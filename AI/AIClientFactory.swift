@@ -14,8 +14,8 @@ struct AIClientFactory {
             return OpenAIClient(config: config)
             
         case .appleFoundationModel:
-            #if canImport(FoundationModels) && os(macOS) && false
-            if #available(macOS 15.0, *) {
+            #if canImport(FoundationModels) && os(macOS)
+            if #available(macOS 26.0, *) {
                 if AppleFoundationModelClient.isAvailable() {
                     return AppleFoundationModelClient(config: config)
                 }

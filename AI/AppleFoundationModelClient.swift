@@ -9,12 +9,11 @@
 
 import Foundation
 
-// NOTE: This client uses futuristic/private APIs (FoundationModels) that are 
-// currently gated to macOS 26.0 in the SDK. It is disabled for now.
-#if false && canImport(FoundationModels) && os(macOS)
+// NOTE: This client uses futuristic/private APIs (FoundationModels).
+#if canImport(FoundationModels) && os(macOS)
 import FoundationModels
 
-@available(macOS 15.0, *)
+@available(macOS 26.0, *)
 final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
     let config: AIConfig
     
@@ -90,6 +89,8 @@ final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
     }
 }
 
+#if canImport(FoundationModels) && os(macOS)
+@available(macOS 26.0, *)
 extension AIClientError {
     static var appleIntelligenceUnavailable: AIClientError {
         return AIClientError.apiError(
@@ -98,4 +99,5 @@ extension AIClientError {
         )
     }
 }
+#endif
 #endif

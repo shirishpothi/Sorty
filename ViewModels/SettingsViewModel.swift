@@ -74,9 +74,14 @@ public class SettingsViewModel: ObservableObject {
     }
     
     private func checkAppleIntelligenceAvailability() {
-        #if canImport(FoundationModels) && os(macOS) && false // Matching the gate in AppleFoundationModelClient
-        isAppleIntelligenceAvailable = AppleFoundationModelClient.isAvailable()
-        appleIntelligenceStatus = AppleFoundationModelClient.unavailabilityReason
+        #if canImport(FoundationModels) && os(macOS)
+        if #available(macOS 26.0, *) {
+            isAppleIntelligenceAvailable = AppleFoundationModelClient.isAvailable()
+            appleIntelligenceStatus = AppleFoundationModelClient.unavailabilityReason
+        } else {
+            isAppleIntelligenceAvailable = false
+            appleIntelligenceStatus = "Apple Intelligence requires macOS 26.0 or later."
+        }
         #else
         isAppleIntelligenceAvailable = false
         appleIntelligenceStatus = "Apple Intelligence is not supported on this version of macOS."

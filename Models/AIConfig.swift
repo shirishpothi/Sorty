@@ -25,11 +25,12 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openAICompatible:
             return true
         case .appleFoundationModel:
-            #if canImport(FoundationModels) && os(macOS) && false
-            return AppleFoundationModelClient.isAvailable()
-            #else
-            return false
+            #if canImport(FoundationModels) && os(macOS)
+            if #available(macOS 26.0, *) {
+                return AppleFoundationModelClient.isAvailable()
+            }
             #endif
+            return false
         }
     }
     
@@ -38,11 +39,12 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openAICompatible:
             return nil
         case .appleFoundationModel:
-            #if canImport(FoundationModels) && os(macOS) && false
-            return AppleFoundationModelClient.unavailabilityReason
-            #else
-            return "Apple Intelligence is not supported on this version of macOS."
+            #if canImport(FoundationModels) && os(macOS)
+            if #available(macOS 26.0, *) {
+                return AppleFoundationModelClient.unavailabilityReason
+            }
             #endif
+            return "Apple Intelligence is not supported on this version of macOS."
         }
     }
 }
