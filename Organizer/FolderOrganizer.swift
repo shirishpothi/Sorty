@@ -126,11 +126,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         timeoutTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self, let start = self.startTime else { return }
-                self.elapsedTime = Date().timeIntervalSince(start)
+                guard let strongSelf = self, let start = strongSelf.startTime else { return }
+                strongSelf.elapsedTime = Date().timeIntervalSince(start)
                 
-                if self.elapsedTime >= 30 && !self.showTimeoutMessage {
-                    self.showTimeoutMessage = true
+                if strongSelf.elapsedTime >= 30 && !strongSelf.showTimeoutMessage {
+                    strongSelf.showTimeoutMessage = true
                 }
             }
         }
