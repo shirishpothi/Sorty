@@ -68,7 +68,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var elapsedTime: TimeInterval = 0
     @Published public var showTimeoutMessage: Bool = false
     private var startTime: Date?
-    private var timeoutTimer: Timer?
+    private var timeoutTask: Task<Void, Never>?
     
     // Track current directory for failed history
     private var currentDirectory: URL?
@@ -124,21 +124,26 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         elapsedTime = 0
         showTimeoutMessage = false
         
-        timeoutTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let strongSelf = self, let start = strongSelf.startTime else { return }
-                strongSelf.elapsedTime = Date().timeIntervalSince(start)
+        timeoutTask?.cancel()
+        timeoutTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { break }
                 
-                if strongSelf.elapsedTime >= 30 && !strongSelf.showTimeoutMessage {
-                    strongSelf.showTimeoutMessage = true
+                if let start = self.startTime {
+                    self.elapsedTime = Date().timeIntervalSince(start)
+                    
+                    if self.elapsedTime >= 30 && !self.showTimeoutMessage {
+                        self.showTimeoutMessage = true
+                    }
                 }
             }
         }
     }
     
     private func stopTimeoutTimer() {
-        timeoutTimer?.invalidate()
-        timeoutTimer = nil
+        timeoutTask?.cancel()
+        timeoutTask = nil
         startTime = nil
     }
     
