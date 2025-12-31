@@ -11,26 +11,27 @@ import UniformTypeIdentifiers
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
     @State private var isTargeted = false
-    
+
     var body: some View {
         VStack(spacing: 30) {
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 60))
                 .foregroundColor(.blue)
-            
+
             Text("Select a directory to organize")
                 .font(.title2)
                 .fontWeight(.medium)
-            
+
             Text("Drag and drop a folder here, or click to browse")
                 .font(.body)
                 .foregroundColor(.secondary)
-            
+
             Button("Browse for Folder") {
                 selectDirectory()
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .accessibilityIdentifier("BrowseForFolderButton")
             .accessibilityLabel("Browse for Folder")
             .accessibilityHint("Opens a file picker to select a directory")
         }
@@ -45,22 +46,22 @@ struct DirectorySelectionView: View {
             handleDrop(providers: providers)
         }
     }
-    
+
     private func selectDirectory() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.prompt = "Select"
-        
+
         if panel.runModal() == .OK, let url = panel.url {
             selectedDirectory = url
         }
     }
-    
+
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
-        
+
         provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
             if let data = item as? Data,
                let url = URL(dataRepresentation: data, relativeTo: nil),
@@ -70,7 +71,7 @@ struct DirectorySelectionView: View {
                 }
             }
         }
-        
+
         return true
     }
 }
@@ -80,4 +81,3 @@ extension UTType {
         UTType(exportedAs: "public.file-url")
     }
 }
-

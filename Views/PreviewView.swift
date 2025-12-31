@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct PreviewView: View {
     let plan: OrganizationPlan
@@ -17,18 +18,18 @@ struct PreviewView: View {
     @State private var isApplying = false
     @State private var editablePlan: OrganizationPlan
     @State private var hasEdits = false
-    
+
     init(plan: OrganizationPlan, baseURL: URL) {
         self.plan = plan
         self.baseURL = baseURL
         _editablePlan = State(initialValue: plan)
     }
-    
+
     // Reset isApplying when organizer state changes to completed
     private var shouldDisableButtons: Bool {
         isApplying || (organizer.state == .applying)
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header with version info
@@ -37,7 +38,7 @@ struct PreviewView: View {
                     HStack(spacing: 6) {
                         Text("Preview \(editablePlan.version)")
                             .font(.headline)
-                        
+
                         if hasEdits {
                             Text("(Edited)")
                                 .font(.caption)
@@ -48,7 +49,7 @@ struct PreviewView: View {
                                 .cornerRadius(4)
                         }
                     }
-                    
+
                     if !editablePlan.notes.isEmpty {
                         Text(editablePlan.notes)
                             .font(.caption)
@@ -57,7 +58,7 @@ struct PreviewView: View {
                     }
                 }
                 Spacer()
-                
+
                 // Drag hint
                 if dragDropManager.draggedFile != nil {
                     HStack(spacing: 4) {
@@ -72,14 +73,14 @@ struct PreviewView: View {
                     .background(Color.purple.opacity(0.1))
                     .cornerRadius(6)
                 }
-                
+
                 Text("\(editablePlan.totalFiles) files • \(editablePlan.totalFolders) folders")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
-            
+
             // Tree view with drag-drop support
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 8) {
@@ -92,7 +93,7 @@ struct PreviewView: View {
                             onPlanChanged: { hasEdits = true }
                         )
                     }
-                    
+
                     // Unorganized files section with drop support
                     if !editablePlan.unorganizedFiles.isEmpty || dragDropManager.draggedFile != nil {
                         UnorganizedFilesSection(
@@ -104,9 +105,9 @@ struct PreviewView: View {
                 }
                 .padding()
             }
-            
+
             Divider()
-            
+
             // Action buttons
             VStack(spacing: 12) {
                 // Custom Instructions for Regeneration
@@ -122,34 +123,38 @@ struct PreviewView: View {
                     }
                     .padding(.horizontal)
                 }
-                
+
                 HStack {
                     Button("Cancel") {
                         organizer.reset()
                     }
                     .keyboardShortcut(.cancelAction)
-                    
+                    .accessibilityIdentifier("PreviewCancelButton")
+
                     if hasEdits {
                         Button("Reset Edits") {
                             editablePlan = plan
                             hasEdits = false
                         }
                         .foregroundColor(.orange)
+                        .accessibilityIdentifier("ResetEditsButton")
                     }
-                    
+
                     Spacer()
-                    
+
                     Button("Try Another Organisation") {
                         regeneratePreview()
                     }
                     .disabled(shouldDisableButtons)
-                    
+                    .accessibilityIdentifier("TryAnotherOrganisationButton")
+
                     Button("Apply Organization") {
                         showApplyConfirmation = true
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(shouldDisableButtons)
+                    .accessibilityIdentifier("ApplyOrganizationButton")
                 }
                 .padding(.horizontal)
                 .padding(.bottom)
@@ -178,7 +183,7 @@ struct PreviewView: View {
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))
     }
-    
+
     private func regeneratePreview() {
         Task {
             do {
@@ -188,7 +193,7 @@ struct PreviewView: View {
             }
         }
     }
-    
+
     private func applyOrganization() {
         isApplying = true
         // Use the edited plan if there were edits
@@ -217,11 +222,11 @@ struct EditableFolderTreeView: View {
     @Binding var plan: OrganizationPlan
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
-    
+
     @State private var isExpanded = true
     @State private var showReasoning = false
     @State private var isDropTarget = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Folder header row - drop target
@@ -232,19 +237,19 @@ struct EditableFolderTreeView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(width: 20)
-                
+
                 Image(systemName: "folder.fill")
                     .foregroundColor(isDropTarget ? .purple : .blue)
-                
+
                 Text(suggestion.folderName)
                     .fontWeight(.medium)
-                
+
                 Text("(\(suggestion.totalFileCount) files)")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
+
                 // Reasoning toggle
                 if !suggestion.reasoning.isEmpty {
                     Button {
@@ -270,7 +275,7 @@ struct EditableFolderTreeView: View {
                 draggedFile: $dragDropManager.draggedFile,
                 isTargeted: $isDropTarget
             ))
-            
+
             // Reasoning Disclosure
             if showReasoning && !suggestion.reasoning.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -278,7 +283,7 @@ struct EditableFolderTreeView: View {
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(.purple)
-                    
+
                     Text(suggestion.reasoning)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -294,7 +299,7 @@ struct EditableFolderTreeView: View {
                 .padding(.trailing, 8)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            
+
             if isExpanded {
                 // Files in this folder - draggable
                 ForEach(suggestion.files) { file in
@@ -304,7 +309,7 @@ struct EditableFolderTreeView: View {
                         dragDropManager: dragDropManager
                     )
                 }
-                
+
                 // Subfolders
                 ForEach(suggestion.subfolders) { subfolder in
                     EditableFolderTreeView(
@@ -326,9 +331,9 @@ struct DraggableFileRow: View {
     let file: FileItem
     let level: Int
     @ObservedObject var dragDropManager: DragDropManager
-    
+
     @State private var isDragging = false
-    
+
     var body: some View {
         HStack {
             Image(systemName: "doc")
@@ -337,7 +342,7 @@ struct DraggableFileRow: View {
             Spacer()
             Text(file.formattedSize)
                 .foregroundColor(.secondary)
-            
+
             // Drag handle indicator
             Image(systemName: "line.3.horizontal")
                 .font(.caption2)
@@ -370,9 +375,9 @@ struct UnorganizedFilesSection: View {
     @Binding var plan: OrganizationPlan
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
-    
+
     @State private var isDropTarget = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -381,9 +386,9 @@ struct UnorganizedFilesSection: View {
                 Text("Unorganized Files")
                     .font(.headline)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
+
                 Text("\(plan.unorganizedFiles.count) files")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -400,7 +405,7 @@ struct UnorganizedFilesSection: View {
                 draggedFile: $dragDropManager.draggedFile,
                 isTargeted: $isDropTarget
             ))
-            
+
             ForEach(plan.unorganizedFiles) { file in
                 HStack {
                     Image(systemName: "doc")
@@ -409,7 +414,7 @@ struct UnorganizedFilesSection: View {
                     Spacer()
                     Text(file.formattedSize)
                         .foregroundColor(.secondary)
-                    
+
                     Image(systemName: "line.3.horizontal")
                         .font(.caption2)
                         .foregroundColor(.secondary.opacity(0.6))
@@ -420,7 +425,7 @@ struct UnorganizedFilesSection: View {
                     return NSItemProvider(object: file.id.uuidString as NSString)
                 }
             }
-            
+
             // Unorganized details (reasons from AI)
             ForEach(plan.unorganizedDetails) { detail in
                 HStack {
@@ -446,10 +451,10 @@ struct UnorganizedFilesSection: View {
 struct FolderTreeView: View {
     let suggestion: FolderSuggestion
     let level: Int
-    
+
     @State private var isExpanded = true
     @State private var showReasoning = false
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -459,19 +464,19 @@ struct FolderTreeView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(width: 20)
-                
+
                 Image(systemName: "folder")
                     .foregroundColor(.blue)
-                
+
                 Text(suggestion.folderName)
                     .fontWeight(.medium)
-                
+
                 Text("(\(suggestion.totalFileCount) files)")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
+
                 if !suggestion.reasoning.isEmpty {
                     Button {
                         showReasoning.toggle()
@@ -484,14 +489,14 @@ struct FolderTreeView: View {
                 }
             }
             .padding(.leading, CGFloat(level * 20))
-            
+
             if showReasoning && !suggestion.reasoning.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("AI Reasoning")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundColor(.purple)
-                    
+
                     Text(suggestion.reasoning)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -507,7 +512,7 @@ struct FolderTreeView: View {
                 .padding(.trailing, 8)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            
+
             if isExpanded {
                 ForEach(suggestion.files) { file in
                     HStack {
@@ -520,7 +525,7 @@ struct FolderTreeView: View {
                     }
                     .padding(.leading, CGFloat((level + 1) * 20))
                 }
-                
+
                 ForEach(suggestion.subfolders) { subfolder in
                     FolderTreeView(suggestion: subfolder, level: level + 1)
                 }
