@@ -3,6 +3,7 @@
 //  FileOrganizer
 //
 //  Advanced History view with 4 stats, custom sidebar, and detailed reports
+//  Enhanced with haptic feedback, micro-animations, and modal bounces
 //
 
 import SwiftUI
@@ -14,6 +15,7 @@ struct HistoryView: View {
     @State private var alertMessage: String?
     @State private var showAlert = false
     @State private var selectedFilter: HistoryFilter = .all
+    @State private var contentOpacity: Double = 0
 
     private var filteredEntries: [OrganizationHistoryEntry] {
         switch selectedFilter {
@@ -38,15 +40,8 @@ struct HistoryView: View {
             // Internal Sidebar (Sessions List)
             VStack(spacing: 0) {
                 if organizer.history.entries.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.title)
-                            .foregroundStyle(.secondary)
-                        Text("No History")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    EmptyHistoryView()
+                        .transition(TransitionStyles.scaleAndFade)
                 } else {
                     // Quick Stats - 4 Cards
                     VStack(alignment: .leading, spacing: 12) {
@@ -57,9 +52,13 @@ struct HistoryView: View {
 
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                             HistoryStatCard(title: "Sessions", value: "\(organizer.history.totalSessions)", icon: "list.bullet.rectangle", color: .gray)
+                                .animatedAppearance(delay: 0.05)
                             HistoryStatCard(title: "Files", value: "\(organizer.history.totalFilesOrganized)", icon: "doc.on.doc", color: .blue)
+                                .animatedAppearance(delay: 0.1)
                             HistoryStatCard(title: "Folders", value: "\(organizer.history.totalFoldersCreated)", icon: "folder.fill.badge.plus", color: .purple)
+                                .animatedAppearance(delay: 0.15)
                             HistoryStatCard(title: "Reverted", value: "\(organizer.history.revertedCount)", icon: "arrow.uturn.backward", color: .orange)
+                                .animatedAppearance(delay: 0.2)
                         }
                     }
                     .padding(20)
@@ -71,11 +70,15 @@ struct HistoryView: View {
 
                     // Filter Bar
                     LiquidDropdown(options: HistoryFilter.allCases, selection: $selectedFilter, title: "Show:")
+                        .accessibilityIdentifier("HistoryFilterDropdown")
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
                         .background(Color(NSColor.controlBackgroundColor))
+                        .onChange(of: selectedFilter) { oldValue, newValue in
+                            HapticFeedbackManager.shared.selection()
+                        }
 
-                    List(filteredEntries, selection: $selectedEntry) { entry in
+                    List(Array(filteredEntries.enumerated()), id: \.element.id, selection: $selectedEntry) { index, entry in
                         HistoryEntryRow(entry: entry)
                             .tag(entry)
                             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -85,33 +88,37 @@ struct HistoryView: View {
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(selectedEntry == entry ? Color.accentColor.opacity(0.1) : Color.clear)
                             )
+                            .animatedAppearance(delay: Double(index) * 0.03)
                     }
                     .listStyle(.plain)
                     .padding(.top, 8)
+                    .onChange(of: selectedEntry) { oldValue, newValue in
+                        if newValue != nil {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
                 }
             }
-            .frame(width: 400) // Increased width per user request
+            .frame(width: 400)
             .background(Color(NSColor.windowBackgroundColor))
 
             Divider()
 
             // Detail Area
-            Group {
+            ZStack {
                 if let entry = selectedEntry {
                     HistoryDetailView(entry: entry, isProcessing: $isProcessing, onAction: { msg in
                         alertMessage = msg
                         showAlert = true
                     })
+                    .id(entry.id)
+                    .transition(TransitionStyles.slideFromRight)
                 } else {
-                    VStack(spacing: 16) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.quaternary)
-                        Text("Select a session to view detailed report")
-                            .foregroundColor(.secondary)
-                    }
+                    EmptyDetailView()
+                        .transition(TransitionStyles.scaleAndFade)
                 }
             }
+            .animation(.pageTransition, value: selectedEntry?.id)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(NSColor.windowBackgroundColor))
         }
@@ -120,27 +127,118 @@ struct HistoryView: View {
         .disabled(isProcessing)
         .overlay {
             if isProcessing {
-                ZStack {
-                    Color.black.opacity(0.1)
-                    ProgressView(organizer.organizationStage)
-                        .padding()
-                        .background(.regularMaterial)
-                        .cornerRadius(8)
-                }
+                ProcessingOverlay(stage: organizer.organizationStage)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isProcessing)
         .alert("History Action", isPresented: $showAlert) {
-            Button("OK", role: .cancel) { }
+            Button("OK", role: .cancel) {
+                HapticFeedbackManager.shared.tap()
+            }
         } message: {
             if let msg = alertMessage {
                 Text(msg)
             }
         }
+        .opacity(contentOpacity)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
+        }
     }
 }
 
+// MARK: - Empty History View
+
+struct EmptyHistoryView: View {
+    @State private var iconScale: CGFloat = 1.0
+    @State private var iconRotation: Double = 0
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.title)
+                .foregroundStyle(.secondary)
+                .scaleEffect(iconScale)
+                .rotationEffect(.degrees(iconRotation))
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                        iconScale = 1.1
+                        iconRotation = 10
+                    }
+                }
+            Text("No History")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Empty Detail View
+
+struct EmptyDetailView: View {
+    @State private var appeared = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 48))
+                .foregroundStyle(.quaternary)
+                .scaleEffect(appeared ? 1 : 0.8)
+                .opacity(appeared ? 1 : 0)
+            Text("Select a session to view detailed report")
+                .foregroundColor(.secondary)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 10)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                appeared = true
+            }
+        }
+    }
+}
+
+// MARK: - Processing Overlay
+
+struct ProcessingOverlay: View {
+    let stage: String
+    @State private var appeared = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.1)
+
+            VStack(spacing: 12) {
+                BouncingSpinner(size: 24, color: .accentColor)
+
+                Text(stage)
+                    .font(.body)
+                    .foregroundColor(.primary)
+            }
+            .padding(24)
+            .background(.regularMaterial)
+            .cornerRadius(12)
+            .scaleEffect(appeared ? 1 : 0.8)
+            .opacity(appeared ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                appeared = true
+            }
+        }
+    }
+}
+
+// MARK: - History Entry Row
+
 struct HistoryEntryRow: View {
     let entry: OrganizationHistoryEntry
+
+    @State private var isHovered = false
 
     private var statusColor: Color {
         switch entry.status {
@@ -173,6 +271,8 @@ struct HistoryEntryRow: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(statusColor)
             }
+            .scaleEffect(isHovered ? 1.1 : 1.0)
+            .animation(.subtleBounce, value: isHovered)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
@@ -201,14 +301,21 @@ struct HistoryEntryRow: View {
         }
         .padding(.vertical, 8)
         .opacity(entry.status == .undo || entry.status == .skipped ? 0.6 : 1.0)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
+
+// MARK: - History Detail View
 
 struct HistoryDetailView: View {
     let entry: OrganizationHistoryEntry
     @Binding var isProcessing: Bool
     let onAction: (String) -> Void
     @State private var showRawAIResponse = false
+    @State private var appeared = false
 
     @EnvironmentObject var organizer: FolderOrganizer
 
@@ -228,6 +335,8 @@ struct HistoryDetailView: View {
                         }
                         Spacer()
                         StatusBadge(status: entry.status)
+                            .scaleEffect(appeared ? 1 : 0.8)
+                            .opacity(appeared ? 1 : 0)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -239,14 +348,19 @@ struct HistoryDetailView: View {
                             .cornerRadius(6)
                     }
                 }
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 20)
 
                 // Summary Stats in Detail
                 if entry.success {
                     HStack(spacing: 20) {
                         DetailStatView(title: "Files Organized", value: "\(entry.filesOrganized)", icon: "doc.fill", color: .blue)
+                            .animatedAppearance(delay: 0.1)
                         DetailStatView(title: "Folders Created", value: "\(entry.foldersCreated)", icon: "folder.fill", color: .purple)
+                            .animatedAppearance(delay: 0.15)
                         if let plan = entry.plan {
                             DetailStatView(title: "Plan Version", value: "v\(plan.version)", icon: "number", color: .gray)
+                                .animatedAppearance(delay: 0.2)
                         }
                     }
                 }
@@ -265,6 +379,8 @@ struct HistoryDetailView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.large)
+                                .accessibilityIdentifier("RedoSessionButton")
+                                .bounceTap(scale: 0.95)
                             } else {
                                 Button(action: handleUndo) {
                                     Label("Undo These Changes", systemImage: "arrow.uturn.backward")
@@ -272,6 +388,8 @@ struct HistoryDetailView: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.large)
+                                .accessibilityIdentifier("UndoSessionButton")
+                                .bounceTap(scale: 0.95)
 
                                 Button(action: handleRestore) {
                                     Label("Restore Folder to this State", systemImage: "clock.arrow.circlepath")
@@ -279,9 +397,13 @@ struct HistoryDetailView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.large)
+                                .bounceTap(scale: 0.95)
                             }
                         }
                     }
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 10)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
                 }
 
                 // Timeline Section
@@ -290,6 +412,7 @@ struct HistoryDetailView: View {
                         entries: organizer.history.entries,
                         directoryPath: entry.directoryPath
                     )
+                    .animatedAppearance(delay: 0.25)
                 }
 
                 if !entry.success, let error = entry.errorMessage {
@@ -302,14 +425,16 @@ struct HistoryDetailView: View {
                             .background(Color.red.opacity(0.05))
                             .cornerRadius(8)
                     }
+                    .animatedAppearance(delay: 0.15)
                 }
 
                 // Expanded Plan List with reasoning and files
                 if let plan = entry.plan {
                     SectionView(title: "Organization Details", icon: "list.bullet.indent", color: .blue) {
                         VStack(alignment: .leading, spacing: 16) {
-                            ForEach(plan.suggestions) { suggestion in
+                            ForEach(Array(plan.suggestions.enumerated()), id: \.element.id) { index, suggestion in
                                 FolderHistoryDetailRow(suggestion: suggestion)
+                                    .animatedAppearance(delay: 0.3 + Double(index) * 0.05)
                             }
 
                             if !plan.unorganizedFiles.isEmpty {
@@ -334,12 +459,13 @@ struct HistoryDetailView: View {
                                 .padding()
                                 .background(Color.orange.opacity(0.05))
                                 .cornerRadius(8)
+                                .animatedAppearance(delay: 0.4)
                             }
                         }
                     }
                 }
 
-                // Raw AI Data (New per user request)
+                // Raw AI Data
                 if let raw = entry.rawAIResponse {
                     DisclosureGroup("View Raw AI Response Data", isExpanded: $showRawAIResponse) {
                         Text(raw)
@@ -351,29 +477,44 @@ struct HistoryDetailView: View {
                             .cornerRadius(8)
                     }
                     .padding(.top, 8)
+                    .onChange(of: showRawAIResponse) { oldValue, newValue in
+                        HapticFeedbackManager.shared.tap()
+                    }
+                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showRawAIResponse)
                 }
             }
             .padding(40)
         }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                appeared = true
+            }
+        }
     }
 
     private func handleUndo() {
+        HapticFeedbackManager.shared.tap()
         processAction {
             try await organizer.undoHistoryEntry(entry)
+            HapticFeedbackManager.shared.success()
             onAction("Operations reversed successfully.")
         }
     }
 
     private func handleRestore() {
+        HapticFeedbackManager.shared.tap()
         processAction {
             try await organizer.restoreToState(targetEntry: entry)
+            HapticFeedbackManager.shared.success()
             onAction("Folder state restored.")
         }
     }
 
     private func handleRedo() {
+        HapticFeedbackManager.shared.tap()
         processAction {
             try await organizer.redoOrganization(from: entry)
+            HapticFeedbackManager.shared.success()
             onAction("Organization re-applied.")
         }
     }
@@ -385,6 +526,7 @@ struct HistoryDetailView: View {
                 try await action()
                 isProcessing = false
             } catch {
+                HapticFeedbackManager.shared.error()
                 onAction("Error: \(error.localizedDescription)")
                 isProcessing = false
             }
@@ -392,11 +534,15 @@ struct HistoryDetailView: View {
     }
 }
 
+// MARK: - Detail Stat View
+
 struct DetailStatView: View {
     let title: String
     let value: String
     let icon: String
     let color: Color
+
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -405,6 +551,7 @@ struct DetailStatView: View {
                     .foregroundStyle(color)
                 Text(value)
                     .font(.headline)
+                    .contentTransition(.numericText())
             }
             Text(title)
                 .font(.caption)
@@ -414,14 +561,23 @@ struct DetailStatView: View {
         .frame(minWidth: 120, alignment: .leading)
         .background(Color.secondary.opacity(0.05))
         .cornerRadius(10)
+        .scaleEffect(isHovered ? 1.03 : 1.0)
+        .animation(.subtleBounce, value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
+
+// MARK: - History Stat Card
 
 struct HistoryStatCard: View {
     let title: String
     let value: String
     let icon: String
     let color: Color
+
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 8) {
@@ -433,10 +589,13 @@ struct HistoryStatCard: View {
                     .font(.system(size: 12))
                     .foregroundStyle(color)
             }
+            .scaleEffect(isHovered ? 1.1 : 1.0)
+            .animation(.subtleBounce, value: isHovered)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
                     .font(.system(size: 14, weight: .bold))
+                    .contentTransition(.numericText())
                 Text(title)
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
@@ -446,8 +605,15 @@ struct HistoryStatCard: View {
         .padding(8)
         .background(Color.white.opacity(0.05))
         .cornerRadius(8)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.subtleBounce, value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 }
+
+// MARK: - Status Badge
 
 struct StatusBadge: View {
     let status: OrganizationStatus
@@ -473,6 +639,8 @@ struct StatusBadge: View {
     }
 }
 
+// MARK: - Section View
+
 struct SectionView<Content: View>: View {
     let title: String
     let icon: String
@@ -489,22 +657,31 @@ struct SectionView<Content: View>: View {
     }
 }
 
+// MARK: - Folder History Detail Row
+
 struct FolderHistoryDetailRow: View {
     let suggestion: FolderSuggestion
     @State private var isExpanded = false
+    @State private var isHovered = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                isExpanded.toggle()
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    isExpanded.toggle()
+                }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : 0))
 
                     Image(systemName: "folder.fill")
                         .foregroundColor(.blue)
+                        .scaleEffect(isHovered ? 1.1 : 1.0)
+                        .animation(.subtleBounce, value: isHovered)
 
                     Text(suggestion.folderName)
                         .fontWeight(.semibold)
@@ -517,6 +694,9 @@ struct FolderHistoryDetailRow: View {
                 }
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                isHovered = hovering
+            }
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
@@ -532,11 +712,12 @@ struct FolderHistoryDetailRow: View {
                                 .background(Color.purple.opacity(0.05))
                                 .cornerRadius(6)
                         }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
 
                     // Files
                     VStack(alignment: .leading, spacing: 4) {
-                        ForEach(suggestion.files) { fileItem in
+                        ForEach(Array(suggestion.files.enumerated()), id: \.element.id) { index, fileItem in
                             HStack {
                                 Image(systemName: "doc")
                                     .foregroundColor(.secondary)
@@ -547,6 +728,13 @@ struct FolderHistoryDetailRow: View {
                             }
                             .font(.caption)
                             .padding(.leading, 12)
+                            .opacity(isExpanded ? 1 : 0)
+                            .offset(y: isExpanded ? 0 : -5)
+                            .animation(
+                                .spring(response: 0.3, dampingFraction: 0.7)
+                                    .delay(Double(index) * 0.02),
+                                value: isExpanded
+                            )
                         }
                     }
 
@@ -558,10 +746,20 @@ struct FolderHistoryDetailRow: View {
                 }
                 .padding(.leading, 12)
                 .padding(.vertical, 4)
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
             }
         }
         .padding(12)
         .background(Color.secondary.opacity(0.03))
         .cornerRadius(8)
     }
+}
+
+#Preview {
+    HistoryView()
+        .environmentObject(FolderOrganizer())
+        .frame(width: 900, height: 600)
 }

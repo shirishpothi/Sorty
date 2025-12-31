@@ -4,6 +4,7 @@
 //
 //  Exclusion rules management with improved UI
 //  Updated to handle all rule types including new semantic types
+//  Enhanced with haptic feedback, micro-animations, and modal bounces
 //
 
 import SwiftUI
@@ -11,6 +12,7 @@ import SwiftUI
 struct ExclusionRulesView: View {
     @EnvironmentObject var rulesManager: ExclusionRulesManager
     @State private var showingAddRule = false
+    @State private var contentOpacity: Double = 0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,80 +26,147 @@ struct ExclusionRulesView: View {
                     Text("\(rulesManager.enabledRulesCount) rules active")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
                 }
+                .animatedAppearance(delay: 0.05)
 
                 Spacer()
 
                 Button {
+                    HapticFeedbackManager.shared.tap()
                     showingAddRule = true
                 } label: {
                     Label("Add Rule", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("AddExclusionRuleButton")
+                .bounceTap(scale: 0.95)
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
 
             Divider()
 
-            if rulesManager.rules.isEmpty {
-                // Empty state
-                VStack(spacing: 20) {
-                    Image(systemName: "eye.slash.circle")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
-
-                    VStack(spacing: 8) {
-                        Text("No Exclusion Rules")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-
-                        Text("Add rules to exclude certain files or folders from organization")
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 300)
-                    }
-
-                    Button {
+            ZStack {
+                if rulesManager.rules.isEmpty {
+                    // Empty state
+                    EmptyExclusionRulesView(onAddRule: {
+                        HapticFeedbackManager.shared.tap()
                         showingAddRule = true
-                    } label: {
-                        Label("Add Rule", systemImage: "plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .frame(maxHeight: .infinity)
-            } else {
-                // Rules list
-                List {
-                    ForEach(rulesManager.rules) { rule in
-                        ExclusionRuleRow(rule: rule, rulesManager: rulesManager)
-                    }
-                    .onDelete { indexSet in
-                        for index in indexSet {
-                            rulesManager.removeRule(rulesManager.rules[index])
+                    })
+                    .transition(TransitionStyles.scaleAndFade)
+                } else {
+                    // Rules list
+                    List {
+                        ForEach(Array(rulesManager.rules.enumerated()), id: \.element.id) { index, rule in
+                            ExclusionRuleRow(rule: rule, rulesManager: rulesManager)
+                                .animatedAppearance(delay: Double(index) * 0.03)
+                        }
+                        .onDelete { indexSet in
+                            HapticFeedbackManager.shared.tap()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                for index in indexSet {
+                                    rulesManager.removeRule(rulesManager.rules[index])
+                                }
+                            }
                         }
                     }
+                    .listStyle(.inset)
+                    .transition(TransitionStyles.slideFromRight)
                 }
-                .listStyle(.inset)
             }
+            .animation(.pageTransition, value: rulesManager.rules.isEmpty)
         }
         .navigationTitle("Exclusion Rules")
         .sheet(isPresented: $showingAddRule) {
             AddExclusionRuleView(rulesManager: rulesManager)
+                .modalBounce()
+        }
+        .opacity(contentOpacity)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
         }
     }
 }
 
+// MARK: - Empty State View
+
+struct EmptyExclusionRulesView: View {
+    let onAddRule: () -> Void
+    @State private var iconScale: CGFloat = 1.0
+    @State private var appeared = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "eye.slash.circle")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+                .scaleEffect(iconScale)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                        iconScale = 1.1
+                    }
+                }
+
+            VStack(spacing: 8) {
+                Text("No Exclusion Rules")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 10)
+
+                Text("Add rules to exclude certain files or folders from organization")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+                    .opacity(appeared ? 1 : 0)
+                    .offset(y: appeared ? 0 : 10)
+            }
+
+            Button {
+                onAddRule()
+            } label: {
+                Label("Add Rule", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .bounceTap(scale: 0.95)
+            .opacity(appeared ? 1 : 0)
+            .scaleEffect(appeared ? 1 : 0.9)
+        }
+        .frame(maxHeight: .infinity)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
+                appeared = true
+            }
+        }
+    }
+}
+
+// MARK: - Exclusion Rule Row
+
 struct ExclusionRuleRow: View {
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
+    @State private var isHovered = false
+    @State private var toggleScale: CGFloat = 1.0
 
     var body: some View {
         HStack(spacing: 12) {
             Toggle("", isOn: Binding(
                 get: { rule.isEnabled },
                 set: { newValue in
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
+                        toggleScale = 1.1
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                            toggleScale = 1.0
+                        }
+                    }
                     var updatedRule = rule
                     updatedRule.isEnabled = newValue
                     rulesManager.updateRule(updatedRule)
@@ -105,10 +174,13 @@ struct ExclusionRuleRow: View {
             ))
             .toggleStyle(.switch)
             .labelsHidden()
+            .scaleEffect(toggleScale)
 
             Image(systemName: iconForType(rule.type))
                 .foregroundStyle(rule.isEnabled ? .primary : .secondary)
                 .frame(width: 20)
+                .scaleEffect(isHovered ? 1.15 : 1.0)
+                .animation(.subtleBounce, value: isHovered)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(rule.displayDescription)
@@ -146,6 +218,10 @@ struct ExclusionRuleRow: View {
         }
         .padding(.vertical, 4)
         .opacity(rule.isEnabled ? 1.0 : 0.6)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
     }
 
     private func iconForType(_ type: ExclusionRuleType) -> String {
@@ -178,6 +254,8 @@ struct ExclusionRuleRow: View {
     }
 }
 
+// MARK: - Add Exclusion Rule View
+
 struct AddExclusionRuleView: View {
     @ObservedObject var rulesManager: ExclusionRulesManager
     @Environment(\.dismiss) var dismiss
@@ -191,15 +269,18 @@ struct AddExclusionRuleView: View {
     // Test section state
     @State private var testInput: String = ""
     @State private var isMatch: Bool = false
+    @State private var appeared = false
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
                 Button("Cancel") {
+                    HapticFeedbackManager.shared.tap()
                     dismiss()
                 }
                 .keyboardShortcut(.escape, modifiers: [])
+                .bounceTap(scale: 0.95)
 
                 Spacer()
 
@@ -209,13 +290,18 @@ struct AddExclusionRuleView: View {
                 Spacer()
 
                 Button("Add") {
+                    HapticFeedbackManager.shared.success()
                     addRule()
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(!isValidInput)
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("ConfirmAddRuleButton")
+                .bounceTap(scale: 0.95)
             }
             .padding()
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : -10)
 
             Divider()
 
@@ -226,9 +312,13 @@ struct AddExclusionRuleView: View {
                         Label(type.rawValue, systemImage: type.icon)
                             .tag(type)
                     }
-
                 }
                 .pickerStyle(.menu)
+                .accessibilityIdentifier("ExclusionRuleTypePicker")
+                .onChange(of: selectedType) { oldValue, newValue in
+                    HapticFeedbackManager.shared.selection()
+                }
+                .animatedAppearance(delay: 0.1)
 
                 // Type-specific inputs
                 Group {
@@ -246,7 +336,11 @@ struct AddExclusionRuleView: View {
                             }
                             .pickerStyle(.segmented)
                             .frame(width: 200)
+                            .onChange(of: comparisonGreater) { _, _ in
+                                HapticFeedbackManager.shared.selection()
+                            }
                         }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
 
                     case .creationDate, .modificationDate:
                         HStack {
@@ -261,45 +355,63 @@ struct AddExclusionRuleView: View {
                             }
                             .pickerStyle(.segmented)
                             .frame(width: 200)
-                        }
-
-                    case .fileType:
-                        Picker("Category", selection: $selectedFileTypeCategory) {
-                            ForEach(FileTypeCategory.allCases) { category in
-                                Label(category.rawValue, systemImage: category.icon)
-                                    .tag(category)
+                            .onChange(of: comparisonGreater) { _, _ in
+                                HapticFeedbackManager.shared.selection()
                             }
                         }
-                        .pickerStyle(.menu)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
 
-                        Text("Includes: \(selectedFileTypeCategory.extensions.prefix(5).joined(separator: ", "))\(selectedFileTypeCategory.extensions.count > 5 ? "..." : "")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    case .fileType:
+                        VStack(alignment: .leading, spacing: 8) {
+                            Picker("Category", selection: $selectedFileTypeCategory) {
+                                ForEach(FileTypeCategory.allCases) { category in
+                                    Label(category.rawValue, systemImage: category.icon)
+                                        .tag(category)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .onChange(of: selectedFileTypeCategory) { _, _ in
+                                HapticFeedbackManager.shared.selection()
+                            }
+
+                            Text("Includes: \(selectedFileTypeCategory.extensions.prefix(5).joined(separator: ", "))\(selectedFileTypeCategory.extensions.count > 5 ? "..." : "")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
 
                     case .hiddenFiles, .systemFiles:
                         Text("This rule type does not require a pattern.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .transition(.opacity)
 
                     case .customScript:
                         Text("Custom scripts are not yet implemented.")
                             .font(.caption)
                             .foregroundStyle(.orange)
+                            .transition(.opacity)
 
                     case .fileExtension, .fileName, .folderName, .pathContains, .regex:
                         TextField("Pattern", text: $pattern)
                             .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("ExclusionRulePatternField")
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedType)
+                .animatedAppearance(delay: 0.15)
 
                 TextField("Description (optional)", text: $description)
                     .textFieldStyle(.roundedBorder)
+                    .animatedAppearance(delay: 0.2)
 
                 Section {
                     Text(helpTextForType(selectedType))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .animatedAppearance(delay: 0.25)
 
                 if selectedType.requiresPattern && selectedType != .fileType {
                     Section("Test Rule") {
@@ -314,19 +426,29 @@ struct AddExclusionRuleView: View {
                                 HStack {
                                     Image(systemName: isMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
                                         .foregroundColor(isMatch ? .green : .red)
+                                        .scaleEffect(isMatch ? 1.0 : 1.0)
+                                        .animation(.spring(response: 0.3, dampingFraction: 0.5), value: isMatch)
                                     Text(isMatch ? "Matches rule" : "Does not match")
                                         .font(.caption)
                                         .foregroundColor(isMatch ? .green : .secondary)
                                 }
+                                .transition(.scale(scale: 0.8).combined(with: .opacity))
                             }
                         }
                     }
+                    .animatedAppearance(delay: 0.3)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isMatch)
                 }
             }
             .formStyle(.grouped)
             .padding()
         }
         .frame(width: 550, height: 500)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                appeared = true
+            }
+        }
     }
 
     private var isValidInput: Bool {
@@ -370,7 +492,11 @@ struct AddExclusionRuleView: View {
             comparisonGreater: comparisonGreater
         )
 
-        isMatch = rule.matches(file)
+        let newMatch = rule.matches(file)
+        if newMatch != isMatch {
+            HapticFeedbackManager.shared.selection()
+        }
+        isMatch = newMatch
     }
 
     private var testPlaceholder: String {
@@ -426,7 +552,9 @@ struct AddExclusionRuleView: View {
             break
         }
 
-        rulesManager.addRule(rule)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            rulesManager.addRule(rule)
+        }
         dismiss()
     }
 

@@ -3,51 +3,131 @@
 //  FileOrganizer
 //
 //  Real-time organization display with streaming progress
+//  Enhanced with motion effects and loading animations
 //
 
 import SwiftUI
 
 struct AnalysisView: View {
     @EnvironmentObject var organizer: FolderOrganizer
-    
+
+    @State private var pulseScale: CGFloat = 1.0
+    @State private var rotationAngle: Double = 0
+    @State private var progressBarOffset: CGFloat = 0
+    @State private var contentOpacity: Double = 0
+    @State private var stageIconBounce: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 24) {
-            // Progress indicator
+            // Progress indicator with motion
             VStack(spacing: 16) {
-                ProgressView(value: organizer.progress)
-                    .progressViewStyle(.linear)
-                    .frame(maxWidth: 500)
-                
+                ZStack(alignment: .leading) {
+                    // Background track
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(maxWidth: 500, maxHeight: 12)
+
+                    // Animated progress bar
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            // Base progress
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [.blue, .purple],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(0, geometry.size.width * organizer.progress))
+
+                            // Shimmer overlay
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            .clear,
+                                            .white.opacity(0.4),
+                                            .clear
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: 60)
+                                .offset(x: progressBarOffset)
+                                .mask(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .frame(width: max(0, geometry.size.width * organizer.progress))
+                                )
+                        }
+                    }
+                    .frame(maxWidth: 500, maxHeight: 12)
+                }
+                .frame(maxWidth: 500, maxHeight: 12)
+                .onAppear {
+                    withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                        progressBarOffset = 500
+                    }
+                }
+
+                // Percentage with bounce animation
                 Text("\(Int(organizer.progress * 100))%")
                     .font(.title2)
                     .fontWeight(.semibold)
                     .monospacedDigit()
+                    .scaleEffect(pulseScale)
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                            pulseScale = 1.05
+                        }
+                    }
             }
-            
-            // Stage indicator with icon
+            .opacity(contentOpacity)
+
+            // Stage indicator with icon and motion
             HStack(spacing: 12) {
-                if case .scanning = organizer.state {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.blue)
-                        .symbolEffect(.pulse)
-                } else if case .organizing = organizer.state {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.purple)
-                        .symbolEffect(.variableColor.iterative)
+                Group {
+                    if case .scanning = organizer.state {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.blue)
+                            .symbolEffect(.pulse)
+                            .rotationEffect(.degrees(rotationAngle))
+                            .offset(y: stageIconBounce)
+                    } else if case .organizing = organizer.state {
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.purple)
+                            .symbolEffect(.variableColor.iterative)
+                            .scaleEffect(pulseScale)
+                    }
                 }
-                
+                .onAppear {
+                    // Subtle rotation for scanning
+                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                        rotationAngle = 15
+                    }
+                    // Bounce effect
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.5).repeatForever(autoreverses: true)) {
+                        stageIconBounce = -5
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 4) {
                     Text(organizer.organizationStage)
                         .font(.headline)
-                    
+
                     if organizer.isStreaming {
-                        Text("Receiving response...")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text("Receiving response")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            LoadingDotsView(dotCount: 3, dotSize: 4, color: .secondary)
+                        }
                     }
-                    
+
                     // Elapsed time
                     if organizer.elapsedTime > 0 {
                         Text("Elapsed: \(formatTime(organizer.elapsedTime))")
@@ -57,19 +137,26 @@ struct AnalysisView: View {
                     }
                 }
             }
-            
-            // Timeout message
+            .opacity(contentOpacity)
+
+            // Timeout message with subtle animation
             if organizer.showTimeoutMessage {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Taking longer than expected", systemImage: "clock")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundStyle(.orange)
+                                .rotationEffect(.degrees(rotationAngle * 0.5))
+
+                            Text("Taking longer than expected")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+
                         Text("AI organization can take a while depending on the number of files, model speed, and network conditions. For large directories, this may take a few minutes.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        
+
                         if organizer.elapsedTime > 60 {
                             Text("Tip: Consider organizing smaller directories first, or check your AI provider settings.")
                                 .font(.caption)
@@ -79,8 +166,12 @@ struct AnalysisView: View {
                     .frame(maxWidth: 400)
                 }
                 .backgroundStyle(.yellow.opacity(0.1))
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.9).combined(with: .opacity),
+                    removal: .opacity
+                ))
             }
-            
+
             // Streaming content preview (if available)
             if organizer.isStreaming && !organizer.streamingContent.isEmpty {
                 GroupBox {
@@ -95,7 +186,7 @@ struct AnalysisView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .onChange(of: organizer.streamingContent) { oldValue, newValue in
-                                withAnimation {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     proxy.scrollTo("bottom", anchor: .bottom)
                                 }
                             }
@@ -103,21 +194,38 @@ struct AnalysisView: View {
                     }
                     .frame(maxWidth: 600, maxHeight: 200)
                 } label: {
-                    Label("AI Response", systemImage: "text.word.spacing")
-                        .font(.caption)
+                    HStack {
+                        Image(systemName: "text.word.spacing")
+                            .foregroundStyle(.purple)
+                        Text("AI Response")
+                    }
+                    .font(.caption)
+                }
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity
+                ))
+            }
+
+            // Cancel button with haptic feedback
+            Button("Cancel") {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    organizer.reset()
                 }
             }
-            
-            // Cancel button
-            Button("Cancel") {
-                organizer.reset()
-            }
-            .buttonStyle(.bordered)
+            .buttonStyle(.hapticBounce)
             .keyboardShortcut(.escape, modifiers: [])
+            .opacity(contentOpacity)
         }
         .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
+        }
     }
-    
+
     private var truncatedStreamContent: String {
         let content = organizer.streamingContent
         if content.count > 1000 {
@@ -126,7 +234,7 @@ struct AnalysisView: View {
         }
         return content
     }
-    
+
     private func formatTime(_ interval: TimeInterval) -> String {
         let minutes = Int(interval) / 60
         let seconds = Int(interval) % 60
@@ -137,4 +245,54 @@ struct AnalysisView: View {
     }
 }
 
+// MARK: - Animated Progress Ring
 
+struct AnimatedProgressRing: View {
+    let progress: Double
+    let lineWidth: CGFloat
+    let color: Color
+
+    @State private var animatedProgress: Double = 0
+
+    init(progress: Double, lineWidth: CGFloat = 8, color: Color = .blue) {
+        self.progress = progress
+        self.lineWidth = lineWidth
+        self.color = color
+    }
+
+    var body: some View {
+        ZStack {
+            // Background ring
+            Circle()
+                .stroke(color.opacity(0.2), lineWidth: lineWidth)
+
+            // Progress ring
+            Circle()
+                .trim(from: 0, to: animatedProgress)
+                .stroke(
+                    AngularGradient(
+                        colors: [color, color.opacity(0.5), color],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+        }
+        .onChange(of: progress) { oldValue, newValue in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                animatedProgress = newValue
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                animatedProgress = progress
+            }
+        }
+    }
+}
+
+#Preview {
+    AnalysisView()
+        .environmentObject(FolderOrganizer())
+        .frame(width: 600, height: 400)
+}
