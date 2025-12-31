@@ -56,14 +56,8 @@ jobs:
           echo ""
 
           if [ $BUILD_EXIT_CODE -ne 0 ]; then
-            echo "=== ALL ERRORS ==="
-            grep -i "error:" build_output.log || true
-            echo ""
-            echo "=== UNDEFINED SYMBOLS ==="
-            grep -i "undefined\|cannot find\|no such module" build_output.log || true
-            echo ""
-            echo "=== LAST 200 LINES OF BUILD LOG ==="
-            tail -200 build_output.log
+            echo "=== COMPLETE BUILD LOG ==="
+            cat build_output.log
             echo ""
             echo "=== BUILD FAILED ==="
             exit $BUILD_EXIT_CODE
