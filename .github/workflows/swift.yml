@@ -45,6 +45,8 @@ jobs:
             MACOSX_DEPLOYMENT_TARGET=14.0 \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
             GCC_TREAT_WARNINGS_AS_ERRORS=NO \
+            SWIFT_APPROACHABLE_CONCURRENCY=NO \
+            SWIFT_STRICT_CONCURRENCY=minimal \
             2>&1 | tee build_output.log
 
           BUILD_EXIT_CODE=${PIPESTATUS[0]}
@@ -78,6 +80,8 @@ jobs:
             MACOSX_DEPLOYMENT_TARGET=14.0 \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
             GCC_TREAT_WARNINGS_AS_ERRORS=NO \
+            SWIFT_APPROACHABLE_CONCURRENCY=NO \
+            SWIFT_STRICT_CONCURRENCY=minimal \
             2>&1 | tee test_output.log
 
           TEST_EXIT_CODE=${PIPESTATUS[0]}
