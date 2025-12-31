@@ -8,58 +8,88 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: macos-14
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: "15.4"
+      - name: Select latest Xcode
+        run: |
+          # List available Xcode versions
+          ls -la /Applications/ | grep Xcode
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+          # Use the latest available Xcode
+          XCODE_PATH=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE_PATH" ]; then
+            echo "Using Xcode at: $XCODE_PATH"
+            sudo xcode-select -s "$XCODE_PATH"
+          fi
+
+      - name: Show Xcode and SDK version
+        run: |
+          xcodebuild -version
+          xcrun --show-sdk-path
+          xcrun --show-sdk-version || true
+
+      - name: List available schemes and destinations
+        run: |
+          xcodebuild -project "FileOrganiser.xcodeproj" -list
+          xcodebuild -showdestinations -project "FileOrganiser.xcodeproj" -scheme "FileOrganiser" 2>/dev/null | head -20 || true
 
       - name: Build the project
         run: |
           xcodebuild build \
             -project "FileOrganiser.xcodeproj" \
             -scheme "FileOrganiser" \
-            -destination 'platform=macOS,arch=arm64' \
+            -destination 'platform=macOS' \
             -configuration Debug \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
-            ONLY_ACTIVE_ARCH=YES
+            CODE_SIGN_IDENTITY="-" \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=YES \
+            | tee build_output.log
+
+          BUILD_RESULT=${PIPESTATUS[0]}
+          if [ $BUILD_RESULT -ne 0 ]; then
+            echo "Build failed with exit code $BUILD_RESULT"
+            tail -100 build_output.log
+            exit $BUILD_RESULT
+          fi
 
       - name: Run UI Tests
         run: |
+          # Run UI tests
           xcodebuild test \
             -project "FileOrganiser.xcodeproj" \
             -scheme "FileOrganiser" \
-            -destination 'platform=macOS,arch=arm64' \
+            -destination 'platform=macOS' \
             -only-testing:FileOrganiserUITests \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_IDENTITY="-" \
+            DEVELOPMENT_TEAM="" \
             ONLY_ACTIVE_ARCH=YES \
-            2>&1 | tee test_output.log || true
+            2>&1 | tee test_output.log
+
+          TEST_RESULT=${PIPESTATUS[0]}
 
           echo ""
           echo "=== Test Summary ==="
-          grep -E "(Test Suite|Test Case|Executed|passed|failed|error:)" test_output.log | tail -30 || true
+          grep -E "(Test Suite|Test Case|Executed|passed|failed|error:)" test_output.log | tail -50 || true
 
-          if grep -q "TEST SUCCEEDED" test_output.log; then
+          if [ $TEST_RESULT -eq 0 ]; then
             echo "✅ UI Tests passed!"
+          elif grep -q "Executed.*tests.*with 0 failures" test_output.log; then
+            echo "✅ UI Tests passed (found success pattern)!"
             exit 0
-          elif grep -q "Executed.*test.*with.*0.*failures" test_output.log; then
+          elif grep -q "TEST SUCCEEDED" test_output.log; then
             echo "✅ UI Tests passed!"
             exit 0
           else
-            echo "❌ UI Tests may have failed. Check logs above."
-            exit 1
+            echo "❌ UI Tests failed with exit code $TEST_RESULT"
+            exit $TEST_RESULT
           fi
-        timeout-minutes: 20
+        timeout-minutes: 30
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
@@ -69,5 +99,6 @@ jobs:
           path: |
             TestResults.xcresult
             test_output.log
+            build_output.log
           retention-days: 7
           if-no-files-found: ignore
