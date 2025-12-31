@@ -30,7 +30,13 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.missingAPIKey
         }
         
-        let endpoint = "\(apiURL)/v1/chat/completions"
+        let endpoint: String
+        if config.provider == .ollama {
+            endpoint = "\(apiURL)/api/chat"
+        } else {
+            endpoint = "\(apiURL)/v1/chat/completions"
+        }
+        
         guard let url = URL(string: endpoint) else {
             throw AIClientError.invalidURL
         }
@@ -95,11 +101,22 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
             }
             
             let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            guard let choices = jsonResponse?["choices"] as? [[String: Any]],
-                  let firstChoice = choices.first,
-                  let message = firstChoice["message"] as? [String: Any],
-                  let content = message["content"] as? String else {
-                throw AIClientError.invalidResponseFormat
+            
+            let content: String
+            if config.provider == .ollama {
+                guard let message = jsonResponse?["message"] as? [String: Any],
+                      let text = message["content"] as? String else {
+                    throw AIClientError.invalidResponseFormat
+                }
+                content = text
+            } else {
+                guard let choices = jsonResponse?["choices"] as? [[String: Any]],
+                      let firstChoice = choices.first,
+                      let message = firstChoice["message"] as? [String: Any],
+                      let text = message["content"] as? String else {
+                    throw AIClientError.invalidResponseFormat
+                }
+                content = text
             }
             
             return try ResponseParser.parseResponse(content, originalFiles: files)
@@ -161,23 +178,30 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
                     
                     // Parse the JSON chunk
                     if let jsonData = jsonString.data(using: .utf8),
-                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-                       let choices = json["choices"] as? [[String: Any]],
-                       let firstChoice = choices.first,
-                       let delta = firstChoice["delta"] as? [String: Any],
-                       let content = delta["content"] as? String {
+                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
                         
-                        if firstTokenTime == nil {
-                            firstTokenTime = Date()
+                        let deltaContent: String?
+                        if config.provider == .ollama {
+                            let message = json["message"] as? [String: Any]
+                            deltaContent = message?["content"] as? String
+                        } else {
+                            let choices = json["choices"] as? [[String: Any]]
+                            let firstChoice = choices?.first
+                            let delta = firstChoice?["delta"] as? [String: Any]
+                            deltaContent = delta?["content"] as? String
                         }
-                        
-                        accumulatedContent += content
-                        tokenCountEstimate += 1 // Roughly counting chunks as tokens for now, or use chars/4 later
-                        
-                        // Notify delegate about the new chunk
-                        let chunk = content
-                        await MainActor.run {
-                            streamingDelegate?.didReceiveChunk(chunk)
+
+                        if let content = deltaContent {
+                            if firstTokenTime == nil {
+                                firstTokenTime = Date()
+                            }
+                            
+                            accumulatedContent += content
+                            tokenCountEstimate += 1
+                            
+                            await MainActor.run {
+                                streamingDelegate?.didReceiveChunk(content)
+                            }
                         }
                     }
                 }

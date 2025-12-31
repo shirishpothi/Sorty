@@ -10,7 +10,7 @@ import Foundation
 struct AIClientFactory {
     static func createClient(config: AIConfig) throws -> AIClientProtocol {
         switch config.provider {
-        case .openAICompatible:
+        case .openAICompatible, .ollama:
             return OpenAIClient(config: config)
             
         case .appleFoundationModel:

@@ -62,7 +62,7 @@ struct SettingsView: View {
                         if viewModel.config.provider == .openAICompatible {
                             Section {
                                 TextField("API URL", text: Binding(
-                                    get: { viewModel.config.apiURL ?? "" },
+                                    get: { viewModel.config.apiURL ?? "https://api.openai.com" },
                                     set: { viewModel.config.apiURL = $0.isEmpty ? nil : $0 }
                                 ))
                                 .textFieldStyle(.roundedBorder)
@@ -94,6 +94,39 @@ struct SettingsView: View {
                             }
                             .transition(TransitionStyles.scaleAndFade)
                             .animatedAppearance(delay: 0.1)
+                        }
+
+                        // Ollama Configuration
+                        if viewModel.config.provider == .ollama {
+                            Section {
+                                TextField("Server URL", text: Binding(
+                                    get: { viewModel.config.apiURL ?? "http://localhost:11434" },
+                                    set: { viewModel.config.apiURL = $0.isEmpty ? nil : $0 }
+                                ))
+                                .textFieldStyle(.roundedBorder)
+                                .accessibilityLabel("Ollama Server URL")
+
+                                TextField("Model", text: $viewModel.config.model)
+                                    .textFieldStyle(.roundedBorder)
+                                    .accessibilityLabel("Ollama Model Name")
+                                
+                                Text("Ensure Ollama is running locally and the model is downloaded.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            } header: {
+                                Text("Ollama Local Configuration")
+                            }
+                            .transition(TransitionStyles.scaleAndFade)
+                            .animatedAppearance(delay: 0.1)
+                            .onAppear {
+                                if viewModel.config.apiURL == nil {
+                                    viewModel.config.apiURL = "http://localhost:11434"
+                                }
+                                if viewModel.config.model == "gpt-4" {
+                                    viewModel.config.model = "llama3"
+                                }
+                                viewModel.config.requiresAPIKey = false
+                            }
                         }
 
                         // Organization Strategy

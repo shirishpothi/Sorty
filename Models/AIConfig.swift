@@ -9,12 +9,15 @@ import Foundation
 
 public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case openAICompatible = "openai_compatible"
+    case ollama = "ollama"
     case appleFoundationModel = "apple_foundation_model"
     
     public var displayName: String {
         switch self {
         case .openAICompatible:
             return "OpenAI-Compatible API"
+        case .ollama:
+            return "Ollama (Local)"
         case .appleFoundationModel:
             return "Apple Foundation Model"
         }
@@ -22,7 +25,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var isAvailable: Bool {
         switch self {
-        case .openAICompatible:
+        case .openAICompatible, .ollama:
             return true
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
@@ -36,7 +39,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var unavailabilityReason: String? {
         switch self {
-        case .openAICompatible:
+        case .openAICompatible, .ollama:
             return nil
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)

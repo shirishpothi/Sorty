@@ -159,7 +159,7 @@ struct PromptBuilder {
                 prompt = "USER INSTRUCTIONS: \(instructions)\n\n" + prompt
             }
             return prompt
-        case .openAICompatible:
+        case .openAICompatible, .ollama:
             return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions)
         }
     }
