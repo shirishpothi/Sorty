@@ -18,13 +18,23 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: Show Xcode version
+      - name: Show environment info
         run: |
+          echo "=== Xcode Version ==="
           xcodebuild -version
+          echo ""
+          echo "=== Swift Version ==="
           swift --version
+          echo ""
+          echo "=== Available SDKs ==="
+          xcodebuild -showsdks
+          echo ""
+          echo "=== Project Schemes ==="
+          xcodebuild -project "FileOrganiser.xcodeproj" -list
 
       - name: Build the project
         run: |
+          set -o pipefail
           xcodebuild build \
             -project "FileOrganiser.xcodeproj" \
             -scheme "FileOrganiser" \
@@ -35,15 +45,21 @@ jobs:
             DEVELOPMENT_TEAM="" \
             2>&1 | tee build_output.log
 
-          if [ ${PIPESTATUS[0]} -ne 0 ]; then
-            echo "❌ Build failed"
-            tail -100 build_output.log
-            exit 1
-          fi
+          echo ""
           echo "✅ Build succeeded"
+
+      - name: Show build errors on failure
+        if: failure()
+        run: |
+          echo "=== Build Errors ==="
+          grep -E "(error:|warning:|fatal)" build_output.log | head -100 || true
+          echo ""
+          echo "=== Last 200 lines of build log ==="
+          tail -200 build_output.log
 
       - name: Run UI Tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -project "FileOrganiser.xcodeproj" \
             -scheme "FileOrganiser" \
@@ -55,21 +71,21 @@ jobs:
             DEVELOPMENT_TEAM="" \
             2>&1 | tee test_output.log
 
-          TEST_RESULT=${PIPESTATUS[0]}
-
           echo ""
           echo "=== Test Summary ==="
           grep -E "(Test Suite|Test Case|Executed|passed|failed)" test_output.log | tail -30 || true
-
-          if [ $TEST_RESULT -eq 0 ]; then
-            echo "✅ UI Tests passed!"
-            exit 0
-          else
-            echo "❌ UI Tests failed"
-            grep -E "(error:|failed)" test_output.log | tail -20 || true
-            exit $TEST_RESULT
-          fi
+          echo ""
+          echo "✅ UI Tests passed!"
         timeout-minutes: 30
+
+      - name: Show test errors on failure
+        if: failure()
+        run: |
+          echo "=== Test Errors ==="
+          grep -E "(error:|failed|FAILED)" test_output.log | head -50 || true
+          echo ""
+          echo "=== Last 100 lines of test log ==="
+          tail -100 test_output.log || true
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
