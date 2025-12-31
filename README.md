@@ -6,16 +6,13 @@
 
 A native macOS SwiftUI application that uses AI to intelligently organize directory contents into relevant, semantically-named folders.
 
-## 📸 Preview
+<div align="center">
 
-<p align="center">
-  <img width="1348" alt="A preview of the mid-generation UI, with streaming enabled" src="Assets/Screenshots/A%20preview%20of%20the%20mid-generation%20UI,%20with%20streaming%20enabled.png" />
-  <br><i>Streaming AI responses in real-time</i><br><br>
-  <img width="1348" alt="Setting View" src="Assets/Screenshots/A%20preview%20of%20the%20settings%20page.png" />
-  <br><i>Advanced settings with Stats for Nerds</i><br><br>
-  <img width="1348" alt="A preview of the post-organisation UI" src="Assets/Screenshots/A%20preview%20of%20the%20post-organisation%20UI.png" />
-  <br><i>Interactive organization preview</i>
-</p>
+| <img src="Assets/Screenshots/A%20preview%20of%20the%20mid-generation%20UI,%20with%20streaming%20enabled.png" width="300" /> | <img src="Assets/Screenshots/A%20preview%20of%20the%20settings%20page.png" width="300" /> | <img src="Assets/Screenshots/A%20preview%20of%20the%20post-organisation%20UI.png" width="300" /> |
+| :---: | :---: | :---: |
+| *Streaming AI responses* | *Advanced settings* | *Interactive preview* |
+
+</div>
 
 
 ## ✨ Features
@@ -28,12 +25,6 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 - 👁️ **Interactive Preview**: Review and tweak suggested organization before any files are moved.
 - 🗂️ **Organization History**: Track all operations with detailed analytics and reasoning.
 - 🛡️ **Safe by Design**: Includes dry-run modes, comprehensive validation, and exclusion rules.
-
-<img width="1348" height="1133" alt="A preview of the mid-generation UI, with streaming enabled" src="https://share.cleanshot.com/YPzjGbh5" />
-
-<img width="1348" height="1133" alt="Setting View" src="https://share.cleanshot.com/JdYKL7HH" />
-
-<img width="1348" height="1133" alt="A preview of the post-organisation UI" src="https://share.cleanshot.com/QmDQfqz6" />
 
 
 ## 🚀 Quick Start
