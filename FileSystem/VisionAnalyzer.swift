@@ -83,11 +83,8 @@ public actor VisionAnalyzer {
         return await performOCR(on: cgImage)
     }
 
-    /// Perform OCR on NSImage data
-    public func analyzeImage(_ image: NSImage) async -> OCRResult? {
-        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return nil
-        }
+    /// Perform OCR on CGImage data
+    public func analyzeImage(_ cgImage: CGImage) async -> OCRResult? {
         return await performOCR(on: cgImage)
     }
 

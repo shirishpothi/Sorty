@@ -229,9 +229,8 @@ public actor ContentAnalyzer {
             return nil
         }
 
-        // Use NSImage for compatibility with VisionAnalyzer
-        let nsImage = NSImage(cgImage: cgImage, size: size)
-        return await visionAnalyzer.analyzeImage(nsImage)
+        // Use CGImage directly for compatibility with VisionAnalyzer (Sendable)
+        return await visionAnalyzer.analyzeImage(cgImage)
     }
 
     // MARK: - Image Extraction with OCR
