@@ -224,8 +224,6 @@ struct DuplicatesView: View {
 
 // MARK: - Header
 
-// MARK: - Header
-
 struct DuplicatesHeader: View {
     @ObservedObject var manager: DuplicateDetectionManager
     let currentDirectory: URL?

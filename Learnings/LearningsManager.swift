@@ -318,6 +318,12 @@ public class LearningsManager: ObservableObject {
             applyProgress = Double(index + 1) / Double(job.entries.count)
         }
         
+        // Update job status
+        if let jobIndex = project.jobHistory.firstIndex(where: { $0.id == jobId }) {
+            currentProject?.jobHistory[jobIndex].status = .rolledBack
+            await saveProject()
+        }
+        
         isApplying = false
         applyProgress = 1.0
         

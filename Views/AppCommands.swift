@@ -300,9 +300,10 @@ public class AppState: ObservableObject {
                 let originalName = file.displayName
                 let originalPath = file.path
                 let destination = folderPath + "/" + (suggestion.renameMapping(for: file)?.suggestedName ?? originalName)
-                let reasoning = "\"" + (suggestion.reasoning.replacingOccurrences(of: "\"", with: "\"\"")) + "\""
+                let reasoning = suggestion.reasoning
                 let tags = suggestion.semanticTags.joined(separator: "; ")
-                csv += "\(originalName),\"\(originalPath)\",\(destination),\(reasoning),\"\(tags)\"\n"
+                
+                csv += "\(csvEscape(originalName)),\"\(csvEscape(originalPath))\",\(csvEscape(destination)),\(csvEscape(reasoning)),\"\(csvEscape(tags))\"\n"
             }
             for sub in suggestion.subfolders {
                 processSuggestion(sub, parentPath: folderPath)
@@ -427,10 +428,10 @@ public class AppState: ObservableObject {
                     html += """
                     <div class="file">
                         <div>
-                            <span class="file-name">\(file.displayName)</span>
-                            \(newName != nil ? "<span style='color:#6e6e73;'> → \(newName!)</span>" : "")
+                            <span class="file-name">\(htmlEscape(file.displayName))</span>
+                            \(newName != nil ? "<span style='color:#6e6e73;'> → \(htmlEscape(newName!))</span>" : "")
                         </div>
-                        <span class="file-path">\(file.path)</span>
+                        <span class="file-path">\(htmlEscape(file.path))</span>
                     </div>
                     """
                 }
@@ -522,9 +523,25 @@ public class AppState: ObservableObject {
         // Could also clear history key if desired
         // UserDefaults.standard.removeObject(forKey: "organizationHistory")
     }
-
+    
     public func showAbout() {
         // Open Help window with About section selected
         showHelp(initialSection: .about)
+    }
+    
+    private func csvEscape(_ field: String) -> String {
+        if field.contains(",") || field.contains("\"") || field.contains("\n") {
+            return "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
+        }
+        return field
+    }
+
+    private func htmlEscape(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
     }
 }

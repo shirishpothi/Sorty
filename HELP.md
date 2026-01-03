@@ -396,7 +396,7 @@ Weekly insights show:
 
 ### AI Providers
 
-- **Apple Intelligence**: Processed on-device (requires M-series chip + macOS 26+)
+- **Apple Intelligence**: Processed on-device (requires M-series chip + macOS 15.1+)
 - **OpenAI/Compatible**: Cloud-based, file names and metadata sent to API
 - **Ollama**: Local processing, nothing leaves your machine
 
@@ -453,4 +453,4 @@ All data is stored locally:
 
 ---
 
-*FileOrganiser © 2024-2026 Shirish Pothi. Special thanks to the Apple Developer community.*
+*FileOrganiser © 2025-2026 Shirish Pothi. Special thanks to the Apple Developer community.*
