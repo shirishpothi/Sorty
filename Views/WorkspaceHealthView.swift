@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 
 struct WorkspaceHealthView: View {
     @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var appState: AppState
     @StateObject private var healthManager = WorkspaceHealthManager()
     @State private var selectedPeriod: TimePeriod = .week
     @State private var selectedDirectory: URL?
@@ -42,7 +43,9 @@ struct WorkspaceHealthView: View {
 
                 // Cleanup Opportunities
                 if !healthManager.activeOpportunities.isEmpty {
-                    OpportunitiesSection(healthManager: healthManager)
+                    OpportunitiesSection(healthManager: healthManager) { directoryPath in
+                        navigateToOrganize(directoryPath)
+                    }
                 }
 
                 // Growth Charts
@@ -100,6 +103,22 @@ struct WorkspaceHealthView: View {
                 DebugLogger.log("Analysis failed: \(error)")
             }
         }
+    }
+
+    private func navigateToOrganize(_ directoryPath: String) {
+        let url = URL(fileURLWithPath: directoryPath)
+        // Request access to the directory
+        guard url.startAccessingSecurityScopedResource() else {
+            // If we can't access, just set the directory and let the user handle permissions
+            appState.selectedDirectory = url
+            appState.currentView = .organize
+            organizer.reset()
+            return
+        }
+
+        appState.selectedDirectory = url
+        appState.currentView = .organize
+        organizer.reset()
     }
 }
 
@@ -344,6 +363,7 @@ struct InsightCard: View {
 struct OpportunitiesSection: View {
     @ObservedObject var healthManager: WorkspaceHealthManager
     @State private var expandedOpportunity: UUID?
+    let onTakeAction: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -366,6 +386,9 @@ struct OpportunitiesSection: View {
                     },
                     onDismiss: {
                         healthManager.dismissOpportunity(opportunity)
+                    },
+                    onTakeAction: {
+                        onTakeAction(opportunity.directoryPath)
                     }
                 )
             }
@@ -383,6 +406,7 @@ struct OpportunityCard: View {
     let isExpanded: Bool
     let onToggle: () -> Void
     let onDismiss: () -> Void
+    let onTakeAction: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -447,7 +471,7 @@ struct OpportunityCard: View {
                         .foregroundColor(.secondary)
 
                         Button("Take Action") {
-                            // TODO: Navigate to organize view with this folder
+                            onTakeAction()
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)

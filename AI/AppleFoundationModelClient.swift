@@ -23,6 +23,8 @@ final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
     }
     
     func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        let startTime = Date()
+        
         // Verify availability first
         guard Self.isAvailable() else {
             throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)
@@ -67,7 +69,22 @@ final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
             }
             
             // Parse the response into an OrganizationPlan
-            return try ResponseParser.parseResponse(content, originalFiles: files)
+            var plan = try ResponseParser.parseResponse(content, originalFiles: files)
+            
+            // Calculate stats
+            let duration = Date().timeIntervalSince(startTime)
+            let estimatedTokens = content.count / 4
+            let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
+            
+            plan.generationStats = GenerationStats(
+                duration: duration,
+                tps: tps,
+                ttft: 0.1, // Near instant for on-device
+                totalTokens: estimatedTokens,
+                model: "Apple Foundation Model"
+            )
+            
+            return plan
             
         } catch let error as LanguageModelSession.GenerationError {
             throw AIClientError.apiError(

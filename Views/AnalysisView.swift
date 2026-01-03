@@ -3,7 +3,6 @@
 //  FileOrganizer
 //
 //  Real-time organization display with streaming progress
-//  Enhanced with motion effects and loading animations
 //
 
 import SwiftUI
@@ -11,11 +10,7 @@ import SwiftUI
 struct AnalysisView: View {
     @EnvironmentObject var organizer: FolderOrganizer
 
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var rotationAngle: Double = 0
     @State private var progressBarOffset: CGFloat = 0
-    @State private var contentOpacity: Double = 0
-    @State private var stageIconBounce: CGFloat = 0
 
     var body: some View {
         VStack(spacing: 24) {
@@ -71,47 +66,24 @@ struct AnalysisView: View {
                     }
                 }
 
-                // Percentage with bounce animation
+                // Percentage
                 Text("\(Int(organizer.progress * 100))%")
                     .font(.title2)
                     .fontWeight(.semibold)
                     .monospacedDigit()
-                    .scaleEffect(pulseScale)
-                    .scaleEffect(pulseScale)
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                            pulseScale = 1.05
-                        }
-                    }
             }
-            .opacity(contentOpacity)
 
-            // Stage indicator with icon and motion
+            // Stage indicator with icon
             HStack(spacing: 12) {
                 Group {
                     if case .scanning = organizer.state {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 32))
                             .foregroundStyle(.blue)
-                            .symbolEffect(.pulse)
-                            .rotationEffect(.degrees(rotationAngle))
-                            .offset(y: stageIconBounce)
                     } else if case .organizing = organizer.state {
                         Image(systemName: "brain.head.profile")
                             .font(.system(size: 32))
                             .foregroundStyle(.purple)
-                            .symbolEffect(.variableColor.iterative)
-                            .scaleEffect(pulseScale)
-                    }
-                }
-                .onAppear {
-                    // Subtle rotation for scanning
-                    withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
-                        rotationAngle = 10
-                    }
-                    // Bounce effect
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.9).repeatForever(autoreverses: true)) {
-                        stageIconBounce = -3
                     }
                 }
 
@@ -138,16 +110,14 @@ struct AnalysisView: View {
                     }
                 }
             }
-            .opacity(contentOpacity)
 
-            // Timeout message with subtle animation
+            // Timeout message
             if organizer.showTimeoutMessage {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "clock")
                                 .foregroundStyle(.orange)
-                                .rotationEffect(.degrees(rotationAngle * 0.5))
 
                             Text("Taking longer than expected")
                                 .font(.subheadline)
@@ -187,7 +157,7 @@ struct AnalysisView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .onChange(of: organizer.streamingContent) { oldValue, newValue in
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                withAnimation(.easeOut(duration: 0.2)) {
                                     proxy.scrollTo("bottom", anchor: .bottom)
                                 }
                             }
@@ -208,23 +178,14 @@ struct AnalysisView: View {
                 ))
             }
 
-            // Cancel button with haptic feedback
+            // Cancel button
             Button("Cancel") {
                 HapticFeedbackManager.shared.tap()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                    organizer.reset()
-                }
+                organizer.reset()
             }
-            .buttonStyle(.hapticBounce)
             .keyboardShortcut(.escape, modifiers: [])
-            .opacity(contentOpacity)
         }
         .background(Color(NSColor.windowBackgroundColor))
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
-        }
     }
 
     private var truncatedStreamContent: String {
@@ -280,12 +241,12 @@ struct AnimatedProgressRing: View {
                 .rotationEffect(.degrees(-90))
         }
         .onChange(of: progress) { oldValue, newValue in
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.95)) {
+            withAnimation(.easeOut(duration: 0.3)) {
                 animatedProgress = newValue
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.95)) {
+            withAnimation(.easeOut(duration: 0.3)) {
                 animatedProgress = progress
             }
         }

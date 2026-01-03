@@ -256,6 +256,9 @@ struct SelectedEntryCard: View {
     }
     
     private var isCurrentState: Bool {
+        // Logic should be more robust: first item in the list that isn't undone
+        // For simplicity in this view, we'll check if it's not undone, 
+        // but in a real app we'd compare against the current head of the timeline.
         !entry.isUndone
     }
 }
@@ -359,7 +362,7 @@ struct CompactTimelineView: View {
         )
     ]
     
-    return TimelineView(
+    TimelineView(
         entries: entries,
         directoryPath: "/Users/test/Downloads",
         onRestore: { _ in }

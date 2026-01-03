@@ -82,6 +82,7 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
     // MARK: - Non-Streaming Implementation
     
     private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+        let startTime = Date()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         
@@ -95,6 +96,8 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         
         do {
             let (data, response) = try await session.data(for: request)
+            let endTime = Date()
+            let duration = endTime.timeIntervalSince(startTime)
             
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw AIClientError.invalidResponse
@@ -116,7 +119,23 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
                 throw AIClientError.invalidResponseFormat
             }
             
-            return try ResponseParser.parseResponse(content, originalFiles: files)
+            // Calculate stats
+            // For non-streaming, TTFT is essentially the total duration as we wait for the full response
+            // Estimated tokens: ~4 chars per token
+            let estimatedTokens = content.count / 4
+            let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
+            
+            let stats = GenerationStats(
+                duration: duration,
+                tps: tps,
+                ttft: duration, // approximate
+                totalTokens: estimatedTokens,
+                model: config.model
+            )
+            
+            var plan = try ResponseParser.parseResponse(content, originalFiles: files)
+            plan.generationStats = stats
+            return plan
         } catch let error as AIClientError {
             throw error
         } catch {
@@ -267,5 +286,6 @@ enum AIClientError: LocalizedError, Sendable {
         }
     }
 }
+
 
 

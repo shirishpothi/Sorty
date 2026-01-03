@@ -14,6 +14,7 @@ public enum OrganizationStatus: String, Codable, Sendable {
     case cancelled
     case skipped // Superseded by "Try Another"
     case undo // Reverted
+    case duplicatesCleanup // New: Duplicate removal session
 }
 
 public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendable {
@@ -30,6 +31,11 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public var operations: [FileSystemManager.FileOperation]?
     public var isUndone: Bool
     
+    // Duplicate Specific Fields
+    public var duplicatesDeleted: Int?
+    public var recoveredSpace: Int64?
+    public var restorableItems: [RestorableDuplicate]?
+    
     public init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
@@ -42,7 +48,10 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         errorMessage: String? = nil,
         rawAIResponse: String? = nil,
         operations: [FileSystemManager.FileOperation]? = nil,
-        isUndone: Bool = false
+        isUndone: Bool = false,
+        duplicatesDeleted: Int? = nil,
+        recoveredSpace: Int64? = nil,
+        restorableItems: [RestorableDuplicate]? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -69,6 +78,9 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         self.rawAIResponse = rawAIResponse
         self.operations = operations
         self.isUndone = isUndone
+        self.duplicatesDeleted = duplicatesDeleted
+        self.recoveredSpace = recoveredSpace
+        self.restorableItems = restorableItems
     }
     
     // Custom decoding to handle migration from old format
@@ -103,6 +115,10 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
                 status = .failed
             }
         }
+
+        duplicatesDeleted = try container.decodeIfPresent(Int.self, forKey: .duplicatesDeleted)
+        recoveredSpace = try container.decodeIfPresent(Int64.self, forKey: .recoveredSpace)
+        restorableItems = try container.decodeIfPresent([RestorableDuplicate].self, forKey: .restorableItems)
     }
 }
 
@@ -163,6 +179,10 @@ public class OrganizationHistory: ObservableObject {
     public var failedCount: Int {
         entries.filter { $0.status == .failed }.count
     }
+
+    public var totalRecoveredSpace: Int64 {
+        entries.compactMap { $0.recoveredSpace }.reduce(0, +)
+    }
     
     private func loadHistory() {
         if let data = userDefaults.data(forKey: historyKey),
@@ -175,6 +195,33 @@ public class OrganizationHistory: ObservableObject {
         if let encoded = try? JSONEncoder().encode(entries) {
             userDefaults.set(encoded, forKey: historyKey)
         }
+    }
+}
+
+
+
+/// Represents a duplicate file that has been safely deleted and can be restored
+public struct RestorableDuplicate: Codable, Identifiable, Sendable, Hashable, Equatable {
+    public let id: UUID
+    public let originalPath: String
+    public let deletedPath: String
+    public let deletedDate: Date
+    public let metadata: FileMetadata
+    
+    public struct FileMetadata: Codable, Sendable, Hashable, Equatable {
+        public let creationDate: Date?
+        public let modificationDate: Date?
+        public let permissions: Int?
+        public let ownerAccountID: Int?
+        public let groupOwnerAccountID: Int?
+    }
+    
+    public init(id: UUID = UUID(), originalPath: String, deletedPath: String, deletedDate: Date = Date(), metadata: FileMetadata) {
+        self.id = id
+        self.originalPath = originalPath
+        self.deletedPath = deletedPath
+        self.deletedDate = deletedDate
+        self.metadata = metadata
     }
 }
 

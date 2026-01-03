@@ -46,3 +46,5 @@ Package.resolved
 *.app
 *.swp
 *~
+TestResults.xcresult/
+Logs/

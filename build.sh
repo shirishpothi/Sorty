@@ -15,6 +15,19 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 echo "🚀 Building $APP_NAME..."
 
+# 0. Auto-generate commit.txt from git
+COMMIT_FILE="Resources/commit.txt"
+if [ -d ".git" ]; then
+    COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+    echo "$COMMIT_HASH" > "$COMMIT_FILE"
+    echo "📝 Commit hash written to $COMMIT_FILE: ${COMMIT_HASH:0:9}"
+elif [ -f "$COMMIT_FILE" ]; then
+    echo "📝 Using existing commit.txt"
+else
+    echo "unknown" > "$COMMIT_FILE"
+    echo "⚠️ Warning: Not a git repository, commit set to 'unknown'"
+fi
+
 # 1. Compile the project
 if ! swift build; then
     echo "❌ Error: Build failed!"
@@ -46,7 +59,13 @@ else
     echo "⚠️ Warning: Info.plist not found in project root"
 fi
 
-# 6. Sign the app (Ad-hoc) to prevent launch errors
+# 6. Copy commit.txt to Resources if it exists
+if [ -f "$COMMIT_FILE" ]; then
+    cp "$COMMIT_FILE" "$RESOURCES_DIR/"
+    echo "📄 commit.txt copied to Resources"
+fi
+
+# 7. Sign the app (Ad-hoc) to prevent launch errors
 echo "🔏 Signing $APP_BUNDLE..."
 if codesign --force --deep --sign - "$APP_BUNDLE"; then
     echo "✅ Signing successful"

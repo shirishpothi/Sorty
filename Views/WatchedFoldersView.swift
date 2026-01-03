@@ -39,7 +39,6 @@ struct WatchedFoldersView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("AddWatchedFolderButton")
-                .bounceTap(scale: 0.95)
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
@@ -111,41 +110,23 @@ struct WatchedFoldersView: View {
 // MARK: - Empty State View
 
 struct EmptyWatchedFoldersView: View {
-    @State private var iconScale: CGFloat = 1.0
-    @State private var appeared = false
-
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "eye.slash")
                 .font(.system(size: 48))
                 .foregroundStyle(.tertiary)
-                .scaleEffect(iconScale)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                        iconScale = 1.1
-                    }
-                }
 
             Text("No Watched Folders")
                 .font(.headline)
                 .foregroundColor(.secondary)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 10)
 
             Text("Add folders like Downloads or Desktop to automatically organize new files")
                 .font(.caption)
                 .foregroundColor(.secondary.opacity(0.6))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 300)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
-                appeared = true
-            }
-        }
     }
 }
 
@@ -155,8 +136,6 @@ struct WatchedFolderRow: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @State private var showingConfig = false
-    @State private var isHovered = false
-    @State private var toggleScale: CGFloat = 1.0
 
     var body: some View {
         HStack(spacing: 12) {
@@ -169,8 +148,6 @@ struct WatchedFolderRow: View {
                 Image(systemName: "folder.fill")
                     .font(.system(size: 18))
                     .foregroundStyle(folder.isEnabled ? .blue : .gray)
-                    .scaleEffect(isHovered ? 1.1 : 1.0)
-                    .animation(.subtleBounce, value: isHovered)
             }
 
             // Folder Info
@@ -200,20 +177,11 @@ struct WatchedFolderRow: View {
                     get: { folder.isEnabled },
                     set: { _ in
                         HapticFeedbackManager.shared.selection()
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
-                            toggleScale = 1.1
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                                toggleScale = 1.0
-                            }
-                        }
                         watchedFoldersManager.toggleEnabled(for: folder)
                     }
                 ))
                 .toggleStyle(.switch)
                 .labelsHidden()
-                .scaleEffect(toggleScale)
 
                 if folder.isEnabled {
                     HStack(spacing: 4) {
@@ -245,7 +213,6 @@ struct WatchedFolderRow: View {
                         .foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                .bounceTap(scale: 0.9)
                 .sheet(isPresented: $showingConfig) {
                     WatchedFolderConfigView(folder: folder)
                         .modalBounce()
@@ -256,9 +223,6 @@ struct WatchedFolderRow: View {
         .padding(.vertical, 8)
         .opacity(folder.exists ? 1.0 : 0.5)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
         .overlay {
             if !folder.exists {
                 HStack {
@@ -407,7 +371,6 @@ struct WatchedFolderConfigView: View {
                                 .cornerRadius(8)
                             }
                             .buttonStyle(.plain)
-                            .bounceTap(scale: 0.98)
 
                             Text("Runs a full organization to set the baseline structure.")
                                 .font(.caption)
@@ -429,14 +392,12 @@ struct WatchedFolderConfigView: View {
                         HapticFeedbackManager.shared.tap()
                         dismiss()
                     }
-                    .bounceTap(scale: 0.95)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         HapticFeedbackManager.shared.success()
                         save()
                     }
-                    .bounceTap(scale: 0.95)
                 }
             }
         }

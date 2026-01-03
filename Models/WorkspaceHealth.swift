@@ -172,10 +172,13 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
         case unorganizedFiles = "Unorganized Files"
         case largeFiles = "Large Files"
         case oldFiles = "Old Files"
+        case veryOldFiles = "Very Old Files"
         case screenshotClutter = "Screenshot Clutter"
         case downloadClutter = "Download Clutter"
         case cacheFiles = "Cache Files"
         case temporaryFiles = "Temporary Files"
+        case emptyFolders = "Empty Folders"
+        case brokenSymlinks = "Broken Symlinks"
 
         public var icon: String {
             switch self {
@@ -183,10 +186,13 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
             case .unorganizedFiles: return "folder.badge.questionmark"
             case .largeFiles: return "externaldrive.fill"
             case .oldFiles: return "clock.arrow.circlepath"
+            case .veryOldFiles: return "clock.badge.exclamationmark"
             case .screenshotClutter: return "camera.viewfinder"
             case .downloadClutter: return "arrow.down.circle"
             case .cacheFiles: return "archivebox"
             case .temporaryFiles: return "trash"
+            case .emptyFolders: return "folder.badge.minus"
+            case .brokenSymlinks: return "link.badge.plus"
             }
         }
 
@@ -196,10 +202,13 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
             case .unorganizedFiles: return .orange
             case .largeFiles: return .red
             case .oldFiles: return .gray
+            case .veryOldFiles: return .brown
             case .screenshotClutter: return .blue
             case .downloadClutter: return .green
             case .cacheFiles: return .yellow
             case .temporaryFiles: return .pink
+            case .emptyFolders: return .indigo
+            case .brokenSymlinks: return .red
             }
         }
     }
@@ -500,6 +509,50 @@ public class WorkspaceHealthManager: ObservableObject {
             ))
         }
 
+        // Check for very old files (not accessed in 1+ year)
+        let veryOldFiles = files.filter { file in
+            guard let accessDate = file.lastAccessDate ?? file.modificationDate else { return false }
+            let age = Date().timeIntervalSince(accessDate)
+            return age > 365 * 86400 // Older than 1 year
+        }
+        if veryOldFiles.count >= 10 {
+            let totalSize = veryOldFiles.reduce(0) { $0 + $1.size }
+            opportunities.append(CleanupOpportunity(
+                type: .veryOldFiles,
+                directoryPath: path,
+                description: "\(veryOldFiles.count) files haven't been accessed in over a year. Consider archiving.",
+                estimatedSavings: totalSize,
+                fileCount: veryOldFiles.count,
+                priority: totalSize > 1_000_000_000 ? .high : .medium
+            ))
+        }
+
+        // Check for empty folders
+        let emptyFolders = await findEmptyFolders(at: path)
+        if !emptyFolders.isEmpty {
+            opportunities.append(CleanupOpportunity(
+                type: .emptyFolders,
+                directoryPath: path,
+                description: "\(emptyFolders.count) empty folders can be removed to reduce clutter.",
+                estimatedSavings: 0,
+                fileCount: emptyFolders.count,
+                priority: emptyFolders.count >= 20 ? .medium : .low
+            ))
+        }
+
+        // Check for broken symlinks
+        let brokenSymlinks = await findBrokenSymlinks(at: path)
+        if !brokenSymlinks.isEmpty {
+            opportunities.append(CleanupOpportunity(
+                type: .brokenSymlinks,
+                directoryPath: path,
+                description: "\(brokenSymlinks.count) broken symbolic links found. These point to non-existent targets.",
+                estimatedSavings: 0,
+                fileCount: brokenSymlinks.count,
+                priority: brokenSymlinks.count >= 5 ? .medium : .low
+            ))
+        }
+
         saveData()
     }
 
@@ -630,6 +683,72 @@ public class WorkspaceHealthManager: ObservableObject {
                tempPatterns.contains { name.contains($0) } ||
                name.hasPrefix("~") ||
                name.hasSuffix("~")
+    }
+
+    /// Find empty folders in a directory (non-recursive check for immediate children)
+    private func findEmptyFolders(at path: String) async -> [String] {
+        let fileManager = FileManager.default
+        var emptyFolders: [String] = []
+
+        guard let enumerator = fileManager.enumerator(
+            at: URL(fileURLWithPath: path),
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        while let url = enumerator.nextObject() as? URL {
+            do {
+                let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
+                if resourceValues.isDirectory == true {
+                    let contents = try fileManager.contentsOfDirectory(atPath: url.path)
+                    // Filter out hidden files
+                    let visibleContents = contents.filter { !$0.hasPrefix(".") }
+                    if visibleContents.isEmpty {
+                        emptyFolders.append(url.path)
+                    }
+                }
+            } catch {
+                continue
+            }
+        }
+
+        return emptyFolders
+    }
+
+    /// Find broken symbolic links in a directory
+    private func findBrokenSymlinks(at path: String) async -> [String] {
+        let fileManager = FileManager.default
+        var brokenLinks: [String] = []
+
+        guard let enumerator = fileManager.enumerator(
+            at: URL(fileURLWithPath: path),
+            includingPropertiesForKeys: [.isSymbolicLinkKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        while let url = enumerator.nextObject() as? URL {
+            do {
+                let resourceValues = try url.resourceValues(forKeys: [.isSymbolicLinkKey])
+                if resourceValues.isSymbolicLink == true {
+                    // Try to resolve the symlink
+                    let destination = try fileManager.destinationOfSymbolicLink(atPath: url.path)
+                    let destinationURL = URL(fileURLWithPath: destination, relativeTo: url.deletingLastPathComponent())
+                    
+                    if !fileManager.fileExists(atPath: destinationURL.path) {
+                        brokenLinks.append(url.path)
+                    }
+                }
+            } catch {
+                // If we can't resolve, it's broken
+                brokenLinks.append(url.path)
+            }
+        }
+
+        return brokenLinks
     }
 
     // MARK: - Persistence

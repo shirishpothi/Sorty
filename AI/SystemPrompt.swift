@@ -25,6 +25,11 @@ You are an intelligent file organization assistant. Your task is to analyze a li
   - **Primary**: Group by file type/category (Documents, Media, Code, Archives, etc.)
   - **Secondary**: Group by purpose/project within each category
   - **Tertiary**: Use content patterns, filenames, and metadata to infer relationships
+  - **Tagging (CRITICAL)**: Assign 1-3 relevant Finder-compatible tags to EVERY file. Use short, meaningful tags like:
+    - Purpose: "Invoice", "Receipt", "Report", "Notes", "Draft", "Final"
+    - Type: "Personal", "Work", "School", "Business"
+    - Status: "Important", "Archive", "Review", "Urgent"
+    - Custom: Any project-specific or descriptive tags appropriate for the file
 
 4. **Standard Categories**:
   - **Documents**: PDF, DOCX, DOC, TXT, MD, RTF, PAGES
@@ -63,7 +68,12 @@ You are an intelligent file organization assistant. Your task is to analyze a li
              "files": ["filename.ext"]
            }
          ],
-         "files": ["filename.ext", "filename2.ext"]
+         "files": [
+           {
+             "filename": "filename.ext",
+             "tags": ["tag1", "tag2"]
+           }
+         ]
        }
      ],
      "unorganized": [
@@ -84,5 +94,6 @@ You are an intelligent file organization assistant. Your task is to analyze a li
 Return ONLY the JSON object, no additional text, explanations, or markdown formatting.
 """
 }
+
 
 

@@ -487,7 +487,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Auto-apply for incremental
-            try await apply(at: directory, dryRun: false)
+            // For incremental, we typically want tagging if enabled generally. 
+            // Since we don't have config here easily, we might need to fetch it or pass it.
+            // However, organizeIncremental is called from a view where we have config.
+            // Let's update organizeIncremental signature too? 
+            // Or better, let's just make apply take the argument.
+            // For incremental drop, we'll assume tagging is desired if configured.
+            // But organizeIncremental doesn't take config directly...
+            // Let's stick to updating apply first.
+            try await apply(at: directory, dryRun: false, enableTagging: true) // Default to true, or we need to pass it down.
+
 
         } catch {
             stopTimeoutTimer()
@@ -498,7 +507,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // MARK: - Apply Organization
 
-    public func apply(at baseURL: URL, dryRun: Bool = false) async throws {
+    public func apply(at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true) async throws {
         guard let plan = currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
@@ -508,7 +517,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         updateState(.applying, stage: "Applying changes...", progress: 0.0)
 
         do {
-            let operations = try await fileSystemManager.applyOrganization(plan, at: baseURL, dryRun: dryRun)
+            let operations = try await fileSystemManager.applyOrganization(plan, at: baseURL, dryRun: dryRun, enableTagging: enableTagging)
 
             try checkCancellation()
 

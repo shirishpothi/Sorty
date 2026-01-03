@@ -71,6 +71,7 @@ public struct AIConfig: Codable, Sendable {
     // Deep Scanning & Duplicate Detection
     public var enableDeepScan: Bool   // Analyze file content (PDF text, EXIF, etc.)
     public var detectDuplicates: Bool // Find duplicate files by hash
+    public var enableFileTagging: Bool // Apply Finder tags to files
     public var showStatsForNerds: Bool // Show detailed stats about generation
     
     public init(
@@ -88,6 +89,7 @@ public struct AIConfig: Codable, Sendable {
         enableReasoning: Bool = false,
         enableDeepScan: Bool = false,
         detectDuplicates: Bool = false,
+        enableFileTagging: Bool = true,
         showStatsForNerds: Bool = false
     ) {
         self.provider = provider
@@ -104,6 +106,7 @@ public struct AIConfig: Codable, Sendable {
         self.enableReasoning = enableReasoning
         self.enableDeepScan = enableDeepScan
         self.detectDuplicates = detectDuplicates
+        self.enableFileTagging = enableFileTagging
         self.showStatsForNerds = showStatsForNerds
     }
     
@@ -121,8 +124,10 @@ public struct AIConfig: Codable, Sendable {
         enableReasoning: false,
         enableDeepScan: false,
         detectDuplicates: false,
+        enableFileTagging: true,
         showStatsForNerds: false
     )
 }
+
 
 

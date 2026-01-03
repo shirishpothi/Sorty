@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
-[![macOS](https://img.shields.io/badge/macOS-26.0+-blue.svg)](https://www.apple.com/macos)
+[![macOS](https://img.shields.io/badge/macOS-15.1+-blue.svg)](https://www.apple.com/macos)
 
 A native macOS SwiftUI application that uses AI to intelligently organize directory contents into relevant, semantically-named folders.
 
@@ -18,20 +18,24 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 ## ✨ Features
 
 - 🤖 **Intelligent Organization**: Uses AI to understand file content and context for accurate categorization.
+- 🧠 **The Learnings Profile**: Train a local, example-based file organizer that learns from your existing folder structures and manual examples.
+- 🎭 **Custom Personas**: Create and edit specialized AI profiles for different workflows (e.g., Developer, Photographer, Student).
 - 🔌 **Multiple AI Providers**: 
   - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, etc.)
   - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
 - 🖱️ **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
+- 🔗 **App-Wide Deeplinks**: Control the app externally via `fileorganizer://` URL schemes for automation and shortcuts.
+- ⌨️ **CLI Tooling**: A companion command-line tool `learnings` for managing organization projects and analysis from the terminal.
 - 👁️ **Interactive Preview**: Review and tweak suggested organization before any files are moved.
-- 🗂️ **Organization History**: Track all operations with detailed analytics and reasoning.
-- 🛡️ **Safe by Design**: Includes dry-run modes, comprehensive validation, and exclusion rules.
+- 🗂️ **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
+- 🛡️ **Safe by Design**: Includes dry-run modes, comprehensive validation, duplicate protection settings, and exclusion rules.
 
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- macOS 13.0 or later
-- Xcode 15.0 or later
+- macOS 15.1 or later
+- Xcode 16.0 or later
 - (Optional) API key for OpenAI or compatible provider
 
 ### Installation

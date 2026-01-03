@@ -209,7 +209,7 @@ struct PreviewView: View {
         }
         Task { @MainActor in
             do {
-                try await organizer.apply(at: baseURL, dryRun: false)
+                try await organizer.apply(at: baseURL, dryRun: false, enableTagging: settingsViewModel.config.enableFileTagging)
                 if case .completed = organizer.state {
                     isApplying = false
                 }

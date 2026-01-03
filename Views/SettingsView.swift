@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var personaManager: PersonaManager // Access persona manager
+    @EnvironmentObject var appState: AppState
     @State private var testConnectionStatus: String?
     @State private var isTestingConnection = false
     @State private var showingAdvanced = false
@@ -23,6 +24,48 @@ struct SettingsView: View {
                 VStack(spacing: 24) {
                     // Main content
                     Form {
+                        // Quick Navigation
+                        Section {
+                            Button {
+                                appState.currentView = .watchedFolders
+                            } label: {
+                                Label {
+                                    HStack {
+                                        Text("Watched Folders")
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                } icon: {
+                                    Image(systemName: "eye")
+                                        .foregroundColor(.blue)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                appState.currentView = .exclusions
+                            } label: {
+                                Label {
+                                    HStack {
+                                        Text("Exclusion Rules")
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                } icon: {
+                                    Image(systemName: "eye.slash")
+                                        .foregroundColor(.red)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        } header: {
+                            Text("Organization Rules")
+                        }
+                        .animatedAppearance(delay: 0.05)
+
                         // AI Provider Section
                         Section {
                             VStack(alignment: .leading, spacing: 12) {
@@ -32,13 +75,13 @@ struct SettingsView: View {
                                         Image(systemName: viewModel.config.provider == provider ? "largecircle.fill.circle" : "circle")
                                             .foregroundColor(viewModel.config.provider == provider ? .accentColor : .secondary)
                                             .font(.system(size: 16))
-                                        
+
                                         // Label
                                         Text(provider.displayName)
                                             .foregroundColor(.primary)
-                                        
+
                                         Spacer()
-                                        
+
                                         // Availability Badge
                                         if !provider.isAvailable {
                                             Label("Unavailable", systemImage: "xmark.circle.fill")
@@ -104,11 +147,77 @@ struct SettingsView: View {
                                     .textFieldStyle(.roundedBorder)
                                     .accessibilityLabel("Model Name")
                                     .accessibilityIdentifier("ModelTextField")
+
+                                Divider()
+                                    .padding(.vertical, 4)
+
+                                // Requires API Key toggle (moved from Advanced)
+                                AnimatedToggle(isOn: $viewModel.config.requiresAPIKey) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Requires API Key")
+                                        Text("Disable for local endpoints that don't require authentication")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .accessibilityLabel("API Key requirement")
+                                .padding(.vertical, 4)
+
+                                // Test Connection (moved from separate section)
+                                HStack(spacing: 12) {
+                                    Button(action: testConnection) {
+                                        HStack(spacing: 8) {
+                                            if isTestingConnection {
+                                                BouncingSpinner(size: 14, color: .primary)
+                                            } else {
+                                                Image(systemName: "network")
+                                                    .font(.system(size: 14, weight: .semibold))
+                                            }
+
+                                            Text("Test Connection")
+                                                .font(.system(size: 14, weight: .medium))
+                                        }
+                                        .foregroundColor(.primary)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                        )
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(HapticBounceButtonStyle())
+                                    .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
+                                    .opacity(viewModel.config.provider.isAvailable ? 1.0 : 0.5)
+                                    .accessibilityIdentifier("TestConnectionButton")
+
+                                    if let status = testConnectionStatus {
+                                        Label(
+                                            status.contains("Success") ? "Connected" : "Failed",
+                                            systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
+                                        )
+                                        .foregroundColor(status.contains("Success") ? .green : .red)
+                                        .font(.caption)
+                                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                                    }
+                                }
+                                .padding(.top, 4)
+
+                                if let status = testConnectionStatus, !status.contains("Success") {
+                                    Text(status)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
                             } header: {
                                 Text("API Configuration")
                             }
                             .transition(TransitionStyles.scaleAndFade)
                             .animatedAppearance(delay: 0.1)
+                            .animation(.easeInOut(duration: 0.2), value: testConnectionStatus)
                         }
 
                         // Ollama Configuration
@@ -120,11 +229,26 @@ struct SettingsView: View {
                                 ))
                                 .textFieldStyle(.roundedBorder)
                                 .accessibilityLabel("Ollama Server URL")
+                                
+                                HStack {
+                                    SecureField("API Key (Optional)", text: Binding(
+                                        get: { viewModel.config.apiKey ?? "" },
+                                        set: { viewModel.config.apiKey = $0.isEmpty ? nil : $0 }
+                                    ))
+                                    .textFieldStyle(.roundedBorder)
+                                    .accessibilityLabel("Ollama API Key")
+                                    
+                                    if !viewModel.config.requiresAPIKey {
+                                        Text("Optional")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
 
                                 TextField("Model", text: $viewModel.config.model)
                                     .textFieldStyle(.roundedBorder)
                                     .accessibilityLabel("Ollama Model Name")
-                                
+
                                 Text("Ensure Ollama is running locally and the model is downloaded.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -140,8 +264,161 @@ struct SettingsView: View {
                                 if viewModel.config.model == "gpt-4" {
                                     viewModel.config.model = "llama3"
                                 }
-                                viewModel.config.requiresAPIKey = false
                             }
+                            
+                            // Separate Connection section for Ollama
+                            Section {
+                                VStack(spacing: 12) {
+                                    AnimatedToggle(isOn: $viewModel.config.requiresAPIKey) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Requires API Key")
+                                            Text("Enable if your Ollama instance requires authentication")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .accessibilityLabel("API Key requirement")
+                                    .padding(.vertical, 4)
+                                    
+                                    HStack(spacing: 12) {
+                                        Button(action: testConnection) {
+                                            HStack(spacing: 8) {
+                                                if isTestingConnection {
+                                                    BouncingSpinner(size: 14, color: .primary)
+                                                } else {
+                                                    Image(systemName: "network")
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                }
+                                                
+                                                Text("Test Connection")
+                                                    .font(.system(size: 14, weight: .medium))
+                                            }
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            )
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(HapticBounceButtonStyle())
+                                        .disabled(isTestingConnection)
+                                        .accessibilityIdentifier("OllamaTestConnectionButton")
+                                        
+                                        if let status = testConnectionStatus {
+                                            Label(
+                                                status.contains("Success") ? "Connected" : "Failed",
+                                                systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
+                                            )
+                                            .foregroundColor(status.contains("Success") ? .green : .red)
+                                            .font(.caption)
+                                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(.ultraThinMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                )
+                                
+                                if let status = testConnectionStatus, !status.contains("Success") {
+                                    Text(status)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+                            } header: {
+                                Text("Connection")
+                            }
+                            .transition(TransitionStyles.scaleAndFade)
+                            .animatedAppearance(delay: 0.15)
+                            .animation(.easeInOut(duration: 0.2), value: testConnectionStatus)
+                        }
+                        
+                        // Apple Foundation Model Connection Test
+                        if viewModel.config.provider == .appleFoundationModel {
+                            Section {
+                                VStack(spacing: 12) {
+                                    if viewModel.config.provider.isAvailable {
+                                        Text("Apple Intelligence is available on this device.")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Text("Apple Intelligence requires macOS 26.0+ and compatible hardware.")
+                                            .font(.caption)
+                                            .foregroundColor(.orange)
+                                    }
+                                    
+                                    HStack(spacing: 12) {
+                                        Button(action: testConnection) {
+                                            HStack(spacing: 8) {
+                                                if isTestingConnection {
+                                                    BouncingSpinner(size: 14, color: .primary)
+                                                } else {
+                                                    Image(systemName: "brain")
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                }
+                                                
+                                                Text("Test Connection")
+                                                    .font(.system(size: 14, weight: .medium))
+                                            }
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            )
+                                            .contentShape(Rectangle())
+                                        }
+                                        .buttonStyle(HapticBounceButtonStyle())
+                                        .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
+                                        .opacity(viewModel.config.provider.isAvailable ? 1.0 : 0.5)
+                                        .accessibilityIdentifier("AppleFMTestConnectionButton")
+                                        
+                                        if let status = testConnectionStatus {
+                                            Label(
+                                                status.contains("Success") ? "Connected" : "Failed",
+                                                systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
+                                            )
+                                            .foregroundColor(status.contains("Success") ? .green : .red)
+                                            .font(.caption)
+                                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                                        }
+                                    }
+                                }
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(.ultraThinMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                )
+                                
+                                if let status = testConnectionStatus, !status.contains("Success") {
+                                    Text(status)
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                }
+                            } header: {
+                                Text("Connection")
+                            }
+                            .transition(TransitionStyles.scaleAndFade)
+                            .animatedAppearance(delay: 0.1)
+                            .animation(.easeInOut(duration: 0.2), value: testConnectionStatus)
                         }
 
                         // Organization Strategy
@@ -177,7 +454,19 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.vertical, 4)
+                            .padding(.vertical, 4)
                             .accessibilityIdentifier("DuplicatesToggle")
+
+                            AnimatedToggle(isOn: $viewModel.config.enableFileTagging) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Enable File Tagging")
+                                    Text("Allow AI to suggest and apply Finder tags (e.g., 'Invoice', 'Personal') to files.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            .accessibilityIdentifier("FileTaggingToggle")
                         } header: {
                             Text("Organization Strategy")
                         }
@@ -209,59 +498,7 @@ struct SettingsView: View {
                         }
                         .animatedAppearance(delay: 0.2)
 
-                        // Test Connection
-                        Section {
-                            HStack(spacing: 12) {
-                                Button(action: testConnection) {
-                                    HStack(spacing: 8) {
-                                        if isTestingConnection {
-                                            BouncingSpinner(size: 14, color: .primary)
-                                        } else {
-                                            Image(systemName: "network")
-                                                .font(.system(size: 14, weight: .semibold))
-                                        }
-                                        
-                                        Text("Test Connection")
-                                            .font(.system(size: 14, weight: .medium))
-                                    }
-                                    .foregroundColor(.primary)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                    )
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(HapticBounceButtonStyle()) // Custom liquid style with haptic bounce
-                                .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
-                                .opacity(viewModel.config.provider.isAvailable ? 1.0 : 0.5)
-                                .accessibilityIdentifier("TestConnectionButton")
 
-                                if let status = testConnectionStatus {
-                                    Label(
-                                        status.contains("Success") ? "Connected" : "Failed",
-                                        systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
-                                    )
-                                    .foregroundColor(status.contains("Success") ? .green : .red)
-                                    .font(.caption)
-                                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-                                }
-                            }
-
-                            if let status = testConnectionStatus, !status.contains("Success") {
-                                Text(status)
-                                    .font(.caption)
-                                    .foregroundColor(.red)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-                            }
-                        }
-                        .animatedAppearance(delay: 0.25)
-                        .animatedAppearance(delay: 0.25) // Keeping appearance animation but making it subtle in AnimatedModifier if needed
-                        .animation(.easeInOut(duration: 0.2), value: testConnectionStatus)
 
                         // Advanced Settings (Collapsible)
                         Section {
@@ -286,16 +523,7 @@ struct SettingsView: View {
                                     }
                                     .accessibilityLabel("Enable response streaming")
 
-                                    // API Key Required toggle
-                                    AnimatedToggle(isOn: $viewModel.config.requiresAPIKey) {
-                                        Text("Requires API Key")
-                                    }
-                                    .accessibilityLabel("API Key requirement")
-                                    Text("Disable for local endpoints that don't require authentication")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
 
-                                    Divider()
 
                                     // Timeout settings parameters...
                                     VStack(alignment: .leading, spacing: 8) {
@@ -361,14 +589,11 @@ struct SettingsView: View {
                                             if let _ = personaManager.customPrompts[personaManager.selectedPersona] {
                                                 Button("Reset to Default") {
                                                     HapticFeedbackManager.shared.tap()
-                                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                        personaManager.resetCustomPrompt(for: personaManager.selectedPersona)
-                                                    }
+                                                    personaManager.resetCustomPrompt(for: personaManager.selectedPersona)
                                                 }
                                                 .font(.caption)
                                                 .buttonStyle(.borderless)
                                                 .foregroundColor(.red)
-                                                .bounceTap(scale: 0.95)
                                             }
                                         }
 
@@ -390,66 +615,27 @@ struct SettingsView: View {
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                     }
+
+                                    Divider()
+
+                                    AnimatedToggle(isOn: $viewModel.config.showStatsForNerds) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Stats for Nerds")
+                                            Text("Show detailed generation metrics (tokens/sec, time to first token)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
                                 }
                                 .padding(.top, 8)
                             }
                             .onChange(of: showingAdvanced) { oldValue, newValue in
                                 HapticFeedbackManager.shared.tap()
                             }
-                            
-                            Divider()
-                            
-                            AnimatedToggle(isOn: $viewModel.config.showStatsForNerds) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Stats for Nerds")
-                                    Text("Show detailed generation metrics (tokens/sec, time to first token)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                            }
                         }
                         .animatedAppearance(delay: 0.3)
                         .animation(.easeInOut(duration: 0.25), value: showingAdvanced)
 
-                        // Watched Folders (Smart Automations)
-                        Section {
-                            NavigationLink {
-                                WatchedFoldersView()
-                            } label: {
-                                HStack {
-                                    Label("Watched Folders", systemImage: "eye")
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .bounceTap(scale: 0.98)
-
-                            Text("Automatically organize folders like Downloads when new files arrive")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        } header: {
-                            Text("Smart Automations")
-                        }
-                        .animatedAppearance(delay: 0.35)
-
-                        // Exclusion Rules
-                        Section {
-                            NavigationLink {
-                                ExclusionRulesView()
-                            } label: {
-                                HStack {
-                                    Label("Exclusion Rules", systemImage: "eye.slash")
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .bounceTap(scale: 0.98)
-                        }
-                        .animatedAppearance(delay: 0.4)
                     }
                     .formStyle(.grouped)
                 }
@@ -494,23 +680,12 @@ struct AnimatedToggle<Label: View>: View {
     @Binding var isOn: Bool
     let label: () -> Label
 
-    @State private var toggleScale: CGFloat = 1.0
-
     var body: some View {
         Toggle(isOn: $isOn) {
             label()
         }
-        .scaleEffect(toggleScale)
         .onChange(of: isOn) { oldValue, newValue in
             HapticFeedbackManager.shared.selection()
-            withAnimation(.easeInOut(duration: 0.15)) {
-                toggleScale = 1.05
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    toggleScale = 1.0
-                }
-            }
         }
     }
 }

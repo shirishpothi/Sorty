@@ -65,11 +65,13 @@ struct ResponseParser {
         let filename: String
         let suggestedName: String?
         let renameReason: String?
+        let tags: [String]?
 
-        init(filename: String, suggestedName: String? = nil, renameReason: String? = nil) {
+        init(filename: String, suggestedName: String? = nil, renameReason: String? = nil, tags: [String]? = nil) {
             self.filename = filename
             self.suggestedName = suggestedName
             self.renameReason = renameReason
+            self.tags = tags
         }
 
         func encode(to encoder: Encoder) throws {
@@ -77,6 +79,7 @@ struct ResponseParser {
             try container.encode(filename, forKey: .filename)
             try container.encodeIfPresent(suggestedName, forKey: .suggestedName)
             try container.encodeIfPresent(renameReason, forKey: .renameReason)
+            try container.encodeIfPresent(tags, forKey: .tags)
         }
 
         // Support both simple string and object format
@@ -87,6 +90,7 @@ struct ResponseParser {
                 self.filename = simpleFilename
                 self.suggestedName = nil
                 self.renameReason = nil
+                self.tags = nil
                 return
             }
 
@@ -95,12 +99,14 @@ struct ResponseParser {
             filename = try container.decode(String.self, forKey: .filename)
             suggestedName = try container.decodeIfPresent(String.self, forKey: .suggestedName)
             renameReason = try container.decodeIfPresent(String.self, forKey: .renameReason)
+            tags = try container.decodeIfPresent([String].self, forKey: .tags)
         }
 
         enum CodingKeys: String, CodingKey {
             case filename
             case suggestedName = "suggested_name"
             case renameReason = "rename_reason"
+            case tags
         }
     }
 
@@ -189,7 +195,23 @@ struct ResponseParser {
                     )
                     renameMappings.append(mapping)
                 }
+
+                // Add tags if present
+                if let tags = fileEntry.tags, !tags.isEmpty {
+                    // We'll collect these into a temporary list and add to FolderSuggestion logic below
+                    // NOTE: FolderSuggestion doesn't have a mutable 'addTag' during init easily without
+                    // accumulating them first. Let's create the FileTagMapping here.
+                }
             }
+        }
+        
+        // Collect tag mappings
+        var tagMappings: [FileTagMapping] = []
+        for fileEntry in folder.files {
+           if let file = findFile(named: fileEntry.filename, in: originalFiles),
+              let tags = fileEntry.tags, !tags.isEmpty {
+               tagMappings.append(FileTagMapping(originalFile: file, tags: tags))
+           }
         }
 
         let subfolders = (folder.subfolders ?? []).map { subfolder in
@@ -203,6 +225,7 @@ struct ResponseParser {
             subfolders: subfolders,
             reasoning: folder.reasoning ?? folder.description ?? "",
             fileRenameMappings: renameMappings,
+            fileTagMappings: tagMappings,
             semanticTags: folder.semanticTags ?? [],
             confidenceScore: folder.confidence
         )
@@ -363,3 +386,4 @@ enum ParserError: LocalizedError {
         }
     }
 }
+

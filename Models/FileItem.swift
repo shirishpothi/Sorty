@@ -15,6 +15,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     public var size: Int64
     public var isDirectory: Bool
     public var creationDate: Date?
+    public var modificationDate: Date?
+    public var lastAccessDate: Date?
 
     // Deep scanning metadata
     public var contentMetadata: ContentMetadata?
@@ -43,6 +45,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         size: Int64 = 0,
         isDirectory: Bool = false,
         creationDate: Date? = nil,
+        modificationDate: Date? = nil,
+        lastAccessDate: Date? = nil,
         contentMetadata: ContentMetadata? = nil,
         sha256Hash: String? = nil,
         suggestedFilename: String? = nil,
@@ -58,6 +62,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         self.size = size
         self.isDirectory = isDirectory
         self.creationDate = creationDate
+        self.modificationDate = modificationDate
+        self.lastAccessDate = lastAccessDate
         self.contentMetadata = contentMetadata
         self.sha256Hash = sha256Hash
         self.suggestedFilename = suggestedFilename
@@ -132,3 +138,4 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         return width * height
     }
 }
+

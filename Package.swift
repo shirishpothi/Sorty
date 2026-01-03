@@ -12,7 +12,10 @@ let package = Package(
             targets: ["FileOrganizerLib"]),
         .executable(
             name: "FileOrganizerApp",
-            targets: ["FileOrganizerApp"])
+            targets: ["FileOrganizerApp"]),
+        .executable(
+            name: "learnings",
+            targets: ["LearningsCLI"])
     ],
     targets: [
         // Target for the core logic (Models, AI, Organizer, etc.)
@@ -26,16 +29,25 @@ let package = Package(
                 "build.sh",
                 "Makefile",
                 "README.md",
+                "HELP.md",
+                "LICENSE",
+                "SECURITY.md",
+                "CONTRIBUTING.md",
                 "AppCoordinator.swift",
                 "Info.plist",
                 "FileOrganizer.app",
                 ".git",
-                ".gitignore"
+                ".gitignore",
+                "Resources/commit.txt",
+                "Assets",
+                "Logs",
+                "TestResults.xcresult"
             ],
 
             sources: [
                 "AI",
                 "FileSystem",
+                "Learnings",
                 "Models",
                 "Organizer",
                 "Utilities",
@@ -56,10 +68,18 @@ let package = Package(
                 "build.sh",
                 "Makefile",
                 "README.md",
+                "HELP.md",
+                "LICENSE",
+                "SECURITY.md",
+                "CONTRIBUTING.md",
                 "Info.plist",
                 "FileOrganizer.app",
                 ".git",
-                ".gitignore"
+                ".gitignore",
+                "Resources/commit.txt",
+                "Assets",
+                "Logs",
+                "TestResults.xcresult"
             ],
 
             sources: [
@@ -71,6 +91,13 @@ let package = Package(
             name: "FileOrganizerTests",
             dependencies: ["FileOrganizerLib"],
             path: "Tests"
+        ),
+        // CLI tool for The Learnings feature
+        .executableTarget(
+            name: "LearningsCLI",
+            dependencies: ["FileOrganizerLib"],
+            path: "CLI",
+            sources: ["LearningsCLI.swift"]
         )
     ]
 )

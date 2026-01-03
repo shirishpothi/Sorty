@@ -19,6 +19,7 @@ struct FileOrganizerApp: App {
     @StateObject private var organizer = FolderOrganizer()
     @StateObject private var exclusionRules = ExclusionRulesManager()
     @StateObject private var extensionListener = ExtensionListener()
+    @StateObject private var deeplinkHandler = DeeplinkHandler.shared
     
     @State private var coordinator: AppCoordinator?
     
@@ -32,6 +33,7 @@ struct FileOrganizerApp: App {
                 .environmentObject(organizer)
                 .environmentObject(exclusionRules)
                 .environmentObject(extensionListener)
+                .environmentObject(deeplinkHandler)
                 .onAppear {
                     if coordinator == nil {
                         coordinator = AppCoordinator(organizer: organizer, watchedFoldersManager: watchedFoldersManager)
@@ -50,6 +52,37 @@ struct FileOrganizerApp: App {
                 .onChange(of: watchedFoldersManager.folders) { oldValue, newValue in
                     coordinator?.syncWatchedFolders()
                 }
+                .onOpenURL { url in
+                    // Handle deeplinks
+                    deeplinkHandler.handle(url: url)
+                    
+                    // Navigate based on destination
+                    if let destination = deeplinkHandler.pendingDestination {
+                        switch destination {
+                        case .organize(let path):
+                            if let path = path {
+                                appState.selectedDirectory = URL(fileURLWithPath: path)
+                            }
+                            appState.currentView = .organize
+                        case .duplicates(let path):
+                            if let path = path {
+                                appState.selectedDirectory = URL(fileURLWithPath: path)
+                            }
+                            appState.currentView = .duplicates
+                        case .learnings:
+                            appState.currentView = .learnings
+                        case .settings:
+                            appState.currentView = .settings
+                        case .help:
+                            appState.showHelp()
+                        case .history:
+                            appState.currentView = .history
+                        case .health:
+                            appState.currentView = .workspaceHealth
+                        }
+                        deeplinkHandler.clearPending()
+                    }
+                }
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
@@ -58,5 +91,3 @@ struct FileOrganizerApp: App {
         }
     }
 }
-
-

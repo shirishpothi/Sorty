@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 
 public actor FileSystemManager {
     private var undoStack: [FileOperation] = []
@@ -29,6 +30,7 @@ public actor FileSystemManager {
             case renameFile
             case deleteFile
             case copyFile
+            case tagFile
         }
 
         public struct OperationMetadata: Codable, Hashable, Sendable {
@@ -36,17 +38,23 @@ public actor FileSystemManager {
             public var newFilename: String?
             public var wasCreatedDuringOrganization: Bool
             public var parentFolderPath: String?
+            public var originalTags: [String]?
+            public var newTags: [String]?
 
             public init(
                 originalFilename: String? = nil,
                 newFilename: String? = nil,
                 wasCreatedDuringOrganization: Bool = false,
-                parentFolderPath: String? = nil
+                parentFolderPath: String? = nil,
+                originalTags: [String]? = nil,
+                newTags: [String]? = nil
             ) {
                 self.originalFilename = originalFilename
                 self.newFilename = newFilename
                 self.wasCreatedDuringOrganization = wasCreatedDuringOrganization
                 self.parentFolderPath = parentFolderPath
+                self.originalTags = originalTags
+                self.newTags = newTags
             }
         }
 
@@ -237,9 +245,86 @@ public actor FileSystemManager {
         return operations
     }
 
+    // MARK: - File Tagging
+
+    func tagFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false) async throws -> [FileOperation] {
+        // Tagging is now gated by the caller using this method
+        var operations: [FileOperation] = []
+
+        func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) throws {
+            let folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+
+            // Look for tag mappings in this suggestion
+            for mapping in suggestion.fileTagMappings {
+                // Find the file name (use the new name if it was renamed)
+                let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
+                
+                let fileURL = folderURL.appendingPathComponent(finalFilename)
+                
+                // Only proceed if we have tags to apply
+                guard !mapping.tags.isEmpty else { continue }
+                
+                if !dryRun {
+                    // Check if file exists at the expected location
+                    guard fileManager.fileExists(atPath: fileURL.path) else {
+                        continue
+                    }
+                    
+                    // Get current tags for undo
+                    let resourceValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey])
+                    let originalTags = resourceValues?.tagNames ?? []
+                    
+                    var newTagsSet = Set(originalTags)
+                    for tag in mapping.tags {
+                        newTagsSet.insert(tag)
+                    }
+                    let finalTags = Array(newTagsSet)
+                    
+                    // Apply using NSURL to avoid version check error
+                    let nsURL = fileURL as NSURL
+                    try? nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                    
+                    operations.append(FileOperation(
+                        id: UUID(),
+                        type: .tagFile,
+                        sourcePath: fileURL.path,
+                        destinationPath: nil,
+                        timestamp: Date(),
+                        metadata: FileOperation.OperationMetadata(
+                            originalTags: originalTags,
+                            newTags: finalTags
+                        )
+                    ))
+                } else {
+                     operations.append(FileOperation(
+                        id: UUID(),
+                        type: .tagFile,
+                        sourcePath: fileURL.path,
+                        destinationPath: nil,
+                        timestamp: Date(),
+                        metadata: FileOperation.OperationMetadata(
+                            newTags: mapping.tags
+                        )
+                    ))
+                }
+            }
+
+            // Recurse
+            for subfolder in suggestion.subfolders {
+                try tagFilesInSuggestion(subfolder, parentURL: folderURL)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            try tagFilesInSuggestion(suggestion, parentURL: baseURL)
+        }
+
+        return operations
+    }
+
     // MARK: - Apply Organization
 
-    func applyOrganization(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false) async throws -> [FileOperation] {
+    func applyOrganization(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true) async throws -> [FileOperation] {
         var allOperations: [FileOperation] = []
 
         // First create all folders
@@ -250,8 +335,33 @@ public actor FileSystemManager {
         let fileOps = try await moveFiles(plan, at: baseURL, dryRun: dryRun)
         allOperations.append(contentsOf: fileOps)
 
+        // Then apply tags if enabled
+        if enableTagging {
+            let tagOps = try await tagFiles(plan, at: baseURL, dryRun: dryRun)
+            allOperations.append(contentsOf: tagOps)
+        }
+
         if !dryRun {
             undoStack.append(contentsOf: allOperations)
+
+            // Cleanup: Try to remove empty source folders to "replace" the old structure
+            // We collect all source paths from move operations
+            let sourceFolders = Set(fileOps.compactMap { op -> String? in
+                guard op.type == .moveFile || op.type == .renameFile else { return nil }
+                return URL(fileURLWithPath: op.sourcePath).deletingLastPathComponent().path
+            })
+
+            // Sort by depth (deepest first) to allow recursive cleanup
+            let sortedFolders = sourceFolders.sorted {
+                $0.components(separatedBy: "/").count > $1.components(separatedBy: "/").count
+            }
+
+            for folderPath in sortedFolders {
+                // Ensure we don't delete the base URL itself
+                if folderPath != baseURL.path && folderPath.hasPrefix(baseURL.path) {
+                    try? removeEmptyFolder(at: folderPath)
+                }
+            }
         }
 
         return allOperations
@@ -327,6 +437,16 @@ public actor FileSystemManager {
                 if let destinationPath = operation.destinationPath,
                    fileManager.fileExists(atPath: destinationPath) {
                     try fileManager.removeItem(atPath: destinationPath)
+                }
+                
+            case .tagFile:
+                // Restore original tags
+                if let originalTags = operation.metadata?.originalTags {
+                   let url = URL(fileURLWithPath: operation.sourcePath)
+                   if fileManager.fileExists(atPath: url.path) {
+                       let nsURL = url as NSURL
+                       try? nsURL.setResourceValue(originalTags, forKey: .tagNamesKey)
+                   }
                 }
             }
         }
@@ -524,3 +644,124 @@ enum FileSystemError: LocalizedError {
         }
     }
 }
+
+// MARK: - Duplicate Restoration Manager
+
+/// Manages the persistence and restoration of safely deleted duplicates
+@MainActor
+public class DuplicateRestorationManager: ObservableObject {
+    @Published public private(set) var restoredItems: [RestorableDuplicate] = []
+    
+    private let fileManager = FileManager.default
+    private let persistenceKey = "DuplicateRestorationHistory"
+    
+    public static let shared = DuplicateRestorationManager()
+    
+    private init() {
+        loadHistory()
+    }
+    
+    /// Safely delete a list of duplicate files, keeping one original.
+    /// Stores metadata for the deleted files so they can be "restored" by copying the original back.
+    /// - Parameters:
+    ///   - filesToDelete: The duplicates to remove
+    ///   - originalFile: The file that is being kept (source for restoration)
+    /// - Returns: A list of RestorableDuplicate objects representing the deleted files
+    public func deleteSafely(filesToDelete: [FileItem], originalFile: FileItem) throws -> [RestorableDuplicate] {
+        var deletedItems: [RestorableDuplicate] = []
+        
+        for file in filesToDelete {
+            // Capture metadata before deletion
+            let attributes = try? fileManager.attributesOfItem(atPath: file.path)
+            let metadata = RestorableDuplicate.FileMetadata(
+                creationDate: attributes?[.creationDate] as? Date,
+                modificationDate: attributes?[.modificationDate] as? Date,
+                permissions: attributes?[.posixPermissions] as? Int,
+                ownerAccountID: attributes?[.ownerAccountID] as? Int,
+                groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
+            )
+            
+            let item = RestorableDuplicate(
+                originalPath: originalFile.path,
+                deletedPath: file.path,
+                metadata: metadata
+            )
+            
+            // Perform Deletion
+            try fileManager.removeItem(atPath: file.path)
+            
+            deletedItems.append(item)
+        }
+        
+        restoredItems.append(contentsOf: deletedItems)
+        saveHistory()
+        
+        return deletedItems
+    }
+    
+    /// Restore a previously deleted duplicate
+    public func restore(item: RestorableDuplicate) throws {
+        // 1. Verify original still exists
+        guard fileManager.fileExists(atPath: item.originalPath) else {
+            throw RestorationError.originalFileNotFound
+        }
+        
+        // 2. Verify target location is free (or handle overwrite?)
+        if fileManager.fileExists(atPath: item.deletedPath) {
+            throw RestorationError.targetLocationOccupied
+        }
+        
+        // 3. Copy original to deleted path
+        try fileManager.copyItem(atPath: item.originalPath, toPath: item.deletedPath)
+        
+        // 4. Apply metadata
+        var attributes: [FileAttributeKey: Any] = [:]
+        if let creation = item.metadata.creationDate { attributes[.creationDate] = creation }
+        if let modification = item.metadata.modificationDate { attributes[.modificationDate] = modification }
+        if let perms = item.metadata.permissions { attributes[.posixPermissions] = perms }
+        if let owner = item.metadata.ownerAccountID { attributes[.ownerAccountID] = owner }
+        if let group = item.metadata.groupOwnerAccountID { attributes[.groupOwnerAccountID] = group }
+        
+        try fileManager.setAttributes(attributes, ofItemAtPath: item.deletedPath)
+        
+        // 5. Remove from our tracking list since it's restored
+        if let index = restoredItems.firstIndex(where: { $0.id == item.id }) {
+            restoredItems.remove(at: index)
+            saveHistory()
+        }
+    }
+    
+    /// Delete all stored history data
+    public func clearAllData() {
+        restoredItems.removeAll()
+        UserDefaults.standard.removeObject(forKey: persistenceKey)
+    }
+    
+    private func loadHistory() {
+        if let data = UserDefaults.standard.data(forKey: persistenceKey),
+           let decoded = try? JSONDecoder().decode([RestorableDuplicate].self, from: data) {
+            restoredItems = decoded
+        }
+    }
+    
+    private func saveHistory() {
+        if let encoded = try? JSONEncoder().encode(restoredItems) {
+            UserDefaults.standard.set(encoded, forKey: persistenceKey)
+        }
+    }
+    
+    enum RestorationError: LocalizedError {
+        case originalFileNotFound
+        case targetLocationOccupied
+        
+        var errorDescription: String? {
+            switch self {
+            case .originalFileNotFound:
+                return "The original file copy could not be found. It may have been moved or deleted."
+            case .targetLocationOccupied:
+                return "A file already exists at the restoration location."
+            }
+        }
+    }
+}
+

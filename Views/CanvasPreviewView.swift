@@ -815,7 +815,7 @@ struct LegendItem: View {
         ]
     )
 
-    return CanvasPreviewView(
+    CanvasPreviewView(
         plan: samplePlan,
         baseURL: URL(fileURLWithPath: "/test"),
         onApply: { _ in },

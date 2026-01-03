@@ -10,21 +10,39 @@ import SwiftUI
 
 struct DuplicatesView: View {
     @StateObject private var detectionManager = DuplicateDetectionManager()
+    @StateObject private var settingsManager = DuplicateSettingsManager()
     @EnvironmentObject var appState: AppState
     @State private var selectedGroup: DuplicateGroup?
     @State private var showDeleteConfirmation = false
     @State private var filesToDelete: [FileItem] = []
     @State private var contentOpacity: Double = 0
+    @State private var showSafeDeletionOnboarding = false
+    @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
+    @State private var localDirectory: URL? // Independent directory selection
+    @State private var showSafeDeletionWarning = false
+    @State private var showSettings = false
+    
+    // Derived directory: Use local if set, otherwise fallback to global
+    private var effectiveDirectory: URL? {
+        localDirectory ?? appState.selectedDirectory
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
             DuplicatesHeader(
                 manager: detectionManager,
+                currentDirectory: effectiveDirectory,
+                onSelectDirectory: {
+                    selectDirectory() // Independent selection
+                },
                 onScan: startScan,
                 onBulkDelete: { keepNewest in
                     HapticFeedbackManager.shared.tap()
                     prepareBulkDelete(keepNewest: keepNewest)
+                },
+                onSettings: {
+                    showSettings = true
                 }
             )
             .transition(TransitionStyles.slideFromBottom)
@@ -73,10 +91,13 @@ struct DuplicatesView: View {
                 contentOpacity = 1.0
             }
         }
+        .sheet(isPresented: $showSettings) {
+            DuplicateSettingsView(settingsManager: settingsManager)
+        }
     }
 
     private func startScan() {
-        guard let directory = appState.selectedDirectory else { return }
+        guard let directory = effectiveDirectory else { return }
 
         HapticFeedbackManager.shared.tap()
 
@@ -95,11 +116,86 @@ struct DuplicatesView: View {
 
     private func deleteFiles(_ files: [FileItem]) {
         let fm = FileManager.default
-        for file in files {
-            try? fm.removeItem(atPath: file.path)
+        
+        // Find "original" file logic implies we are keeping one.
+        // But here we are just deleting a list.
+        // We need to know which group they belong to to find the "original" to back up?
+        // Actually, restoration needs the original content.
+        // If we are deleting N-1 duplicates, any of the remaining ones is the "original".
+        
+        do {
+            if enableSafeDeletion {
+                var totalDeleted = 0
+                var totalSizeRecovered: Int64 = 0
+                var potentialRestorables: [RestorableDuplicate] = []
+                
+                // Group files by hash to find their "surviving" sibling
+                // This is a bit complex since 'files' is a flat list.
+                // We'll rely on global `detectionManager.duplicateGroups` to find the surviving sibling for each file.
+                
+                for file in files {
+                    if let group = detectionManager.duplicateGroups.first(where: { $0.files.contains(file) }) {
+                        // Find a file in this group that IS NOT in the deletion list
+                        if let survivor = group.files.first(where: { !files.contains($0) }) {
+                            // Safe delete
+                            let restorables = try DuplicateRestorationManager.shared.deleteSafely(filesToDelete: [file], originalFile: survivor)
+                            potentialRestorables.append(contentsOf: restorables)
+                            
+                            totalDeleted += 1
+                            totalSizeRecovered += file.size
+                        } else {
+                            // No survivor found (deleting all?) - Fallback to normal delete
+                            try fm.removeItem(atPath: file.path)
+                            totalDeleted += 1
+                            totalSizeRecovered += file.size
+                        }
+                    } else {
+                         try fm.removeItem(atPath: file.path)
+                    }
+                }
+                
+                // Add History Entry
+                Task { @MainActor in
+                     let entry = OrganizationHistoryEntry(
+                        directoryPath: effectiveDirectory?.path ?? "",
+                        filesOrganized: 0,
+                        foldersCreated: 0,
+                        success: true,
+                        status: .duplicatesCleanup,
+                        duplicatesDeleted: totalDeleted,
+                        recoveredSpace: totalSizeRecovered,
+                        restorableItems: potentialRestorables
+                     )
+                     appState.organizer?.history.addEntry(entry)
+                }
+                
+            } else {
+                // Permanently delete
+                for file in files {
+                    try? fm.removeItem(atPath: file.path)
+                }
+            }
+            
+            HapticFeedbackManager.shared.success()
+        } catch {
+             HapticFeedbackManager.shared.error()
+             DebugLogger.log("Delete failed: \(error)")
         }
+
         // Refresh scan
         startScan()
+    }
+    
+    private func selectDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            localDirectory = url
+            detectionManager.clearResults() // Clear old results
+        }
     }
 
     private func prepareBulkDelete(keepNewest: Bool) {
@@ -130,8 +226,15 @@ struct DuplicatesView: View {
 
 struct DuplicatesHeader: View {
     @ObservedObject var manager: DuplicateDetectionManager
+    let currentDirectory: URL?
+    let onSelectDirectory: () -> Void
     let onScan: () -> Void
     let onBulkDelete: (Bool) -> Void // Bool: keepNewest
+    let onSettings: () -> Void
+    
+    @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
+    @State private var showInfo = false
+    @State private var showSafeDeletionWarning = false
 
     @State private var isHovered = false
     @State private var appeared = false
@@ -139,9 +242,24 @@ struct DuplicatesHeader: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Duplicate Files")
+                // Main Header Title - Show Directory if selected, otherwise fallback
+                if let path = currentDirectory?.path {
+                    let folderName = URL(fileURLWithPath: path).lastPathComponent
+                     HStack {
+                         Image(systemName: "folder.fill")
+                             .foregroundColor(.blue)
+                         Text(folderName)
+                     }
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(path) // Tooltip with full path
+                } else {
+                    Text("Duplicate Files")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                }
 
                 if !manager.duplicateGroups.isEmpty {
                     Text("Found \(manager.totalDuplicates) duplicates • \(manager.formattedSavings) recoverable")
@@ -153,7 +271,94 @@ struct DuplicatesHeader: View {
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 10)
 
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 10)
+
             Spacer()
+            
+            // Directory Selection & Safe Deletion Toggle
+            VStack(alignment: .trailing, spacing: 4) {
+                // Folder Selection and Settings
+                HStack {
+                    Button(action: onSettings) {
+                        Image(systemName: "gearshape")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Duplicate Detection Settings")
+                    
+                    Button("Change Folder") {
+                        HapticFeedbackManager.shared.tap()
+                        onSelectDirectory()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                
+                // Safe Deletion Toggle
+                HStack(spacing: 8) {
+                    Toggle("Safe Deletion", isOn: $enableSafeDeletion)
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                        .onChange(of: enableSafeDeletion) { _, newValue in
+                            HapticFeedbackManager.shared.selection()
+                            if !newValue {
+                                // Show warning when disabling
+                                showSafeDeletionWarning = true
+                            }
+                        }
+                        .alert("Disable Safe Deletion?", isPresented: $showSafeDeletionWarning) {
+                            Button("Disable", role: .destructive) {
+                                enableSafeDeletion = false
+                            }
+                            Button("Cancel", role: .cancel) {
+                                enableSafeDeletion = true
+                            }
+                        } message: {
+                            Text("Permanently deleting files cannot be undone. Are you sure you want to disable the safety net?")
+                        }
+                    
+                    Button {
+                        showInfo.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showInfo) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: enableSafeDeletion ? "lifepreserver.fill" : "exclamationmark.triangle.fill")
+                                    .foregroundStyle(enableSafeDeletion ? .green : .orange)
+                                Text(enableSafeDeletion ? "Safe Deletion is On" : "Safe Deletion is Off")
+                                    .font(.headline)
+                            }
+                            
+                            if enableSafeDeletion {
+                                Text("Files are not permanently deleted immediately.")
+                                    .font(.caption)
+                                
+                                Text("• 'Deleted' duplicates are hidden but recoverable.\n• You can undo deletions from the History tab.\n• Disk space is recovered only after you flush the trash.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } else {
+                                Text("Warning: Files will be permanently deleted!")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                
+                                Text("• Deleted files cannot be recovered.\n• This action is irreversible.\n• Consider enabling Safe Deletion for a safety net.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding()
+                        .frame(width: 300)
+                    }
+                }
+            }
+            .padding(.trailing, 16)
 
             if let lastScan = manager.lastScanDate {
                 Text("Last scan: \(lastScan, style: .relative) ago")
@@ -189,12 +394,6 @@ struct DuplicatesHeader: View {
             .buttonStyle(.borderedProminent)
             .disabled(manager.isScanning)
             .accessibilityIdentifier("ScanDuplicatesButton")
-            .bounceTap(scale: 0.95)
-            .scaleEffect(isHovered ? 1.02 : 1.0)
-            .animation(.subtleBounce, value: isHovered)
-            .onHover { hovering in
-                isHovered = hovering
-            }
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
@@ -211,9 +410,7 @@ struct DuplicatesHeader: View {
 struct ScanProgressView: View {
     let progress: Double
 
-    @State private var pulseScale: CGFloat = 1.0
     @State private var shimmerOffset: CGFloat = -300
-    @State private var appeared = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -264,12 +461,6 @@ struct ScanProgressView: View {
             Text("Scanning files... \(Int(progress * 100))%")
                 .font(.body)
                 .foregroundColor(.secondary)
-                .scaleEffect(pulseScale)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                        pulseScale = 1.03
-                    }
-                }
 
             HStack(spacing: 4) {
                 Text("Computing file hashes to find duplicates")
@@ -280,13 +471,6 @@ struct ScanProgressView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .opacity(appeared ? 1 : 0)
-        .scaleEffect(appeared ? 1 : 0.95)
-        .onAppear {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                appeared = true
-            }
-        }
     }
 }
 
@@ -295,36 +479,11 @@ struct ScanProgressView: View {
 struct EmptyDuplicatesView: View {
     let hasScanned: Bool
 
-    @State private var iconScale: CGFloat = 1.0
-    @State private var iconRotation: Double = 0
-    @State private var appeared = false
-
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: hasScanned ? "checkmark.circle" : "doc.on.doc")
                 .font(.system(size: 48))
                 .foregroundStyle(hasScanned ? .green : .secondary)
-                .scaleEffect(iconScale)
-                .rotationEffect(.degrees(iconRotation))
-                .onAppear {
-                    if hasScanned {
-                        // Success bounce animation
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
-                            iconScale = 1.2
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                iconScale = 1.0
-                            }
-                        }
-                    } else {
-                        // Idle floating animation
-                        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                            iconScale = 1.05
-                            iconRotation = 3
-                        }
-                    }
-                }
 
             if hasScanned {
                 Text("No Duplicates Found")
@@ -342,13 +501,6 @@ struct EmptyDuplicatesView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 20)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                appeared = true
-            }
-        }
     }
 }
 
@@ -480,7 +632,6 @@ struct DuplicateGroupRow: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .bounceTap(scale: 0.95)
                     }
                     .padding(.top, 8)
                     .opacity(isExpanded ? 1 : 0)

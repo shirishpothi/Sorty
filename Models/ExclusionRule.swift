@@ -565,3 +565,4 @@ public class ExclusionRulesManager: ObservableObject {
         userDefaults.set(activePresetName, forKey: presetKey)
     }
 }
+

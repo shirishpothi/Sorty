@@ -19,12 +19,22 @@ struct PromptBuilder {
         if enableReasoning {
             prompt += """
             
-            ## IMPORTANT: Reasoning Mode Enabled
+            ## IMPORTANT: Detailed Reasoning Mode Enabled
             
-            For EACH folder in your response, you MUST include a "reasoning" field that explains:
-            - Why you chose this folder structure
-            - What patterns you noticed in the files
-            - Why certain files are grouped together
+            For EACH folder in your response, you MUST include a comprehensive "reasoning" field that provides:
+            
+            1. **Pattern Recognition**: What naming patterns, file types, or metadata led you to group these files together? Be specific about the patterns you observed.
+            
+            2. **Semantic Grouping**: Explain the logical relationship between the files in this folder. What do they have in common beyond just file type?
+            
+            3. **Alternative Consideration**: Briefly mention 1-2 alternative folder structures you considered and why you rejected them in favor of this organization.
+            
+            4. **User Benefit**: How does this organization improve the user's workflow or findability?
+            
+            The reasoning should be 3-5 sentences minimum per folder. Shallow, one-sentence explanations are NOT acceptable.
+            
+            Example of GOOD reasoning:
+            "These invoice PDFs share a consistent naming pattern with vendor prefixes (AWS_, GCP_, Azure_) and date suffixes. They're grouped under 'Cloud Services/Invoices' rather than just 'Documents' because the user clearly manages multiple cloud accounts and would benefit from having all billing-related files for infrastructure costs in one location. I considered grouping by date but the vendor-based organization provides faster lookup when reconciling specific provider bills."
             
             The JSON structure becomes:
             {
@@ -32,15 +42,13 @@ struct PromptBuilder {
                 {
                   "name": "folder_name",
                   "description": "brief purpose description",
-                  "reasoning": "Detailed explanation of why this folder structure was chosen and what patterns led to this decision",
+                  "reasoning": "Detailed 3-5 sentence explanation as described above",
                   "subfolders": [...],
                   "files": [...]
                 }
               ],
               ...
             }
-            
-            Be thorough in your reasoning - the user wants to understand your thought process.
             """
         }
         
@@ -164,5 +172,6 @@ struct PromptBuilder {
         }
     }
 }
+
 
 

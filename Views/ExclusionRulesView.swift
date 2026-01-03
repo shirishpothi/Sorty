@@ -40,7 +40,6 @@ struct ExclusionRulesView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("AddExclusionRuleButton")
-                .bounceTap(scale: 0.95)
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
@@ -95,35 +94,23 @@ struct ExclusionRulesView: View {
 
 struct EmptyExclusionRulesView: View {
     let onAddRule: () -> Void
-    @State private var iconScale: CGFloat = 1.0
-    @State private var appeared = false
 
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "eye.slash.circle")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-                .scaleEffect(iconScale)
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                        iconScale = 1.1
-                    }
-                }
 
             VStack(spacing: 8) {
                 Text("No Exclusion Rules")
                     .font(.title3)
                     .fontWeight(.semibold)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 10)
 
                 Text("Add rules to exclude certain files or folders from organization")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 300)
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 10)
             }
 
             Button {
@@ -132,16 +119,8 @@ struct EmptyExclusionRulesView: View {
                 Label("Add Rule", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
-            .bounceTap(scale: 0.95)
-            .opacity(appeared ? 1 : 0)
-            .scaleEffect(appeared ? 1 : 0.9)
         }
         .frame(maxHeight: .infinity)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1)) {
-                appeared = true
-            }
-        }
     }
 }
 
@@ -150,8 +129,6 @@ struct EmptyExclusionRulesView: View {
 struct ExclusionRuleRow: View {
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
-    @State private var isHovered = false
-    @State private var toggleScale: CGFloat = 1.0
 
     var body: some View {
         HStack(spacing: 12) {
@@ -159,14 +136,6 @@ struct ExclusionRuleRow: View {
                 get: { rule.isEnabled },
                 set: { newValue in
                     HapticFeedbackManager.shared.selection()
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
-                        toggleScale = 1.1
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
-                            toggleScale = 1.0
-                        }
-                    }
                     var updatedRule = rule
                     updatedRule.isEnabled = newValue
                     rulesManager.updateRule(updatedRule)
@@ -174,13 +143,10 @@ struct ExclusionRuleRow: View {
             ))
             .toggleStyle(.switch)
             .labelsHidden()
-            .scaleEffect(toggleScale)
 
             Image(systemName: iconForType(rule.type))
                 .foregroundStyle(rule.isEnabled ? .primary : .secondary)
                 .frame(width: 20)
-                .scaleEffect(isHovered ? 1.15 : 1.0)
-                .animation(.subtleBounce, value: isHovered)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(rule.displayDescription)
@@ -219,9 +185,6 @@ struct ExclusionRuleRow: View {
         .padding(.vertical, 4)
         .opacity(rule.isEnabled ? 1.0 : 0.6)
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
     }
 
     private func iconForType(_ type: ExclusionRuleType) -> String {
@@ -280,7 +243,6 @@ struct AddExclusionRuleView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.escape, modifiers: [])
-                .bounceTap(scale: 0.95)
 
                 Spacer()
 
@@ -297,7 +259,6 @@ struct AddExclusionRuleView: View {
                 .disabled(!isValidInput)
                 .buttonStyle(.borderedProminent)
                 .accessibilityIdentifier("ConfirmAddRuleButton")
-                .bounceTap(scale: 0.95)
             }
             .padding()
             .opacity(appeared ? 1 : 0)

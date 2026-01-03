@@ -59,6 +59,8 @@ struct HistoryView: View {
                                 .animatedAppearance(delay: 0.15)
                             HistoryStatCard(title: "Reverted", value: "\(organizer.history.revertedCount)", icon: "arrow.uturn.backward", color: .orange)
                                 .animatedAppearance(delay: 0.2)
+                            HistoryStatCard(title: "Space Saved", value: "\(ByteCountFormatter.string(fromByteCount: organizer.history.totalRecoveredSpace, countStyle: .file))", icon: "externaldrive.fill.badge.plus", color: .green)
+                                .animatedAppearance(delay: 0.25)
                         }
                     }
                     .padding(20)
@@ -153,22 +155,11 @@ struct HistoryView: View {
 // MARK: - Empty History View
 
 struct EmptyHistoryView: View {
-    @State private var iconScale: CGFloat = 1.0
-    @State private var iconRotation: Double = 0
-
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.title)
                 .foregroundStyle(.secondary)
-                .scaleEffect(iconScale)
-                .rotationEffect(.degrees(iconRotation))
-                .onAppear {
-                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                        iconScale = 1.1
-                        iconRotation = 10
-                    }
-                }
             Text("No History")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -180,24 +171,13 @@ struct EmptyHistoryView: View {
 // MARK: - Empty Detail View
 
 struct EmptyDetailView: View {
-    @State private var appeared = false
-
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 48))
                 .foregroundStyle(.quaternary)
-                .scaleEffect(appeared ? 1 : 0.8)
-                .opacity(appeared ? 1 : 0)
             Text("Select a session to view detailed report")
                 .foregroundColor(.secondary)
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 10)
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                appeared = true
-            }
         }
     }
 }
@@ -247,6 +227,7 @@ struct HistoryEntryRow: View {
         case .cancelled: return .gray
         case .skipped: return .secondary
         case .undo: return .orange
+        case .duplicatesCleanup: return .purple
         }
     }
 
@@ -257,6 +238,7 @@ struct HistoryEntryRow: View {
         case .cancelled: return "stop.fill"
         case .skipped: return "arrow.right.circle"
         case .undo: return "arrow.uturn.backward"
+        case .duplicatesCleanup: return "trash.fill"
         }
     }
 
@@ -286,6 +268,13 @@ struct HistoryEntryRow: View {
                             .font(.system(size: 11))
                         Label("\(entry.foldersCreated) folders", systemImage: "folder")
                             .font(.system(size: 11))
+                    } else if entry.status == .duplicatesCleanup {
+                        Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
+                            .font(.system(size: 11))
+                        if let recovered = entry.recoveredSpace {
+                            Label(ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), systemImage: "externaldrive")
+                                .font(.system(size: 11))
+                        }
                     } else {
                         Text(entry.status.rawValue.capitalized)
                             .font(.system(size: 11, weight: .bold))
@@ -352,27 +341,49 @@ struct HistoryDetailView: View {
                 .offset(y: appeared ? 0 : 20)
 
                 // Summary Stats in Detail
-                if entry.success {
+                if entry.success || entry.status == .duplicatesCleanup {
                     HStack(spacing: 20) {
-                        DetailStatView(title: "Files Organized", value: "\(entry.filesOrganized)", icon: "doc.fill", color: .blue)
-                            .animatedAppearance(delay: 0.1)
-                        DetailStatView(title: "Folders Created", value: "\(entry.foldersCreated)", icon: "folder.fill", color: .purple)
-                            .animatedAppearance(delay: 0.15)
-                        if let plan = entry.plan {
-                            DetailStatView(title: "Plan Version", value: "v\(plan.version)", icon: "number", color: .gray)
-                                .animatedAppearance(delay: 0.2)
+                        if entry.status == .duplicatesCleanup {
+                             DetailStatView(title: "Duplicates Deleted", value: "\(entry.duplicatesDeleted ?? 0)", icon: "trash.fill", color: .red)
+                                .animatedAppearance(delay: 0.1)
+                             if let recovered = entry.recoveredSpace {
+                                 DetailStatView(title: "Space Recovered", value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), icon: "externaldrive.fill", color: .green)
+                                    .animatedAppearance(delay: 0.15)
+                             }
+                        } else {
+                            DetailStatView(title: "Files Organized", value: "\(entry.filesOrganized)", icon: "doc.fill", color: .blue)
+                                .animatedAppearance(delay: 0.1)
+                            DetailStatView(title: "Folders Created", value: "\(entry.foldersCreated)", icon: "folder.fill", color: .purple)
+                                .animatedAppearance(delay: 0.15)
+                            if let plan = entry.plan {
+                                DetailStatView(title: "Plan Version", value: "v\(plan.version)", icon: "number", color: .gray)
+                                    .animatedAppearance(delay: 0.2)
+                            }
                         }
                     }
                 }
 
                 // Actions
-                if entry.success {
+                if entry.success || entry.status == .duplicatesCleanup {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Session Management")
                             .font(.headline)
 
                         HStack(spacing: 12) {
-                            if entry.isUndone {
+                            if entry.status == .duplicatesCleanup {
+                                if let restorables = entry.restorableItems, !restorables.isEmpty {
+                                    Button(action: handleRestoreDuplicates) {
+                                        Label("Restore Deleted Files", systemImage: "arrow.uturn.backward")
+                                            .frame(minWidth: 150)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.large)
+                                } else {
+                                    Text("No restore data available for this session")
+                                        .foregroundStyle(.secondary)
+                                        .font(.caption)
+                                }
+                            } else if entry.isUndone {
                                 Button(action: handleRedo) {
                                     Label("Re-Apply This Organization", systemImage: "arrow.clockwise")
                                         .frame(minWidth: 150)
@@ -380,7 +391,6 @@ struct HistoryDetailView: View {
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.large)
                                 .accessibilityIdentifier("RedoSessionButton")
-                                .bounceTap(scale: 0.95)
                             } else {
                                 Button(action: handleUndo) {
                                     Label("Undo These Changes", systemImage: "arrow.uturn.backward")
@@ -389,7 +399,6 @@ struct HistoryDetailView: View {
                                 .buttonStyle(.bordered)
                                 .controlSize(.large)
                                 .accessibilityIdentifier("UndoSessionButton")
-                                .bounceTap(scale: 0.95)
 
                                 Button(action: handleRestore) {
                                     Label("Restore Folder to this State", systemImage: "clock.arrow.circlepath")
@@ -397,7 +406,6 @@ struct HistoryDetailView: View {
                                 }
                                 .buttonStyle(.borderedProminent)
                                 .controlSize(.large)
-                                .bounceTap(scale: 0.95)
                             }
                         }
                     }
@@ -463,6 +471,26 @@ struct HistoryDetailView: View {
                             }
                         }
                     }
+                } else if let restorables = entry.restorableItems, !restorables.isEmpty {
+                    SectionView(title: "Deleted Files", icon: "trash", color: .red) {
+                         VStack(alignment: .leading, spacing: 8) {
+                             ForEach(restorables) { item in
+                                 HStack {
+                                     Image(systemName: "doc")
+                                         .foregroundColor(.secondary)
+                                     Text(URL(fileURLWithPath: item.deletedPath).lastPathComponent)
+                                     Spacer()
+                                     Text("Original: " + URL(fileURLWithPath: item.originalPath).lastPathComponent)
+                                         .foregroundStyle(.tertiary)
+                                         .font(.caption2)
+                                 }
+                                 .font(.caption)
+                                 .padding(8)
+                                 .background(Color.secondary.opacity(0.05))
+                                 .cornerRadius(6)
+                             }
+                         }
+                    }
                 }
 
                 // Raw AI Data
@@ -516,6 +544,22 @@ struct HistoryDetailView: View {
             try await organizer.redoOrganization(from: entry)
             HapticFeedbackManager.shared.success()
             onAction("Organization re-applied.")
+        }
+    }
+    
+    private func handleRestoreDuplicates() {
+        HapticFeedbackManager.shared.tap()
+        processAction {
+            guard let restorables = entry.restorableItems else { return }
+            var restoredCount = 0
+            
+            for item in restorables {
+                try DuplicateRestorationManager.shared.restore(item: item)
+                restoredCount += 1
+            }
+            
+            HapticFeedbackManager.shared.success()
+            onAction("Restored \(restoredCount) files.")
         }
     }
 
@@ -625,6 +669,7 @@ struct StatusBadge: View {
         case .cancelled: return .gray
         case .skipped: return .secondary
         case .undo: return .orange
+        case .duplicatesCleanup: return .purple
         }
     }
 

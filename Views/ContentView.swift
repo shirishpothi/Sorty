@@ -49,19 +49,16 @@ public struct ContentView: View {
                         Label("Organize", systemImage: "folder.badge.gearshape")
                     }
                     .accessibilityIdentifier("OrganizeSidebarItem")
-                    .bounceTap(scale: 0.97)
 
                     NavigationLink(value: AppState.AppView.workspaceHealth) {
                         Label("Workspace Health", systemImage: "heart.text.square")
                     }
                     .accessibilityIdentifier("WorkspaceHealthSidebarItem")
-                    .bounceTap(scale: 0.97)
 
                     NavigationLink(value: AppState.AppView.duplicates) {
                         Label("Duplicates", systemImage: "doc.on.doc")
                     }
                     .accessibilityIdentifier("DuplicatesSidebarItem")
-                    .bounceTap(scale: 0.97)
                 }
 
                 Section("Options") {
@@ -69,25 +66,26 @@ public struct ContentView: View {
                         Label("Settings", systemImage: "gear")
                     }
                     .accessibilityIdentifier("SettingsSidebarItem")
-                    .bounceTap(scale: 0.97)
 
                     NavigationLink(value: AppState.AppView.history) {
                         Label("History", systemImage: "clock")
                     }
                     .accessibilityIdentifier("HistorySidebarItem")
-                    .bounceTap(scale: 0.97)
 
                     NavigationLink(value: AppState.AppView.exclusions) {
                         Label("Exclusions", systemImage: "eye.slash")
                     }
                     .accessibilityIdentifier("ExclusionsSidebarItem")
-                    .bounceTap(scale: 0.97)
 
                     NavigationLink(value: AppState.AppView.watchedFolders) {
                         Label("Watched Folders", systemImage: "eye")
                     }
                     .accessibilityIdentifier("WatchedFoldersSidebarItem")
-                    .bounceTap(scale: 0.97)
+                    
+                    NavigationLink(value: AppState.AppView.learnings) {
+                        Label("The Learnings", systemImage: "brain")
+                    }
+                    .accessibilityIdentifier("LearningsSidebarItem")
                 }
             }
             .navigationTitle("FileOrganizer")
@@ -127,25 +125,20 @@ public struct ContentView: View {
         switch view {
         case .organize:
             OrganizeView()
-                .animatedAppearance(delay: 0.05)
         case .settings:
             SettingsView()
-                .animatedAppearance(delay: 0.05)
         case .history:
             HistoryView()
-                .animatedAppearance(delay: 0.05)
         case .workspaceHealth:
             WorkspaceHealthView()
-                .animatedAppearance(delay: 0.05)
         case .duplicates:
             DuplicatesView()
-                .animatedAppearance(delay: 0.05)
         case .exclusions:
             ExclusionRulesView()
-                .animatedAppearance(delay: 0.05)
         case .watchedFolders:
             WatchedFoldersView()
-                .animatedAppearance(delay: 0.05)
+        case .learnings:
+            LearningsView()
         }
     }
 
@@ -160,7 +153,7 @@ public struct ContentView: View {
 
     private func determineDirection(from oldView: AppState.AppView, to newView: AppState.AppView) -> NavigationDirection {
         let viewOrder: [AppState.AppView] = [
-            .organize, .workspaceHealth, .duplicates, .settings, .history, .exclusions, .watchedFolders
+            .organize, .workspaceHealth, .duplicates, .settings, .history, .exclusions, .watchedFolders, .learnings
         ]
 
         guard let oldIndex = viewOrder.firstIndex(of: oldView),
