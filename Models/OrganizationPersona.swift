@@ -141,11 +141,19 @@ public class PersonaManager: ObservableObject {
     public init() {
         loadPersona()
         loadCustomPrompts()
+        loadCustomPersonaId()
     }
     
     public func selectPersona(_ persona: PersonaType) {
         selectedPersona = persona
+        selectedCustomPersonaId = nil
         savePersona()
+        saveCustomPersonaId()
+    }
+    
+    public func selectCustomPersona(_ id: String) {
+        selectedCustomPersonaId = id
+        saveCustomPersonaId()
     }
     
     public func getPrompt(for persona: PersonaType) -> String {
@@ -190,6 +198,20 @@ public class PersonaManager: ObservableObject {
     private func saveCustomPrompts() {
         if let encoded = try? JSONEncoder().encode(customPrompts) {
             userDefaults.set(encoded, forKey: customPromptsKey)
+        }
+    }
+    
+    private func loadCustomPersonaId() {
+        if let id = userDefaults.string(forKey: customIdKey) {
+            selectedCustomPersonaId = id
+        }
+    }
+    
+    private func saveCustomPersonaId() {
+        if let id = selectedCustomPersonaId {
+            userDefaults.set(id, forKey: customIdKey)
+        } else {
+            userDefaults.removeObject(forKey: customIdKey)
         }
     }
 }

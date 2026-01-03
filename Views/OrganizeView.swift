@@ -54,7 +54,7 @@ struct OrganizeView: View {
                     } label: {
                         Label("Regenerate", systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(.hapticBounce)
+                    .buttonStyle(.plain)
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 }
             }
