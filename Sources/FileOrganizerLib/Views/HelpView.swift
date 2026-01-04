@@ -561,6 +561,8 @@ private struct PrivacyContent: View {
 }
 
 private struct AboutContent: View {
+    @EnvironmentObject var appState: AppState
+    
     var body: some View {
         VStack(alignment: .center, spacing: 20) {
             // App Icon
@@ -609,10 +611,67 @@ private struct AboutContent: View {
                 }
             }
             
+            // Update Status Area
+            VStack(spacing: 8) {
+                switch appState.updateManager.state {
+                case .idle:
+                    EmptyView()
+                case .checking:
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Checking for updates...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                case .available(let version, let url, _):
+                    VStack(spacing: 4) {
+                        Text("New version available: \(version)")
+                            .font(.headline)
+                            .foregroundColor(.green)
+                        Button("Download Update") {
+                            NSWorkspace.shared.open(url)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(12)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(8)
+                case .upToDate:
+                    Text("FileOrganizer is up to date.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                case .error(let message):
+                    VStack(spacing: 4) {
+                        Text("Update check failed")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
+                        Text(message)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(8)
+                    .background(Color.red.opacity(0.05))
+                    .cornerRadius(6)
+                }
+            }
+            .frame(height: 60)
+            
             Spacer().frame(height: 10)
             
             // Buttons
             HStack(spacing: 16) {
+                Button(action: {
+                    Task {
+                        await appState.updateManager.checkForUpdates()
+                    }
+                }) {
+                    Label("Check for Updates", systemImage: "arrow.clockwise.circle")
+                }
+                .buttonStyle(.bordered)
+                .disabled(appState.updateManager.state == .checking)
+
                 Button(action: {
                     if let url = URL(string: "https://github.com/shirishpothi/FileOrganizer#readme") {
                         NSWorkspace.shared.open(url)

@@ -23,6 +23,12 @@ public struct FileOrganizerCommands: Commands {
             Button("About FileOrganizer") {
                 appState.showAbout()
             }
+            
+            Button("Check for Updates...") {
+                Task {
+                    await appState.updateManager.checkForUpdates()
+                }
+            }
         }
 
         // Replace default New/Open with custom commands
@@ -207,6 +213,12 @@ public struct FileOrganizerCommands: Commands {
             Button("About FileOrganizer") {
                 appState.showAbout()
             }
+            
+            Button("Check for Updates...") {
+                Task {
+                    await appState.updateManager.checkForUpdates()
+                }
+            }
         }
     }
 }
@@ -219,6 +231,7 @@ public class AppState: ObservableObject {
     @Published public var showingSidebar: Bool = true
     @Published public var showDirectoryPicker: Bool = false
     @Published public var selectedDirectory: URL?
+    @Published public var updateManager = UpdateManager()
 
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
