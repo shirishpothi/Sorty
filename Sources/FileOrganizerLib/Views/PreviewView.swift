@@ -22,7 +22,6 @@ struct PreviewView: View {
     @State private var editablePlan: OrganizationPlan
     @State private var hasEdits = false
     @State private var showPostOrganizationHoning = false
-    @State private var organizationJustCompleted = false
 
     init(plan: OrganizationPlan, baseURL: URL) {
         self.plan = plan
@@ -192,7 +191,6 @@ struct PreviewView: View {
         .onChange(of: organizer.state) { oldState, newState in
             if case .completed = newState {
                 isApplying = false
-                organizationJustCompleted = true
                 // Show post-organization honing if learnings is enabled
                 if learningsManager.consentManager.canCollectData {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -411,6 +409,7 @@ struct EditableFolderTreeView: View {
 
     @State private var isExpanded = true
     @State private var showReasoning = false
+
     @State private var isDropTarget = false
 
     var body: some View {

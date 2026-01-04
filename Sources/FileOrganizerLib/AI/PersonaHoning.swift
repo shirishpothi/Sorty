@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 public struct HoningQuestion: Identifiable, Codable, Sendable {
     public let id: String
@@ -69,7 +70,7 @@ public class PersonaHoningEngine: ObservableObject {
         
         let client = try AIClientFactory.createClient(config: genConfig)
         
-        let prompt = "User Description: \"\(description)\"\n\nGeneate 3 clarifying questions in JSON format."
+        let prompt = "User Description: \"\(description)\"\n\nGenerate 3 clarifying questions in JSON format."
         
         var jsonString = try await client.generateText(prompt: prompt, systemPrompt: metaQuestionPrompt)
         

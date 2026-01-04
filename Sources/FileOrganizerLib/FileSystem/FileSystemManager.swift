@@ -647,9 +647,9 @@ public actor FileSystemManager {
     }
 
     /// Delete a file (Now non-destructive: moves to .duplicates)
-    func deleteFile(at url: URL, moveToTrash: Bool = true) throws -> FileOperation {
-        let workspaceURL = url.deletingLastPathComponent() // Rough heuristic, might need actual base
-        return try moveToDuplicates(url: url, workspaceURL: workspaceURL)
+    func deleteFile(at url: URL, moveToTrash: Bool = true, workspaceURL: URL? = nil) throws -> FileOperation {
+        let actualWorkspaceURL = workspaceURL ?? url.deletingLastPathComponent() // Fallback to heuristic
+        return try moveToDuplicates(url: url, workspaceURL: actualWorkspaceURL)
     }
     
     /// Non-destructive move to a .duplicates folder
@@ -757,7 +757,8 @@ public class DuplicateRestorationManager: ObservableObject {
                 groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
             )
             
-            let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(file.name + "." + file.extension))
+            let fileName = URL(fileURLWithPath: file.path).lastPathComponent
+            let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(fileName))
             
             let item = RestorableDuplicate(
                 originalPath: originalFile.path,

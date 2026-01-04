@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 import SwiftUI
 
 // MARK: - Deeplink Types

@@ -15,6 +15,8 @@ struct PersonaPickerView: View {
     @State private var showingGenerator: Bool = false
     @State private var showingEditor: Bool = false
     @State private var editingPersona: CustomPersona?
+    @State private var localPrompt: String = ""
+    @FocusState private var isEditorFocused: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -49,9 +51,11 @@ struct PersonaPickerView: View {
                         isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil,
                         isHovering: hoveringPersona == persona
                     ) {
+                        saveChangesIfNeeded()
                         withAnimation(.spring(response: 0.3)) {
                             personaManager.selectPersona(persona)
                             personaManager.selectedCustomPersonaId = nil
+                            updateLocalPrompt()
                         }
                     }
                     .onHover { hovering in
@@ -75,8 +79,10 @@ struct PersonaPickerView: View {
                             isSelected: personaManager.selectedCustomPersonaId == custom.id,
                             isHovering: hoveringCustom == custom.id,
                             onSelect: {
+                                saveChangesIfNeeded()
                                 withAnimation(.spring(response: 0.3)) {
                                     personaManager.selectedCustomPersonaId = custom.id
+                                    updateLocalPrompt()
                                 }
                             },
                             onEdit: {
@@ -122,6 +128,7 @@ struct PersonaPickerView: View {
                             Button("Reset to Default") {
                                 HapticFeedbackManager.shared.tap()
                                 personaManager.resetCustomPrompt(for: personaManager.selectedPersona)
+                                updateLocalPrompt() // Update local prompt after reset
                             }
                             .font(.caption)
                             .buttonStyle(.borderless)
@@ -133,14 +140,8 @@ struct PersonaPickerView: View {
                 if let customId = personaManager.selectedCustomPersonaId,
                    let index = customStore.customPersonas.firstIndex(where: { $0.id == customId }) {
                     // Editing Custom Persona
-                    TextEditor(text: Binding(
-                        get: { customStore.customPersonas[index].promptModifier },
-                        set: { newValue in
-                            var updated = customStore.customPersonas[index]
-                            updated.promptModifier = newValue
-                            customStore.updatePersona(updated)
-                        }
-                    ))
+                    TextEditor(text: $localPrompt)
+                        .focused($isEditorFocused)
                     .font(.system(.body, design: .monospaced))
                     .frame(height: 120)
                     .padding(4)
@@ -154,12 +155,8 @@ struct PersonaPickerView: View {
                     
                 } else {
                     // Editing Standard Persona
-                    TextEditor(text: Binding(
-                        get: { personaManager.getPrompt(for: personaManager.selectedPersona) },
-                        set: { newValue in
-                            personaManager.saveCustomPrompt(for: personaManager.selectedPersona, prompt: newValue)
-                        }
-                    ))
+                    TextEditor(text: $localPrompt)
+                        .focused($isEditorFocused)
                     .font(.system(.body, design: .monospaced))
                     .frame(height: 120)
                     .padding(4)
@@ -178,6 +175,38 @@ struct PersonaPickerView: View {
         }
         .sheet(isPresented: $showingGenerator) {
             PersonaGeneratorView(store: customStore, selectedPersonaId: $personaManager.selectedCustomPersonaId)
+        }
+        .onAppear {
+            updateLocalPrompt()
+        }
+        .onChange(of: isEditorFocused) { oldValue, newValue in
+            if !newValue { // Focus lost
+                saveChangesIfNeeded()
+            }
+        }
+    }
+    
+    private func updateLocalPrompt() {
+        if let customId = personaManager.selectedCustomPersonaId,
+           let custom = customStore.customPersonas.first(where: { $0.id == customId }) {
+            localPrompt = custom.promptModifier
+        } else {
+            localPrompt = personaManager.getPrompt(for: personaManager.selectedPersona)
+        }
+    }
+    
+    private func saveChangesIfNeeded() {
+        if let customId = personaManager.selectedCustomPersonaId,
+           let index = customStore.customPersonas.firstIndex(where: { $0.id == customId }) {
+            var updated = customStore.customPersonas[index]
+            if updated.promptModifier != localPrompt {
+                updated.promptModifier = localPrompt
+                customStore.updatePersona(updated)
+            }
+        } else {
+            if personaManager.getPrompt(for: personaManager.selectedPersona) != localPrompt {
+                personaManager.saveCustomPrompt(for: personaManager.selectedPersona, prompt: localPrompt)
+            }
         }
     }
     

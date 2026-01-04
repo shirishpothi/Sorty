@@ -8,6 +8,7 @@
 
 import Foundation
 import SwiftUI
+import Combine
 
 /// Main manager for "The Learnings" feature
 @MainActor
@@ -239,7 +240,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a manual correction (File moved manually after AI organization)
     public func recordCorrection(originalPath: String, newPath: String) {
-        guard var profile = currentProfile else { return }
+        guard consentManager.canCollectData, var profile = currentProfile else { return }
         
         let example = LabeledExample(
             srcPath: originalPath,
@@ -253,7 +254,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a rejection (File reverted or explicitly rejected)
     public func recordRejection(originalPath: String) {
-        guard var profile = currentProfile else { return }
+        guard consentManager.canCollectData, var profile = currentProfile else { return }
         
         let example = LabeledExample(
             srcPath: originalPath,
@@ -280,7 +281,7 @@ public class LearningsManager: ObservableObject {
     
     /// Internal helper to add a labeled example
     public func addLabeledExample(srcPath: String, dstPath: String, action: ExampleAction) {
-        guard var profile = currentProfile else { return }
+        guard consentManager.canCollectData, var profile = currentProfile else { return }
         
         let example = LabeledExample(
             srcPath: srcPath,
@@ -610,7 +611,10 @@ public class LearningsManager: ObservableObject {
         
         // 3. Additional Instructions (Explicit User Commands)
         // Take unique latest 5 instructions to keep context concise
-        let uniqueInstructions = Array(Set(profile.additionalInstructionsHistory.map { $0.instruction })).suffix(5)
+        let uniqueInstructions = profile.additionalInstructionsHistory
+            .map { $0.instruction }
+            .orderedDeduplicated()
+            .suffix(5)
         if !uniqueInstructions.isEmpty {
             context += "\nUSER INSTRUCTIONS:\n"
             for instruction in uniqueInstructions {
@@ -620,7 +624,10 @@ public class LearningsManager: ObservableObject {
         }
         
         // 4. Guiding Instructions (Pre-organization feedback)
-        let uniqueGuidingInstructions = Array(Set(profile.guidingInstructionsHistory.map { $0.instruction })).suffix(5)
+        let uniqueGuidingInstructions = profile.guidingInstructionsHistory
+            .map { $0.instruction }
+            .orderedDeduplicated()
+            .suffix(5)
         if !uniqueGuidingInstructions.isEmpty {
             context += "\nGUIDING INSTRUCTIONS:\n"
             for instruction in uniqueGuidingInstructions {
@@ -712,6 +719,7 @@ public class LearningsManager: ObservableObject {
 public enum LearningsError: LocalizedError {
     case noProject
     case noAnalysisResult
+    case emptyRootPaths
     case saveFailed(String)
     
     public var errorDescription: String? {
@@ -720,6 +728,8 @@ public enum LearningsError: LocalizedError {
             return "No project is currently loaded"
         case .noAnalysisResult:
             return "No analysis result available. Run analysis first."
+        case .emptyRootPaths:
+            return "No root paths provided for analysis"
         case .saveFailed(let reason):
             return "Failed to save: \(reason)"
         }

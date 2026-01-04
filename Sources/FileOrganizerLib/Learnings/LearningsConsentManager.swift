@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 import SwiftUI
 
 /// Manages user consent state for the Learnings feature

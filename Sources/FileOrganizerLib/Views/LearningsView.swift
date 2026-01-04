@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import LocalAuthentication
 import AppKit
 import UniformTypeIdentifiers
 

@@ -18,6 +18,7 @@ struct PersonaEditorView: View {
     @State private var promptModifier: String = ""
     @State private var showIconPicker: Bool = false
     @State private var showingGenerator: Bool = false
+    @State private var showingGuidingPrompt = false
     @State private var generationInput: String = ""
     @StateObject private var generator = PersonaGenerator()
     
@@ -136,7 +137,7 @@ struct PersonaEditorView: View {
                             tipRow(icon: "doc.text.magnifyingglass", text: "Mention specific file types or patterns to look for")
                             tipRow(icon: "arrow.triangle.branch", text: "Describe how to handle edge cases")
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 4)
                     }
                 }
                 .padding()
@@ -277,4 +278,5 @@ struct PersonaEditorView: View {
 
 #Preview {
     PersonaEditorView(store: CustomPersonaStore())
+        .environmentObject(SettingsViewModel())
 }

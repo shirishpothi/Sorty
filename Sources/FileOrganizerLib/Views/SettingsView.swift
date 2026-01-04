@@ -225,7 +225,7 @@ struct SettingsView: View {
                                         .buttonStyle(HapticBounceButtonStyle())
                                         .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
                                         .opacity(viewModel.config.provider.isAvailable ? 1.0 : 0.5)
-                                        .accessibilityIdentifier("OpenAITestConnectionButton")
+                                        .accessibilityIdentifier("TestConnectionButton")
 
                                         if let status = testConnectionStatus {
                                             Label(
@@ -270,6 +270,7 @@ struct SettingsView: View {
                                 ))
                                 .textFieldStyle(.roundedBorder)
                                 .accessibilityLabel("Ollama Server URL")
+                                .accessibilityIdentifier("ApiUrlTextField")
                                 
                                 HStack {
                                     SecureField("API Key (Optional)", text: Binding(
@@ -278,6 +279,7 @@ struct SettingsView: View {
                                     ))
                                     .textFieldStyle(.roundedBorder)
                                     .accessibilityLabel("Ollama API Key")
+                                    .accessibilityIdentifier("ApiKeyTextField")
                                     
                                     if !viewModel.config.requiresAPIKey {
                                         Text("Optional")
@@ -289,6 +291,7 @@ struct SettingsView: View {
                                 TextField("Model", text: $viewModel.config.model)
                                     .textFieldStyle(.roundedBorder)
                                     .accessibilityLabel("Ollama Model Name")
+                                    .accessibilityIdentifier("ModelTextField")
 
                                 Text("Ensure Ollama is running locally and the model is downloaded.")
                                     .font(.caption)
@@ -348,7 +351,7 @@ struct SettingsView: View {
                                         }
                                         .buttonStyle(HapticBounceButtonStyle())
                                         .disabled(isTestingConnection)
-                                        .accessibilityIdentifier("OllamaTestConnectionButton")
+                                        .accessibilityIdentifier("TestConnectionButton")
                                         
                                         if let status = testConnectionStatus {
                                             Label(
@@ -426,7 +429,7 @@ struct SettingsView: View {
                                         .buttonStyle(HapticBounceButtonStyle())
                                         .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
                                         .opacity(viewModel.config.provider.isAvailable ? 1.0 : 0.5)
-                                        .accessibilityIdentifier("AppleFMTestConnectionButton")
+                                        .accessibilityIdentifier("TestConnectionButton")
                                         
                                         if let status = testConnectionStatus {
                                             Label(
@@ -494,7 +497,6 @@ struct SettingsView: View {
                                         .foregroundColor(.secondary)
                                 }
                             }
-                            .padding(.vertical, 4)
                             .padding(.vertical, 4)
                             .accessibilityIdentifier("DuplicatesToggle")
 

@@ -29,6 +29,7 @@ struct WorkspaceHealthView: View {
     @State private var showingDirectoryPicker = false
     @State private var showingSettings = false
     @State private var isAnalyzing = false
+    @State private var analysisError: String?
 
     var body: some View {
         ZStack {
@@ -64,6 +65,24 @@ struct WorkspaceHealthView: View {
                         accessingURL = nil
                     }
 
+                    if let error = analysisError {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.red)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Button("Dismiss") { analysisError = nil }
+                                .font(.caption)
+                                .buttonStyle(.borderless)
+                        }
+                        .padding()
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                    }
+                    
                     // Main Content Grid
                     VStack(spacing: 24) {
                         if !healthManager.opportunities.isEmpty || !healthManager.insights.isEmpty {
@@ -143,6 +162,7 @@ struct WorkspaceHealthView: View {
                 await healthManager.analyzeDirectory(path: url.path, files: files)
                 isAnalyzing = false
             } catch {
+                analysisError = "Analysis failed: \(error.localizedDescription)"
                 isAnalyzing = false
             }
         }
@@ -245,6 +265,7 @@ struct LiquidHeaderSection: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isAnalyzing)
+                .accessibilityIdentifier("AnalyzeFolderButton")
             }
         }
         .padding(24)
@@ -695,6 +716,7 @@ struct LiquidEmptyState: View {
                     .shadow(color: .accentColor.opacity(0.3), radius: 8, y: 4)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("AnalyzeFolderButton")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)

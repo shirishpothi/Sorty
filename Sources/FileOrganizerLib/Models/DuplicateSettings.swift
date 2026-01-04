@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 /// Settings for duplicate detection behavior
 public struct DuplicateSettings: Codable, Sendable {

@@ -277,3 +277,13 @@ public enum FileCategory: String, Codable, Sendable, CaseIterable {
         return .other
     }
 }
+
+// MARK: - Utilities
+
+extension Sequence where Element: Hashable {
+    /// Returns a new array with unique elements, preserving original order
+    public func orderedDeduplicated() -> [Element] {
+        var set = Set<Element>()
+        return filter { set.insert($0).inserted }
+    }
+}

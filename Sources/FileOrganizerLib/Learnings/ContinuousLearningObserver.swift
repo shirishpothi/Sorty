@@ -203,19 +203,18 @@ public class ContinuousLearningObserver: ObservableObject {
                 print("AI put it at: \(src)")
                 print("User moved it to: \(dst)")
                 
-                learningsManager.recordCorrection(originalPath: aiOp.sourcePath, newPath: dst)
-                
                 let change = DirectoryChange(
                     originalPath: src, 
                     newPath: dst, 
                     wasAIOrganized: true,
                     aiSessionId: matchedSession?.id ?? entry.id.uuidString
                 )
+                
                 learningsManager.recordDirectoryChange(
                     from: src, 
                     to: dst, 
                     wasAIOrganized: true,
-                    sessionId: matchedSession?.id ?? entry.id.uuidString
+                    sessionId: change.aiSessionId
                 )
                 
                 // Track correction in the session

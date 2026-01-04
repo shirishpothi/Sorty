@@ -143,6 +143,7 @@ struct ExclusionRuleRow: View {
             ))
             .toggleStyle(.switch)
             .labelsHidden()
+            .accessibilityIdentifier("RuleToggle_\(rule.id)")
 
             Image(systemName: iconForType(rule.type))
                 .foregroundStyle(rule.isEnabled ? .primary : .secondary)

@@ -270,7 +270,7 @@ FileOrganizer provides comprehensive URL schemes to control all aspects of the a
 |-------|------------|-------------|
 | `fileorganizer://organize` | Open the organization view |
 | `path` | Path to organize |
-| `persona` | ID of persona (fileorganizer_general, developer, etc.) |
+| `persona` | ID of persona (fileorganizer_general, developer, etc.). |
 | `autostart=true` | Automatically begin organization |
 
 ### Duplicates

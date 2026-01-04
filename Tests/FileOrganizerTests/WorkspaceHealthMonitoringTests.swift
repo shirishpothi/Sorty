@@ -33,8 +33,8 @@ class WorkspaceHealthMonitoringTests: XCTestCase {
         let file = tempDirectory.appendingPathComponent("test.txt")
         try "content".write(to: file, atomically: true, encoding: .utf8)
         
-        // 3. Wait for change detection (debounce is 2.0s)
-        try await Task.sleep(nanoseconds: 3_000_000_000) // 3s
+        // 3. Wait for change detection (polling/debounce is ~3.0s)
+        try await Task.sleep(nanoseconds: 3_500_000_000) // 3.5s
         
         // 4. Assert change detected
         XCTAssertNotNil(healthManager.fileChangeDetected)

@@ -457,7 +457,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // We assume specificFiles are filenames or relative paths
             for filename in specificFiles {
                 let fileURL = directory.appendingPathComponent(filename)
-                if let item = try? await scanner.scanFile(at: fileURL, root: directory) {
+                if let item = try? await scanner.scanFile(at: fileURL) {
                     files.append(item)
                 }
             }

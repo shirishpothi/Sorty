@@ -54,7 +54,6 @@ actor DirectoryScanner {
     /// Scan a single file and return a FileItem
     func scanFile(
         at url: URL,
-        root rootURL: URL,
         deepScan: Bool = false,
         computeHashes: Bool = false
     ) async throws -> FileItem {

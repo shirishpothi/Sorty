@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 /// Main analyzer for "The Learnings" feature
 @MainActor
@@ -100,8 +101,12 @@ public class LearningsAnalyzer: ObservableObject {
         var conflicts: [MappingConflict] = []
         var destinationCounts: [String: [String]] = [:]  // dst -> [src paths]
         
+        guard let primaryRootPath = rootPaths.first else {
+            throw LearningsError.emptyRootPaths
+        }
+        
         for (index, fileURL) in allFiles.enumerated() {
-            let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: rootPaths.first ?? "")
+            let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: primaryRootPath)
             mappings.append(mapping)
             
             // Track for conflict detection

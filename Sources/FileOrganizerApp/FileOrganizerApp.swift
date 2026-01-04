@@ -35,7 +35,6 @@ struct FileOrganizerApp: App {
                 .environmentObject(watchedFoldersManager)
                 .environmentObject(organizer)
                 .environmentObject(exclusionRules)
-                .environmentObject(exclusionRules)
                 .environmentObject(extensionListener)
                 .environmentObject(deeplinkHandler)
                 .environmentObject(learningsManager) // Inject

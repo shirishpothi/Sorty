@@ -42,7 +42,7 @@ struct LearningsHoningView: View {
                     Spacer()
                     
                     if let session = engine.currentSession {
-                        Text("\(session.answers.count + 1) / \(session.targetQuestionCount)")
+                        Text("\(min(session.answers.count + 1, session.targetQuestionCount)) / \(session.targetQuestionCount)")
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                             .foregroundColor(.gray)
                             .padding(.horizontal, 12)

@@ -980,7 +980,18 @@ public class WorkspaceHealthManager: ObservableObject {
                     try fileManager.createDirectory(at: dateFolder, withIntermediateDirectories: true)
                 }
                 
-                let destination = dateFolder.appendingPathComponent(file.lastPathComponent)
+                var destination = dateFolder.appendingPathComponent(file.lastPathComponent)
+                
+                // If conflict exists in archive, append human-readable timestamp to make unique
+                if fileManager.fileExists(atPath: destination.path) {
+                    let fileName = file.deletingPathExtension().lastPathComponent
+                    let fileExt = file.pathExtension
+                    
+                    let timestamp = Date().filenameTimestamp
+                    let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
+                    destination = dateFolder.appendingPathComponent(uniqueName)
+                }
+                
                 try fileManager.moveItem(at: file, to: destination)
             }
         }

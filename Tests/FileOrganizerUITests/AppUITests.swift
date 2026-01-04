@@ -487,6 +487,13 @@ final class AppUITests: XCTestCase {
             apiUrlField.typeText("https://api.test-provider.com/v1")
         }
 
+        // 1.5. Configure API key
+        let apiKeyField = app.secureFields["ApiKeyTextField"]
+        if waitForElement(apiKeyField, timeout: 2.0) {
+            apiKeyField.click()
+            apiKeyField.typeText("test-api-key")
+        }
+
         // 2. Configure model
         let modelField = app.textFields["ModelTextField"]
         if waitForElement(modelField, timeout: 2.0) {
@@ -578,7 +585,8 @@ final class AppUITests: XCTestCase {
             "SettingsSidebarItem",
             "HistorySidebarItem",
             "ExclusionsSidebarItem",
-            "WatchedFoldersSidebarItem"
+            "WatchedFoldersSidebarItem",
+            "LearningsSidebarItem"
         ]
 
         for identifier in sidebarItems {
@@ -598,7 +606,8 @@ final class AppUITests: XCTestCase {
             "WatchedFoldersSidebarItem",
             "DuplicatesSidebarItem",
             "WorkspaceHealthSidebarItem",
-            "HistorySidebarItem"
+            "HistorySidebarItem",
+            "LearningsSidebarItem"
         ]
 
         // Navigate rapidly through all views multiple times
@@ -703,7 +712,8 @@ final class AppUITests: XCTestCase {
             ("SettingsSidebarItem", "Settings"),
             ("HistorySidebarItem", "History"),
             ("ExclusionsSidebarItem", "Exclusion"),
-            ("WatchedFoldersSidebarItem", "Watched")
+            ("WatchedFoldersSidebarItem", "Watched"),
+            ("LearningsSidebarItem", "Learnings")
         ]
 
         for (identifier, expectedContent) in sidebarItems {
@@ -789,6 +799,12 @@ final class AppUITests: XCTestCase {
         navigateToView("WatchedFoldersSidebarItem")
         XCTAssertTrue(app.buttons["AddWatchedFolderButton"].waitForExistence(timeout: 2.0),
                      "Add Folder button should have accessibility identifier")
+
+        // Test Learnings
+        navigateToView("LearningsSidebarItem")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'Learnings'")).count > 0 ||
+                     app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Learn'")).count > 0,
+                     "Learnings view should have content")
     }
 
     // MARK: - Window Management Tests

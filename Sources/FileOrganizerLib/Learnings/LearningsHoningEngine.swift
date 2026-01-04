@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 
 public struct HoningSession: Identifiable, Codable, Sendable {
     public let id: String
@@ -136,8 +137,18 @@ public class LearningsHoningEngine: ObservableObject {
                     // Verify it's not a duplicate
                     if !(currentSession?.questions.contains(where: { $0.text == question.text }) ?? false) {
                         currentSession?.questions.append(question)
+                        UserDefaults.standard.set(0, forKey: "HoningRetryCount") // Reset retry count on success
                     } else {
-                        // If duplicate, try again or just finish if we have enough
+                        // If duplicate, try again up to 3 times
+                        let retryCount = UserDefaults.standard.integer(forKey: "HoningRetryCount")
+                        if retryCount < 3 {
+                            UserDefaults.standard.set(retryCount + 1, forKey: "HoningRetryCount")
+                            await generateNextQuestion()
+                            return
+                        }
+                        
+                        // Otherwise just finish if we have enough
+                        UserDefaults.standard.set(0, forKey: "HoningRetryCount")
                         if (currentSession?.questions.count ?? 0) > 0 {
                             finishSession()
                         }
