@@ -44,14 +44,28 @@ public class UpdateManager: ObservableObject {
             
             let (data, response) = try await URLSession.shared.data(for: request)
             
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                state = .error("Failed to connect to GitHub (Status: \((response as? HTTPURLResponse)?.statusCode ?? 0))")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                state = .error("Invalid server response")
+                return
+            }
+            
+            if httpResponse.statusCode == 404 {
+                print("[UpdateManager] No releases found for this repository (404)")
+                state = .upToDate // Treat no releases as "up to date" for now
+                return
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                print("[UpdateManager] Error response: \(httpResponse.statusCode)")
+                state = .error("Failed to connect to GitHub (Status: \(httpResponse.statusCode))")
                 return
             }
             
             let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+            print("[UpdateManager] Found latest release: \(release.tagName)")
             let latestVersion = release.tagName.replacingOccurrences(of: "v", with: "")
             
+            print("[UpdateManager] Comparing latest \(latestVersion) with current \(BuildInfo.version)")
             if isVersionNewer(latest: latestVersion, current: BuildInfo.version) {
                 if let htmlUrl = URL(string: release.htmlUrl) {
                     state = .available(version: latestVersion, url: htmlUrl, notes: release.body)

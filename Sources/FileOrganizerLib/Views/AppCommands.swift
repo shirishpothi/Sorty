@@ -553,6 +553,7 @@ public class AppState: ObservableObject {
         
         // Create new window with proper lifecycle management
         let helpView = HelpView(initialSection: initialSection)
+            .environmentObject(self)
         let hostingController = NSHostingController(rootView: helpView)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 650),
