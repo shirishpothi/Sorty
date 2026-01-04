@@ -20,11 +20,14 @@ public class UpdateManager: ObservableObject {
     @Published public var state: UpdateState = .idle
     @Published public var lastCheckDate: Date?
     
-    // Repository details - adjust if necessary
-    private let repoOwner = "shirishpothi"
-    private let repoName = "FileOrganizer"
+    // Repository details
+    private let repoOwner: String
+    private let repoName: String
     
-    public init() {}
+    public init(repoOwner: String = "shirishpothi", repoName: String = "FileOrganizer") {
+        self.repoOwner = repoOwner
+        self.repoName = repoName
+    }
     
     /// Checks for updates from GitHub Releases
     public func checkForUpdates() async {
@@ -49,31 +52,42 @@ public class UpdateManager: ObservableObject {
                 return
             }
             
-            if httpResponse.statusCode == 404 {
-                print("[UpdateManager] No releases found for this repository (404)")
-                state = .upToDate // Treat no releases as "up to date" for now
-                return
-            }
-            
-            guard httpResponse.statusCode == 200 else {
-                print("[UpdateManager] Error response: \(httpResponse.statusCode)")
-                state = .error("Failed to connect to GitHub (Status: \(httpResponse.statusCode))")
-                return
-            }
-            
-            let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
-            print("[UpdateManager] Found latest release: \(release.tagName)")
-            let latestVersion = release.tagName.replacingOccurrences(of: "v", with: "")
-            
-            print("[UpdateManager] Comparing latest \(latestVersion) with current \(BuildInfo.version)")
-            if isVersionNewer(latest: latestVersion, current: BuildInfo.version) {
-                if let htmlUrl = URL(string: release.htmlUrl) {
-                    state = .available(version: latestVersion, url: htmlUrl, notes: release.body)
+            if httpResponse.statusCode == 200 {
+                let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+                print("[UpdateManager] Found latest release: \(release.tagName)")
+                
+                // Robust normalization: strip leading 'v' if present
+                let latestVersion = release.tagName.hasPrefix("v") ? String(release.tagName.dropFirst()) : release.tagName
+                
+                print("[UpdateManager] Comparing latest \(latestVersion) with current \(BuildInfo.version)")
+                if isVersionNewer(latest: latestVersion, current: BuildInfo.version) {
+                    if let htmlUrl = URL(string: release.htmlUrl) {
+                        state = .available(version: latestVersion, url: htmlUrl, notes: release.body)
+                    } else {
+                        state = .error("Invalid release URL")
+                    }
                 } else {
-                    state = .error("Invalid release URL")
+                    state = .upToDate
                 }
             } else {
-                state = .upToDate
+                let statusCode = httpResponse.statusCode
+                print("[UpdateManager] Error response: \(statusCode)")
+                
+                let message: String
+                switch statusCode {
+                case 401:
+                    message = "Authentication required to access releases."
+                case 403:
+                    message = "GitHub API rate limit exceeded. Please try again later."
+                case 404:
+                    // Treat 404 as no releases exist, which means we are technically "up to date"
+                    print("[UpdateManager] No releases found for this repository (404)")
+                    state = .upToDate
+                    return
+                default:
+                    message = "Failed to connect to GitHub (Status: \(statusCode))"
+                }
+                state = .error(message)
             }
         } catch {
             state = .error("Update check failed: \(error.localizedDescription)")
@@ -87,9 +101,14 @@ public class UpdateManager: ObservableObject {
     
     // MARK: - Helper Logic
     
+    /// Compares version strings (e.g., "1.0.0" vs "1.1.0")
     private func isVersionNewer(latest: String, current: String) -> Bool {
-        let latestComponents = latest.split(separator: ".").compactMap { Int($0) }
-        let currentComponents = current.split(separator: ".").compactMap { Int($0) }
+        // Strip any pre-release identifiers for basic comparison
+        let latestNumeric = latest.components(separatedBy: "-").first ?? latest
+        let currentNumeric = current.components(separatedBy: "-").first ?? current
+        
+        let latestComponents = latestNumeric.split(separator: ".").compactMap { Int($0) }
+        let currentComponents = currentNumeric.split(separator: ".").compactMap { Int($0) }
         
         let count = max(latestComponents.count, currentComponents.count)
         
@@ -99,6 +118,17 @@ public class UpdateManager: ObservableObject {
             
             if l > c { return true }
             if l < c { return false }
+        }
+        
+        // Handle pre-release awareness: if numeric parts are equal, check if one is a pre-release
+        // A full release "1.0.0" is newer than "1.0.0-beta"
+        if latestNumeric == currentNumeric {
+            let latestHasPreRelease = latest.contains("-")
+            let currentHasPreRelease = current.contains("-")
+            
+            if currentHasPreRelease && !latestHasPreRelease {
+                return true // Current is beta, latest is full release -> update available
+            }
         }
         
         return false

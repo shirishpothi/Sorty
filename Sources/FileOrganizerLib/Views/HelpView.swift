@@ -656,7 +656,7 @@ private struct AboutContent: View {
                     .cornerRadius(6)
                 }
             }
-            .frame(height: 60)
+            .frame(minHeight: 40, maxHeight: 100)
             
             Spacer().frame(height: 10)
             
