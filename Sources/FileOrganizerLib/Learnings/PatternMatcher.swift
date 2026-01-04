@@ -215,8 +215,7 @@ public struct PatternMatcher {
         }
         
         // Fallback: try to build a simple pattern
-        let tokens = filenames.flatMap { tokenize($0) }
-        let uniqueTokens = Set(tokens)
+        let _ = filenames.flatMap { tokenize($0) }
         
         // If filenames share a common prefix, use it
         if let prefix = findCommonPrefix(filenames) {
@@ -231,7 +230,7 @@ public struct PatternMatcher {
         guard let first = strings.first else { return nil }
         
         var prefix = ""
-        for (index, char) in first.enumerated() {
+        for (index, _) in first.enumerated() {
             let prefixCandidate = String(first.prefix(index + 1))
             if strings.allSatisfy({ $0.hasPrefix(prefixCandidate) }) {
                 prefix = prefixCandidate

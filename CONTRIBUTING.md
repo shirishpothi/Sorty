@@ -33,9 +33,9 @@ Proposed enhancements should be submitted as feature requests. Provide a detaile
 
 ### Prerequisites
 
-*   macOS 13.0 or later.
-*   Xcode 15.0 or later.
-*   Swift 5.9 or later.
+*   macOS 15.1 or later.
+*   Xcode 16.0 or later.
+*   Swift 6.0 or later.
 
 ### Building the Project
 

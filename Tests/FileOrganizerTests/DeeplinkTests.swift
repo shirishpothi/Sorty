@@ -128,6 +128,74 @@ final class DeeplinkTests: XCTestCase {
     }
     
     @MainActor
+    func testPersonaDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "fileorganizer://persona?action=generate&prompt=Organize%20my%20music")!
+        handler.handle(url: url)
+        
+        if case .persona(let action, let prompt, let generate) = handler.pendingDestination {
+            XCTAssertEqual(action, "generate")
+            XCTAssertEqual(prompt, "Organize my music")
+            XCTAssertFalse(generate)
+        } else {
+            XCTFail("Expected persona destination")
+        }
+        
+        handler.clearPending()
+    }
+    
+    @MainActor
+    func testWatchedDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "fileorganizer://watched?action=add&path=/Users/test/Code")!
+        handler.handle(url: url)
+        
+        if case .watched(let action, let path) = handler.pendingDestination {
+            XCTAssertEqual(action, "add")
+            XCTAssertEqual(path, "/Users/test/Code")
+        } else {
+            XCTFail("Expected watched destination")
+        }
+        
+        handler.clearPending()
+    }
+    
+    @MainActor
+    func testRulesDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "fileorganizer://rules?action=add&pattern=*.tmp")!
+        handler.handle(url: url)
+        
+        if case .rules(let action, _, let pattern) = handler.pendingDestination {
+            XCTAssertEqual(action, "add")
+            XCTAssertEqual(pattern, "*.tmp")
+        } else {
+            XCTFail("Expected rules destination")
+        }
+        
+        handler.clearPending()
+    }
+    
+    @MainActor
+    func testLearningsHoningDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "fileorganizer://learnings?action=honing")!
+        handler.handle(url: url)
+        
+        if case .learnings(let action, _) = handler.pendingDestination {
+            XCTAssertEqual(action, .honing)
+        } else {
+            XCTFail("Expected learnings honing destination")
+        }
+        
+        handler.clearPending()
+    }
+    
+    @MainActor
     func testUnknownDeeplink() {
         let handler = DeeplinkHandler.shared
         handler.clearPending()
@@ -167,5 +235,14 @@ final class DeeplinkTests: XCTestCase {
     func testGenerateLearningsURL() {
         let url = DeeplinkHandler.url(for: .learnings(action: nil, project: "MyProject"))
         XCTAssertEqual(url?.absoluteString, "fileorganizer://learnings?project=MyProject")
+        
+        let hunkURL = DeeplinkHandler.url(for: .learnings(action: .honing, project: nil))
+        XCTAssertEqual(hunkURL?.absoluteString, "fileorganizer://learnings?action=honing")
+    }
+    
+    @MainActor
+    func testGeneratePersonaURL() {
+        let url = DeeplinkHandler.url(for: .persona(action: "generate", prompt: "Test prompt", generate: true))
+        XCTAssertEqual(url?.absoluteString, "fileorganizer://persona?action=generate&prompt=Test%20prompt&generate=true")
     }
 }

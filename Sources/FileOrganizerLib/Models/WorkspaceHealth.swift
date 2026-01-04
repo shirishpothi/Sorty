@@ -1039,10 +1039,7 @@ public class WorkspaceHealthManager: ObservableObject {
                      let fileName = file.deletingPathExtension().lastPathComponent
                      let fileExt = file.pathExtension
                      
-                     let formatter = DateFormatter()
-                     formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
-                     let timestamp = formatter.string(from: Date())
-                     
+                     let timestamp = Date().filenameTimestamp
                      let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
                      destination = trashURL.appendingPathComponent(uniqueName)
                  }
