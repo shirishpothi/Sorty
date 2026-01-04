@@ -177,19 +177,7 @@ final class RuleInducerTests: XCTestCase {
     
     // MARK: - Models Tests
     
-    func testLearningsProjectCreation() {
-        let project = LearningsProject(
-            name: "Test Project",
-            rootPaths: ["/Users/test/Downloads"],
-            exampleFolders: ["/Users/test/OrganizedPhotos"]
-        )
-        
-        XCTAssertEqual(project.name, "Test Project")
-        XCTAssertEqual(project.rootPaths.count, 1)
-        XCTAssertEqual(project.exampleFolders.count, 1)
-        XCTAssertTrue(project.labeledExamples.isEmpty)
-        XCTAssertTrue(project.options.dryRun) // Default
-    }
+
     
     func testAnalysisResultToJSON() throws {
         let result = LearningsAnalysisResult(

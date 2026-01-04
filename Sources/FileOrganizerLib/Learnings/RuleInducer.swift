@@ -65,7 +65,7 @@ public actor RuleInducer {
             if let regex = try? NSRegularExpression(pattern: rule.pattern),
                regex.firstMatch(in: srcFilename, range: NSRange(srcFilename.startIndex..., in: srcFilename)) != nil {
                 // Example matches this rule - increase priority
-                var updated = rule
+                let updated = rule
                 var newExampleIds = updated.exampleIds
                 newExampleIds.append(newExample.id)
                 updatedRules[index] = InferredRule(

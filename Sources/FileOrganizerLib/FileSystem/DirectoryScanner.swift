@@ -50,6 +50,57 @@ actor DirectoryScanner {
         
         return files
     }
+
+    /// Scan a single file and return a FileItem
+    func scanFile(
+        at url: URL,
+        root rootURL: URL,
+        deepScan: Bool = false,
+        computeHashes: Bool = false
+    ) async throws -> FileItem {
+        let fileManager = FileManager.default
+        
+        guard url.isFileURL else {
+            throw ScannerError.invalidURL
+        }
+        
+        guard fileManager.fileExists(atPath: url.path) else {
+            throw ScannerError.pathNotFound
+        }
+        
+        let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey]
+        let resourceValues = try? url.resourceValues(forKeys: Set(resourceKeys))
+        
+        let isDirectory = resourceValues?.isDirectory ?? false
+        let size = resourceValues?.fileSize ?? 0
+        let creationDate = resourceValues?.creationDate
+        
+        let pathExtension = url.pathExtension
+        let fileName = url.deletingPathExtension().lastPathComponent
+        
+        // Deep scan: extract content metadata
+        var contentMetadata: ContentMetadata? = nil
+        if deepScan {
+            contentMetadata = await contentAnalyzer.analyze(fileURL: url)
+        }
+        
+        // Hash computation for duplicate detection
+        var sha256Hash: String? = nil
+        if computeHashes {
+            sha256Hash = computeSHA256(for: url)
+        }
+        
+        return FileItem(
+            path: url.path,
+            name: fileName,
+            extension: pathExtension,
+            size: Int64(size),
+            isDirectory: isDirectory,
+            creationDate: creationDate,
+            contentMetadata: contentMetadata,
+            sha256Hash: sha256Hash
+        )
+    }
     
     private func scanDirectoryRecursive(
         at url: URL,

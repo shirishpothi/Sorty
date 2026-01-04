@@ -10,7 +10,7 @@ import Foundation
 /// Protocol for receiving folder change notifications
 @MainActor
 public protocol FolderWatcherDelegate: AnyObject {
-    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder)
+    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>)
 }
 
 /// Monitors directories for file changes and triggers organization
@@ -179,7 +179,7 @@ public final class FolderWatcher: @unchecked Sendable {
             DebugLogger.log("New files detected: \(newFiles)")
             
             Task { @MainActor in
-                self.delegate?.folderWatcher(self, didDetectChangesIn: folder)
+                self.delegate?.folderWatcher(self, didDetectChangesIn: folder, newFiles: newFiles)
             }
         }
         

@@ -118,19 +118,93 @@ This is helpful for understanding and fine-tuning the organization.
 
 ## The Learnings
 
-The Learnings is an example-based organization engine that allows you to train the AI using your own folder structures.
+The Learnings is a **passive learning system** that builds a personalized understanding of how you prefer to organize files. It observes your organization habits, corrections, and feedback to continuously improve AI suggestions over time.
 
-### How it works
-1. **Create a Project**: Give your project a name (e.g., "Personal Archive").
-2. **Add Source Folders**: Select the folders you want to organize.
-3. **Add Examples**: Add folders that are already organized exactly how you like.
-4. **Analyze**: The AI infers rules from your examples (e.g., "Always group invoices by year").
-5. **Apply**: Review the proposed moves and apply them with built-in backup and rollback support.
+### Getting Started
 
-### Pro-Tips
-- Provide at least 2-3 well-organized example folders for best results.
-- Use the **Rollback** feature if the organization isn't what you expected.
-- You can save and reload Learnings projects for recurring tasks.
+1. **Enable Learning**: Navigate to **The Learnings** (⇧⌘L) and grant consent
+2. **Authenticate**: Set up Touch ID / Face ID / Passcode protection for your data
+3. **Use the App Normally**: Organize files, provide feedback, and make corrections
+
+After initial setup, you'll need to authenticate each time you access The Learnings dashboard (for security).
+
+### What Gets Learned
+
+| Behavior | What's Captured | Priority |
+|----------|-----------------|----------|
+| **Steering Prompts** | Post-organization feedback and instructions | Highest |
+| **Honing Answers** | Your explicit preferences from Q&A sessions | High |
+| **Guiding Instructions** | Instructions you provide before organizing | High |
+| **Manual Corrections** | Files you move after AI organization | Medium |
+| **Reverts** | Organization sessions you undo | Medium |
+| **Additional Instructions** | Custom instructions during organization | Medium |
+
+### How Learning Improves AI
+
+The system uses your learnings in several ways:
+
+1. **Pattern Recognition**: Identifies how you prefer to organize specific file types
+2. **Temporal Weighting**: Recent behavior is weighted more heavily than older patterns
+3. **Rule Induction**: AI analyzes patterns to create explicit organization rules
+4. **Contextual Understanding**: Learns folder preferences for different contexts
+
+### The Dashboard
+
+The Learnings dashboard has three tabs:
+
+- **Overview**: Quick stats, learning progress, and action buttons
+- **Preferences**: Grouped view of all learned preferences (honing answers, inferred rules, feedback)
+- **Activity**: Timeline of corrections, reverts, and instructions with expandable details
+
+### Honing Sessions
+
+Use the **Refine Preferences** button to start a honing session:
+
+1. Answer 3-5 questions about your organization philosophy
+2. Questions are AI-generated based on your recent activity
+3. Answers become high-priority preferences for future organizations
+4. Honing is also offered after completing an organization
+
+**Example questions:**
+- "When you finish a project, what is your preferred archival strategy?"
+- "How do you prefer to organize documents by date?"
+
+### Security & Privacy
+
+| Feature | Description |
+|---------|-------------|
+| **Biometric Protection** | Touch ID / Face ID required after initial setup |
+| **AES-256 Encryption** | All learning data encrypted with Keychain-stored keys |
+| **Local Storage Only** | Data never leaves your device |
+| **Session Timeout** | Automatic lock after 5 minutes of inactivity |
+| **Secure Deletion** | Data overwritten before removal |
+
+### Data Management
+
+- **Pause Learning**: Stop data collection while preserving existing data
+- **Delete All Data**: Permanently and securely remove all learning data
+- **Export**: (Coming soon) Export your preferences as JSON
+
+### CLI Commands
+
+```bash
+# View learning status
+learnings-cli --status
+
+# Clear all learning data
+learnings-cli --clear
+
+# Open Learnings dashboard
+fileorg learnings
+```
+
+### Deeplinks
+
+| Deeplink | Description |
+|----------|-------------|
+| `fileorganizer://learnings` | Open Learnings dashboard |
+| `fileorganizer://learnings?action=honing` | Start a honing session |
+| `fileorganizer://learnings?action=stats` | View learning statistics |
 
 ---
 
@@ -188,32 +262,94 @@ You can scan any folder for duplicates without changing your main organization t
 
 ## App Deeplinks
 
-FileOrganiser supports URL schemes for integration with Shortcuts, browsers, and scripts.
+FileOrganiser provides comprehensive URL schemes to control all aspect of the application.
 
-| Route | Example URL |
-|-------|-------------|
-| **Organize** | `fileorganizer://organize?path=/Downloads` |
-| **Duplicates** | `fileorganizer://duplicates` |
-| **Learnings** | `fileorganizer://learnings?project=Photos` |
-| **Settings** | `fileorganizer://settings` |
-| **Help** | `fileorganizer://help?section=learnings` |
-| **History** | `fileorganizer://history` |
-| **Health** | `fileorganizer://health` |
+### Organization Routes
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| **Organize** | `fileorganizer://organize` | Open the organization view |
+| | `path` | Path to organize |
+| | `persona` | ID of persona (fileorganizer_general, developer, etc) |
+| | `autostart=true` | Automatically begin organization |
+| **Duplicates** | `fileorganizer://duplicates` | Open duplicates view |
+| | `path` | Path to scan |
+| | `autostart=true` | Automatically begin scan |
+
+### Management Routes
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| **Persona** | `fileorganizer://persona` | Manage personas |
+| | `action=generate` | Generate a new persona |
+| | `prompt` | Description for generation |
+| | `generate=true` | Trigger generation immediately |
+| **Watched** | `fileorganizer://watched` | Manage watched folders |
+| | `action=add` | Add a new watched folder |
+| | `path` | Path to add |
+| **Rules** | `fileorganizer://rules` | Manage exclusion rules |
+| | `action=add` | Add a new rule |
+| | `pattern` | Pattern to exclude (e.g., "*.tmp") |
+
+### Navigation Routes
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| **Settings** | `fileorganizer://settings` | Open Settings |
+| **Learnings** | `fileorganizer://learnings` | Open Learnings |
+| **History** | `fileorganizer://history` | Open History |
+| **Health** | `fileorganizer://health` | Open Workspace Health |
+| **Help** | `fileorganizer://help` | Open Help |
 
 ---
 
 ## CLI Tooling
 
-Interact with the organization engine from your terminal using the `learnings` tool.
-
-### Commands
-- `learnings list`: List all saved projects.
-- `learnings analyze --project <name>`: Run analysis on a project.
-- `learnings apply --project <name> --src <path>`: Organize a directory.
-- `learnings rollback --job <id>`: Undo a specific operation.
+FileOrganiser includes a comprehensive CLI tool called `fileorg` that allows you to control the application from your terminal.
 
 ### Installation
-Run `make install` in the source directory to move the `learnings` binary to your shell's path.
+Run `make install` (or ensure `CLI/fileorg` is in your path).
+
+### Usage
+`fileorg <command> [options]`
+
+### Commands
+
+**Organization**
+```bash
+# Organize current folder
+fileorg organize .
+
+# Organize specific folder with specific persona
+fileorg organize /Users/me/Downloads --persona developer
+
+# Auto-start organization
+fileorg organize . --auto
+```
+
+**Maintenance**
+```bash
+# Scan for duplicates
+fileorg duplicates /path/to/scan --auto
+
+# Add watched folder
+fileorg watched add /path/to/watch
+
+# Add exclusion rule
+fileorg rules add "*.log"
+```
+
+**Generative AI**
+```bash
+# Generate a new persona from description
+fileorg persona generate "I want to organize my sci-fi ebook collection by author"
+```
+
+**Navigation**
+```bash
+fileorg settings
+fileorg history
+fileorg learnings
+fileorg health
+fileorg help
+```
 
 ---
 

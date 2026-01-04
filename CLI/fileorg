@@ -1,0 +1,179 @@
+#!/bin/bash
+
+# FileOrganizer CLI (fileorg)
+# Controls the FileOrganizer app via URL schemes
+
+APP_SCHEME="fileorganizer"
+
+function show_help {
+    echo "FileOrganizer CLI (fileorg)"
+    echo ""
+    echo "Usage: fileorg <command> [options]"
+    echo ""
+    echo "Commands:"
+    echo "  organize <path> [options]    Start organizing a directory"
+    echo "    --persona <id>             Select a persona (e.g. 'general', 'developer')"
+    echo "    --auto                     Automatically start organization"
+    echo ""
+    echo "  duplicates <path> [options]  Scan for duplicates"
+    echo "    --auto                     Automatically start scanning"
+    echo ""
+    echo "  settings [section]           Open settings"
+    echo "    sections: general, ai, advanced, watched, exclusions"
+    echo ""
+    echo "  persona <action>             Manage personas"
+    echo "    create                     Open persona creator"
+    echo "    generate <prompt>          Generate a new persona from description"
+    echo ""
+    echo "  watched add <path>           Add a watched folder"
+    echo ""
+    echo "  rules add <pattern>          Add an exclusion rule"
+    echo ""
+    echo "  learnings                    Open Learnings dashboard"
+    echo "  history                      Open History"
+    echo "  health                       Open Workspace Health"
+    echo "  help                         Open Help"
+    echo ""
+}
+
+function open_url {
+    open "$1"
+}
+
+COMMAND=$1
+shift
+
+if [ -z "$COMMAND" ]; then
+    show_help
+    exit 0
+fi
+
+case "$COMMAND" in
+    "organize")
+        PATH_ARG=""
+        PERSONA=""
+        AUTOSTART="false"
+        
+        while [[ $# -gt 0 ]]; do
+            case $1 in
+                --persona)
+                    PERSONA="$2"
+                    shift
+                    shift
+                    ;;
+                --auto)
+                    AUTOSTART="true"
+                    shift
+                    ;;
+                *)
+                    if [ -z "$PATH_ARG" ]; then
+                        PATH_ARG="$1"
+                    fi
+                    shift
+                    ;;
+            esac
+        done
+        
+        URL="${APP_SCHEME}://organize?autostart=${AUTOSTART}"
+        if [ ! -z "$PATH_ARG" ]; then
+            URL="${URL}&path=${PATH_ARG}"
+        fi
+        if [ ! -z "$PERSONA" ]; then
+            URL="${URL}&persona=${PERSONA}"
+        fi
+        open_url "$URL"
+        ;;
+        
+    "duplicates")
+        PATH_ARG=""
+        AUTOSTART="false"
+        
+        while [[ $# -gt 0 ]]; do
+            case $1 in
+                --auto)
+                    AUTOSTART="true"
+                    shift
+                    ;;
+                *)
+                    if [ -z "$PATH_ARG" ]; then
+                        PATH_ARG="$1"
+                    fi
+                    shift
+                    ;;
+            esac
+        done
+        
+        URL="${APP_SCHEME}://duplicates?autostart=${AUTOSTART}"
+        if [ ! -z "$PATH_ARG" ]; then
+            URL="${URL}&path=${PATH_ARG}"
+        fi
+        open_url "$URL"
+        ;;
+        
+    "settings")
+        SECTION=$1
+        URL="${APP_SCHEME}://settings"
+        if [ ! -z "$SECTION" ]; then
+            URL="${URL}?section=${SECTION}"
+        fi
+        open_url "$URL"
+        ;;
+        
+    "persona")
+        ACTION=$1
+        shift
+        URL="${APP_SCHEME}://persona?action=${ACTION}"
+        
+        if [ "$ACTION" == "generate" ]; then
+            PROMPT="$*"
+            # encoding spaces for URL is rudimentary here
+            ENCODED_PROMPT=$(echo "$PROMPT" | sed 's/ /%20/g')
+            URL="${URL}&generate=true&prompt=${ENCODED_PROMPT}"
+        fi
+        open_url "$URL"
+        ;;
+        
+    "watched")
+        ACTION=$1
+        shift
+        if [ "$ACTION" == "add" ]; then
+            PATH_ARG=$1
+            URL="${APP_SCHEME}://watched?action=add&path=${PATH_ARG}"
+            open_url "$URL"
+        else
+             echo "Unknown action. Usage: watched add <path>"
+        fi
+        ;;
+        
+    "rules")
+        ACTION=$1
+        shift
+        if [ "$ACTION" == "add" ]; then
+            PATTERN=$1
+            URL="${APP_SCHEME}://rules?action=add&pattern=${PATTERN}"
+            open_url "$URL"
+        else
+             echo "Unknown action. Usage: rules add <pattern>"
+        fi
+        ;;
+        
+    "learnings")
+        open_url "${APP_SCHEME}://learnings"
+        ;;
+        
+    "history")
+        open_url "${APP_SCHEME}://history"
+        ;;
+        
+    "health")
+        open_url "${APP_SCHEME}://health"
+        ;;
+        
+    "help")
+        open_url "${APP_SCHEME}://help"
+        ;;
+        
+    *)
+        show_help
+        ;;
+esac

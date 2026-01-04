@@ -21,6 +21,10 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     func setHandler(_ handler: @escaping @Sendable ([FileItem]) async throws -> OrganizationPlan) {
         self.analyzeHandler = handler
     }
+
+    func generateText(prompt: String, systemPrompt: String?) async throws -> String {
+        return "Mock response"
+    }
 }
 
 class FileOrganizerTests: XCTestCase {

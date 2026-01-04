@@ -79,6 +79,74 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
+    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+        guard let apiURL = config.apiURL else {
+            throw AIClientError.missingAPIURL
+        }
+        
+        if config.requiresAPIKey && (config.apiKey == nil || config.apiKey?.isEmpty == true) {
+            throw AIClientError.missingAPIKey
+        }
+        
+        let endpoint: String
+        if apiURL.hasSuffix("/v1/chat/completions") {
+             endpoint = apiURL
+        } else if apiURL.hasSuffix("/") {
+             endpoint = "\(apiURL)v1/chat/completions"
+        } else {
+             endpoint = "\(apiURL)/v1/chat/completions"
+        }
+        
+        guard let url = URL(string: endpoint) else {
+            throw AIClientError.invalidURL
+        }
+        
+        var requestBody: [String: Any] = [
+            "model": config.model,
+            "messages": [
+                ["role": "system", "content": systemPrompt ?? "You are a helpful assistant."],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.7
+        ]
+        
+        if let maxTokens = config.maxTokens {
+            requestBody["max_tokens"] = maxTokens
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        
+        if let apiKey = config.apiKey, !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+        }
+        
+        let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        
+        guard let choices = jsonResponse?["choices"] as? [[String: Any]],
+              let firstChoice = choices.first,
+              let message = firstChoice["message"] as? [String: Any],
+              let content = message["content"] as? String else {
+            throw AIClientError.invalidResponseFormat
+        }
+        
+        return content
+    }
+    
     // MARK: - Non-Streaming Implementation
     
     private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {

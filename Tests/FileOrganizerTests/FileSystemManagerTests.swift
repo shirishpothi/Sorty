@@ -250,11 +250,11 @@ class FileSystemManagerTests: XCTestCase {
             notes: ""
         )
         
-        try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+        _ = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
         
         // Source folder should be removed if empty
         // Note: This might not work in all cases depending on implementation
-        let sourceExists = FileManager.default.fileExists(atPath: sourceFolder.path)
+        _ = FileManager.default.fileExists(atPath: sourceFolder.path)
         // We can't assert it's removed because the implementation tries but doesn't guarantee
         // Just verify the file was moved
         XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Dest/move_me.txt").path))

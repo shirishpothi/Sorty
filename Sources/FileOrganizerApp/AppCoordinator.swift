@@ -17,16 +17,30 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     let folderWatcher = FolderWatcher()
     let organizer: FolderOrganizer
     let watchedFoldersManager: WatchedFoldersManager
+    let learningsManager: LearningsManager
+    let continuousLearningObserver: ContinuousLearningObserver
     
-    init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager) {
+    init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
         self.organizer = organizer
         self.watchedFoldersManager = watchedFoldersManager
+        self.learningsManager = learningsManager
+        self.continuousLearningObserver = ContinuousLearningObserver(
+            history: organizer.history,
+            learningsManager: learningsManager
+        )
         self.folderWatcher.delegate = self
         
         // Initial sync
         self.folderWatcher.syncWithFolders(watchedFoldersManager.folders)
         
         setupNotifications()
+        
+        // Start observing
+        self.continuousLearningObserver.startObserving()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     private func setupNotifications() {
@@ -47,18 +61,16 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
     }
     
-    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder) {
-        print("Detailed Log: Change detected in \(folder.path)")
+    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>) {
+        guard !newFiles.isEmpty else { return }
         
         Task {
             // Check if we can proceed (e.g. not already organizing)
             guard organizer.state == .idle || organizer.state == .ready || organizer.state == .completed else {
-                print("Detailed Log: Organizer busy, skipping auto-organization")
                 return
             }
             
             do {
-                print("Detailed Log: Starting auto-organization for \(folder.name)")
                 folderWatcher.pause(folder) // Prevent loop
                 
                 watchedFoldersManager.markTriggered(folder)
@@ -66,6 +78,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 // Use Incremental Organization for Smart Drop
                 try await organizer.organizeIncremental(
                     directory: folder.url, 
+                    specificFiles: Array(newFiles),
                     customPrompt: folder.customPrompt,
                     temperature: folder.temperature
                 )
@@ -73,7 +86,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 folderWatcher.resume(folder) // Resume after completion
                 
             } catch {
-                print("Detailed Log: Auto-organization failed: \(error.localizedDescription)")
                 folderWatcher.resume(folder) // Ensure we resume even on error
             }
         }

@@ -15,7 +15,7 @@ public struct LabeledExample: Codable, Identifiable, Hashable, Sendable {
     public let srcPath: String
     public let dstPath: String
     public let metadata: [String: String]?
-    public let action: LabelAction
+    public let action: ExampleAction
     public let timestamp: Date
     
     public init(
@@ -23,7 +23,7 @@ public struct LabeledExample: Codable, Identifiable, Hashable, Sendable {
         srcPath: String,
         dstPath: String,
         metadata: [String: String]? = nil,
-        action: LabelAction = .accept,
+        action: ExampleAction = .accept,
         timestamp: Date = Date()
     ) {
         self.id = id
@@ -36,7 +36,7 @@ public struct LabeledExample: Codable, Identifiable, Hashable, Sendable {
 }
 
 /// Action that created the labeled example
-public enum LabelAction: String, Codable, Sendable {
+public enum ExampleAction: String, Codable, Sendable {
     case accept        // User accepted a proposal
     case edit          // User edited a proposal
     case reject        // User rejected a proposal

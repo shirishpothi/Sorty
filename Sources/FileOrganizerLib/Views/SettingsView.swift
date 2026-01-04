@@ -12,6 +12,9 @@ struct SettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var personaManager: PersonaManager // Access persona manager
     @EnvironmentObject var appState: AppState
+    @State private var healthManager = WorkspaceHealthManager()
+    @State private var showingHealthSettings = false
+
     @State private var testConnectionStatus: String?
     @State private var isTestingConnection = false
     @State private var showingAdvanced = false
@@ -61,10 +64,36 @@ struct SettingsView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+
+                            Button {
+                                showingHealthSettings = true
+                            } label: {
+                                Label {
+                                    HStack {
+                                        Text("Workspace Health Rules")
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                } icon: {
+                                    Image(systemName: "heart.text.square")
+                                        .foregroundColor(.green)
+                                }
+                            }
+                            .buttonStyle(.plain)
                         } header: {
                             Text("Organization Rules")
                         }
                         .animatedAppearance(delay: 0.05)
+
+                        // Organization Style / Personas Section
+                        Section {
+                            PersonaPickerView()
+                        } header: {
+                            Text("Organization Style")
+                        }
+                        .animatedAppearance(delay: 0.1)
 
                         // AI Provider Section
                         Section {
@@ -147,64 +176,76 @@ struct SettingsView: View {
                                     .textFieldStyle(.roundedBorder)
                                     .accessibilityLabel("Model Name")
                                     .accessibilityIdentifier("ModelTextField")
+                            } header: {
+                                Text("API Configuration")
+                            }
+                            .transition(TransitionStyles.scaleAndFade)
+                            .animatedAppearance(delay: 0.1)
 
-                                Divider()
+                            // Separate Connection section for OpenAI Compatible
+                            Section {
+                                VStack(spacing: 12) {
+                                    // Requires API Key toggle
+                                    AnimatedToggle(isOn: $viewModel.config.requiresAPIKey) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("Requires API Key")
+                                            Text("Disable for local endpoints that don't require authentication")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .accessibilityLabel("API Key requirement")
                                     .padding(.vertical, 4)
 
-                                // Requires API Key toggle (moved from Advanced)
-                                AnimatedToggle(isOn: $viewModel.config.requiresAPIKey) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text("Requires API Key")
-                                        Text("Disable for local endpoints that don't require authentication")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .accessibilityLabel("API Key requirement")
-                                .padding(.vertical, 4)
+                                    HStack(spacing: 12) {
+                                        Button(action: testConnection) {
+                                            HStack(spacing: 8) {
+                                                if isTestingConnection {
+                                                    BouncingSpinner(size: 14, color: .primary)
+                                                } else {
+                                                    Image(systemName: "network")
+                                                        .font(.system(size: 14, weight: .semibold))
+                                                }
 
-                                // Test Connection (moved from separate section)
-                                HStack(spacing: 12) {
-                                    Button(action: testConnection) {
-                                        HStack(spacing: 8) {
-                                            if isTestingConnection {
-                                                BouncingSpinner(size: 14, color: .primary)
-                                            } else {
-                                                Image(systemName: "network")
-                                                    .font(.system(size: 14, weight: .semibold))
+                                                Text("Test Connection")
+                                                    .font(.system(size: 14, weight: .medium))
                                             }
-
-                                            Text("Test Connection")
-                                                .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            )
+                                            .contentShape(Rectangle())
                                         }
-                                        .foregroundColor(.primary)
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 8)
-                                        .background(.ultraThinMaterial)
-                                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                                        .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                                        )
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(HapticBounceButtonStyle())
-                                    .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
-                                    .opacity(viewModel.config.provider.isAvailable ? 1.0 : 0.5)
-                                    .accessibilityIdentifier("TestConnectionButton")
+                                        .buttonStyle(HapticBounceButtonStyle())
+                                        .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
+                                        .opacity(viewModel.config.provider.isAvailable ? 1.0 : 0.5)
+                                        .accessibilityIdentifier("OpenAITestConnectionButton")
 
-                                    if let status = testConnectionStatus {
-                                        Label(
-                                            status.contains("Success") ? "Connected" : "Failed",
-                                            systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
-                                        )
-                                        .foregroundColor(status.contains("Success") ? .green : .red)
-                                        .font(.caption)
-                                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                                        if let status = testConnectionStatus {
+                                            Label(
+                                                status.contains("Success") ? "Connected" : "Failed",
+                                                systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
+                                            )
+                                            .foregroundColor(status.contains("Success") ? .green : .red)
+                                            .font(.caption)
+                                            .transition(.scale(scale: 0.8).combined(with: .opacity))
+                                        }
                                     }
                                 }
-                                .padding(.top, 4)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 12)
+                                .background(.ultraThinMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                                )
 
                                 if let status = testConnectionStatus, !status.contains("Success") {
                                     Text(status)
@@ -213,10 +254,10 @@ struct SettingsView: View {
                                         .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
                             } header: {
-                                Text("API Configuration")
+                                Text("Connection")
                             }
                             .transition(TransitionStyles.scaleAndFade)
-                            .animatedAppearance(delay: 0.1)
+                            .animatedAppearance(delay: 0.15)
                             .animation(.easeInOut(duration: 0.2), value: testConnectionStatus)
                         }
 
@@ -504,19 +545,6 @@ struct SettingsView: View {
                         Section {
                             DisclosureGroup("Advanced Settings", isExpanded: $showingAdvanced) {
                                 VStack(alignment: .leading, spacing: 16) {
-                                    Divider()
-
-                                    // Persona Picker (Moved here)
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Default Organization Persona")
-                                            .font(.headline)
-                                        CompactPersonaPicker()
-                                    }
-                                    .padding(.vertical, 4)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-
-                                    Divider()
-
                                     // Streaming toggle
                                     AnimatedToggle(isOn: $viewModel.config.enableStreaming) {
                                         Text("Enable Streaming")
@@ -580,44 +608,6 @@ struct SettingsView: View {
 
                                     Divider()
 
-                                    // System prompt override (Per Persona)
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        HStack {
-                                            Text("Custom System Prompt")
-                                            Spacer()
-
-                                            if let _ = personaManager.customPrompts[personaManager.selectedPersona] {
-                                                Button("Reset to Default") {
-                                                    HapticFeedbackManager.shared.tap()
-                                                    personaManager.resetCustomPrompt(for: personaManager.selectedPersona)
-                                                }
-                                                .font(.caption)
-                                                .buttonStyle(.borderless)
-                                                .foregroundColor(.red)
-                                            }
-                                        }
-
-                                        Text(" customizing for: \(personaManager.selectedPersona.displayName)")
-                                            .font(.caption)
-                                            .foregroundColor(.purple)
-
-                                        TextEditor(text: Binding(
-                                            get: { personaManager.getPrompt(for: personaManager.selectedPersona) },
-                                            set: { newValue in
-                                                personaManager.saveCustomPrompt(for: personaManager.selectedPersona, prompt: newValue)
-                                            }
-                                        ))
-                                        .font(.system(.body, design: .monospaced))
-                                        .frame(height: 150)
-                                        .border(Color.secondary.opacity(0.3), width: 1)
-
-                                        Text("Customize how the AI behaves for the selected persona.")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                    }
-
-                                    Divider()
-
                                     AnimatedToggle(isOn: $viewModel.config.showStatsForNerds) {
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text("Stats for Nerds")
@@ -648,6 +638,9 @@ struct SettingsView: View {
                     contentOpacity = 1.0
                 }
             }
+        }
+        .sheet(isPresented: $showingHealthSettings) {
+            WorkspaceHealthSettingsView(healthManager: healthManager)
         }
     }
 

@@ -162,6 +162,15 @@ public class PersonaManager: ObservableObject {
         }
         return persona.promptModifier
     }
+
+    /// Returns the effective prompt based on the current selection (custom or standard)
+    public func getEffectivePrompt(customStore: CustomPersonaStore) -> String {
+        if let customId = selectedCustomPersonaId,
+           let custom = customStore.customPersonas.first(where: { $0.id == customId }) {
+            return custom.promptModifier
+        }
+        return getPrompt(for: selectedPersona)
+    }
     
     public func saveCustomPrompt(for persona: PersonaType, prompt: String) {
         if prompt.isEmpty || prompt == persona.promptModifier {

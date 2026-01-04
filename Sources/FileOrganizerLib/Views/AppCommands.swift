@@ -19,6 +19,12 @@ public struct FileOrganizerCommands: Commands {
     }
 
     public var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About FileOrganizer") {
+                appState.showAbout()
+            }
+        }
+
         // Replace default New/Open with custom commands
         CommandGroup(replacing: .newItem) {
             Button("New Session") {
@@ -146,6 +152,39 @@ public struct FileOrganizerCommands: Commands {
             }
             .keyboardShortcut(.escape, modifiers: [])
             .disabled(!appState.isOperationInProgress)
+        }
+
+        // Learnings menu
+        CommandMenu("Learnings") {
+            Button("Open Dashboard") {
+                appState.currentView = .learnings
+            }
+            .keyboardShortcut("l", modifiers: [.command, .shift])
+            
+            Divider()
+            
+            Button("Start Honing Session") {
+                appState.startHoningSession()
+            }
+            .keyboardShortcut("h", modifiers: [.command, .option])
+            
+            Button("View Statistics") {
+                appState.showLearningsStats()
+            }
+            
+            Divider()
+            
+            Button("Pause Learning") {
+                appState.pauseLearning()
+            }
+            
+            Button("Export Learning Profile...") {
+                appState.exportLearningsProfile()
+            }
+            
+            Button("Import Learning Profile...") {
+                appState.importLearningsProfile()
+            }
         }
 
         // Help menu additions
@@ -516,6 +555,37 @@ public class AppState: ObservableObject {
         let controller = NSWindowController(window: window)
         helpWindowController = controller
         controller.showWindow(nil)
+    }
+    
+    // MARK: - Learnings Actions
+    
+    public func startHoningSession() {
+        currentView = .learnings
+        // Post notification to trigger honing in the Learnings view
+        NotificationCenter.default.post(name: .startHoningSession, object: nil)
+    }
+    
+    public func showLearningsStats() {
+        currentView = .learnings
+        // Post notification to show stats tab
+        NotificationCenter.default.post(name: .showLearningsStats, object: nil)
+    }
+    
+    public func pauseLearning() {
+        // Post notification to pause learning
+        NotificationCenter.default.post(name: .pauseLearning, object: nil)
+    }
+    
+    public func exportLearningsProfile() {
+        currentView = .learnings
+        // Post notification to trigger export
+        NotificationCenter.default.post(name: .exportLearningsProfile, object: nil)
+    }
+    
+    public func importLearningsProfile() {
+        currentView = .learnings
+        // Post notification to trigger import
+        NotificationCenter.default.post(name: .importLearningsProfile, object: nil)
     }
     
     public func deleteUsageData() {

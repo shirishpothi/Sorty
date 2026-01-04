@@ -52,7 +52,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     }
 }
 
-public struct AIConfig: Codable, Sendable {
+public struct AIConfig: Codable, Sendable, Equatable {
     public var provider: AIProvider
     public var apiURL: String?
     public var apiKey: String?
@@ -73,7 +73,9 @@ public struct AIConfig: Codable, Sendable {
     public var detectDuplicates: Bool // Find duplicate files by hash
     public var enableFileTagging: Bool // Apply Finder tags to files
     public var showStatsForNerds: Bool // Show detailed stats about generation
-    
+    public var storeDuplicateMetadata: Bool // Save original metadata for duplicates (opt-in)
+    public var strictExclusions: Bool // Higher-level screening for exclusions
+
     public init(
         provider: AIProvider = .openAICompatible,
         apiURL: String? = nil,
@@ -90,7 +92,9 @@ public struct AIConfig: Codable, Sendable {
         enableDeepScan: Bool = false,
         detectDuplicates: Bool = false,
         enableFileTagging: Bool = true,
-        showStatsForNerds: Bool = false
+        showStatsForNerds: Bool = false,
+        storeDuplicateMetadata: Bool = true,
+        strictExclusions: Bool = true
     ) {
         self.provider = provider
         self.apiURL = apiURL
@@ -108,6 +112,8 @@ public struct AIConfig: Codable, Sendable {
         self.detectDuplicates = detectDuplicates
         self.enableFileTagging = enableFileTagging
         self.showStatsForNerds = showStatsForNerds
+        self.storeDuplicateMetadata = storeDuplicateMetadata
+        self.strictExclusions = strictExclusions
     }
     
     public static let `default` = AIConfig(
@@ -125,7 +131,9 @@ public struct AIConfig: Codable, Sendable {
         enableDeepScan: false,
         detectDuplicates: false,
         enableFileTagging: true,
-        showStatsForNerds: false
+        showStatsForNerds: false,
+        storeDuplicateMetadata: true,
+        strictExclusions: true
     )
 }
 

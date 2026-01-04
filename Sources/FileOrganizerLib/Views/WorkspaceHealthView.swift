@@ -3,12 +3,21 @@
 //  FileOrganizer
 //
 //  Automated Workspace Health Insights Dashboard
-//  Tracks clutter growth and cleanup opportunities with visual analytics
+//  Redesigned with "Liquid Glass" Aesthetic for Ideal Optimisation
 //
 
 import SwiftUI
 import Charts
 import UniformTypeIdentifiers
+
+// MARK: - Constants
+private enum LiquidConstants {
+    static let glassMaterial: Material = .ultraThin
+    static let cardCornerRadius: CGFloat = 20
+    static let shadowColor = Color.black.opacity(0.1)
+    static let shadowRadius: CGFloat = 10
+    static let shadowY: CGFloat = 5
+}
 
 struct WorkspaceHealthView: View {
     @EnvironmentObject var organizer: FolderOrganizer
@@ -16,526 +25,562 @@ struct WorkspaceHealthView: View {
     @StateObject private var healthManager = WorkspaceHealthManager()
     @State private var selectedPeriod: TimePeriod = .week
     @State private var selectedDirectory: URL?
+    @State private var accessingURL: URL? 
     @State private var showingDirectoryPicker = false
+    @State private var showingSettings = false
     @State private var isAnalyzing = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header
-                HeaderSection(
-                    healthManager: healthManager,
-                    onAnalyze: {
-                        showingDirectoryPicker = true
-                    },
-                    isAnalyzing: isAnalyzing
-                )
-
-                // Quick Stats
-                if !healthManager.opportunities.isEmpty || !healthManager.insights.isEmpty {
-                    QuickStatsSection(healthManager: healthManager)
-                }
-
-                // Insights
-                if !healthManager.unreadInsights.isEmpty {
-                    InsightsSection(healthManager: healthManager)
-                }
-
-                // Cleanup Opportunities
-                if !healthManager.activeOpportunities.isEmpty {
-                    OpportunitiesSection(healthManager: healthManager) { directoryPath in
-                        navigateToOrganize(directoryPath)
-                    }
-                }
-
-                // Growth Charts
-                if !healthManager.snapshots.isEmpty {
-                    GrowthChartsSection(
+        ZStack {
+            // Ambient Background
+            LinearGradient(
+                colors: [
+                    Color(NSColor.windowBackgroundColor),
+                    Color.blue.opacity(0.05),
+                    Color.purple.opacity(0.05)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 32) {
+                    // Header Section
+                    LiquidHeaderSection(
                         healthManager: healthManager,
-                        selectedPeriod: $selectedPeriod
+                        onAnalyze: { showingDirectoryPicker = true },
+                        onOpenSettings: { showingSettings = true },
+                        isAnalyzing: isAnalyzing
                     )
-                }
+                    .onChange(of: healthManager.fileChangeDetected) { _ in
+                        if let url = selectedDirectory {
+                            performAnalysis(url)
+                        }
+                    }
+                    .onDisappear {
+                        healthManager.stopMonitoring()
+                        accessingURL?.stopAccessingSecurityScopedResource()
+                        accessingURL = nil
+                    }
 
-                // Empty State
-                if healthManager.opportunities.isEmpty && healthManager.insights.isEmpty && healthManager.snapshots.isEmpty {
-                    EmptyStateView(onAnalyze: {
-                        showingDirectoryPicker = true
-                    })
+                    // Main Content Grid
+                    VStack(spacing: 24) {
+                        if !healthManager.opportunities.isEmpty || !healthManager.insights.isEmpty {
+                            LiquidQuickStatsRefined(healthManager: healthManager)
+                        }
+
+                        if !healthManager.unreadInsights.isEmpty {
+                            LiquidInsightsSection(healthManager: healthManager)
+                        }
+
+                        if !healthManager.activeOpportunities.isEmpty {
+                            LiquidOpportunitiesSection(
+                                healthManager: healthManager,
+                                onTakeAction: navigateToOrganize,
+                                performAction: { opp, action in
+                                    try? await healthManager.performAction(action, for: opp)
+                                    if let url = selectedDirectory { performAnalysis(url) }
+                                }
+                            )
+                        }
+
+                        if !healthManager.snapshots.isEmpty {
+                            LiquidGrowthChartsSection(
+                                healthManager: healthManager,
+                                selectedPeriod: $selectedPeriod
+                            )
+                        }
+                        
+                        // Empty State
+                        if healthManager.opportunities.isEmpty && healthManager.insights.isEmpty && healthManager.snapshots.isEmpty {
+                            LiquidEmptyState(onAnalyze: { showingDirectoryPicker = true })
+                        }
+                    }
+                    .padding(.horizontal)
                 }
+                .padding(.vertical, 32)
             }
-            .padding()
         }
-        .background(Color(NSColor.windowBackgroundColor))
         .navigationTitle("Workspace Health")
         .fileImporter(
             isPresented: $showingDirectoryPicker,
             allowedContentTypes: [.folder],
             allowsMultipleSelection: false
         ) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first {
-                    selectedDirectory = url
-                    analyzeDirectory(url)
-                }
-            case .failure(let error):
-                DebugLogger.log("Failed to select folder: \(error)")
+            if case .success(let urls) = result, let url = urls.first {
+                selectedDirectory = url
+                setDirectory(url)
             }
         }
+        .sheet(isPresented: $showingSettings) {
+            WorkspaceHealthSettingsView(healthManager: healthManager)
+        }
     }
-
-    private func analyzeDirectory(_ url: URL) {
+    
+    // MARK: - Logic Helpers
+    
+    private func setDirectory(_ url: URL) {
+        if let oldUrl = accessingURL, oldUrl != url {
+            oldUrl.stopAccessingSecurityScopedResource()
+            accessingURL = nil
+        }
+        
+        if url.startAccessingSecurityScopedResource() {
+            accessingURL = url
+        }
+        
+        healthManager.startMonitoring(path: url.path)
+        performAnalysis(url)
+    }
+    
+    private func performAnalysis(_ url: URL) {
         isAnalyzing = true
-
         Task {
             do {
                 let files = try await organizer.scanner.scanDirectory(at: url)
-
-                // Take snapshot
                 await healthManager.takeSnapshot(at: url.path, files: files)
-
-                // Analyze for opportunities
                 await healthManager.analyzeDirectory(path: url.path, files: files)
-
                 isAnalyzing = false
             } catch {
                 isAnalyzing = false
-                DebugLogger.log("Analysis failed: \(error)")
             }
         }
     }
 
     private func navigateToOrganize(_ directoryPath: String) {
         let url = URL(fileURLWithPath: directoryPath)
-        // Request access to the directory
-        guard url.startAccessingSecurityScopedResource() else {
-            // If we can't access, just set the directory and let the user handle permissions
-            appState.selectedDirectory = url
-            appState.currentView = .organize
-            organizer.reset()
-            return
+        if !url.startAccessingSecurityScopedResource() {
+             // Continue anyway, user will deal with permissions
         }
-
         appState.selectedDirectory = url
         appState.currentView = .organize
         organizer.reset()
     }
 }
 
-// MARK: - Header Section
+// MARK: - Liquid Header
 
-struct HeaderSection: View {
+struct LiquidHeaderSection: View {
     @ObservedObject var healthManager: WorkspaceHealthManager
     let onAnalyze: () -> Void
+    let onOpenSettings: () -> Void
     let isAnalyzing: Bool
 
     var body: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Image(systemName: "heart.text.square.fill")
-                        .font(.largeTitle)
-                        .foregroundStyle(.red.gradient)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Workspace Health")
-                            .font(.title)
-                            .fontWeight(.bold)
-
-                        if let lastDate = healthManager.lastAnalysisDate {
-                            Text("Last analyzed: \(lastDate.formatted(date: .abbreviated, time: .shortened))")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
+        HStack {
+            HStack(spacing: 20) {
+                // Animated Ring
+                ZStack {
+                    Circle()
+                        .stroke(.white.opacity(0.2), lineWidth: 10)
+                        .frame(width: 80, height: 80)
+                    
+                    Circle()
+                        .trim(from: 0, to: healthManager.healthScore / 100)
+                        .stroke(
+                            AngularGradient(
+                                colors: [healthManager.healthStatus.color, healthManager.healthStatus.color.opacity(0.6)],
+                                center: .center
+                            ),
+                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                        )
+                        .frame(width: 80, height: 80)
+                        .rotationEffect(.degrees(-90))
+                        .shadow(color: healthManager.healthStatus.color.opacity(0.3), radius: 8)
+                    
+                    VStack(spacing: 0) {
+                        Text("\(Int(healthManager.healthScore))")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("%")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-            }
-
-            Spacer()
-
-            Button {
-                onAnalyze()
-            } label: {
-                if isAnalyzing {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .frame(width: 20, height: 20)
-                } else {
-                    Label("Analyze Folder", systemImage: "magnifyingglass")
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Workspace Health")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text(healthManager.healthStatus.title)
+                        .font(.headline)
+                        .foregroundStyle(healthManager.healthStatus.color)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(healthManager.healthStatus.color.opacity(0.1))
+                        .clipShape(Capsule())
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(isAnalyzing)
-            .accessibilityIdentifier("AnalyzeFolderButton")
+            
+            Spacer()
+            
+            HStack(spacing: 12) {
+                Button(action: onOpenSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.body)
+                        .padding(12)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                
+                Button(action: onAnalyze) {
+                    HStack {
+                        if isAnalyzing {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "magnifyingglass")
+                            Text("Analyze Folder")
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.accentColor)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .shadow(color: .accentColor.opacity(0.3), radius: 5, y: 3)
+                }
+                .buttonStyle(.plain)
+                .disabled(isAnalyzing)
+            }
         }
-        .padding()
+        .padding(24)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
+            RoundedRectangle(cornerRadius: LiquidConstants.cardCornerRadius)
+                .fill(LiquidConstants.glassMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: LiquidConstants.cardCornerRadius)
+                        .stroke(.white.opacity(0.3), lineWidth: 1)
+                )
+                .shadow(color: LiquidConstants.shadowColor, radius: LiquidConstants.shadowRadius, y: LiquidConstants.shadowY)
         )
+        .padding(.horizontal)
     }
 }
 
-// MARK: - Quick Stats Section
+// MARK: - Liquid Quick Stats
 
-struct QuickStatsSection: View {
+struct LiquidQuickStatsRefined: View {
     @ObservedObject var healthManager: WorkspaceHealthManager
-
+    
     var body: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-            GridItem(.flexible())
-        ], spacing: 16) {
-            HealthStatCard(
+        HStack(spacing: 16) {
+            LiquidStatCard(
                 title: "Insights",
                 value: "\(healthManager.unreadInsights.count)",
                 icon: "lightbulb.fill",
-                color: .yellow,
-                subtitle: "unread"
+                gradient: Gradient(colors: [.yellow.opacity(0.8), .orange])
             )
-
-            HealthStatCard(
+            
+            LiquidStatCard(
                 title: "Opportunities",
                 value: "\(healthManager.activeOpportunities.count)",
                 icon: "sparkles",
-                color: .green,
-                subtitle: "available"
+                gradient: Gradient(colors: [.green.opacity(0.8), .teal])
             )
-
-            HealthStatCard(
-                title: "Potential Savings",
+            
+            LiquidStatCard(
+                title: "Savings",
                 value: healthManager.formattedTotalSavings,
                 icon: "externaldrive.fill",
-                color: .blue,
-                subtitle: "recoverable"
-            )
-
-            HealthStatCard(
-                title: "Tracked Folders",
-                value: "\(healthManager.snapshots.count)",
-                icon: "folder.fill",
-                color: .purple,
-                subtitle: "monitored"
+                gradient: Gradient(colors: [.blue.opacity(0.8), .purple])
             )
         }
     }
 }
 
-struct HealthStatCard: View {
+struct LiquidStatCard: View {
     let title: String
     let value: String
     let icon: String
-    let color: Color
-    let subtitle: String
-
+    let gradient: Gradient
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(color.gradient)
-
+                ZStack {
+                    Circle()
+                        .fill(.white.opacity(0.2))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .foregroundStyle(.white)
+                }
                 Spacer()
             }
-
-            VStack(alignment: .leading, spacing: 4) {
+            
+            VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.title)
+                    .font(.title2)
                     .fontWeight(.bold)
-
-                Text(subtitle)
+                    .foregroundStyle(.white)
+                
+                Text(title)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.white.opacity(0.8))
             }
-
-            Text(title)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(color.opacity(0.1))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(color.opacity(0.2), lineWidth: 1)
-                )
-        )
+        .padding(16)
+        .background(LinearGradient(gradient: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: Color.black.opacity(0.05), radius: 5, y: 3)
     }
 }
 
-// MARK: - Insights Section
+// MARK: - Liquid Insights
 
-struct InsightsSection: View {
+struct LiquidInsightsSection: View {
     @ObservedObject var healthManager: WorkspaceHealthManager
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Label("Insights", systemImage: "lightbulb.fill")
                     .font(.headline)
-                    .foregroundColor(.yellow)
-
                 Spacer()
-
-                if !healthManager.insights.isEmpty {
-                    Button("Clear All") {
-                        healthManager.clearInsights()
-                    }
+                Button("Clear All") { healthManager.clearInsights() }
+                    .buttonStyle(.plain)
                     .font(.caption)
-                    .foregroundColor(.secondary)
-                    .accessibilityIdentifier("ClearInsightsButton")
-                }
+                    .foregroundStyle(.secondary)
             }
-
-            ForEach(healthManager.unreadInsights.prefix(5)) { insight in
-                InsightCard(insight: insight, healthManager: healthManager)
+            .padding(.horizontal, 4)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(healthManager.unreadInsights) { insight in
+                        LiquidInsightCard(insight: insight, healthManager: healthManager)
+                    }
+                }
+                .padding(.bottom, 20) // Space for shadow
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        )
     }
 }
 
-struct InsightCard: View {
+struct LiquidInsightCard: View {
     let insight: HealthInsight
     @ObservedObject var healthManager: WorkspaceHealthManager
-
+    
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(insight.type.color.opacity(0.1))
-                    .frame(width: 40, height: 40)
-
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
                 Image(systemName: insight.type.icon)
-                    .foregroundColor(insight.type.color)
+                    .font(.title3)
+                    .foregroundStyle(insight.type.color)
+                    .padding(8)
+                    .background(insight.type.color.opacity(0.1))
+                    .clipShape(Circle())
+                
+                Spacer()
+                
+                Button(action: { healthManager.markInsightAsRead(insight) }) {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
-
+            
             VStack(alignment: .leading, spacing: 4) {
                 Text(insight.message)
                     .font(.subheadline)
-                    .fontWeight(.medium)
-
+                    .fontWeight(.semibold)
+                    .lineLimit(2)
+                
                 Text(insight.details)
                     .font(.caption)
-                    .foregroundColor(.secondary)
-
-                if let prompt = insight.actionPrompt {
-                    Text(prompt)
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                        .padding(.top, 4)
-                }
-
-                Text(insight.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary.opacity(0.6))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
             }
-
-            Spacer()
-
-            Button {
-                healthManager.markInsightAsRead(insight)
-            } label: {
-                Image(systemName: "checkmark.circle")
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.borderless)
         }
-        .padding()
+        .padding(16)
+        .frame(width: 240, height: 160)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(NSColor.controlBackgroundColor))
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.white.opacity(0.6)) // More opaque for readability
+                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
         )
     }
 }
 
-// MARK: - Opportunities Section
+// MARK: - Liquid Opportunities
 
-struct OpportunitiesSection: View {
+struct LiquidOpportunitiesSection: View {
     @ObservedObject var healthManager: WorkspaceHealthManager
-    @State private var expandedOpportunity: UUID?
     let onTakeAction: (String) -> Void
-
+    let performAction: (CleanupOpportunity, CleanupOpportunity.QuickAction) async -> Void
+    @State private var expandedId: UUID?
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Label("Cleanup Opportunities", systemImage: "sparkles")
                 .font(.headline)
-                .foregroundColor(.green)
-
-            ForEach(healthManager.activeOpportunities) { opportunity in
-                OpportunityCard(
-                    opportunity: opportunity,
-                    isExpanded: expandedOpportunity == opportunity.id,
-                    onToggle: {
-                        withAnimation {
-                            if expandedOpportunity == opportunity.id {
-                                expandedOpportunity = nil
-                            } else {
-                                expandedOpportunity = opportunity.id
+                .padding(.horizontal, 4)
+            
+            VStack(spacing: 12) {
+                ForEach(healthManager.activeOpportunities) { opportunity in
+                    LiquidOpportunityCard(
+                        opportunity: opportunity,
+                        isExpanded: expandedId == opportunity.id,
+                        onToggle: {
+                            withAnimation(.spring()) {
+                                expandedId = (expandedId == opportunity.id) ? nil : opportunity.id
                             }
-                        }
-                    },
-                    onDismiss: {
-                        healthManager.dismissOpportunity(opportunity)
-                    },
-                    onTakeAction: {
-                        onTakeAction(opportunity.directoryPath)
-                    }
-                )
+                        },
+                        onDismiss: { healthManager.dismissOpportunity(opportunity) },
+                        onTakeAction: { onTakeAction(opportunity.directoryPath) },
+                        performQuickAction: { action in await performAction(opportunity, action) }
+                    )
+                }
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        )
     }
 }
 
-struct OpportunityCard: View {
+struct LiquidOpportunityCard: View {
     let opportunity: CleanupOpportunity
     let isExpanded: Bool
     let onToggle: () -> Void
     let onDismiss: () -> Void
     let onTakeAction: () -> Void
-
+    let performQuickAction: (CleanupOpportunity.QuickAction) async -> Void
+    
+    @State private var isPerforming = false
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(opportunity.type.color.opacity(0.1))
-                        .frame(width: 40, height: 40)
-
+        VStack(spacing: 0) {
+            // Header Row
+            Button(action: onToggle) {
+                HStack(spacing: 12) {
                     Image(systemName: opportunity.type.icon)
-                        .foregroundColor(opportunity.type.color)
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack {
+                        .font(.headline)
+                        .foregroundStyle(opportunity.type.color)
+                        .padding(10)
+                        .background(opportunity.type.color.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(opportunity.type.rawValue)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-
-                        PriorityBadge(priority: opportunity.priority)
+                            .font(.body)
+                            .fontWeight(.medium)
+                        
+                        Text("\(opportunity.fileCount) files • \(opportunity.formattedSavings)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-
-                    Text("\(opportunity.fileCount) files • \(opportunity.formattedSavings)")
+                    
+                    Spacer()
+                    
+                    if opportunity.priority == .critical {
+                        Text("Critical")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.red.opacity(0.1))
+                            .foregroundStyle(.red)
+                            .clipShape(Capsule())
+                    }
+                    
+                    Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
-
-                Spacer()
-
-                Button {
-                    onToggle()
-                } label: {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.borderless)
+                .padding(16)
+                .contentShape(Rectangle())
             }
-
-            // Expanded content
+            .buttonStyle(.plain)
+            
+            // Expanded Content
             if isExpanded {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Divider()
+                        .background(.white.opacity(0.2))
+                    
                     Text(opportunity.description)
-                        .font(.body)
-                        .foregroundColor(.primary)
-
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    
                     HStack {
                         Text(URL(fileURLWithPath: opportunity.directoryPath).lastPathComponent)
                             .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .padding(6)
                             .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(4)
-
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        
                         Spacer()
-
-                        Button("Dismiss") {
-                            onDismiss()
+                        
+                        Button("Dismiss") { onDismiss() }
+                            .buttonStyle(.plain)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        
+                        if let action = opportunity.action {
+                            Button {
+                                Task {
+                                    isPerforming = true
+                                    await performQuickAction(action)
+                                    isPerforming = false
+                                }
+                            } label: {
+                                if isPerforming {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Label(action.rawValue, systemImage: action.icon)
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.regular)
+                        } else {
+                            Button("Take Action") { onTakeAction() }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.regular)
                         }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                        Button("Take Action") {
-                            onTakeAction()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
                     }
                 }
-                .padding(.top, 8)
+                .padding(16)
+                .background(Color.secondary.opacity(0.03))
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(opportunity.priority == .critical ? Color.red.opacity(0.3) : Color.clear, lineWidth: 2)
-                )
+        .background(LiquidConstants.glassMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(.white.opacity(0.3), lineWidth: 1)
         )
+        .shadow(color: LiquidConstants.shadowColor, radius: 5, y: 2)
     }
 }
 
-struct PriorityBadge: View {
-    let priority: CleanupOpportunity.Priority
+// MARK: - Liquid Charts
 
-    var body: some View {
-        Text(priority.displayName)
-            .font(.caption2)
-            .fontWeight(.bold)
-            .foregroundColor(priority.color)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(priority.color.opacity(0.1))
-            .cornerRadius(4)
-    }
-}
-
-// MARK: - Growth Charts Section
-
-struct GrowthChartsSection: View {
+struct LiquidGrowthChartsSection: View {
     @ObservedObject var healthManager: WorkspaceHealthManager
     @Binding var selectedPeriod: TimePeriod
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Label("Growth Analytics", systemImage: "chart.line.uptrend.xyaxis")
+                Label("Growth Analytics", systemImage: "chart.xyaxis.line")
                     .font(.headline)
-                    .foregroundColor(.blue)
-
                 Spacer()
-
                 Picker("Period", selection: $selectedPeriod) {
                     ForEach(TimePeriod.allCases) { period in
                         Text(period.rawValue).tag(period)
                     }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 300)
-                .accessibilityIdentifier("GrowthPeriodPicker")
+                .frame(width: 200)
             }
-
-            // Show chart for each tracked directory
+            .padding(.horizontal, 4)
+            
             ForEach(Array(healthManager.snapshots.keys.sorted()), id: \.self) { path in
                 if let snapshots = healthManager.snapshots[path], snapshots.count >= 2 {
-                    DirectoryGrowthChart(
+                    LiquidDirectoryChart(
                         path: path,
                         snapshots: snapshots,
                         growth: healthManager.getGrowth(for: path, period: selectedPeriod)
@@ -543,202 +588,120 @@ struct GrowthChartsSection: View {
                 }
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        )
     }
 }
 
-struct DirectoryGrowthChart: View {
+struct LiquidDirectoryChart: View {
     let path: String
     let snapshots: [DirectorySnapshot]
     let growth: DirectoryGrowth?
-
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "folder.fill")
-                    .foregroundColor(.blue)
-
+                    .foregroundStyle(.blue)
                 Text(URL(fileURLWithPath: path).lastPathComponent)
-                    .font(.subheadline)
                     .fontWeight(.medium)
-
                 Spacer()
-
                 if let growth = growth {
-                    HStack(spacing: 4) {
-                        Image(systemName: growth.growthRate.icon)
-                            .foregroundColor(growth.growthRate.color)
-
-                        Text(growth.formattedSizeChange)
-                            .font(.caption)
-                            .foregroundColor(growth.isGrowing ? .red : .green)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(growth.growthRate.color.opacity(0.1))
-                    .cornerRadius(6)
+                    Text(growth.formattedSizeChange)
+                        .font(.subheadline)
+                        .foregroundStyle(growth.isGrowing ? .red : .green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            (growth.isGrowing ? Color.red : Color.green).opacity(0.1)
+                        )
+                        .clipShape(Capsule())
                 }
             }
-
-            // Size over time chart
+            
             if #available(macOS 14.0, *) {
                 Chart(snapshots) { snapshot in
-                    LineMark(
-                        x: .value("Date", snapshot.timestamp),
-                        y: .value("Size", Double(snapshot.totalSize) / 1_000_000_000) // GB
-                    )
-                    .foregroundStyle(.blue.gradient)
-
                     AreaMark(
                         x: .value("Date", snapshot.timestamp),
                         y: .value("Size", Double(snapshot.totalSize) / 1_000_000_000)
                     )
-                    .foregroundStyle(.blue.opacity(0.1))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue.opacity(0.3), .blue.opacity(0.0)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .interpolationMethod(.catmullRom)
+                    
+                    LineMark(
+                        x: .value("Date", snapshot.timestamp),
+                        y: .value("Size", Double(snapshot.totalSize) / 1_000_000_000)
+                    )
+                    .foregroundStyle(.blue)
+                    .interpolationMethod(.catmullRom)
+                    .symbol(.circle)
                 }
+                .frame(height: 180)
                 .chartYAxisLabel("Size (GB)")
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: 5))
-                }
-                .frame(height: 150)
             } else {
-                // Fallback for older macOS
-                SimpleBarChart(snapshots: snapshots)
-                    .frame(height: 150)
-            }
-
-            // File type breakdown
-            if let latest = snapshots.last, !latest.filesByExtension.isEmpty {
-                FileTypeBreakdown(filesByExtension: latest.filesByExtension)
+                Text("Chart requires macOS 14.0+")
+                    .foregroundStyle(.secondary)
+                    .frame(height: 180)
             }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor))
+        .padding(20)
+        .background(LiquidConstants.glassMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(.white.opacity(0.3), lineWidth: 1)
         )
     }
 }
 
-struct SimpleBarChart: View {
-    let snapshots: [DirectorySnapshot]
+// MARK: - Liquid Empty State
 
-    var maxSize: Int64 {
-        snapshots.map { $0.totalSize }.max() ?? 1
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            HStack(alignment: .bottom, spacing: 2) {
-                ForEach(snapshots.suffix(20)) { snapshot in
-                    let height = CGFloat(snapshot.totalSize) / CGFloat(maxSize) * geometry.size.height
-
-                    Rectangle()
-                        .fill(.blue.gradient)
-                        .frame(width: max(geometry.size.width / CGFloat(min(snapshots.count, 20)) - 4, 8), height: max(height, 2))
-                }
-            }
-        }
-    }
-}
-
-struct FileTypeBreakdown: View {
-    let filesByExtension: [String: Int]
-
-    var sortedExtensions: [(String, Int)] {
-        filesByExtension
-            .sorted { $0.value > $1.value }
-            .prefix(6)
-            .map { ($0.key, $0.value) }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("File Types")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
-            HStack(spacing: 12) {
-                ForEach(sortedExtensions, id: \.0) { ext, count in
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(colorForExtension(ext))
-                            .frame(width: 8, height: 8)
-
-                        Text(".\(ext)")
-                            .font(.caption2)
-
-                        Text("(\(count))")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    private func colorForExtension(_ ext: String) -> Color {
-        switch ext.lowercased() {
-        case "pdf": return .red
-        case "jpg", "jpeg", "png", "gif", "heic": return .purple
-        case "mp4", "mov": return .pink
-        case "mp3", "wav", "m4a": return .orange
-        case "doc", "docx", "txt", "pages": return .blue
-        case "xls", "xlsx", "numbers": return .green
-        case "zip", "rar": return .brown
-        case "swift", "py", "js": return .cyan
-        default: return .gray
-        }
-    }
-}
-
-// MARK: - Empty State View
-
-struct EmptyStateView: View {
+struct LiquidEmptyState: View {
     let onAnalyze: () -> Void
-
+    
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "heart.text.square")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary.opacity(0.5))
-
-            VStack(spacing: 8) {
-                Text("No Health Data Yet")
-                    .font(.title2)
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.1))
+                    .frame(width: 100, height: 100)
+                
+                Image(systemName: "sparkles")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Color.accentColor)
+            }
+            
+            Text("Your Workspace is Clean!")
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            Text("Select a folder to analyze deeply and find specific optimization opportunities.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: 300)
+            
+            Button(action: onAnalyze) {
+                Text("Analyze Folder")
                     .fontWeight(.semibold)
-
-                Text("Analyze a folder to start tracking its health and get cleanup suggestions")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.accentColor)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .shadow(color: .accentColor.opacity(0.3), radius: 8, y: 4)
             }
-
-            Button {
-                onAnalyze()
-            } label: {
-                Label("Analyze a Folder", systemImage: "magnifyingglass")
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity)
-        .padding(60)
+        .padding(.vertical, 60)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 24)
                 .fill(.ultraThinMaterial)
+                .overlay(RoundedRectangle(cornerRadius: 24).stroke(.white.opacity(0.2), lineWidth: 1))
         )
     }
-}
-
-// MARK: - Preview
-
-#Preview {
-    WorkspaceHealthView()
-        .environmentObject(FolderOrganizer())
-        .frame(width: 900, height: 800)
 }

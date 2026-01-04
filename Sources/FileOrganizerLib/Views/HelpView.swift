@@ -575,7 +575,7 @@ private struct AboutContent: View {
                 .font(.system(size: 32, weight: .bold, design: .rounded))
             
             // Description
-            Text("Intelligently organize your files with AI.\nLearn from your patterns and keep your workspace tidy.")
+            Text("Intelligently organize your files with AI. Learn from your patterns and keep your workspace tidy.")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -759,40 +759,80 @@ private struct CLIDeepLinksContent: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("FileOrganiser supports powerful automation via deep links and a command-line interface.")
             
+            // App Deep Links Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("App Deep Links")
                     .font(.headline)
                 
-                Text("You can navigate to specific parts of the app using URL schemes (e.g., from a browser or script).")
+                Text("Control the app via standard URL schemes:")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                 
-                DeepLinkRow(title: "Organize Folder", url: "fileorganizer://organize?path=/Downloads")
-                DeepLinkRow(title: "Duplicates Finder", url: "fileorganizer://duplicates")
-                DeepLinkRow(title: "The Learnings", url: "fileorganizer://learnings")
-                DeepLinkRow(title: "Open Settings", url: "fileorganizer://settings")
-                DeepLinkRow(title: "Help Center", url: "fileorganizer://help?section=personas")
+                // Organization
+                DeepLinkSection(title: "Organization", routes: [
+                    DeepLinkRow(title: "Organize Folder", url: "fileorganizer://organize?path=/Downloads&persona=developer"),
+                    DeepLinkRow(title: "Scan Duplicates", url: "fileorganizer://duplicates?path=/&autostart=true")
+                ])
+                
+                // Management
+                DeepLinkSection(title: "Management", routes: [
+                    DeepLinkRow(title: "Generate Persona", url: "fileorganizer://persona?action=generate&prompt=..."),
+                    DeepLinkRow(title: "Add Watched Folder", url: "fileorganizer://watched?action=add&path=..."),
+                    DeepLinkRow(title: "Add Exclusion Rule", url: "fileorganizer://rules?action=add&pattern=*.log")
+                ])
+                
+                // Navigation
+                DeepLinkSection(title: "Navigation", routes: [
+                    DeepLinkRow(title: "Open Settings", url: "fileorganizer://settings"),
+                    DeepLinkRow(title: "View History", url: "fileorganizer://history")
+                ])
             }
             
             Divider()
             
+            // CLI Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("Command Line Interface (CLI)")
                     .font(.headline)
                 
-                Text("The 'learnings' tool allows you to interact with the example-based engine from your terminal.")
+                Text("The 'fileorg' tool allows you to control the app from your terminal.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                 
                 Group {
-                    CLICodeBlock(cmd: "learnings list", desc: "List all saved Learnings projects")
-                    CLICodeBlock(cmd: "learnings analyze --project \"Photos\"", desc: "Analyze rules for a specific project")
-                    CLICodeBlock(cmd: "learnings apply --project \"Downloads\" --src ~/Downloads", desc: "Apply rules to organize a folder")
-                    CLICodeBlock(cmd: "learnings rollback --job <job_id>", desc: "Undo a previous organization task")
+                    Text("Organization")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                    CLICodeBlock(cmd: "fileorg organize . --auto", desc: "Organize current folder")
+                    CLICodeBlock(cmd: "fileorg organize ~/Downloads --persona developer", desc: "Organize with specific persona")
+                    
+                    Text("Maintenance")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                    CLICodeBlock(cmd: "fileorg rules add \"*.tmp\"", desc: "Add exclusion rule")
+                    CLICodeBlock(cmd: "fileorg persona generate \"Organize by date\"", desc: "Generate new persona")
                 }
             }
             
-            tipCard(icon: "terminal.fill", title: "Installation", message: "Run 'make install' in the source directory to add the 'learnings' command to your shell.")
+            tipCard(icon: "terminal.fill", title: "Installation", message: "Run 'make install' to add 'fileorg' to your path, or find it in the CLI/ directory.")
+        }
+    }
+}
+
+private struct DeepLinkSection: View {
+    let title: String
+    let routes: [DeepLinkRow]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
+            
+            ForEach(routes.indices, id: \.self) { index in
+                routes[index]
+            }
         }
     }
 }

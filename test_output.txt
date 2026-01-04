@@ -1,0 +1,169 @@
+[0/1] Planning build
+Building for debugging...
+[0/10] /Users/shirishpothi/Downloads/File runner.swift
+[0/10] Write sources
+[3/10] Write swift-version--58304C5D6DBC2206.txt
+[5/26] Compiling FileOrganizerTests BuildInfoTests.swift
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:71:28: warning: enum case 'learnings' has 2 associated values; matching them as a tuple is deprecated [#deprecation]
+ 69 |         handler.handle(url: url)
+ 70 |         
+ 71 |         if case .learnings(let project) = handler.pendingDestination {
+    |                            `- warning: enum case 'learnings' has 2 associated values; matching them as a tuple is deprecated [#deprecation]
+ 72 |             XCTAssertEqual(project, "Photos")
+ 73 |         } else {
+
+<unknown>:0: note: 'learnings(action:project:)' declared here
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:72:28: error: cannot convert value of type '(action: DeeplinkDestination.LearningsAction?, project: String?)' to expected argument type 'String'
+ 70 |         
+ 71 |         if case .learnings(let project) = handler.pendingDestination {
+ 72 |             XCTAssertEqual(project, "Photos")
+    |                            `- error: cannot convert value of type '(action: DeeplinkDestination.LearningsAction?, project: String?)' to expected argument type 'String'
+ 73 |         } else {
+ 74 |             XCTFail("Expected learnings destination")
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:167:55: error: missing argument for parameter 'action' in call
+165 |     @MainActor
+166 |     func testGenerateLearningsURL() {
+167 |         let url = DeeplinkHandler.url(for: .learnings(project: "MyProject"))
+    |                                                       `- error: missing argument for parameter 'action' in call
+168 |         XCTAssertEqual(url?.absoluteString, "fileorganizer://learnings?project=MyProject")
+169 |     }
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Sources/FileOrganizerLib/Utilities/DeeplinkHandler.swift:16:10: note: 'learnings(action:project:)' declared here
+ 14 |     case organize(path: String?, persona: String?, autostart: Bool)
+ 15 |     case duplicates(path: String?, autostart: Bool)
+ 16 |     case learnings(action: LearningsAction?, project: String?)
+    |          `- note: 'learnings(action:project:)' declared here
+ 17 |     case settings(section: String?)
+ 18 |     case help(section: String?)
+[6/26] Compiling FileOrganizerTests CustomPersonaTests.swift
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:71:28: warning: enum case 'learnings' has 2 associated values; matching them as a tuple is deprecated [#deprecation]
+ 69 |         handler.handle(url: url)
+ 70 |         
+ 71 |         if case .learnings(let project) = handler.pendingDestination {
+    |                            `- warning: enum case 'learnings' has 2 associated values; matching them as a tuple is deprecated [#deprecation]
+ 72 |             XCTAssertEqual(project, "Photos")
+ 73 |         } else {
+
+<unknown>:0: note: 'learnings(action:project:)' declared here
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:72:28: error: cannot convert value of type '(action: DeeplinkDestination.LearningsAction?, project: String?)' to expected argument type 'String'
+ 70 |         
+ 71 |         if case .learnings(let project) = handler.pendingDestination {
+ 72 |             XCTAssertEqual(project, "Photos")
+    |                            `- error: cannot convert value of type '(action: DeeplinkDestination.LearningsAction?, project: String?)' to expected argument type 'String'
+ 73 |         } else {
+ 74 |             XCTFail("Expected learnings destination")
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:167:55: error: missing argument for parameter 'action' in call
+165 |     @MainActor
+166 |     func testGenerateLearningsURL() {
+167 |         let url = DeeplinkHandler.url(for: .learnings(project: "MyProject"))
+    |                                                       `- error: missing argument for parameter 'action' in call
+168 |         XCTAssertEqual(url?.absoluteString, "fileorganizer://learnings?project=MyProject")
+169 |     }
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Sources/FileOrganizerLib/Utilities/DeeplinkHandler.swift:16:10: note: 'learnings(action:project:)' declared here
+ 14 |     case organize(path: String?, persona: String?, autostart: Bool)
+ 15 |     case duplicates(path: String?, autostart: Bool)
+ 16 |     case learnings(action: LearningsAction?, project: String?)
+    |          `- note: 'learnings(action:project:)' declared here
+ 17 |     case settings(section: String?)
+ 18 |     case help(section: String?)
+[7/26] Compiling FileOrganizerTests DeeplinkTests.swift
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:71:28: warning: enum case 'learnings' has 2 associated values; matching them as a tuple is deprecated [#deprecation]
+ 69 |         handler.handle(url: url)
+ 70 |         
+ 71 |         if case .learnings(let project) = handler.pendingDestination {
+    |                            `- warning: enum case 'learnings' has 2 associated values; matching them as a tuple is deprecated [#deprecation]
+ 72 |             XCTAssertEqual(project, "Photos")
+ 73 |         } else {
+
+<unknown>:0: note: 'learnings(action:project:)' declared here
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:72:28: error: cannot convert value of type '(action: DeeplinkDestination.LearningsAction?, project: String?)' to expected argument type 'String'
+ 70 |         
+ 71 |         if case .learnings(let project) = handler.pendingDestination {
+ 72 |             XCTAssertEqual(project, "Photos")
+    |                            `- error: cannot convert value of type '(action: DeeplinkDestination.LearningsAction?, project: String?)' to expected argument type 'String'
+ 73 |         } else {
+ 74 |             XCTFail("Expected learnings destination")
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/DeeplinkTests.swift:167:55: error: missing argument for parameter 'action' in call
+165 |     @MainActor
+166 |     func testGenerateLearningsURL() {
+167 |         let url = DeeplinkHandler.url(for: .learnings(project: "MyProject"))
+    |                                                       `- error: missing argument for parameter 'action' in call
+168 |         XCTAssertEqual(url?.absoluteString, "fileorganizer://learnings?project=MyProject")
+169 |     }
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Sources/FileOrganizerLib/Utilities/DeeplinkHandler.swift:16:10: note: 'learnings(action:project:)' declared here
+ 14 |     case organize(path: String?, persona: String?, autostart: Bool)
+ 15 |     case duplicates(path: String?, autostart: Bool)
+ 16 |     case learnings(action: LearningsAction?, project: String?)
+    |          `- note: 'learnings(action:project:)' declared here
+ 17 |     case settings(section: String?)
+ 18 |     case help(section: String?)
+[8/28] Compiling FileOrganizerTests DirectoryScannerTests.swift
+[9/28] Compiling FileOrganizerTests DuplicateDetectorTests.swift
+[10/28] Compiling FileOrganizerTests DuplicateSettingsTests.swift
+[11/28] Compiling FileOrganizerTests SemanticAnalysisTests.swift
+[12/28] Compiling FileOrganizerTests WorkspaceHealthMonitoringTests.swift
+[13/28] Compiling FileOrganizerTests EdgeCaseTests.swift
+[14/28] Compiling FileOrganizerTests ExclusionRulesTests.swift
+[15/28] Compiling FileOrganizerTests FileOrganizerTests.swift
+[16/28] Compiling FileOrganizerTests ResponseParserTests.swift
+[17/28] Compiling FileOrganizerTests RuleInducerTests.swift
+[18/28] Emitting module FileOrganizerTests
+[19/28] Compiling FileOrganizerTests FileSystemManagerTests.swift
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/FileSystemManagerTests.swift:253:37: warning: result of call to 'applyOrganization(_:at:dryRun:enableTagging:strictExclusions:exclusionManager:)' is unused [#no-usage]
+251 |         )
+252 |         
+253 |         try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+    |                                     `- warning: result of call to 'applyOrganization(_:at:dryRun:enableTagging:strictExclusions:exclusionManager:)' is unused [#no-usage]
+254 |         
+255 |         // Source folder should be removed if empty
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/FileSystemManagerTests.swift:257:13: warning: initialization of immutable value 'sourceExists' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+255 |         // Source folder should be removed if empty
+256 |         // Note: This might not work in all cases depending on implementation
+257 |         let sourceExists = FileManager.default.fileExists(atPath: sourceFolder.path)
+    |             `- warning: initialization of immutable value 'sourceExists' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+258 |         // We can't assert it's removed because the implementation tries but doesn't guarantee
+259 |         // Just verify the file was moved
+[20/28] Compiling FileOrganizerTests FolderSuggestionTests.swift
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/FileSystemManagerTests.swift:253:37: warning: result of call to 'applyOrganization(_:at:dryRun:enableTagging:strictExclusions:exclusionManager:)' is unused [#no-usage]
+251 |         )
+252 |         
+253 |         try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+    |                                     `- warning: result of call to 'applyOrganization(_:at:dryRun:enableTagging:strictExclusions:exclusionManager:)' is unused [#no-usage]
+254 |         
+255 |         // Source folder should be removed if empty
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/FileSystemManagerTests.swift:257:13: warning: initialization of immutable value 'sourceExists' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+255 |         // Source folder should be removed if empty
+256 |         // Note: This might not work in all cases depending on implementation
+257 |         let sourceExists = FileManager.default.fileExists(atPath: sourceFolder.path)
+    |             `- warning: initialization of immutable value 'sourceExists' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+258 |         // We can't assert it's removed because the implementation tries but doesn't guarantee
+259 |         // Just verify the file was moved
+[21/28] Compiling FileOrganizerTests HistoryTests.swift
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/FileSystemManagerTests.swift:253:37: warning: result of call to 'applyOrganization(_:at:dryRun:enableTagging:strictExclusions:exclusionManager:)' is unused [#no-usage]
+251 |         )
+252 |         
+253 |         try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+    |                                     `- warning: result of call to 'applyOrganization(_:at:dryRun:enableTagging:strictExclusions:exclusionManager:)' is unused [#no-usage]
+254 |         
+255 |         // Source folder should be removed if empty
+
+/Users/shirishpothi/Downloads/File Organiser/FileOrganizer/Tests/FileOrganizerTests/FileSystemManagerTests.swift:257:13: warning: initialization of immutable value 'sourceExists' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+255 |         // Source folder should be removed if empty
+256 |         // Note: This might not work in all cases depending on implementation
+257 |         let sourceExists = FileManager.default.fileExists(atPath: sourceFolder.path)
+    |             `- warning: initialization of immutable value 'sourceExists' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+258 |         // We can't assert it's removed because the implementation tries but doesn't guarantee
+259 |         // Just verify the file was moved
+[22/28] Compiling FileOrganizerTests LLMRuleInducerTests.swift
+[23/28] Compiling FileOrganizerTests LearningsManagerTests.swift
+[24/28] Compiling FileOrganizerTests PromptBuilderTests.swift
+[25/28] Compiling FileOrganizerTests WorkspaceHealthQuickActionTests.swift
+[26/28] Compiling FileOrganizerTests WorkspaceHealthTests.swift
+error: fatalError

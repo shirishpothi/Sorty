@@ -9,6 +9,7 @@ import SwiftUI
 
 struct PersonaEditorView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @ObservedObject var store: CustomPersonaStore
     
     @State private var name: String = ""
@@ -16,6 +17,9 @@ struct PersonaEditorView: View {
     @State private var description: String = ""
     @State private var promptModifier: String = ""
     @State private var showIconPicker: Bool = false
+    @State private var showingGenerator: Bool = false
+    @State private var generationInput: String = ""
+    @StateObject private var generator = PersonaGenerator()
     
     // Edit mode
     var editingPersona: CustomPersona?
@@ -108,6 +112,12 @@ struct PersonaEditorView: View {
                                 }
                                 .buttonStyle(.bordered)
                                 
+                                Button(action: { showingGenerator = true }) {
+                                    Label("Generate with AI", systemImage: "sparkles")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(generator.isGenerating)
+                                
                                 Spacer()
                                 
                                 Text("\(promptModifier.count) characters")
@@ -133,6 +143,62 @@ struct PersonaEditorView: View {
             }
         }
         .frame(width: 600, height: 600)
+        .sheet(isPresented: $showingGenerator) {
+            VStack(spacing: 20) {
+                Text("Generate Persona")
+                    .font(.headline)
+                
+                Text("Describe how you want your files to be organized. Be as specific as you like about file types, folder structures, and naming conventions.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                
+                TextEditor(text: $generationInput)
+                    .font(.body)
+                    .frame(height: 150)
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+                
+                if let error = generator.error {
+                    Text(error.localizedDescription)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                }
+                
+                HStack {
+                    Button("Cancel") {
+                        showingGenerator = false
+                    }
+                    
+                    if generator.isGenerating {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Button("Generate") {
+                            Task {
+                                do {
+                                    let result = try await generator.generatePersona(from: generationInput, config: settingsViewModel.config)
+                                    name = result.name
+                                    promptModifier = result.prompt
+                                    showingGenerator = false
+                                } catch {
+                                    // Error is handled by generator.error publishing
+                                }
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(generationInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+            .padding()
+            .frame(width: 400)
+        }
     }
     
     private var iconPickerPopover: some View {

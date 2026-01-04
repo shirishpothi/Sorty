@@ -2,7 +2,8 @@
 //  PreviewView.swift
 //  FileOrganizer
 //
-//  Enhanced preview interface with reasoning support and drag-drop editing
+//  Enhanced preview interface with reasoning support, drag-drop editing,
+//  and post-organization honing integration for Learnings feature
 //
 
 import SwiftUI
@@ -13,12 +14,15 @@ struct PreviewView: View {
     let baseURL: URL
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var learningsManager: LearningsManager
     @StateObject private var previewManager = PreviewManager()
     @StateObject private var dragDropManager = DragDropManager()
     @State private var showApplyConfirmation = false
     @State private var isApplying = false
     @State private var editablePlan: OrganizationPlan
     @State private var hasEdits = false
+    @State private var showPostOrganizationHoning = false
+    @State private var organizationJustCompleted = false
 
     init(plan: OrganizationPlan, baseURL: URL) {
         self.plan = plan
@@ -126,6 +130,16 @@ struct PreviewView: View {
                         HStack {
                             TextField("e.g. 'Group by file size', 'Separate RAW files'", text: $organizer.customInstructions)
                                 .textFieldStyle(.roundedBorder)
+                                .onChange(of: organizer.customInstructions) { oldValue, newValue in
+                                    // Track guiding instruction for learnings
+                                    if !newValue.isEmpty && newValue != oldValue && learningsManager.consentManager.canCollectData {
+                                        NotificationCenter.default.post(
+                                            name: .steeringPromptProvided,
+                                            object: nil,
+                                            userInfo: ["prompt": newValue, "folderPath": baseURL.path]
+                                        )
+                                    }
+                                }
                         }
                     }
                     .padding(.horizontal)
@@ -178,6 +192,13 @@ struct PreviewView: View {
         .onChange(of: organizer.state) { oldState, newState in
             if case .completed = newState {
                 isApplying = false
+                organizationJustCompleted = true
+                // Show post-organization honing if learnings is enabled
+                if learningsManager.consentManager.canCollectData {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showPostOrganizationHoning = true
+                    }
+                }
             } else if case .error = newState {
                 isApplying = false
             }
@@ -187,11 +208,32 @@ struct PreviewView: View {
             editablePlan = newPlan
             hasEdits = false
         }
+        .sheet(isPresented: $showPostOrganizationHoning) {
+            PostOrganizationHoningView(
+                fileCount: editablePlan.totalFiles,
+                folderCount: editablePlan.totalFolders,
+                config: settingsViewModel.config,
+                onComplete: { answers in
+                    Task {
+                        await learningsManager.saveHoningResults(answers)
+                        showPostOrganizationHoning = false
+                    }
+                },
+                onSkip: {
+                    showPostOrganizationHoning = false
+                }
+            )
+        }
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))
     }
 
     private func regeneratePreview() {
+        // Track guiding instruction if provided
+        if !organizer.customInstructions.isEmpty && learningsManager.consentManager.canCollectData {
+            learningsManager.recordGuidingInstruction(organizer.customInstructions)
+        }
+        
         Task {
             do {
                 try await organizer.regeneratePreview()
@@ -216,6 +258,143 @@ struct PreviewView: View {
             } catch {
                 organizer.state = .error(error)
                 isApplying = false
+            }
+        }
+    }
+}
+
+// MARK: - Post-Organization Honing View
+
+struct PostOrganizationHoningView: View {
+    let fileCount: Int
+    let folderCount: Int
+    let config: AIConfig
+    let onComplete: ([HoningAnswer]) -> Void
+    let onSkip: () -> Void
+    
+    @StateObject private var engine: LearningsHoningEngine
+    @State private var currentQuestionIndex = 0
+    @State private var answers: [HoningAnswer] = []
+    
+    init(fileCount: Int, folderCount: Int, config: AIConfig, onComplete: @escaping ([HoningAnswer]) -> Void, onSkip: @escaping () -> Void) {
+        self.fileCount = fileCount
+        self.folderCount = folderCount
+        self.config = config
+        self.onComplete = onComplete
+        self.onSkip = onSkip
+        _engine = StateObject(wrappedValue: LearningsHoningEngine(config: config))
+    }
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header
+            VStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 48))
+                    .foregroundColor(.green)
+                
+                Text("Organization Complete!")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                
+                Text("Organized \(fileCount) files into \(folderCount) folders")
+                    .foregroundColor(.secondary)
+            }
+            .padding(.top, 24)
+            
+            Divider()
+            
+            // Quick Feedback Section
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Help us learn your preferences")
+                    .font(.headline)
+                
+                Text("Answer a quick question to improve future organizations")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                if engine.isGenerating {
+                    ProgressView("Generating question...")
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding()
+                } else if let session = engine.currentSession, !session.questions.isEmpty {
+                    let question = session.questions.last!
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(question.text)
+                            .font(.body)
+                            .fontWeight(.medium)
+                        
+                        ForEach(question.options, id: \.self) { option in
+                            Button(action: {
+                                let answer = HoningAnswer(
+                                    questionId: question.id,
+                                    selectedOption: option
+                                )
+                                answers.append(answer)
+                                onComplete(answers)
+                            }) {
+                                HStack {
+                                    Text(option)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding()
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } else {
+                    // Fallback static question
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Was this organization helpful?")
+                            .font(.body)
+                            .fontWeight(.medium)
+                        
+                        ForEach(["Yes, it was great!", "It was okay", "Not really useful"], id: \.self) { option in
+                            Button(action: {
+                                let answer = HoningAnswer(
+                                    questionId: "post_org_feedback",
+                                    selectedOption: option
+                                )
+                                answers.append(answer)
+                                onComplete(answers)
+                            }) {
+                                HStack {
+                                    Text(option)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding()
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding()
+            
+            Spacer()
+            
+            // Skip button
+            Button("Skip for now") {
+                onSkip()
+            }
+            .foregroundColor(.secondary)
+            .padding(.bottom, 24)
+        }
+        .frame(width: 450, height: 500)
+        .onAppear {
+            Task {
+                await engine.startSession(questionCount: 1)
             }
         }
     }

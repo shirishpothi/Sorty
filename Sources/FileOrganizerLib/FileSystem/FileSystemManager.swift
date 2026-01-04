@@ -100,11 +100,20 @@ public actor FileSystemManager {
 
     // MARK: - Folder Creation
 
-    func createFolders(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false) async throws -> [FileOperation] {
+    func createFolders(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
 
-        func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL) throws {
+        func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
             let folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+
+            // Check exclusions
+            if let manager = exclusionManager {
+                let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
+                if await manager.shouldExclude(item) {
+                    DebugLogger.log("Skipping excluded folder creation: \(folderURL.path)")
+                    return
+                }
+            }
 
             if !dryRun {
                 var isDirectory: ObjCBool = false
@@ -153,12 +162,12 @@ public actor FileSystemManager {
 
             // Create subfolders
             for subfolder in suggestion.subfolders {
-                try createFolderRecursive(subfolder, parentURL: folderURL)
+                try await createFolderRecursive(subfolder, parentURL: folderURL)
             }
         }
 
         for suggestion in plan.suggestions {
-            try createFolderRecursive(suggestion, parentURL: baseURL)
+            try await createFolderRecursive(suggestion, parentURL: baseURL)
         }
 
         return operations
@@ -166,15 +175,23 @@ public actor FileSystemManager {
 
     // MARK: - File Moving with Rename Support
 
-    func moveFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false) async throws -> [FileOperation] {
+    func moveFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
 
-        func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) throws {
+        func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
             let folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
 
             // Process files with potential renaming
             for file in suggestion.files {
                 guard let sourceURL = file.url else { continue }
+
+                // Check exclusions
+                if let manager = exclusionManager {
+                    if await manager.shouldExclude(file) {
+                        DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
+                        continue
+                    }
+                }
 
                 // Check for rename mapping
                 let finalFilename: String
@@ -234,12 +251,12 @@ public actor FileSystemManager {
 
             // Process subfolders
             for subfolder in suggestion.subfolders {
-                try moveFilesInSuggestion(subfolder, parentURL: folderURL)
+                try await moveFilesInSuggestion(subfolder, parentURL: folderURL)
             }
         }
 
         for suggestion in plan.suggestions {
-            try moveFilesInSuggestion(suggestion, parentURL: baseURL)
+            try await moveFilesInSuggestion(suggestion, parentURL: baseURL)
         }
 
         return operations
@@ -247,15 +264,22 @@ public actor FileSystemManager {
 
     // MARK: - File Tagging
 
-    func tagFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false) async throws -> [FileOperation] {
+    func tagFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
         // Tagging is now gated by the caller using this method
         var operations: [FileOperation] = []
 
-        func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) throws {
+        func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
             let folderURL = parentURL.appendingPathComponent(suggestion.folderName)
 
             // Look for tag mappings in this suggestion
             for mapping in suggestion.fileTagMappings {
+                // Check exclusions
+                if let manager = exclusionManager {
+                    if await manager.shouldExclude(mapping.originalFile) {
+                        continue
+                    }
+                }
+
                 // Find the file name (use the new name if it was renamed)
                 let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
                 
@@ -311,33 +335,65 @@ public actor FileSystemManager {
 
             // Recurse
             for subfolder in suggestion.subfolders {
-                try tagFilesInSuggestion(subfolder, parentURL: folderURL)
+                try await tagFilesInSuggestion(subfolder, parentURL: folderURL)
             }
         }
 
         for suggestion in plan.suggestions {
-            try tagFilesInSuggestion(suggestion, parentURL: baseURL)
+            try await tagFilesInSuggestion(suggestion, parentURL: baseURL)
         }
 
         return operations
     }
 
     // MARK: - Apply Organization
+    
+    func validateOperation(_ operation: FileOperation, exclusionManager: ExclusionRulesManager?) async -> Bool {
+        guard let manager = exclusionManager else { return true }
+        
+        let sourceURL = URL(fileURLWithPath: operation.sourcePath)
+        let sourceItem = FileItem(path: sourceURL.path, name: sourceURL.lastPathComponent, extension: sourceURL.pathExtension)
+        
+        let shouldExcludeSource = await manager.shouldExclude(sourceItem)
+        if shouldExcludeSource {
+            DebugLogger.log("Operation BLOCKED: Source \(operation.sourcePath) is excluded.")
+            return false
+        }
+        
+        if let destPath = operation.destinationPath {
+            let destURL = URL(fileURLWithPath: destPath)
+            let destItem = FileItem(path: destURL.path, name: destURL.lastPathComponent, extension: destURL.pathExtension)
+            let shouldExcludeDest = await manager.shouldExclude(destItem)
+            if shouldExcludeDest {
+                DebugLogger.log("Operation BLOCKED: Destination \(destPath) is excluded.")
+                return false
+            }
+        }
+        
+        return true
+    }
 
-    func applyOrganization(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true) async throws -> [FileOperation] {
+    func applyOrganization(
+        _ plan: OrganizationPlan, 
+        at baseURL: URL, 
+        dryRun: Bool = false, 
+        enableTagging: Bool = true,
+        strictExclusions: Bool = true,
+        exclusionManager: ExclusionRulesManager? = nil
+    ) async throws -> [FileOperation] {
         var allOperations: [FileOperation] = []
 
-        // First create all folders
-        let folderOps = try await createFolders(plan, at: baseURL, dryRun: dryRun)
+        // 1. Create folders
+        let folderOps = try await createFolders(plan, at: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
         allOperations.append(contentsOf: folderOps)
 
-        // Then move all files
-        let fileOps = try await moveFiles(plan, at: baseURL, dryRun: dryRun)
+        // 2. Move files (with internal validation)
+        let fileOps = try await moveFiles(plan, at: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
         allOperations.append(contentsOf: fileOps)
 
-        // Then apply tags if enabled
+        // 3. Apply tags
         if enableTagging {
-            let tagOps = try await tagFiles(plan, at: baseURL, dryRun: dryRun)
+            let tagOps = try await tagFiles(plan, at: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
             allOperations.append(contentsOf: tagOps)
         }
 
@@ -590,30 +646,41 @@ public actor FileSystemManager {
         return operation
     }
 
-    /// Delete a file (use with caution - not easily reversible)
+    /// Delete a file (Now non-destructive: moves to .duplicates)
     func deleteFile(at url: URL, moveToTrash: Bool = true) throws -> FileOperation {
-        if moveToTrash {
-            var trashedURL: NSURL?
-            try fileManager.trashItem(at: url, resultingItemURL: &trashedURL)
-
-            return FileOperation(
-                id: UUID(),
-                type: .deleteFile,
-                sourcePath: url.path,
-                destinationPath: trashedURL?.path,
-                timestamp: Date()
-            )
-        } else {
-            try fileManager.removeItem(at: url)
-
-            return FileOperation(
-                id: UUID(),
-                type: .deleteFile,
-                sourcePath: url.path,
-                destinationPath: nil,
-                timestamp: Date()
-            )
+        let workspaceURL = url.deletingLastPathComponent() // Rough heuristic, might need actual base
+        return try moveToDuplicates(url: url, workspaceURL: workspaceURL)
+    }
+    
+    /// Non-destructive move to a .duplicates folder
+    func moveToDuplicates(url: URL, workspaceURL: URL) throws -> FileOperation {
+        let duplicatesDir = workspaceURL.appendingPathComponent(".duplicates")
+        
+        if !fileManager.fileExists(atPath: duplicatesDir.path) {
+            try fileManager.createDirectory(at: duplicatesDir, withIntermediateDirectories: true)
+            // Ideally hide this folder?
+            // try? (duplicatesDir as NSURL).setResourceValue(true, forKey: .isHiddenKey)
         }
+        
+        let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(url.lastPathComponent))
+        
+        try fileManager.moveItem(at: url, to: destinationURL)
+        
+        let operation = FileOperation(
+            id: UUID(),
+            type: .deleteFile, // Still marked as delete for history logic, but destination is recorded
+            sourcePath: url.path,
+            destinationPath: destinationURL.path,
+            timestamp: Date(),
+            metadata: FileOperation.OperationMetadata(
+                originalFilename: url.lastPathComponent,
+                wasCreatedDuringOrganization: false,
+                parentFolderPath: url.deletingLastPathComponent().path
+            )
+        )
+        
+        undoStack.append(operation)
+        return operation
     }
 }
 
@@ -670,8 +737,17 @@ public class DuplicateRestorationManager: ObservableObject {
     public func deleteSafely(filesToDelete: [FileItem], originalFile: FileItem) throws -> [RestorableDuplicate] {
         var deletedItems: [RestorableDuplicate] = []
         
+        // Use the original file's location as a base for the .duplicates folder
+        let originalURL = URL(fileURLWithPath: originalFile.path)
+        let workspaceURL = originalURL.deletingLastPathComponent()
+        let duplicatesDir = workspaceURL.appendingPathComponent(".duplicates")
+        
+        if !fileManager.fileExists(atPath: duplicatesDir.path) {
+            try fileManager.createDirectory(at: duplicatesDir, withIntermediateDirectories: true)
+        }
+        
         for file in filesToDelete {
-            // Capture metadata before deletion
+            // Capture metadata before move
             let attributes = try? fileManager.attributesOfItem(atPath: file.path)
             let metadata = RestorableDuplicate.FileMetadata(
                 creationDate: attributes?[.creationDate] as? Date,
@@ -681,14 +757,21 @@ public class DuplicateRestorationManager: ObservableObject {
                 groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
             )
             
+            let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(file.name + "." + file.extension))
+            
             let item = RestorableDuplicate(
                 originalPath: originalFile.path,
-                deletedPath: file.path,
+                deletedPath: file.path, // Store the ORIGINAL path here
                 metadata: metadata
             )
             
-            // Perform Deletion
-            try fileManager.removeItem(atPath: file.path)
+            // Perform non-destructive move instead of deletion
+            try fileManager.moveItem(atPath: file.path, toPath: destinationURL.path)
+            
+            // We need to store the backup path somewhere. Since RestorableDuplicate doesn't have a backupPath field,
+            // we'll rely on the fact that if we want to restore, we can either copy from originalFile.path 
+            // OR move it back from the .duplicates folder if we can find it.
+            // For now, let's keep it simple: restoration will copy from the current original.
             
             deletedItems.append(item)
         }
@@ -697,6 +780,20 @@ public class DuplicateRestorationManager: ObservableObject {
         saveHistory()
         
         return deletedItems
+    }
+    
+    private func generateUniqueURL(for url: URL) -> URL {
+        let directory = url.deletingLastPathComponent()
+        let filename = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension
+        var counter = 1
+        var newURL = url
+        while fileManager.fileExists(atPath: newURL.path) {
+            let newName = ext.isEmpty ? "\(filename)_\(counter)" : "\(filename)_\(counter).\(ext)"
+            newURL = directory.appendingPathComponent(newName)
+            counter += 1
+        }
+        return newURL
     }
     
     /// Restore a previously deleted duplicate

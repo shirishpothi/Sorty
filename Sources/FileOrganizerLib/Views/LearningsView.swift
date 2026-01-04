@@ -2,817 +2,859 @@
 //  LearningsView.swift
 //  FileOrganizer
 //
-//  Main view for "The Learnings" feature - trainable example-based organization
-//  Redesigned with wizard-style onboarding flow
+//  Passive Learning Dashboard - observes user behavior to build preferences
+//  NOT an organization wizard - this watches and learns in the background
+//  Enhanced with improved UI/UX and grouped preference display
 //
 
 import SwiftUI
-
-// MARK: - Wizard Step Enum
-
-enum LearningsStep: Int, CaseIterable {
-    case welcome = 0
-    case addFolders = 1
-    case addExamples = 2
-    case analyze = 3
-    case apply = 4
-    
-    var title: String {
-        switch self {
-        case .welcome: return "Welcome"
-        case .addFolders: return "Add Folders"
-        case .addExamples: return "Add Examples"
-        case .analyze: return "Analyze"
-        case .apply: return "Apply"
-        }
-    }
-    
-    var icon: String {
-        switch self {
-        case .welcome: return "sparkles"
-        case .addFolders: return "folder.badge.plus"
-        case .addExamples: return "star.fill"
-        case .analyze: return "magnifyingglass"
-        case .apply: return "checkmark.circle.fill"
-        }
-    }
-    
-    var description: String {
-        switch self {
-        case .welcome: return "Learn how The Learnings works"
-        case .addFolders: return "Choose folders to organize"
-        case .addExamples: return "Teach with examples"
-        case .analyze: return "Infer organization rules"
-        case .apply: return "Apply and review changes"
-        }
-    }
-}
+import AppKit
+import UniformTypeIdentifiers
 
 // MARK: - Main View
 
 struct LearningsView: View {
-    @StateObject private var manager = LearningsManager()
-    @State private var currentStep: LearningsStep = .welcome
-    @State private var projectName: String = ""
-    enum ActivePicker {
-        case none
-        case rootFolder
-        case exampleFolder
-    }
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var manager: LearningsManager
     
-    @State private var activePicker: ActivePicker = .none
-    @State private var showingFileImporter = false
-    @State private var showingProjectList = false
-    @State private var hasStarted = false
+    @State private var showingConsentSheet = false
+    @State private var showingHoningSheet = false
+    @State private var showingDeleteConfirmation = false
+    @State private var showingWithdrawConfirmation = false
+    @State private var selectedTab: LearningsTab = .overview
+    
+    enum LearningsTab: String, CaseIterable {
+        case overview = "Overview"
+        case preferences = "Preferences"
+        case activity = "Activity"
+    }
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Step indicator
-            if hasStarted {
-                stepIndicator
-                Divider()
-            }
-            
-            // Content
-            ScrollView {
-                switch currentStep {
-                case .welcome:
-                    welcomeStep
-                case .addFolders:
-                    addFoldersStep
-                case .addExamples:
-                    addExamplesStep
-                case .analyze:
-                    analyzeStep
-                case .apply:
-                    applyStep
-                }
-            }
-            
-            // Navigation buttons
-            if hasStarted {
-                Divider()
-                navigationButtons
+        Group {
+            if manager.isLocked {
+                authenticationGateView
+            } else if !manager.consentManager.hasConsented {
+                onboardingView
+            } else {
+                dashboardView
             }
         }
-        .frame(minWidth: 700, minHeight: 550)
-        .alert("Error", isPresented: .constant(manager.error != nil)) {
-            Button("OK") { manager.error = nil }
-        } message: {
-            if let error = manager.error {
-                Text(error)
+        .frame(minWidth: 650, minHeight: 550)
+        .onAppear {
+            Task {
+                await manager.unlock()
             }
-        }
-        .sheet(isPresented: $showingProjectList) {
-            ProjectListSheet(manager: manager, onSelect: { name in
-                Task {
-                    await manager.loadProject(name: name)
-                    projectName = manager.currentProject?.name ?? ""
-                    hasStarted = true
-                    currentStep = .addFolders
-                }
-            })
-        }
-        .fileImporter(
-            isPresented: $showingFileImporter,
-            allowedContentTypes: [.folder],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                _ = url.startAccessingSecurityScopedResource()
-                defer { url.stopAccessingSecurityScopedResource() }
-                
-                switch activePicker {
-                case .rootFolder:
-                    manager.addRootPath(url.path)
-                case .exampleFolder:
-                    manager.addExampleFolder(url.path)
-                default:
-                    break
-                }
-            }
-            activePicker = .none
         }
     }
     
-    // MARK: - Step Indicator
+    // MARK: - Authentication Gate
     
-    private var stepIndicator: some View {
-        HStack(spacing: 0) {
-            ForEach(LearningsStep.allCases, id: \.rawValue) { step in
-                HStack(spacing: 8) {
-                    ZStack {
-                        Circle()
-                            .fill(stepColor(for: step))
-                            .frame(width: 32, height: 32)
-                        
-                        if step.rawValue < currentStep.rawValue {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                        } else {
-                            Text("\(step.rawValue + 1)")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(step == currentStep ? .white : .secondary)
-                        }
-                    }
-                    
-                    if step != .apply {
-                        Rectangle()
-                            .fill(step.rawValue < currentStep.rawValue ? Color.green : Color.secondary.opacity(0.3))
-                            .frame(height: 2)
-                    }
-                }
-                .frame(maxWidth: .infinity)
+    private var authenticationGateView: some View {
+        VStack(spacing: 32) {
+            Spacer()
+            
+            Image(systemName: manager.securityManager.biometryType == .touchID ? "touchid" : 
+                  manager.securityManager.biometryType == .faceID ? "faceid" : "lock.shield")
+                .font(.system(size: 72))
+                .foregroundStyle(.linearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+            
+            Text("Authentication Required")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            
+            Text("Use \(manager.securityManager.biometryDisplayName) to access your learning data.")
+                .font(.title3)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 400)
+            
+            Button(action: {
+                Task { await manager.unlock() }
+            }) {
+                Label("Unlock with \(manager.securityManager.biometryDisplayName)", systemImage: "lock.open")
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            
+            if let error = manager.securityManager.error {
+                Text(error)
+                    .foregroundColor(.red)
+                    .font(.callout)
+                    .padding()
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(8)
+            }
+            
+            Spacer()
         }
         .padding()
     }
     
-    private func stepColor(for step: LearningsStep) -> Color {
-        if step.rawValue < currentStep.rawValue {
-            return .green
-        } else if step == currentStep {
-            return .accentColor
-        } else {
-            return .secondary.opacity(0.3)
-        }
-    }
+    // MARK: - Onboarding (Simple: Welcome + Consent)
     
-    // MARK: - Welcome Step
-    
-    private var welcomeStep: some View {
+    private var onboardingView: some View {
         VStack(spacing: 32) {
             Spacer()
             
             // Hero
-            VStack(spacing: 16) {
-                Image(systemName: "brain.head.profile")
-                    .font(.system(size: 72))
-                    .foregroundStyle(.linearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
-                
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 80))
+                .foregroundStyle(.linearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+            
+            Text("The Learnings")
+                .font(.largeTitle)
+                .fontWeight(.bold)
+            
+            Text("A passive learning system that watches how you organize files and learns your preferences over time.")
+                .font(.title3)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 500)
+            
+            // What it does
+            VStack(alignment: .leading, spacing: 16) {
+                featureRow(icon: "eye", title: "Watches", description: "Observes when you modify directories after AI organization")
+                featureRow(icon: "arrow.uturn.backward", title: "Learns from Reverts", description: "Understands when AI suggestions weren't right")
+                featureRow(icon: "text.bubble", title: "Remembers Instructions", description: "Captures your additional guidance and preferences")
+                featureRow(icon: "sparkles", title: "Improves Over Time", description: "Uses learnings to make better future suggestions")
+            }
+            .padding(24)
+            .background(Color.secondary.opacity(0.1))
+            .cornerRadius(12)
+            
+            // Privacy
+            HStack(spacing: 8) {
+                Image(systemName: "lock.shield.fill")
+                    .foregroundColor(.green)
+                Text("Encrypted locally • Biometric Protection • Delete anytime")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Enable button
+            Button(action: {
+                Task {
+                    await manager.grantConsent()
+                    manager.completeInitialSetup()
+                }
+            }) {
+                Label("Enable Learning", systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            
+            Spacer()
+        }
+        .padding(32)
+    }
+    
+    private func featureRow(icon: String, title: String, description: String) -> some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(.accentColor)
+                .frame(width: 32)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    // MARK: - Dashboard (Main View)
+    
+    private var dashboardView: some View {
+        VStack(spacing: 0) {
+            // Header
+            dashboardHeader
+            
+            Divider()
+            
+            // Tab Bar
+            HStack(spacing: 0) {
+                ForEach(LearningsTab.allCases, id: \.self) { tab in
+                    tabButton(tab)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            Divider()
+                .padding(.top, 8)
+            
+            // Content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    switch selectedTab {
+                    case .overview:
+                        overviewSection
+                    case .preferences:
+                        preferencesSection
+                    case .activity:
+                        activitySection
+                    }
+                }
+                .padding(24)
+            }
+        }
+        .sheet(isPresented: $showingHoningSheet) {
+            LearningsHoningView(config: settingsViewModel.config) { answers in
+                Task {
+                    await manager.saveHoningResults(answers)
+                    showingHoningSheet = false
+                }
+            }
+        }
+        .alert("Delete All Learning Data?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                Task { await manager.clearAllData() }
+            }
+        } message: {
+            Text("This will permanently delete all your learning data and preferences. This cannot be undone.")
+        }
+        .alert("Withdraw Consent?", isPresented: $showingWithdrawConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Withdraw", role: .destructive) {
+                Task { await manager.withdrawConsent() }
+            }
+        } message: {
+            Text("Learning will stop but your existing data will be preserved. You can re-enable learning later.")
+        }
+        // Menu action handlers
+        .onReceive(NotificationCenter.default.publisher(for: .startHoningSession)) { _ in
+            if !manager.isLocked && manager.consentManager.hasConsented {
+                showingHoningSheet = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showLearningsStats)) { _ in
+            selectedTab = .overview
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .pauseLearning)) { _ in
+            showingWithdrawConfirmation = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) { _ in
+            // Export handled by the manager
+            exportProfile()
+        }
+
+    }
+    
+    // MARK: - Export Profile
+    
+    private func exportProfile() {
+        guard let profile = manager.currentProfile else { return }
+        
+        let panel = NSSavePanel()
+        let learningsType = UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json
+        panel.allowedContentTypes = [learningsType]
+        panel.nameFieldStringValue = "learnings_profile_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "-")).learnings"
+        panel.message = "Export Learning Profile"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                encoder.dateEncodingStrategy = .iso8601
+                let data = try encoder.encode(profile)
+                try data.write(to: url)
+                HapticFeedbackManager.shared.success()
+                NSWorkspace.shared.open(url)
+            } catch {
+                DebugLogger.log("Failed to export profile: \(error)")
+                HapticFeedbackManager.shared.error()
+            }
+        }
+    }
+    
+    private var dashboardHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("The Learnings")
                     .font(.largeTitle)
                     .fontWeight(.bold)
-                
-                Text("Train a local, example-based file organizer that learns from your preferences.")
-                    .font(.title3)
+                Text("Passively learning from your organization habits")
+                    .font(.callout)
                     .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 500)
             }
-            
-            // Features
-            HStack(spacing: 32) {
-                featureCard(icon: "folder.badge.plus", title: "Add Folders", description: "Choose which folders to organize")
-                featureCard(icon: "star.fill", title: "Teach by Example", description: "Show the organizer how you like it")
-                featureCard(icon: "sparkles", title: "Learn Rules", description: "AI infers patterns from your examples")
-                featureCard(icon: "arrow.triangle.2.circlepath", title: "Apply & Rollback", description: "Safe changes with undo support")
-            }
-            .padding(.horizontal, 32)
-            
             Spacer()
-            
-            // Actions
-            VStack(spacing: 16) {
-                HStack(spacing: 16) {
-                    TextField("Project Name", text: $projectName)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 250)
-                    
-                    Button(action: startNewProject) {
-                        Label("Start New Project", systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(projectName.isEmpty)
-                }
-                
-                Button("Load Existing Project...") {
-                    showingProjectList = true
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(.bottom, 32)
+            statusBadge
         }
         .padding()
+        .background(Color(NSColor.controlBackgroundColor))
     }
     
-    private func featureCard(icon: String, title: String, description: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 28))
-                .foregroundColor(.accentColor)
-            
-            Text(title)
-                .font(.headline)
-            
-            Text(description)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+    private func tabButton(_ tab: LearningsTab) -> some View {
+        Button(action: { selectedTab = tab }) {
+            Text(tab.rawValue)
+                .font(.subheadline)
+                .fontWeight(selectedTab == tab ? .semibold : .regular)
+                .foregroundColor(selectedTab == tab ? .accentColor : .secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(
+                    selectedTab == tab ? Color.accentColor.opacity(0.1) : Color.clear
+                )
+                .cornerRadius(8)
         }
-        .frame(width: 140)
-        .padding()
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(12)
+        .buttonStyle(.plain)
     }
     
-    private func startNewProject() {
-        manager.createProject(name: projectName, rootPaths: [])
-        hasStarted = true
-        currentStep = .addFolders
-    }
+    // MARK: - Overview Section
     
-    // MARK: - Add Folders Step
-    
-    private var addFoldersStep: some View {
+    private var overviewSection: some View {
         VStack(alignment: .leading, spacing: 24) {
-            // Header
-            stepHeader(
-                icon: "folder.badge.plus",
-                title: "Add Folders to Organize",
-                subtitle: "Select the folders containing files you want to organize. These are your source directories."
-            )
+            // Stats Grid
+            statsSection
             
-            // Folder list
-            GroupBox {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let paths = manager.currentProject?.rootPaths, !paths.isEmpty {
-                        ForEach(Array(paths.enumerated()), id: \.offset) { index, path in
-                            HStack {
-                                Image(systemName: "folder.fill")
-                                    .foregroundColor(.blue)
-                                    .frame(width: 24)
-                                
-                                VStack(alignment: .leading) {
-                                    Text(URL(fileURLWithPath: path).lastPathComponent)
-                                        .fontWeight(.medium)
-                                    Text(path)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                                
-                                Spacer()
-                                
-                                Button(action: { manager.removeRootPath(at: index) }) {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.red)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(12)
-                            .background(Color.blue.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                    } else {
-                        emptyStateInline(
-                            icon: "folder.badge.questionmark",
-                            message: "No folders added yet. Click 'Add Folder' to get started."
-                        )
-                    }
-                    
-                    Button(action: { 
-                        activePicker = .rootFolder
-                        showingFileImporter = true 
-                    }) {
-                        Label("Add Folder", systemImage: "plus")
-                    }
-                    .buttonStyle(.bordered)
-                }
-                .padding()
-            }
-            
-            // Tips
-            tipCard(
-                icon: "lightbulb.fill",
-                title: "Tip",
-                message: "Start with a Downloads folder or any directory with mixed files that need organizing."
-            )
-            
-            Spacer()
-        }
-        .padding(24)
-    }
-    
-    // MARK: - Add Examples Step
-    
-    private var addExamplesStep: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            stepHeader(
-                icon: "star.fill",
-                title: "Teach by Example",
-                subtitle: "Add folders that are already organized the way you want. The Learnings will learn from their structure."
-            )
-            
-            // Example folders
-            GroupBox("Example Folders") {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let folders = manager.currentProject?.exampleFolders, !folders.isEmpty {
-                        ForEach(Array(folders.enumerated()), id: \.offset) { index, path in
-                            HStack {
-                                Image(systemName: "star.fill")
-                                    .foregroundColor(.yellow)
-                                    .frame(width: 24)
-                                
-                                VStack(alignment: .leading) {
-                                    Text(URL(fileURLWithPath: path).lastPathComponent)
-                                        .fontWeight(.medium)
-                                    Text(path)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                                
-                                Spacer()
-                                
-                                Button(action: { manager.removeExampleFolder(at: index) }) {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.red)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(12)
-                            .background(Color.yellow.opacity(0.1))
-                            .cornerRadius(8)
-                        }
-                    } else {
-                        emptyStateInline(
-                            icon: "star.slash",
-                            message: "No example folders yet. Add a well-organized folder to teach the system."
-                        )
-                    }
-                    
-                    Button(action: { 
-                        activePicker = .exampleFolder
-                        showingFileImporter = true 
-                    }) {
-                        Label("Add Example Folder", systemImage: "plus")
-                    }
-                    .buttonStyle(.bordered)
-                }
-                .padding()
-            }
-            
-            // Labeled examples count
-            if let examples = manager.currentProject?.labeledExamples, !examples.isEmpty {
-                GroupBox("Manual Examples (\(examples.count))") {
-                    Text("You have \(examples.count) manually labeled src → dst mappings that will help refine the rules.")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                        .padding()
-                }
-            }
-            
-            tipCard(
-                icon: "info.circle.fill",
-                title: "How it works",
-                message: "The Learnings analyzes folder structures and file naming patterns to infer organization rules. More examples = better results!"
-            )
-            
-            Spacer()
-        }
-        .padding(24)
-    }
-    
-    // MARK: - Analyze Step
-    
-    private var analyzeStep: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            stepHeader(
-                icon: "magnifyingglass",
-                title: "Analyze & Learn Rules",
-                subtitle: "Run analysis to infer organization rules from your examples and source folders."
-            )
-            
-            if manager.analyzer.isAnalyzing {
-                // Progress
-                VStack(spacing: 16) {
-                    ProgressView(value: manager.analyzer.progress, total: 1.0)
-                        .progressViewStyle(.linear)
-                    
-                    Text(manager.analyzer.currentStatus)
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-            } else if let result = manager.analysisResult {
-                // Results
-                GroupBox("Inferred Rules (\(result.inferredRules.count))") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(result.inferredRules.prefix(5)) { rule in
-                            HStack {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                Text(rule.explanation)
-                                    .font(.callout)
-                            }
-                        }
-                        
-                        if result.inferredRules.count > 5 {
-                            Text("... and \(result.inferredRules.count - 5) more rules")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding()
-                }
+            // Quick Actions
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Quick Actions")
+                    .font(.headline)
                 
-                // Confidence summary
-                HStack(spacing: 16) {
-                    confidenceBadge(label: "High", count: result.confidenceSummary.high, color: .green)
-                    confidenceBadge(label: "Medium", count: result.confidenceSummary.medium, color: .orange)
-                    confidenceBadge(label: "Low", count: result.confidenceSummary.low, color: .red)
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-                
-                Button("Re-analyze") {
-                    Task { await manager.analyze() }
-                }
-                .buttonStyle(.bordered)
-            } else {
-                // Ready to analyze
-                VStack(spacing: 16) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 48))
-                        .foregroundColor(.purple)
+                HStack(spacing: 12) {
+                    ActionCard(
+                        icon: "wand.and.stars",
+                        title: "Refine Preferences",
+                        description: "Answer questions to improve accuracy",
+                        color: .purple
+                    ) {
+                        showingHoningSheet = true
+                    }
                     
-                    Text("Ready to Analyze")
+                    ActionCard(
+                        icon: "arrow.clockwise",
+                        title: "Re-analyze Patterns",
+                        description: "Update rules from recent activity",
+                        color: .blue
+                    ) {
+                        // Trigger re-analysis
+                        Task {
+                            await manager.analyze(rootPaths: [], examplePaths: [])
+                        }
+                    }
+                }
+            }
+            
+            // Recent Insights
+            if let profile = manager.currentProfile, !profile.inferredRules.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Top Learned Patterns")
                         .font(.headline)
                     
-                    Text("Click 'Run Analysis' to infer organization rules from your examples.")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                    
-                    Button(action: {
-                        Task { await manager.analyze() }
-                    }) {
-                        Label("Run Analysis", systemImage: "sparkles")
+                    ForEach(profile.inferredRules.prefix(3)) { rule in
+                        InsightCard(rule: rule)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(32)
-                .background(Color.secondary.opacity(0.05))
-                .cornerRadius(12)
             }
-            
-            Spacer()
         }
-        .padding(24)
     }
     
-    private func confidenceBadge(label: String, count: Int, color: Color) -> some View {
-        VStack {
-            Text("\(count)")
+    // MARK: - Preferences Section
+    
+    private var preferencesSection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if let profile = manager.currentProfile {
+                // Explicit Preferences (from Honing)
+                if !profile.honingAnswers.isEmpty {
+                    PreferenceGroup(
+                        title: "Your Preferences",
+                        subtitle: "Answers from honing sessions",
+                        icon: "person.fill.checkmark",
+                        color: .blue
+                    ) {
+                        ForEach(profile.honingAnswers) { answer in
+                            PreferenceRow(
+                                icon: "checkmark.circle.fill",
+                                text: answer.selectedOption,
+                                color: .blue
+                            )
+                        }
+                    }
+                }
+                
+                // Learned Rules
+                if !profile.inferredRules.isEmpty {
+                    PreferenceGroup(
+                        title: "Learned Patterns",
+                        subtitle: "Inferred from your behavior",
+                        icon: "wand.and.stars",
+                        color: .purple
+                    ) {
+                        ForEach(profile.inferredRules.prefix(5)) { rule in
+                            PreferenceRow(
+                                icon: "lightbulb.fill",
+                                text: rule.explanation,
+                                color: .purple,
+                                priority: rule.priority
+                            )
+                        }
+                    }
+                }
+                
+                // Steering Prompts (Recent Feedback)
+                if !profile.steeringPrompts.isEmpty {
+                    PreferenceGroup(
+                        title: "Recent Feedback",
+                        subtitle: "Your post-organization instructions",
+                        icon: "text.bubble.fill",
+                        color: .orange
+                    ) {
+                        ForEach(profile.steeringPrompts.suffix(5)) { prompt in
+                            PreferenceRow(
+                                icon: "quote.bubble",
+                                text: prompt.prompt,
+                                color: .orange
+                            )
+                        }
+                    }
+                }
+                
+                // Empty State
+                if profile.honingAnswers.isEmpty && profile.inferredRules.isEmpty && profile.steeringPrompts.isEmpty {
+                    ContentUnavailableView(
+                        "No Preferences Yet",
+                        systemImage: "brain.head.profile",
+                        description: Text("Preferences will appear here as you organize files and provide feedback.")
+                    )
+                }
+                
+                // Refine Button
+                Button(action: { showingHoningSheet = true }) {
+                    Label("Refine Preferences", systemImage: "wand.and.stars")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+    
+    // MARK: - Activity Section
+    
+    private var activitySection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if let profile = manager.currentProfile {
+                // Corrections
+                if !profile.postOrganizationChanges.isEmpty {
+                    ActivityGroup(
+                        title: "Recent Corrections",
+                        subtitle: "Files you moved after AI organization",
+                        icon: "arrow.left.arrow.right",
+                        color: .blue,
+                        count: profile.postOrganizationChanges.count
+                    ) {
+                        ForEach(profile.postOrganizationChanges.suffix(5)) { change in
+                            ActivityRow(change: change)
+                        }
+                    }
+                }
+                
+                // Reverts
+                if !profile.historyReverts.isEmpty {
+                    ActivityGroup(
+                        title: "Reverts",
+                        subtitle: "Organization sessions you undid",
+                        icon: "arrow.uturn.backward",
+                        color: .orange,
+                        count: profile.historyReverts.count
+                    ) {
+                        ForEach(profile.historyReverts.suffix(5)) { revert in
+                            RevertRow(revert: revert)
+                        }
+                    }
+                }
+                
+                // Instructions History
+                if !profile.additionalInstructionsHistory.isEmpty {
+                    ActivityGroup(
+                        title: "Instructions Given",
+                        subtitle: "Custom instructions you've provided",
+                        icon: "text.bubble",
+                        color: .purple,
+                        count: profile.additionalInstructionsHistory.count
+                    ) {
+                        ForEach(profile.additionalInstructionsHistory.suffix(5)) { instruction in
+                            InstructionRow(instruction: instruction)
+                        }
+                    }
+                }
+                
+                // Empty State
+                if profile.postOrganizationChanges.isEmpty && profile.historyReverts.isEmpty && profile.additionalInstructionsHistory.isEmpty {
+                    ContentUnavailableView(
+                        "No Activity Yet",
+                        systemImage: "clock",
+                        description: Text("Your organization activity will appear here as you use the app.")
+                    )
+                }
+            }
+            
+            Divider()
+            
+            // Data Management
+            dataManagementSection
+        }
+        .fileImporter(
+            isPresented: $manager.showingImportPicker,
+            allowedContentTypes: [UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                Task {
+                    do {
+                        try await manager.importProfile(from: url)
+                        HapticFeedbackManager.shared.success()
+                    } catch {
+                        DebugLogger.log("Failed to import profile: \(error)")
+                        HapticFeedbackManager.shared.error()
+                        manager.error = "Import failed: \(error.localizedDescription)"
+                    }
+                }
+            case .failure(let error):
+                DebugLogger.log("Import failed: \(error)")
+            }
+        }
+    }
+    
+    private var dataManagementSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Data & Privacy")
+                .font(.headline)
+            
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Image(systemName: "lock.shield.fill")
+                            .foregroundColor(.green)
+                        Text("Your data is encrypted locally")
+                            .font(.subheadline)
+                    }
+                    Text("Protected with \(manager.securityManager.biometryDisplayName)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Button(action: { manager.showingImportPicker = true }) {
+                    Text("Import Profile")
+                }
+                .buttonStyle(.bordered)
+                
+                Button(action: { showingWithdrawConfirmation = true }) {
+                    Text("Pause Learning")
+                }
+                .buttonStyle(.bordered)
+                
+                Button(role: .destructive, action: { showingDeleteConfirmation = true }) {
+                    Label("Delete All Data", systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(12)
+        }
+    }
+    
+    private var statusBadge: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(manager.consentManager.hasConsented ? Color.green : Color.gray)
+                .frame(width: 8, height: 8)
+            Text(manager.consentManager.hasConsented ? "Active" : "Inactive")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.1))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Stats Section
+    
+    private var statsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Learning Progress")
+                .font(.headline)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 16) {
+                statCard(value: "\(manager.currentProfile?.postOrganizationChanges.count ?? 0)", label: "Corrections", icon: "arrow.left.arrow.right", color: .blue)
+                statCard(value: "\(manager.currentProfile?.historyReverts.count ?? 0)", label: "Reverts", icon: "arrow.uturn.backward", color: .orange)
+                statCard(value: "\(manager.currentProfile?.steeringPrompts.count ?? 0)", label: "Feedback", icon: "text.bubble", color: .purple)
+                statCard(value: "\(manager.currentProfile?.inferredRules.count ?? 0)", label: "Rules", icon: "lightbulb.fill", color: .green)
+            }
+        }
+    }
+    
+    private func statCard(value: String, label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(color)
+            Text(value)
                 .font(.title2)
                 .fontWeight(.bold)
             Text(label)
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
-        .frame(width: 80)
-        .padding()
-        .background(color.opacity(0.15))
-        .cornerRadius(8)
-    }
-    
-    // MARK: - Apply Step
-    
-    @State private var enableBackup = true
-    @State private var showApplyConfirmation = false
-    
-    private var applyStep: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            stepHeader(
-                icon: "checkmark.circle.fill",
-                title: "Review & Apply",
-                subtitle: "Review proposed changes and apply them to your files."
-            )
-            
-            if manager.isApplying {
-                VStack(spacing: 16) {
-                    ProgressView(value: manager.applyProgress, total: 1.0)
-                        .progressViewStyle(.linear)
-                    
-                    Text("Applying changes...")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-            } else if let result = manager.analysisResult {
-                // Preview
-                GroupBox("Proposed Moves (\(result.proposedMappings.count))") {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ForEach(result.proposedMappings.prefix(10)) { mapping in
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        Text(URL(fileURLWithPath: mapping.srcPath).lastPathComponent)
-                                            .font(.callout)
-                                        Text("→ \(mapping.proposedDstPath)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Text(String(format: "%.0f%%", mapping.confidence * 100))
-                                        .font(.caption)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(mapping.confidenceLevel == .high ? Color.green.opacity(0.2) : Color.orange.opacity(0.2))
-                                        .cornerRadius(4)
-                                }
-                            }
-                            
-                            if result.proposedMappings.count > 10 {
-                                Text("... and \(result.proposedMappings.count - 10) more")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 250)
-                    .padding()
-                }
-                
-                // Options
-                HStack {
-                    Toggle("Create Backup", isOn: $enableBackup)
-                        .toggleStyle(.checkbox)
-                    
-                    Spacer()
-                    
-                    if let lastJobId = manager.lastJobId {
-                        Button(action: {
-                            Task { await manager.rollbackJob(jobId: lastJobId) }
-                        }) {
-                            Label("Undo Last Apply", systemImage: "arrow.uturn.backward")
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    
-                    Button(action: { showApplyConfirmation = true }) {
-                        Label("Apply Changes", systemImage: "checkmark.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(result.proposedMappings.isEmpty)
-                }
-                .confirmationDialog("Apply Changes?", isPresented: $showApplyConfirmation, titleVisibility: .visible) {
-                    Button("Apply High-Confidence Only") {
-                        Task {
-                            let backupDir = enableBackup ? getBackupDirectory() : nil
-                            await manager.applyMappings(backupDirectory: backupDir, onlyHighConfidence: true)
-                        }
-                    }
-                    Button("Apply All") {
-                        Task {
-                            let backupDir = enableBackup ? getBackupDirectory() : nil
-                            await manager.applyMappings(backupDirectory: backupDir, onlyHighConfidence: false)
-                        }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("This will move files. \(enableBackup ? "A backup will be created." : "No backup will be created.")")
-                }
-            } else {
-                emptyStateInline(
-                    icon: "exclamationmark.triangle",
-                    message: "No analysis results. Go back to the Analyze step first."
-                )
-            }
-            
-            // Save project
-            HStack {
-                Spacer()
-                Button("Save Project") {
-                    Task { await manager.saveProject() }
-                }
-                .buttonStyle(.bordered)
-            }
-            
-            Spacer()
-        }
-        .padding(24)
-    }
-    
-    private func getBackupDirectory() -> URL {
-        let fm = FileManager.default
-        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("FileOrganizer/Learnings/Backups/\(Date().timeIntervalSince1970)")
-    }
-    
-    // MARK: - Navigation Buttons
-    
-    private var navigationButtons: some View {
-        HStack {
-            if currentStep != .welcome {
-                Button(action: previousStep) {
-                    Label("Back", systemImage: "chevron.left")
-                }
-                .buttonStyle(.bordered)
-            }
-            
-            Spacer()
-            
-            if currentStep != .apply {
-                Button(action: nextStep) {
-                    Label("Next", systemImage: "chevron.right")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canProceed)
-            }
-        }
-        .padding()
-    }
-    
-    private var canProceed: Bool {
-        switch currentStep {
-        case .welcome:
-            return !projectName.isEmpty
-        case .addFolders:
-            return !(manager.currentProject?.rootPaths.isEmpty ?? true)
-        case .addExamples:
-            return true // Optional step
-        case .analyze:
-            return manager.analysisResult != nil
-        case .apply:
-            return true
-        }
-    }
-    
-    private func nextStep() {
-        if let next = LearningsStep(rawValue: currentStep.rawValue + 1) {
-            withAnimation(.spring(response: 0.3)) {
-                currentStep = next
-            }
-        }
-    }
-    
-    private func previousStep() {
-        if let prev = LearningsStep(rawValue: currentStep.rawValue - 1) {
-            withAnimation(.spring(response: 0.3)) {
-                currentStep = prev
-            }
-        }
-    }
-    
-    // MARK: - Helper Views
-    
-    private func stepHeader(icon: String, title: String, subtitle: String) -> some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 32))
-                .foregroundColor(.accentColor)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                Text(subtitle)
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-            }
-            
-            Spacer()
-        }
-    }
-    
-    private func emptyStateInline(icon: String, message: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(.secondary)
-            Text(message)
-                .foregroundColor(.secondary)
-        }
         .frame(maxWidth: .infinity)
         .padding()
+        .background(color.opacity(0.1))
+        .cornerRadius(12)
     }
+}
+
+// MARK: - Supporting Views
+
+struct ActionCard: View {
+    let icon: String
+    let title: String
+    let description: String
+    let color: Color
+    let action: () -> Void
     
-    private func tipCard(icon: String, title: String, message: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .foregroundColor(.blue)
-            
-            VStack(alignment: .leading, spacing: 4) {
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
                 Text(title)
                     .font(.headline)
-                Text(message)
-                    .font(.callout)
+                    .foregroundColor(.primary)
+                Text(description)
+                    .font(.caption)
                     .foregroundColor(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+            .background(color.opacity(0.1))
+            .cornerRadius(12)
         }
-        .padding()
-        .background(Color.blue.opacity(0.1))
+        .buttonStyle(.plain)
+    }
+}
+
+struct InsightCard: View {
+    let rule: InferredRule
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "lightbulb.fill")
+                .foregroundColor(.yellow)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rule.explanation)
+                    .font(.subheadline)
+                Text("Priority: \(rule.priority)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.05))
         .cornerRadius(8)
     }
 }
 
-// MARK: - Project List Sheet
-
-struct ProjectListSheet: View {
-    @ObservedObject var manager: LearningsManager
-    let onSelect: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var projects: [String] = []
+struct PreferenceGroup<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    @ViewBuilder let content: Content
     
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Load Project")
-                    .font(.headline)
-                Spacer()
-                Button("Cancel") { dismiss() }
-            }
-            .padding()
-            
-            Divider()
-            
-            if projects.isEmpty {
-                VStack(spacing: 16) {
-                    Image(systemName: "folder.badge.questionmark")
-                        .font(.system(size: 48))
-                        .foregroundColor(.secondary)
-                    Text("No saved projects")
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                List(projects, id: \.self) { name in
-                    Button(action: {
-                        onSelect(name)
-                        dismiss()
-                    }) {
-                        HStack {
-                            Image(systemName: "folder.fill")
-                                .foregroundColor(.accentColor)
-                            Text(name)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                        }
+            }
+            
+            content
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(12)
+    }
+}
+
+struct PreferenceRow: View {
+    let icon: String
+    let text: String
+    let color: Color
+    var priority: Int? = nil
+    
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .foregroundColor(color)
+                .frame(width: 20)
+            Text(text)
+                .font(.subheadline)
+            Spacer()
+            if let priority = priority {
+                Text("\(priority)%")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(4)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct ActivityGroup<Content: View>: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+    let count: Int
+    @ViewBuilder let content: Content
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button(action: { isExpanded.toggle() }) {
+                HStack {
+                    Image(systemName: icon)
+                        .foregroundColor(color)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.headline)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    Spacer()
+                    Text("\(count)")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundColor(color)
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .foregroundColor(.secondary)
                 }
             }
+            .buttonStyle(.plain)
+            
+            if isExpanded {
+                content
+                    .transition(.opacity)
+            }
         }
-        .frame(width: 400, height: 300)
-        .task {
-            projects = await manager.listProjects()
+        .padding()
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(12)
+    }
+}
+
+struct ActivityRow: View {
+    let change: DirectoryChange
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: change.wasAIOrganized ? "arrow.triangle.2.circlepath" : "folder")
+                .foregroundColor(change.wasAIOrganized ? .blue : .secondary)
+                .frame(width: 20)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(URL(fileURLWithPath: change.originalPath).lastPathComponent)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent)
+                        .foregroundColor(.secondary)
+                    Image(systemName: "arrow.right")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent)
+                        .foregroundColor(.accentColor)
+                }
+                .font(.caption)
+            }
+            
+            Spacer()
         }
+        .padding(.vertical, 4)
+    }
+}
+
+struct RevertRow: View {
+    let revert: RevertEvent
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.uturn.backward.circle")
+                .foregroundColor(.orange)
+                .frame(width: 20)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(revert.operationCount) files reverted")
+                    .font(.subheadline)
+                if let reason = revert.reason {
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            Text(revert.timestamp, style: .relative)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct InstructionRow: View {
+    let instruction: UserInstruction
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "quote.bubble")
+                .foregroundColor(.purple)
+                .frame(width: 20)
+            
+            Text(instruction.instruction)
+                .font(.subheadline)
+                .lineLimit(2)
+            
+            Spacer()
+            
+            Text(instruction.timestamp, style: .relative)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
     }
 }
 

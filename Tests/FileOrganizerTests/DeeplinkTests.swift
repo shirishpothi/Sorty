@@ -19,7 +19,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "fileorganizer://organize?path=/Users/test/Downloads")!
         handler.handle(url: url)
         
-        if case .organize(let path) = handler.pendingDestination {
+        if case .organize(let path, _, _) = handler.pendingDestination {
             XCTAssertEqual(path, "/Users/test/Downloads")
         } else {
             XCTFail("Expected organize destination")
@@ -36,7 +36,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "fileorganizer://organize")!
         handler.handle(url: url)
         
-        if case .organize(let path) = handler.pendingDestination {
+        if case .organize(let path, _, _) = handler.pendingDestination {
             XCTAssertNil(path)
         } else {
             XCTFail("Expected organize destination")
@@ -52,7 +52,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "fileorganizer://duplicates?path=/tmp/test")!
         handler.handle(url: url)
         
-        if case .duplicates(let path) = handler.pendingDestination {
+        if case .duplicates(let path, _) = handler.pendingDestination {
             XCTAssertEqual(path, "/tmp/test")
         } else {
             XCTFail("Expected duplicates destination")
@@ -68,7 +68,8 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "fileorganizer://learnings?project=Photos")!
         handler.handle(url: url)
         
-        if case .learnings(let project) = handler.pendingDestination {
+        if case .learnings(let action, let project) = handler.pendingDestination {
+            XCTAssertNil(action)
             XCTAssertEqual(project, "Photos")
         } else {
             XCTFail("Expected learnings destination")
@@ -84,7 +85,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "fileorganizer://settings")!
         handler.handle(url: url)
         
-        XCTAssertEqual(handler.pendingDestination, .settings)
+        XCTAssertEqual(handler.pendingDestination, .settings(section: nil))
         handler.clearPending()
     }
     
@@ -152,19 +153,19 @@ final class DeeplinkTests: XCTestCase {
     
     @MainActor
     func testGenerateOrganizeURL() {
-        let url = DeeplinkHandler.url(for: .organize(path: "/test/path"))
+        let url = DeeplinkHandler.url(for: .organize(path: "/test/path", persona: nil, autostart: false))
         XCTAssertEqual(url?.absoluteString, "fileorganizer://organize?path=/test/path")
     }
     
     @MainActor
     func testGenerateSettingsURL() {
-        let url = DeeplinkHandler.url(for: .settings)
+        let url = DeeplinkHandler.url(for: .settings(section: nil))
         XCTAssertEqual(url?.absoluteString, "fileorganizer://settings")
     }
     
     @MainActor
     func testGenerateLearningsURL() {
-        let url = DeeplinkHandler.url(for: .learnings(project: "MyProject"))
+        let url = DeeplinkHandler.url(for: .learnings(action: nil, project: "MyProject"))
         XCTAssertEqual(url?.absoluteString, "fileorganizer://learnings?project=MyProject")
     }
 }

@@ -98,6 +98,30 @@ final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
+    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+        // Verify availability first
+        guard Self.isAvailable() else {
+            throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)
+        }
+        
+        do {
+            // Create a language model session with the system instructions
+            let session = LanguageModelSession(instructions: systemPrompt ?? "You are a helpful assistant.")
+            
+            // Generate response from the model
+            let response = try await session.respond(to: prompt)
+            return response.content
+            
+        } catch let error as LanguageModelSession.GenerationError {
+            throw AIClientError.apiError(
+                statusCode: 500,
+                message: "Apple Intelligence generation error: \(error.localizedDescription)"
+            )
+        } catch {
+            throw error
+        }
+    }
+    
     /// Check if Apple Intelligence is available on this device
     static func isAvailable() -> Bool {
         let model = SystemLanguageModel.default

@@ -16,80 +16,30 @@ final class LearningsManagerTests: XCTestCase {
     override func setUp() async throws {
         try await super.setUp()
         manager = LearningsManager()
+        // Reset to empty profile for tests
+        manager.currentProfile = LearningsProfile()
     }
     
     override func tearDown() async throws {
         manager = nil
         try await super.tearDown()
     }
-    
-    // MARK: - Project Management Tests
-    
-    func testCreateProject() {
-        manager.createProject(name: "Test Project", rootPaths: ["/test/path"])
-        
-        XCTAssertNotNil(manager.currentProject)
-        XCTAssertEqual(manager.currentProject?.name, "Test Project")
-        XCTAssertEqual(manager.currentProject?.rootPaths.count, 1)
-        XCTAssertNil(manager.analysisResult)
-    }
-    
-    func testAddExampleFolder() {
-        manager.createProject(name: "Photos", rootPaths: [])
-        
-        manager.addExampleFolder("/Users/test/OrganizedPhotos")
-        
-        XCTAssertEqual(manager.currentProject?.exampleFolders.count, 1)
-        XCTAssertEqual(manager.currentProject?.exampleFolders.first, "/Users/test/OrganizedPhotos")
-    }
-    
-    func testRemoveExampleFolder() {
-        manager.createProject(name: "Project", rootPaths: [])
-        manager.addExampleFolder("/path1")
-        manager.addExampleFolder("/path2")
-        
-        manager.removeExampleFolder(at: 0)
-        
-        XCTAssertEqual(manager.currentProject?.exampleFolders.count, 1)
-        XCTAssertEqual(manager.currentProject?.exampleFolders.first, "/path2")
-    }
-    
-    func testAddRootPath() {
-        manager.createProject(name: "Project", rootPaths: [])
-        
-        manager.addRootPath("/Users/test/Downloads")
-        
-        XCTAssertEqual(manager.currentProject?.rootPaths.count, 1)
-    }
-    
-    func testRemoveRootPath() {
-        manager.createProject(name: "Project", rootPaths: ["/path1", "/path2"])
-        
-        manager.removeRootPath(at: 0)
-        
-        XCTAssertEqual(manager.currentProject?.rootPaths.count, 1)
-        XCTAssertEqual(manager.currentProject?.rootPaths.first, "/path2")
-    }
-    
+
     // MARK: - Labeled Example Tests
     
     func testAddLabeledExample() {
-        manager.createProject(name: "Project", rootPaths: [])
-        
         manager.addLabeledExample(
             srcPath: "/Downloads/IMG_001.jpg",
             dstPath: "/Photos/2024/IMG_001.jpg",
             action: .accept
         )
         
-        XCTAssertEqual(manager.currentProject?.labeledExamples.count, 1)
-        XCTAssertEqual(manager.currentProject?.labeledExamples.first?.srcPath, "/Downloads/IMG_001.jpg")
-        XCTAssertEqual(manager.currentProject?.labeledExamples.first?.action, .accept)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.srcPath, "/Downloads/IMG_001.jpg")
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.action, .accept)
     }
     
     func testAcceptMapping() {
-        manager.createProject(name: "Project", rootPaths: [])
-        
         let mapping = ProposedMapping(
             srcPath: "/test/file.txt",
             proposedDstPath: "/organized/file.txt",
@@ -99,13 +49,12 @@ final class LearningsManagerTests: XCTestCase {
         
         manager.acceptMapping(mapping)
         
-        XCTAssertEqual(manager.currentProject?.labeledExamples.count, 1)
-        XCTAssertEqual(manager.currentProject?.labeledExamples.first?.action, .accept)
+        // Should go to positiveExamples
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.action, .accept)
     }
     
     func testRejectMapping() {
-        manager.createProject(name: "Project", rootPaths: [])
-        
         let mapping = ProposedMapping(
             srcPath: "/test/file.txt",
             proposedDstPath: "/organized/file.txt",
@@ -115,15 +64,14 @@ final class LearningsManagerTests: XCTestCase {
         
         manager.rejectMapping(mapping)
         
-        XCTAssertEqual(manager.currentProject?.labeledExamples.count, 1)
-        XCTAssertEqual(manager.currentProject?.labeledExamples.first?.action, .reject)
-        // Should keep in place
-        XCTAssertEqual(manager.currentProject?.labeledExamples.first?.dstPath, "/test/file.txt")
+        // Should go to rejections
+        XCTAssertEqual(manager.currentProfile?.rejections.count, 1)
+        XCTAssertEqual(manager.currentProfile?.rejections.first?.action, .reject)
+        // Should keep in place (srcPath as dstPath)
+        XCTAssertEqual(manager.currentProfile?.rejections.first?.dstPath, "/test/file.txt")
     }
     
     func testEditMapping() {
-        manager.createProject(name: "Project", rootPaths: [])
-        
         let mapping = ProposedMapping(
             srcPath: "/test/file.txt",
             proposedDstPath: "/organized/file.txt",
@@ -133,29 +81,71 @@ final class LearningsManagerTests: XCTestCase {
         
         manager.editMapping(mapping, newDstPath: "/custom/location/file.txt")
         
-        XCTAssertEqual(manager.currentProject?.labeledExamples.count, 1)
-        XCTAssertEqual(manager.currentProject?.labeledExamples.first?.action, .edit)
-        XCTAssertEqual(manager.currentProject?.labeledExamples.first?.dstPath, "/custom/location/file.txt")
+        // Should go to corrections
+        XCTAssertEqual(manager.currentProfile?.corrections.count, 1)
+        XCTAssertEqual(manager.currentProfile?.corrections.first?.action, .edit)
+        XCTAssertEqual(manager.currentProfile?.corrections.first?.dstPath, "/custom/location/file.txt")
     }
     
     // MARK: - Analysis Tests
     
-    func testAnalyzeWithNoProject() async {
-        // Don't create a project
-        await manager.analyze()
+    func testAnalyzeWithNoInputs() async {
+        // Should error if no inputs
+        await manager.analyze(rootPaths: [], examplePaths: [])
         
-        XCTAssertNotNil(manager.error)
-        XCTAssertTrue(manager.error!.contains("No project"))
+        // Error might be set internal to analyzer or manager, but manager wraps it.
+        // Assuming manager validates inputs or regex returns empty results
+        // Analysis result should be present but empty
+        XCTAssertNotNil(manager.analysisResult)
+        XCTAssertTrue(manager.analysisResult?.proposedMappings.isEmpty ?? false)
+    }
+    // MARK: - Prompt Context Generation Tests
+    
+    func testGeneratePromptContext() async {
+        // 1. Setup Profile
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.honingAnswers = [
+            HoningAnswer(questionId: "q1", selectedOption: "Sort by Date")
+        ]
+        profile.inferredRules = [
+            InferredRule(pattern: ".*", template: "{ext}/", priority: 10, explanation: "Group by extension")
+        ]
+        profile.additionalInstructionsHistory = [
+            UserInstruction(instruction: "No folders")
+        ]
+        profile.postOrganizationChanges = [
+            DirectoryChange(originalPath: "/a.txt", newPath: "/b/a.txt", wasAIOrganized: true)
+        ]
+        
+        manager.currentProfile = profile
+        
+        // 2. Generate Context
+        let context = manager.generatePromptContext()
+        
+        // 3. Verify
+        XCTAssertTrue(context.contains("PREFERENCES"))
+        XCTAssertTrue(context.contains("Sort by Date"))
+        XCTAssertTrue(context.contains("LEARNED PATTERNS"))
+        XCTAssertTrue(context.contains("Group by extension"))
+        XCTAssertTrue(context.contains("USER INSTRUCTIONS"))
+        XCTAssertTrue(context.contains("No folders"))
+        XCTAssertTrue(context.contains("RECENT CORRECTIONS"))
+        XCTAssertTrue(context.contains("a.txt"))
+        
+        // 4. Test No Consent (Should respect privacy)
+        manager.currentProfile?.consentGranted = false
+        XCTAssertTrue(manager.generatePromptContext().isEmpty)
     }
     
-    // MARK: - Error Handling Tests
     
     func testErrorStateClearing() async {
         manager.error = "Previous error"
-        manager.createProject(name: "New", rootPaths: [])
+        // Perform an action that clears error usually at start
+        // manager.analyze clears errors
+        await manager.analyze(rootPaths: [], examplePaths: [])
         
-        // Error should persist until cleared by another operation
-        XCTAssertNotNil(manager.error)
+        XCTAssertNil(manager.error)
     }
 }
 
@@ -242,144 +232,37 @@ final class LearningsAnalyzerTests: XCTestCase {
     }
 }
 
-// MARK: - LearningsProject Tests
+// MARK: - LearningsProfile Tests
 
-final class LearningsProjectTests: XCTestCase {
+final class LearningsProfileTests: XCTestCase {
     
-    func testProjectCreation() {
-        let project = LearningsProject(
-            name: "Test Project",
-            rootPaths: ["/test"],
-            exampleFolders: ["/examples"]
+    func testProfileCreation() {
+        let profile = LearningsProfile(
+            createdAt: Date(),
+            honingAnswers: [],
+            inferredRules: [],
+            corrections: [],
+            rejections: [],
+            positiveExamples: []
         )
         
-        XCTAssertEqual(project.name, "Test Project")
-        XCTAssertEqual(project.rootPaths.count, 1)
-        XCTAssertEqual(project.exampleFolders.count, 1)
-        XCTAssertTrue(project.labeledExamples.isEmpty)
-        XCTAssertTrue(project.inferredRules.isEmpty)
-        XCTAssertTrue(project.jobHistory.isEmpty)
-    }
-    
-    func testProjectTouch() {
-        var project = LearningsProject(name: "Test")
-        let originalModified = project.modifiedAt
-        
-        Thread.sleep(forTimeInterval: 0.01)
-        
-        project.touch()
-        
-        XCTAssertGreaterThan(project.modifiedAt, originalModified)
+        XCTAssertTrue(profile.corrections.isEmpty)
+        XCTAssertTrue(profile.inferredRules.isEmpty)
+        XCTAssertTrue(profile.honingAnswers.isEmpty)
     }
     
     func testAddExample() {
-        var project = LearningsProject(name: "Test")
+        var profile = LearningsProfile()
         
         let example = LabeledExample(
             srcPath: "/src/file.txt",
-            dstPath: "/dst/file.txt"
+            dstPath: "/dst/file.txt",
+            action: .accept
         )
         
-        project.addExample(example)
+        profile.positiveExamples.append(example)
         
-        XCTAssertEqual(project.labeledExamples.count, 1)
-    }
-    
-    func testUpdateRules() {
-        var project = LearningsProject(name: "Test")
-        
-        let rules = [
-            InferredRule(
-                pattern: "^test.*",
-                template: "{filename}",
-                priority: 50,
-                explanation: "Test rule"
-            )
-        ]
-        
-        project.updateRules(rules)
-        
-        XCTAssertEqual(project.inferredRules.count, 1)
-    }
-    
-    func testAddJob() {
-        var project = LearningsProject(name: "Test")
-        
-        let job = JobManifest(
-            projectName: "Test",
-            entries: [],
-            backupMode: .none
-        )
-        
-        project.addJob(job)
-        
-        XCTAssertEqual(project.jobHistory.count, 1)
-    }
-    
-    func testLearningsOptionDefaults() {
-        let options = LearningsOptions()
-        
-        XCTAssertTrue(options.dryRun)
-        XCTAssertTrue(options.stagedApply)
-        XCTAssertEqual(options.sampleSize, 50)
-        XCTAssertEqual(options.backupMode, .copyToBackupDir)
-        XCTAssertEqual(options.confidenceThreshold, 0.7)
-    }
-    
-    func testBackupModeDisplayNames() {
-        XCTAssertEqual(BackupMode.none.displayName, "No Backup")
-        XCTAssertEqual(BackupMode.moveToBackupDir.displayName, "Move to Backup Directory")
-        XCTAssertEqual(BackupMode.copyToBackupDir.displayName, "Copy to Backup Directory")
-    }
-    
-    func testJobManifestCreation() {
-        let entries = [
-            JobManifestEntry(
-                originalPath: "/src/file1.txt",
-                destinationPath: "/dst/file1.txt"
-            ),
-            JobManifestEntry(
-                originalPath: "/src/file2.txt",
-                destinationPath: "/dst/file2.txt"
-            )
-        ]
-        
-        let job = JobManifest(
-            projectName: "Test",
-            entries: entries,
-            backupMode: .copyToBackupDir
-        )
-        
-        XCTAssertEqual(job.fileCount, 2)
-        XCTAssertEqual(job.successCount, 0) // All pending
-    }
-    
-    func testJobSuccessCount() {
-        var entries = [
-            JobManifestEntry(
-                originalPath: "/src/file1.txt",
-                destinationPath: "/dst/file1.txt",
-                status: .success
-            ),
-            JobManifestEntry(
-                originalPath: "/src/file2.txt",
-                destinationPath: "/dst/file2.txt",
-                status: .failed
-            ),
-            JobManifestEntry(
-                originalPath: "/src/file3.txt",
-                destinationPath: "/dst/file3.txt",
-                status: .success
-            )
-        ]
-        
-        let job = JobManifest(
-            projectName: "Test",
-            entries: entries,
-            backupMode: .none
-        )
-        
-        XCTAssertEqual(job.successCount, 2)
+        XCTAssertEqual(profile.positiveExamples.count, 1)
     }
 }
 
@@ -423,8 +306,6 @@ final class PatternMatcherAdvancedTests: XCTestCase {
         
         let pattern = PatternMatcher.buildPattern(from: filenames)
         
-        // Might return nil or a generic pattern
-        // Just verify it doesn't crash
         XCTAssertTrue(pattern == nil || !pattern!.isEmpty)
     }
     

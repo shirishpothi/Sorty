@@ -135,7 +135,22 @@ struct EmptyWatchedFoldersView: View {
 struct WatchedFolderRow: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
+    @EnvironmentObject var organizer: FolderOrganizer
     @State private var showingConfig = false
+    
+    private var isOrganizing: Bool {
+        guard let currentDir = organizer.currentDirectory else { return false }
+        // Simple path comparison - could be improved with standardized URLs
+        return currentDir.path == folder.path && 
+               organizer.state != .idle && 
+               organizer.state != .completed && 
+               !isErrorState
+    }
+    
+    private var isErrorState: Bool {
+        if case .error = organizer.state { return true }
+        return false
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -166,6 +181,18 @@ struct WatchedFolderRow: View {
                     Text("Last organized: \(lastTriggered, style: .relative) ago")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary.opacity(0.6))
+                }
+                
+                if isOrganizing {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .scaleEffect(0.7)
+                        Text("Organizing...")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
+                    .transition(.opacity.combined(with: .scale))
                 }
             }
 
@@ -245,13 +272,15 @@ struct WatchedFolderRow: View {
 struct WatchedFolderConfigView: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var appState: AppState // Assuming AppCoordinator is accessible or we trigger via notification
     @Environment(\.dismiss) var dismiss
-
+    
     @State private var customPrompt: String
     @State private var temperature: Double
     @State private var autoOrganize: Bool
-    @State private var appeared = false
+    
+    // For manual trigger
+    @State private var showTriggerConfirmation = false
 
     init(folder: WatchedFolder) {
         self.folder = folder
@@ -261,146 +290,136 @@ struct WatchedFolderConfigView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color(NSColor.windowBackgroundColor).ignoresSafeArea()
-
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Liquid Glass Card for Strategy
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Strategy")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-
-                            Toggle(isOn: $autoOrganize) {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text(folder.name)
+                    .font(.headline)
+                Spacer()
+                Button("Done") {
+                    HapticFeedbackManager.shared.success()
+                    save()
+                }
+                .fontWeight(.medium)
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            
+            Divider()
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Status & Automation
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Automation")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        
+                        Toggle(isOn: $autoOrganize) {
+                            VStack(alignment: .leading) {
+                                Text("Auto-Organize")
+                                    .font(.headline)
+                                Text("Automatically organize new files into existing folders.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
+                    }
+                    .padding(16)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(12)
+                    
+                    // Manual Actions
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Actions")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        
+                        Button {
+                            // "Calibrate" is essentially running a full organization once
+                            // We use the same mechanism as calibrateAction in the previous code
+                            appState.calibrateAction?(folder)
+                            dismiss()
+                        } label: {
+                            HStack {
+                                Image(systemName: "wand.and.stars")
+                                    .foregroundStyle(.blue)
                                 VStack(alignment: .leading) {
-                                    Text("Auto-Organize")
-                                        .font(.headline)
-                                    Text("Smart Drop: Only moves new files into existing folders")
+                                    Text("Run Full Organization")
+                                        .foregroundStyle(.primary)
+                                    Text("Analyze and organize all files in this folder now.")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(.tertiary)
                             }
-                            .toggleStyle(.switch)
-                            .onChange(of: autoOrganize) { _, _ in
-                                HapticFeedbackManager.shared.selection()
-                            }
+                            .contentShape(Rectangle())
                         }
-                        .padding(20)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
-                        .animatedAppearance(delay: 0.1)
-
-                        // Custom Instructions
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Instructions")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-
+                        .buttonStyle(.plain)
+                    }
+                    .padding(16)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(12)
+                    
+                    // Configuration
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Configuration")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        
+                        // Instructions
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Custom Instructions")
+                                .font(.subheadline)
+                            
                             TextEditor(text: $customPrompt)
                                 .font(.system(.body, design: .monospaced))
                                 .frame(height: 100)
                                 .scrollContentBackground(.hidden)
-                                .padding(12)
-                                .background(Color(NSColor.controlBackgroundColor))
+                                .padding(8)
+                                .background(Color(NSColor.textBackgroundColor))
                                 .cornerRadius(8)
-
-                            Text("Overrides generic instructions for this folder.")
-                                .font(.caption)
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.2)))
+                            
+                            Text("Specific rules for this folder (e.g. 'Group by Project')")
+                                .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(20)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
-                        .animatedAppearance(delay: 0.15)
-
-                        // Temperature
-                        VStack(alignment: .leading, spacing: 16) {
+                        
+                        Divider()
+                        
+                        // Creativity
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text("Creativity")
-                                    .font(.headline)
-                                    .foregroundStyle(.secondary)
+                                Text("AI Creativity")
+                                    .font(.subheadline)
                                 Spacer()
-                                Text(String(format: "%.1f", temperature))
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(.blue)
-                                    .contentTransition(.numericText())
+                                Text(temperature < 0.3 ? "Strict" : (temperature > 0.7 ? "Creative" : "Balanced"))
+                                    .font(.caption)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(4)
                             }
-
+                            
                             Slider(value: $temperature, in: 0...1) {
                                 Text("Temperature")
-                            } minimumValueLabel: {
-                                Text("Focused").font(.caption)
-                            } maximumValueLabel: {
-                                Text("Creative").font(.caption)
                             }
-                            .onChange(of: temperature) { _, _ in
-                                HapticFeedbackManager.shared.selection()
-                            }
+                            .tint(.blue)
                         }
-                        .padding(20)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
-                        .animatedAppearance(delay: 0.2)
-
-                        // Calibrate Action
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Maintenance")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-
-                            Button {
-                                HapticFeedbackManager.shared.tap()
-                                appState.calibrateAction?(folder)
-                                dismiss()
-                            } label: {
-                                HStack {
-                                    Image(systemName: "tuningfork")
-                                    Text("Calibrate Folder")
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding()
-                                .background(Color(NSColor.controlBackgroundColor))
-                                .cornerRadius(8)
-                            }
-                            .buttonStyle(.plain)
-
-                            Text("Runs a full organization to set the baseline structure.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(20)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: .black.opacity(0.05), radius: 10, y: 5)
-                        .animatedAppearance(delay: 0.25)
                     }
-                    .padding()
+                    .padding(16)
+                    .background(Color(NSColor.controlBackgroundColor))
+                    .cornerRadius(12)
                 }
-            }
-            .navigationTitle(folder.name)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        HapticFeedbackManager.shared.tap()
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        HapticFeedbackManager.shared.success()
-                        save()
-                    }
-                }
+                .padding(20)
             }
         }
+        .frame(width: 400, height: 600)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 
     private func save() {
@@ -408,7 +427,8 @@ struct WatchedFolderConfigView: View {
         updated.customPrompt = customPrompt.isEmpty ? nil : customPrompt
         updated.temperature = temperature
         updated.autoOrganize = autoOrganize
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        
+        withAnimation {
             watchedFoldersManager.updateFolder(updated)
         }
         dismiss()

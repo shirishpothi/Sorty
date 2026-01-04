@@ -20,15 +20,25 @@ public class LearningsAnalyzer: ObservableObject {
     
     // MARK: - Dependencies
     
-    private let ruleInducer = RuleInducer()
+    private let ruleInducer = RuleInducer() // Legacy pattern matcher
+    private var llmInducer: LLMRuleInducer?
     private let contentAnalyzer = ContentAnalyzer()
     
     public init() {}
     
+    // Configure with AI Client for advanced learning
+    public func configure(aiClient: AIClientProtocol) {
+        self.llmInducer = LLMRuleInducer(aiClient: aiClient)
+    }
+    
     // MARK: - Public API
     
-    /// Analyze a project and generate proposals
-    public func analyze(project: LearningsProject) async throws -> LearningsAnalysisResult {
+    /// Analyze using profile data and target paths
+    public func analyze(
+        profile: LearningsProfile,
+        rootPaths: [String],
+        examplePaths: [String]
+    ) async throws -> LearningsAnalysisResult {
         isAnalyzing = true
         progress = 0.0
         currentStatus = "Starting analysis..."
@@ -38,15 +48,37 @@ public class LearningsAnalyzer: ObservableObject {
             currentStatus = ""
         }
         
-        // Step 1: Induce rules from examples
-        currentStatus = "Learning patterns from examples..."
+        // Step 1: LLM Rule Induction (Primary) if available
+        currentStatus = "Asking AI to find patterns..."
         progress = 0.1
         
-        let exampleFolderURLs = project.exampleFolders.map { URL(fileURLWithPath: $0) }
-        let rules = await ruleInducer.induceRules(
-            from: project.labeledExamples,
-            exampleFolders: exampleFolderURLs
-        )
+        var rules: [InferredRule] = []
+        let exampleFolderURLs = examplePaths.map { URL(fileURLWithPath: $0) }
+        
+        // Combine manual corrections/rejections/positive examples into training set
+        let trainingExamples = profile.corrections + profile.rejections + profile.positiveExamples
+        
+        if let llm = llmInducer {
+            // Enhanced rule induction with steering prompts and guiding instructions
+            let aiRules = await llm.induceRules(
+                from: trainingExamples,
+                exampleFolders: exampleFolderURLs,
+                honingAnswers: profile.honingAnswers,
+                steeringPrompts: profile.steeringPrompts,
+                guidingInstructions: profile.guidingInstructionsHistory
+            )
+            rules.append(contentsOf: aiRules)
+        }
+        
+        // Fallback/Supplement: Pattern Rule Induction
+        if rules.isEmpty {
+            currentStatus = "Scanning for regex patterns..."
+            let legacyRules = await ruleInducer.induceRules(
+                from: trainingExamples,
+                exampleFolders: exampleFolderURLs
+            )
+            rules.append(contentsOf: legacyRules)
+        }
         
         progress = 0.3
         
@@ -54,9 +86,9 @@ public class LearningsAnalyzer: ObservableObject {
         currentStatus = "Scanning files..."
         var allFiles: [URL] = []
         
-        for rootPath in project.rootPaths {
+        for rootPath in rootPaths {
             let rootURL = URL(fileURLWithPath: rootPath)
-            let files = await scanDirectory(rootURL, sampleSize: project.options.sampleSize)
+            let files = await scanDirectory(rootURL, sampleSize: 100) // Hardcoded sample size for now or pass in config
             allFiles.append(contentsOf: files)
         }
         
@@ -69,7 +101,7 @@ public class LearningsAnalyzer: ObservableObject {
         var destinationCounts: [String: [String]] = [:]  // dst -> [src paths]
         
         for (index, fileURL) in allFiles.enumerated() {
-            let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: project.rootPaths.first ?? "")
+            let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: rootPaths.first ?? "")
             mappings.append(mapping)
             
             // Track for conflict detection

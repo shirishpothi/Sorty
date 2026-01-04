@@ -124,8 +124,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var startTime: Date?
     private var timeoutTask: Task<Void, Never>?
 
-    // Track current directory for failed history
-    private var currentDirectory: URL?
+    // Track current directory for status checks
+    @Published public var currentDirectory: URL?
 
     // CRITICAL: Cancellation token - must be checked frequently
     private var currentTask: Task<Void, Error>?
@@ -137,11 +137,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     var scanner = DirectoryScanner()
     var aiClient: AIClientProtocol?
     private let fileSystemManager = FileSystemManager()
+    private var aiConfig: AIConfig?
     private let validator = FileOrganizationValidator.self
     public let history = OrganizationHistory()
     public var exclusionRules: ExclusionRulesManager?
     public var personaManager: PersonaManager?
-
+    public var customPersonaStore: CustomPersonaStore?
+    public var learningsManager: LearningsManager?
+    
     public init() {}
 
     public func configure(with config: AIConfig) async throws {
@@ -151,11 +154,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         client.streamingDelegate = self
 
         self.aiClient = client
+        self.aiConfig = config
     }
 
     // MARK: - StreamingDelegate
 
-    nonisolated func didReceiveChunk(_ chunk: String) {
+    public nonisolated func didReceiveChunk(_ chunk: String) {
         Task { @MainActor in
             guard !self.isCancellationRequested else { return }
 
@@ -173,7 +177,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    nonisolated func didComplete(content: String) {
+    public nonisolated func didComplete(content: String) {
         Task { @MainActor in
             self.isStreaming = false
             self.organizationStage = "Processing response..."
@@ -181,7 +185,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    nonisolated func didFail(error: Error) {
+    public nonisolated func didFail(error: Error) {
         Task { @MainActor in
             self.isStreaming = false
             self.errorMessage = error.localizedDescription
@@ -287,8 +291,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             try checkCancellation()
 
-            let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
-            let instructions = customPrompt ?? customInstructions
+            let personaPrompt = personaManager?.getEffectivePrompt(customStore: customPersonaStore ?? CustomPersonaStore())
+            
+            // Add exclusion context to prompt
+            var instructions = customPrompt ?? customInstructions
+            if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
+                let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
+                instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
+            }
+            
+            // Add Learnings context (User preferences, past corrections, etc.)
+            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+                instructions += "\n\n" + learnedContext
+                DebugLogger.log("Injected Learnings context into prompt")
+            }
 
             let plan = try await client.analyze(files: files, customInstructions: instructions, personaPrompt: personaPrompt, temperature: temperature)
 
@@ -403,7 +419,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // MARK: - Incremental Organization (for watched folders)
 
-    public func organizeIncremental(directory: URL, customPrompt: String? = nil, temperature: Double? = nil) async throws {
+    public func organizeIncremental(directory: URL, specificFiles: [String]? = nil, customPrompt: String? = nil, temperature: Double? = nil) async throws {
         guard !isOperationInProgress() else {
             DebugLogger.log("Incremental organization blocked: Already in progress")
             return
@@ -413,7 +429,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         isCancellationRequested = false
 
         currentTask = Task {
-            try await performIncrementalOrganization(directory: directory, customPrompt: customPrompt, temperature: temperature)
+            try await performIncrementalOrganization(directory: directory, specificFiles: specificFiles, customPrompt: customPrompt, temperature: temperature)
         }
 
         do {
@@ -423,23 +439,40 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    private func performIncrementalOrganization(directory: URL, customPrompt: String?, temperature: Double?) async throws {
+    private func performIncrementalOrganization(directory: URL, specificFiles: [String]?, customPrompt: String?, temperature: Double?) async throws {
         guard let client = aiClient else {
             throw OrganizationError.clientNotConfigured
         }
 
         currentDirectory = directory
-
-        updateState(.scanning, stage: "Scanning for new files...", progress: 0.1)
-
-        try checkCancellation()
-
-        var files = try await scanner.scanDirectory(at: directory)
-
-        // Filter: Only top-level files (no folders, no deep scan) for incremental drop
-        files = files.filter {
-            let relativePath = $0.path.replacingOccurrences(of: directory.path + "/", with: "")
-            return !relativePath.contains("/") // Only files in root
+        
+        var files: [FileItem] = []
+        
+        if let specificFiles = specificFiles {
+            // Processing specific files
+            updateState(.scanning, stage: "Processing \(specificFiles.count) new files...", progress: 0.1)
+            try checkCancellation()
+            
+            // map file names to FileItems
+            // We assume specificFiles are filenames or relative paths
+            for filename in specificFiles {
+                let fileURL = directory.appendingPathComponent(filename)
+                if let item = try? await scanner.scanFile(at: fileURL, root: directory) {
+                    files.append(item)
+                }
+            }
+        } else {
+            // Fallback to scanning root
+            updateState(.scanning, stage: "Scanning for new files...", progress: 0.1)
+            try checkCancellation()
+            
+            let allFiles = try await scanner.scanDirectory(at: directory)
+            
+            // Filter: Only top-level files (no folders, no deep scan) for incremental drop
+            files = allFiles.filter {
+                let relativePath = $0.path.replacingOccurrences(of: directory.path + "/", with: "")
+                return !relativePath.contains("/") // Only files in root
+            }
         }
 
         if let exclusionRules = exclusionRules {
@@ -470,12 +503,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 .map { $0.lastPathComponent }
                 .filter { !$0.hasPrefix(".") }
 
-            let contextPrompt = "The following folders already exist: \(existingFolders.joined(separator: ", ")). Prefer placing files into these folders if they match. Create new folders only if necessary."
+            let contextPrompt = """
+            The following folders already exist: \(existingFolders.joined(separator: ", ")).
+            
+            RULES for Organization:
+            1. You MUST prioritize placing files into these existing folders if they are relevant.
+            2. Do NOT create new folders unless the file is completely unrelated to any existing folder.
+            3. If a file does not fit well into any existing folder, you may leave it in the root (do not move it).
+            4. This is a "Smart Drop" operation: we want to maintain the existing structure, not reinvent it.
+            """
 
             let prompt = (customPrompt ?? customInstructions) + "\n\n" + contextPrompt
+            
+            // Add Learnings context
+            var finalPrompt = prompt
+            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+                finalPrompt += "\n\n" + learnedContext
+            }
+            
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
 
-            let plan = try await client.analyze(files: files, customInstructions: prompt, personaPrompt: personaPrompt, temperature: temperature)
+            let plan = try await client.analyze(files: files, customInstructions: finalPrompt, personaPrompt: personaPrompt, temperature: temperature)
 
             stopTimeoutTimer()
 
@@ -487,16 +535,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Auto-apply for incremental
-            // For incremental, we typically want tagging if enabled generally. 
-            // Since we don't have config here easily, we might need to fetch it or pass it.
-            // However, organizeIncremental is called from a view where we have config.
-            // Let's update organizeIncremental signature too? 
-            // Or better, let's just make apply take the argument.
-            // For incremental drop, we'll assume tagging is desired if configured.
-            // But organizeIncremental doesn't take config directly...
-            // Let's stick to updating apply first.
-            try await apply(at: directory, dryRun: false, enableTagging: true) // Default to true, or we need to pass it down.
-
+            try await apply(at: directory, dryRun: false, enableTagging: true)
 
         } catch {
             stopTimeoutTimer()
@@ -517,7 +556,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         updateState(.applying, stage: "Applying changes...", progress: 0.0)
 
         do {
-            let operations = try await fileSystemManager.applyOrganization(plan, at: baseURL, dryRun: dryRun, enableTagging: enableTagging)
+            let operations = try await fileSystemManager.applyOrganization(
+                plan, 
+                at: baseURL, 
+                dryRun: dryRun, 
+                enableTagging: enableTagging,
+                strictExclusions: aiConfig?.strictExclusions ?? true,
+                exclusionManager: exclusionRules
+            )
 
             try checkCancellation()
 
@@ -539,7 +585,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 state = .completed
             }
 
-            NotificationCenter.default.post(name: .organizationDidFinish, object: nil, userInfo: ["url": baseURL])
+            NotificationCenter.default.post(
+                name: .organizationDidFinish,
+                object: nil,
+                userInfo: [
+                    "url": baseURL,
+                    "entry": historyEntry,
+                    "operations": operations
+                ]
+            )
 
         } catch {
             let failedEntry = OrganizationHistoryEntry(
@@ -625,7 +679,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             // Generate new plan
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
-            var newPlan = try await client.analyze(files: allFiles, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: nil)
+            
+            var instructions = customInstructions
+            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+                instructions += "\n\n" + learnedContext
+            }
+            
+            var newPlan = try await client.analyze(files: allFiles, customInstructions: instructions, personaPrompt: personaPrompt, temperature: nil)
             newPlan.version = (currentPlan.version) + 1
 
             stopTimeoutTimer()
@@ -684,7 +744,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 state = .idle
             }
 
-            NotificationCenter.default.post(name: .organizationDidRevert, object: nil, userInfo: ["url": URL(fileURLWithPath: entry.directoryPath)])
+            NotificationCenter.default.post(
+                name: .organizationDidRevert,
+                object: nil,
+                userInfo: [
+                    "url": URL(fileURLWithPath: entry.directoryPath),
+                    "entry": entry
+                ]
+            )
 
         } catch {
             await MainActor.run {
