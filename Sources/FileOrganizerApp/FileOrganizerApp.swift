@@ -65,7 +65,7 @@ struct FileOrganizerApp: App {
                         learningsManager.configure(with: settingsViewModel.config)
                     }
                 }
-                .onChange(of: settingsViewModel.config) { oldConfig, newConfig in
+                .onChange(of: settingsViewModel.config) { _, newConfig in
                     Task {
                         try? await organizer.configure(with: newConfig)
                         learningsManager.configure(with: newConfig)

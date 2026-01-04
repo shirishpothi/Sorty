@@ -1,0 +1,2405 @@
+author:	coderabbitai
+association:	contributor
+edited:	true
+status:	none
+--
+<!-- This is an auto-generated comment: summarize by coderabbit.ai -->
+<!-- walkthrough_start -->
+
+<details>
+<summary>📝 Walkthrough</summary>
+
+## Walkthrough
+
+Introduces a comprehensive learnings and continuous-improvement system integrating AI-assisted persona generation, user feedback tracking, encrypted profile persistence, consent management, and biometric authentication. Adds a new fileorg CLI tool for URL-scheme interaction, expands deeplink routing with personalization and automation parameters, refactors data models from project-centric to profile-based architecture, and enhances workspace health monitoring with quick-action cleanup workflows. Multiple new UI flows support honing sessions, learning dashboards, persona generation, and settings.
+
+## Changes
+
+| Cohort / File(s) | Summary |
+|---|---|
+| **CLI Tooling** <br> `CLI/fileorg`, `Sources/LearningsCLI/main.swift` | New Bash-based CLI at CLI/fileorg with fileorganizer URL scheme commands (organize, duplicates, learnings, persona, watched, rules, settings, etc.). LearningsCLI refactored to status/stats/export/clear/withdraw commands with LearningsManager integration. |
+| **Documentation & Configuration** <br> `HELP.md`, `Info.plist`, `Resources/commit.txt` | HELP.md overhauled with new learnings onboarding, expanded deeplink tables, CLI tooling sections, and security guidance. Info.plist adds fileorganizer URL scheme, learnings document type, and custom UTType declarations. Commit hash updated. |
+| **App Architecture & Coordination** <br> `Sources/FileOrganizerApp/FileOrganizerApp.swift`, `Sources/FileOrganizerApp/AppCoordinator.swift` | FileOrganizerApp introduces CustomPersonaStore and LearningsManager as app-wide state; extends deeplink handling for organize/duplicates/learnings/persona/watched/rules with autostart and personalization. AppCoordinator wired with learningsManager and continuousLearningObserver; FolderWatcher delegate updated to pass newFiles set. |
+| **AI & Persona Generation** <br> `Sources/FileOrganizerLib/AI/AIClientProtocol.swift`, `Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift`, `Sources/FileOrganizerLib/AI/OpenAIClient.swift`, `Sources/FileOrganizerLib/AI/PersonaGenerator.swift`, `Sources/FileOrganizerLib/AI/PersonaHoning.swift` | AIClientProtocol and implementations expose public generateText() method. New PersonaGenerator for AI-assisted persona creation from natural-language prompts and JSON parsing. PersonaHoning introduces HoningQuestion/Answer models and PersonaHoningEngine for multi-turn clarification flow. |
+| **Learnings Core Models** <br> `Sources/FileOrganizerLib/Learnings/LearningsProfile.swift`, `Sources/FileOrganizerLib/Learnings/LearningsModels.swift` | Replaces LearningsProject with LearningsProfile, introducing UserInstruction, DirectoryChange, RevertEvent, SteeringPrompt, JobManifest, and JobStatus enums. Adds LabelAction→ExampleAction rename with addToExamples case. Centralizes persistent learning data structure. |
+| **Learnings System Core** <br> `Sources/FileOrganizerLib/Learnings/LearningsManager.swift`, `Sources/FileOrganizerLib/Learnings/ContinuousLearningObserver.swift`, `Sources/FileOrganizerLib/Learnings/LearningsConsentManager.swift`, `Sources/FileOrganizerLib/Learnings/LearningsFileManager.swift` | LearningsManager refactored to profile-centric API with consent/unlock/analysis flows. ContinuousLearningObserver tracks user corrections, reverts, and steering prompts via NotificationCenter; correlates with session IDs. LearningsConsentManager manages UserDefaults-backed consent state and keychain keys. LearningsFileManager encrypts/decrypts profiles with AES-GCM. |
+| **Learnings Analysis & Induction** <br> `Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift`, `Sources/FileOrganizerLib/Learnings/LLMRuleInducer.swift`, `Sources/FileOrganizerLib/Learnings/LearningsHoningEngine.swift` | LearningsAnalyzer.analyze() signature changed to accept profile/rootPaths/examplePaths; adds configure(aiClient:) for LLM-based rule induction. LLMRuleInducer orchestrates rule inference from labeled examples with temporal weighting and JSON parsing. LearningsHoningEngine manages multi-turn Q&A sessions with session tracking. |
+| **Learnings Legacy (Removed)** <br> `Sources/FileOrganizerLib/Learnings/LearningsProject.swift` | Entire LearningsProject persistence layer, LearningsOptions, BackupMode enums, and LearningsProjectStore actor removed; replaced by profile-based system. |
+| **File System Operations** <br> `Sources/FileOrganizerLib/FileSystem/DirectoryScanner.swift`, `Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift`, `Sources/FileOrganizerLib/FileSystem/FolderWatcher.swift` | DirectoryScanner adds scanFile() for per-file metadata extraction. FileSystemManager methods (createFolders, moveFiles, tagFiles, applyOrganization) gain async signatures with exclusionManager parameter and validateOperation() hook. deleteFile behavior changed to non-destructive moveToDuplicates() with unique path resolution. FolderWatcher delegate signature updated to pass newFiles set. |
+| **Models & Utilities** <br> `Sources/FileOrganizerLib/Models/AIConfig.swift`, `Sources/FileOrganizerLib/Models/OrganizationPersona.swift`, `Sources/FileOrganizerLib/Utilities/DeeplinkHandler.swift`, `Sources/FileOrganizerLib/Utilities/SecurityManager.swift` | AIConfig adds storeDuplicateMetadata and strictExclusions with Equatable conformance. PersonaManager adds getEffectivePrompt() for custom persona selection. DeeplinkDestination enum expanded with associated values (organize, duplicates, learnings, settings, persona, watched, rules). SecurityManager introduces MainActor-bound authentication with biometry fallback, password auth, and session timeout. |
+| **Workspace Health** <br> `Sources/FileOrganizerLib/Models/WorkspaceHealth.swift` | WorkspaceHealthConfig model added with thresholds and enabled-checks. CleanupOpportunity gains QuickAction enum (archiveOldDownloads, groupScreenshots, cleanInstallers, pruneEmptyFolders, removeBrokenSymlinks, organizeRoot). WorkspaceHealthManager exposes public config, updateConfig(), startMonitoring(), stopMonitoring(), performAction(), plus healthScore/healthStatus computed properties. |
+| **Organizer Core** <br> `Sources/FileOrganizerLib/Organizer/FolderOrganizer.swift` | currentDirectory changed to `@Published` public; added customPersonaStore and learningsManager properties. organizeIncremental signature updated to accept specificFiles parameter. Prompt construction integrates exclusion context and learnings context. Streaming delegate methods made public nonisolated. Notification payloads enriched with entry/operation details. |
+| **UI - Learnings & Personas** <br> `Sources/FileOrganizerLib/Views/LearningsView.swift`, `Sources/FileOrganizerLib/Views/LearningsHoningView.swift`, `Sources/FileOrganizerLib/Views/PersonaGeneratorView.swift`, `Sources/FileOrganizerLib/Views/PersonaEditorView.swift`, `Sources/FileOrganizerLib/Views/PersonaPickerView.swift` | LearningsView redesigned as dashboard with auth gate, consent flow, tab-based UI (Overview/Preferences/Activity), import/export workflows. LearningsHoningView manages Q&A flow for profile refinement. PersonaGeneratorView orchestrates honing + generation with animated UI. PersonaEditorView adds AI-generation sheet with PersonaGenerator. PersonaPickerView adds Generator button, custom prompt editor, and refined persona selection UI. |
+| **UI - Settings & Organization** <br> `Sources/FileOrganizerLib/Views/SettingsView.swift`, `Sources/FileOrganizerLib/Views/OrganizeView.swift`, `Sources/FileOrganizerLib/Views/PreviewView.swift`, `Sources/FileOrganizerLib/Views/AppCommands.swift`, `Sources/FileOrganizerLib/Views/HelpView.swift` | SettingsView adds Workspace Health Rules section and PersonaPickerView. OrganizeView adds CompactPersonaPicker in header. PreviewView integrates learningsManager, adds PostOrganizationHoningView sheet, tracks guiding instructions via notifications. AppCommands adds Learnings menu with 5 actions (honing, stats, pause, export, import). HelpView refactors deeplinks into DeepLinkSection groups (Organization/Management/Navigation). |
+| **UI - Workspace Health** <br> `Sources/FileOrganizerLib/Views/WorkspaceHealthView.swift`, `Sources/FileOrganizerLib/Views/WorkspaceHealthSettingsView.swift` | WorkspaceHealthView redesigned with "Liquid Glass" aesthetic using new LiquidHeaderSection, LiquidQuickStatsRefined, LiquidInsightsSection, LiquidOpportunitiesSection, LiquidGrowthChartsSection. WorkspaceHealthSettingsView provides sliders for thresholds, toggles for checks, and path-picker for ignored paths. |
+| **UI - Watched Folders** <br> `Sources/FileOrganizerLib/Views/WatchedFoldersView.swift` | WatchedFolderRow depends on FolderOrganizer to show "Organizing..." indicator. WatchedFolderConfigView redesigned with Automation toggle, Run Full Organization action, AI Creativity slider, custom instructions editor in card-based layout. |
+| **Tests** <br> `Tests/FileOrganizerTests/DeeplinkTests.swift`, `Tests/FileOrganizerTests/FileOrganizerTests.swift`, `Tests/FileOrganizerTests/FileSystemManagerTests.swift`, `Tests/FileOrganizerTests/LLMRuleInducerTests.swift`, `Tests/FileOrganizerTests/LearningsManagerTests.swift`, `Tests/FileOrganizerTests/RuleInducerTests.swift`, `Tests/FileOrganizerTests/WorkspaceHealthMonitoringTests.swift`, `Tests/FileOrganizerTests/WorkspaceHealthQuickActionTests.swift` | DeeplinkTests updated for associated-value enum cases. FileOrganizerTests adds generateText() to MockAIClient. FileSystemManagerTests discards applyOrganization result. LLMRuleInducerTests added for JSON parsing validation. LearningsManagerTests refactored for profile-centric model. RuleInducerTests removes LearningsProject test. WorkspaceHealthMonitoringTests and WorkspaceHealthQuickActionTests added for file monitoring and quick-action cleanup. |
+
+## Sequence Diagrams
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FolderOrganizer
+    participant FolderWatcher
+    participant ContinuousLearningObserver
+    participant LearningsManager
+    participant FileSystemManager
+    
+    User->>FolderWatcher: Detects file changes in watched folder
+    FolderWatcher->>FolderOrganizer: didDetectChangesIn(folder, newFiles)
+    FolderOrganizer->>FileSystemManager: organizeIncremental(specificFiles)
+    FileSystemManager->>FolderOrganizer: Returns operations
+    FolderOrganizer->>FolderOrganizer: Applies organization
+    FolderOrganizer->>ContinuousLearningObserver: Posts organizationDidFinish notification
+    
+    ContinuousLearningObserver->>ContinuousLearningObserver: Detects user corrections (moved files)
+    ContinuousLearningObserver->>LearningsManager: recordCorrection(original, new)
+    LearningsManager->>LearningsManager: Updates profile with correction
+    
+    User->>FolderOrganizer: Reverts organization
+    FolderOrganizer->>ContinuousLearningObserver: Posts organizationDidRevert notification
+    ContinuousLearningObserver->>LearningsManager: recordHistoryRevert(sessionId)
+    LearningsManager->>LearningsManager: Marks session as rejected
+```
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant PersonaGeneratorView
+    participant PersonaHoningEngine
+    participant AIClient
+    participant PersonaGenerator
+    participant CustomPersonaStore
+    
+    User->>PersonaGeneratorView: Enters description & clicks Generate
+    PersonaGeneratorView->>PersonaHoningEngine: startSession()
+    PersonaHoningEngine->>AIClient: generateText(prompt, systemPrompt)
+    AIClient->>PersonaHoningEngine: Returns clarifying questions (JSON)
+    PersonaHoningEngine->>PersonaGeneratorView: Display questions
+    
+    loop For each question
+        User->>PersonaGeneratorView: Selects answer
+        PersonaGeneratorView->>PersonaHoningEngine: submitAnswer()
+    end
+    
+    PersonaHoningEngine->>PersonaGeneratorView: finishSession()
+    PersonaGeneratorView->>PersonaGenerator: generatePersona(description, answers)
+    PersonaGenerator->>AIClient: generateText(enhanced_prompt)
+    AIClient->>PersonaGenerator: Returns JSON {name, prompt}
+    PersonaGenerator->>CustomPersonaStore: Stores as CustomPersona
+    PersonaGeneratorView->>User: Show save/use alert
+```
+
+```mermaid
+sequenceDiagram
+    participant LearningsManager
+    participant LearningsConsentManager
+    participant SecurityManager
+    participant LearningsFileManager
+    participant LearningsAnalyzer
+    participant LLMRuleInducer
+    
+    rect rgb(200, 220, 255)
+    note over LearningsManager: Initial Setup
+    LearningsManager->>LearningsConsentManager: Check hasCompletedInitialSetup
+    LearningsManager->>SecurityManager: authenticateForLearningsAccess()
+    SecurityManager->>SecurityManager: Biometric or password auth
+    end
+    
+    rect rgb(200, 255, 220)
+    note over LearningsManager: Load & Analyze
+    LearningsManager->>LearningsFileManager: load() profile
+    LearningsManager->>LearningsAnalyzer: analyze(rootPaths, examplePaths)
+    LearningsAnalyzer->>LLMRuleInducer: induceRules(examples, answers, prompts)
+    LLMRuleInducer->>LearningsAnalyzer: Returns inferred rules
+    LearningsAnalyzer->>LearningsManager: Updated profile with rules
+    end
+    
+    rect rgb(255, 220, 200)
+    note over LearningsManager: Persist
+    LearningsManager->>LearningsFileManager: save(profile) with AES-GCM encryption
+    LearningsFileManager->>LearningsFileManager: Encrypt & store
+    end
+```
+
+## Estimated code review effort
+
+🎯 4 (Complex) | ⏱️ ~75 minutes
+
+## Possibly related PRs
+
+- **shirishpothi/FileOrganizer#1**: Implements the same comprehensive Learnings feature set including LearningsManager/Profiles, persona generation, continuous learning integration, FolderWatcher hooks, consent/authentication management, and deeplink expansion with matching API changes across core types.
+
+## Poem
+
+> 🐰 *Whiskers twitch at learning's delight,*
+> *Personas spring to life with AI's might,*
+> *From chaos born, through correction refined,*
+> *A rabbit's quest: to organize humankind.*
+> *Each click, each move, the system learns anew—*
+> *Intelligence emerges, forever true.* ✨
+
+</details>
+
+<!-- walkthrough_end -->
+
+
+<!-- pre_merge_checks_walkthrough_start -->
+
+## Pre-merge checks and finishing touches
+<details>
+<summary>❌ Failed checks (1 warning)</summary>
+
+|     Check name     | Status     | Explanation                                                                           | Resolution                                                                     |
+| :----------------: | :--------- | :------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------- |
+| Docstring Coverage | ⚠️ Warning | Docstring coverage is 46.48% which is insufficient. The required threshold is 80.00%. | You can run `@coderabbitai generate docstrings` to improve docstring coverage. |
+
+</details>
+<details>
+<summary>✅ Passed checks (2 passed)</summary>
+
+|     Check name    | Status   | Explanation                                                                                                                                                                                  |
+| :---------------: | :------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|    Title check    | ✅ Passed | The title accurately summarizes the main changes: fixing build errors, addressing compiler warnings, and handling Trash filename conflicts.                                                  |
+| Description check | ✅ Passed | The description provides a clear list of changes made to each file, explains the improvements, and includes verification results confirming all tests passed and the project builds cleanly. |
+
+</details>
+
+<!-- pre_merge_checks_walkthrough_end -->
+
+<!-- finishing_touch_checkbox_start -->
+
+<details>
+<summary>✨ Finishing touches</summary>
+
+- [ ] <!-- {"checkboxId": "7962f53c-55bc-4827-bfbf-6a18da830691"} --> 📝 Generate docstrings
+<details>
+<summary>🧪 Generate unit tests (beta)</summary>
+
+- [ ] <!-- {"checkboxId": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "radioGroupId": "utg-output-choice-group-unknown_comment_id"} -->   Create PR with unit tests
+- [ ] <!-- {"checkboxId": "07f1e7d6-8a8e-4e23-9900-8731c2c87f58", "radioGroupId": "utg-output-choice-group-unknown_comment_id"} -->   Post copyable unit tests in a comment
+- [ ] <!-- {"checkboxId": "6ba7b810-9dad-11d1-80b4-00c04fd430c8", "radioGroupId": "utg-output-choice-group-unknown_comment_id"} -->   Commit unit tests in branch `fix/build-errors-and-warnings`
+
+</details>
+
+</details>
+
+<!-- finishing_touch_checkbox_end -->
+
+<!-- tips_start -->
+
+---
+
+Thanks for using [CodeRabbit](https://coderabbit.ai?utm_source=oss&utm_medium=github&utm_campaign=shirishpothi/FileOrganizer&utm_content=3)! It's free for OSS, and your support helps us grow. If you like it, consider giving us a shout-out.
+
+<details>
+<summary>❤️ Share</summary>
+
+- [X](https://twitter.com/intent/tweet?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A&url=https%3A//coderabbit.ai)
+- [Mastodon](https://mastodon.social/share?text=I%20just%20used%20%40coderabbitai%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20the%20proprietary%20code.%20Check%20it%20out%3A%20https%3A%2F%2Fcoderabbit.ai)
+- [Reddit](https://www.reddit.com/submit?title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&text=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code.%20Check%20it%20out%3A%20https%3A//coderabbit.ai)
+- [LinkedIn](https://www.linkedin.com/sharing/share-offsite/?url=https%3A%2F%2Fcoderabbit.ai&mini=true&title=Great%20tool%20for%20code%20review%20-%20CodeRabbit&summary=I%20just%20used%20CodeRabbit%20for%20my%20code%20review%2C%20and%20it%27s%20fantastic%21%20It%27s%20free%20for%20OSS%20and%20offers%20a%20free%20trial%20for%20proprietary%20code)
+
+</details>
+
+<sub>Comment `@coderabbitai help` to get the list of available commands and usage tips.</sub>
+
+<!-- tips_end -->
+
+<!-- internal state start -->
+
+
+<!-- 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 -->
+
+<!-- internal state end -->
+--
+author:	copilot-pull-request-reviewer
+association:	none
+edited:	false
+status:	commented
+--
+## Pull request overview
+
+This PR addresses build errors and compiler warnings to achieve a clean build, while also fixing a bug in the Workspace Health feature related to handling filename conflicts when moving files to Trash.
+
+- Fixed DeeplinkTests to handle updated enum cases with multiple associated values
+- Suppressed redundant mutation warning in RuleInducer by removing unnecessary `var` keyword
+- Silenced unused result warnings in FileSystemManagerTests
+- Implemented timestamp-based conflict resolution for Trash operations in WorkspaceHealth
+
+### Reviewed changes
+
+Copilot reviewed 54 out of 54 changed files in this pull request and generated 1 comment.
+
+<details>
+<summary>Show a summary per file</summary>
+
+| File | Description |
+| ---- | ----------- |
+| test_output.txt | Shows the build errors that were fixed (enum case matching issues) |
+| Tests/FileOrganizerTests/DeeplinkTests.swift | Updated to match enum cases with multiple associated values (action, project, etc.) |
+| Sources/FileOrganizerLib/Learnings/RuleInducer.swift | Changed `var updated` to `let updated` to fix redundant mutation warning |
+| Tests/FileOrganizerTests/FileSystemManagerTests.swift | Added `_ =` prefix to suppress unused result warnings |
+| Sources/FileOrganizerLib/Models/WorkspaceHealth.swift | Added timestamp-based filename conflict resolution for Trash operations |
+| Tests/FileOrganizerTests/WorkspaceHealthQuickActionTests.swift | New test file verifying the cleanInstallers fix |
+</details>
+
+
+
+
+
+
+---
+
+💡 <a href="/shirishpothi/FileOrganizer/new/main/.github/instructions?filename=*.instructions.md" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Add Copilot custom instructions</a> for smarter, more guided reviews. <a href="https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Learn how to get started</a>.
+--
+author:	coderabbitai
+association:	contributor
+edited:	false
+status:	commented
+--
+**Actionable comments posted: 7**
+
+> [!NOTE]
+> Due to the large number of review comments, Critical, Major severity comments were prioritized as inline comments.
+
+> [!CAUTION]
+> Some comments are outside the diff and can’t be posted inline due to platform limitations.
+> 
+> 
+> 
+> <details>
+> <summary>⚠️ Outside diff range comments (2)</summary><blockquote>
+> 
+> <details>
+> <summary>Sources/FileOrganizerLib/Views/PersonaEditorView.swift (1)</summary><blockquote>
+> 
+> `278-279`: **Preview will crash due to missing `SettingsViewModel` environment object.**
+> 
+> The preview at line 278-279 creates `PersonaEditorView(store:)` but doesn't inject the required `@EnvironmentObject var settingsViewModel: SettingsViewModel`. This will cause a runtime crash when previewing.
+> 
+> <details>
+> <summary>🔎 Proposed fix</summary>
+> 
+> ```diff
+>  #Preview {
+>      PersonaEditorView(store: CustomPersonaStore())
+> +        .environmentObject(SettingsViewModel())
+>  }
+> ```
+> </details>
+> 
+> </blockquote></details>
+> <details>
+> <summary>Sources/FileOrganizerLib/Views/SettingsView.swift (1)</summary><blockquote>
+> 
+> `496-499`: **Duplicate `.padding(.vertical, 4)` modifier.**
+> 
+> Lines 497-498 apply `.padding(.vertical, 4)` twice to the Duplicates toggle, resulting in 8pt vertical padding instead of 4pt. This appears to be a copy-paste error.
+> 
+> <details>
+> <summary>🔎 Proposed fix</summary>
+> 
+> ```diff
+>              .padding(.vertical, 4)
+> -            .padding(.vertical, 4)
+>              .accessibilityIdentifier("DuplicatesToggle")
+> ```
+> </details>
+> 
+> </blockquote></details>
+> 
+> </blockquote></details>
+
+<details>
+<summary>🟡 Minor comments (17)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Views/PersonaPickerView.swift-133-143 (1)</summary><blockquote>
+
+`133-143`: **Frequent disk writes on every keystroke.**
+
+The `TextEditor` binding at lines 136-142 calls `customStore.updatePersona(updated)` on every character typed. Based on the relevant code snippet, `updatePersona` calls `savePersonas()` which persists to disk. This could cause performance issues and excessive I/O.
+
+Consider debouncing the save operation or saving on focus loss instead.
+
+
+<details>
+<summary>🔎 Proposed approach</summary>
+
+One option is to use a local `@State` variable for editing and save on `onSubmit` or when focus changes:
+
+```swift
+// Use a local state for editing
+@State private var editingPrompt: String = ""
+@FocusState private var isEditing: Bool
+
+// In the view:
+TextEditor(text: $editingPrompt)
+    .focused($isEditing)
+    .onChange(of: isEditing) { focused in
+        if !focused {
+            // Save when focus leaves
+            var updated = customStore.customPersonas[index]
+            updated.promptModifier = editingPrompt
+            customStore.updatePersona(updated)
+        }
+    }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/ContinuousLearningObserver.swift-208-219 (1)</summary><blockquote>
+
+`208-219`: **Unused variable `change` created but not used.**
+
+The `DirectoryChange` instance at line 208 is created but never used. The call to `recordDirectoryChange` at lines 214-219 takes individual parameters, not the `change` object.
+
+
+<details>
+<summary>🔎 Proposed fix - remove unused variable</summary>
+
+```diff
+                 learningsManager.recordCorrection(originalPath: aiOp.sourcePath, newPath: dst)
+                 
+-                let change = DirectoryChange(
+-                    originalPath: src, 
+-                    newPath: dst, 
+-                    wasAIOrganized: true,
+-                    aiSessionId: matchedSession?.id ?? entry.id.uuidString
+-                )
+                 learningsManager.recordDirectoryChange(
+                     from: src, 
+                     to: dst, 
+                     wasAIOrganized: true,
+                     sessionId: matchedSession?.id ?? entry.id.uuidString
+                 )
+                 
+                 // Track correction in the session
+                 if var session = matchedSession {
++                    let change = DirectoryChange(
++                        originalPath: src, 
++                        newPath: dst, 
++                        wasAIOrganized: true,
++                        aiSessionId: session.id
++                    )
+                     session.userCorrections.append(change)
+```
+</details>
+
+
+> Committable suggestion skipped: line range outside the PR's diff.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Models/WorkspaceHealth.swift-957-987 (1)</summary><blockquote>
+
+`957-987`: **Missing conflict handling for file moves in `archiveOldDownloads`.**
+
+Unlike `cleanInstallers`, this method doesn't handle the case where a file with the same name already exists at the destination. This could throw an error and stop the archival process.
+
+
+<details>
+<summary>🔎 Proposed fix to handle destination conflicts</summary>
+
+```diff
+                 let destination = dateFolder.appendingPathComponent(file.lastPathComponent)
++                var finalDestination = destination
++                if fileManager.fileExists(atPath: destination.path) {
++                    let fileName = file.deletingPathExtension().lastPathComponent
++                    let fileExt = file.pathExtension
++                    let uniqueName = "\(fileName)_\(Int(Date().timeIntervalSince1970)).\(fileExt)"
++                    finalDestination = dateFolder.appendingPathComponent(uniqueName)
++                }
+-                try fileManager.moveItem(at: file, to: destination)
++                try fileManager.moveItem(at: file, to: finalDestination)
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift-649-653 (1)</summary><blockquote>
+
+`649-653`: **The `workspaceURL` heuristic may produce incorrect results.**
+
+Using `url.deletingLastPathComponent()` as the workspace assumes the file is directly in the workspace root. For nested files like `/Workspace/SubFolder/file.dmg`, this would create `.duplicates` in `/Workspace/SubFolder/` rather than the workspace root.
+
+
+<details>
+<summary>🔎 Consider accepting workspaceURL as a parameter</summary>
+
+```diff
+-    /// Delete a file (Now non-destructive: moves to .duplicates)
+-    func deleteFile(at url: URL, moveToTrash: Bool = true) throws -> FileOperation {
+-        let workspaceURL = url.deletingLastPathComponent() // Rough heuristic, might need actual base
+-        return try moveToDuplicates(url: url, workspaceURL: workspaceURL)
++    /// Delete a file (Now non-destructive: moves to .duplicates)
++    func deleteFile(at url: URL, workspaceURL: URL? = nil, moveToTrash: Bool = true) throws -> FileOperation {
++        let effectiveWorkspaceURL = workspaceURL ?? url.deletingLastPathComponent()
++        return try moveToDuplicates(url: url, workspaceURL: effectiveWorkspaceURL)
+     }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift-760-760 (1)</summary><blockquote>
+
+`760-760`: **Double extension bug in destination filename construction.**
+
+When constructing the destination URL, `file.name + "." + file.extension` will produce filenames like `document.txt.txt` if `file.name` is "document" and `file.extension` is "txt". The `FileItem.name` property typically excludes the extension, but this pattern is fragile.
+
+
+<details>
+<summary>🔎 Proposed fix using the original filename</summary>
+
+```diff
+-            let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(file.name + "." + file.extension))
++            let originalFilename = URL(fileURLWithPath: file.path).lastPathComponent
++            let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(originalFilename))
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/WorkspaceHealthMonitoringTests.swift-36-40 (1)</summary><blockquote>
+
+`36-40`: **Comment says debounce is 2.0s but implementation uses 3.0s polling.**
+
+The comment on line 36 mentions "debounce is 2.0s" but the relevant code snippet from `WorkspaceHealth.swift` shows `Timer.scheduledTimer(withTimeInterval: 3.0, ...)`. This mismatch could lead to flaky tests if timing assumptions are incorrect.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/LearningsHoningView.swift-44-52 (1)</summary><blockquote>
+
+`44-52`: **Progress counter may display values exceeding the target.**
+
+The progress text shows `session.answers.count + 1` which assumes there's always a pending question. After the last question is answered but before `isComplete` is true, this could briefly show `6 / 5`.
+
+Consider clamping to `min(session.answers.count + 1, session.targetQuestionCount)`.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaHoning.swift-72-72 (1)</summary><blockquote>
+
+`72-72`: **Typo: "Geneate" should be "Generate".**
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+-let prompt = "User Description: \"\(description)\"\n\nGeneate 3 clarifying questions in JSON format."
++let prompt = "User Description: \"\(description)\"\n\nGenerate 3 clarifying questions in JSON format."
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>HELP.md-272-272 (1)</summary><blockquote>
+
+`272-272`: **Minor typo: Missing period after "etc".**
+
+In American English, abbreviations like "etc." require a period.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+-| | `persona` | ID of persona (fileorganizer_general, developer, etc) |
++| | `persona` | ID of persona (fileorganizer_general, developer, etc.) |
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerApp/FileOrganizerApp.swift-37-39 (1)</summary><blockquote>
+
+`37-39`: **Duplicate `.environmentObject(exclusionRules)` injection.**
+
+`exclusionRules` is injected twice (lines 37 and 38), which is redundant. Remove the duplicate.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+ .environmentObject(exclusionRules)
+-.environmentObject(exclusionRules)
+ .environmentObject(extensionListener)
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/PreviewView.swift-17-26 (1)</summary><blockquote>
+
+`17-26`: **Remove unused state variable `organizationJustCompleted`.**
+
+This variable is initialized on line 25 and set to `true` on line 195, but is never read anywhere in the codebase. Remove the declaration and the assignment.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LLMRuleInducer.swift-252-259 (1)</summary><blockquote>
+
+`252-259`: **JSON extraction may fail on nested brackets.**
+
+The current implementation finds the first `[` and last `]` in the response. If the LLM includes explanatory text with brackets (e.g., `"See [1] for details"`), this could capture invalid JSON. Consider using a more robust extraction that validates the JSON structure.
+
+
+
+<details>
+<summary>🔎 More robust JSON extraction</summary>
+
+```diff
+ private func extractJSON(from text: String) -> String {
++    // Try to find JSON array in markdown code block first
++    if let codeBlockRange = text.range(of: "```json"),
++       let endBlockRange = text.range(of: "```", range: codeBlockRange.upperBound..<text.endIndex) {
++        let jsonContent = String(text[codeBlockRange.upperBound..<endBlockRange.lowerBound])
++        if let start = jsonContent.range(of: "["),
++           let end = jsonContent.range(of: "]", options: .backwards) {
++            return String(jsonContent[start.lowerBound..<end.upperBound])
++        }
++    }
++    
++    // Fallback to finding outermost brackets
+     if let startRange = text.range(of: "["),
+        let endRange = text.range(of: "]", options: .backwards) {
+         let range = startRange.lowerBound..<endRange.upperBound
+         return String(text[range])
+     }
+     return text
+ }
+```
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/WorkspaceHealthView.swift-137-149 (1)</summary><blockquote>
+
+`137-149`: **Analysis errors are silently swallowed.**
+
+When the scan or analysis fails, the error is caught but not logged or surfaced to the user. Consider at minimum logging the error, or showing a user-facing message.
+
+
+
+<details>
+<summary>🔎 Suggested improvement</summary>
+
+```diff
+ private func performAnalysis(_ url: URL) {
+     isAnalyzing = true
+     Task {
+         do {
+             let files = try await organizer.scanner.scanDirectory(at: url)
+             await healthManager.takeSnapshot(at: url.path, files: files)
+             await healthManager.analyzeDirectory(path: url.path, files: files)
+             isAnalyzing = false
+         } catch {
++            DebugLogger.log("Health analysis failed: \(error)")
+             isAnalyzing = false
+         }
+     }
+ }
+```
+
+</details>
+
+
+> Committable suggestion skipped: line range outside the PR's diff.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift-103-105 (1)</summary><blockquote>
+
+`103-105`: **Empty string fallback for missing rootPath.**
+
+When `rootPaths.first` is `nil`, the fallback to `""` will produce malformed paths like `/Documents/filename.pdf`. While this is an edge case (analyze shouldn't be called with empty rootPaths), consider adding a guard or precondition.
+
+
+
+<details>
+<summary>🔎 Suggested guard</summary>
+
+```diff
++guard let primaryRootPath = rootPaths.first else {
++    throw LearningsError.noRootPaths
++}
++
+ for (index, fileURL) in allFiles.enumerated() {
+-    let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: rootPaths.first ?? "")
++    let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: primaryRootPath)
+     mappings.append(mapping)
+```
+
+</details>
+
+
+> Committable suggestion skipped: line range outside the PR's diff.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift-241-266 (1)</summary><blockquote>
+
+`241-266`: **Consent check missing in `recordCorrection` and `recordRejection`.**
+
+Other tracking methods (e.g., `recordAdditionalInstruction`, `recordDirectoryChange`) check `consentManager.canCollectData` before recording, but these two methods don't. Add the consent guard for consistency.
+
+<details>
+<summary>Proposed fix</summary>
+
+```diff
+     public func recordCorrection(originalPath: String, newPath: String) {
+-        guard var profile = currentProfile else { return }
++        guard consentManager.canCollectData, var profile = currentProfile else { return }
+         
+         let example = LabeledExample(
+             srcPath: originalPath,
+             dstPath: newPath,
+             action: .edit
+         )
+         profile.corrections.append(example)
+         currentProfile = profile
+         debouncedSave()
+     }
+     
+     public func recordRejection(originalPath: String) {
+-        guard var profile = currentProfile else { return }
++        guard consentManager.canCollectData, var profile = currentProfile else { return }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift-613-620 (1)</summary><blockquote>
+
+`613-620`: **`Set` loses ordering; `suffix(5)` on unordered collection is non-deterministic.**
+
+Converting to `Set` for uniqueness loses the chronological order of instructions. Then calling `suffix(5)` yields arbitrary elements. Consider using ordered deduplication instead.
+
+<details>
+<summary>Proposed fix preserving order</summary>
+
+```diff
+-        let uniqueInstructions = Array(Set(profile.additionalInstructionsHistory.map { $0.instruction })).suffix(5)
++        var seen = Set<String>()
++        let uniqueInstructions = profile.additionalInstructionsHistory
++            .reversed()  // Start from most recent
++            .compactMap { seen.insert($0.instruction).inserted ? $0.instruction : nil }
++            .prefix(5)
++            .reversed()  // Restore chronological order
+```
+</details>
+
+Apply similar fix to line 623 for guiding instructions.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsHoningEngine.swift-136-144 (1)</summary><blockquote>
+
+`136-144`: **Premature session finish on duplicate question.**
+
+If a duplicate is generated and `questions.count > 0`, the session finishes early even if only one question was asked. Consider retrying question generation (with a retry limit) instead of finishing.
+
+<details>
+<summary>Proposed fix with retry logic</summary>
+
+```diff
++                    // If duplicate, retry generation (up to 3 times)
+-                    if !(currentSession?.questions.contains(where: { $0.text == question.text }) ?? false) {
++                    let isDuplicate = currentSession?.questions.contains(where: { $0.text == question.text }) ?? false
++                    if !isDuplicate {
+                         currentSession?.questions.append(question)
+                     } else {
+-                        // If duplicate, try again or just finish if we have enough
+-                        if (currentSession?.questions.count ?? 0) > 0 {
+-                            finishSession()
+-                        }
++                        // Could implement retry logic here with a counter
++                        self.error = "Duplicate question generated, please retry"
+                     }
+```
+</details>
+
+</blockquote></details>
+
+</blockquote></details>
+
+<details>
+<summary>🧹 Nitpick comments (41)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/DirectoryScanner.swift (2)</summary><blockquote>
+
+`55-60`: **Unused parameter `rootURL`.**
+
+The `rootURL` parameter is declared but never used in the method body. If it's intended for future use (e.g., computing relative paths), consider documenting that intent. Otherwise, remove it to avoid confusion.
+
+<details>
+<summary>🔎 If unused, consider removing:</summary>
+
+```diff
+     func scanFile(
+         at url: URL,
+-        root rootURL: URL,
+         deepScan: Bool = false,
+         computeHashes: Bool = false
+     ) async throws -> FileItem {
+```
+</details>
+
+---
+
+`82-91`: **Remove redundant `= nil` initializations.**
+
+As flagged by SwiftLint, initializing optional variables with `nil` is redundant in Swift since optionals default to `nil`.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+         // Deep scan: extract content metadata
+-        var contentMetadata: ContentMetadata? = nil
++        var contentMetadata: ContentMetadata?
+         if deepScan {
+             contentMetadata = await contentAnalyzer.analyze(fileURL: url)
+         }
+         
+         // Hash computation for duplicate detection
+-        var sha256Hash: String? = nil
++        var sha256Hash: String?
+         if computeHashes {
+             sha256Hash = computeSHA256(for: url)
+         }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/PersonaGeneratorView.swift (1)</summary><blockquote>
+
+`211-228`: **Silent error fallback may confuse users.**
+
+When `generateQuestions` fails (line 222-224), the code silently falls back to `generateFinalPersona()` without informing the user. This could lead to unexpected behavior where the honing step is skipped without explanation.
+
+Consider showing a brief indication or logging that honing was skipped due to an error.
+
+
+<details>
+<summary>🔎 Proposed improvement</summary>
+
+```diff
+             } catch {
+-                // Ignore error and fall back to direct generation
++                // Log error and fall back to direct generation
++                print("Honing questions failed: \(error.localizedDescription), falling back to direct generation")
+                 generateFinalPersona()
+             }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaGenerator.swift (1)</summary><blockquote>
+
+`104-116`: **Fallback JSON extraction is fragile with escaped quotes.**
+
+The fallback extraction logic at lines 105-113 searches for the first `"` after `"name": "` or `"prompt": "`. This will incorrectly truncate values containing escaped quotes like `\"`.
+
+Consider using a more robust JSON extraction or regex pattern.
+
+
+<details>
+<summary>🔎 Proposed improvement</summary>
+
+```diff
+             // Fallback extraction if JSON is buried in text
+-            if let nameRange = jsonString.range(of: "\"name\": \""),
+-               let nameEnd = jsonString.range(of: "\"", range: nameRange.upperBound..<jsonString.endIndex),
+-               let promptRange = jsonString.range(of: "\"prompt\": \""),
+-               let promptEnd = jsonString.range(of: "\"", range: promptRange.upperBound..<jsonString.endIndex) {
+-                
+-                let extractedName = String(jsonString[nameRange.upperBound..<nameEnd.lowerBound])
+-                let extractedPrompt = String(jsonString[promptRange.upperBound..<promptEnd.lowerBound])
+-                return (enforceNameLength(extractedName), extractedPrompt)
+-            }
++            // Try to find JSON object boundaries and parse that
++            if let jsonStart = jsonString.firstIndex(of: "{"),
++               let jsonEnd = jsonString.lastIndex(of: "}") {
++                let jsonSubstring = String(jsonString[jsonStart...jsonEnd])
++                if let subData = jsonSubstring.data(using: .utf8),
++                   let subJson = try? JSONSerialization.jsonObject(with: subData) as? [String: String],
++                   let name = subJson["name"],
++                   let prompt = subJson["prompt"] {
++                    return (enforceNameLength(name), prompt)
++                }
++            }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/AppCommands.swift (1)</summary><blockquote>
+
+`91-94`: **Duplicate keyboard shortcut ⇧⌘L defined twice.**
+
+Both "The Learnings" navigation (line 94) and "Open Dashboard" (line 162) use the same keyboard shortcut `⇧⌘L`. While they perform the same action, having duplicate shortcut definitions is redundant and could cause confusion.
+
+Consider removing the shortcut from one location or consolidating the menu items.
+
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+         CommandMenu("Learnings") {
+             Button("Open Dashboard") {
+                 appState.currentView = .learnings
+             }
+-            .keyboardShortcut("l", modifiers: [.command, .shift])
++            // Shortcut already defined in View > Navigation menu
+```
+</details>
+
+
+Also applies to: 159-162
+
+</blockquote></details>
+<details>
+<summary>Sources/LearningsCLI/main.swift (1)</summary><blockquote>
+
+`173-176`: **Confirm input comparison is case-sensitive as intended.**
+
+The confirmation requires exactly `DELETE` (line 173), which is good for preventing accidental deletion. However, consider if `delete` should also be accepted for better usability.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/ContinuousLearningObserver.swift (1)</summary><blockquote>
+
+`114-114`: **Consider using structured logging instead of print statements.**
+
+Multiple `print` statements are used for debugging (lines 114, 120-121, 146, 202-204, 268, 276). For a production library, consider using a structured logging approach like `os.log` or a custom logger that can be disabled in release builds.
+
+
+
+Also applies to: 120-121, 146-146, 202-204, 268-268, 276-276
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Models/WorkspaceHealth.swift (1)</summary><blockquote>
+
+`1050-1064`: **Unbounded loop in `pruneEmptyFoldersRecursively` could be slow for deep hierarchies.**
+
+The `while hasRemoved` loop repeatedly scans the entire directory tree until no empty folders are found. For deeply nested structures, this results in O(d × n) complexity where d is depth and n is total folders.
+
+Consider a single depth-first traversal that removes folders bottom-up.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift (1)</summary><blockquote>
+
+`785-797`: **`generateUniqueURL` is duplicated.**
+
+This helper is identical to the one in `FileSystemManager` (line 553-568). Consider extracting to a shared utility to avoid duplication.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (2)</summary><blockquote>
+
+`91-98`: **Consider extracting endpoint resolution logic.**
+
+The endpoint resolution logic here is duplicated from the `analyze` method (lines 36-43). Consider extracting this to a private helper method to reduce duplication.
+
+
+
+<details>
+<summary>🔎 Proposed refactor</summary>
+
+```diff
++    private func resolveEndpoint() throws -> URL {
++        guard let apiURL = config.apiURL else {
++            throw AIClientError.missingAPIURL
++        }
++        
++        let endpoint: String
++        if apiURL.hasSuffix("/v1/chat/completions") {
++            endpoint = apiURL
++        } else if apiURL.hasSuffix("/") {
++            endpoint = "\(apiURL)v1/chat/completions"
++        } else {
++            endpoint = "\(apiURL)/v1/chat/completions"
++        }
++        
++        guard let url = URL(string: endpoint) else {
++            throw AIClientError.invalidURL
++        }
++        
++        return url
++    }
+```
+
+Then use it in both `analyze` and `generateText`:
+
+```diff
+-        let endpoint: String
+-        if apiURL.hasSuffix("/v1/chat/completions") {
+-             endpoint = apiURL
+-        } else if apiURL.hasSuffix("/") {
+-             endpoint = "\(apiURL)v1/chat/completions"
+-        } else {
+-             endpoint = "\(apiURL)/v1/chat/completions"
+-        }
+-        
+-        guard let url = URL(string: endpoint) else {
+-            throw AIClientError.invalidURL
+-        }
++        let url = try resolveEndpoint()
+```
+</details>
+
+---
+
+`110-110`: **Consider using config.temperature for consistency.**
+
+The temperature is hardcoded to `0.7`, while the `analyze` method uses `temperature ?? config.temperature`. For consistency, consider using `config.temperature` here as well.
+
+
+
+<details>
+<summary>🔎 Proposed change</summary>
+
+```diff
+-            "temperature": 0.7
++            "temperature": config.temperature
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/LearningsHoningView.swift (3)</summary><blockquote>
+
+`19-22`: **Closure capture in init may cause issues.**
+
+Storing `onComplete` as a property and passing it to `StateObject` initialization works, but the closure is also assigned again in `onAppear` (line 152). This pattern is fragile because the closure reference at init time differs from the one assigned later if the parent view recreates this view with a new closure.
+
+Consider removing the `onComplete` property and only using the `onAppear` assignment, or vice versa.
+
+---
+
+`151-153`: **Prefer setting `onComplete` once, not in `onAppear`.**
+
+Setting `engine.onComplete` in `onAppear` can lead to unexpected behavior if the view reappears (e.g., after a sheet dismissal and re-presentation). The callback may be reassigned or trigger multiple times.
+
+Consider setting this during initialization or ensuring idempotent assignment.
+
+---
+
+`205-213`: **Empty `withAnimation` block is dead code.**
+
+The `withAnimation` closure on lines 208-210 contains only a comment. This creates an animation transaction with no actual state changes, which is unnecessary overhead.
+
+Either add the intended optimistic UI update or remove the empty block.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+ private func submitAnswer(questionId: String, option: String) {
+     let answer = HoningAnswer(questionId: questionId, selectedOption: option)
+     Task {
+-        withAnimation {
+-            // Optimistic UI update/transition could happen here
+-        }
+         await engine.submitAnswer(answer)
+     }
+ }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/WorkspaceHealthQuickActionTests.swift (1)</summary><blockquote>
+
+`97-127`: **Consider adding Trash verification for `cleanInstallers` test.**
+
+The test verifies files are removed from source but doesn't confirm they landed in Trash (as noted in the comment). While verifying Trash contents is complex, you could at least check the Trash directory contains a file with a matching base name.
+
+This would catch regressions if the implementation accidentally deletes files instead of moving them.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/PersonaEditorView.swift (1)</summary><blockquote>
+
+`182-196`: **Empty catch block is intentional but could benefit from logging.**
+
+The comment notes that `generator.error` handles the error state, which is correct. However, silent catch blocks can obscure debugging. Consider adding a debug log.
+
+<details>
+<summary>🔎 Optional: add debug logging</summary>
+
+```diff
+                         } catch {
+-                            // Error is handled by generator.error publishing
++                            // Error is handled by generator.error publishing
++                            #if DEBUG
++                            print("Persona generation failed: \(error)")
++                            #endif
+                         }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/WorkspaceHealthMonitoringTests.swift (2)</summary><blockquote>
+
+`27-48`: **Sleep-based test may be flaky in CI environments.**
+
+Fixed-duration sleeps (3 seconds) can cause intermittent failures under load. Consider using `XCTestExpectation` with a timeout instead:
+
+```swift
+let expectation = XCTestExpectation(description: "File change detected")
+// Observe fileChangeDetected and fulfill expectation
+wait(for: [expectation], timeout: 5.0)
+```
+
+This would be more resilient and faster when the condition is met early.
+
+---
+
+`42-44`: **Directly mutating `fileChangeDetected` couples test to implementation.**
+
+Setting `healthManager.fileChangeDetected = nil` assumes this property is publicly settable and that nil-ing it is the correct way to reset state. If the implementation changes, this test will break.
+
+Consider exposing a dedicated reset method or using a fresh manager instance for the second assertion.
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/LearningsManagerTests.swift (3)</summary><blockquote>
+
+`37-39`: **Optional chaining on assertions may silently pass when `currentProfile` is nil.**
+
+Assertions like `XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)` will pass if `currentProfile` is `nil` because `nil == nil` when comparing optionals... wait, that's not right. `nil` would not equal `1`. However, if the count is being compared and the profile is nil, the test behavior could be confusing.
+
+Consider adding an explicit `XCTAssertNotNil(manager.currentProfile)` guard before accessing properties.
+
+<details>
+<summary>🔎 Example guard pattern</summary>
+
+```diff
++    XCTAssertNotNil(manager.currentProfile)
++    guard let profile = manager.currentProfile else { return }
++    XCTAssertEqual(profile.positiveExamples.count, 1)
+-    XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
+```
+</details>
+
+
+Also applies to: 53-54, 68-71, 85-87
+
+---
+
+`92-101`: **Test expectations are unclear.**
+
+The comments on lines 96-98 indicate uncertainty about the expected behavior ("Error might be set internal...", "Assuming manager validates..."). Tests should have clear expectations.
+
+Clarify what the expected behavior is when `analyze` is called with empty inputs and assert accordingly.
+
+---
+
+`237-266`: **`LearningsProfileTests` tests data structure, not manager behavior.**
+
+`testAddExample` directly appends to `profile.positiveExamples` rather than using a manager method. This tests the data structure but not the API. Consider whether this is intentional or if it should test `manager.addLabeledExample`.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/WorkspaceHealthSettingsView.swift (2)</summary><blockquote>
+
+`127-133`: **Consider using `where` clause for cleaner iteration.**
+
+Per SwiftLint's suggestion, the filter condition inside the loop can be moved to a `where` clause.
+
+<details>
+<summary>🔎 Proposed refactor</summary>
+
+```diff
+ if panel.runModal() == .OK {
+-    for url in panel.urls {
+-        if !config.ignoredPaths.contains(url.path) {
+-            config.ignoredPaths.append(url.path)
+-        }
++    for url in panel.urls where !config.ignoredPaths.contains(url.path) {
++        config.ignoredPaths.append(url.path)
+     }
+ }
+```
+</details>
+
+---
+
+`137-144`: **Consider removing commented-out code.**
+
+Dead code clutters the codebase. If "Reset to Defaults" is planned for a future section, track it as a TODO comment or issue rather than leaving commented-out UI code.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerApp/FileOrganizerApp.swift (4)</summary><blockquote>
+
+`61-62`: **Remove duplicate comment.**
+
+The comment "// Initial configuration of organizer" appears twice.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+ // Initial configuration of organizer
+-// Initial configuration of organizer
+ Task {
+```
+</details>
+
+---
+
+`68-73`: **Replace unused closure parameter with `_`.**
+
+Per SwiftLint, `oldConfig` is unused and should be replaced with `_`.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+-.onChange(of: settingsViewModel.config) { oldConfig, newConfig in
++.onChange(of: settingsViewModel.config) { _, newConfig in
+     Task {
+         try? await organizer.configure(with: newConfig)
+         learningsManager.configure(with: newConfig)
+     }
+ }
+```
+</details>
+
+---
+
+`114-120`: **Incomplete autostart implementation for duplicates deeplink.**
+
+The autostart branch for duplicates contains only a placeholder comment. Either implement the scan trigger or remove the autostart parameter handling.
+
+
+Would you like me to help implement the duplicate scan trigger, or should this be tracked as a follow-up issue?
+
+---
+
+`157-159`: **Use structured logging instead of `print()`.**
+
+Replace `print()` with `DebugLogger.log()` for consistency with the rest of the codebase.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+ } catch {
+-    print("Failed to generate persona: \(error)")
++    DebugLogger.log("Failed to generate persona: \(error)")
+ }
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaHoning.swift (2)</summary><blockquote>
+
+`76-80`: **Markdown stripping could be more robust.**
+
+The current approach filters lines containing "```" but could fail if the JSON itself contains that sequence (unlikely but possible in question text).
+
+<details>
+<summary>🔎 Proposed fix using regex for common patterns</summary>
+
+```diff
+ // Clean markdown
+-if jsonString.contains("```") {
+-     let lines = jsonString.components(separatedBy: .newlines)
+-     jsonString = lines.filter { !$0.contains("```") }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+-}
++if let jsonMatch = jsonString.range(of: #"\[[\s\S]*\]"#, options: .regularExpression) {
++    jsonString = String(jsonString[jsonMatch])
++}
+```
+</details>
+
+---
+
+`82-87`: **Consider using `DebugLogger` for consistency.**
+
+The fallback is reasonable, but using `DebugLogger.log()` instead of `print()` would maintain consistency with the codebase's logging patterns.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/LearningsView.swift (1)</summary><blockquote>
+
+`705-731`: **Remove redundant `nil` initialization.**
+
+Per SwiftLint, optional properties don't need explicit `nil` initialization.
+
+<details>
+<summary>🔎 Proposed fix</summary>
+
+```diff
+ let text: String
+ let color: Color
+-var priority: Int? = nil
++var priority: Int?
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/SecurityManager.swift (1)</summary><blockquote>
+
+`106-131`: **Consider Keychain-backed authentication for higher security (per static analysis).**
+
+The static analysis tool flags that `LAContext.evaluatePolicy` returns a simple boolean, which can be bypassed on jailbroken devices using tools like Frida. For sensitive features like Learnings data, consider storing a secret in the Keychain with `kSecAccessControlBiometryCurrentSet` and using Keychain access as the authentication check instead of relying solely on the boolean result.
+
+That said, this is a defense-in-depth consideration primarily relevant for jailbroken devices, so the current implementation is acceptable for most use cases.
+
+
+
+<details>
+<summary>🔎 Higher-security alternative using Keychain</summary>
+
+Instead of checking the boolean result, store a secret in Keychain with biometric protection:
+
+```swift
+// On first setup, store a random secret:
+let secret = UUID().uuidString.data(using: .utf8)!
+let query: [String: Any] = [
+    kSecClass as String: kSecClassGenericPassword,
+    kSecAttrAccount as String: "learnings_auth_token",
+    kSecValueData as String: secret,
+    kSecAttrAccessControl as String: SecAccessControlCreateWithFlags(
+        nil,
+        kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+        .biometryCurrentSet,
+        nil
+    )!
+]
+SecItemAdd(query as CFDictionary, nil)
+
+// On authentication, read it back (biometrics required):
+// If read succeeds, user is authenticated
+```
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift (1)</summary><blockquote>
+
+`89-93`: **Hardcoded sample size noted.**
+
+The comment acknowledges this should be configurable. For now, 100 files is a reasonable default for analysis performance.
+
+
+
+Consider extracting this to a configuration parameter:
+
+```diff
+-let files = await scanDirectory(rootURL, sampleSize: 100) // Hardcoded sample size for now or pass in config
++let files = await scanDirectory(rootURL, sampleSize: config?.sampleSize ?? 100)
+```
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/WorkspaceHealthView.swift (1)</summary><blockquote>
+
+`151-159`: **Permission handling deferred to user is acceptable but consider feedback.**
+
+The comment on line 154 acknowledges that if `startAccessingSecurityScopedResource()` fails, the code continues anyway. While this is pragmatic, the user won't know why organization might fail later. Consider showing a brief warning if access fails.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsFileManager.swift (4)</summary><blockquote>
+
+`17-19`: **Force unwrap on Application Support directory could crash.**
+
+While Application Support is virtually always available, force unwrapping `.first!` is not defensive. Consider a guard with a thrown error for robustness.
+
+<details>
+<summary>Proposed fix</summary>
+
+```diff
+ private static var learningsDirectory: URL {
+-    let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
++    guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
++        fatalError("Application Support directory not available")
++    }
+     return appSupport.appendingPathComponent("FileOrganizer/Learnings")
+ }
+```
+</details>
+
+---
+
+`52-52`: **Remove or guard debug print statements in production.**
+
+Printing profile file paths to console may leak user information. Consider using a conditional debug logger or removing these prints entirely.
+
+<details>
+<summary>Proposed fix</summary>
+
+```diff
+-        print("LearningsFileManager: Saved profile to \(profileURL.lastPathComponent)")
++        #if DEBUG
++        print("LearningsFileManager: Saved profile to \(profileURL.lastPathComponent)")
++        #endif
+```
+</details>
+
+Apply similar changes to lines 77 and 102.
+
+---
+
+`100-100`: **Keychain deletion result is silently ignored.**
+
+If the key deletion fails for reasons other than "not found," the error goes unnoticed. Consider logging or throwing on unexpected failures.
+
+<details>
+<summary>Proposed fix</summary>
+
+```diff
+-        _ = KeychainManager.delete(key: "learnings_encryption_key")
++        let deleted = KeychainManager.delete(key: "learnings_encryption_key")
++        if !deleted {
++            // Log or handle unexpected failure (errSecItemNotFound is acceptable)
++        }
+```
+</details>
+
+---
+
+`145-148`: **`decryptionFailed` error case is defined but never thrown.**
+
+The `decrypt` method throws CryptoKit errors directly. Either wrap them with `LearningsFileError.decryptionFailed` or remove the unused case to avoid confusion.
+
+<details>
+<summary>Proposed fix to wrap CryptoKit errors</summary>
+
+```diff
+ private static func decrypt(data: Data, using key: SymmetricKey) throws -> Data {
++    do {
+         let sealedBox = try AES.GCM.SealedBox(combined: data)
+         return try AES.GCM.open(sealedBox, using: key)
++    } catch {
++        throw LearningsFileError.decryptionFailed
++    }
+ }
+```
+</details>
+
+
+Also applies to: 166-166
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsHoningEngine.swift (1)</summary><blockquote>
+
+`36-46`: **Unused `honingCheckPrompt` constant.**
+
+This prompt is defined but never used in the implementation. Remove it or implement the sufficiency check logic.
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Organizer/FolderOrganizer.swift (2)</summary><blockquote>
+
+`458-463`: **Silent failure when scanning specific files.**
+
+If `scanner.scanFile(at:root:)` throws, the file is silently skipped with `try?`. Consider logging skipped files or collecting errors to inform the user.
+
+<details>
+<summary>Proposed fix</summary>
+
+```diff
+             for filename in specificFiles {
+                 let fileURL = directory.appendingPathComponent(filename)
+-                if let item = try? await scanner.scanFile(at: fileURL, root: directory) {
+-                    files.append(item)
++                do {
++                    let item = try await scanner.scanFile(at: fileURL, root: directory)
++                    files.append(item)
++                } catch {
++                    DebugLogger.log("Failed to scan file \(filename): \(error.localizedDescription)")
+                 }
+             }
+```
+</details>
+
+---
+
+`524-524`: **Inconsistent persona prompt method usage.**
+
+Line 294 uses `getEffectivePrompt(customStore:)` while line 524 uses `getPrompt(for:)`. For consistency and to respect custom personas in incremental organization, consider using `getEffectivePrompt` here as well.
+
+<details>
+<summary>Proposed fix</summary>
+
+```diff
+-            let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
++            let personaPrompt = personaManager?.getEffectivePrompt(customStore: customPersonaStore ?? CustomPersonaStore())
+```
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift (1)</summary><blockquote>
+
+`291-300`: **Silent `default` case may hide future issues.**
+
+If new `ExampleAction` cases are added, they will silently fall through to `break`. Consider handling all cases explicitly or adding a warning log.
+
+<details>
+<summary>Proposed fix</summary>
+
+```diff
+         case .edit:
+             profile.corrections.append(example)
+-        default:
+-            break
++        case .addToExamples:
++            profile.positiveExamples.append(example)
+         }
+```
+
+Or if `addToExamples` is not the intended behavior, use `@unknown default` to get compiler warnings for new cases:
+
+```diff
+-        default:
++        @unknown default:
+             break
+```
+</details>
+
+</blockquote></details>
+
+</blockquote></details>
+
+<details>
+<summary>📜 Review details</summary>
+
+**Configuration used**: Repository UI
+
+**Review profile**: CHILL
+
+**Plan**: Pro
+
+<details>
+<summary>📥 Commits</summary>
+
+Reviewing files that changed from the base of the PR and between 95c9c36ab33d5964630d8e1f49998b49a6accf2e and 7afe5d51ec767b1d4b1e18e9940a18ec04736d5b.
+
+</details>
+
+<details>
+<summary>📒 Files selected for processing (54)</summary>
+
+* `CLI/fileorg`
+* `HELP.md`
+* `Info.plist`
+* `Resources/commit.txt`
+* `Sources/FileOrganizerApp/AppCoordinator.swift`
+* `Sources/FileOrganizerApp/FileOrganizerApp.swift`
+* `Sources/FileOrganizerLib/AI/AIClientProtocol.swift`
+* `Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift`
+* `Sources/FileOrganizerLib/AI/OpenAIClient.swift`
+* `Sources/FileOrganizerLib/AI/PersonaGenerator.swift`
+* `Sources/FileOrganizerLib/AI/PersonaHoning.swift`
+* `Sources/FileOrganizerLib/FileSystem/DirectoryScanner.swift`
+* `Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift`
+* `Sources/FileOrganizerLib/FileSystem/FolderWatcher.swift`
+* `Sources/FileOrganizerLib/Learnings/ContinuousLearningObserver.swift`
+* `Sources/FileOrganizerLib/Learnings/LLMRuleInducer.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsConsentManager.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsFileManager.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsHoningEngine.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsManager.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsModels.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsProfile.swift`
+* `Sources/FileOrganizerLib/Learnings/LearningsProject.swift`
+* `Sources/FileOrganizerLib/Learnings/RuleInducer.swift`
+* `Sources/FileOrganizerLib/Models/AIConfig.swift`
+* `Sources/FileOrganizerLib/Models/OrganizationPersona.swift`
+* `Sources/FileOrganizerLib/Models/WorkspaceHealth.swift`
+* `Sources/FileOrganizerLib/Organizer/FolderOrganizer.swift`
+* `Sources/FileOrganizerLib/Utilities/DeeplinkHandler.swift`
+* `Sources/FileOrganizerLib/Utilities/SecurityManager.swift`
+* `Sources/FileOrganizerLib/Views/AppCommands.swift`
+* `Sources/FileOrganizerLib/Views/HelpView.swift`
+* `Sources/FileOrganizerLib/Views/LearningsHoningView.swift`
+* `Sources/FileOrganizerLib/Views/LearningsView.swift`
+* `Sources/FileOrganizerLib/Views/OrganizeView.swift`
+* `Sources/FileOrganizerLib/Views/PersonaEditorView.swift`
+* `Sources/FileOrganizerLib/Views/PersonaGeneratorView.swift`
+* `Sources/FileOrganizerLib/Views/PersonaPickerView.swift`
+* `Sources/FileOrganizerLib/Views/PreviewView.swift`
+* `Sources/FileOrganizerLib/Views/SettingsView.swift`
+* `Sources/FileOrganizerLib/Views/WatchedFoldersView.swift`
+* `Sources/FileOrganizerLib/Views/WorkspaceHealthSettingsView.swift`
+* `Sources/FileOrganizerLib/Views/WorkspaceHealthView.swift`
+* `Sources/LearningsCLI/main.swift`
+* `Tests/FileOrganizerTests/DeeplinkTests.swift`
+* `Tests/FileOrganizerTests/FileOrganizerTests.swift`
+* `Tests/FileOrganizerTests/FileSystemManagerTests.swift`
+* `Tests/FileOrganizerTests/LLMRuleInducerTests.swift`
+* `Tests/FileOrganizerTests/LearningsManagerTests.swift`
+* `Tests/FileOrganizerTests/RuleInducerTests.swift`
+* `Tests/FileOrganizerTests/WorkspaceHealthMonitoringTests.swift`
+* `Tests/FileOrganizerTests/WorkspaceHealthQuickActionTests.swift`
+* `test_output.txt`
+
+</details>
+
+<details>
+<summary>💤 Files with no reviewable changes (1)</summary>
+
+* Sources/FileOrganizerLib/Learnings/LearningsProject.swift
+
+</details>
+
+<details>
+<summary>🧰 Additional context used</summary>
+
+<details>
+<summary>🧬 Code graph analysis (25)</summary>
+
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsConsentManager.swift (4)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift (2)</summary>
+
+* `grantConsent` (82-91)
+* `withdrawConsent` (94-102)
+
+</details>
+<details>
+<summary>Sources/LearningsCLI/main.swift (1)</summary>
+
+* `withdrawConsent` (188-205)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift (2)</summary>
+
+* `fileExists` (586-588)
+* `contentsOfDirectory` (591-593)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/KeychainManager.swift (1)</summary>
+
+* `delete` (53-62)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/WorkspaceHealthMonitoringTests.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Models/WorkspaceHealth.swift (1)</summary>
+
+* `startMonitoring` (699-744)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/FileSystemManagerTests.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift (2)</summary>
+
+* `applyOrganization` (376-424)
+* `fileExists` (586-588)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FolderWatcher.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerApp/AppCoordinator.swift (1)</summary>
+
+* `folderWatcher` (64-92)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (3)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (1)</summary>
+
+* `generateText` (82-148)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/FileOrganizerTests.swift (1)</summary>
+
+* `generateText` (25-27)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/LLMRuleInducerTests.swift (1)</summary>
+
+* `generateText` (24-26)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AIClientProtocol.swift (2)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (2)</summary>
+
+* `analyze` (25-99)
+* `generateText` (101-123)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (2)</summary>
+
+* `analyze` (23-80)
+* `generateText` (82-148)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/PersonaEditorView.swift (2)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/Constants.swift (1)</summary>
+
+* `error` (52-54)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaGenerator.swift (1)</summary>
+
+* `generatePersona` (62-124)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/LLMRuleInducerTests.swift (3)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (2)</summary>
+
+* `analyze` (23-80)
+* `generateText` (82-148)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift (1)</summary>
+
+* `analyze` (37-144)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LLMRuleInducer.swift (1)</summary>
+
+* `induceRules` (27-59)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (3)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (1)</summary>
+
+* `generateText` (101-123)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/FileOrganizerTests.swift (1)</summary>
+
+* `generateText` (25-27)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/LLMRuleInducerTests.swift (1)</summary>
+
+* `generateText` (24-26)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/WorkspaceHealthSettingsView.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Models/WorkspaceHealth.swift (1)</summary>
+
+* `updateConfig` (691-694)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/HelpView.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/DeeplinkHandler.swift (1)</summary>
+
+* `url` (121-221)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/DirectoryScanner.swift (6)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/DeeplinkHandler.swift (1)</summary>
+
+* `url` (121-221)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/DuplicateDetector.swift (3)</summary>
+
+* `computeHashes` (65-77)
+* `computeSHA256` (80-87)
+* `computeSHA256` (155-161)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (1)</summary>
+
+* `analyze` (25-99)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/FileOrganizerTests.swift (1)</summary>
+
+* `analyze` (14-19)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/LLMRuleInducerTests.swift (1)</summary>
+
+* `analyze` (20-22)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/ContentAnalyzer.swift (1)</summary>
+
+* `analyze` (109-128)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaGenerator.swift (3)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/AI/AIClientFactory.swift (1)</summary>
+
+* `createClient` (11-26)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (1)</summary>
+
+* `generateText` (101-123)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (1)</summary>
+
+* `generateText` (82-148)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/SecurityManager.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift (1)</summary>
+
+* `lock` (66-71)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Tests/FileOrganizerTests/WorkspaceHealthQuickActionTests.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Models/WorkspaceHealth.swift (4)</summary>
+
+* `archiveOldDownloads` (957-987)
+* `performAction` (800-827)
+* `groupScreenshots` (989-1024)
+* `cleanInstallers` (1026-1048)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerApp/AppCoordinator.swift (4)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FolderWatcher.swift (2)</summary>
+
+* `syncWithFolders` (123-142)
+* `pause` (36-38)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/ContinuousLearningObserver.swift (1)</summary>
+
+* `startObserving` (79-101)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Models/WatchedFolder.swift (1)</summary>
+
+* `markTriggered` (97-102)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Organizer/FolderOrganizer.swift (1)</summary>
+
+* `organizeIncremental` (422-440)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift (5)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift (2)</summary>
+
+* `configure` (39-46)
+* `analyze` (309-337)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (1)</summary>
+
+* `analyze` (25-99)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (1)</summary>
+
+* `analyze` (23-80)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LLMRuleInducer.swift (1)</summary>
+
+* `induceRules` (27-59)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/RuleInducer.swift (1)</summary>
+
+* `induceRules` (21-50)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/SettingsView.swift (3)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/Constants.swift (1)</summary>
+
+* `animatedAppearance` (359-361)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/ViewModels/SettingsViewModel.swift (1)</summary>
+
+* `testConnection` (95-104)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (1)</summary>
+
+* `isAvailable` (126-132)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/LearningsView.swift (7)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift (6)</summary>
+
+* `unlock` (51-64)
+* `grantConsent` (82-91)
+* `completeInitialSetup` (74-77)
+* `clearAllData` (105-117)
+* `withdrawConsent` (94-102)
+* `analyze` (309-337)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsConsentManager.swift (3)</summary>
+
+* `grantConsent` (42-51)
+* `completeInitialSetup` (63-68)
+* `withdrawConsent` (54-60)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift (1)</summary>
+
+* `clearAllData` (832-835)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/AppCommands.swift (4)</summary>
+
+* `startHoningSession` (562-566)
+* `showLearningsStats` (568-572)
+* `pauseLearning` (574-577)
+* `exportLearningsProfile` (579-583)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (1)</summary>
+
+* `analyze` (23-80)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift (1)</summary>
+
+* `analyze` (37-144)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/LLMRuleInducerTests.swift (1)</summary>
+
+* `analyze` (20-22)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsFileManager.swift (2)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift (1)</summary>
+
+* `fileExists` (586-588)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/KeychainManager.swift (2)</summary>
+
+* `delete` (53-62)
+* `get` (32-51)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/PersonaPickerView.swift (2)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Models/OrganizationPersona.swift (3)</summary>
+
+* `resetCustomPrompt` (184-187)
+* `getPrompt` (159-164)
+* `saveCustomPrompt` (175-182)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Models/CustomPersona.swift (2)</summary>
+
+* `updatePersona` (65-70)
+* `persona` (77-79)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/PersonaGeneratorView.swift (2)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaHoning.swift (1)</summary>
+
+* `generateQuestions` (66-90)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaGenerator.swift (1)</summary>
+
+* `generatePersona` (62-124)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/PersonaHoning.swift (6)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsModels.swift (1)</summary>
+
+* `from` (270-278)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AIClientFactory.swift (1)</summary>
+
+* `createClient` (11-26)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (1)</summary>
+
+* `generateText` (101-123)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (1)</summary>
+
+* `generateText` (82-148)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/FileOrganizerTests.swift (1)</summary>
+
+* `generateText` (25-27)
+
+</details>
+<details>
+<summary>Tests/FileOrganizerTests/LLMRuleInducerTests.swift (1)</summary>
+
+* `generateText` (24-26)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/FileSystemManager.swift (1)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Models/ExclusionRule.swift (1)</summary>
+
+* `shouldExclude` (510-512)
+
+</details>
+
+</blockquote></details>
+<details>
+<summary>Sources/FileOrganizerLib/Organizer/FolderOrganizer.swift (5)</summary><blockquote>
+
+<details>
+<summary>Sources/FileOrganizerLib/Models/OrganizationPersona.swift (2)</summary>
+
+* `getEffectivePrompt` (167-173)
+* `getPrompt` (159-164)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsManager.swift (2)</summary>
+
+* `generatePromptContext` (583-666)
+* `analyze` (309-337)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Learnings/LearningsAnalyzer.swift (1)</summary>
+
+* `analyze` (37-144)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/AppleFoundationModelClient.swift (1)</summary>
+
+* `analyze` (25-99)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/AI/OpenAIClient.swift (1)</summary>
+
+* `analyze` (23-80)
+
+</details>
+
+</blockquote></details>
+
+</details><details>
+<summary>🪛 ast-grep (0.40.3)</summary>
+
+<details>
+<summary>Sources/FileOrganizerLib/Utilities/SecurityManager.swift</summary>
+
+[info] 106-106: The application was observed to leverage biometrics via Local
+                Authentication, which returns a simple boolean result for authentication.
+                This design is subject to bypass with runtime tampering tools such as
+                Frida, Substrate, and others. Although this is limited to rooted
+                (jailbroken) devices, consider implementing biometric authentication the
+                reliable way - via Keychain Services.
+Context: context.evaluatePolicy
+Note: [CWE-305] Authentication Bypass by Primary Weakness [REFERENCES]
+    - https://mobile-security.gitbook.io/mobile-security-testing-guide/ios-testing-guide/0x06f-testing-local-authentication
+    - https://shirazkhan030.medium.com/biometric-authentication-in-ios-6c53c54f17df
+
+(insecure-biometrics-swift)
+
+---
+
+[info] 145-145: The application was observed to leverage biometrics via Local
+                Authentication, which returns a simple boolean result for authentication.
+                This design is subject to bypass with runtime tampering tools such as
+                Frida, Substrate, and others. Although this is limited to rooted
+                (jailbroken) devices, consider implementing biometric authentication the
+                reliable way - via Keychain Services.
+Context: context.evaluatePolicy
+Note: [CWE-305] Authentication Bypass by Primary Weakness [REFERENCES]
+    - https://mobile-security.gitbook.io/mobile-security-testing-guide/ios-testing-guide/0x06f-testing-local-authentication
+    - https://shirazkhan030.medium.com/biometric-authentication-in-ios-6c53c54f17df
+
+(insecure-biometrics-swift)
+
+</details>
+
+</details>
+<details>
+<summary>🪛 LanguageTool</summary>
+
+<details>
+<summary>HELP.md</summary>
+
+[style] ~272-~272: In American English, abbreviations like “etc.” require a period.
+Context: ...sona (fileorganizer_general, developer, etc) | | | `autostart=true` | Automatically...
+
+(ETC_PERIOD)
+
+---
+
+[grammar] ~304-~304: Ensure spelling is correct
+Context: ...lp` | Open Help |  ---  ## CLI Tooling  FileOrganiser includes a comprehensive CLI tool calle...
+
+(QB_NEW_EN_ORTHOGRAPHY_ERROR_IDS_1)
+
+</details>
+
+</details>
+<details>
+<summary>🪛 markdownlint-cli2 (0.18.1)</summary>
+
+<details>
+<summary>HELP.md</summary>
+
+268-268: Tables should be surrounded by blank lines
+
+(MD058, blanks-around-tables)
+
+---
+
+279-279: Tables should be surrounded by blank lines
+
+(MD058, blanks-around-tables)
+
+---
+
+293-293: Tables should be surrounded by blank lines
+
+(MD058, blanks-around-tables)
+
+---
+
+315-315: Emphasis used instead of a heading
+
+(MD036, no-emphasis-as-heading)
+
+---
+
+327-327: Emphasis used instead of a heading
+
+(MD036, no-emphasis-as-heading)
+
+---
+
+339-339: Emphasis used instead of a heading
+
+(MD036, no-emphasis-as-heading)
+
+---
+
+345-345: Emphasis used instead of a heading
+
+(MD036, no-emphasis-as-heading)
+
+</details>
+
+</details>
+<details>
+<summary>🪛 SwiftLint (0.57.0)</summary>
+
+<details>
+<summary>Sources/FileOrganizerLib/Views/WorkspaceHealthSettingsView.swift</summary>
+
+[Warning] 129-129: `where` clauses are preferred over a single `if` inside a `for`
+
+(for_where)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerApp/FileOrganizerApp.swift</summary>
+
+[Warning] 68-68: Unused parameter in a closure should be replaced with _
+
+(unused_closure_parameter)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/FileSystem/DirectoryScanner.swift</summary>
+
+[Warning] 82-82: Initializing an optional variable with nil is redundant
+
+(redundant_optional_initialization)
+
+---
+
+[Warning] 88-88: Initializing an optional variable with nil is redundant
+
+(redundant_optional_initialization)
+
+</details>
+<details>
+<summary>Sources/FileOrganizerLib/Views/LearningsView.swift</summary>
+
+[Warning] 709-709: Initializing an optional variable with nil is redundant
+
+(redundant_optional_initialization)
+
+</details>
+
+</details>
+
+</details>
+
+<details>
+<summary>⏰ Context from checks skipped due to timeout of 90000ms. You can increase the timeout in your CodeRabbit configuration to a maximum of 15 minutes (900000ms). (3)</summary>
+
+* GitHub Check: Agent
+* GitHub Check: Greptile Review
+* GitHub Check: build-and-test
+
+</details>
+
+</details>
+
+<!-- This is an auto-generated comment by CodeRabbit for review status -->
+--
+author:	greptile-apps
+association:	none
+edited:	false
+status:	none
+--
+<h3>Greptile Summary</h3>
+
+
+This PR fixes build errors and compiler warnings introduced in the previous commit. The main changes include updating test assertions to match enum case signature changes, fixing Swift compiler warnings about redundant mutations and unused results, and implementing conflict resolution when moving installer files to Trash.
+
+**Key Changes:**
+- Fixed `DeeplinkTests.swift` to destructure enum cases with new associated values
+- Changed `var` to `let` in `RuleInducer.swift` to eliminate redundant mutation warning  
+- Added `_ =` prefix in `FileSystemManagerTests.swift` to silence unused result warnings
+- Implemented timestamp-based filename conflict resolution in `WorkspaceHealth.cleanInstallers()`
+- Added comprehensive test coverage in new `WorkspaceHealthQuickActionTests.swift`
+
+**Build Status:**
+All 213 tests pass successfully and the project builds without errors.
+
+<h3>Confidence Score: 4/5</h3>
+
+
+- This PR is safe to merge with minor style considerations
+- The changes are straightforward bug fixes and warning resolutions. All tests pass (213/213) and the build succeeds. The timestamp conflict resolution works correctly but could use a more readable date format. No logic errors or security issues detected.
+- Sources/FileOrganizerLib/Models/WorkspaceHealth.swift - consider improving timestamp format for better user experience
+
+<h3>Important Files Changed</h3>
+
+
+
+
+| Filename | Overview |
+|----------|----------|
+| Sources/FileOrganizerLib/Models/WorkspaceHealth.swift | Added timestamp-based conflict resolution to cleanInstallers function when moving files to Trash |
+| Tests/FileOrganizerTests/DeeplinkTests.swift | Updated enum case destructuring to match new associated values in DeeplinkDestination enum |
+| Sources/FileOrganizerLib/Learnings/RuleInducer.swift | Changed variable to constant to fix redundant mutation warning |
+| Tests/FileOrganizerTests/FileSystemManagerTests.swift | Silenced unused result and variable warnings with explicit discard |
+| Tests/FileOrganizerTests/WorkspaceHealthQuickActionTests.swift | New test file verifying cleanInstallers conflict handling and other quick actions |
+
+</details>
+
+
+
+<h3>Sequence Diagram</h3>
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant WorkspaceHealthManager
+    participant FileManager
+    participant Trash
+    
+    User->>WorkspaceHealthManager: performAction(.cleanInstallers)
+    WorkspaceHealthManager->>FileManager: contentsOfDirectory(at: path)
+    FileManager-->>WorkspaceHealthManager: [files]
+    
+    loop for each installer file (dmg, pkg, iso)
+        WorkspaceHealthManager->>WorkspaceHealthManager: Check extension
+        WorkspaceHealthManager->>FileManager: fileExists(at: trashURL/filename)
+        
+        alt File exists in Trash
+            FileManager-->>WorkspaceHealthManager: true
+            WorkspaceHealthManager->>WorkspaceHealthManager: Generate unique name with timestamp
+            Note over WorkspaceHealthManager: filename_1735992058.ext
+            WorkspaceHealthManager->>FileManager: moveItem(to: uniqueDestination)
+        else File doesn't exist
+            FileManager-->>WorkspaceHealthManager: false
+            WorkspaceHealthManager->>FileManager: moveItem(to: destination)
+        end
+        
+        FileManager->>Trash: Move file
+        Trash-->>FileManager: Success
+        FileManager-->>WorkspaceHealthManager: Success
+    end
+    
+    WorkspaceHealthManager->>WorkspaceHealthManager: dismissOpportunity()
+    WorkspaceHealthManager-->>User: Action completed
+```
+--
+author:	greptile-apps
+association:	none
+edited:	false
+status:	commented
+--
+<sub>54 files reviewed, 1 comment</sub>
+
+<sub>[Edit Code Review Agent Settings](https://app.greptile.com/review/github) | [Greptile](https://greptile.com?utm_source=greptile_expert&utm_medium=github&utm_campaign=code_reviews&utm_content=fileorganizer_3)</sub>
+--

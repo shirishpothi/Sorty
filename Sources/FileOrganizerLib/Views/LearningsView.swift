@@ -706,7 +706,7 @@ struct PreferenceRow: View {
     let icon: String
     let text: String
     let color: Color
-    var priority: Int? = nil
+    var priority: Int?
     
     var body: some View {
         HStack(spacing: 10) {

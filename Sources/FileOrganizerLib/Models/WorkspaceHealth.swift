@@ -1034,11 +1034,16 @@ public class WorkspaceHealthManager: ObservableObject {
              if ["dmg", "pkg", "iso"].contains(ext) {
                  var destination = trashURL.appendingPathComponent(file.lastPathComponent)
                  
-                 // If conflict exists in trash, append timestamp to make unique
+                 // If conflict exists in trash, append human-readable timestamp to make unique
                  if fileManager.fileExists(atPath: destination.path) {
                      let fileName = file.deletingPathExtension().lastPathComponent
                      let fileExt = file.pathExtension
-                     let uniqueName = "\(fileName)_\(Int(Date().timeIntervalSince1970)).\(fileExt)"
+                     
+                     let formatter = DateFormatter()
+                     formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
+                     let timestamp = formatter.string(from: Date())
+                     
+                     let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
                      destination = trashURL.appendingPathComponent(uniqueName)
                  }
                  

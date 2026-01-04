@@ -125,10 +125,8 @@ struct WorkspaceHealthSettingsView: View {
                     panel.allowsMultipleSelection = true
                     
                     if panel.runModal() == .OK {
-                        for url in panel.urls {
-                            if !config.ignoredPaths.contains(url.path) {
-                                config.ignoredPaths.append(url.path)
-                            }
+                        for url in panel.urls where !config.ignoredPaths.contains(url.path) {
+                            config.ignoredPaths.append(url.path)
                         }
                     }
                 }

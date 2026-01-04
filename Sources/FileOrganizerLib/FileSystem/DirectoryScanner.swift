@@ -79,13 +79,13 @@ actor DirectoryScanner {
         let fileName = url.deletingPathExtension().lastPathComponent
         
         // Deep scan: extract content metadata
-        var contentMetadata: ContentMetadata? = nil
+        var contentMetadata: ContentMetadata?
         if deepScan {
             contentMetadata = await contentAnalyzer.analyze(fileURL: url)
         }
         
         // Hash computation for duplicate detection
-        var sha256Hash: String? = nil
+        var sha256Hash: String?
         if computeHashes {
             sha256Hash = computeSHA256(for: url)
         }
@@ -149,13 +149,13 @@ actor DirectoryScanner {
             let fileName = fileURL.deletingPathExtension().lastPathComponent
             
             // Deep scan: extract content metadata
-            var contentMetadata: ContentMetadata? = nil
+            var contentMetadata: ContentMetadata?
             if deepScan {
                 contentMetadata = await contentAnalyzer.analyze(fileURL: fileURL)
             }
             
             // Hash computation for duplicate detection
-            var sha256Hash: String? = nil
+            var sha256Hash: String?
             if computeHashes {
                 sha256Hash = computeSHA256(for: fileURL)
             }
