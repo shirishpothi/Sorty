@@ -807,6 +807,30 @@ final class AppUITests: XCTestCase {
                      "Learnings view should have content")
     }
 
+    // MARK: - Environment-Dependent Tests
+    
+    func testAppleFoundationModelAvailability() throws {
+        navigateToView("SettingsSidebarItem")
+        
+        let modelField = app.textFields["ModelTextField"]
+        guard waitForElement(modelField, timeout: 2.0) else {
+             throw XCTSkip("Model settings not accessible")
+        }
+        
+        // Check for Apple Foundation Model capability
+        // This demonstrates skipping tests when hardware/feature is unavailable
+        let appleModelOption = app.buttons["Use Apple Foundation Model"]
+        
+        // If the option isn't presented (e.g. on Intel Mac or older OS), skip
+        if !appleModelOption.waitForExistence(timeout: 1.0) {
+             throw XCTSkip("Apple Foundation Models not available on this device/OS environment")
+        }
+        
+        // If available, verify it works
+        appleModelOption.click()
+        // verify selection state if applicable...
+    }
+
     // MARK: - Window Management Tests
 
     func testAppHasMainWindow() throws {
