@@ -6,8 +6,8 @@
 # Exit on error
 set -e
 
-APP_NAME="FileOrganizer"
-BINARY_NAME="FileOrganizerApp"
+APP_NAME="Sorty"
+BINARY_NAME="SortyApp"
 APP_BUNDLE="$APP_NAME.app"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -65,7 +65,13 @@ if [ -f "$COMMIT_FILE" ]; then
     echo "📄 commit.txt copied to Resources"
 fi
 
-# 7. Sign the app (Ad-hoc) to prevent launch errors
+# 7. Copy AppIcon.icns to Resources if it exists
+if [ -f "Resources/AppIcon.icns" ]; then
+    cp "Resources/AppIcon.icns" "$RESOURCES_DIR/"
+    echo "📄 AppIcon.icns copied to Resources"
+fi
+
+# 8. Sign the app (Ad-hoc) to prevent launch errors
 echo "🔏 Signing $APP_BUNDLE..."
 if codesign --force --deep --sign - "$APP_BUNDLE"; then
     echo "✅ Signing successful"

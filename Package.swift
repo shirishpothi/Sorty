@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "FileOrganizer",
+    name: "Sorty",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .library(
-            name: "FileOrganizerLib",
-            targets: ["FileOrganizerLib"]),
+            name: "SortyLib",
+            targets: ["SortyLib"]),
         .executable(
-            name: "FileOrganizerApp",
-            targets: ["FileOrganizerApp"]),
+            name: "SortyApp",
+            targets: ["SortyApp"]),
         .executable(
             name: "learnings",
             targets: ["LearningsCLI"])
@@ -20,22 +20,22 @@ let package = Package(
     dependencies: [],
     targets: [
         .target(
-            name: "FileOrganizerLib",
-            path: "Sources/FileOrganizerLib"
+            name: "SortyLib",
+            path: "Sources/SortyLib"
         ),
         .executableTarget(
-            name: "FileOrganizerApp",
-            dependencies: ["FileOrganizerLib"],
-            path: "Sources/FileOrganizerApp"
+            name: "SortyApp",
+            dependencies: ["SortyLib"],
+            path: "Sources/SortyApp"
         ),
         .testTarget(
-            name: "FileOrganizerTests",
-            dependencies: ["FileOrganizerLib"],
-            path: "Tests/FileOrganizerTests"
+            name: "SortyTests",
+            dependencies: ["SortyLib"],
+            path: "Tests/SortyTests"
         ),
         .executableTarget(
             name: "LearningsCLI",
-            dependencies: ["FileOrganizerLib"],
+            dependencies: ["SortyLib"],
             path: "Sources/LearningsCLI"
         )
     ]

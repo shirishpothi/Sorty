@@ -1,0 +1,180 @@
+//
+//  LearningsFileManager.swift
+//  Sorty
+//
+//  Secure file storage for user learnings in .learning files.
+//  Uses AES-256 encryption with Keychain-stored keys.
+//
+
+import Foundation
+import CryptoKit
+
+/// Manages secure storage of learning profiles in encrypted .learning files
+public struct LearningsFileManager {
+    
+    // MARK: - Configuration
+    
+    private static var learningsDirectory: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport.appendingPathComponent("Sorty/Learnings")
+    }
+    
+    private static var userIdentifier: String {
+        NSUserName()
+    }
+    
+    private static var profileURL: URL {
+        learningsDirectory.appendingPathComponent("\(userIdentifier).learning")
+    }
+    
+    // MARK: - Public API
+    
+    /// Save profile to encrypted .learning file
+    public static func save(profile: LearningsProfile) throws {
+        // Ensure directory exists
+        try ensureDirectoryExists()
+        
+        // Encode profile to JSON
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let jsonData = try encoder.encode(profile)
+        
+        // Get or create encryption key
+        let key = try getOrCreateEncryptionKey()
+        
+        // Encrypt data
+        let encryptedData = try encrypt(data: jsonData, using: key)
+        
+        // Write to file
+        try encryptedData.write(to: profileURL)
+        
+        print("LearningsFileManager: Saved profile to \(profileURL.lastPathComponent)")
+    }
+    
+    /// Load profile from encrypted .learning file
+    public static func load() throws -> LearningsProfile? {
+        guard FileManager.default.fileExists(atPath: profileURL.path) else {
+            return nil
+        }
+        
+        // Read encrypted data
+        let encryptedData = try Data(contentsOf: profileURL)
+        
+        // Get encryption key
+        guard let key = getEncryptionKey() else {
+            throw LearningsFileError.noEncryptionKey
+        }
+        
+        // Decrypt data
+        let jsonData = try decrypt(data: encryptedData, using: key)
+        
+        // Decode profile
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let profile = try decoder.decode(LearningsProfile.self, from: jsonData)
+        
+        print("LearningsFileManager: Loaded profile from \(profileURL.lastPathComponent)")
+        return profile
+    }
+    
+    /// Securely delete the .learning file
+    public static func secureDelete() throws {
+        let fm = FileManager.default
+        
+        guard fm.fileExists(atPath: profileURL.path) else {
+            return
+        }
+        
+        // Overwrite with random data before deletion (secure wipe)
+        let fileSize = try fm.attributesOfItem(atPath: profileURL.path)[.size] as? Int ?? 0
+        if fileSize > 0 {
+            let randomData = Data((0..<fileSize).map { _ in UInt8.random(in: 0...255) })
+            try randomData.write(to: profileURL)
+        }
+        
+        // Delete file
+        try fm.removeItem(at: profileURL)
+        
+        // Delete encryption key
+        _ = KeychainManager.delete(key: "learnings_encryption_key")
+        
+        print("LearningsFileManager: Securely deleted profile")
+    }
+    
+    /// Check if a profile exists
+    public static var profileExists: Bool {
+        FileManager.default.fileExists(atPath: profileURL.path)
+    }
+    
+    // MARK: - Encryption
+    
+    private static func getOrCreateEncryptionKey() throws -> SymmetricKey {
+        if let existing = getEncryptionKey() {
+            return existing
+        }
+        
+        // Generate new key
+        let key = SymmetricKey(size: .bits256)
+        let keyData = key.withUnsafeBytes { Data($0) }
+        
+        // Store in Keychain
+        guard KeychainManager.save(key: "learnings_encryption_key", value: keyData.base64EncodedString()) else {
+            throw LearningsFileError.keychainSaveFailed
+        }
+        
+        return key
+    }
+    
+    private static func getEncryptionKey() -> SymmetricKey? {
+        guard let base64Key = KeychainManager.get(key: "learnings_encryption_key"),
+              let keyData = Data(base64Encoded: base64Key) else {
+            return nil
+        }
+        return SymmetricKey(data: keyData)
+    }
+    
+    private static func encrypt(data: Data, using key: SymmetricKey) throws -> Data {
+        let sealedBox = try AES.GCM.seal(data, using: key)
+        guard let combined = sealedBox.combined else {
+            throw LearningsFileError.encryptionFailed
+        }
+        return combined
+    }
+    
+    private static func decrypt(data: Data, using key: SymmetricKey) throws -> Data {
+        let sealedBox = try AES.GCM.SealedBox(combined: data)
+        return try AES.GCM.open(sealedBox, using: key)
+    }
+    
+    // MARK: - Helpers
+    
+    private static func ensureDirectoryExists() throws {
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: learningsDirectory.path) {
+            try fm.createDirectory(at: learningsDirectory, withIntermediateDirectories: true)
+        }
+    }
+}
+
+// MARK: - Errors
+
+public enum LearningsFileError: LocalizedError {
+    case noEncryptionKey
+    case keychainSaveFailed
+    case encryptionFailed
+    case decryptionFailed
+    
+    public var errorDescription: String? {
+        switch self {
+        case .noEncryptionKey:
+            return "No encryption key found. Cannot decrypt learning data."
+        case .keychainSaveFailed:
+            return "Failed to save encryption key to Keychain."
+        case .encryptionFailed:
+            return "Failed to encrypt learning data."
+        case .decryptionFailed:
+            return "Failed to decrypt learning data."
+        }
+    }
+}

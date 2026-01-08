@@ -1,6 +1,6 @@
 //
 //  AppUITests.swift
-//  FileOrganiserUITests
+//  SortyUITests
 //
 //  Comprehensive functional UI tests that verify features actually work,
 //  not just that UI elements exist. These tests verify:

@@ -5,13 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>FileOrganizerApp</string>
+    <string>SortyApp</string>
     <key>CFBundleIdentifier</key>
-    <string>com.fileorganizer.app</string>
+    <string>com.sorty.app</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>File Organizer</string>
+    <string>Sorty</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -30,10 +32,10 @@
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
             <key>CFBundleURLName</key>
-            <string>com.fileorganizer.app</string>
+            <string>com.sorty.app</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>fileorganizer</string>
+                <string>sorty</string>
             </array>
         </dict>
     </array>
@@ -74,5 +76,9 @@
             </dict>
         </dict>
     </array>
+    <key>SUFeedURL</key>
+    <string>https://github.com/shirishpothi/Sorty/releases/latest/download/appcast.xml</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>

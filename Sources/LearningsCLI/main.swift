@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import FileOrganizerLib
+import SortyLib
 
 @main
 @MainActor
@@ -131,7 +131,7 @@ struct LearningsCLI {
         }
         
         print("\n  \u{001B}[1mTo view detailed stats:\u{001B}[0m")
-        print("    1. Open FileOrganizer")
+        print("    1. Open Sorty")
         print("    2. Navigate to The Learnings (⇧⌘L)")
         print("    3. Authenticate with Touch ID / Passcode")
         print("")
@@ -148,7 +148,7 @@ struct LearningsCLI {
         print("⚠️  For security, full profile export is only available in the main app.")
         print("")
         print("To export your learning data:")
-        print("  1. Open FileOrganizer")
+        print("  1. Open Sorty")
         print("  2. Navigate to The Learnings (⇧⌘L)")
         print("  3. Authenticate and use the export function")
         print("")
@@ -213,7 +213,7 @@ struct LearningsCLI {
         print("  🔐 Security: AES-256 + Keychain")
         print("  🔑 Auth: Touch ID / Face ID / Passcode")
         print("  ⏱️  Session Timeout: 5 minutes")
-        print("  💾 Storage: ~/.config/FileOrganizer/Learnings/")
+        print("  💾 Storage: ~/.config/Sorty/Learnings/")
         print("  📄 File Format: .learning (encrypted JSON)")
         print("")
         print("  \u{001B}[1mPrivacy:\u{001B}[0m")

@@ -1,4 +1,4 @@
-# FileOrganizer Makefile
+# Sorty Makefile
 
 .PHONY: build run test clean help cli install-cli
 
@@ -10,8 +10,8 @@ build:
 	@./build.sh
 
 run: build
-	@echo "🚀 Launching FileOrganizer..."
-	@open FileOrganizer.app
+	@echo "🚀 Launching Sorty..."
+	@open Sorty.app
 
 test:
 	@echo "🧪 Running Swift tests..."
@@ -21,7 +21,7 @@ clean:
 	@echo "🧹 Cleaning build artifacts..."
 	@swift package clean
 	@rm -rf .build
-	@rm -rf FileOrganizer.app/Contents/MacOS/FileOrganizerApp
+	@rm -rf Sorty.app/Contents/MacOS/SortyApp
 	@echo "✨ Clean complete"
 
 # Build the learnings CLI tool
