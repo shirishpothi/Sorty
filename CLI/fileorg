@@ -1,12 +1,10 @@
-#!/bin/bash
+# Sorty CLI (fileorg)
+# Controls the Sorty app via URL schemes
 
-# FileOrganizer CLI (fileorg)
-# Controls the FileOrganizer app via URL schemes
-
-APP_SCHEME="fileorganizer"
+APP_SCHEME="sorty"
 
 function show_help {
-    echo "FileOrganizer CLI (fileorg)"
+    echo "Sorty CLI (fileorg)"
     echo ""
     echo "Usage: fileorg <command> [options]"
     echo ""
@@ -18,6 +16,8 @@ function show_help {
     echo "  duplicates <path> [options]  Scan for duplicates"
     echo "    --auto                     Automatically start scanning"
     echo ""
+    echo "  status                       View Workspace Health"
+    echo "  list                         View Watched Folders"
     echo "  settings [section]           Open settings"
     echo "    sections: general, ai, advanced, watched, exclusions"
     echo ""
@@ -31,13 +31,17 @@ function show_help {
     echo ""
     echo "  learnings                    Open Learnings dashboard"
     echo "  history                      Open History"
-    echo "  health                       Open Workspace Health"
     echo "  help                         Open Help"
     echo ""
 }
 
 function open_url {
     open "$1"
+}
+
+function urlencode {
+    # Basic URL encoding for spaces and special characters
+    python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.stdin.read().strip()))"
 }
 
 COMMAND=$1
@@ -76,7 +80,10 @@ case "$COMMAND" in
         
         URL="${APP_SCHEME}://organize?autostart=${AUTOSTART}"
         if [ ! -z "$PATH_ARG" ]; then
-            URL="${URL}&path=${PATH_ARG}"
+            # Convert relative path to absolute
+            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
+            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
+            URL="${URL}&path=${ENCODED_PATH}"
         fi
         if [ ! -z "$PERSONA" ]; then
             URL="${URL}&persona=${PERSONA}"
@@ -105,9 +112,29 @@ case "$COMMAND" in
         
         URL="${APP_SCHEME}://duplicates?autostart=${AUTOSTART}"
         if [ ! -z "$PATH_ARG" ]; then
-            URL="${URL}&path=${PATH_ARG}"
+            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
+            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
+            URL="${URL}&path=${ENCODED_PATH}"
         fi
         open_url "$URL"
+        ;;
+        
+    "status"|"health")
+        open_url "${APP_SCHEME}://health"
+        ;;
+        
+    "list"|"watched")
+        if [ "$1" == "add" ]; then
+            shift
+            PATH_ARG=$1
+            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
+            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
+            URL="${APP_SCHEME}://watched?action=add&path=${ENCODED_PATH}"
+            open_url "$URL"
+        else
+            # Open the watched folders list in settings
+            open_url "${APP_SCHEME}://watched"
+        fi
         ;;
         
     "settings")
@@ -126,23 +153,10 @@ case "$COMMAND" in
         
         if [ "$ACTION" == "generate" ]; then
             PROMPT="$*"
-            # encoding spaces for URL is rudimentary here
-            ENCODED_PROMPT=$(echo "$PROMPT" | sed 's/ /%20/g')
+            ENCODED_PROMPT=$(echo -n "$PROMPT" | urlencode)
             URL="${URL}&generate=true&prompt=${ENCODED_PROMPT}"
         fi
         open_url "$URL"
-        ;;
-        
-    "watched")
-        ACTION=$1
-        shift
-        if [ "$ACTION" == "add" ]; then
-            PATH_ARG=$1
-            URL="${APP_SCHEME}://watched?action=add&path=${PATH_ARG}"
-            open_url "$URL"
-        else
-             echo "Unknown action. Usage: watched add <path>"
-        fi
         ;;
         
     "rules")
@@ -150,7 +164,8 @@ case "$COMMAND" in
         shift
         if [ "$ACTION" == "add" ]; then
             PATTERN=$1
-            URL="${APP_SCHEME}://rules?action=add&pattern=${PATTERN}"
+            ENCODED_PATTERN=$(echo -n "$PATTERN" | urlencode)
+            URL="${APP_SCHEME}://rules?action=add&pattern=${ENCODED_PATTERN}"
             open_url "$URL"
         else
              echo "Unknown action. Usage: rules add <pattern>"
@@ -163,10 +178,6 @@ case "$COMMAND" in
         
     "history")
         open_url "${APP_SCHEME}://history"
-        ;;
-        
-    "health")
-        open_url "${APP_SCHEME}://health"
         ;;
         
     "help")

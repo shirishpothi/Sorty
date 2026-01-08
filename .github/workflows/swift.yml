@@ -24,6 +24,15 @@ jobs:
           swift test --parallel 2>&1 | tee unit_test_output.log
           echo "✅ Unit tests completed"
 
+      - name: Verify CLI Script
+        run: |
+          chmod +x CLI/fileorg
+          # Verify scheme is updated to sorty
+          grep -q "APP_SCHEME=\"sorty\"" CLI/fileorg
+          # Basic syntax check
+          bash -n CLI/fileorg
+          echo "✅ CLI verification successful"
+
       - name: Build CLI Tool
         run: |
           swift build --product learnings

@@ -180,6 +180,23 @@ final class DeeplinkTests: XCTestCase {
     }
     
     @MainActor
+    func testWatchedListDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty://watched")!
+        handler.handle(url: url)
+        
+        if case .watched(let action, let path) = handler.pendingDestination {
+            XCTAssertNil(action)
+            XCTAssertNil(path)
+        } else {
+            XCTFail("Expected watched destination")
+        }
+        
+        handler.clearPending()
+    }
+    
+    @MainActor
     func testLearningsHoningDeeplink() {
         let handler = DeeplinkHandler.shared
         
