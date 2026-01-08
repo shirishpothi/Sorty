@@ -89,7 +89,13 @@
 		3353FCD62F0124320097CD23 /* WatchedFoldersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCC22F0124320097CD23 /* WatchedFoldersView.swift */; };
 		3353FCD72F0124320097CD23 /* WorkspaceHealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCC32F0124320097CD23 /* WorkspaceHealthView.swift */; };
 		33A128922F01230200A86470 /* AppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33A128912F01230200A86470 /* AppUITests.swift */; };
+		AABBCC220002000000000001 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000001 /* UpdateManager.swift */; };
+		AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000002 /* AppAccessibilityTests.swift */; };
+		AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */; };
+		AABBCC220002000000000004 /* FeatureSpecificUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000004 /* FeatureSpecificUITests.swift */; };
+		AABBCC220002000000000005 /* DeeplinkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000005 /* DeeplinkUITests.swift */; };
 /* End PBXBuildFile section */
+
 
 /* Begin PBXContainerItemProxy section */
 		33A128702F01230200A86470 /* PBXContainerItemProxy */ = {
@@ -194,6 +200,11 @@
 		33A1286F2F01230200A86470 /* FileOrganiserTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileOrganiserTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A128792F01230200A86470 /* FileOrganiserUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileOrganiserUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A128912F01230200A86470 /* AppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUITests.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000001 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000002 /* AppAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccessibilityTests.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationWorkflowTests.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000004 /* FeatureSpecificUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureSpecificUITests.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000005 /* DeeplinkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeplinkUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -318,6 +329,7 @@
 				3353FCB92F0124320097CD23 /* ExtensionListener.swift */,
 				3353FC362F0124320097CD23 /* Extensions.swift */,
 				3353FC372F0124320097CD23 /* KeychainManager.swift */,
+				AABBCC110001000000000001 /* UpdateManager.swift */,
 			);
 			path = Sources/SortyLib/Utilities;
 			sourceTree = "<group>";
@@ -404,6 +416,10 @@
 			isa = PBXGroup;
 			children = (
 				33A128912F01230200A86470 /* AppUITests.swift */,
+				AABBCC110001000000000002 /* AppAccessibilityTests.swift */,
+				AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */,
+				AABBCC110001000000000004 /* FeatureSpecificUITests.swift */,
+				AABBCC110001000000000005 /* DeeplinkUITests.swift */,
 			);
 			path = Tests/FileOrganizerUITests;
 			sourceTree = "<group>";
@@ -624,6 +640,7 @@
 				3353FCD52F0124320097CD23 /* TimelineView.swift in Sources */,
 				3353FCD62F0124320097CD23 /* WatchedFoldersView.swift in Sources */,
 				3353FCD72F0124320097CD23 /* WorkspaceHealthView.swift in Sources */,
+				AABBCC220002000000000001 /* UpdateManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -639,6 +656,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				33A128922F01230200A86470 /* AppUITests.swift in Sources */,
+				AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */,
+				AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */,
+				AABBCC220002000000000004 /* FeatureSpecificUITests.swift in Sources */,
+				AABBCC220002000000000005 /* DeeplinkUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

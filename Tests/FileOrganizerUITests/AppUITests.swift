@@ -488,7 +488,7 @@ final class AppUITests: XCTestCase {
         }
 
         // 1.5. Configure API key
-        let apiKeyField = app.secureFields["ApiKeyTextField"]
+        let apiKeyField = app.secureTextFields["ApiKeyTextField"]
         if waitForElement(apiKeyField, timeout: 2.0) {
             apiKeyField.click()
             apiKeyField.typeText("test-api-key")

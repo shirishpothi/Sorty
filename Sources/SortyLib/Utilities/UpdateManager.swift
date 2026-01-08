@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 @MainActor
 public class UpdateManager: ObservableObject {

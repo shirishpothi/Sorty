@@ -71,6 +71,7 @@ struct AnalysisView: View {
                     .font(.title2)
                     .fontWeight(.semibold)
                     .monospacedDigit()
+                    .accessibilityIdentifier("AnalysisPercentageText")
             }
 
             // Stage indicator with icon
@@ -107,8 +108,12 @@ struct AnalysisView: View {
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .monospacedDigit()
+                            .accessibilityIdentifier("AnalysisElapsedTimeText")
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Current organization stage: \(organizer.organizationStage)")
+                .accessibilityIdentifier("AnalysisStageInfo")
             }
 
             // Timeout message
@@ -184,6 +189,7 @@ struct AnalysisView: View {
                 organizer.reset()
             }
             .keyboardShortcut(.escape, modifiers: [])
+            .accessibilityIdentifier("AnalysisCancelButton")
         }
         .background(Color(NSColor.windowBackgroundColor))
     }

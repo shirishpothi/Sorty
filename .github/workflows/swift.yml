@@ -21,6 +21,7 @@ jobs:
 
       - name: Run Unit Tests (SPM)
         run: |
+          set -o pipefail
           swift test --parallel 2>&1 | tee unit_test_output.log
           echo "✅ Unit tests completed"
 
@@ -46,6 +47,7 @@ jobs:
 
       - name: Run UI Tests
         run: |
+          set -o pipefail
           xcodebuild test \
             -project "FileOrganiser.xcodeproj" \
             -scheme "FileOrganiser" \
