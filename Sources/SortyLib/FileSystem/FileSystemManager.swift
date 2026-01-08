@@ -524,23 +524,35 @@ public actor FileSystemManager {
         do {
             let contents = try fileManager.contentsOfDirectory(atPath: path)
 
-            // Filter out hidden files like .DS_Store
-            let significantContents = contents.filter { !$0.hasPrefix(".") }
+            // Safe list of disposable files
+            let disposableFiles: Set<String> = [".DS_Store", "Thumbs.db", "desktop.ini"]
+            
+            // Check if there are any files that are NOT in the disposable list
+            let hasSignificantContent = contents.contains { filename in
+                !disposableFiles.contains(filename)
+            }
 
-            if significantContents.isEmpty {
-                // Remove any hidden files first
+            if !hasSignificantContent {
+                // Only remove the known disposable files
                 for item in contents {
-                    let itemPath = (path as NSString).appendingPathComponent(item)
-                    try? fileManager.removeItem(atPath: itemPath)
+                    if disposableFiles.contains(item) {
+                        let itemPath = (path as NSString).appendingPathComponent(item)
+                        try? fileManager.removeItem(atPath: itemPath)
+                    }
                 }
 
-                // Remove the folder
-                try fileManager.removeItem(atPath: path)
-
+                // Double check if folder is truly empty now
+                if let remaining = try? fileManager.contentsOfDirectory(atPath: path), remaining.isEmpty {
+                     try fileManager.removeItem(atPath: path)
+                }
+                
                 // Try to clean up parent folder too
                 let parentPath = (path as NSString).deletingLastPathComponent
                 try? removeEmptyFolder(at: parentPath)
+                
+                return // Exit function
             }
+
         } catch {
             // Folder might not be empty or we don't have permission
             DebugLogger.log("Could not remove folder: \(path) - \(error.localizedDescription)")

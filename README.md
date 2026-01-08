@@ -1,4 +1,4 @@
-# File Organizer - macOS AI-Powered Directory Management
+# Sorty - macOS AI-Powered Directory Management
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
@@ -18,13 +18,13 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 ## ✨ Features
 
 - 🤖 **Intelligent Organization**: Uses AI to understand file content and context for accurate categorization.
-- 🧠 **The Learnings Profile**: Train a local, example-based file organizer that learns from your existing folder structures and manual examples.
+- 🧠 **The Learnings Profile**: Train a local, example-based AI organizer that learns from your existing folder structures and manual examples.
 - 🎭 **Custom Personas**: Create and edit specialized AI profiles for different workflows (e.g., Developer, Photographer, Student).
 - 🔌 **Multiple AI Providers**: 
   - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, etc.)
   - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
 - 🖱️ **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
-- 🔗 **App-Wide Deeplinks**: Control the app externally via `fileorganizer://` URL schemes for automation and shortcuts.
+- 🔗 **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
 - ⌨️ **CLI Tooling**: A companion command-line tool `learnings` for managing organization projects and analysis from the terminal.
 - 👁️ **Interactive Preview**: Review and tweak suggested organization before any files are moved.
 - 🗂️ **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
@@ -39,14 +39,18 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 - (Optional) API key for OpenAI or compatible provider
 
 ### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/[your-username]/FileOrganizer.git
-   cd FileOrganizer
-   ```
-2. Open `FileOrganizer.xcodeproj` in Xcode.
-3. Select the `FileOrganizer` scheme and your Mac as the destination.
-4. Press `⌘R` to build and run.
+
+**Using Make (Recommended):**
+```bash
+git clone https://github.com/[your-username]/Sorty.git
+cd Sorty
+make run
+```
+
+**Using Xcode:**
+1. Open `FileOrganiser.xcodeproj` in Xcode.
+2. Select the `FileOrganiser` scheme and your Mac as the destination.
+3. Press `⌘R` to build and run.
 
 ## ⚙️ Configuration
 
@@ -58,22 +62,22 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 
 ### 2. Finder Extension (Optional)
 To enable the "Organize with AI..." context menu in Finder:
-1. Build and run the `FileOrganizerExtension` target.
+1. Build and run the `SortyExtension` target.
 2. Go to **System Settings → Privacy & Security → Extensions → Finder Extensions**.
-3. Enable **FileOrganizerExtension**.
+3. Enable **SortyExtension**.
 4. Restart Finder if necessary: `killall Finder`.
 
 > [!IMPORTANT]
-> The Finder extension requires **App Groups** to be configured in both the main app and extension targets using the identifier `group.com.fileorganizer.app`.
+> The Finder extension requires **App Groups** to be configured in both the main app and extension targets using the identifier `group.com.sorty.app`.
 
 ## 🛠 Project Structure
 
-- `Sources/FileOrganizerLib/`: Core implementation including AI, FileSystem, Models, and Views.
-- `Sources/FileOrganizerApp/`: Main macOS application entry and navigation.
+- `Sources/SortyLib/`: Core implementation including AI, FileSystem, Models, and Views.
+- `Sources/SortyApp/`: Main macOS application entry and navigation.
 - `Sources/LearningsCLI/`: Implementation of the `learnings` command-line tool.
 - `Tests/`: Unit and UI test suites organized by component.
-- `FinderExtension/`: macOS Finder context menu support.
-- `Logs/`: Directory for persistent application and operation logs.
+- `Assets/`: App icons and screenshots.
+- `scripts/`: Build and automation scripts.
 
 ## 📜 License
 

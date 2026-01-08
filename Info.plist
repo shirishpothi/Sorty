@@ -43,14 +43,14 @@
     <array>
         <dict>
             <key>CFBundleTypeName</key>
-            <string>FileOrganizer Learnings Profile</string>
+            <string>Sorty Learnings Profile</string>
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
             <key>LSHandlerRank</key>
             <string>Owner</string>
             <key>LSItemContentTypes</key>
             <array>
-                <string>com.fileorganizer.learnings</string>
+                <string>com.sorty.learnings</string>
             </array>
         </dict>
     </array>
@@ -62,11 +62,11 @@
                 <string>public.json</string>
             </array>
             <key>UTTypeDescription</key>
-            <string>FileOrganizer Learnings Profile</string>
+            <string>Sorty Learnings Profile</string>
             <key>UTTypeIcons</key>
             <dict/>
             <key>UTTypeIdentifier</key>
-            <string>com.fileorganizer.learnings</string>
+            <string>com.sorty.learnings</string>
             <key>UTTypeTagSpecification</key>
             <dict>
                 <key>public.filename-extension</key>

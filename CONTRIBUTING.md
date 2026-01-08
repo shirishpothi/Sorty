@@ -1,6 +1,6 @@
-# Contributing to File Organizer
+# Contributing to Sorty
 
-Thank you for your interest in contributing to File Organizer. To ensure a productive and collaborative environment, please adhere to the following guidelines.
+Thank you for your interest in contributing to Sorty. To ensure a productive and collaborative environment, please adhere to the following guidelines.
 
 ## Code of Conduct
 

@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5EF522556FCD42DFA4915F5E /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F7EE24F00684AD1BC0124C3 /* main.swift */; };
 		E1C18B1FCE6F4CDA919F06DF /* LearningsHoningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C803137980F429E8E946D30 /* LearningsHoningView.swift */; };
 		9AB64201726C425D855C0797 /* DuplicateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */; };
 		5B461775CCAE4523A380B07C /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AD0E58548934B6E962C2293 /* HelpView.swift */; };
@@ -110,7 +109,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		2F7EE24F00684AD1BC0124C3 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		0C803137980F429E8E946D30 /* LearningsHoningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsHoningView.swift; sourceTree = "<group>"; };
 		A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
 		9AD0E58548934B6E962C2293 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
@@ -171,8 +169,8 @@
 		3353FC412F0124320097CD23 /* OrganizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizeView.swift; sourceTree = "<group>"; };
 		3353FC422F0124320097CD23 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		3353FC432F0124320097CD23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		3353FC452F0124320097CD23 /* FileOrganizerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/FileOrganizerApp/FileOrganizerApp.swift; sourceTree = "<group>"; };
-		3353FCB02F0124320097CD23 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/FileOrganizerApp/AppCoordinator.swift; sourceTree = "<group>"; };
+		3353FC452F0124320097CD23 /* FileOrganizerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/FileOrganizerApp.swift; sourceTree = "<group>"; };
+		3353FCB02F0124320097CD23 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/AppCoordinator.swift; sourceTree = "<group>"; };
 		3353FCB12F0124320097CD23 /* ContentAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentAnalyzer.swift; sourceTree = "<group>"; };
 		3353FCB22F0124320097CD23 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetector.swift; sourceTree = "<group>"; };
 		3353FCB32F0124320097CD23 /* FolderWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderWatcher.swift; sourceTree = "<group>"; };
@@ -227,7 +225,6 @@
 		141AC570FAC743F08B8A7DD4 /* Learnings */ = {
 			isa = PBXGroup;
 			children = (
-				2F7EE24F00684AD1BC0124C3 /* main.swift */,
 				013C0B2ACB544367B1D15939 /* LearningsManager.swift */,
 				884D9885364848D980496707 /* LearningsModels.swift */,
 				47870FA6EF8C4D89A960A570 /* LLMRuleInducer.swift */,
@@ -240,7 +237,7 @@
 				DDFD17C04F03490991995D66 /* LearningsFileManager.swift */,
 				C42902EEA5C445E4AE788CC8 /* LearningsAnalyzer.swift */,
 			);
-			path = Sources/FileOrganizerLib/Learnings;
+			path = Sources/SortyLib/Learnings;
 			sourceTree = "<group>";
 		};
 		3353FC222F0124320097CD23 /* AI */ = {
@@ -256,7 +253,7 @@
 				3353FC202F0124320097CD23 /* ResponseParser.swift */,
 				3353FC212F0124320097CD23 /* SystemPrompt.swift */,
 			);
-			path = Sources/FileOrganizerLib/AI;
+			path = Sources/SortyLib/AI;
 			sourceTree = "<group>";
 		};
 		3353FC252F0124320097CD23 /* FileSystem */ = {
@@ -270,7 +267,7 @@
 				3353FCB42F0124320097CD23 /* SemanticDuplicateDetector.swift */,
 				3353FCB52F0124320097CD23 /* VisionAnalyzer.swift */,
 			);
-			path = Sources/FileOrganizerLib/FileSystem;
+			path = Sources/SortyLib/FileSystem;
 			sourceTree = "<group>";
 		};
 		3353FC282F0124320097CD23 /* FinderExtension */ = {
@@ -279,7 +276,7 @@
 				3353FC262F0124320097CD23 /* ExtensionCommunication.swift */,
 				3353FC272F0124320097CD23 /* FileOrganizerActionExtension.swift */,
 			);
-			path = Sources/FileOrganizerLib/FinderExtension;
+			path = Sources/SortyLib/FinderExtension;
 			sourceTree = "<group>";
 		};
 		3353FC2F2F0124320097CD23 /* Models */ = {
@@ -297,7 +294,7 @@
 				3353FCB82F0124320097CD23 /* WorkspaceHealth.swift */,
 				33007BB82F09093D000207CB /* CustomPersona.swift */,
 			);
-			path = Sources/FileOrganizerLib/Models;
+			path = Sources/SortyLib/Models;
 			sourceTree = "<group>";
 		};
 		3353FC332F0124320097CD23 /* Organizer */ = {
@@ -307,7 +304,7 @@
 				3353FC312F0124320097CD23 /* FolderOrganizer.swift */,
 				3353FC322F0124320097CD23 /* PreviewManager.swift */,
 			);
-			path = Sources/FileOrganizerLib/Organizer;
+			path = Sources/SortyLib/Organizer;
 			sourceTree = "<group>";
 		};
 		3353FC382F0124320097CD23 /* Utilities */ = {
@@ -322,7 +319,7 @@
 				3353FC362F0124320097CD23 /* Extensions.swift */,
 				3353FC372F0124320097CD23 /* KeychainManager.swift */,
 			);
-			path = Sources/FileOrganizerLib/Utilities;
+			path = Sources/SortyLib/Utilities;
 			sourceTree = "<group>";
 		};
 		3353FC3A2F0124320097CD23 /* ViewModels */ = {
@@ -330,7 +327,7 @@
 			children = (
 				3353FC392F0124320097CD23 /* SettingsViewModel.swift */,
 			);
-			path = Sources/FileOrganizerLib/ViewModels;
+			path = Sources/SortyLib/ViewModels;
 			sourceTree = "<group>";
 		};
 		3353FC442F0124320097CD23 /* Views */ = {
@@ -364,7 +361,7 @@
 				3353FCC22F0124320097CD23 /* WatchedFoldersView.swift */,
 				3353FCC32F0124320097CD23 /* WorkspaceHealthView.swift */,
 			);
-			path = Sources/FileOrganizerLib/Views;
+			path = Sources/SortyLib/Views;
 			sourceTree = "<group>";
 		};
 		3353FC462F0124320097CD23 = {
@@ -546,7 +543,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5EF522556FCD42DFA4915F5E /* main.swift in Sources */,
 				E1C18B1FCE6F4CDA919F06DF /* LearningsHoningView.swift in Sources */,
 				9AB64201726C425D855C0797 /* DuplicateSettingsView.swift in Sources */,
 				5B461775CCAE4523A380B07C /* HelpView.swift in Sources */,

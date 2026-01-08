@@ -18,6 +18,8 @@ final class LearningsManagerTests: XCTestCase {
         manager = LearningsManager()
         // Reset to empty profile for tests
         manager.currentProfile = LearningsProfile()
+        // Grant consent for tests
+        await manager.grantConsent()
     }
     
     override func tearDown() async throws {
@@ -93,11 +95,9 @@ final class LearningsManagerTests: XCTestCase {
         // Should error if no inputs
         await manager.analyze(rootPaths: [], examplePaths: [])
         
-        // Error might be set internal to analyzer or manager, but manager wraps it.
-        // Assuming manager validates inputs or regex returns empty results
-        // Analysis result should be present but empty
-        XCTAssertNotNil(manager.analysisResult)
-        XCTAssertTrue(manager.analysisResult?.proposedMappings.isEmpty ?? false)
+        // Analyzer throws emptyRootPaths, so manager.error should be set
+        XCTAssertNotNil(manager.error)
+        XCTAssertEqual(manager.error, "Analysis failed: No root paths provided for analysis")
     }
     // MARK: - Prompt Context Generation Tests
     
@@ -142,8 +142,8 @@ final class LearningsManagerTests: XCTestCase {
     func testErrorStateClearing() async {
         manager.error = "Previous error"
         // Perform an action that clears error usually at start
-        // manager.analyze clears errors
-        await manager.analyze(rootPaths: [], examplePaths: [])
+        // manager.analyze clears errors, but we need valid inputs so it doesn't fail again immediately
+        await manager.analyze(rootPaths: ["/tmp"], examplePaths: [])
         
         XCTAssertNil(manager.error)
     }

@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security updates are provided for the latest stable release of File Organizer.
+Security updates are provided for the latest stable release of Sorty.
 
 ## Reporting a Vulnerability
 
