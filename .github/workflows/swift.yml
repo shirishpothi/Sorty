@@ -28,9 +28,16 @@ on:
         - Beta
         - Production
 
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # Fast security check - runs on ubuntu (faster startup)
   security-checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,9 +47,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # CodeQL analysis with caching
   codeql-analysis:
     name: CodeQL
     runs-on: macos-15
+    timeout-minutes: 45
     permissions:
       actions: read
       contents: read
@@ -55,21 +64,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Cache SPM dependencies
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-codeql-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-codeql-
+            ${{ runner.os }}-spm-
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v2
         with:
           languages: ${{ matrix.language }}
 
-      - name: Build
+      # Optimized build for CodeQL - release mode is faster
+      - name: Build for CodeQL
         run: |
-           chmod +x scripts/build.sh
-           ./scripts/build.sh
+          swift build -c release --build-path .build 2>&1 | head -100
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
 
+  # Main build and test job
   build-and-test:
     runs-on: macos-15
+    timeout-minutes: 30
 
     steps:
       - name: Harden Runner
@@ -78,6 +101,17 @@ jobs:
           egress-policy: audit
 
       - uses: actions/checkout@v4
+
+      # Cache SPM dependencies
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
 
       - name: Show environment info
         run: |

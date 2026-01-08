@@ -18,6 +18,8 @@ public class SettingsViewModel: ObservableObject {
     
     @Published public var isAppleIntelligenceAvailable: Bool = false
     @Published public var appleIntelligenceStatus: String = ""
+    @Published public var availableModels: [String] = []
+    @Published public var isLoadingModels: Bool = false
     
     private let userDefaults = UserDefaults.standard
     private let configKey = "aiConfig"
@@ -101,6 +103,39 @@ public class SettingsViewModel: ObservableObject {
             FileItem(path: "/test/file2.pdf", name: "file2", extension: "pdf")
         ]
         _ = try await client.analyze(files: testFiles, customInstructions: nil, personaPrompt: nil, temperature: clientConfig.temperature)
+    }
+    
+    public func updateAvailableModels() {
+        guard config.provider == .githubCopilot else {
+            // For other providers, we don't dynamically fetch models yet
+            return
+        }
+        
+        Task {
+            await MainActor.run {
+                self.isLoadingModels = true
+            }
+            
+            do {
+                // Create a temporary client just for fetching models, using current config
+                if let client = try AIClientFactory.createClient(config: config) as? GitHubCopilotClient {
+                    let models = try await client.fetchAvailableModels()
+                    await MainActor.run {
+                        self.availableModels = models
+                        // Ensure current model is valid
+                        if !models.contains(self.config.model) {
+                            self.config.model = models.first ?? "gpt-4"
+                        }
+                        self.isLoadingModels = false
+                    }
+                }
+            } catch let fetchError {
+                LogManager.shared.log("Error fetching models: \(fetchError)", level: .error, category: "SettingsViewModel")
+                await MainActor.run {
+                    self.isLoadingModels = false
+                }
+            }
+        }
     }
 }
 

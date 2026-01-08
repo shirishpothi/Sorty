@@ -155,7 +155,7 @@ public class LearningsHoningEngine: ObservableObject {
                     }
                 } else {
                     self.error = "Failed to decode question JSON"
-                    print("JSON Decode Error. Data: \(String(data: data, encoding: .utf8) ?? "nil")")
+                    LogManager.shared.log("JSON Decode Error. Data: \(String(data: data, encoding: .utf8) ?? "nil")", level: .error, category: "HoningEngine")
                 }
             } else {
                 self.error = "Failed to parse question from AI"

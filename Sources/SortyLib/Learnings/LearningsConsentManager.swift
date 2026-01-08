@@ -48,7 +48,7 @@ public class LearningsConsentManager: ObservableObject {
         UserDefaults.standard.set(true, forKey: consentKey)
         UserDefaults.standard.set(now.timeIntervalSince1970, forKey: consentDateKey)
         
-        print("LearningsConsentManager: Consent granted at \(now)")
+        LogManager.shared.log("Consent granted at \(now)", category: "ConsentManager")
     }
     
     /// Revoke consent (stops data collection but keeps existing data)
@@ -57,7 +57,7 @@ public class LearningsConsentManager: ObservableObject {
         
         UserDefaults.standard.set(false, forKey: consentKey)
         
-        print("LearningsConsentManager: Consent withdrawn")
+        LogManager.shared.log("Consent withdrawn", category: "ConsentManager")
     }
     
     /// Mark initial setup as complete (triggers Touch ID requirement)
@@ -65,7 +65,7 @@ public class LearningsConsentManager: ObservableObject {
         hasCompletedInitialSetup = true
         UserDefaults.standard.set(true, forKey: setupCompleteKey)
         
-        print("LearningsConsentManager: Initial setup complete, Touch ID will be required")
+        LogManager.shared.log("Initial setup complete, Touch ID will be required", category: "ConsentManager")
     }
     
     /// Reset initial setup (for testing or re-onboarding)
@@ -83,7 +83,7 @@ public class LearningsConsentManager: ObservableObject {
             let files = try fm.contentsOfDirectory(at: learningsDirectory, includingPropertiesForKeys: nil)
             for file in files where file.pathExtension == "learning" {
                 try fm.removeItem(at: file)
-                print("LearningsConsentManager: Deleted \(file.lastPathComponent)")
+                LogManager.shared.log("Deleted \(file.lastPathComponent)", category: "ConsentManager")
             }
         }
         
@@ -97,7 +97,7 @@ public class LearningsConsentManager: ObservableObject {
         
         UserDefaults.standard.removeObject(forKey: consentDateKey)
         
-        print("LearningsConsentManager: All data deleted successfully")
+        LogManager.shared.log("All data deleted successfully", category: "ConsentManager")
     }
     
     /// Check if data collection is allowed

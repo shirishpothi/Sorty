@@ -8,16 +8,31 @@
 import Foundation
 
 public enum AIProvider: String, Codable, CaseIterable, Sendable {
+    case openAI = "openai"
+    case githubCopilot = "github_copilot"
+    case groq = "groq"
     case openAICompatible = "openai_compatible"
+    case openRouter = "open_router"
     case ollama = "ollama"
+    case anthropic = "anthropic"
     case appleFoundationModel = "apple_foundation_model"
     
     public var displayName: String {
         switch self {
+        case .openAI:
+            return "OpenAI"
+        case .githubCopilot:
+            return "GitHub Copilot"
+        case .groq:
+            return "Groq"
         case .openAICompatible:
             return "OpenAI-Compatible API"
+        case .openRouter:
+            return "OpenRouter"
         case .ollama:
             return "Ollama (Local)"
+        case .anthropic:
+            return "Anthropic (Claude)"
         case .appleFoundationModel:
             return "Apple Foundation Model"
         }
@@ -25,7 +40,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var isAvailable: Bool {
         switch self {
-        case .openAICompatible, .ollama:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic:
             return true
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
@@ -39,7 +54,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var unavailabilityReason: String? {
         switch self {
-        case .openAICompatible, .ollama:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic:
             return nil
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
@@ -50,7 +65,84 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "Apple Intelligence is not supported on this version of macOS."
         }
     }
+    
+    /// Default API URL for this provider
+    public var defaultAPIURL: String? {
+        switch self {
+        case .openAI:
+            return "https://api.openai.com"
+        case .githubCopilot:
+            return "https://api.githubcopilot.com"
+        case .groq:
+            return "https://api.groq.com/openai"
+        case .openAICompatible:
+            return "https://api.openai.com"
+        case .openRouter:
+            return "https://openrouter.ai/api/v1"
+        case .ollama:
+            return "http://localhost:11434"
+        case .anthropic:
+            return "https://api.anthropic.com/v1/messages"
+        case .appleFoundationModel:
+            return nil
+        }
+    }
+    
+    /// Default model for this provider
+    public var defaultModel: String {
+        switch self {
+        case .openAI:
+            return "gpt-4o"
+        case .githubCopilot:
+            return "gpt-4o"
+        case .groq:
+            return "llama-3.3-70b-versatile"
+        case .openAICompatible:
+            return "gpt-4"
+        case .openRouter:
+            return "openai/gpt-4o"
+        case .ollama:
+            return "llama3"
+        case .anthropic:
+            return "claude-3-5-sonnet-20240620"
+        case .appleFoundationModel:
+            return "default"
+        }
+    }
+    
+    /// Whether this provider typically requires an API key
+    public var typicallyRequiresAPIKey: Bool {
+        switch self {
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic:
+            return true
+        case .ollama, .appleFoundationModel:
+            return false
+        }
+    }
+    
+    /// Help text for obtaining API keys
+    public var apiKeyHelpText: String {
+        switch self {
+        case .openAI:
+            return "Get your API key from platform.openai.com"
+        case .githubCopilot:
+            return "Use your GitHub Personal Access Token with Copilot enabled"
+        case .groq:
+            return "Get your API key from console.groq.com"
+        case .openAICompatible:
+            return "Enter your API key for the compatible provider"
+        case .openRouter:
+            return "Get your API key from openrouter.ai/keys"
+        case .ollama:
+            return "API key is optional for local Ollama instances"
+        case .anthropic:
+            return "Get your API key from console.anthropic.com"
+        case .appleFoundationModel:
+            return "No API key required"
+        }
+    }
 }
+
 
 public struct AIConfig: Codable, Sendable, Equatable {
     public var provider: AIProvider

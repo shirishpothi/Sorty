@@ -161,17 +161,19 @@ struct PromptBuilder {
     static func buildPromptForProvider(_ provider: AIProvider, files: [FileItem], enableReasoning: Bool = false, customInstructions: String? = nil) -> String {
         switch provider {
         case .appleFoundationModel:
-            // Append instructions to compact prompt
+            // Append instructions
             var prompt = buildCompactPrompt(files: files, enableReasoning: enableReasoning)
             if let instructions = customInstructions, !instructions.isEmpty {
                 prompt = "USER INSTRUCTIONS: \(instructions)\n\n" + prompt
             }
             return prompt
-        case .openAICompatible, .ollama:
+        case .anthropic:
+            // Anthropic handles system prompts separately but we ensure the user prompt is robust
+            return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions)
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama:
             return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions)
         }
     }
 }
-
 
 

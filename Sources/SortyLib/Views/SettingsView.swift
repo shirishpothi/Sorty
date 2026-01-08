@@ -14,12 +14,14 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @State private var healthManager = WorkspaceHealthManager()
     @State private var showingHealthSettings = false
+    @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
 
     @State private var testConnectionStatus: String?
     @State private var isTestingConnection = false
     @State private var showingAdvanced = false
     @State private var contentOpacity: Double = 0
     @State private var sectionAppeared: [Int: Bool] = [:]
+    @State private var hasCopiedCode = false
 
     var body: some View {
         NavigationStack {
@@ -123,6 +125,12 @@ struct SettingsView: View {
                                         if provider.isAvailable {
                                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                                 viewModel.config.provider = provider
+                                                // Apply provider defaults
+                                                if let defaultURL = provider.defaultAPIURL {
+                                                    viewModel.config.apiURL = defaultURL
+                                                }
+                                                viewModel.config.model = provider.defaultModel
+                                                viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
                                                 HapticFeedbackManager.shared.selection()
                                             }
                                         }
@@ -145,16 +153,19 @@ struct SettingsView: View {
                         }
                         .animatedAppearance(delay: 0.05)
 
-                        // API Configuration (for OpenAI)
-                        if viewModel.config.provider == .openAICompatible {
+                        // API Configuration (for cloud-based providers)
+                        if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic].contains(viewModel.config.provider) {
                             Section {
-                                TextField("API URL", text: Binding(
-                                    get: { viewModel.config.apiURL ?? "https://api.openai.com" },
-                                    set: { viewModel.config.apiURL = $0.isEmpty ? nil : $0 }
-                                ))
-                                .textFieldStyle(.roundedBorder)
-                                .accessibilityLabel("API URL")
-                                .accessibilityIdentifier("ApiUrlTextField")
+                                // Only show API URL for custom/compatible provider
+                                if viewModel.config.provider == .openAICompatible {
+                                    TextField("API URL", text: Binding(
+                                        get: { viewModel.config.apiURL ?? "https://api.openai.com" },
+                                        set: { viewModel.config.apiURL = $0.isEmpty ? nil : $0 }
+                                    ))
+                                    .textFieldStyle(.roundedBorder)
+                                    .accessibilityLabel("API URL")
+                                    .accessibilityIdentifier("ApiUrlTextField")
+                                }
 
                                 HStack {
                                     SecureField("API Key", text: Binding(
@@ -171,18 +182,194 @@ struct SettingsView: View {
                                             .foregroundColor(.secondary)
                                     }
                                 }
+                                
+                                // Help text for getting API key
+                                Text(viewModel.config.provider.apiKeyHelpText)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
 
                                 TextField("Model", text: $viewModel.config.model)
                                     .textFieldStyle(.roundedBorder)
                                     .accessibilityLabel("Model Name")
                                     .accessibilityIdentifier("ModelTextField")
+
                             } header: {
                                 Text("API Configuration")
                             }
                             .transition(TransitionStyles.scaleAndFade)
                             .animatedAppearance(delay: 0.1)
+                        }
+                        
+                        // GitHub Copilot Configuration
+                        if viewModel.config.provider == .githubCopilot {
+                            Section {
+                                if copilotAuth.isAuthenticated {
+                                     HStack(spacing: 12) {
+                                         Image(systemName: "person.circle.fill")
+                                             .font(.title2)
+                                             .foregroundColor(.green)
+                                         
+                                         VStack(alignment: .leading) {
+                                             Text("Signed in")
+                                                 .font(.headline)
+                                             if let username = copilotAuth.username {
+                                                  Text(username)
+                                                      .font(.subheadline)
+                                                      .foregroundColor(.secondary)
+                                              }
+                                              
+                                              // Model Picker
+                                              if !viewModel.availableModels.isEmpty {
+                                                  Picker("Model", selection: $viewModel.config.model) {
+                                                      ForEach(viewModel.availableModels, id: \.self) { model in
+                                                          Text(model).tag(model)
+                                                      }
+                                                  }
+                                                  .pickerStyle(.menu)
+                                                  .labelsHidden()
+                                                  .frame(width: 120)
+                                                  .controlSize(.small)
+                                              } else if viewModel.isLoadingModels {
+                                                  BouncingSpinner(size: 10, color: .secondary)
+                                              }
+                                          }
+                                          .onAppear {
+                                              viewModel.updateAvailableModels()
+                                          }
+                                         
+                                         Spacer()
+                                         
+                                         Button("Sign Out") {
+                                             copilotAuth.signOut()
+                                         }
+                                         .buttonStyle(.bordered)
+                                     }
+                                     .padding(.vertical, 4)
+                                } else if let code = copilotAuth.deviceCodeResponse {
+                                     // Show code and instruction
+                                     VStack(alignment: .leading, spacing: 16) {
+                                         VStack(alignment: .leading, spacing: 4) {
+                                             Text("Step 1: Open this URL in your browser")
+                                                 .font(.headline)
+                                             Link(destination: URL(string: code.verificationUri)!) {
+                                                 Text(code.verificationUri)
+                                                     .underline()
+                                                     .foregroundColor(.blue)
+                                             }
+                                         }
+                                         
+                                         VStack(alignment: .leading, spacing: 8) {
+                                             Text("Step 2: Enter this code")
+                                                 .font(.headline)
+                                             
+                                             HStack {
+                                                 Text(code.userCode)
+                                                     .font(.system(.title, design: .monospaced))
+                                                     .bold()
+                                                     .padding()
+                                                     .background(Color.secondary.opacity(0.1))
+                                                     .cornerRadius(8)
+                                                 
+                                                 Button {
+                                                     let pasteboard = NSPasteboard.general
+                                                     pasteboard.clearContents()
+                                                     pasteboard.setString(code.userCode, forType: .string)
+                                                     HapticFeedbackManager.shared.tap()
+                                                     
+                                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                                         hasCopiedCode = true
+                                                     }
+                                                     
+                                                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                                         withAnimation {
+                                                             hasCopiedCode = false
+                                                         }
+                                                     }
+                                                 } label: {
+                                                     Image(systemName: hasCopiedCode ? "checkmark" : "doc.on.doc")
+                                                         .font(.title2)
+                                                         .foregroundColor(hasCopiedCode ? .green : .primary)
+                                                         .padding()
+                                                         .background(Color.secondary.opacity(0.1))
+                                                         .cornerRadius(8)
+                                                         .scaleEffect(hasCopiedCode ? 1.1 : 1.0)
+                                                 }
+                                                 .buttonStyle(.plain)
+                                             }
+                                         }
+                                         
+                                         HStack {
+                                             BouncingSpinner(size: 10, color: .secondary)
+                                             Text("Waiting for authorization...")
+                                                 .font(.caption)
+                                                 .foregroundColor(.secondary)
+                                         }
+                                     }
+                                     .padding()
+                                     .background(Color.secondary.opacity(0.05))
+                                     .cornerRadius(12)
+                                } else {
+                                     // Sign In Button & Disclaimer
+                                     VStack(alignment: .leading, spacing: 16) {
+                                         Text("Sign in with your GitHub account to use GitHub Copilot models.")
+                                             .font(.body)
+                                         
+                                         Button {
+                                             Task {
+                                                 try? await copilotAuth.startDeviceFlow()
+                                             }
+                                             HapticFeedbackManager.shared.tap()
+                                         } label: {
+                                             HStack {
+                                                 Image(systemName: "person.badge.key.fill")
+                                                 Text("Sign in with GitHub")
+                                             }
+                                             .frame(maxWidth: .infinity)
+                                             .padding()
+                                             .background(Color.black)
+                                             .foregroundColor(.white)
+                                             .cornerRadius(8)
+                                         }
+                                         .buttonStyle(.plain)
+                                         .shadow(radius: 2)
+                                         
+                                         if let error = copilotAuth.authError {
+                                             Label(error, systemImage: "exclamationmark.triangle")
+                                                 .foregroundColor(.red)
+                                                 .font(.caption)
+                                         }
+                                         
+                                         Divider()
+                                         
+                                         // Disclaimer
+                                         VStack(alignment: .leading, spacing: 8) {
+                                             Text("Disclaimer")
+                                                 .font(.caption)
+                                                 .bold()
+                                                 .foregroundColor(.secondary)
+                                             
+                                             Text("This is an unofficial integration and is not affiliated with or endorsed by GitHub or Microsoft. By using this feature:\n• You must have an active GitHub Copilot subscription\n• You understand your data will be sent to GitHub's servers\n• You agree to comply with GitHub Copilot's Terms of Service\n• You acknowledge this is for personal, non-automated use only")
+                                                 .font(.caption)
+                                                 .foregroundColor(.secondary)
+                                                 .fixedSize(horizontal: false, vertical: true)
+                                                 .padding(.bottom, 4)
+                                                 
+                                             Text("You accept this software is provided \"as is\" without warranties. Please ensure you have appropriate permissions and comply with all applicable terms when using this integration.")
+                                                 .font(.caption2)
+                                                 .foregroundColor(.secondary.opacity(0.8))
+                                         }
+                                     }
+                                     .padding(.vertical, 8)
+                                }
+                            } header: {
+                                Text("GitHub Copilot Authentication")
+                            }
+                            .transition(TransitionStyles.scaleAndFade)
+                            .animatedAppearance(delay: 0.1)
+                        }
 
-                            // Separate Connection section for OpenAI Compatible
+                        // Shared Connection Section (Available for all providers that support it)
+                        if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic].contains(viewModel.config.provider) {
                             Section {
                                 VStack(spacing: 12) {
                                     // Requires API Key toggle
@@ -465,18 +652,42 @@ struct SettingsView: View {
                             .animation(.easeInOut(duration: 0.2), value: testConnectionStatus)
                         }
 
-                        // Organization Strategy
                         Section {
+                            AnimatedToggle(isOn: $viewModel.config.showStatsForNerds) {
+                                Text("Show Stats for Nerds")
+                            }
+                            
                             AnimatedToggle(isOn: $viewModel.config.enableReasoning, id: "ReasoningToggle") {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Include Reasoning")
-                                    Text("AI will explain its organization choices. This will take significantly more time and tokens.")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                                 VStack(alignment: .leading, spacing: 4) {
+                                     Text("Include Reasoning")
+                                     Text("AI will explain its organization choices. This will take significantly more time and tokens.")
+                                         .font(.caption)
+                                         .foregroundColor(.secondary)
+                                 }
                             }
                             .padding(.vertical, 4)
+                            
+                            // Export Debug Logs Button
+                            Button {
+                                if let logURL = LogManager.shared.exportLogs() {
+                                    NSWorkspace.shared.activateFileViewerSelecting([logURL])
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.up")
+                                    Text("Export Debug Logs")
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(.blue)
 
+                        } header: {
+                            Text("Advanced Settings")
+                        }
+                        .animatedAppearance(delay: 0.25)
+
+                        // Organization Strategy
+                        Section {
                             AnimatedToggle(isOn: $viewModel.config.enableDeepScan, id: "DeepScanToggle") {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Deep Scanning")

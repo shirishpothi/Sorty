@@ -49,7 +49,7 @@ public struct LearningsFileManager {
         // Write to file
         try encryptedData.write(to: profileURL)
         
-        print("LearningsFileManager: Saved profile to \(profileURL.lastPathComponent)")
+        LogManager.shared.log("Saved profile to \(profileURL.lastPathComponent)", category: "LearningsFile")
     }
     
     /// Load profile from encrypted .learning file
@@ -74,7 +74,7 @@ public struct LearningsFileManager {
         decoder.dateDecodingStrategy = .iso8601
         let profile = try decoder.decode(LearningsProfile.self, from: jsonData)
         
-        print("LearningsFileManager: Loaded profile from \(profileURL.lastPathComponent)")
+        LogManager.shared.log("Loaded profile from \(profileURL.lastPathComponent)", category: "LearningsFile")
         return profile
     }
     
@@ -99,7 +99,7 @@ public struct LearningsFileManager {
         // Delete encryption key
         _ = KeychainManager.delete(key: "learnings_encryption_key")
         
-        print("LearningsFileManager: Securely deleted profile")
+        LogManager.shared.log("Securely deleted profile", category: "LearningsFile")
     }
     
     /// Check if a profile exists

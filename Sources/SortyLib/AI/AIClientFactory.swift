@@ -10,8 +10,14 @@ import Foundation
 struct AIClientFactory {
     static func createClient(config: AIConfig) throws -> AIClientProtocol {
         switch config.provider {
-        case .openAICompatible, .ollama:
+        case .openAI, .groq, .openAICompatible, .openRouter, .ollama:
             return OpenAIClient(config: config)
+            
+        case .githubCopilot:
+            return GitHubCopilotClient(config: config)
+            
+        case .anthropic:
+            return AnthropicClient(config: config)
             
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)

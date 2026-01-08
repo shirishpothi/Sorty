@@ -55,12 +55,12 @@ public class UpdateManager: ObservableObject {
             
             if httpResponse.statusCode == 200 {
                 let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
-                print("[UpdateManager] Found latest release: \(release.tagName)")
+                LogManager.shared.log("Found latest release: \(release.tagName)", category: "UpdateManager")
                 
                 // Robust normalization: strip leading 'v' if present
                 let latestVersion = release.tagName.hasPrefix("v") ? String(release.tagName.dropFirst()) : release.tagName
                 
-                print("[UpdateManager] Comparing latest \(latestVersion) with current \(BuildInfo.version)")
+                LogManager.shared.log("Comparing latest \(latestVersion) with current \(BuildInfo.version)", category: "UpdateManager")
                 if isVersionNewer(latest: latestVersion, current: BuildInfo.version) {
                     if let htmlUrl = URL(string: release.htmlUrl) {
                         state = .available(version: latestVersion, url: htmlUrl, notes: release.body)
@@ -72,7 +72,7 @@ public class UpdateManager: ObservableObject {
                 }
             } else {
                 let statusCode = httpResponse.statusCode
-                print("[UpdateManager] Error response: \(statusCode)")
+                LogManager.shared.log("Error response: \(statusCode)", level: .error, category: "UpdateManager")
                 
                 let message: String
                 switch statusCode {
@@ -82,7 +82,7 @@ public class UpdateManager: ObservableObject {
                     message = "GitHub API rate limit exceeded. Please try again later."
                 case 404:
                     // Treat 404 as no releases exist, which means we are technically "up to date"
-                    print("[UpdateManager] No releases found for this repository (404)")
+                    LogManager.shared.log("No releases found for this repository (404)", level: .warning, category: "UpdateManager")
                     state = .upToDate
                     return
                 default:

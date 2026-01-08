@@ -45,8 +45,8 @@ quick:
 
 # skips all checks and builds/runs immediately
 now:
-	@echo "🏎️  Immediate build and run..."
-	@SKIP_TESTS=true ./scripts/build.sh
+	@echo "🏎️  Immediate build and run (DEBUG mode)..."
+	@SKIP_TESTS=true BUILD_CONFIG=debug ./scripts/build.sh
 	@open releases/Sorty.app
 
 clean:

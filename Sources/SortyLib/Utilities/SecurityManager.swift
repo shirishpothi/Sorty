@@ -58,7 +58,7 @@ public class SecurityManager: ObservableObject {
             biometryType = context.biometryType
         } else {
             biometryType = .none
-            print("Biometry not available: \(error?.localizedDescription ?? "Unknown error")")
+            LogManager.shared.log("Biometry not available: \(error?.localizedDescription ?? "Unknown error")", level: .warning, category: "SecurityManager")
         }
     }
     
@@ -112,7 +112,8 @@ public class SecurityManager: ObservableObject {
                 self.authenticationMethod = biometryType != .none ? .biometric : .password
                 self.lastAuthenticationTime = Date()
                 startSessionTimer()
-                print("SecurityManager: Authentication successful via \(authenticationMethod.rawValue)")
+                startSessionTimer()
+                LogManager.shared.log("Authentication successful via \(authenticationMethod.rawValue)", category: "SecurityManager")
             }
         } catch let error as LAError {
             switch error.code {
@@ -151,7 +152,8 @@ public class SecurityManager: ObservableObject {
                 self.authenticationMethod = .password
                 self.lastAuthenticationTime = Date()
                 startSessionTimer()
-                print("SecurityManager: Authentication successful via password")
+                startSessionTimer()
+                LogManager.shared.log("Authentication successful via password", category: "SecurityManager")
             }
         } catch {
             self.error = "Password authentication failed: \(error.localizedDescription)"
@@ -170,7 +172,7 @@ public class SecurityManager: ObservableObject {
         lastAuthenticationTime = nil
         authenticationMethod = .none
         stopSessionTimer()
-        print("SecurityManager: Session locked")
+        LogManager.shared.log("Session locked", category: "SecurityManager")
     }
     
     /// Refresh the session timer (call on user activity)
@@ -199,7 +201,7 @@ public class SecurityManager: ObservableObject {
     private func checkSessionTimeout() {
         if isSessionExpired && isUnlocked {
             lock()
-            print("SecurityManager: Session timed out after \(sessionTimeoutInterval) seconds")
+            LogManager.shared.log("Session timed out after \(sessionTimeoutInterval) seconds", level: .info, category: "SecurityManager")
         }
     }
 }

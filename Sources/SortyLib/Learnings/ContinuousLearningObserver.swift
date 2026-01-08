@@ -111,13 +111,13 @@ public class ContinuousLearningObserver: ObservableObject {
         currentSession = session
         recentSessions.append(session)
         
-        print("ContinuousLearning: Started session \(session.id) for \(folderPath)")
+        LogManager.shared.log("Started session \(session.id) for \(folderPath)", category: "LearningObserver")
     }
     
     /// End the current session
     public func endSession() {
         if let session = currentSession {
-            print("ContinuousLearning: Ended session \(session.id)")
+            LogManager.shared.log("Ended session \(session.id)", category: "LearningObserver")
         }
         currentSession = nil
     }
@@ -143,7 +143,7 @@ public class ContinuousLearningObserver: ObservableObject {
         learningsManager.recordGuidingInstruction(prompt)
         learningsManager.recordSteeringPrompt(prompt, folderPath: folderPath ?? currentSession?.folderPath, sessionId: currentSession?.id)
         
-        print("ContinuousLearning: Recorded steering prompt: \(prompt.prefix(50))...")
+        LogManager.shared.log("Recorded steering prompt: \(prompt.prefix(50))...", category: "LearningObserver")
     }
     
     private func handleSteeringPrompt(_ notification: Notification) {
@@ -199,9 +199,9 @@ public class ContinuousLearningObserver: ObservableObject {
             
             if let aiOp = operations.first(where: { $0.destinationPath == src }) {
                 // Found the AI action that put the file here
-                print("ContinuousLearning: Detected correction for \(aiOp.sourcePath)")
-                print("AI put it at: \(src)")
-                print("User moved it to: \(dst)")
+                LogManager.shared.log("Detected correction for \(aiOp.sourcePath)", category: "LearningObserver")
+                LogManager.shared.log("AI put it at: \(src)", category: "LearningObserver")
+                LogManager.shared.log("User moved it to: \(dst)", category: "LearningObserver")
                 
                 let change = DirectoryChange(
                     originalPath: src, 
@@ -264,7 +264,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard canCollect, !learningsManager.isLocked else { return }
         
         learningsManager.recordAdditionalInstruction(instruction, for: folderPath)
-        print("ContinuousLearning: Recorded additional instruction for \(folderPath)")
+        LogManager.shared.log("Recorded additional instruction for \(folderPath)", category: "LearningObserver")
     }
     
     /// Track when user provides guiding instructions for next attempt
@@ -272,7 +272,7 @@ public class ContinuousLearningObserver: ObservableObject {
         guard canCollect, !learningsManager.isLocked else { return }
         
         learningsManager.recordGuidingInstruction(instruction)
-        print("ContinuousLearning: Recorded guiding instruction")
+        LogManager.shared.log("Recorded guiding instruction", category: "LearningObserver")
     }
     
     // MARK: - History Revert Tracking
@@ -282,7 +282,7 @@ public class ContinuousLearningObserver: ObservableObject {
               let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
               let operations = entry.operations else { return }
         
-        print("ContinuousLearning: Learning from Revert of session")
+        LogManager.shared.log("Learning from Revert of session", category: "LearningObserver")
         
         // Find and update the relevant session
         if let idx = recentSessions.firstIndex(where: { $0.historyEntryId == entry.id.uuidString }) {
