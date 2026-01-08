@@ -1,10 +1,10 @@
 # Contributing to Sorty
 
-Thank you for your interest in contributing to Sorty. To ensure a productive and collaborative environment, please adhere to the following guidelines.
+Thank you for your interest in contributing to Sorty! This document provides guidelines and instructions for contributing to this project.
 
 ## Code of Conduct
 
-All contributors are expected to maintain professional conduct. Communication should be clear, respectful, and focused on technical or organizational improvement.
+By participating in this project, you are expected to uphold our Code of Conduct. Please report unacceptable behavior to [conduct@sorty.app](mailto:conduct@sorty.app).r organizational improvement.
 
 ## How to Contribute
 

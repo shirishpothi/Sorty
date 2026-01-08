@@ -2,18 +2,27 @@
 
 ## Supported Versions
 
-Security updates are provided for the latest stable release of Sorty.
+The following versions of the Sorty project are currently being supported with security updates:
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 1.0.x   | :white_check_mark: |
+| < 1.0   | :x:                |
 
 ## Reporting a Vulnerability
 
-If you discover a potential security vulnerability, please report it via GitHub's Private Vulnerability Reporting mechanism.
+We take the security of Sorty strictly. If you have discovered a security vulnerability, please follow these steps:
 
-Please refrain from disclosing security vulnerabilities in public issues.
+1.  **Do not** open a public issue on GitHub.
+2.  Send an email to [security@sorty.app](mailto:security@sorty.app) (or your designated security contact).
+3.  Include as much detail as possible to help us reproduce the issue.
 
-### Disclosure Process
+We will acknowledge your email within 48 hours and provide an estimated timeline for the fix.
 
-Once a report is received, the maintainers will verify the issue and respond with a proposed timeline for remediation. We request that you provide sufficient time to address the vulnerability before public disclosure.
+## Security Features
 
-### Bug Bounty Program
-
-This project is a community-driven initiative. At this time, we do not offer a monetary bug bounty program. We value the contributions of security researchers and will provide appropriate attribution for verified reports.
+Sorty implements the following security measures:
+- **Sandboxing**: Runs within the macOS App Sandbox.
+- **Harden Runner**: GitHub Actions are monitored for tamper attempts.
+- **Secret Scanning**: All commits are scanned for exposed credentials.
+- **Code Signing**: Releases are signed with a Developer ID.

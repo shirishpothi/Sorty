@@ -76,5 +76,11 @@
             </dict>
         </dict>
     </array>
+    <key>SUFeedURL</key>
+    <string>https://github.com/shirishpothi/Sorty/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>PLACEHOLDER_KEY_REPLACE_WITH_REAL_PUBLIC_KEY</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
 </dict>
 </plist>

@@ -45,6 +45,9 @@ else
     log_item "SKIP_TESTS is set."
 fi
 
+# Inject Git Info
+"${SCRIPT_DIR}/inject_git_info.sh" "${PROJECT_DIR}/Resources"
+
 print_step 2 $TOTAL_STEPS "Compiling Project"
 start_step_timer "build"
 
