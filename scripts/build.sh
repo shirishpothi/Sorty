@@ -27,6 +27,10 @@ APP_BUNDLE="Sorty.app"
 
 TOTAL_STEPS=4
 
+# Build configuration
+BUILD_CONFIG="${BUILD_CONFIG:-release}"
+log_item "Configuration: ${BUILD_CONFIG}"
+
 if [ "$SKIP_TESTS" != "true" ]; then
     print_step 1 $TOTAL_STEPS "Running Unit Tests"
     start_step_timer "test"
@@ -44,11 +48,11 @@ fi
 print_step 2 $TOTAL_STEPS "Compiling Project"
 start_step_timer "build"
 
-if ! swift build -c release; then
+if ! swift build -c "${BUILD_CONFIG}"; then
     log_failure "Compilation failed"
     exit 1
 fi
-BIN_PATH=$(swift build -c release --show-bin-path)
+BIN_PATH=$(swift build -c "${BUILD_CONFIG}" --show-bin-path)
 log_success "Compilation succeeded ($(get_step_duration "build"))"
 
 print_step 3 $TOTAL_STEPS "Assembling App Bundle"
