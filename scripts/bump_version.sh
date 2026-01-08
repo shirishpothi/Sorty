@@ -27,7 +27,13 @@ if [ -f "$INFOPLIST" ]; then
         NEW_BUILD=1
     fi
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${NEW_BUILD}" "$INFOPLIST"
-    log_success "Updated Info.plist to Version ${NEW_VERSION} (Build ${NEW_BUILD})"
+    
+    # Inject Git Commit Hash
+    COMMIT_HASH=$(git rev-parse --short HEAD)
+    /usr/libexec/PlistBuddy -c "Add :GitCommitHash string ${COMMIT_HASH}" "$INFOPLIST" 2>/dev/null || \
+    /usr/libexec/PlistBuddy -c "Set :GitCommitHash ${COMMIT_HASH}" "$INFOPLIST"
+    
+    log_success "Updated Info.plist to Version ${NEW_VERSION} (Build ${NEW_BUILD}, Commit ${COMMIT_HASH})"
 else
     log_failure "Info.plist not found at $INFOPLIST"
     exit 1

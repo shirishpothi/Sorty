@@ -5,6 +5,28 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Test Scope'
+        required: true
+        default: 'Unit'
+        type: choice
+        options:
+        - Unit
+        - UI
+        - CLI
+        - All
+        - None
+      release_type:
+        description: 'Release Type'
+        required: true
+        default: 'None'
+        type: choice
+        options:
+        - None
+        - Beta
+        - Production
 
 jobs:
   build-and-test:
@@ -103,6 +125,37 @@ jobs:
           echo ""
           echo "✅ UI Tests completed"
         timeout-minutes: 30
+
+      - name: Run Build and Release
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          ARGS=""
+          
+          # correct scope mapping
+          if [[ "${{ inputs.test_scope }}" == "UI" ]] || [[ "${{ inputs.test_scope }}" == "All" ]]; then
+             ARGS="$ARGS --ui-tests"
+          elif [[ "${{ inputs.test_scope }}" == "CLI" ]]; then
+             ARGS="$ARGS --cli-only"
+          elif [[ "${{ inputs.test_scope }}" == "None" ]]; then
+             ARGS="$ARGS --no-tests"
+          else
+             # Default or Unit
+             ARGS="$ARGS --skip-ui"
+          fi
+          
+          echo "Running release.sh with args: $ARGS"
+          ./scripts/release.sh $ARGS
+        env:
+           NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
+           NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+           TEAM_ID: ${{ secrets.TEAM_ID }}
+
+      - name: Archive Release Artifacts
+        if: github.event_name == 'workflow_dispatch' && inputs.release_type != 'None'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Release-Artifacts
+          path: releases/
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4

@@ -21,6 +21,19 @@ BUILD_NUM=$(get_build_number)
 DATE=$(date -R)
 SIZE=$(stat -f%z "$ZIP_PATH")
 
+# Validate Sparkle Configuration
+FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "${PROJECT_DIR}/Info.plist" 2>/dev/null || true)
+if [ -z "$FEED_URL" ]; then
+    log_failure "SUFeedURL not set in Info.plist. Autoupdate will fail."
+    # Fail strict build? Or warn? User said "if it can't update in-app... build is screwed"
+    exit 1
+fi
+
+PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${PROJECT_DIR}/Info.plist" 2>/dev/null || true)
+if [ -z "$PUBLIC_KEY" ]; then
+    log_warn "SUPublicEDKey not set in Info.plist. Updates may be insecure."
+fi
+
 # Generate signature if key is provided
 SIGNATURE=""
 if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
