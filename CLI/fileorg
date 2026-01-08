@@ -181,7 +181,11 @@ case "$COMMAND" in
         ;;
         
     "help")
-        open_url "${APP_SCHEME}://help"
+        show_help
+        # Also try to open app help if in a GUI session
+        if [[ "$OSTYPE" == "darwin"* ]] && [ ! -z "$DISPLAY" ] || [ -z "$CI" ]; then
+            open_url "${APP_SCHEME}://help"
+        fi
         ;;
         
     *)

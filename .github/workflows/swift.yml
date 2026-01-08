@@ -62,13 +62,13 @@ jobs:
           swift build --product learnings 2>&1 | tee cli_build_output.log
           echo "✅ CLI build successful"
           
-          # Test basic commands
+          # Test basic commands using swift run
           echo "Testing learnings CLI help..."
-          .build/debug/learnings help 2>&1 | grep -q "Learnings CLI"
+          swift run learnings help 2>&1 | grep -q "Learnings CLI"
           echo "✅ Help command works"
           
           echo "Testing learnings CLI info..."
-          .build/debug/learnings info 2>&1 | head -5
+          swift run learnings info 2>&1 | head -5
           echo "✅ Info command works"
           
           echo "✅ Learnings CLI tests completed"
@@ -94,19 +94,15 @@ jobs:
           echo ""
           echo "=== UI Test Summary ==="
           grep -E "(Test Suite|Test Case|Executed|passed|failed)" ui_test_output.log | tail -30 || true
+          
+          if grep -q "TEST FAILED" ui_test_output.log 2>/dev/null; then
+            echo "❌ UI Tests failed!"
+            exit 1
+          fi
+          
           echo ""
           echo "✅ UI Tests completed"
         timeout-minutes: 30
-        continue-on-error: true
-
-      - name: Check UI Test Results
-        run: |
-          if grep -q "TEST FAILED" ui_test_output.log 2>/dev/null; then
-            echo "⚠️ Some UI tests failed. Check the test results artifact for details."
-            # Don't fail the entire build, but log the issue
-          else
-            echo "✅ All UI tests passed"
-          fi
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
