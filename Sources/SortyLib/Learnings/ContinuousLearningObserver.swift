@@ -203,22 +203,22 @@ public class ContinuousLearningObserver: ObservableObject {
                 print("AI put it at: \(src)")
                 print("User moved it to: \(dst)")
                 
-                let sessionId = matchedSession?.id ?? entry.id.uuidString
+                let change = DirectoryChange(
+                    originalPath: src, 
+                    newPath: dst, 
+                    wasAIOrganized: true,
+                    aiSessionId: matchedSession?.id ?? entry.id.uuidString
+                )
+                
                 learningsManager.recordDirectoryChange(
                     from: src, 
                     to: dst, 
                     wasAIOrganized: true,
-                    sessionId: sessionId
+                    sessionId: change.aiSessionId
                 )
                 
                 // Track correction in the session
                 if var session = matchedSession {
-                    let change = DirectoryChange(
-                        originalPath: src, 
-                        newPath: dst, 
-                        wasAIOrganized: true,
-                        aiSessionId: sessionId
-                    )
                     session.userCorrections.append(change)
                     if let idx = recentSessions.firstIndex(where: { $0.id == session.id }) {
                         recentSessions[idx] = session

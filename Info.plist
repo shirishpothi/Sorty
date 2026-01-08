@@ -76,9 +76,5 @@
             </dict>
         </dict>
     </array>
-    <key>SUFeedURL</key>
-    <string>https://github.com/shirishpothi/Sorty/releases/latest/download/appcast.xml</string>
-    <key>SUEnableAutomaticChecks</key>
-    <true/>
 </dict>
 </plist>

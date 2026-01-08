@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Project Settings
-PROJECT_NAME="FileOrganiser"
+PROJECT_NAME="Sorty"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCHEME="FileOrganiser"
 

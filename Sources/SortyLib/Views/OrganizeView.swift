@@ -157,13 +157,11 @@ struct DirectoryHeader: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "folder.fill")
-                .font(.title3)
                 .foregroundStyle(.blue)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(url.lastPathComponent)
                     .font(.headline)
-                    .fontWeight(.medium)
                 Text(url.deletingLastPathComponent().path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -179,10 +177,9 @@ struct DirectoryHeader: View {
                 .controlSize(.regular)
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, 8)
+        .padding(.vertical, 16)
+        .background(.bar)
         .overlay(Divider(), alignment: .bottom)
-        .padding(.top, 16)
-        .background(Color(NSColor.windowBackgroundColor))
     }
 }
 

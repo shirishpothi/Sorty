@@ -1,4 +1,4 @@
-# Sorty Help
+# FileOrganizer Help
 
 ## Table of Contents
 1. [Getting Started](#getting-started)
@@ -21,7 +21,7 @@
 
 ## Getting Started
 
-Welcome to Sorty! This app uses AI to intelligently sort your files into logical folders.
+Welcome to FileOrganizer! This app uses AI to intelligently sort your files into logical folders.
 
 ### Quick Start Guide
 
@@ -52,7 +52,7 @@ Before your first organization, we recommend:
 AI-powered sorting based on filenames, file types, and optionally content metadata. The AI recognizes patterns like project structures, date sequences, and semantic groupings.
 
 ### Deep Scan
-When enabled, Sorty reads file content for better accuracy:
+When enabled, FileOrganizer reads file content for better accuracy:
 - PDF text extraction
 - Image EXIF metadata (camera, date, location)
 - Document titles and keywords
@@ -76,7 +76,7 @@ Monitor your directories for clutter growth, identify cleanup opportunities, and
 
 ### How Organization Works
 
-1. **Scanning**: Sorty scans your selected directory and collects information about each file.
+1. **Scanning**: FileOrganizer scans your selected directory and collects information about each file.
 
 2. **AI Analysis**: The AI analyzes patterns in your files:
    - Naming conventions (project_v1, project_v2, etc.)
@@ -189,22 +189,22 @@ Use the **Refine Preferences** button to start a honing session:
 
 ```bash
 # View learning status
-sorty-cli --status
+learnings-cli --status
 
 # Clear all learning data
-sorty-cli --clear
+learnings-cli --clear
 
 # Open Learnings dashboard
-sorty learnings
+fileorg learnings
 ```
 
 ### Deeplinks
 
 | Deeplink | Description |
 |----------|-------------|
-| `sorty://learnings` | Open Learnings dashboard |
-| `sorty://learnings?action=honing` | Start a honing session |
-| `sorty://learnings?action=stats` | View learning statistics |
+| `fileorganizer://learnings` | Open Learnings dashboard |
+| `fileorganizer://learnings?action=honing` | Start a honing session |
+| `fileorganizer://learnings?action=stats` | View learning statistics |
 
 ---
 
@@ -240,7 +240,7 @@ You can customize the system prompt for each persona:
 
 ### How Duplicate Detection Works
 
-Sorty uses SHA-256 content hashing to find files with **identical content**, regardless of filename. Files are grouped by hash, and you can choose which copy to keep.
+FileOrganizer uses SHA-256 content hashing to find files with **identical content**, regardless of filename. Files are grouped by hash, and you can choose which copy to keep.
 
 ### Safe Deletion (Recommended)
 
@@ -262,13 +262,13 @@ You can scan any folder for duplicates without changing your main organization t
 
 ## App Deeplinks
 
-Sorty provides comprehensive URL schemes to control all aspects of the application.
+FileOrganizer provides comprehensive URL schemes to control all aspects of the application.
 
 ### Organization Routes
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://organize` | Open the organization view |
+| `fileorganizer://organize` | Open the organization view |
 | `path` | Path to organize |
 | `persona` | ID of persona (fileorganizer_general, developer, etc.). |
 | `autostart=true` | Automatically begin organization |
@@ -277,7 +277,7 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://duplicates` | Open duplicates view |
+| `fileorganizer://duplicates` | Open duplicates view |
 | `path` | Path to scan |
 | `autostart=true` | Automatically begin scan |
 
@@ -285,7 +285,7 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://persona` | Manage personas |
+| `fileorganizer://persona` | Manage personas |
 | `action=generate` | Generate a new persona |
 | `prompt` | Description for generation |
 | `generate=true` | Trigger generation immediately |
@@ -294,7 +294,7 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://watched` | Manage watched folders |
+| `fileorganizer://watched` | Manage watched folders |
 | `action=add` | Add a new watched folder |
 | `path` | Path to add |
 
@@ -302,7 +302,7 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://rules` | Manage exclusion rules |
+| `fileorganizer://rules` | Manage exclusion rules |
 | `action=add` | Add a new rule |
 | `pattern` | Pattern to exclude (e.g., "*.tmp") |
 
@@ -310,63 +310,63 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://settings` | Open Settings |
-| `sorty://learnings` | Open Learnings |
-| `sorty://history` | Open History |
-| `sorty://health` | Open Workspace Health |
-| `sorty://help` | Open Help |
+| `fileorganizer://settings` | Open Settings |
+| `fileorganizer://learnings` | Open Learnings |
+| `fileorganizer://history` | Open History |
+| `fileorganizer://health` | Open Workspace Health |
+| `fileorganizer://help` | Open Help |
 
 ---
 
 ## CLI Tooling
 
-Sorty includes a comprehensive CLI tool called `sorty-cli` (formerly `fileorg`) that allows you to control the application from your terminal.
+FileOrganizer includes a comprehensive CLI tool called `fileorg` that allows you to control the application from your terminal.
 
 ### Installation
-Run `make install` (or ensure `CLI/sorty-cli` is in your path).
+Run `make install` (or ensure `CLI/fileorg` is in your path).
 
 ### Usage
-`sorty-cli <command> [options]`
+`fileorg <command> [options]`
 
 ### Commands
 
 #### Organization
 ```bash
 # Organize current folder
-sorty-cli organize .
+fileorg organize .
 
 # Organize specific folder with specific persona
-sorty-cli organize /Users/me/Downloads --persona developer
+fileorg organize /Users/me/Downloads --persona developer
 
 # Auto-start organization
-sorty-cli organize . --auto
+fileorg organize . --auto
 ```
 
 #### Maintenance
 ```bash
 # Scan for duplicates
-sorty-cli duplicates /path/to/scan --auto
+fileorg duplicates /path/to/scan --auto
 
 # Add watched folder
-sorty-cli watched add /path/to/watch
+fileorg watched add /path/to/watch
 
 # Add exclusion rule
-sorty-cli rules add "*.log"
+fileorg rules add "*.log"
 ```
 
 #### Generative AI
 ```bash
 # Generate a new persona from description
-sorty-cli persona generate "I want to organize my sci-fi ebook collection by author"
+fileorg persona generate "I want to organize my sci-fi ebook collection by author"
 ```
 
 #### Navigation
 ```bash
-sorty-cli settings
-sorty-cli history
-sorty-cli learnings
-sorty-cli health
-sorty-cli help
+fileorg settings
+fileorg history
+fileorg learnings
+fileorg health
+fileorg help
 ```
 
 ---
@@ -443,7 +443,7 @@ Run "Calibrate" to perform a one-time full organization. This establishes the ba
 
 ### Cleanup Opportunities
 
-Sorty identifies:
+FileOrganizer identifies:
 - **Screenshot Clutter**: Many screenshots that could be organized
 - **Download Clutter**: Old files in Downloads folder
 - **Large Files**: Files > 100MB that may need attention
@@ -574,7 +574,7 @@ All data is stored locally:
 
 **A**: Yes! Press ⌘Z immediately after applying, or go to History and click "Revert" on any past session.
 
-### Q: Will Sorty delete my files?
+### Q: Will FileOrganizer delete my files?
 
 **A**: No. Organization only **moves** files into folders. The only deletion feature is for duplicates, and it has Safe Deletion enabled by default.
 
@@ -582,7 +582,7 @@ All data is stored locally:
 
 **A**: No. Deep Scan extracts metadata locally. Only file names and metadata summaries are sent to the AI.
 
-### Q: Can I use Sorty offline?
+### Q: Can I use FileOrganizer offline?
 
 **A**: Yes, with Ollama (local AI) or Apple Intelligence. Cloud providers (OpenAI) require internet.
 
@@ -607,4 +607,4 @@ All data is stored locally:
 
 ---
 
-*Sorty © 2025-2026 Shirish Pothi. Special thanks to the Apple Developer community.*
+*FileOrganizer © 2025-2026 Shirish Pothi. Special thanks to the Apple Developer community.*

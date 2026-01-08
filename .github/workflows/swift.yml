@@ -29,16 +29,11 @@ jobs:
           swift build --product learnings
           echo "✅ CLI build successful"
 
-      - name: Build the app
+      - name: Build the app (via script)
         run: |
-          xcodebuild build \
-            -project "FileOrganiser.xcodeproj" \
-            -scheme "FileOrganiser" \
-            -destination 'platform=macOS' \
-            -configuration Debug \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee build_output.log
-          echo "✅ Build succeeded"
+          chmod +x scripts/build.sh
+          ./scripts/build.sh
+          echo "✅ Build script succeeded"
 
       - name: Run UI Tests
         run: |

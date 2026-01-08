@@ -6,12 +6,12 @@
 all: build
 
 build:
-	@chmod +x build.sh
-	@./build.sh
+	@chmod +x scripts/build.sh
+	@./scripts/build.sh
 
 run: build
 	@echo "🚀 Launching Sorty..."
-	@open Sorty.app
+	@open releases/Sorty.app
 
 test:
 	@echo "🧪 Running Swift tests..."
