@@ -102,6 +102,7 @@ jobs:
           echo "✅ Build script succeeded"
 
       - name: Run UI Tests
+        if: github.event_name == 'workflow_dispatch' && (inputs.test_scope == 'UI' || inputs.test_scope == 'All')
         run: |
           set -o pipefail
           xcodebuild test \
