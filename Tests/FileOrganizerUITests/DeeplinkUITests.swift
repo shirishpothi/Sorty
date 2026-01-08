@@ -30,41 +30,46 @@ final class DeeplinkUITests: XCTestCase {
         let url = URL(string: "sorty://help")!
         NSWorkspace.shared.open(url)
         
-        // Check if Help view is shown
-        // In Sorty, appState.showHelp() likely shows a help window or a specific view
-        // Looking at AppUITests, we check for static texts
-        let helpText = app.staticTexts["Help"]
-        XCTAssertTrue(waitForElement(helpText), "Help view should be shown via deeplink")
+        // Help opens in a separate window "Sorty Help"
+        let helpWindow = app.windows["Sorty Help"]
+        
+        let exists = helpWindow.waitForExistence(timeout: 5.0)
+        XCTAssertTrue(exists, "Help window 'Sorty Help' should be shown via deeplink")
     }
 
     func testSettingsDeeplinkNavigation() throws {
-        // Trigger deeplink: sorty://settings
         let url = URL(string: "sorty://settings")!
         NSWorkspace.shared.open(url)
         
         // Verify Settings view is active
-        let settingsTitle = app.staticTexts["Settings"]
-        XCTAssertTrue(waitForElement(settingsTitle), "Settings view should be shown via deeplink")
+        // Use a more specific identifier if possible, or wait for Title
+        // SettingsView usually has a navigation title "Settings"
+        
+        // In macOS SwiftUI, navigation title often appears as a generic static text or window title
+        // We will look for "Organization Rules" header which is unique to Settings
+        let settingsHeader = app.staticTexts["Organization Rules"]
+        XCTAssertTrue(waitForElement(settingsHeader), "Settings view content should be shown")
     }
 
     func testHistoryDeeplinkNavigation() throws {
-        // Trigger deeplink: sorty://history
         let url = URL(string: "sorty://history")!
         NSWorkspace.shared.open(url)
         
-        // Verify History view is active
+        // Verify History view
+        // Looking for unique content in HistoryView
+        // Assuming navigation title "History" or similar
         let historyTitle = app.staticTexts["History"]
-        XCTAssertTrue(waitForElement(historyTitle), "History view should be shown via deeplink")
+        XCTAssertTrue(waitForElement(historyTitle), "History view should be shown")
     }
 
     func testHealthDeeplinkNavigation() throws {
-        // Trigger deeplink: sorty://health
         let url = URL(string: "sorty://health")!
         NSWorkspace.shared.open(url)
         
-        // Verify Workspace Health view is active
+        // Verify Workspace Health view
+        // Is titled "Workspace Health"
         let healthTitle = app.staticTexts["Workspace Health"]
-        XCTAssertTrue(waitForElement(healthTitle), "Workspace Health view should be shown via deeplink")
+        XCTAssertTrue(waitForElement(healthTitle), "Workspace Health view should be shown")
     }
 
     func testOrganizeDeeplinkWithParameters() throws {

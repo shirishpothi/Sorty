@@ -467,7 +467,7 @@ struct SettingsView: View {
 
                         // Organization Strategy
                         Section {
-                            AnimatedToggle(isOn: $viewModel.config.enableReasoning) {
+                            AnimatedToggle(isOn: $viewModel.config.enableReasoning, id: "ReasoningToggle") {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Include Reasoning")
                                     Text("AI will explain its organization choices. This will take significantly more time and tokens.")
@@ -476,9 +476,8 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.vertical, 4)
-                            .accessibilityIdentifier("ReasoningToggle")
 
-                            AnimatedToggle(isOn: $viewModel.config.enableDeepScan) {
+                            AnimatedToggle(isOn: $viewModel.config.enableDeepScan, id: "DeepScanToggle") {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Deep Scanning")
                                     Text("Analyze file content (PDF text, EXIF data for photos, etc.) for smarter organization.")
@@ -487,9 +486,8 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.vertical, 4)
-                            .accessibilityIdentifier("DeepScanToggle")
 
-                            AnimatedToggle(isOn: $viewModel.config.detectDuplicates) {
+                            AnimatedToggle(isOn: $viewModel.config.detectDuplicates, id: "DuplicatesToggle") {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Detect Duplicates")
                                     Text("Find files with identical content using SHA-256 hashing. May slow down large scans.")
@@ -498,9 +496,8 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.vertical, 4)
-                            .accessibilityIdentifier("DuplicatesToggle")
 
-                            AnimatedToggle(isOn: $viewModel.config.enableFileTagging) {
+                            AnimatedToggle(isOn: $viewModel.config.enableFileTagging, id: "FileTaggingToggle") {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Enable File Tagging")
                                     Text("Allow AI to suggest and apply Finder tags (e.g., 'Invoice', 'Personal') to files.")
@@ -509,7 +506,6 @@ struct SettingsView: View {
                                 }
                             }
                             .padding(.vertical, 4)
-                            .accessibilityIdentifier("FileTaggingToggle")
                         } header: {
                             Text("Organization Strategy")
                         }
@@ -525,6 +521,7 @@ struct SettingsView: View {
                                         .foregroundColor(.secondary)
                                         .monospacedDigit()
                                         .contentTransition(.numericText())
+                                        .accessibilityIdentifier("TemperatureDisplay")
                                 }
                                 Slider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
                                     .accessibilityLabel("Temperature")
@@ -673,6 +670,7 @@ struct SettingsView: View {
 
 struct AnimatedToggle<Label: View>: View {
     @Binding var isOn: Bool
+    var id: String? = nil
     let label: () -> Label
 
     var body: some View {
@@ -681,6 +679,19 @@ struct AnimatedToggle<Label: View>: View {
         }
         .onChange(of: isOn) { oldValue, newValue in
             HapticFeedbackManager.shared.selection()
+        }
+        .applyIdentifier(id)
+        .contentShape(Rectangle())
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func applyIdentifier(_ id: String?) -> some View {
+        if let id = id {
+            self.accessibilityIdentifier(id)
+        } else {
+            self
         }
     }
 }

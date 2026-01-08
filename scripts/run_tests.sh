@@ -87,18 +87,9 @@ if [ "$INCLUDE_UI" == "true" ]; then
     # xcodebuild is picky. If we have a filter, we might just grep the output or use specific schemes?
     # Actually, simpler: swift test doesn't do UI tests. xcodebuild does.
     
-    CMD="xcodebuild test -project ${PROJECT_NAME}.xcodeproj -scheme ${PROJECT_NAME} -destination 'platform=macOS'"
+    CMD="xcodebuild test -project FileOrganiser.xcodeproj -scheme ${SCHEME} -destination 'platform=macOS'"
     
     if [ -n "$TEST_FILTER" ]; then
-        # This is a bit rough, strict mapping is hard without knowing all test names.
-        # But we can try -only-testing if we map strictly, or just rely on the user running all UI tests
-        # The user wanted "selectively check just that"
-        # If I filter unit tests, I might not filter UI tests easily unless I map them.
-        
-        # Let's try to pass it as -only-testing:FileOrganiserUITests/*Filter*
-        # But xcodebuild doesn't verify wildcards well in -only-testing usually requires exact match?
-        # Actually in recent XCode, you can do -only-testing:Target/TestClass
-        
         # Heuristic mapping
         if [[ "$TEST_FILTER" == "Settings" ]]; then
              CMD="$CMD -only-testing:FileOrganiserUITests/AppUITests/testSettingsWorkflow"
@@ -111,7 +102,7 @@ if [ "$INCLUDE_UI" == "true" ]; then
     fi
      
     echo "Executing: $CMD"
-    eval "$CMD" | xcbeautify || eval "$CMD"
+    eval "$CMD"
 else
     # Unit Tests Only (swift test)
     CMD="swift test"
