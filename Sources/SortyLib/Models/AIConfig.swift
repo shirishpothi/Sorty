@@ -115,7 +115,11 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         switch self {
         case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic:
             return true
-        case .ollama, .appleFoundationModel:
+        case .ollama:
+            return false
+        case .appleFoundationModel:
+            // CRITICAL: Apple Foundation Model runs strictly on-device via FoundationModels.framework
+            // it does NOT use an API key and this must remain 'false'.
             return false
         }
     }
@@ -157,6 +161,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var systemPromptOverride: String?
     public var maxTokens: Int?
     public var enableStreaming: Bool
+    /// Whether the current provider requires an API key. 
+    /// NOTE: For .appleFoundationModel and .ollama (usually), this should be false.
     public var requiresAPIKey: Bool
     public var enableReasoning: Bool  // Ask AI to explain organization decisions
     

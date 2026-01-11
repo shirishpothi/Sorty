@@ -39,6 +39,9 @@ struct SortyApp: App {
                 .environmentObject(deeplinkHandler)
                 .environmentObject(learningsManager) // Inject
                 .onAppear {
+                    // Restore sandbox access for watched folders
+                    watchedFoldersManager.restoreSecurityScopedAccess()
+                    
                     if coordinator == nil {
                         coordinator = AppCoordinator(
                             organizer: organizer, 

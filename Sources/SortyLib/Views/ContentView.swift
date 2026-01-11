@@ -22,6 +22,15 @@ public struct ContentView: View {
     public init() {}
 
     public var body: some View {
+        if !appState.hasCompletedOnboarding {
+            OnboardingView(hasCompletedOnboarding: $appState.hasCompletedOnboarding)
+                .transition(TransitionStyles.scaleAndFade)
+        } else {
+            mainContent
+        }
+    }
+    
+    private var mainContent: some View {
         NavigationSplitView(columnVisibility: Binding(
             get: { appState.showingSidebar ? .all : .detailOnly },
             set: { appState.showingSidebar = $0 != .detailOnly }

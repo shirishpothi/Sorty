@@ -13,9 +13,11 @@
 10. [App Deeplinks](#app-deeplinks)
 11. [CLI Tooling](#cli-tooling)
 12. [Keyboard Shortcuts](#keyboard-shortcuts)
-13. [Troubleshooting](#troubleshooting)
-14. [Privacy & Data](#privacy--data)
-15. [FAQ](#faq)
+13. [Menu Bar Commands](#menu-bar-commands)
+14. [Version & Updates](#version--updates)
+15. [Troubleshooting](#troubleshooting)
+16. [Privacy & Data](#privacy--data)
+17. [FAQ](#faq)
 
 ---
 
@@ -470,7 +472,6 @@ Weekly insights show:
 | ⌘3 | Go to Duplicates |
 | ⌘4 | Go to Exclusions |
 | ⌘5 | Go to Watched Folders |
-| ⌘6 | Go to The Learnings |
 | ⌘, | Open Settings |
 | ⇧⌘H | Open History |
 | ⇧⌘L | Open The Learnings |
@@ -490,9 +491,108 @@ Weekly insights show:
 
 | Shortcut | Action |
 |----------|--------|
-| ⌘R | Start/Regenerate Organization |
+| ⌘R | Start Organization |
+| ⇧⌘R | Regenerate Organization |
 | ⌘⏎ | Apply Changes |
+| ⇧⌘P | Preview Changes |
 | ⎋ | Cancel Operation |
+
+### Learnings
+
+| Shortcut | Action |
+|----------|--------|
+| ⌥⌘H | Start Honing Session |
+
+---
+
+## Menu Bar Commands
+
+Sorty provides a comprehensive menu bar with commands organized into logical groups.
+
+### File Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| New Session | ⌘N | Clear current state and start fresh |
+| Open Directory... | ⌘O | Select a folder to organize |
+| Export Results... | ⌘E | Export organization plan as JSON, CSV, or HTML |
+
+### View Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Show/Hide Sidebar | ⌘\ | Toggle the navigation sidebar |
+| Organize | ⌘1 | Navigate to main organization view |
+| Workspace Health | ⌘2 | Navigate to health monitoring |
+| Duplicates | ⌘3 | Navigate to duplicate finder |
+| Exclusions | ⌘4 | Navigate to exclusion rules |
+| Watched Folders | ⌘5 | Navigate to watched folders |
+| The Learnings | ⇧⌘L | Navigate to learning dashboard |
+| Settings | ⌘, | Open app settings |
+| History | ⇧⌘H | View organization history |
+
+### Organize Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Start Organization | ⌘R | Begin AI analysis of selected folder |
+| Regenerate Organization | ⇧⌘R | Re-run analysis with current settings |
+| Apply Changes | ⌘⏎ | Execute the proposed organization |
+| Preview Changes | ⇧⌘P | Preview what will change before applying |
+| Cancel | ⎋ | Stop the current operation |
+
+### Learnings Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Open Dashboard | ⇧⌘L | Open The Learnings dashboard |
+| Start Honing Session | ⌥⌘H | Begin a preference refinement Q&A |
+| View Statistics | — | See learning metrics and progress |
+| Pause Learning | — | Temporarily stop data collection |
+| Export Learning Profile... | — | Save preferences to a file |
+| Import Learning Profile... | — | Load preferences from a file |
+
+### Help Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Sorty Help | ⌘? | Open this help documentation |
+| Delete All Usage Data | — | Remove Safe Deletion and usage history |
+| GitHub Repository | — | Open Sorty's GitHub page |
+| About Sorty | — | View app version and credits |
+| Check for Updates... | — | Check for new versions of Sorty |
+
+---
+
+## Version & Updates
+
+### Checking for Updates
+
+Sorty includes a built-in update checker that helps you stay current with the latest features and bug fixes.
+
+**To check for updates:**
+1. Go to **Help → Check for Updates...** (or use the About menu)
+2. Sorty will check GitHub releases for a newer version
+3. If an update is available, you'll see release notes and a download link
+
+### What's Included in Updates
+
+Updates may include:
+- New AI providers and models
+- Enhanced organization algorithms
+- Bug fixes and performance improvements
+- New personas and file type support
+- Security patches
+
+### Automatic Notifications
+
+Sorty periodically checks for updates in the background and will notify you when a new version is available. You can always manually check via the Help menu.
+
+### Release Notes
+
+View the full changelog at:
+- **In-app**: Check for Updates dialog shows release notes
+- **Online**: [GitHub Releases](https://github.com/shirishpothi/Sorty/releases)
 
 ---
 

@@ -8,6 +8,13 @@
 import Foundation
 import Combine
 
+public enum FolderAccessStatus: String, Codable, Sendable {
+    case valid
+    case stale
+    case lost
+    case unknown
+}
+
 public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var path: String
@@ -18,6 +25,8 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public var triggerDelay: TimeInterval // Seconds to wait after file changes before organizing
     public var customPrompt: String?
     public var temperature: Double?
+    public var bookmarkData: Data?
+    public var accessStatus: FolderAccessStatus = .unknown
     
     public init(
         id: UUID = UUID(),
@@ -28,7 +37,8 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         lastTriggered: Date? = nil,
         triggerDelay: TimeInterval = 5.0,
         customPrompt: String? = nil,
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        bookmarkData: Data? = nil
     ) {
         self.id = id
         self.path = path
@@ -39,6 +49,7 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         self.triggerDelay = triggerDelay
         self.customPrompt = customPrompt
         self.temperature = temperature
+        self.bookmarkData = bookmarkData
     }
     
     public var url: URL {
@@ -69,6 +80,13 @@ public class WatchedFoldersManager: ObservableObject {
     }
     
     public func removeFolder(_ folder: WatchedFolder) {
+        // Stop accessing security scoped resource before removing
+        if let bookmarkData = folder.bookmarkData {
+            var isStale = false
+            if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
         folders.removeAll { $0.id == folder.id }
         saveFolders()
     }
@@ -98,6 +116,60 @@ public class WatchedFoldersManager: ObservableObject {
         if var updated = folders.first(where: { $0.id == folder.id }) {
             updated.lastTriggered = Date()
             updateFolder(updated)
+        }
+    }
+    
+    /// Restores access to all security-scoped bookmarks
+    /// Should be called on app launch
+    public func restoreSecurityScopedAccess() {
+        var updatedFolders = folders
+        var hasChanges = false
+        
+        for (index, folder) in folders.enumerated() {
+            guard let bookmarkData = folder.bookmarkData else {
+                continue
+            }
+            
+            var isStale = false
+            do {
+                let url = try URL(resolvingBookmarkData: bookmarkData,
+                                  options: .withSecurityScope,
+                                  relativeTo: nil,
+                                  bookmarkDataIsStale: &isStale)
+                
+                if url.startAccessingSecurityScopedResource() {
+                    // Success!
+                    if isStale {
+                         // Recreate bookmark
+                         if let newData = try? url.bookmarkData(options: .withSecurityScope, includingResourceValuesForKeys: nil, relativeTo: nil) {
+                             updatedFolders[index].bookmarkData = newData
+                             hasChanges = true
+                         }
+                         updatedFolders[index].accessStatus = .stale
+                    } else {
+                        updatedFolders[index].accessStatus = .valid
+                    }
+                    
+                    // Update path if it changed (e.g. volume rename)
+                    if url.path != folder.path {
+                        updatedFolders[index].path = url.path
+                        hasChanges = true
+                    }
+                } else {
+                    DebugLogger.log("Failed to access security resource for \(folder.name)")
+                    updatedFolders[index].accessStatus = .lost
+                    hasChanges = true
+                }
+            } catch {
+                DebugLogger.log("Failed to resolve bookmark for \(folder.name): \(error)")
+                updatedFolders[index].accessStatus = .lost
+                hasChanges = true
+            }
+        }
+        
+        if hasChanges {
+            folders = updatedFolders
+            saveFolders()
         }
     }
     

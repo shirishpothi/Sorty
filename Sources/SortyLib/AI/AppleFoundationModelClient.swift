@@ -14,15 +14,15 @@ import Foundation
 import FoundationModels
 
 @available(macOS 26.0, *)
-final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
-    let config: AIConfig
-    @MainActor weak var streamingDelegate: StreamingDelegate?
+public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
+    public let config: AIConfig
+    @MainActor public weak var streamingDelegate: StreamingDelegate?
     
-    init(config: AIConfig) {
+    public init(config: AIConfig) {
         self.config = config
     }
     
-    func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let startTime = Date()
         
         // Verify availability first
@@ -98,7 +98,7 @@ final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
-    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+    public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         // Verify availability first
         guard Self.isAvailable() else {
             throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)

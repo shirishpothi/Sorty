@@ -28,6 +28,14 @@ public class LearningsManager: ObservableObject {
     public let securityManager = SecurityManager()
     public let consentManager = LearningsConsentManager()
     
+    // Learning Controls
+    @Published public var learningStrength: Double = 0.5 {
+        didSet {
+            UserDefaults.standard.set(learningStrength, forKey: "learningStrength")
+        }
+    }
+    @Published public var behaviorPreferences: BehaviorPreferences?
+    
     // MARK: - Dependencies
     
     public let analyzer = LearningsAnalyzer()
@@ -35,6 +43,9 @@ public class LearningsManager: ObservableObject {
     public init() {
         // Check if initial setup is required
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
+        // Load learning strength from UserDefaults
+        learningStrength = UserDefaults.standard.double(forKey: "learningStrength")
+        if learningStrength == 0 { learningStrength = 0.5 } // Default if not set
     }
     
     public func configure(with config: AIConfig) {
@@ -711,6 +722,135 @@ public class LearningsManager: ObservableObject {
         }
         
         return topics
+    }
+    
+    // MARK: - Impact Metrics
+    
+    /// Compute a summary of how learnings have affected organization results
+    public func computeImpactSummary(lastNRuns: Int = 10) -> LearningsImpactSummary? {
+        guard let profile = currentProfile else { return nil }
+        
+        // Count runs with learnings (based on whether we had rules/preferences at the time)
+        let totalRuns = profile.jobHistory.count
+        let runsWithLearnings = profile.jobHistory.filter { $0.status == .completed }.count
+        
+        // Files routed by learnings (estimate from successful rule applications)
+        let filesRoutedByLearnings = profile.inferredRules.reduce(0) { $0 + $1.successCount }
+        
+        // Corrections after AI
+        let correctionsAfterAI = profile.postOrganizationChanges.filter { $0.wasAIOrganized }.count
+        
+        // Reverts
+        let reverts = profile.historyReverts.count
+        
+        return LearningsImpactSummary(
+            runsWithLearnings: runsWithLearnings,
+            totalRuns: totalRuns,
+            filesRoutedByLearnings: filesRoutedByLearnings,
+            correctionsAfterAI: correctionsAfterAI,
+            reverts: reverts
+        )
+    }
+    
+    // MARK: - Rule Management
+    
+    /// Enable or disable a specific inferred rule
+    public func setRuleEnabled(ruleId: String, enabled: Bool) async {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].isEnabled = enabled
+            currentProfile = profile
+            await saveProfile()
+        }
+    }
+    
+    /// Record a rule success (applied and no correction followed)
+    public func recordRuleSuccess(ruleId: String) {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].successCount += 1
+            profile.inferredRules[index].lastAppliedAt = Date()
+            currentProfile = profile
+            debouncedSave()
+        }
+    }
+    
+    /// Record a rule failure (applied but user corrected)
+    public func recordRuleFailure(ruleId: String) {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].failureCount += 1
+            
+            // Auto-disable rules with high failure rate
+            let rule = profile.inferredRules[index]
+            if rule.failureRate > 0.3 && (rule.successCount + rule.failureCount) >= 5 {
+                profile.inferredRules[index].isEnabled = false
+                DebugLogger.log("Auto-disabled rule '\(rule.explanation)' due to high failure rate")
+            }
+            
+            currentProfile = profile
+            debouncedSave()
+        }
+    }
+    
+    /// Get active rules filtered by learning strength
+    public func getActiveRules() -> [InferredRule] {
+        guard let profile = currentProfile else { return [] }
+        
+        // Filter enabled rules
+        var activeRules = profile.inferredRules.filter { $0.isEnabled }
+        
+        // Sort by priority
+        activeRules.sort { $0.priority > $1.priority }
+        
+        // Apply learning strength to limit number of rules
+        let maxRules = Int(Double(activeRules.count) * learningStrength) + 1
+        return Array(activeRules.prefix(maxRules))
+    }
+    
+    /// Extract behavior preferences from honing answers
+    public func extractBehaviorPreferences() {
+        guard let profile = currentProfile else { return }
+        
+        var prefs = BehaviorPreferences()
+        
+        for answer in profile.honingAnswers {
+            let option = answer.selectedOption.lowercased()
+            
+            // Map answers to preferences based on keywords
+            if option.contains("archive") && option.contains("year") {
+                prefs.deletionVsArchive = .archiveByYear
+            } else if option.contains("archive") {
+                prefs.deletionVsArchive = .archive
+            } else if option.contains("delete") {
+                prefs.deletionVsArchive = .delete
+            }
+            
+            if option.contains("flat") {
+                prefs.folderDepthPreference = .flat
+            } else if option.contains("deep") || option.contains("hierarchy") {
+                prefs.folderDepthPreference = .deep
+            }
+            
+            if option.contains("date") || option.contains("year") || option.contains("month") {
+                prefs.dateVsContentPreference = .date
+            } else if option.contains("project") {
+                prefs.dateVsContentPreference = .project
+            } else if option.contains("content") || option.contains("type") {
+                prefs.dateVsContentPreference = .content
+            }
+            
+            if option.contains("newest") || option.contains("recent") {
+                prefs.duplicateKeeperStrategy = .keepNewest
+            } else if option.contains("oldest") || option.contains("original") {
+                prefs.duplicateKeeperStrategy = .keepOldest
+            }
+        }
+        
+        behaviorPreferences = prefs
     }
 }
 

@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import UserNotifications
 #if canImport(SortyLib)
 import SortyLib
 #endif
@@ -34,6 +35,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         self.folderWatcher.syncWithFolders(watchedFoldersManager.folders)
         
         setupNotifications()
+        requestNotificationPermission()
         
         // Start observing
         self.continuousLearningObserver.startObserving()
@@ -61,12 +63,36 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
     }
     
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+    
+    func folderWatcher(_ watcher: FolderWatcher, didDetectStaleBookmarkFor folder: WatchedFolder, newBookmarkData: Data) {
+        var updatedFolder = folder
+        updatedFolder.bookmarkData = newBookmarkData
+        // Also ensure status is valid
+        updatedFolder.accessStatus = .valid
+        watchedFoldersManager.updateFolder(updatedFolder)
+        print("Coordinator: Updated stale bookmark for \(folder.name)")
+    }
+    
     func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>) {
         guard !newFiles.isEmpty else { return }
         
         Task {
             // Check if we can proceed (e.g. not already organizing)
             guard organizer.state == .idle || organizer.state == .ready || organizer.state == .completed else {
+                print("Coordinator: Skipping auto-organize for \(folder.name) - organizer busy (state: \(organizer.state))")
+                return
+            }
+            
+            // Validate AI provider is configured before attempting organization
+            guard organizer.aiClient != nil else {
+                print("Coordinator: Cannot auto-organize \(folder.name) - AI provider not configured")
+                sendNotification(
+                    title: "Organization Failed",
+                    body: "Could not auto-organize \"\(folder.name)\" because no AI provider is configured."
+                )
                 return
             }
             
@@ -74,6 +100,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 folderWatcher.pause(folder) // Prevent loop
                 
                 watchedFoldersManager.markTriggered(folder)
+                
+                print("Coordinator: Auto-organizing \(newFiles.count) new files in \(folder.name): \(newFiles)")
                 
                 // Use Incremental Organization for Smart Drop
                 try await organizer.organizeIncremental(
@@ -83,10 +111,21 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                     temperature: folder.temperature
                 )
                 
-                folderWatcher.resume(folder) // Resume after completion
+                // Snapshot is updated inside resume() automatically
+                folderWatcher.resume(folder)
+                
+                print("Coordinator: Auto-organize completed for \(folder.name)")
+                
+                // Optional: success notification
+                // sendNotification(title: "Files Organized", body: "Successfully organized \(newFiles.count) new files in \(folder.name).")
                 
             } catch {
-                folderWatcher.resume(folder) // Ensure we resume even on error
+                print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
+                sendNotification(
+                    title: "Organization Failed",
+                    body: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)"
+                )
+                folderWatcher.resume(folder)
             }
         }
     }
@@ -96,19 +135,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             folderWatcher.pause(folder)
             do {
                 try await organizer.organize(directory: folder.url, customPrompt: folder.customPrompt, temperature: folder.temperature)
-                // Note: User still needs to click "Apply" for calibrate, which might be confusing if watcher is paused.
-                // Ideally calibrate should just be a manual "Organize" trigger from the UI.
-                // We'll let the UI handle the "Apply" state, but we need to ensure resume happens eventually.
-                // Actually, if we use the main organizer flow, the user controls it. 
-                // We should unpause when they finish or cancel.
-                // For simplicity in this iteration, we'll just Auto-Apply for calibrate too if it's auto-organize?
-                // No, User asked for "Calibrate" to set baseline. Usually implies manual review.
-                // We will NOT auto-apply calibrate. We will resume watcher when state goes back to idle/completed.
-                // NOTE: This requires observing state changes which is complex here.
-                // Alternative: Just resume immediately? No, that risks loops.
-                // Better: Just don't pause for calibrate? But then moves trigger watcher.
-                // Strategy: Pause, Run Full Organize, Auto-Apply (since it's explicit action)?
-                // Let's stick to: Calibrate = Full Organize + Auto Apply.
                  try await organizer.apply(at: folder.url, dryRun: false)
                  folderWatcher.resume(folder)
             } catch {
@@ -119,5 +145,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     
     func syncWatchedFolders() {
         folderWatcher.syncWithFolders(watchedFoldersManager.folders)
+    }
+    
+    private func sendNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 }

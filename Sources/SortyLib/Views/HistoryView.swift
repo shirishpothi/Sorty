@@ -2,8 +2,8 @@
 //  HistoryView.swift
 //  Sorty
 //
-//  Advanced History view with 4 stats, custom sidebar, and detailed reports
-//  Enhanced with haptic feedback, micro-animations, and modal bounces
+//  Advanced History view with 6 stats, card-based layout matching DuplicatesView style
+//  Enhanced with haptic feedback, micro-animations, and full ARIA accessibility
 //
 
 import SwiftUI
@@ -16,6 +16,7 @@ struct HistoryView: View {
     @State private var showAlert = false
     @State private var selectedFilter: HistoryFilter = .all
     @State private var contentOpacity: Double = 0
+    @State private var showingDetail = false
 
     private var filteredEntries: [OrganizationHistoryEntry] {
         switch selectedFilter {
@@ -36,95 +37,58 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Internal Sidebar (Sessions List)
-            VStack(spacing: 0) {
-                if organizer.history.entries.isEmpty {
-                    EmptyHistoryView()
-                        .transition(TransitionStyles.scaleAndFade)
-                } else {
-                    // Quick Stats - 4 Cards
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("DASHBOARD")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.secondary)
-                            .tracking(1.2)
-
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            HistoryStatCard(title: "Sessions", value: "\(organizer.history.totalSessions)", icon: "list.bullet.rectangle", color: .gray)
-                                .animatedAppearance(delay: 0.05)
-                            HistoryStatCard(title: "Files", value: "\(organizer.history.totalFilesOrganized)", icon: "doc.on.doc", color: .blue)
-                                .animatedAppearance(delay: 0.1)
-                            HistoryStatCard(title: "Folders", value: "\(organizer.history.totalFoldersCreated)", icon: "folder.fill.badge.plus", color: .purple)
-                                .animatedAppearance(delay: 0.15)
-                            HistoryStatCard(title: "Reverted", value: "\(organizer.history.revertedCount)", icon: "arrow.uturn.backward", color: .orange)
-                                .animatedAppearance(delay: 0.2)
-                            HistoryStatCard(title: "Space Saved", value: "\(ByteCountFormatter.string(fromByteCount: organizer.history.totalRecoveredSpace, countStyle: .file))", icon: "externaldrive.fill.badge.plus", color: .green)
-                                .animatedAppearance(delay: 0.25)
-                        }
-                    }
-                    .padding(20)
-                    .background(Color(NSColor.controlBackgroundColor))
-
-                    Divider()
-
-                    Divider()
-
-                    // Filter Bar
-                    LiquidDropdown(options: HistoryFilter.allCases, selection: $selectedFilter, title: "Show:")
-                        .accessibilityIdentifier("HistoryFilterDropdown")
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .onChange(of: selectedFilter) { oldValue, newValue in
-                            HapticFeedbackManager.shared.selection()
-                        }
-
-                    List(Array(filteredEntries.enumerated()), id: \.element.id, selection: $selectedEntry) { index, entry in
-                        HistoryEntryRow(entry: entry)
-                            .tag(entry)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                            .listRowSeparator(.hidden)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(selectedEntry == entry ? Color.accentColor.opacity(0.1) : Color.clear)
-                            )
-                            .animatedAppearance(delay: Double(index) * 0.03)
-                    }
-                    .listStyle(.plain)
-                    .padding(.top, 8)
-                    .onChange(of: selectedEntry) { oldValue, newValue in
-                        if newValue != nil {
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    }
-                }
-            }
-            .frame(width: 400)
-            .background(Color(NSColor.windowBackgroundColor))
+        VStack(spacing: 0) {
+            // Header - matches DuplicatesView style
+            HistoryHeader(
+                manager: organizer,
+                selectedFilter: $selectedFilter,
+                onClearHistory: clearHistory
+            )
 
             Divider()
 
-            // Detail Area
             ZStack {
-                if let entry = selectedEntry {
-                    HistoryDetailView(entry: entry, isProcessing: $isProcessing, onAction: { msg in
-                        alertMessage = msg
-                        showAlert = true
-                    })
-                    .id(entry.id)
-                    .transition(TransitionStyles.slideFromRight)
-                } else {
-                    EmptyDetailView()
+                if organizer.history.entries.isEmpty {
+                    HistoryEmptyStateView()
                         .transition(TransitionStyles.scaleAndFade)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 16) {
+                            // Summary Card - 6 stats in 2x3 grid
+                            HistorySummaryCard(history: organizer.history)
+                                .padding(.top, 16)
+                                .accessibilityElement(children: .contain)
+                                .accessibilityLabel("History Summary")
+
+                            // Session Cards
+                            ForEach(Array(filteredEntries.enumerated()), id: \.element.id) { index, entry in
+                                HistorySessionCard(
+                                    entry: entry,
+                                    isSelected: selectedEntry == entry,
+                                    onSelect: {
+                                        HapticFeedbackManager.shared.selection()
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            selectedEntry = entry
+                                            showingDetail = true
+                                        }
+                                    },
+                                    onUndo: { handleUndo(entry) },
+                                    onRedo: { handleRedo(entry) }
+                                )
+                                .animatedAppearance(delay: Double(index) * 0.03)
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 24)
+                    }
+                    .background(Color(NSColor.windowBackgroundColor))
+                    .transition(TransitionStyles.slideFromRight)
                 }
             }
-            .animation(.pageTransition, value: selectedEntry?.id)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(NSColor.windowBackgroundColor))
+            .animation(.pageTransition, value: organizer.history.entries.isEmpty)
+            .animation(.pageTransition, value: selectedFilter)
+            .opacity(contentOpacity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("History")
         .disabled(isProcessing)
         .overlay {
@@ -143,81 +107,257 @@ struct HistoryView: View {
                 Text(msg)
             }
         }
-        .opacity(contentOpacity)
+        .sheet(isPresented: $showingDetail) {
+            if let entry = selectedEntry {
+                HistoryDetailSheet(
+                    entry: entry,
+                    isProcessing: $isProcessing,
+                    onAction: { msg in
+                        alertMessage = msg
+                        showAlert = true
+                    },
+                    onDismiss: {
+                        showingDetail = false
+                        selectedEntry = nil
+                    }
+                )
+                .environmentObject(organizer)
+            }
+        }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
             }
         }
     }
-}
 
-// MARK: - Empty History View
-
-struct EmptyHistoryView: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.title)
-                .foregroundStyle(.secondary)
-            Text("No History")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private func clearHistory() {
+        HapticFeedbackManager.shared.tap()
+        organizer.history.clearHistory()
     }
-}
 
-// MARK: - Empty Detail View
-
-struct EmptyDetailView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 48))
-                .foregroundStyle(.quaternary)
-            Text("Select a session to view detailed report")
-                .foregroundColor(.secondary)
-        }
-    }
-}
-
-// MARK: - Processing Overlay
-
-struct ProcessingOverlay: View {
-    let stage: String
-    @State private var appeared = false
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.1)
-
-            VStack(spacing: 12) {
-                BouncingSpinner(size: 24, color: .accentColor)
-
-                Text(stage)
-                    .font(.body)
-                    .foregroundColor(.primary)
+    private func handleUndo(_ entry: OrganizationHistoryEntry) {
+        isProcessing = true
+        Task {
+            do {
+                try await organizer.undoHistoryEntry(entry)
+                HapticFeedbackManager.shared.success()
+                alertMessage = "Operations reversed successfully."
+                showAlert = true
+            } catch {
+                HapticFeedbackManager.shared.error()
+                alertMessage = "Error: \(error.localizedDescription)"
+                showAlert = true
             }
-            .padding(24)
-            .background(.regularMaterial)
-            .cornerRadius(12)
-            .scaleEffect(appeared ? 1 : 0.8)
-            .opacity(appeared ? 1 : 0)
+            isProcessing = false
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                appeared = true
+    }
+
+    private func handleRedo(_ entry: OrganizationHistoryEntry) {
+        isProcessing = true
+        Task {
+            do {
+                try await organizer.redoOrganization(from: entry)
+                HapticFeedbackManager.shared.success()
+                alertMessage = "Organization re-applied."
+                showAlert = true
+            } catch {
+                HapticFeedbackManager.shared.error()
+                alertMessage = "Error: \(error.localizedDescription)"
+                showAlert = true
             }
+            isProcessing = false
         }
     }
 }
 
-// MARK: - History Entry Row
+// MARK: - History Header
 
-struct HistoryEntryRow: View {
+struct HistoryHeader: View {
+    @ObservedObject var manager: FolderOrganizer
+    @Binding var selectedFilter: HistoryView.HistoryFilter
+    let onClearHistory: () -> Void
+
+    @State private var showClearConfirmation = false
+
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.title2)
+                        .foregroundStyle(.blue.gradient)
+                    Text("Organization History")
+                        .font(.title2.bold())
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Organization History")
+
+                Text("\(manager.history.totalSessions) sessions recorded")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("\(manager.history.totalSessions) sessions recorded")
+            }
+
+            Spacer()
+
+            // Filter Picker
+            Picker("Filter", selection: $selectedFilter) {
+                ForEach(HistoryView.HistoryFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 280)
+            .accessibilityLabel("Filter history sessions")
+            .accessibilityIdentifier("HistoryFilterPicker")
+            .onChange(of: selectedFilter) { _, _ in
+                HapticFeedbackManager.shared.selection()
+            }
+
+            Button {
+                showClearConfirmation = true
+            } label: {
+                Label("Clear", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .disabled(manager.history.entries.isEmpty)
+            .accessibilityLabel("Clear all history")
+            .accessibilityIdentifier("ClearHistoryButton")
+            .confirmationDialog("Clear History?", isPresented: $showClearConfirmation, titleVisibility: .visible) {
+                Button("Clear All History", role: .destructive) {
+                    onClearHistory()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently remove all history entries. This cannot be undone.")
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+        .background(.bar)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("History controls")
+    }
+}
+
+// MARK: - History Summary Card (6 Stats)
+
+struct HistorySummaryCard: View {
+    let history: OrganizationHistory
+
+    var body: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible()),
+            GridItem(.flexible()),
+            GridItem(.flexible())
+        ], spacing: 20) {
+            HistoryStatItem(
+                title: "Total Sessions",
+                value: "\(history.totalSessions)",
+                icon: "list.bullet.rectangle.fill",
+                color: .gray
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Total sessions: \(history.totalSessions)")
+
+            HistoryStatItem(
+                title: "Files Organized",
+                value: "\(history.totalFilesOrganized)",
+                icon: "doc.on.doc.fill",
+                color: .blue
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Files organized: \(history.totalFilesOrganized)")
+
+            HistoryStatItem(
+                title: "Folders Created",
+                value: "\(history.totalFoldersCreated)",
+                icon: "folder.fill.badge.plus",
+                color: .purple
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Folders created: \(history.totalFoldersCreated)")
+
+            HistoryStatItem(
+                title: "Reverted",
+                value: "\(history.revertedCount)",
+                icon: "arrow.uturn.backward.circle.fill",
+                color: .orange
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Reverted: \(history.revertedCount)")
+
+            HistoryStatItem(
+                title: "Space Saved",
+                value: ByteCountFormatter.string(fromByteCount: history.totalRecoveredSpace, countStyle: .file),
+                icon: "externaldrive.fill.badge.checkmark",
+                color: .green
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Space saved: \(ByteCountFormatter.string(fromByteCount: history.totalRecoveredSpace, countStyle: .file))")
+
+            HistoryStatItem(
+                title: "Success Rate",
+                value: history.totalSessions > 0 ? "\(Int(Double(history.successCount) / Double(history.totalSessions) * 100))%" : "—",
+                icon: "chart.line.uptrend.xyaxis.circle.fill",
+                color: .teal
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Success rate: \(history.totalSessions > 0 ? "\(Int(Double(history.successCount) / Double(history.totalSessions) * 100)) percent" : "not available")")
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+        )
+    }
+}
+
+private struct HistoryStatItem: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(color.gradient)
+                .scaleEffect(isHovered ? 1.1 : 1.0)
+                .animation(.subtleBounce, value: isHovered)
+
+            Text(value)
+                .font(.title2.bold())
+                .contentTransition(.numericText())
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(minWidth: 100)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+// MARK: - History Session Card
+
+struct HistorySessionCard: View {
     let entry: OrganizationHistoryEntry
+    let isSelected: Bool
+    let onSelect: () -> Void
+    let onUndo: () -> Void
+    let onRedo: () -> Void
 
+    @State private var isExpanded = false
     @State private var isHovered = false
 
     private var statusColor: Color {
@@ -233,346 +373,568 @@ struct HistoryEntryRow: View {
 
     private var statusIcon: String {
         switch entry.status {
-        case .completed: return "checkmark"
-        case .failed: return "xmark"
-        case .cancelled: return "stop.fill"
-        case .skipped: return "arrow.right.circle"
-        case .undo: return "arrow.uturn.backward"
-        case .duplicatesCleanup: return "trash.fill"
+        case .completed: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
+        case .skipped: return "arrow.right.circle.fill"
+        case .undo: return "arrow.uturn.backward.circle.fill"
+        case .duplicatesCleanup: return "trash.circle.fill"
         }
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(statusColor.opacity(0.1))
-                    .frame(width: 32, height: 32)
-
-                Image(systemName: statusIcon)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(statusColor)
-            }
-            .scaleEffect(isHovered ? 1.1 : 1.0)
-            .animation(.subtleBounce, value: isHovered)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
-                    .font(.system(size: 14, weight: .semibold))
-                    .strikethrough(entry.status == .undo)
-                    .lineLimit(1)
-
-                HStack(spacing: 12) {
-                    if entry.status == .completed {
-                        Label("\(entry.filesOrganized) files", systemImage: "doc")
-                            .font(.system(size: 11))
-                        Label("\(entry.foldersCreated) folders", systemImage: "folder")
-                            .font(.system(size: 11))
-                    } else if entry.status == .duplicatesCleanup {
-                        Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
-                            .font(.system(size: 11))
-                        if let recovered = entry.recoveredSpace {
-                            Label(ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), systemImage: "externaldrive")
-                                .font(.system(size: 11))
-                        }
-                    } else {
-                        Text(entry.status.rawValue.capitalized)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(statusColor)
-                    }
-                    Spacer()
-                    Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            // Header Row
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
                 }
-                .foregroundColor(.secondary)
+                HapticFeedbackManager.shared.tap()
+            } label: {
+                HStack(spacing: 12) {
+                    // Status Icon
+                    Image(systemName: statusIcon)
+                        .font(.title3)
+                        .foregroundStyle(statusColor)
+                        .frame(width: 32)
+                        .accessibilityHidden(true)
+
+                    // Main Info
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
+                            .font(.headline)
+                            .lineLimit(1)
+
+                        HStack(spacing: 16) {
+                            if entry.status == .completed {
+                                Label("\(entry.filesOrganized) files", systemImage: "doc")
+                                Label("\(entry.foldersCreated) folders", systemImage: "folder")
+                            } else if entry.status == .duplicatesCleanup {
+                                Label("\(entry.duplicatesDeleted ?? 0) deleted", systemImage: "trash")
+                                if let recovered = entry.recoveredSpace {
+                                    Label(ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), systemImage: "externaldrive")
+                                }
+                            } else {
+                                Text(entry.status.rawValue.capitalized)
+                                    .foregroundStyle(statusColor)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    // Timestamp
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(entry.timestamp.formatted(date: .abbreviated, time: .omitted))
+                            .font(.caption)
+                        Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+
+                    // Expand Chevron
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .padding(16)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue), \(entry.timestamp.formatted(date: .abbreviated, time: .shortened))")
+            .accessibilityHint(isExpanded ? "Tap to collapse" : "Tap to expand")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("HistorySessionCard-\(entry.id.uuidString)")
+
+            // Expanded Content
+            if isExpanded {
+                Divider()
+                    .padding(.horizontal, 16)
+
+                VStack(alignment: .leading, spacing: 12) {
+                    // Full Path
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder")
+                            .foregroundStyle(.secondary)
+                        Text(entry.directoryPath)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Path: \(entry.directoryPath)")
+
+                    // Actions
+                    HStack(spacing: 12) {
+                        Button {
+                            onSelect()
+                        } label: {
+                            Label("View Details", systemImage: "info.circle")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityLabel("View session details")
+                        .accessibilityIdentifier("ViewDetailsButton-\(entry.id.uuidString)")
+
+                        if entry.success && entry.status != .duplicatesCleanup {
+                            if entry.isUndone {
+                                Button {
+                                    onRedo()
+                                } label: {
+                                    Label("Redo", systemImage: "arrow.clockwise")
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                                .accessibilityLabel("Redo organization")
+                                .accessibilityIdentifier("RedoButton-\(entry.id.uuidString)")
+                            } else {
+                                Button {
+                                    onUndo()
+                                } label: {
+                                    Label("Undo", systemImage: "arrow.uturn.backward")
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .accessibilityLabel("Undo organization")
+                                .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
+                            }
+                        }
+
+                        Spacer()
+                    }
+                }
+                .padding(16)
+                .background(Color.black.opacity(0.02))
             }
         }
-        .padding(.vertical, 8)
-        .opacity(entry.status == .undo || entry.status == .skipped ? 0.6 : 1.0)
-        .contentShape(Rectangle())
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+        )
+        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
     }
 }
 
-// MARK: - History Detail View
+// MARK: - History Empty State
 
-struct HistoryDetailView: View {
+struct HistoryEmptyStateView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 64))
+                .foregroundStyle(.secondary)
+                .opacity(0.8)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 8) {
+                Text("No History Yet")
+                    .font(.title2.bold())
+
+                Text("Your organization sessions will appear here. Start by organizing a folder.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 350)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.windowBackgroundColor))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No history yet. Your organization sessions will appear here.")
+    }
+}
+
+// MARK: - History Detail Sheet
+
+struct HistoryDetailSheet: View {
     let entry: OrganizationHistoryEntry
     @Binding var isProcessing: Bool
     let onAction: (String) -> Void
-    @State private var showRawAIResponse = false
-    @State private var appeared = false
+    let onDismiss: () -> Void
 
+    @State private var showRawAIResponse = false
     @EnvironmentObject var organizer: FolderOrganizer
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                // Header
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(entry.status == .completed ? "Organization Report" : "Session Detail")
-                                .font(.title)
-                                .fontWeight(.bold)
-                            Text(entry.timestamp.formatted(date: .complete, time: .shortened))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header Info
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
+                                    .font(.title.bold())
+                                Text(entry.timestamp.formatted(date: .complete, time: .shortened))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            StatusBadge(status: entry.status)
                         }
-                        Spacer()
-                        StatusBadge(status: entry.status)
-                            .scaleEffect(appeared ? 1 : 0.8)
-                            .opacity(appeared ? 1 : 0)
-                    }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue), \(entry.timestamp.formatted())")
 
-                    VStack(alignment: .leading, spacing: 8) {
+                        // Full Path
                         Label(entry.directoryPath, systemImage: "folder")
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(.primary)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
                             .padding(8)
                             .background(Color.secondary.opacity(0.1))
                             .cornerRadius(6)
+                            .accessibilityLabel("Full path: \(entry.directoryPath)")
                     }
-                }
-                .opacity(appeared ? 1 : 0)
-                .offset(y: appeared ? 0 : 20)
 
-                // Summary Stats in Detail
-                if entry.success || entry.status == .duplicatesCleanup {
-                    HStack(spacing: 20) {
-                        if entry.status == .duplicatesCleanup {
-                             DetailStatView(title: "Duplicates Deleted", value: "\(entry.duplicatesDeleted ?? 0)", icon: "trash.fill", color: .red)
-                                .animatedAppearance(delay: 0.1)
-                             if let recovered = entry.recoveredSpace {
-                                 DetailStatView(title: "Space Recovered", value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file), icon: "externaldrive.fill", color: .green)
-                                    .animatedAppearance(delay: 0.15)
-                             }
-                        } else {
-                            DetailStatView(title: "Files Organized", value: "\(entry.filesOrganized)", icon: "doc.fill", color: .blue)
-                                .animatedAppearance(delay: 0.1)
-                            DetailStatView(title: "Folders Created", value: "\(entry.foldersCreated)", icon: "folder.fill", color: .purple)
-                                .animatedAppearance(delay: 0.15)
-                            if let plan = entry.plan {
-                                DetailStatView(title: "Plan Version", value: "v\(plan.version)", icon: "number", color: .gray)
-                                    .animatedAppearance(delay: 0.2)
+                    Divider()
+
+                    // Stats Section
+                    if entry.success || entry.status == .duplicatesCleanup {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Session Statistics")
+                                .font(.headline)
+                                .accessibilityAddTraits(.isHeader)
+
+                            HStack(spacing: 20) {
+                                if entry.status == .duplicatesCleanup {
+                                    DetailStatView(
+                                        title: "Duplicates Deleted",
+                                        value: "\(entry.duplicatesDeleted ?? 0)",
+                                        icon: "trash.fill",
+                                        color: .red
+                                    )
+                                    if let recovered = entry.recoveredSpace {
+                                        DetailStatView(
+                                            title: "Space Recovered",
+                                            value: ByteCountFormatter.string(fromByteCount: recovered, countStyle: .file),
+                                            icon: "externaldrive.fill",
+                                            color: .green
+                                        )
+                                    }
+                                } else {
+                                    DetailStatView(
+                                        title: "Files Organized",
+                                        value: "\(entry.filesOrganized)",
+                                        icon: "doc.fill",
+                                        color: .blue
+                                    )
+                                    DetailStatView(
+                                        title: "Folders Created",
+                                        value: "\(entry.foldersCreated)",
+                                        icon: "folder.fill",
+                                        color: .purple
+                                    )
+                                    if let plan = entry.plan {
+                                        DetailStatView(
+                                            title: "Plan Version",
+                                            value: "v\(plan.version)",
+                                            icon: "number",
+                                            color: .gray
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
 
-                // Actions
-                if entry.success || entry.status == .duplicatesCleanup {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Session Management")
-                            .font(.headline)
+                    // Error Section
+                    if !entry.success, let error = entry.errorMessage {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("Error", systemImage: "exclamationmark.triangle.fill")
+                                .font(.headline)
+                                .foregroundStyle(.red)
+                                .accessibilityAddTraits(.isHeader)
 
-                        HStack(spacing: 12) {
-                            if entry.status == .duplicatesCleanup {
-                                if let restorables = entry.restorableItems, !restorables.isEmpty {
-                                    Button(action: handleRestoreDuplicates) {
-                                        Label("Restore Deleted Files", systemImage: "arrow.uturn.backward")
+                            Text(error)
+                                .font(.callout)
+                                .foregroundColor(.red)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.red.opacity(0.05))
+                                .cornerRadius(8)
+                                .accessibilityLabel("Error: \(error)")
+                        }
+                    }
+
+                    // Actions Section
+                    if entry.success || entry.status == .duplicatesCleanup {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Actions")
+                                .font(.headline)
+                                .accessibilityAddTraits(.isHeader)
+
+                            HStack(spacing: 12) {
+                                if entry.status == .duplicatesCleanup {
+                                    if let restorables = entry.restorableItems, !restorables.isEmpty {
+                                        Button {
+                                            handleRestoreDuplicates()
+                                        } label: {
+                                            Label("Restore Deleted Files", systemImage: "arrow.uturn.backward")
+                                                .frame(minWidth: 150)
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .controlSize(.large)
+                                        .accessibilityLabel("Restore deleted files")
+                                        .accessibilityIdentifier("RestoreDuplicatesButton")
+                                    }
+                                } else if entry.isUndone {
+                                    Button {
+                                        handleRedo()
+                                    } label: {
+                                        Label("Re-Apply Organization", systemImage: "arrow.clockwise")
                                             .frame(minWidth: 150)
                                     }
                                     .buttonStyle(.borderedProminent)
                                     .controlSize(.large)
+                                    .accessibilityLabel("Re-apply this organization")
+                                    .accessibilityIdentifier("RedoSessionButton")
                                 } else {
-                                    Text("No restore data available for this session")
-                                        .foregroundStyle(.secondary)
-                                        .font(.caption)
-                                }
-                            } else if entry.isUndone {
-                                Button(action: handleRedo) {
-                                    Label("Re-Apply This Organization", systemImage: "arrow.clockwise")
-                                        .frame(minWidth: 150)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
-                                .accessibilityIdentifier("RedoSessionButton")
-                            } else {
-                                Button(action: handleUndo) {
-                                    Label("Undo These Changes", systemImage: "arrow.uturn.backward")
-                                        .frame(minWidth: 150)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.large)
-                                .accessibilityIdentifier("UndoSessionButton")
+                                    Button {
+                                        handleUndo()
+                                    } label: {
+                                        Label("Undo Changes", systemImage: "arrow.uturn.backward")
+                                            .frame(minWidth: 150)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.large)
+                                    .accessibilityLabel("Undo these changes")
+                                    .accessibilityIdentifier("UndoSessionButton")
 
-                                Button(action: handleRestore) {
-                                    Label("Restore Folder to this State", systemImage: "clock.arrow.circlepath")
-                                        .frame(minWidth: 150)
+                                    Button {
+                                        handleRestore()
+                                    } label: {
+                                        Label("Restore to State", systemImage: "clock.arrow.circlepath")
+                                            .frame(minWidth: 150)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.large)
+                                    .accessibilityLabel("Restore folder to this state")
+                                    .accessibilityIdentifier("RestoreStateButton")
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.large)
                             }
                         }
                     }
-                    .opacity(appeared ? 1 : 0)
-                    .offset(y: appeared ? 0 : 10)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: appeared)
-                }
 
-                // Timeline Section
-                if entry.success {
-                    CompactTimelineView(
-                        entries: organizer.history.entries,
-                        directoryPath: entry.directoryPath
-                    )
-                    .animatedAppearance(delay: 0.25)
-                }
-
-                if !entry.success, let error = entry.errorMessage {
-                    SectionView(title: "Error Log", icon: "exclamationmark.triangle.fill", color: .red) {
-                        Text(error)
-                            .font(.callout)
-                            .foregroundColor(.red)
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.red.opacity(0.05))
-                            .cornerRadius(8)
+                    // Timeline Section
+                    if entry.success {
+                        CompactTimelineView(
+                            entries: organizer.history.entries,
+                            directoryPath: entry.directoryPath
+                        )
                     }
-                    .animatedAppearance(delay: 0.15)
-                }
 
-                // Expanded Plan List with reasoning and files
-                if let plan = entry.plan {
-                    SectionView(title: "Organization Details", icon: "list.bullet.indent", color: .blue) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ForEach(Array(plan.suggestions.enumerated()), id: \.element.id) { index, suggestion in
+                    // Organization Details
+                    if let plan = entry.plan {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Organization Details")
+                                .font(.headline)
+                                .accessibilityAddTraits(.isHeader)
+
+                            ForEach(plan.suggestions) { suggestion in
                                 FolderHistoryDetailRow(suggestion: suggestion)
-                                    .animatedAppearance(delay: 0.3 + Double(index) * 0.05)
                             }
 
                             if !plan.unorganizedFiles.isEmpty {
-                                VStack(alignment: .leading, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 8) {
                                     Text("Unorganized Files")
-                                        .font(.subheadline)
-                                        .fontWeight(.bold)
+                                        .font(.subheadline.bold())
                                         .foregroundColor(.orange)
 
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        ForEach(plan.unorganizedFiles) { fileItem in
-                                            HStack {
-                                                Image(systemName: "doc")
-                                                Text(fileItem.displayName)
-                                                Spacer()
-                                            }
-                                            .font(.caption)
-                                            .padding(.leading, 12)
+                                    ForEach(plan.unorganizedFiles) { fileItem in
+                                        HStack {
+                                            Image(systemName: "doc")
+                                                .foregroundStyle(.secondary)
+                                            Text(fileItem.displayName)
+                                            Spacer()
                                         }
+                                        .font(.caption)
+                                        .accessibilityElement(children: .combine)
+                                        .accessibilityLabel("Unorganized file: \(fileItem.displayName)")
                                     }
                                 }
                                 .padding()
                                 .background(Color.orange.opacity(0.05))
                                 .cornerRadius(8)
-                                .animatedAppearance(delay: 0.4)
                             }
                         }
                     }
-                } else if let restorables = entry.restorableItems, !restorables.isEmpty {
-                    SectionView(title: "Deleted Files", icon: "trash", color: .red) {
-                         VStack(alignment: .leading, spacing: 8) {
-                             ForEach(restorables) { item in
-                                 HStack {
-                                     Image(systemName: "doc")
-                                         .foregroundColor(.secondary)
-                                     Text(URL(fileURLWithPath: item.deletedPath).lastPathComponent)
-                                     Spacer()
-                                     Text("Original: " + URL(fileURLWithPath: item.originalPath).lastPathComponent)
-                                         .foregroundStyle(.tertiary)
-                                         .font(.caption2)
-                                 }
-                                 .font(.caption)
-                                 .padding(8)
-                                 .background(Color.secondary.opacity(0.05))
-                                 .cornerRadius(6)
-                             }
-                         }
-                    }
-                }
 
-                // Raw AI Data
-                if let raw = entry.rawAIResponse {
-                    DisclosureGroup("View Raw AI Response Data", isExpanded: $showRawAIResponse) {
-                        Text(raw)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.black.opacity(0.05))
-                            .cornerRadius(8)
+                    // Restorable Items for Duplicates
+                    if let restorables = entry.restorableItems, !restorables.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Deleted Files")
+                                .font(.headline)
+                                .accessibilityAddTraits(.isHeader)
+
+                            ForEach(restorables) { item in
+                                HStack {
+                                    Image(systemName: "doc")
+                                        .foregroundColor(.secondary)
+                                    Text(URL(fileURLWithPath: item.deletedPath).lastPathComponent)
+                                    Spacer()
+                                    Text("Original: \(URL(fileURLWithPath: item.originalPath).lastPathComponent)")
+                                        .foregroundStyle(.tertiary)
+                                        .font(.caption2)
+                                }
+                                .font(.caption)
+                                .padding(8)
+                                .background(Color.secondary.opacity(0.05))
+                                .cornerRadius(6)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("Deleted: \(URL(fileURLWithPath: item.deletedPath).lastPathComponent), original: \(URL(fileURLWithPath: item.originalPath).lastPathComponent)")
+                            }
+                        }
                     }
-                    .padding(.top, 8)
-                    .onChange(of: showRawAIResponse) { oldValue, newValue in
-                        HapticFeedbackManager.shared.tap()
+
+                    // Raw AI Response
+                    if let raw = entry.rawAIResponse {
+                        DisclosureGroup("Raw AI Response", isExpanded: $showRawAIResponse) {
+                            Text(raw)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .padding()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.black.opacity(0.05))
+                                .cornerRadius(8)
+                                .accessibilityLabel("Raw AI response data")
+                        }
+                        .accessibilityIdentifier("RawAIResponseDisclosure")
+                        .onChange(of: showRawAIResponse) { _, _ in
+                            HapticFeedbackManager.shared.tap()
+                        }
                     }
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showRawAIResponse)
+                }
+                .padding(24)
+            }
+            .navigationTitle("Session Details")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                    .accessibilityLabel("Close details")
+                    .accessibilityIdentifier("DismissDetailsButton")
                 }
             }
-            .padding(40)
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                appeared = true
-            }
-        }
+        .frame(minWidth: 600, minHeight: 500)
     }
 
     private func handleUndo() {
         HapticFeedbackManager.shared.tap()
-        processAction {
-            try await organizer.undoHistoryEntry(entry)
-            HapticFeedbackManager.shared.success()
-            onAction("Operations reversed successfully.")
+        isProcessing = true
+        Task {
+            do {
+                try await organizer.undoHistoryEntry(entry)
+                HapticFeedbackManager.shared.success()
+                onAction("Operations reversed successfully.")
+                onDismiss()
+            } catch {
+                HapticFeedbackManager.shared.error()
+                onAction("Error: \(error.localizedDescription)")
+            }
+            isProcessing = false
         }
     }
 
     private func handleRestore() {
         HapticFeedbackManager.shared.tap()
-        processAction {
-            try await organizer.restoreToState(targetEntry: entry)
-            HapticFeedbackManager.shared.success()
-            onAction("Folder state restored.")
+        isProcessing = true
+        Task {
+            do {
+                try await organizer.restoreToState(targetEntry: entry)
+                HapticFeedbackManager.shared.success()
+                onAction("Folder state restored.")
+                onDismiss()
+            } catch {
+                HapticFeedbackManager.shared.error()
+                onAction("Error: \(error.localizedDescription)")
+            }
+            isProcessing = false
         }
     }
 
     private func handleRedo() {
         HapticFeedbackManager.shared.tap()
-        processAction {
-            try await organizer.redoOrganization(from: entry)
-            HapticFeedbackManager.shared.success()
-            onAction("Organization re-applied.")
-        }
-    }
-    
-    private func handleRestoreDuplicates() {
-        HapticFeedbackManager.shared.tap()
-        processAction {
-            guard let restorables = entry.restorableItems else { return }
-            var restoredCount = 0
-            
-            for item in restorables {
-                try DuplicateRestorationManager.shared.restore(item: item)
-                restoredCount += 1
-            }
-            
-            HapticFeedbackManager.shared.success()
-            onAction("Restored \(restoredCount) files.")
-        }
-    }
-
-    private func processAction(_ action: @escaping () async throws -> Void) {
         isProcessing = true
         Task {
             do {
-                try await action()
-                isProcessing = false
+                try await organizer.redoOrganization(from: entry)
+                HapticFeedbackManager.shared.success()
+                onAction("Organization re-applied.")
+                onDismiss()
             } catch {
                 HapticFeedbackManager.shared.error()
                 onAction("Error: \(error.localizedDescription)")
+            }
+            isProcessing = false
+        }
+    }
+
+    private func handleRestoreDuplicates() {
+        HapticFeedbackManager.shared.tap()
+        isProcessing = true
+        Task {
+            guard let restorables = entry.restorableItems else {
                 isProcessing = false
+                return
+            }
+            var restoredCount = 0
+            for item in restorables {
+                do {
+                    try DuplicateRestorationManager.shared.restore(item: item)
+                    restoredCount += 1
+                } catch {
+                    // Continue with other items
+                }
+            }
+            HapticFeedbackManager.shared.success()
+            onAction("Restored \(restoredCount) files.")
+            isProcessing = false
+            onDismiss()
+        }
+    }
+}
+
+// MARK: - Processing Overlay
+
+struct ProcessingOverlay: View {
+    let stage: String
+    @State private var appeared = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.1)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 12) {
+                BouncingSpinner(size: 24, color: .accentColor)
+
+                Text(stage)
+                    .font(.body)
+                    .foregroundColor(.primary)
+            }
+            .padding(24)
+            .background(.regularMaterial)
+            .cornerRadius(12)
+            .scaleEffect(appeared ? 1 : 0.8)
+            .opacity(appeared ? 1 : 0)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Processing: \(stage)")
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                appeared = true
             }
         }
     }
@@ -593,6 +955,7 @@ struct DetailStatView: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .foregroundStyle(color)
+                    .accessibilityHidden(true)
                 Text(value)
                     .font(.headline)
                     .contentTransition(.numericText())
@@ -610,50 +973,8 @@ struct DetailStatView: View {
         .onHover { hovering in
             isHovered = hovering
         }
-    }
-}
-
-// MARK: - History Stat Card
-
-struct HistoryStatCard: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-
-    @State private var isHovered = false
-
-    var body: some View {
-        HStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.1))
-                    .frame(width: 28, height: 28)
-                Image(systemName: icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(color)
-            }
-            .scaleEffect(isHovered ? 1.1 : 1.0)
-            .animation(.subtleBounce, value: isHovered)
-
-            VStack(alignment: .leading, spacing: 0) {
-                Text(value)
-                    .font(.system(size: 14, weight: .bold))
-                    .contentTransition(.numericText())
-                Text(title)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(8)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(.subtleBounce, value: isHovered)
-        .onHover { hovering in
-            isHovered = hovering
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
 
@@ -681,6 +1002,7 @@ struct StatusBadge: View {
             .background(color.opacity(0.15))
             .foregroundColor(color)
             .cornerRadius(6)
+            .accessibilityLabel("Status: \(status.rawValue)")
     }
 }
 
@@ -697,6 +1019,7 @@ struct SectionView<Content: View>: View {
             Label(title, systemImage: icon)
                 .font(.headline)
                 .foregroundColor(color)
+                .accessibilityAddTraits(.isHeader)
             content()
         }
     }
@@ -721,12 +1044,13 @@ struct FolderHistoryDetailRow: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 0 : 0))
+                        .accessibilityHidden(true)
 
                     Image(systemName: "folder.fill")
                         .foregroundColor(.blue)
                         .scaleEffect(isHovered ? 1.1 : 1.0)
                         .animation(.subtleBounce, value: isHovered)
+                        .accessibilityHidden(true)
 
                     Text(suggestion.folderName)
                         .fontWeight(.semibold)
@@ -742,6 +1066,10 @@ struct FolderHistoryDetailRow: View {
             .onHover { hovering in
                 isHovered = hovering
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(suggestion.folderName), \(suggestion.totalFileCount) files")
+            .accessibilityHint(isExpanded ? "Tap to collapse" : "Tap to expand")
+            .accessibilityAddTraits(.isButton)
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
@@ -758,14 +1086,16 @@ struct FolderHistoryDetailRow: View {
                                 .cornerRadius(6)
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("AI reasoning: \(suggestion.reasoning)")
                     }
 
-                    // Files
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(suggestion.files.enumerated()), id: \.element.id) { index, fileItem in
                             HStack {
                                 Image(systemName: "doc")
                                     .foregroundColor(.secondary)
+                                    .accessibilityHidden(true)
                                 Text(fileItem.displayName)
                                 Spacer()
                                 Text(fileItem.formattedSize)
@@ -780,10 +1110,11 @@ struct FolderHistoryDetailRow: View {
                                     .delay(Double(index) * 0.02),
                                 value: isExpanded
                             )
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(fileItem.displayName), \(fileItem.formattedSize)")
                         }
                     }
 
-                    // Subfolders
                     ForEach(suggestion.subfolders) { subfolder in
                         FolderHistoryDetailRow(suggestion: subfolder)
                             .padding(.leading, 12)
@@ -806,5 +1137,5 @@ struct FolderHistoryDetailRow: View {
 #Preview {
     HistoryView()
         .environmentObject(FolderOrganizer())
-        .frame(width: 900, height: 600)
+        .frame(width: 900, height: 700)
 }

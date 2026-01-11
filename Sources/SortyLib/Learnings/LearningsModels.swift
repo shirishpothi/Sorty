@@ -46,14 +46,36 @@ public enum ExampleAction: String, Codable, Sendable {
 // MARK: - Inferred Rule
 
 /// A regex + template rule learned from examples
+/// Enhanced with success/failure tracking and enable/disable controls
 public struct InferredRule: Codable, Identifiable, Sendable {
     public let id: String
     public let pattern: String           // Regex pattern
     public let template: String           // Output template with placeholders
     public let metadataCues: [String]     // e.g., ["exif:DateTimeOriginal", "fs:ctime"]
-    public let priority: Int              // Higher = more specific/preferred
+    public var priority: Int              // Higher = more specific/preferred (0-100)
     public let exampleIds: [String]       // IDs of examples that contributed to this rule
     public let explanation: String        // Human-readable explanation
+    
+    // Quality tracking
+    public var successCount: Int          // Times applied without correction
+    public var failureCount: Int          // Times user corrected after applying
+    public var isEnabled: Bool            // Can be toggled by user
+    public var lastAppliedAt: Date?       // Last time this rule was used
+    public var supportCount: Int          // Number of examples supporting this rule
+    
+    /// Calculate failure rate for quality assessment
+    public var failureRate: Double {
+        let total = successCount + failureCount
+        guard total > 0 else { return 0 }
+        return Double(failureCount) / Double(total)
+    }
+    
+    /// Confidence level based on support and failure rate
+    public var confidenceLevel: RuleConfidence {
+        if failureRate > 0.3 { return .low }
+        if supportCount >= 5 && failureRate < 0.1 { return .high }
+        return .medium
+    }
     
     public init(
         id: String = UUID().uuidString,
@@ -62,7 +84,12 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         metadataCues: [String] = [],
         priority: Int = 0,
         exampleIds: [String] = [],
-        explanation: String
+        explanation: String,
+        successCount: Int = 0,
+        failureCount: Int = 0,
+        isEnabled: Bool = true,
+        lastAppliedAt: Date? = nil,
+        supportCount: Int = 1
     ) {
         self.id = id
         self.pattern = pattern
@@ -71,7 +98,16 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         self.priority = priority
         self.exampleIds = exampleIds
         self.explanation = explanation
+        self.successCount = successCount
+        self.failureCount = failureCount
+        self.isEnabled = isEnabled
+        self.lastAppliedAt = lastAppliedAt
+        self.supportCount = supportCount
     }
+}
+
+public enum RuleConfidence: String, Codable, Sendable {
+    case high, medium, low
 }
 
 // MARK: - Proposed Mapping
@@ -275,6 +311,127 @@ public enum FileCategory: String, Codable, Sendable, CaseIterable {
             }
         }
         return .other
+    }
+}
+
+// MARK: - Behavior Preferences
+
+/// User's explicit organization philosophy derived from honing and behavior
+public struct BehaviorPreferences: Codable, Sendable, Equatable {
+    public var deletionVsArchive: DeletionPreference
+    public var folderDepthPreference: FolderDepthPreference
+    public var dateVsContentPreference: OrganizationAxis
+    public var duplicateKeeperStrategy: DuplicateKeeperStrategy
+    
+    public init(
+        deletionVsArchive: DeletionPreference = .archive,
+        folderDepthPreference: FolderDepthPreference = .balanced,
+        dateVsContentPreference: OrganizationAxis = .content,
+        duplicateKeeperStrategy: DuplicateKeeperStrategy = .keepNewest
+    ) {
+        self.deletionVsArchive = deletionVsArchive
+        self.folderDepthPreference = folderDepthPreference
+        self.dateVsContentPreference = dateVsContentPreference
+        self.duplicateKeeperStrategy = duplicateKeeperStrategy
+    }
+}
+
+public enum DeletionPreference: String, Codable, Sendable, CaseIterable {
+    case delete = "delete"
+    case archive = "archive"
+    case archiveByYear = "archive_by_year"
+    
+    public var displayName: String {
+        switch self {
+        case .delete: return "Delete old files"
+        case .archive: return "Archive to folder"
+        case .archiveByYear: return "Archive by year"
+        }
+    }
+}
+
+public enum FolderDepthPreference: String, Codable, Sendable, CaseIterable {
+    case flat = "flat"
+    case balanced = "balanced"
+    case deep = "deep"
+    
+    public var displayName: String {
+        switch self {
+        case .flat: return "Flat structure"
+        case .balanced: return "2-3 levels deep"
+        case .deep: return "Deep hierarchy"
+        }
+    }
+}
+
+public enum OrganizationAxis: String, Codable, Sendable, CaseIterable {
+    case date = "date"
+    case content = "content"
+    case project = "project"
+    case hybrid = "hybrid"
+    
+    public var displayName: String {
+        switch self {
+        case .date: return "Date-based"
+        case .content: return "Content-based"
+        case .project: return "Project-based"
+        case .hybrid: return "Hybrid approach"
+        }
+    }
+}
+
+public enum DuplicateKeeperStrategy: String, Codable, Sendable, CaseIterable {
+    case keepNewest = "keep_newest"
+    case keepOldest = "keep_oldest"
+    case keepInPrimaryFolder = "keep_primary"
+    case askEachTime = "ask"
+    
+    public var displayName: String {
+        switch self {
+        case .keepNewest: return "Keep newest"
+        case .keepOldest: return "Keep oldest"
+        case .keepInPrimaryFolder: return "Keep in main folder"
+        case .askEachTime: return "Ask each time"
+        }
+    }
+}
+
+// MARK: - Learnings Impact Summary
+
+/// Summary of how learnings have affected organization results
+public struct LearningsImpactSummary: Sendable {
+    public let runsWithLearnings: Int
+    public let totalRuns: Int
+    public let filesRoutedByLearnings: Int
+    public let correctionsAfterAI: Int
+    public let reverts: Int
+    
+    public var correctionRate: Double {
+        guard filesRoutedByLearnings > 0 else { return 0 }
+        return Double(correctionsAfterAI) / Double(filesRoutedByLearnings)
+    }
+    
+    public var revertRate: Double {
+        guard runsWithLearnings > 0 else { return 0 }
+        return Double(reverts) / Double(runsWithLearnings)
+    }
+    
+    public var successRate: Double {
+        return max(0, 1.0 - correctionRate - revertRate * 0.5)
+    }
+    
+    public init(
+        runsWithLearnings: Int = 0,
+        totalRuns: Int = 0,
+        filesRoutedByLearnings: Int = 0,
+        correctionsAfterAI: Int = 0,
+        reverts: Int = 0
+    ) {
+        self.runsWithLearnings = runsWithLearnings
+        self.totalRuns = totalRuns
+        self.filesRoutedByLearnings = filesRoutedByLearnings
+        self.correctionsAfterAI = correctionsAfterAI
+        self.reverts = reverts
     }
 }
 
