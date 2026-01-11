@@ -130,7 +130,7 @@ public class SettingsViewModel: ObservableObject {
                     }
                 }
             } catch let fetchError {
-                LogManager.shared.log("Error fetching models: \(fetchError)", level: .error, category: "SettingsViewModel")
+                DebugLogger.log("Error fetching models: \(fetchError)")
                 await MainActor.run {
                     self.isLoadingModels = false
                 }

@@ -22,6 +22,8 @@ struct PreviewView: View {
     @State private var editablePlan: OrganizationPlan
     @State private var hasEdits = false
     @State private var showPostOrganizationHoning = false
+    @State private var isInstructionsExpanded = false
+    @FocusState private var instructionsFocused: Bool
 
     init(plan: OrganizationPlan, baseURL: URL) {
         self.plan = plan
@@ -118,66 +120,75 @@ struct PreviewView: View {
 
             Divider()
 
-            // Action buttons
-            VStack(spacing: 12) {
-                // Custom Instructions for Regeneration
+            VStack(spacing: 0) {
                 if !isApplying {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Guiding Instructions (for next attempt)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        HStack {
-                            TextField("e.g. 'Group by file size', 'Separate RAW files'", text: $organizer.customInstructions)
-                                .textFieldStyle(.roundedBorder)
-                                .onChange(of: organizer.customInstructions) { oldValue, newValue in
-                                    // Track guiding instruction for learnings
-                                    if !newValue.isEmpty && newValue != oldValue && learningsManager.consentManager.canCollectData {
-                                        NotificationCenter.default.post(
-                                            name: .steeringPromptProvided,
-                                            object: nil,
-                                            userInfo: ["prompt": newValue, "folderPath": baseURL.path]
-                                        )
-                                    }
-                                }
-                        }
-                    }
-                    .padding(.horizontal)
+                    guidingInstructionsSection
                 }
-
-                HStack {
-                    Button("Cancel") {
+                
+                Divider()
+                
+                HStack(spacing: 12) {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
                         organizer.reset()
+                    } label: {
+                        Text("Cancel")
                     }
                     .keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("PreviewCancelButton")
+                    .accessibilityLabel("Cancel organization")
 
                     if hasEdits {
-                        Button("Reset Edits") {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
                             editablePlan = plan
                             hasEdits = false
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.counterclockwise")
+                                    .font(.system(size: 11))
+                                Text("Reset Edits")
+                            }
                         }
                         .foregroundColor(.orange)
                         .accessibilityIdentifier("ResetEditsButton")
+                        .accessibilityLabel("Reset all manual edits")
                     }
 
                     Spacer()
 
-                    Button("Try Another Organisation") {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
                         regeneratePreview()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 12))
+                            Text("Try Another")
+                        }
                     }
                     .disabled(shouldDisableButtons)
                     .accessibilityIdentifier("TryAnotherOrganisationButton")
+                    .accessibilityLabel("Generate a different organization suggestion")
 
-                    Button("Apply Organization") {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
                         showApplyConfirmation = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 12))
+                            Text("Apply Organization")
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                     .disabled(shouldDisableButtons)
                     .accessibilityIdentifier("ApplyOrganizationButton")
+                    .accessibilityLabel("Apply this organization to your files")
                 }
-                .padding(.horizontal)
-                .padding(.bottom)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
         }
         .alert("Apply Organization?", isPresented: $showApplyConfirmation) {
@@ -226,8 +237,118 @@ struct PreviewView: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
 
+    private var guidingInstructionsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isInstructionsExpanded.toggle()
+                    if isInstructionsExpanded {
+                        instructionsFocused = true
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: isInstructionsExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 12)
+                    
+                    Image(systemName: "text.bubble")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Guiding Instructions")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    Text("(for regeneration)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    
+                    Spacer()
+                    
+                    if !organizer.customInstructions.isEmpty {
+                        Text("\(organizer.customInstructions.count) chars")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color.secondary.opacity(0.1))
+                            )
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Guiding instructions for regeneration")
+            .accessibilityHint(isInstructionsExpanded ? "Collapse instructions field" : "Expand instructions field")
+            
+            if isInstructionsExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    ZStack(alignment: .topLeading) {
+                        if organizer.customInstructions.isEmpty && !instructionsFocused {
+                            Text("e.g. \"Group by file size\", \"Separate RAW files\", \"Create a folder for each year\"...")
+                                .font(.body)
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .allowsHitTesting(false)
+                        }
+                        
+                        TextEditor(text: $organizer.customInstructions)
+                            .font(.body)
+                            .scrollContentBackground(.hidden)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .focused($instructionsFocused)
+                            .onChange(of: organizer.customInstructions) { oldValue, newValue in
+                                if !newValue.isEmpty && newValue != oldValue && learningsManager.consentManager.canCollectData {
+                                    NotificationCenter.default.post(
+                                        name: .steeringPromptProvided,
+                                        object: nil,
+                                        userInfo: ["prompt": newValue, "folderPath": baseURL.path]
+                                    )
+                                }
+                            }
+                    }
+                    .frame(minHeight: 50, maxHeight: 70)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(NSColor.textBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                instructionsFocused ? Color.accentColor : Color(NSColor.separatorColor),
+                                lineWidth: instructionsFocused ? 2 : 1
+                            )
+                    )
+                    .accessibilityIdentifier("GuidingInstructionsTextField")
+                    .accessibilityLabel("Guiding instructions text field")
+                    .accessibilityHint("Enter instructions to guide the AI when regenerating organization")
+                    
+                    Text("These instructions will be used when you click \"Try Another\"")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .onAppear {
+            if !organizer.customInstructions.isEmpty {
+                isInstructionsExpanded = true
+            }
+        }
+    }
+    
     private func regeneratePreview() {
-        // Track guiding instruction if provided
         if !organizer.customInstructions.isEmpty && learningsManager.consentManager.canCollectData {
             learningsManager.recordGuidingInstruction(organizer.customInstructions)
         }
@@ -273,6 +394,8 @@ struct PostOrganizationHoningView: View {
     @StateObject private var engine: LearningsHoningEngine
     @State private var currentQuestionIndex = 0
     @State private var answers: [HoningAnswer] = []
+    @State private var hasAppeared = false
+    @State private var selectedOption: String?
     
     init(fileCount: Int, folderCount: Int, config: AIConfig, onComplete: @escaping ([HoningAnswer]) -> Void, onSkip: @escaping () -> Void) {
         self.fileCount = fileCount
@@ -284,117 +407,230 @@ struct PostOrganizationHoningView: View {
     }
     
     var body: some View {
-        VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 48))
-                    .foregroundColor(.green)
-                
-                Text("Organization Complete!")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                Text("Organized \(fileCount) files into \(folderCount) folders")
-                    .foregroundColor(.secondary)
+        VStack(spacing: 0) {
+            VStack(spacing: 20) {
+                headerSection
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 10)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
             }
-            .padding(.top, 24)
+            .padding(.top, 28)
+            .padding(.bottom, 20)
             
             Divider()
             
-            // Quick Feedback Section
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Help us learn your preferences")
-                    .font(.headline)
-                
-                Text("Answer a quick question to improve future organizations")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                if engine.isGenerating {
-                    ProgressView("Generating question...")
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding()
-                } else if let session = engine.currentSession, !session.questions.isEmpty {
-                    let question = session.questions.last!
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    feedbackHeader
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 10)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
                     
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(question.text)
-                            .font(.body)
-                            .fontWeight(.medium)
-                        
-                        ForEach(question.options, id: \.self) { option in
-                            Button(action: {
-                                let answer = HoningAnswer(
-                                    questionId: question.id,
-                                    selectedOption: option
-                                )
-                                answers.append(answer)
-                                onComplete(answers)
-                            }) {
-                                HStack {
-                                    Text(option)
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding()
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(8)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                } else {
-                    // Fallback static question
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Was this organization helpful?")
-                            .font(.body)
-                            .fontWeight(.medium)
-                        
-                        ForEach(["Yes, it was great!", "It was okay", "Not really useful"], id: \.self) { option in
-                            Button(action: {
-                                let answer = HoningAnswer(
-                                    questionId: "post_org_feedback",
-                                    selectedOption: option
-                                )
-                                answers.append(answer)
-                                onComplete(answers)
-                            }) {
-                                HStack {
-                                    Text(option)
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding()
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(8)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    questionSection
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 10)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
                 }
+                .padding(24)
             }
-            .padding()
             
             Spacer()
             
-            // Skip button
-            Button("Skip for now") {
+            Divider()
+            
+            Button {
+                HapticFeedbackManager.shared.tap()
                 onSkip()
+            } label: {
+                Text("Skip for now")
+                    .foregroundStyle(.secondary)
             }
-            .foregroundColor(.secondary)
+            .buttonStyle(.plain)
             .padding(.bottom, 24)
+            .opacity(hasAppeared ? 1 : 0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
+            .accessibilityIdentifier("SkipFeedbackButton")
+            .accessibilityLabel("Skip feedback")
         }
-        .frame(width: 450, height: 500)
+        .frame(width: 480, height: 520)
         .onAppear {
+            withAnimation {
+                hasAppeared = true
+            }
             Task {
                 await engine.startSession(questionCount: 1)
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Post-organization feedback")
+    }
+    
+    private var headerSection: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.1))
+                    .frame(width: 70, height: 70)
+                
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 40, weight: .light))
+                    .foregroundStyle(.green)
+            }
+            
+            Text("Organization Complete!")
+                .font(.title3)
+                .fontWeight(.bold)
+            
+            HStack(spacing: 12) {
+                Label("\(fileCount) files", systemImage: "doc.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                
+                Text("→")
+                    .foregroundStyle(.tertiary)
+                
+                Label("\(folderCount) folders", systemImage: "folder.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+    
+    private var feedbackHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "brain.head.profile")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.purple)
+                
+                Text("Help Sorty Learn")
+                    .font(.headline)
+            }
+            
+            Text("Answer a quick question to improve future organizations")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+    
+    private var questionSection: some View {
+        Group {
+            if engine.isGenerating {
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .controlSize(.regular)
+                    Text("Preparing question...")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+            } else if let session = engine.currentSession, !session.questions.isEmpty {
+                let question = session.questions.last!
+                dynamicQuestionView(question: question, questionId: question.id)
+            } else {
+                staticQuestionView
+            }
+        }
+    }
+    
+    private func dynamicQuestionView(question: HoningQuestion, questionId: String) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(question.text)
+                .font(.body)
+                .fontWeight(.medium)
+            
+            ForEach(Array(question.options.enumerated()), id: \.element) { index, option in
+                FeedbackOptionButton(
+                    option: option,
+                    isSelected: selectedOption == option,
+                    delay: Double(index) * 0.05
+                ) {
+                    HapticFeedbackManager.shared.selection()
+                    selectedOption = option
+                    let answer = HoningAnswer(
+                        questionId: questionId,
+                        selectedOption: option
+                    )
+                    answers.append(answer)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        onComplete(answers)
+                    }
+                }
+            }
+        }
+    }
+    
+    private var staticQuestionView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Was this organization helpful?")
+                .font(.body)
+                .fontWeight(.medium)
+            
+            ForEach(Array(["Yes, it was great!", "It was okay", "Not really useful"].enumerated()), id: \.element) { index, option in
+                FeedbackOptionButton(
+                    option: option,
+                    isSelected: selectedOption == option,
+                    delay: Double(index) * 0.05
+                ) {
+                    HapticFeedbackManager.shared.selection()
+                    selectedOption = option
+                    let answer = HoningAnswer(
+                        questionId: "post_org_feedback",
+                        selectedOption: option
+                    )
+                    answers.append(answer)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        onComplete(answers)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct FeedbackOptionButton: View {
+    let option: String
+    let isSelected: Bool
+    let delay: Double
+    let action: () -> Void
+    
+    @State private var hasAppeared = false
+    @State private var isHovering = false
+    
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(option)
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    .foregroundStyle(isSelected ? .green : .secondary)
+                    .font(.system(size: 14))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? Color.green.opacity(0.1) : (isHovering ? Color.secondary.opacity(0.08) : Color.secondary.opacity(0.05)))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(x: hasAppeared ? 0 : -10)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(delay), value: hasAppeared)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .onAppear {
+            hasAppeared = true
+        }
+        .accessibilityLabel(option)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

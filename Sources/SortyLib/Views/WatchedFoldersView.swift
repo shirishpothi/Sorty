@@ -2,8 +2,7 @@
 //  WatchedFoldersView.swift
 //  Sorty
 //
-//  Settings view for managing watched folders
-//  Enhanced with haptic feedback, micro-animations, and modal bounces
+//  Modern watched folders management with rich folder cards and status indicators
 //
 
 import SwiftUI
@@ -11,69 +10,41 @@ import UniformTypeIdentifiers
 
 struct WatchedFoldersView: View {
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
+    @EnvironmentObject var organizer: FolderOrganizer
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var contentOpacity: Double = 0
+    
+    // Check if AI is available
+    private var isAIConfigured: Bool {
+        organizer.aiClient != nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Watched Folders")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    Text("Automatically organize new files as they arrive")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .animatedAppearance(delay: 0.05)
-
-                Spacer()
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    showingFolderPicker = true
-                } label: {
-                    Label("Add Folder", systemImage: "plus")
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("AddWatchedFolderButton")
-            }
-            .padding()
-            .background(Color(NSColor.controlBackgroundColor))
-
+            headerView
+            
             Divider()
 
-            // Folder List
+            // Folder Grid/List
             ZStack {
                 if watchedFoldersManager.folders.isEmpty {
-                    EmptyWatchedFoldersView()
-                        .transition(TransitionStyles.scaleAndFade)
+                    EmptyWatchedFoldersView(onAddFolder: {
+                        HapticFeedbackManager.shared.tap()
+                        showingFolderPicker = true
+                    })
+                    .transition(TransitionStyles.scaleAndFade)
                 } else {
-                    List {
-                        ForEach(Array(watchedFoldersManager.folders.enumerated()), id: \.element.id) { index, folder in
-                            WatchedFolderRow(folder: folder)
-                                .contextMenu {
-                                    Button("Remove") {
-                                        HapticFeedbackManager.shared.tap()
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                            watchedFoldersManager.removeFolder(folder)
-                                        }
-                                    }
-                                }
-                                .animatedAppearance(delay: Double(index) * 0.05)
-                        }
-                        .onDelete { indexSet in
-                            HapticFeedbackManager.shared.tap()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                for index in indexSet {
-                                    watchedFoldersManager.removeFolder(watchedFoldersManager.folders[index])
-                                }
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(Array(watchedFoldersManager.folders.enumerated()), id: \.element.id) { index, folder in
+                                WatchedFolderCard(folder: folder)
+                                    .animatedAppearance(delay: Double(index) * 0.05)
                             }
                         }
+                        .padding(20)
                     }
-                    .listStyle(.inset)
                     .transition(TransitionStyles.slideFromRight)
                 }
             }
@@ -88,7 +59,22 @@ struct WatchedFoldersView: View {
             case .success(let urls):
                 if let url = urls.first {
                     HapticFeedbackManager.shared.success()
-                    let folder = WatchedFolder(path: url.path)
+                    
+                    // Create security-scoped bookmark
+                    let bookmarkData = try? url.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    )
+                    
+                    if bookmarkData == nil {
+                        DebugLogger.log("Failed to create security-scoped bookmark for \(url.path)")
+                    }
+                    
+                    let folder = WatchedFolder(
+                        path: url.path,
+                        bookmarkData: bookmarkData
+                    )
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         watchedFoldersManager.addFolder(folder)
                     }
@@ -105,42 +91,124 @@ struct WatchedFoldersView: View {
             }
         }
     }
+    
+    private var headerView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Watched Folders")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                HStack(spacing: 8) {
+                    let activeCount = watchedFoldersManager.folders.filter { $0.isEnabled }.count
+                    let autoCount = watchedFoldersManager.folders.filter { $0.isEnabled && $0.autoOrganize }.count
+                    
+                    Text("\(activeCount) active")
+                        .foregroundStyle(activeCount > 0 ? .green : .secondary)
+                    
+                    if autoCount > 0 {
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Text("\(autoCount) auto-organizing")
+                            .foregroundStyle(.blue)
+                    }
+                }
+                .font(.caption)
+            }
+            .animatedAppearance(delay: 0.05)
+
+            Spacer()
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                showingFolderPicker = true
+            } label: {
+                Label("Add Folder", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("AddWatchedFolderButton")
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+    }
 }
 
 // MARK: - Empty State View
 
 struct EmptyWatchedFoldersView: View {
+    let onAddFolder: () -> Void
+    
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "eye.slash")
-                .font(.system(size: 48))
-                .foregroundStyle(.tertiary)
+        VStack(spacing: 24) {
+            Image(systemName: "folder.badge.plus")
+                .font(.system(size: 52))
+                .foregroundStyle(.secondary)
 
-            Text("No Watched Folders")
-                .font(.headline)
-                .foregroundColor(.secondary)
+            VStack(spacing: 8) {
+                Text("No Watched Folders")
+                    .font(.title3)
+                    .fontWeight(.semibold)
 
-            Text("Add folders like Downloads or Desktop to automatically organize new files")
-                .font(.caption)
-                .foregroundColor(.secondary.opacity(0.6))
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 300)
+                Text("Add folders like Downloads or Desktop to automatically organize new files as they arrive")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            }
+            
+            // Suggestion cards
+            VStack(spacing: 8) {
+                Text("Popular choices:")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                
+                HStack(spacing: 12) {
+                    FolderSuggestionPill(name: "Downloads", icon: "arrow.down.circle")
+                    FolderSuggestionPill(name: "Desktop", icon: "menubar.dock.rectangle")
+                    FolderSuggestionPill(name: "Documents", icon: "doc.text")
+                }
+            }
+
+            Button {
+                onAddFolder()
+            } label: {
+                Label("Add Folder", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
-// MARK: - Watched Folder Row
+struct FolderSuggestionPill: View {
+    let name: String
+    let icon: String
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(name)
+                .font(.caption)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.1))
+        .clipShape(Capsule())
+    }
+}
 
-struct WatchedFolderRow: View {
+// MARK: - Watched Folder Card
+
+struct WatchedFolderCard: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var organizer: FolderOrganizer
     @State private var showingConfig = false
+    @State private var isHovered = false
     
     private var isOrganizing: Bool {
         guard let currentDir = organizer.currentDirectory else { return false }
-        // Simple path comparison - could be improved with standardized URLs
         return currentDir.path == folder.path && 
                organizer.state != .idle && 
                organizer.state != .completed && 
@@ -151,118 +219,259 @@ struct WatchedFolderRow: View {
         if case .error = organizer.state { return true }
         return false
     }
+    
+    // Check if AI is available
+    private var isAIConfigured: Bool {
+        organizer.aiClient != nil
+    }
+    
+    private var statusColor: Color {
+        if !folder.exists { return .red }
+        if folder.accessStatus == .lost { return .orange }
+        if !folder.isEnabled { return .secondary }
+        if isOrganizing { return .blue }
+        if folder.autoOrganize { return .green }
+        return .blue
+    }
+    
+    private var statusIcon: String {
+        if !folder.exists { return "exclamationmark.triangle.fill" }
+        if folder.accessStatus == .lost { return "lock.slash.fill" }
+        if !folder.isEnabled { return "pause.circle.fill" }
+        if isOrganizing { return "arrow.triangle.2.circlepath" }
+        if folder.autoOrganize { return "bolt.circle.fill" }
+        return "eye.circle.fill"
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Folder Icon
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(folder.isEnabled ? Color.blue.opacity(0.1) : Color.gray.opacity(0.1))
-                    .frame(width: 40, height: 40)
-
+        HStack(spacing: 16) {
+            // Folder Icon with Status
+            ZStack(alignment: .bottomTrailing) {
                 Image(systemName: "folder.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(folder.isEnabled ? .blue : .gray)
+                    .font(.system(size: 32))
+                    .foregroundStyle(folder.isEnabled ? .blue : .secondary)
+                
+                Image(systemName: statusIcon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(statusColor)
+                    .background(
+                        Circle()
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .frame(width: 18, height: 18)
+                    )
+                    .offset(x: 4, y: 4)
             }
+            .frame(width: 48, height: 48)
 
             // Folder Info
             VStack(alignment: .leading, spacing: 4) {
-                Text(folder.name)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(folder.isEnabled ? .primary : .secondary)
+                HStack(spacing: 8) {
+                    Text(folder.name)
+                        .font(.headline)
+                        .foregroundColor(folder.isEnabled ? .primary : .secondary)
+                    
+                    if isOrganizing {
+                        HStack(spacing: 4) {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .scaleEffect(0.7)
+                            Text("Organizing...")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.1))
+                        .clipShape(Capsule())
+                    }
+                    
+                    // Show warning if enabled but AI not configured
+                    if folder.isEnabled && folder.autoOrganize && !isAIConfigured {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.caption2)
+                            Text("AI Missing")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.1))
+                        .clipShape(Capsule())
+                        .help("Auto-organization requires an AI provider configured in Settings")
+                    }
+                }
 
                 Text(folder.path)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-
-                if let lastTriggered = folder.lastTriggered {
-                    Text("Last organized: \(lastTriggered, style: .relative) ago")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary.opacity(0.6))
-                }
                 
-                if isOrganizing {
-                    HStack(spacing: 4) {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .scaleEffect(0.7)
-                        Text("Organizing...")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.blue)
+                // Stats row
+                HStack(spacing: 12) {
+                    if let lastTriggered = folder.lastTriggered {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock")
+                                .font(.caption2)
+                            Text(lastTriggered, style: .relative)
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.secondary)
                     }
-                    .transition(.opacity.combined(with: .scale))
+                    
+                    if folder.autoOrganize {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                                .font(.caption2)
+                            Text("Auto")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.green)
+                    }
+                    
+                    if !folder.exists {
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                            Text("Folder not found")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.red)
+                    } else if folder.accessStatus == .lost {
+                        HStack(spacing: 4) {
+                            Image(systemName: "lock.slash.fill")
+                                .font(.caption2)
+                            Text("Access Lost")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.orange)
+                        .help("App Sandbox access to this folder was lost. Try removing and re-adding it.")
+                    }
                 }
             }
 
             Spacer()
 
             // Controls
-            VStack(alignment: .trailing, spacing: 8) {
-                Toggle("", isOn: Binding(
-                    get: { folder.isEnabled },
-                    set: { _ in
-                        HapticFeedbackManager.shared.selection()
-                        watchedFoldersManager.toggleEnabled(for: folder)
-                    }
-                ))
-                .toggleStyle(.switch)
-                .labelsHidden()
-
-                if folder.isEnabled {
-                    HStack(spacing: 4) {
-                        Image(systemName: folder.autoOrganize ? "wand.and.stars" : "wand.and.stars.inverse")
-                            .font(.system(size: 10))
-                        Text(folder.autoOrganize ? "Auto" : "Manual")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundColor(folder.autoOrganize ? .green : .secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(folder.autoOrganize ? Color.green.opacity(0.1) : Color.clear)
-                    .cornerRadius(4)
-                    .onTapGesture {
-                        HapticFeedbackManager.shared.tap()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            watchedFoldersManager.toggleAutoOrganize(for: folder)
+            HStack(spacing: 12) {
+                if isHovered {
+                    // Quick Actions
+                    HStack(spacing: 8) {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+                        } label: {
+                            Image(systemName: "folder")
+                                .font(.caption)
                         }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Reveal in Finder")
+                        
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            showingConfig = true
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Configure")
+                        
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                watchedFoldersManager.removeFolder(folder)
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("Remove")
                     }
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+                    .transition(.scale.combined(with: .opacity))
                 }
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    showingConfig = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .sheet(isPresented: $showingConfig) {
-                    WatchedFolderConfigView(folder: folder)
-                        .modalBounce()
+                
+                // Auto-organize toggle
+                VStack(alignment: .trailing, spacing: 4) {
+                    Toggle("", isOn: Binding(
+                        get: { folder.isEnabled },
+                        set: { _ in
+                            HapticFeedbackManager.shared.selection()
+                            watchedFoldersManager.toggleEnabled(for: folder)
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .labelsHidden()
+                    
+                    if folder.isEnabled {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            // Only allow toggling auto if AI is configured
+                            if isAIConfigured {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    watchedFoldersManager.toggleAutoOrganize(for: folder)
+                                }
+                            } else {
+                                // Provide feedback that it's disabled
+                                HapticFeedbackManager.shared.error()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: folder.autoOrganize ? "bolt.fill" : "bolt")
+                                    .font(.caption2)
+                                Text(folder.autoOrganize ? "Auto" : "Manual")
+                                    .font(.caption2)
+                            }
+                            .foregroundColor(folder.autoOrganize ? .green : .secondary)
+                            .opacity(isAIConfigured ? 1.0 : 0.5)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!isAIConfigured)
+                        .transition(.scale.combined(with: .opacity))
+                        .help(!isAIConfigured ? "AI Provider required" : "")
+                    }
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: folder.isEnabled)
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: folder.isEnabled)
         }
-        .padding(.vertical, 8)
-        .opacity(folder.exists ? 1.0 : 0.5)
+        .padding(16)
+        .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(folder.exists ? Color.white.opacity(0.1) : Color.red.opacity(0.3), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.03), radius: 3, x: 0, y: 1)
+        .opacity(folder.exists ? 1.0 : 0.8)
         .contentShape(Rectangle())
-        .overlay {
-            if !folder.exists {
-                HStack {
-                    Spacer()
-                    Text("Folder not found")
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                        .padding(4)
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(4)
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .contextMenu {
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+            }
+            Button("Configure...") {
+                showingConfig = true
+            }
+            Divider()
+            Button("Remove", role: .destructive) {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    watchedFoldersManager.removeFolder(folder)
                 }
             }
+        }
+        .sheet(isPresented: $showingConfig) {
+            WatchedFolderConfigView(folder: folder)
+                .modalBounce()
         }
     }
 }
@@ -272,15 +481,18 @@ struct WatchedFolderRow: View {
 struct WatchedFolderConfigView: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var appState: AppState // Assuming AppCoordinator is accessible or we trigger via notification
+    @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) var dismiss
     
     @State private var customPrompt: String
     @State private var temperature: Double
     @State private var autoOrganize: Bool
     
-    // For manual trigger
-    @State private var showTriggerConfirmation = false
+    // Check if AI is available
+    private var isAIConfigured: Bool {
+        organizer.aiClient != nil
+    }
 
     init(folder: WatchedFolder) {
         self.folder = folder
@@ -293,14 +505,28 @@ struct WatchedFolderConfigView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text(folder.name)
-                    .font(.headline)
+                HStack(spacing: 12) {
+                    Image(systemName: "folder.fill")
+                        .font(.title2)
+                        .foregroundStyle(.blue)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(folder.name)
+                            .font(.headline)
+                        Text(folder.path)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                
                 Spacer()
+                
                 Button("Done") {
                     HapticFeedbackManager.shared.success()
                     save()
                 }
-                .fontWeight(.medium)
+                .buttonStyle(.borderedProminent)
             }
             .padding()
             .background(.ultraThinMaterial)
@@ -308,47 +534,74 @@ struct WatchedFolderConfigView: View {
             Divider()
             
             ScrollView {
-                VStack(spacing: 24) {
-                    // Status & Automation
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Automation")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                        
-                        Toggle(isOn: $autoOrganize) {
-                            VStack(alignment: .leading) {
-                                Text("Auto-Organize")
-                                    .font(.headline)
-                                Text("Automatically organize new files into existing folders.")
+                VStack(spacing: 16) {
+                    // Automation Section
+                    ConfigSection(title: "Automation", icon: "bolt", color: .green) {
+                        VStack(spacing: 12) {
+                            if !isAIConfigured {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.orange)
+                                    Text("AI Provider Not Configured")
+                                        .font(.subheadline.bold())
+                                        .foregroundStyle(.orange)
+                                    Spacer()
+                                }
+                                
+                                Text("To enable automatic organization, please configure an AI provider in Settings first.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    
+                                Button("Open Settings") {
+                                    appState.currentView = .settings
+                                    dismiss()
+                                }
+                                .controlSize(.small)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            
+                            Toggle(isOn: $autoOrganize) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Auto-Organize")
+                                        .font(.subheadline)
+                                    Text("Automatically organize new files as they appear")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(.switch)
+                            .disabled(!isAIConfigured)
+                            
+                            if autoOrganize {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "info.circle")
+                                        .foregroundStyle(.blue)
+                                    Text("Files will be organized into existing folders based on content and type.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(10)
+                                .background(Color.blue.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .transition(.scale.combined(with: .opacity))
                             }
                         }
-                        .toggleStyle(.switch)
                     }
-                    .padding(16)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(12)
                     
-                    // Manual Actions
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Actions")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                        
+                    // Actions Section
+                    ConfigSection(title: "Actions", icon: "play", color: .blue) {
                         Button {
-                            // "Calibrate" is essentially running a full organization once
-                            // We use the same mechanism as calibrateAction in the previous code
                             appState.calibrateAction?(folder)
                             dismiss()
                         } label: {
                             HStack {
                                 Image(systemName: "wand.and.stars")
                                     .foregroundStyle(.blue)
-                                VStack(alignment: .leading) {
+                                VStack(alignment: .leading, spacing: 2) {
                                     Text("Run Full Organization")
                                         .foregroundStyle(.primary)
-                                    Text("Analyze and organize all files in this folder now.")
+                                    Text("Analyze and organize all files now")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -360,66 +613,93 @@ struct WatchedFolderConfigView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(16)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(12)
                     
-                    // Configuration
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Configuration")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                        
-                        // Instructions
+                    // Custom Instructions Section
+                    ConfigSection(title: "Custom Instructions", icon: "text.bubble", color: .purple) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Custom Instructions")
-                                .font(.subheadline)
-                            
                             TextEditor(text: $customPrompt)
-                                .font(.system(.body, design: .monospaced))
-                                .frame(height: 100)
+                                .font(.system(.body, design: .default))
+                                .frame(height: 80)
                                 .scrollContentBackground(.hidden)
-                                .padding(8)
+                                .padding(10)
                                 .background(Color(NSColor.textBackgroundColor))
-                                .cornerRadius(8)
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.2)))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                )
                             
-                            Text("Specific rules for this folder (e.g. 'Group by Project')")
-                                .font(.caption2)
+                            Text("e.g., \"Group by project name\" or \"Keep invoices separate\"")
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        
-                        Divider()
-                        
-                        // Creativity
-                        VStack(alignment: .leading, spacing: 8) {
+                    }
+                    
+                    // AI Creativity Section
+                    ConfigSection(title: "AI Creativity", icon: "sparkles", color: .orange) {
+                        VStack(spacing: 12) {
                             HStack {
-                                Text("AI Creativity")
+                                Text("Temperature")
                                     .font(.subheadline)
                                 Spacer()
-                                Text(temperature < 0.3 ? "Strict" : (temperature > 0.7 ? "Creative" : "Balanced"))
+                                Text(creativityLabel)
                                     .font(.caption)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.blue.opacity(0.1))
-                                    .cornerRadius(4)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(creativityColor.opacity(0.1))
+                                    .foregroundStyle(creativityColor)
+                                    .clipShape(Capsule())
                             }
                             
-                            Slider(value: $temperature, in: 0...1) {
-                                Text("Temperature")
+                            Slider(value: $temperature, in: 0...1, step: 0.1)
+                                .tint(creativityColor)
+                            
+                            HStack {
+                                Text("Strict")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("Creative")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
                             }
-                            .tint(.blue)
                         }
                     }
-                    .padding(16)
-                    .background(Color(NSColor.controlBackgroundColor))
-                    .cornerRadius(12)
+                    
+                    // Folder Info
+                    if let lastTriggered = folder.lastTriggered {
+                        ConfigSection(title: "Statistics", icon: "chart.bar", color: .gray) {
+                            HStack {
+                                Text("Last organized")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(lastTriggered, style: .relative)
+                                    .font(.subheadline)
+                                Text("ago")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
                 .padding(20)
             }
         }
-        .frame(width: 400, height: 600)
+        .frame(width: 450, height: 550)
         .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    private var creativityLabel: String {
+        if temperature < 0.3 { return "Strict" }
+        if temperature < 0.6 { return "Balanced" }
+        return "Creative"
+    }
+    
+    private var creativityColor: Color {
+        if temperature < 0.3 { return .blue }
+        if temperature < 0.6 { return .green }
+        return .orange
     }
 
     private func save() {
@@ -435,8 +715,41 @@ struct WatchedFolderConfigView: View {
     }
 }
 
+// MARK: - Config Section
+
+struct ConfigSection<Content: View>: View {
+    let title: String
+    let icon: String
+    let color: Color
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundStyle(color)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.secondary)
+            }
+            
+            content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
+    }
+}
+
 #Preview {
     WatchedFoldersView()
         .environmentObject(WatchedFoldersManager())
-        .frame(width: 500, height: 400)
+        .environmentObject(FolderOrganizer())
+        .frame(width: 600, height: 500)
 }

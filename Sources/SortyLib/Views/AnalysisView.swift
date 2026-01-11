@@ -9,189 +9,289 @@ import SwiftUI
 
 struct AnalysisView: View {
     @EnvironmentObject var organizer: FolderOrganizer
-
-    @State private var progressBarOffset: CGFloat = 0
+    @State private var hasAppeared = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            // Progress indicator with motion
-            VStack(spacing: 16) {
-                ZStack(alignment: .leading) {
-                    // Background track
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(maxWidth: 500, maxHeight: 12)
+        VStack(spacing: 0) {
+            Spacer()
+            
+            VStack(spacing: 28) {
+                progressSection
+                    .opacity(hasAppeared ? 1 : 0)
+                    .scaleEffect(hasAppeared ? 1 : 0.9)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+                
+                stageIndicator
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 10)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
 
-                    // Animated progress bar
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            // Base progress
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [.blue, .purple],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: max(0, geometry.size.width * organizer.progress))
-
-                            // Shimmer overlay
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            .clear,
-                                            .white.opacity(0.4),
-                                            .clear
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: 60)
-                                .offset(x: progressBarOffset)
-                                .mask(
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .frame(width: max(0, geometry.size.width * organizer.progress))
-                                )
-                        }
-                    }
-                    .frame(maxWidth: 500, maxHeight: 12)
-                }
-                .frame(maxWidth: 500, maxHeight: 12)
-                .onAppear {
-                    withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                        progressBarOffset = 500
-                    }
+                if organizer.showTimeoutMessage {
+                    timeoutMessage
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.95).combined(with: .opacity),
+                            removal: .opacity
+                        ))
                 }
 
-                // Percentage
-                Text("\(Int(organizer.progress * 100))%")
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                    .accessibilityIdentifier("AnalysisPercentageText")
+                if organizer.isStreaming {
+                    aiInsightsView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                }
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    organizer.reset()
+                } label: {
+                    Text("Cancel")
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+                .opacity(hasAppeared ? 1 : 0)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+                .accessibilityIdentifier("AnalysisCancelButton")
             }
-
-            // Stage indicator with icon
-            HStack(spacing: 12) {
-                Group {
-                    if case .scanning = organizer.state {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.blue)
-                    } else if case .organizing = organizer.state {
-                        Image(systemName: "brain.head.profile")
-                            .font(.system(size: 32))
-                            .foregroundStyle(.purple)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(organizer.organizationStage)
-                        .font(.headline)
-
-                    if organizer.isStreaming {
-                        HStack(spacing: 4) {
-                            Text("Receiving response")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-
-                            LoadingDotsView(dotCount: 3, dotSize: 4, color: .secondary)
-                        }
-                    }
-
-                    // Elapsed time
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            withAnimation {
+                hasAppeared = true
+            }
+        }
+    }
+    
+    private var progressSection: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.15), lineWidth: 8)
+                    .frame(width: 120, height: 120)
+                
+                Circle()
+                    .trim(from: 0, to: organizer.progress)
+                    .stroke(
+                        Color.accentColor,
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .frame(width: 120, height: 120)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.spring(response: 0.4, dampingFraction: 0.9), value: organizer.progress)
+                
+                VStack(spacing: 2) {
+                    Text("\(Int(organizer.progress * 100))%")
+                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    
                     if organizer.elapsedTime > 0 {
-                        Text("Elapsed: \(formatTime(organizer.elapsedTime))")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                            .monospacedDigit()
-                            .accessibilityIdentifier("AnalysisElapsedTimeText")
-                    }
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Current organization stage: \(organizer.organizationStage)")
-                .accessibilityIdentifier("AnalysisStageInfo")
-            }
-
-            // Timeout message
-            if organizer.showTimeoutMessage {
-                GroupBox {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "clock")
-                                .foregroundStyle(.orange)
-
-                            Text("Taking longer than expected")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        }
-
-                        Text("AI organization can take a while depending on the number of files, model speed, and network conditions. For large directories, this may take a few minutes.")
+                        Text(formatTime(organizer.elapsedTime))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-
-                        if organizer.elapsedTime > 60 {
-                            Text("Tip: Consider organizing smaller directories first, or check your AI provider settings.")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
+                            .monospacedDigit()
                     }
-                    .frame(maxWidth: 400)
                 }
-                .backgroundStyle(.yellow.opacity(0.1))
-                .transition(.asymmetric(
-                    insertion: .scale(scale: 0.9).combined(with: .opacity),
-                    removal: .opacity
-                ))
+                .accessibilityIdentifier("AnalysisPercentageText")
             }
-
-            // Streaming content preview (if available)
-            if organizer.isStreaming && !organizer.streamingContent.isEmpty {
-                GroupBox {
-                    ScrollView {
-                        ScrollViewReader { proxy in
-                            VStack(alignment: .leading, spacing: 0) {
-                                Text(truncatedStreamContent)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .multilineTextAlignment(.leading)
-                                    .id("bottom")
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .onChange(of: organizer.streamingContent) { oldValue, newValue in
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    proxy.scrollTo("bottom", anchor: .bottom)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: 600, maxHeight: 200)
-                } label: {
-                    HStack {
-                        Image(systemName: "text.word.spacing")
-                            .foregroundStyle(.purple)
-                        Text("AI Response")
-                    }
-                    .font(.caption)
-                }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .opacity
-                ))
-            }
-
-            // Cancel button
-            Button("Cancel") {
-                HapticFeedbackManager.shared.tap()
-                organizer.reset()
-            }
-            .keyboardShortcut(.escape, modifiers: [])
-            .accessibilityIdentifier("AnalysisCancelButton")
         }
-        .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    private var stageIndicator: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 10) {
+                stageIcon
+                    .font(.system(size: 24))
+                
+                Text(organizer.organizationStage)
+                    .font(.headline)
+            }
+            
+            if isEstablishingConnection {
+                HStack(spacing: 6) {
+                    Text("Connecting to AI provider")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
+                }
+            } else if organizer.isStreaming {
+                HStack(spacing: 6) {
+                    Text("Receiving response")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Current organization stage: \(organizer.organizationStage)")
+        .accessibilityIdentifier("AnalysisStageInfo")
+    }
+    
+    private var isEstablishingConnection: Bool {
+        if case .organizing = organizer.state {
+            return organizer.organizationStage.contains("Establishing") && !organizer.isStreaming
+        }
+        return false
+    }
+    
+    @ViewBuilder
+    private var stageIcon: some View {
+        if case .scanning = organizer.state {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.blue)
+                .symbolEffect(.pulse.byLayer, options: .repeating)
+        } else if case .organizing = organizer.state {
+            if isEstablishingConnection {
+                Image(systemName: "network")
+                    .foregroundStyle(.orange)
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
+            } else {
+                Image(systemName: "brain.head.profile")
+                    .foregroundStyle(.purple)
+                    .symbolEffect(.pulse.byLayer, options: .repeating)
+            }
+        }
+    }
+    
+    private var timeoutMessage: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "clock")
+                    .foregroundStyle(.orange)
+
+                Text("Taking longer than expected")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+
+            Text("AI organization can take a while depending on the number of files, model speed, and network conditions. For large directories, this may take a few minutes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if organizer.elapsedTime > 60 {
+                Text("Tip: Consider organizing smaller directories first, or check your AI provider settings.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+        .frame(maxWidth: 400)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.orange.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Warning: Organization is taking longer than expected")
+    }
+    
+    // MARK: - AI Insights View
+    
+    private var aiInsightsView: some View {
+        VStack(spacing: 12) {
+            // Current insight (prominent display)
+            if !organizer.currentInsight.isEmpty {
+                currentInsightBubble
+            }
+            
+            // Recent insights history
+            if organizer.insightHistory.count > 1 {
+                insightHistoryView
+            }
+        }
+        .frame(maxWidth: 500)
+    }
+    
+    private var currentInsightBubble: some View {
+        HStack(spacing: 10) {
+            // Pulsing indicator
+            Circle()
+                .fill(Color.accentColor)
+                .frame(width: 8, height: 8)
+                .scaleEffect(organizer.isStreaming ? 1.2 : 1.0)
+                .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: organizer.isStreaming)
+            
+            Text(organizer.currentInsight)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .contentTransition(.numericText())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.accentColor.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: organizer.currentInsight)
+    }
+    
+    private var insightHistoryView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(organizer.insightHistory.dropLast()) { insight in
+                    InsightPill(insight: insight)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .frame(height: 32)
+    }
+    
+    private var streamingPreview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "text.word.spacing")
+                    .foregroundStyle(.purple)
+                Text("AI Response")
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            
+            ScrollView {
+                ScrollViewReader { proxy in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(truncatedStreamContent)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                            .id("bottom")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: organizer.streamingContent) { _, _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: 550, maxHeight: 180)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(NSColor.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+        )
+        .accessibilityLabel("AI response preview")
     }
 
     private var truncatedStreamContent: String {
@@ -230,23 +330,18 @@ struct AnimatedProgressRing: View {
 
     var body: some View {
         ZStack {
-            // Background ring
             Circle()
                 .stroke(color.opacity(0.2), lineWidth: lineWidth)
 
-            // Progress ring
             Circle()
                 .trim(from: 0, to: animatedProgress)
                 .stroke(
-                    AngularGradient(
-                        colors: [color, color.opacity(0.5), color],
-                        center: .center
-                    ),
+                    color,
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
         }
-        .onChange(of: progress) { oldValue, newValue in
+        .onChange(of: progress) { _, newValue in
             withAnimation(.easeOut(duration: 0.3)) {
                 animatedProgress = newValue
             }
@@ -256,6 +351,40 @@ struct AnimatedProgressRing: View {
                 animatedProgress = progress
             }
         }
+    }
+}
+
+// MARK: - Insight Pill
+
+struct InsightPill: View {
+    let insight: AIInsight
+    
+    private var iconColor: Color {
+        switch insight.category {
+        case .file: return .blue
+        case .folder: return .orange
+        case .constraint: return .yellow
+        case .decision: return .green
+        case .pattern: return .purple
+        case .general: return .secondary
+        }
+    }
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: insight.category.icon)
+                .font(.caption2)
+                .foregroundStyle(iconColor)
+            
+            Text(insight.text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.secondary.opacity(0.1))
+        .clipShape(Capsule())
     }
 }
 

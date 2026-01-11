@@ -56,6 +56,51 @@ public enum OrganizationError: LocalizedError, Equatable {
     }
 }
 
+/// AI reasoning insight extracted from streaming content
+public struct AIInsight: Identifiable, Sendable {
+    public let id = UUID()
+    public let text: String
+    public let category: Category
+    public let timestamp: Date
+    
+    public enum Category: String, Sendable {
+        case file = "File"
+        case folder = "Folder"
+        case constraint = "Constraint"
+        case decision = "Decision"
+        case pattern = "Pattern"
+        case general = "Analyzing"
+        
+        public var icon: String {
+            switch self {
+            case .file: return "doc"
+            case .folder: return "folder"
+            case .constraint: return "exclamationmark.triangle"
+            case .decision: return "arrow.right"
+            case .pattern: return "circle.grid.3x3"
+            case .general: return "brain"
+            }
+        }
+        
+        public var color: String {
+            switch self {
+            case .file: return "blue"
+            case .folder: return "orange"
+            case .constraint: return "yellow"
+            case .decision: return "green"
+            case .pattern: return "purple"
+            case .general: return "secondary"
+            }
+        }
+    }
+    
+    public init(text: String, category: Category) {
+        self.text = text
+        self.category = category
+        self.timestamp = Date()
+    }
+}
+
 /// Progress update for real-time UI feedback
 public struct OrganizationProgress: Sendable {
     public let phase: Phase
@@ -117,6 +162,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var streamingContent: String = ""
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
+    
+    // AI reasoning insights - extracted from streaming content
+    @Published public var currentInsight: String = ""
+    @Published public var insightHistory: [AIInsight] = []
+    private var lastInsightExtraction: Date = .distantPast
+    private let insightExtractionInterval: TimeInterval = 0.8 // Throttle to avoid too frequent updates
 
     // Timeout messaging
     @Published public var elapsedTime: TimeInterval = 0
@@ -135,7 +186,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var userInitiatedAction: Bool = false
 
     var scanner = DirectoryScanner()
-    var aiClient: AIClientProtocol?
+    public private(set) var aiClient: AIClientProtocol?
     private let fileSystemManager = FileSystemManager()
     private var aiConfig: AIConfig?
     private let validator = FileOrganizationValidator.self
@@ -162,19 +213,183 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public nonisolated func didReceiveChunk(_ chunk: String) {
         Task { @MainActor in
             guard !self.isCancellationRequested else { return }
-
+            
+            let isFirstChunk = self.streamingContent.isEmpty
             self.streamingContent += chunk
 
-            // Increment progress asymptotically towards 0.8 during streaming
+            if isFirstChunk {
+                self.isStreaming = true
+                self.organizationStage = "Receiving AI response..."
+                self.progress = 0.30
+            }
+
+            // Increment progress asymptotically towards 0.85 during streaming
             // Use content length as a proxy for progress
             let contentLength = self.streamingContent.count
-            let estimatedTotal = 5000 // Estimated total characters
-            let streamProgress = min(0.8, 0.3 + (Double(contentLength) / Double(estimatedTotal)) * 0.5)
+            let estimatedTotal = 4000 // Estimated total characters for typical response
+            let streamProgress = min(0.85, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.55)
 
             if self.progress < streamProgress {
                 self.progress = streamProgress
             }
+            
+            // Extract insights from streaming content (throttled)
+            self.extractInsightsIfNeeded()
         }
+    }
+    
+    /// Extract meaningful insights from the streaming AI response
+    /// This is throttled to avoid performance impact
+    private func extractInsightsIfNeeded() {
+        let now = Date()
+        guard now.timeIntervalSince(lastInsightExtraction) >= insightExtractionInterval else { return }
+        lastInsightExtraction = now
+        
+        // Get the last portion of content for analysis
+        let content = streamingContent
+        guard content.count > 50 else { return }
+        
+        // Look for meaningful patterns in the content
+        let insight = extractInsight(from: content)
+        if let insight = insight, insight.text != currentInsight {
+            currentInsight = insight.text
+            
+            // Keep history limited to last 5 insights
+            if insightHistory.count >= 5 {
+                insightHistory.removeFirst()
+            }
+            insightHistory.append(insight)
+        }
+    }
+    
+    /// Parse streaming content to find meaningful insights
+    private func extractInsight(from content: String) -> AIInsight? {
+        // Get the last ~500 characters for analysis
+        let analysisWindow = String(content.suffix(500))
+        
+        // Look for file-related insights
+        if let fileMatch = extractFileInsight(from: analysisWindow) {
+            return fileMatch
+        }
+        
+        // Look for folder/destination insights
+        if let folderMatch = extractFolderInsight(from: analysisWindow) {
+            return folderMatch
+        }
+        
+        // Look for constraint/consideration insights
+        if let constraintMatch = extractConstraintInsight(from: analysisWindow) {
+            return constraintMatch
+        }
+        
+        // Look for decision/action insights
+        if let decisionMatch = extractDecisionInsight(from: analysisWindow) {
+            return decisionMatch
+        }
+        
+        // Fallback: extract any recent meaningful text
+        return extractGeneralInsight(from: analysisWindow)
+    }
+    
+    private func extractFileInsight(from text: String) -> AIInsight? {
+        // Look for patterns like "file: X", "processing X.pdf", "analyzing document.txt"
+        let patterns = [
+            #"(?:file|document|processing|analyzing)[:\s]+["']?([^"'\n,]{3,40})["']?"#,
+            #""([^"]{3,40}\.[a-zA-Z]{2,5})""#,
+            #"'([^']{3,40}\.[a-zA-Z]{2,5})'"#
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
+               let range = Range(match.range(at: 1), in: text) {
+                let fileName = String(text[range]).trimmingCharacters(in: .whitespaces)
+                if !fileName.isEmpty && fileName.count < 50 {
+                    return AIInsight(text: "Analyzing \(fileName)", category: .file)
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func extractFolderInsight(from text: String) -> AIInsight? {
+        // Look for folder/destination patterns
+        let patterns = [
+            #"(?:folder|directory|destination|move to|into)[:\s]+["']?([^"'\n,/]{3,30})["']?"#,
+            #"→\s*["']?([^"'\n,]{3,30})["']?"#,
+            #"creating folder[:\s]+["']?([^"'\n,]{3,30})["']?"#
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
+               let range = Range(match.range(at: 1), in: text) {
+                let folderName = String(text[range]).trimmingCharacters(in: .whitespaces)
+                if !folderName.isEmpty && folderName.count < 40 {
+                    return AIInsight(text: "Organizing into \(folderName)", category: .folder)
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func extractConstraintInsight(from text: String) -> AIInsight? {
+        // Look for constraint/consideration patterns
+        let patterns = [
+            #"(?:considering|constraint|rule|preference)[:\s]+([^.\n]{10,60})"#,
+            #"(?:because|since|due to)[:\s]+([^.\n]{10,50})"#,
+            #"(?:based on|according to)[:\s]+([^.\n]{10,50})"#
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
+               let range = Range(match.range(at: 1), in: text) {
+                let constraint = String(text[range]).trimmingCharacters(in: .whitespaces)
+                if constraint.count > 10 && constraint.count < 70 {
+                    return AIInsight(text: constraint.prefix(60) + (constraint.count > 60 ? "..." : ""), category: .constraint)
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func extractDecisionInsight(from text: String) -> AIInsight? {
+        // Look for decision/action patterns
+        let patterns = [
+            #"(?:will move|moving|placing|organizing)[:\s]+([^.\n]{10,50})"#,
+            #"(?:grouped with|categorized as|belongs to)[:\s]+([^.\n]{5,40})"#
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
+               let range = Range(match.range(at: 1), in: text) {
+                let decision = String(text[range]).trimmingCharacters(in: .whitespaces)
+                if decision.count > 5 && decision.count < 60 {
+                    return AIInsight(text: decision, category: .decision)
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func extractGeneralInsight(from text: String) -> AIInsight? {
+        // Look for any meaningful recent text segment
+        // Find the last complete sentence or phrase
+        let sentences = text.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
+        
+        // Get the last meaningful sentence
+        for sentence in sentences.reversed() {
+            let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.count >= 15 && trimmed.count <= 80 {
+                // Skip if it looks like JSON or code
+                if !trimmed.contains("{") && !trimmed.contains("}") && !trimmed.contains("[") {
+                    return AIInsight(text: trimmed, category: .general)
+                }
+            }
+        }
+        return nil
     }
 
     public nonisolated func didComplete(content: String) {
@@ -282,9 +497,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             try checkCancellation()
 
-            updateState(.organizing, stage: "Organizing with AI...", progress: 0.25)
+            updateState(.organizing, stage: "Establishing connection...", progress: 0.22)
             await MainActor.run {
-                isStreaming = true
+                isStreaming = false
             }
 
             startTimeoutTimer()
@@ -814,5 +1029,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentDirectory = nil
         isCancellationRequested = false
         userInitiatedAction = false
+        
+        // Clear AI insights
+        currentInsight = ""
+        insightHistory = []
+        lastInsightExtraction = .distantPast
     }
 }

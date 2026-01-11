@@ -232,6 +232,12 @@ public class AppState: ObservableObject {
     @Published public var showDirectoryPicker: Bool = false
     @Published public var selectedDirectory: URL?
     @Published public var updateManager = UpdateManager()
+    
+    @Published public var hasCompletedOnboarding: Bool {
+        didSet {
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+        }
+    }
 
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
@@ -253,7 +259,9 @@ public class AppState: ObservableObject {
         case learnings
     }
 
-    public init() {}
+    public init() {
+        self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    }
 
     public var hasResults: Bool {
         organizer?.currentPlan != nil && organizer?.state == .completed

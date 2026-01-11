@@ -1,6 +1,6 @@
 # Sorty Makefile
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now release
 
 # Default target
 all: build
@@ -74,6 +74,17 @@ install-cli: cli
 	@sudo cp .build/debug/learnings /usr/local/bin/learnings
 	@echo "✅ Installed! Run with: learnings --help"
 
+# Create a release zip for GitHub
+release: build
+	@echo "📦 Creating release package..."
+	@cd releases && zip -r Sorty-macOS.zip Sorty.app
+	@echo "✅ Release package created: releases/Sorty-macOS.zip"
+	@echo ""
+	@echo "📋 Next steps:"
+	@echo "   1. Create a new release on GitHub"
+	@echo "   2. Upload releases/Sorty-macOS.zip"
+	@echo "   3. Remind users to run: xattr -cr /Applications/Sorty.app"
+
 help:
 	@echo "Sorty Build System"
 	@echo "=================="
@@ -94,4 +105,5 @@ help:
 	@echo "  make install     - Copy built app to /Applications"
 	@echo "  make cli         - Build the 'learnings' CLI tool"
 	@echo "  make install-cli - Install 'learnings' CLI to /usr/local/bin"
+	@echo "  make release     - Create a release zip for GitHub"
 	@echo "  make help        - Show this help message"

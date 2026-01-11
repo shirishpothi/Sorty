@@ -7,8 +7,8 @@
 
 import Foundation
 
-struct AIClientFactory {
-    static func createClient(config: AIConfig) throws -> AIClientProtocol {
+public struct AIClientFactory {
+    public static func createClient(config: AIConfig) throws -> AIClientProtocol {
         switch config.provider {
         case .openAI, .groq, .openAICompatible, .openRouter, .ollama:
             return OpenAIClient(config: config)
