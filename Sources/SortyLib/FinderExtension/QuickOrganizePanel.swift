@@ -333,7 +333,7 @@ struct QuickOrganizeView: View {
                 Spacer()
             }
             
-            if result.success {
+            if result.success && (result.filesOrganized > 0 || result.foldersCreated > 0) {
                 HStack(spacing: 20) {
                     StatPill(value: "\(result.filesOrganized)", label: "Files", color: .blue)
                     StatPill(value: "\(result.foldersCreated)", label: "Folders", color: .green)
@@ -383,23 +383,24 @@ struct QuickOrganizeView: View {
         guard let directory = controller.selectedDirectory else { return }
         
         controller.isOrganizing = true
-        controller.status = "Organizing..."
+        controller.status = "Opening in Sorty..."
         
         // Send organization request to main app
         let url = ExtensionCommunication.urlForOrganizing(path: directory.path)
         if let url = url {
             NSWorkspace.shared.open(url)
-        }
-        
-        // Simulate completion for now (in real implementation, listen for completion notification)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            
+            // Just indicate handoff to main app
             controller.isOrganizing = false
             controller.lastResult = QuickOrganizeResult(
                 success: true,
                 filesOrganized: 0,
                 foldersCreated: 0,
-                message: "Opened in Sorty for organization"
+                message: "Handed off to Sorty - check the main app for results"
             )
+        } else {
+            controller.isOrganizing = false
+            controller.status = "Failed to launch Sorty"
         }
     }
 }
@@ -523,8 +524,8 @@ public class FinderToolbarHelper {
             end tell')
             
             if [ -n "$FINDER_PATH" ]; then
-                # Encode the path for URL
-                ENCODED_PATH=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$FINDER_PATH'))")
+                # Encode the path for URL (using sys.argv to handle special characters safely)
+                ENCODED_PATH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$FINDER_PATH")
                 open "sorty://organize?path=$ENCODED_PATH"
             else
                 # No Finder window, just open the app

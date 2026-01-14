@@ -117,6 +117,13 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         }
     }
     
+    public func checkHealth() async throws {
+        // Verify availability
+        guard Self.isAvailable() else {
+            throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)
+        }
+    }
+    
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         // Verify availability first
         guard Self.isAvailable() else {

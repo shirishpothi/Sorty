@@ -141,18 +141,27 @@ public class NotificationManager: ObservableObject {
     public func show(_ type: NotificationType) {
         let settingsValue = settings.settings
         
+        print("NotificationManager: show() called with type, inAppHUD=\(settingsValue.inAppHUD), systemNotifications=\(settingsValue.systemNotifications)")
+        
         // Check if we should show this notification type
         switch type {
         case .processingComplete:
-            guard settingsValue.processingComplete else { return }
+            guard settingsValue.processingComplete else {
+                print("NotificationManager: processingComplete notifications disabled")
+                return
+            }
         case .processingError(_, let isCritical):
             if isCritical && settingsValue.alwaysShowCriticalErrors {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
+                print("NotificationManager: processingErrors notifications disabled")
                 return
             }
         case .batchSummary:
-            guard settingsValue.batchSummary else { return }
+            guard settingsValue.batchSummary else {
+                print("NotificationManager: batchSummary notifications disabled")
+                return
+            }
         case .info:
             // Info notifications are always allowed
             break
@@ -164,6 +173,8 @@ public class NotificationManager: ObservableObject {
         // Show in-app HUD if enabled
         if settingsValue.inAppHUD {
             showHUD(title: title, message: message, icon: icon, iconColor: iconColor, playSound: settingsValue.hudSounds)
+        } else {
+            print("NotificationManager: inAppHUD disabled, skipping HUD")
         }
         
         // Show system notification if enabled
@@ -171,6 +182,8 @@ public class NotificationManager: ObservableObject {
             Task {
                 await showSystemNotification(title: title, message: message, playSound: settingsValue.systemNotificationSounds)
             }
+        } else {
+            print("NotificationManager: systemNotifications disabled, skipping system notification")
         }
     }
     
@@ -280,6 +293,8 @@ public class NotificationManager: ObservableObject {
     }
     
     private func showHUD(title: String, message: String, icon: String, iconColor: Color, playSound: Bool) {
+        print("NotificationManager: showHUD called - title: \(title), message: \(message)")
+        
         let notification = HUDNotification(
             title: title,
             message: message,
@@ -290,13 +305,17 @@ public class NotificationManager: ObservableObject {
         )
         
         if currentHUDNotification == nil {
+            print("NotificationManager: Presenting HUD immediately")
             presentHUD(notification)
         } else {
+            print("NotificationManager: Queuing HUD notification (queue size: \(hudNotificationQueue.count + 1))")
             hudNotificationQueue.append(notification)
         }
     }
     
     private func presentHUD(_ notification: HUDNotification) {
+        print("NotificationManager: presentHUD - \(notification.title)")
+        
         if notification.playSound {
             playHUDSound()
         }
@@ -304,6 +323,11 @@ public class NotificationManager: ObservableObject {
         withAnimation(.easeOut(duration: 0.2)) {
             currentHUDNotification = notification
         }
+        
+        // Force publish change for observers
+        objectWillChange.send()
+        
+        print("NotificationManager: currentHUDNotification set, scheduling auto-dismiss")
         
         // Auto-dismiss after 4 seconds
         dismissTask?.cancel()

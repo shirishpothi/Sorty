@@ -395,7 +395,7 @@ struct AnalysisView: View {
                     .font(.subheadline)
                     .fontWeight(.medium)
                 
-                Text("Sortly will keep organizing in the background. We'll notify you when it's done.")
+                Text("Sorty will keep organizing in the background. We'll notify you when it's done.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -173,12 +173,12 @@ private struct GettingStartedContent: View {
     }
 }
 
-struct OnboardingHelpContent: View {
+private struct OnboardingHelpContent: View {
     @EnvironmentObject var appState: AppState
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("The onboarding flow helps you set up Sortly for the first time. For new users, onboarding is mandatory and covers all the essential setup steps.")
+            Text("The onboarding flow helps you set up Sorty for the first time. For new users, onboarding is mandatory and covers all the essential setup steps.")
                 .font(.body)
             
             Text("What's Covered in Onboarding")
@@ -190,7 +190,7 @@ struct OnboardingHelpContent: View {
             
             HelpFeatureView(icon: "person.crop.circle.badge.checkmark", title: "Workflow Selection", description: "Choose a persona that matches how you work - Developer, Photographer, Student, or General use.")
             
-            HelpFeatureView(icon: "play.circle.fill", title: "Live Demo", description: "See Sortly in action! Select a real folder and watch as files are organized in real-time.")
+            HelpFeatureView(icon: "play.circle.fill", title: "Live Demo", description: "See Sorty in action! Select a real folder and watch as files are organized in real-time.")
             
             Divider()
             
@@ -859,6 +859,7 @@ private struct TroubleshootItem: View {
 
 #Preview {
     HelpView()
+        .environmentObject(AppState())
 }
 
 // MARK: - Updates Help Content

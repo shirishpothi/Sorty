@@ -97,8 +97,8 @@ struct AIProviderSettingsView: View {
                 }
                 
                 let client = try AIClientFactory.createClient(config: viewModel.config)
-                // Simple connectivity check
-                _ = try await client.generateText(prompt: "Hello", systemPrompt: nil)
+                // Use lightweight health check instead of full inference
+                try await client.checkHealth()
                 
                 await MainActor.run {
                     withAnimation {

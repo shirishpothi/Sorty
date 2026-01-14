@@ -18,6 +18,7 @@ public protocol StreamingDelegate: AnyObject {
 public protocol AIClientProtocol: Sendable {
     func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan
     func generateText(prompt: String, systemPrompt: String?) async throws -> String
+    func checkHealth() async throws
     var config: AIConfig { get }
     @MainActor var streamingDelegate: StreamingDelegate? { get set }
 }
@@ -29,7 +30,7 @@ public enum AIClientError: LocalizedError, Sendable {
     case invalidResponse
     case invalidResponseFormat
     case apiError(statusCode: Int, message: String)
-    case networkError(Error)
+    case networkError(any Error & Sendable)
     
     public var errorDescription: String? {
         switch self {

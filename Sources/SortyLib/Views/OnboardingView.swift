@@ -258,7 +258,7 @@ struct ProviderSelectionStep: View {
                     Text("You choose where your data goes")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                     
-                    Text("Sortly works with multiple AI providers. Your files are processed locally, and only file names and metadata are sent to the AI for organization suggestions.")
+                    Text("Sorty works with multiple AI providers. Your files are processed locally, and only file names and metadata are sent to the AI for organization suggestions.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -461,7 +461,7 @@ struct PermissionsStep: View {
                     Text("Permissions")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                     
-                    Text("Sortly needs a few permissions to organize your files effectively. You can grant these now or later when needed.")
+                    Text("Sorty needs a few permissions to organize your files effectively. You can grant these now or later when needed.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -860,7 +860,7 @@ struct DemoStep: View {
                 
                 Text(demoState == .complete ? 
                      "Your files have been organized. You can undo this anytime." :
-                     "Select a folder to see Sortly in action. This will actually organize your files.")
+                     "Select a folder to see Sorty in action. This will actually organize your files.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -1065,7 +1065,7 @@ struct CompletionStep: View {
             
             // Title and message
             VStack(spacing: 16) {
-                Text("Sortly is Ready!")
+                Text("Sorty is Ready!")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                 
                 Text("You're all set to start organizing your files with AI.")
@@ -1097,7 +1097,7 @@ struct CompletionStep: View {
                 onFinish()
             } label: {
                 HStack(spacing: 8) {
-                    Text("Start Using Sortly")
+                    Text("Start Using Sorty")
                     Image(systemName: "arrow.right.circle.fill")
                         .font(.system(size: 16))
                 }

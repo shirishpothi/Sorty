@@ -183,7 +183,7 @@ public struct ExtensionCommunication {
                             <key>AMParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>for f in "$@"; do open "sorty://organize?path=$f"; done</string>
+                                <string>for f in "$@"; do encoded=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f"); open "sorty://organize?path=$encoded"; done</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -211,7 +211,7 @@ public struct ExtensionCommunication {
                             <key>ActionParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>for f in "$@"; do open "sorty://organize?path=$f"; done</string>
+                                <string>for f in "$@"; do encoded=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f"); open "sorty://organize?path=$encoded"; done</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -383,7 +383,7 @@ public struct ExtensionCommunication {
         on run {input, parameters}
             repeat with theItem in input
                 set thePath to POSIX path of theItem
-                set encodedPath to do shell script "python3 -c \\"import urllib.parse; print(urllib.parse.quote('" & thePath & "'))\\""
+                set encodedPath to do shell script "python3 -c \\"import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))\\" " & quoted form of thePath
                 do shell script "open 'sorty://organize?path=" & encodedPath & "'"
             end repeat
             return input

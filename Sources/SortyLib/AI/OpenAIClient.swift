@@ -148,6 +148,44 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         return content
     }
     
+    public func checkHealth() async throws {
+        guard let apiURL = config.apiURL else {
+            throw AIClientError.missingAPIURL
+        }
+        
+        // Base API URL for health check (stripping /chat/completions if present)
+        var baseURL = apiURL
+        if baseURL.hasSuffix("/chat/completions") {
+            baseURL = String(baseURL.dropLast("/chat/completions".count))
+        } else if baseURL.hasSuffix("/chat/completions/") {
+            baseURL = String(baseURL.dropLast("/chat/completions/".count))
+        }
+        
+        let modelsURL = baseURL.hasSuffix("/") ? "\(baseURL)models" : "\(baseURL)/models"
+        
+        guard let url = URL(string: modelsURL) else {
+            throw AIClientError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        
+        if config.requiresAPIKey, let apiKey = config.apiKey, !apiKey.isEmpty {
+            request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+        }
+    }
+    
     // MARK: - Non-Streaming Implementation
     
     private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {

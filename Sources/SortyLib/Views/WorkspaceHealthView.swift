@@ -347,7 +347,19 @@ public struct WorkspaceHealthView: View {
                     OpportunityCard(
                         opportunity: opportunity,
                         onAction: {
-                            selectedOpportunity = opportunity
+                            if let action = opportunity.action,
+                               UserDefaults.standard.bool(forKey: "skipPreview_\(action.rawValue.replacingOccurrences(of: " ", with: "_"))") {
+                                Task {
+                                    try? await healthManager.performAction(action, for: opportunity)
+                                    await refreshAnalysis()
+                                    await MainActor.run {
+                                        toastMessage = "Action completed"
+                                        showToast = true
+                                    }
+                                }
+                            } else {
+                                selectedOpportunity = opportunity
+                            }
                         },
                         onDismiss: {
                             healthManager.dismissOpportunity(opportunity)

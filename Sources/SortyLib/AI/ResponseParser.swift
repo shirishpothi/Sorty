@@ -151,8 +151,8 @@ struct ResponseParser {
                           let fileNames = dict["files"] as? [String] else { return nil }
                     
                     var files: [FileItem] = []
-                    for name in fileNames {
-                        if let file = findFile(named: name, in: originalFiles) {
+                    for fileName in fileNames {
+                        if let file = findFile(named: fileName, in: originalFiles) {
                             files.append(file)
                         }
                     }

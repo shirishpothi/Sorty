@@ -1065,22 +1065,29 @@ public class WorkspaceHealthManager: ObservableObject {
         guard let lastAction = cleanupHistory.last else { return }
         let fileManager = FileManager.default
         
+        var allSucceeded = true
+        var lastError: Error?
+        
         switch lastAction.type {
         case .trash:
             // "Trash" actions in this context were moves to Trash
             // To undo, we need to move them back from Trash to original paths.
-            // This is tricky because filenames might have changed or trash might be emptied.
-            // But we stored the destination path (in Trash) and original path.
-            
             if let destinations = lastAction.destinationPaths {
-                for (index, trashPath) in destinations.enumerated() {
-                    let originalPath = lastAction.affectedFilePaths[index]
+                // Use zip to safely iterate over both arrays and prevent index-out-of-bounds
+                for (trashPath, originalPath) in zip(destinations, lastAction.affectedFilePaths) {
                     let trashURL = URL(fileURLWithPath: trashPath)
                     let originalURL = URL(fileURLWithPath: originalPath)
                     
                     if fileManager.fileExists(atPath: trashPath) {
-                        try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                        try fileManager.moveItem(at: trashURL, to: originalURL)
+                        do {
+                            try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                            try fileManager.moveItem(at: trashURL, to: originalURL)
+                        } catch {
+                            allSucceeded = false
+                            lastError = error
+                        }
+                    } else {
+                        allSucceeded = false
                     }
                 }
             }
@@ -1088,14 +1095,20 @@ public class WorkspaceHealthManager: ObservableObject {
         case .move:
             // Reverse the move
             if let destinations = lastAction.destinationPaths {
-                for (index, destPath) in destinations.enumerated() {
-                    let originalPath = lastAction.affectedFilePaths[index]
+                for (destPath, originalPath) in zip(destinations, lastAction.affectedFilePaths) {
                     let destURL = URL(fileURLWithPath: destPath)
                     let originalURL = URL(fileURLWithPath: originalPath)
                     
                     if fileManager.fileExists(atPath: destPath) {
-                        try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                        try fileManager.moveItem(at: destURL, to: originalURL)
+                        do {
+                            try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                            try fileManager.moveItem(at: destURL, to: originalURL)
+                        } catch {
+                            allSucceeded = false
+                            lastError = error
+                        }
+                    } else {
+                        allSucceeded = false
                     }
                 }
             }
@@ -1105,8 +1118,12 @@ public class WorkspaceHealthManager: ObservableObject {
             throw NSError(domain: "Sorty", code: 400, userInfo: [NSLocalizedDescriptionKey: "Permanent deletions cannot be undone."])
         }
         
-        cleanupHistory.removeLast()
-        saveData()
+        if allSucceeded {
+            cleanupHistory.removeLast()
+            saveData()
+        } else {
+            throw lastError ?? NSError(domain: "Sorty", code: 500, userInfo: [NSLocalizedDescriptionKey: "Partial success: some files could not be restored."])
+        }
     }
 
     /// Perform a quick action for an opportunity
