@@ -146,6 +146,29 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         return try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
     }
     
+    public func checkHealth() async throws {
+        guard let apiKey = config.apiKey, !apiKey.isEmpty else {
+            throw AIClientError.missingAPIKey
+        }
+        
+        let url = URL(string: "https://api.anthropic.com/v1/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+        }
+    }
+    
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
             throw AIClientError.missingAPIKey

@@ -702,6 +702,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         state = .error(error)
         errorMessage = error.localizedDescription
+        
+        // Show error notification (unless cancelled)
+        if case .cancelled = error as? OrganizationError {
+            // Don't show notification for user-initiated cancellation
+        } else {
+            NotificationManager.shared.showError(
+                message: error.localizedDescription,
+                isCritical: true
+            )
+        }
     }
 
     // MARK: - State Updates with Progress

@@ -102,6 +102,28 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
+    public func checkHealth() async throws {
+        let url = URL(string: "https://api.githubcopilot.com/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        
+        let headers = try await getHeaders()
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+        }
+    }
+    
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         

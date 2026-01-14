@@ -25,6 +25,10 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     func generateText(prompt: String, systemPrompt: String?) async throws -> String {
         return "Mock response"
     }
+    
+    func checkHealth() async throws {
+        // Success by default
+    }
 }
 
 class SortyTests: XCTestCase {

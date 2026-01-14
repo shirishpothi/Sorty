@@ -131,7 +131,8 @@ public struct CleanupPreviewSheet: View {
     private func confirm() {
         // Persist "Don't show again" preference if checked
         if dontShowAgain, let action = opportunity.action {
-            UserDefaults.standard.set(true, forKey: "skipPreview_\(action.rawValue)")
+            let key = "skipPreview_\(action.rawValue.replacingOccurrences(of: " ", with: "_"))"
+            UserDefaults.standard.set(true, forKey: key)
         }
         
         let selectedFiles = opportunity.affectedFiles.filter { selectedFileIDs.contains($0.id) }

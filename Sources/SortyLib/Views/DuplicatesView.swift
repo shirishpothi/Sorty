@@ -193,12 +193,17 @@ struct DuplicatesView: View {
                             totalDeleted += 1
                             totalSizeRecovered += file.size
                         } else {
-                            try fm.removeItem(atPath: file.path)
+                            // No survivor found (all in group are being deleted) 
+                            // Fallback to Trash for safety instead of permanent delete
+                            try fm.trashItem(at: URL(fileURLWithPath: file.path), resultingItemURL: nil)
                             totalDeleted += 1
                             totalSizeRecovered += file.size
                         }
                     } else {
-                        try fm.removeItem(atPath: file.path)
+                        // Group not found - fallback to Trash
+                        try fm.trashItem(at: URL(fileURLWithPath: file.path), resultingItemURL: nil)
+                        totalDeleted += 1
+                        totalSizeRecovered += file.size
                     }
                 }
                 
@@ -429,7 +434,12 @@ struct DuplicateGroupDetailView: View {
                 Spacer()
                 
                 Button("Keep First, Cleanup Others") {
-                    onDelete(Array(group.files.dropFirst()))
+                    let sortedFiles = group.files.sorted { f1, f2 in
+                        let d1 = f1.creationDate ?? Date.distantPast
+                        let d2 = f2.creationDate ?? Date.distantPast
+                        return d1 < d2 // Keep oldest
+                    }
+                    onDelete(Array(sortedFiles.dropFirst()))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
@@ -439,7 +449,13 @@ struct DuplicateGroupDetailView: View {
             
             // File List
             List {
-                ForEach(Array(group.files.enumerated()), id: \.element.id) { index, file in
+                let sortedFiles = group.files.sorted { f1, f2 in
+                    let d1 = f1.creationDate ?? Date.distantPast
+                    let d2 = f2.creationDate ?? Date.distantPast
+                    return d1 < d2
+                }
+                
+                ForEach(Array(sortedFiles.enumerated()), id: \.element.id) { index, file in
                     DuplicateFileDetailRow(file: file, isOriginal: index == 0, onDelete: {
                         onDelete([file])
                     })

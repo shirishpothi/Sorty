@@ -24,6 +24,10 @@ final class LLMRuleInducerTests: XCTestCase {
         func generateText(prompt: String, systemPrompt: String?) async throws -> String {
             return generateTextResponse
         }
+        
+        func checkHealth() async throws {
+            // Success by default
+        }
     }
     
     var inducer: LLMRuleInducer!

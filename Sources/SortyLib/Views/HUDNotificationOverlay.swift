@@ -9,9 +9,11 @@ import SwiftUI
 
 /// HUD notification overlay that appears at the bottom-left of the window
 public struct HUDNotificationOverlay: View {
-    @ObservedObject var notificationManager = NotificationManager.shared
+    @ObservedObject private var notificationManager: NotificationManager
     
-    public init() {}
+    public init() {
+        self._notificationManager = ObservedObject(wrappedValue: NotificationManager.shared)
+    }
     
     public var body: some View {
         VStack {
@@ -33,7 +35,10 @@ public struct HUDNotificationOverlay: View {
             .padding(.leading, 20)
             .padding(.bottom, 20)
         }
+        .allowsHitTesting(notificationManager.currentHUDNotification != nil)
         .animation(.easeOut(duration: 0.2), value: notificationManager.currentHUDNotification?.id)
+        .ignoresSafeArea()
+        .zIndex(1000)
     }
 }
 
@@ -102,10 +107,16 @@ struct HUDNotificationCard: View {
     }
 }
 
-#Preview {
+#Preview("HUD Overlay") {
     ZStack {
         Color.gray.opacity(0.3)
         HUDNotificationOverlay()
     }
     .frame(width: 800, height: 600)
+    .onAppear {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            NotificationManager.shared.showInfo(title: "Test Notification", message: "This is a preview notification to verify the HUD is working correctly!")
+        }
+    }
 }
