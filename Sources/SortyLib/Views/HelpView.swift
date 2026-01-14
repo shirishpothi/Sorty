@@ -63,6 +63,7 @@ public enum HelpSection: String, CaseIterable {
     case workspaceHealth
     case cliAndDeeplinks
     case shortcuts
+    case updates
     case troubleshooting
     case privacy
     case about
@@ -80,6 +81,7 @@ public enum HelpSection: String, CaseIterable {
         case .workspaceHealth: return "Workspace Health"
         case .shortcuts: return "Keyboard Shortcuts"
         case .cliAndDeeplinks: return "CLI & Deeplinks"
+        case .updates: return "Version & Updates"
         case .troubleshooting: return "Troubleshooting"
         case .privacy: return "Privacy & Data"
         case .about: return "About"
@@ -99,6 +101,7 @@ public enum HelpSection: String, CaseIterable {
         case .workspaceHealth: return "heart.text.clipboard.fill"
         case .shortcuts: return "keyboard.fill"
         case .cliAndDeeplinks: return "terminal.fill"
+        case .updates: return "arrow.down.circle.fill"
         case .troubleshooting: return "wrench.and.screwdriver.fill"
         case .privacy: return "lock.shield.fill"
         case .about: return "info.circle.fill"
@@ -130,6 +133,8 @@ public enum HelpSection: String, CaseIterable {
             CLIDeepLinksContent()
         case .shortcuts:
             ShortcutsContent()
+        case .updates:
+            UpdatesHelpContent()
         case .troubleshooting:
             TroubleshootingContent()
         case .privacy:
@@ -854,6 +859,116 @@ private struct TroubleshootItem: View {
 
 #Preview {
     HelpView()
+}
+
+// MARK: - Updates Help Content
+
+private struct UpdatesHelpContent: View {
+    @EnvironmentObject var appState: AppState
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Sorty includes a built-in update checker that helps you stay current with the latest features and bug fixes.")
+            
+            // How to Check
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Checking for Updates")
+                    .font(.headline)
+                
+                HelpFeatureView(
+                    icon: "arrow.down.circle",
+                    title: "Manual Check",
+                    description: "Go to Help → Check for Updates... to manually check for new versions."
+                )
+                
+                HelpFeatureView(
+                    icon: "bell.badge",
+                    title: "Automatic Notifications",
+                    description: "Sorty periodically checks for updates in the background and notifies you when a new version is available."
+                )
+                
+                HelpFeatureView(
+                    icon: "doc.text",
+                    title: "Release Notes",
+                    description: "When an update is available, you'll see release notes describing new features and bug fixes."
+                )
+            }
+            
+            Divider()
+            
+            // How it Works
+            VStack(alignment: .leading, spacing: 12) {
+                Text("How the Update System Works")
+                    .font(.headline)
+                
+                Text("Sorty checks the GitHub Releases API for the latest version:")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("1.")
+                            .fontWeight(.bold)
+                        Text("Fetches the latest release from github.com/shirishpothi/Sorty")
+                    }
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("2.")
+                            .fontWeight(.bold)
+                        Text("Compares the remote version with your installed version")
+                    }
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("3.")
+                            .fontWeight(.bold)
+                        Text("Shows a dialog if an update is available with download link")
+                    }
+                }
+                .font(.callout)
+                .padding()
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(8)
+            }
+            
+            Divider()
+            
+            // Troubleshooting
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Update Check Troubleshooting")
+                    .font(.headline)
+                
+                TroubleshootItem(
+                    problem: "Update Check Failed",
+                    solutions: [
+                        "Check your internet connection",
+                        "GitHub API rate limit may be exceeded - wait 60 minutes",
+                        "Firewall may be blocking api.github.com",
+                        "Try again later if GitHub is experiencing issues"
+                    ]
+                )
+                
+                ErrorExplanation(
+                    error: "Error 403: Rate Limited",
+                    explanation: "GitHub limits API requests. Wait an hour and try again."
+                )
+                
+                ErrorExplanation(
+                    error: "Error 404: Not Found",
+                    explanation: "No releases published yet. You have the latest version."
+                )
+            }
+            
+            // Check Now Button
+            Divider()
+            
+            Button(action: {
+                Task {
+                    await appState.updateManager.checkForUpdates()
+                }
+            }) {
+                Label("Check for Updates Now", systemImage: "arrow.down.circle")
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
 }
 
 private struct CLIDeepLinksContent: View {
