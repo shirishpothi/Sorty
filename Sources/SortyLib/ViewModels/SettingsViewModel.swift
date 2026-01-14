@@ -97,12 +97,9 @@ public class SettingsViewModel: ObservableObject {
     public func testConnection() async throws {
         let clientConfig = config
         let client = try AIClientFactory.createClient(config: clientConfig)
-        // Test with a minimal file list
-        let testFiles = [
-            FileItem(path: "/test/file1.txt", name: "file1", extension: "txt"),
-            FileItem(path: "/test/file2.pdf", name: "file2", extension: "pdf")
-        ]
-        _ = try await client.analyze(files: testFiles, customInstructions: nil, personaPrompt: nil, temperature: clientConfig.temperature)
+        // Use lightweight health check endpoint (e.g., /models) instead of inference
+        // This avoids unnecessary token usage and is faster
+        try await client.checkHealth()
     }
     
     public func updateAvailableModels() {
@@ -130,7 +127,7 @@ public class SettingsViewModel: ObservableObject {
                     }
                 }
             } catch let fetchError {
-                LogManager.shared.log("Error fetching models: \(fetchError)", level: .error, category: "SettingsViewModel")
+                DebugLogger.log("Error fetching models: \(fetchError)")
                 await MainActor.run {
                     self.isLoadingModels = false
                 }

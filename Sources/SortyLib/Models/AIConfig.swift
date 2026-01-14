@@ -15,6 +15,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case openRouter = "open_router"
     case ollama = "ollama"
     case anthropic = "anthropic"
+    case gemini = "gemini"
     case appleFoundationModel = "apple_foundation_model"
     
     public var displayName: String {
@@ -33,6 +34,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "Ollama (Local)"
         case .anthropic:
             return "Anthropic (Claude)"
+        case .gemini:
+            return "Google Gemini"
         case .appleFoundationModel:
             return "Apple Foundation Model"
         }
@@ -40,7 +43,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var isAvailable: Bool {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
             return true
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
@@ -54,7 +57,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var unavailabilityReason: String? {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
             return nil
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
@@ -83,6 +86,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "http://localhost:11434"
         case .anthropic:
             return "https://api.anthropic.com/v1/messages"
+        case .gemini:
+            return "https://generativelanguage.googleapis.com/v1beta/openai"
         case .appleFoundationModel:
             return nil
         }
@@ -105,6 +110,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "llama3"
         case .anthropic:
             return "claude-3-5-sonnet-20240620"
+        case .gemini:
+            return "gemini-1.5-flash"
         case .appleFoundationModel:
             return "default"
         }
@@ -113,9 +120,13 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Whether this provider typically requires an API key
     public var typicallyRequiresAPIKey: Bool {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .gemini:
             return true
-        case .ollama, .appleFoundationModel:
+        case .ollama:
+            return false
+        case .appleFoundationModel:
+            // CRITICAL: Apple Foundation Model runs strictly on-device via FoundationModels.framework
+            // it does NOT use an API key and this must remain 'false'.
             return false
         }
     }
@@ -137,8 +148,31 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "API key is optional for local Ollama instances"
         case .anthropic:
             return "Get your API key from console.anthropic.com"
+        case .gemini:
+            return "Get your API key from aistudio.google.com"
         case .appleFoundationModel:
             return "No API key required"
+        }
+    }
+    
+    public var logoImageName: String {
+        switch self {
+        case .openAI: return "ChatGPT"
+        case .githubCopilot: return "GitHubCopilot"
+        case .groq: return "Groq"
+        case .openRouter: return "OpenRouter"
+        case .ollama: return "Ollama"
+        case .anthropic: return "Claude"
+        case .gemini: return "Gemini"
+        case .openAICompatible: return "server.rack"
+        case .appleFoundationModel: return "apple.logo"
+        }
+    }
+
+    public var usesSystemImage: Bool {
+        switch self {
+        case .openAICompatible, .appleFoundationModel: return true
+        default: return false
         }
     }
 }
@@ -157,6 +191,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var systemPromptOverride: String?
     public var maxTokens: Int?
     public var enableStreaming: Bool
+    /// Whether the current provider requires an API key. 
+    /// NOTE: For .appleFoundationModel and .ollama (usually), this should be false.
     public var requiresAPIKey: Bool
     public var enableReasoning: Bool  // Ask AI to explain organization decisions
     
@@ -167,6 +203,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var showStatsForNerds: Bool // Show detailed stats about generation
     public var storeDuplicateMetadata: Bool // Save original metadata for duplicates (opt-in)
     public var strictExclusions: Bool // Higher-level screening for exclusions
+    
+    // Organization limits (user-configurable)
+    public var maxTopLevelFolders: Int // Maximum number of top-level folders AI can create (3-20)
 
     public init(
         provider: AIProvider = .openAICompatible,
@@ -186,7 +225,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableFileTagging: Bool = true,
         showStatsForNerds: Bool = false,
         storeDuplicateMetadata: Bool = true,
-        strictExclusions: Bool = true
+        strictExclusions: Bool = true,
+        maxTopLevelFolders: Int = 10
     ) {
         self.provider = provider
         self.apiURL = apiURL
@@ -206,6 +246,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.showStatsForNerds = showStatsForNerds
         self.storeDuplicateMetadata = storeDuplicateMetadata
         self.strictExclusions = strictExclusions
+        self.maxTopLevelFolders = maxTopLevelFolders
     }
     
     public static let `default` = AIConfig(
@@ -225,7 +266,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableFileTagging: true,
         showStatsForNerds: false,
         storeDuplicateMetadata: true,
-        strictExclusions: true
+        strictExclusions: true,
+        maxTopLevelFolders: 10
     )
 }
 

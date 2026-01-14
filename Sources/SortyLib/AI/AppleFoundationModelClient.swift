@@ -14,15 +14,15 @@ import Foundation
 import FoundationModels
 
 @available(macOS 26.0, *)
-final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
-    let config: AIConfig
-    @MainActor weak var streamingDelegate: StreamingDelegate?
+public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
+    public let config: AIConfig
+    @MainActor public weak var streamingDelegate: StreamingDelegate?
     
-    init(config: AIConfig) {
+    public init(config: AIConfig) {
         self.config = config
     }
     
-    func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let startTime = Date()
         
         // Verify availability first
@@ -30,14 +30,33 @@ final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)
         }
         
-        // Use compact prompts for Apple Intelligence
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildCompactSystemPrompt(enableReasoning: config.enableReasoning)
+        // Determine compaction level to fit context window
+        let compactionLevel = PromptBuilder.selectCompactionLevel(files: files, maxTokens: 1200)
+        
+        var systemPrompt: String
+        var userPrompt: String
+        
+        switch compactionLevel {
+        case .standard:
+            systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildCompactSystemPrompt(enableReasoning: config.enableReasoning, maxTopLevelFolders: config.maxTopLevelFolders)
+            userPrompt = PromptBuilder.buildCompactPrompt(files: files, enableReasoning: config.enableReasoning)
+        case .ultra:
+            let prompts = PromptBuilder.buildUltraCompactPrompt(files: files)
+            systemPrompt = prompts.system
+            userPrompt = prompts.user
+        case .summary:
+            let prompts = PromptBuilder.buildSummaryPrompt(files: files)
+            systemPrompt = prompts.system
+            userPrompt = prompts.user
+        }
         
         // Incorporate custom instructions
-        var userPrompt = PromptBuilder.buildCompactPrompt(files: files, enableReasoning: config.enableReasoning)
         if let instructions = customInstructions, !instructions.isEmpty {
             userPrompt = "USER INSTRUCTIONS: \(instructions)\n\n" + userPrompt
         }
+        
+        // Log strategy for debugging
+        DebugLogger.log("AFM Strategy: \(compactionLevel) compaction for \(files.count) files")
         
         do {
             // Create a language model session with the system instructions
@@ -98,7 +117,14 @@ final class AppleFoundationModelClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
-    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+    public func checkHealth() async throws {
+        // Verify availability
+        guard Self.isAvailable() else {
+            throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)
+        }
+    }
+    
+    public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         // Verify availability first
         guard Self.isAvailable() else {
             throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)

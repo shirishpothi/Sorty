@@ -21,7 +21,11 @@ let package = Package(
     targets: [
         .target(
             name: "SortyLib",
-            path: "Sources/SortyLib"
+            path: "Sources/SortyLib",
+            resources: [
+                .process("Resources/Assets.xcassets"),
+                .copy("Resources/Images")
+            ]
         ),
         .executableTarget(
             name: "SortyApp",

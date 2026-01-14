@@ -13,9 +13,12 @@
 10. [App Deeplinks](#app-deeplinks)
 11. [CLI Tooling](#cli-tooling)
 12. [Keyboard Shortcuts](#keyboard-shortcuts)
-13. [Troubleshooting](#troubleshooting)
-14. [Privacy & Data](#privacy--data)
-15. [FAQ](#faq)
+13. [Menu Bar Commands](#menu-bar-commands)
+14. [Version & Updates](#version--updates)
+15. [Troubleshooting](#troubleshooting)
+    - [Update Check Issues](#update-check-issues)
+16. [Privacy & Data](#privacy--data)
+17. [FAQ](#faq)
 
 ---
 
@@ -281,40 +284,59 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 | `path` | Path to scan |
 | `autostart=true` | Automatically begin scan |
 
-### Management Routes
+### Persona Management
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://persona` | Manage personas |
-| `action=generate` | Generate a new persona |
-| `prompt` | Description for generation |
-| `generate=true` | Trigger generation immediately |
+| `sorty://persona` | | Open persona management |
+| | `action=generate` | Generate a new persona |
+| | `prompt=<description>` | Description for persona generation |
+| | `generate=true` | Trigger generation immediately |
 
-### Watched
+**Examples:**
+- `sorty://persona` - Open persona view
+- `sorty://persona?action=generate&prompt=sci-fi%20ebook%20collector` - Generate persona from description
+
+### Watched Folders
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://watched` | Manage watched folders |
-| `action=add` | Add a new watched folder |
-| `path` | Path to add |
+| `sorty://watched` | | Open watched folders view |
+| | `action=add` | Add a new watched folder |
+| | `path=<folder_path>` | Path to add as watched |
+
+**Examples:**
+- `sorty://watched` - Open watched folders
+- `sorty://watched?action=add&path=/Users/me/Downloads` - Add Downloads as watched
 
 ### Rules
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://rules` | Manage exclusion rules |
-| `action=add` | Add a new rule |
-| `pattern` | Pattern to exclude (e.g., "*.tmp") |
+| `sorty://rules` | | Open exclusion rules |
+| | `action=add` | Add a new rule |
+| | `type=<pattern\|folder\|extension>` | Type of exclusion rule |
+| | `pattern=<glob_pattern>` | Pattern to exclude (e.g., "*.tmp") |
+
+**Examples:**
+- `sorty://rules` - Open rules view
+- `sorty://rules?action=add&type=pattern&pattern=*.log` - Add pattern rule
+
+### Health
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://health` | | Open Workspace Health |
 
 ### Navigation Routes
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://settings` | Open Settings |
-| `sorty://learnings` | Open Learnings |
-| `sorty://history` | Open History |
-| `sorty://health` | Open Workspace Health |
-| `sorty://help` | Open Help |
+| `sorty://settings` | | Open Settings |
+| `sorty://learnings` | | Open Learnings |
+| `sorty://history` | | Open History |
+| `sorty://help` | | Open Help |
+| `sorty://help` | `section=updates` | Jump to updates section |
 
 ---
 
@@ -368,6 +390,22 @@ fileorg learnings
 fileorg health
 fileorg help
 ```
+
+### Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `fileorg status` | Show current app status and selected folder |
+| `fileorg health` | Open Workspace Health view |
+| `fileorg settings` | Open Settings |
+| `fileorg persona [generate "description"]` | Manage or generate personas |
+| `fileorg watched [add <path>]` | Manage watched folders |
+| `fileorg rules [add "<pattern>"]` | Manage exclusion rules |
+| `fileorg organize <path> [--persona <id>] [--auto]` | Organize a folder |
+| `fileorg duplicates <path> [--auto]` | Scan for duplicates |
+| `fileorg learnings` | Open The Learnings dashboard |
+| `fileorg history` | Open organization history |
+| `fileorg help` | Open help (or `sorty://help?section=updates` for updates) |
 
 ---
 
@@ -470,7 +508,6 @@ Weekly insights show:
 | ⌘3 | Go to Duplicates |
 | ⌘4 | Go to Exclusions |
 | ⌘5 | Go to Watched Folders |
-| ⌘6 | Go to The Learnings |
 | ⌘, | Open Settings |
 | ⇧⌘H | Open History |
 | ⇧⌘L | Open The Learnings |
@@ -490,9 +527,126 @@ Weekly insights show:
 
 | Shortcut | Action |
 |----------|--------|
-| ⌘R | Start/Regenerate Organization |
+| ⌘R | Start Organization |
+| ⇧⌘R | Regenerate Organization |
 | ⌘⏎ | Apply Changes |
+| ⇧⌘P | Preview Changes |
 | ⎋ | Cancel Operation |
+
+### Learnings
+
+| Shortcut | Action |
+|----------|--------|
+| ⌥⌘H | Start Honing Session |
+
+---
+
+## Menu Bar Commands
+
+Sorty provides a comprehensive menu bar with commands organized into logical groups.
+
+### File Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| New Session | ⌘N | Clear current state and start fresh |
+| Open Directory... | ⌘O | Select a folder to organize |
+| Export Results... | ⌘E | Export organization plan as JSON, CSV, or HTML |
+
+### View Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Show/Hide Sidebar | ⌘\ | Toggle the navigation sidebar |
+| Organize | ⌘1 | Navigate to main organization view |
+| Workspace Health | ⌘2 | Navigate to health monitoring |
+| Duplicates | ⌘3 | Navigate to duplicate finder |
+| Exclusions | ⌘4 | Navigate to exclusion rules |
+| Watched Folders | ⌘5 | Navigate to watched folders |
+| The Learnings | ⇧⌘L | Navigate to learning dashboard |
+| Settings | ⌘, | Open app settings |
+| History | ⇧⌘H | View organization history |
+
+### Organize Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Start Organization | ⌘R | Begin AI analysis of selected folder |
+| Regenerate Organization | ⇧⌘R | Re-run analysis with current settings |
+| Apply Changes | ⌘⏎ | Execute the proposed organization |
+| Preview Changes | ⇧⌘P | Preview what will change before applying |
+| Cancel | ⎋ | Stop the current operation |
+
+### Learnings Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Open Dashboard | ⇧⌘L | Open The Learnings dashboard |
+| Start Honing Session | ⌥⌘H | Begin a preference refinement Q&A |
+| View Statistics | — | See learning metrics and progress |
+| Pause Learning | — | Temporarily stop data collection |
+| Export Learning Profile... | — | Save preferences to a file |
+| Import Learning Profile... | — | Load preferences from a file |
+
+### Help Menu
+
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| Sorty Help | ⌘? | Open this help documentation |
+| Delete All Usage Data | — | Remove Safe Deletion and usage history |
+| GitHub Repository | — | Open Sorty's GitHub page |
+| About Sorty | — | View app version and credits |
+| Check for Updates... | — | Check for new versions of Sorty |
+
+---
+
+## Version & Updates
+
+### Checking for Updates
+
+Sorty includes a built-in update checker that helps you stay current with the latest features and bug fixes.
+
+**To check for updates:**
+1. Go to **Help → Check for Updates...** (or use the About menu)
+2. Sorty will check GitHub releases for a newer version
+3. If an update is available, you'll see release notes and a download link
+
+### How the Update System Works
+
+The update checker queries the **GitHub Releases API** to compare your installed version against the latest published release:
+
+1. **API Request**: Sorty fetches `https://api.github.com/repos/shirishpothi/Sorty/releases/latest`
+2. **Version Comparison**: The `tag_name` from the response is compared with the current app version
+3. **Release Notes**: If a newer version exists, the `body` field provides release notes
+4. **Download Link**: The `html_url` links directly to the release download page
+
+### What's Included in Updates
+
+Updates may include:
+- New AI providers and models
+- Enhanced organization algorithms
+- Bug fixes and performance improvements
+- New personas and file type support
+- Security patches
+
+### Automatic Notifications
+
+Sorty periodically checks for updates in the background and will notify you when a new version is available. You can always manually check via the Help menu.
+
+### Update Check Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "Rate limit exceeded" | Too many API requests | Wait 60 minutes, then retry |
+| "Network error" | No internet connection | Check your connection and retry |
+| "404 Not Found" | No releases published yet | The repository has no releases; check back later |
+| Timeout | Slow connection or GitHub issues | Increase timeout in settings or retry later |
+
+### Release Notes
+
+View the full changelog at:
+- **In-app**: Check for Updates dialog shows release notes
+- **Online**: [GitHub Releases](https://github.com/shirishpothi/Sorty/releases)
 
 ---
 
@@ -533,6 +687,14 @@ Weekly insights show:
 - ✓ Check History tab for restoration options
 - ✓ Verify files weren't permanently deleted (Safe Deletion was ON)
 - ✓ Look in the original locations for restored files
+
+### Update Check Issues
+
+- ✓ **Rate limit error**: GitHub limits unauthenticated API requests to 60/hour. Wait and retry later.
+- ✓ **Network error**: Check your internet connection and firewall settings.
+- ✓ **404 Not Found**: No releases exist yet in the repository. This is normal for new installations.
+- ✓ **Timeout**: Try again later; GitHub may be experiencing issues.
+- ✓ **Version parsing error**: The release tag format may have changed. Check the [releases page](https://github.com/shirishpothi/Sorty/releases) manually.
 
 ---
 

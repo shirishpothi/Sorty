@@ -199,6 +199,10 @@ public struct SortyCommands: Commands {
                 appState.showHelp()
             }
             .keyboardShortcut("?", modifiers: .command)
+            
+            Button("Restart Onboarding...") {
+                appState.showOnboarding()
+            }
 
             Button("Delete All Usage Data") {
                 appState.deleteUsageData()
@@ -232,6 +236,12 @@ public class AppState: ObservableObject {
     @Published public var showDirectoryPicker: Bool = false
     @Published public var selectedDirectory: URL?
     @Published public var updateManager = UpdateManager()
+    
+    @Published public var hasCompletedOnboarding: Bool {
+        didSet {
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+        }
+    }
 
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
@@ -251,9 +261,12 @@ public class AppState: ObservableObject {
         case exclusions
         case watchedFolders
         case learnings
+        case storageLocations
     }
 
-    public init() {}
+    public init() {
+        self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+    }
 
     public var hasResults: Bool {
         organizer?.currentPlan != nil && organizer?.state == .completed
@@ -288,6 +301,11 @@ public class AppState: ObservableObject {
     public func resetSession() {
         selectedDirectory = nil
         organizer?.reset()
+    }
+    
+    /// Show the onboarding flow again (for revisiting setup)
+    public func showOnboarding() {
+        hasCompletedOnboarding = false
     }
 
     public func exportResults() {

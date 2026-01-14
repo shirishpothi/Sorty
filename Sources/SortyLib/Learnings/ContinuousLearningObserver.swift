@@ -26,6 +26,12 @@ public struct OrganizationSession: Codable, Identifiable, Sendable {
     public var userCorrections: [DirectoryChange]
     public var wasReverted: Bool
     
+    /// Map of destination paths to rule IDs (to track which rules placed which files)
+    public var appliedRules: [String: String]
+    
+    /// Rule IDs that were used in this session (for tracking success)
+    public var usedRuleIds: Set<String>
+    
     public init(
         id: String = UUID().uuidString,
         timestamp: Date = Date(),
@@ -33,7 +39,9 @@ public struct OrganizationSession: Codable, Identifiable, Sendable {
         historyEntryId: String? = nil,
         steeringPrompts: [String] = [],
         userCorrections: [DirectoryChange] = [],
-        wasReverted: Bool = false
+        wasReverted: Bool = false,
+        appliedRules: [String: String] = [:],
+        usedRuleIds: Set<String> = []
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -42,6 +50,8 @@ public struct OrganizationSession: Codable, Identifiable, Sendable {
         self.steeringPrompts = steeringPrompts
         self.userCorrections = userCorrections
         self.wasReverted = wasReverted
+        self.appliedRules = appliedRules
+        self.usedRuleIds = usedRuleIds
     }
 }
 
@@ -114,12 +124,86 @@ public class ContinuousLearningObserver: ObservableObject {
         LogManager.shared.log("Started session \(session.id) for \(folderPath)", category: "LearningObserver")
     }
     
-    /// End the current session
+    /// Record that a specific rule was applied to a file
+    public func recordRuleApplication(destinationPath: String, ruleId: String) {
+        guard canCollect, var session = currentSession else { return }
+        
+        session.appliedRules[destinationPath] = ruleId
+        session.usedRuleIds.insert(ruleId)
+        currentSession = session
+        
+        // Update in recentSessions array
+        if let idx = recentSessions.firstIndex(where: { $0.id == session.id }) {
+            recentSessions[idx] = session
+        }
+    }
+    
+    /// End the current session and evaluate rule success
     public func endSession() {
         if let session = currentSession {
             LogManager.shared.log("Ended session \(session.id)", category: "LearningObserver")
+            
+            // Schedule delayed rule success evaluation
+            // Wait some time to see if user makes corrections
+            scheduleRuleSuccessEvaluation(for: session)
         }
         currentSession = nil
+    }
+    
+    /// Evaluate rules after a delay to check for corrections
+    private func scheduleRuleSuccessEvaluation(for session: OrganizationSession) {
+        // Wait 5 minutes before evaluating (gives user time to make corrections)
+        let evaluationDelay: TimeInterval = 5 * 60
+        
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(evaluationDelay * 1_000_000_000))
+            await evaluateRuleSuccess(for: session)
+        }
+    }
+    
+    /// Evaluate which rules succeeded (no corrections) vs failed (had corrections)
+    private func evaluateRuleSuccess(for session: OrganizationSession) async {
+        // Get the current state of the session (may have been updated with corrections)
+        guard let updatedSession = recentSessions.first(where: { $0.id == session.id }) else { return }
+        
+        // If session was reverted, all rules failed
+        if updatedSession.wasReverted {
+            for ruleId in updatedSession.usedRuleIds {
+                learningsManager.recordRuleFailure(ruleId: ruleId)
+            }
+            LogManager.shared.log("Session \(session.id) was reverted - marking \(updatedSession.usedRuleIds.count) rules as failed", category: "LearningObserver")
+            return
+        }
+        
+        // Find which rules had corrections
+        let correctedPaths = Set(updatedSession.userCorrections.map { $0.originalPath })
+        var failedRuleIds: Set<String> = []
+        var succeededRuleIds: Set<String> = []
+        
+        for (destPath, ruleId) in updatedSession.appliedRules {
+            if correctedPaths.contains(destPath) {
+                // This file was corrected - rule failed
+                failedRuleIds.insert(ruleId)
+            } else {
+                // No correction for this file - rule potentially succeeded
+                succeededRuleIds.insert(ruleId)
+            }
+        }
+        
+        // Remove rules that had any failures from success set
+        succeededRuleIds.subtract(failedRuleIds)
+        
+        // Record successes and failures
+        for ruleId in succeededRuleIds {
+            learningsManager.recordRuleSuccess(ruleId: ruleId)
+        }
+        for ruleId in failedRuleIds {
+            learningsManager.recordRuleFailure(ruleId: ruleId)
+        }
+        
+        if !succeededRuleIds.isEmpty || !failedRuleIds.isEmpty {
+            LogManager.shared.log("Session \(session.id) evaluation: \(succeededRuleIds.count) rules succeeded, \(failedRuleIds.count) rules failed", category: "LearningObserver")
+        }
     }
     
     // MARK: - Steering Prompts

@@ -77,6 +77,44 @@ struct WorkspaceHealthSettingsView: View {
                 }
             }
             
+            Section("Detection Sensitivity") {
+                VStack(alignment: .leading) {
+                    Text("Min Screenshots: \(config.minScreenshotCount)")
+                    Slider(
+                        value: Binding(
+                            get: { Double(config.minScreenshotCount) },
+                            set: { config.minScreenshotCount = Int($0) }
+                        ),
+                        in: 5...50,
+                        step: 5
+                    )
+                }
+                
+                VStack(alignment: .leading) {
+                    Text("Min Unorganized Files: \(config.minUnorganizedCount)")
+                    Slider(
+                        value: Binding(
+                            get: { Double(config.minUnorganizedCount) },
+                            set: { config.minUnorganizedCount = Int($0) }
+                        ),
+                        in: 5...50,
+                        step: 5
+                    )
+                }
+                
+                VStack(alignment: .leading) {
+                    Text("Min Old Files: \(config.minOldFileCount)")
+                    Slider(
+                        value: Binding(
+                            get: { Double(config.minOldFileCount) },
+                            set: { config.minOldFileCount = Int($0) }
+                        ),
+                        in: 5...50,
+                        step: 5
+                    )
+                }
+            }
+            
             Section("Enabled Checks") {
                 // Group checks by type/category if possible, or just list them
                 ForEach(CleanupOpportunity.OpportunityType.allCases, id: \.self) { type in

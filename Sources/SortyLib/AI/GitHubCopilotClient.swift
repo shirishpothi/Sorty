@@ -7,12 +7,12 @@
 
 import Foundation
 
-final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
-    let config: AIConfig
+public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
+    public let config: AIConfig
     private let session: URLSession
-    @MainActor weak var streamingDelegate: StreamingDelegate?
+    @MainActor public weak var streamingDelegate: StreamingDelegate?
     
-    init(config: AIConfig) {
+    public init(config: AIConfig) {
         self.config = config
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.timeoutIntervalForRequest = config.requestTimeout
@@ -31,10 +31,10 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         ]
     }
     
-    func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "")
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             enableReasoning: config.enableReasoning,
@@ -65,9 +65,9 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
-    func fetchAvailableModels() async throws -> [String] {
+    public func fetchAvailableModels() async throws -> [String] {
         let url = URL(string: "https://api.githubcopilot.com/models")!
-        LogManager.shared.log("Fetching available models", category: "CopilotClient")
+        DebugLogger.log("Fetching available models")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         
@@ -97,12 +97,34 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             
         } catch {
              // Fallback on error
-             LogManager.shared.log("Failed to fetch models: \(error), using defaults", level: .error, category: "CopilotClient")
+             DebugLogger.log("Failed to fetch models: \(error), using defaults")
              return ["gpt-4", "gpt-3.5-turbo"]
         }
     }
     
-    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+    public func checkHealth() async throws {
+        let url = URL(string: "https://api.githubcopilot.com/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        
+        let headers = try await getHeaders()
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+        }
+    }
+    
+    public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         
         let requestBody: [String: Any] = [
@@ -263,7 +285,7 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                         let firstChoice = choices?.first
                         let delta = firstChoice?["delta"] as? [String: Any]
                         let deltaContent = delta?["content"] as? String
-
+ 
                         if let content = deltaContent {
                             if firstTokenTime == nil {
                                 firstTokenTime = Date()

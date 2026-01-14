@@ -32,7 +32,26 @@ function show_help {
     echo "  learnings                    Open Learnings dashboard"
     echo "  history                      Open History"
     echo "  help                         Open Help"
+    echo "  update                       Check for updates"
+    echo "  version, -v, --version       Show app version"
     echo ""
+}
+
+function show_version {
+    APP_PATH="/Applications/Sorty.app"
+    if [ -d "$APP_PATH" ]; then
+        VERSION=$(defaults read "$APP_PATH/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null)
+        BUILD=$(defaults read "$APP_PATH/Contents/Info.plist" CFBundleVersion 2>/dev/null)
+        if [ ! -z "$VERSION" ]; then
+            echo "Sorty version $VERSION (build $BUILD)"
+        else
+            echo "Sorty is installed but version could not be determined."
+            echo "Check version in-app: Settings > About"
+        fi
+    else
+        echo "Sorty app not found at $APP_PATH"
+        echo "Check version in-app: Settings > About"
+    fi
 }
 
 function open_url {
@@ -186,6 +205,14 @@ case "$COMMAND" in
         if [[ "$OSTYPE" == "darwin"* ]] && [ ! -z "$DISPLAY" ] || [ -z "$CI" ]; then
             open_url "${APP_SCHEME}://help"
         fi
+        ;;
+        
+    "update")
+        open_url "${APP_SCHEME}://help?section=updates"
+        ;;
+        
+    "version"|"-v"|"--version")
+        show_version
         ;;
         
     *)

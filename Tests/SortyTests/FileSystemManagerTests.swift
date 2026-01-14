@@ -269,19 +269,19 @@ final class DuplicateRestorationManagerTests: XCTestCase {
     var manager: DuplicateRestorationManager!
     var tempDirectory: URL!
     
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() {
+        super.setUp()
         manager = DuplicateRestorationManager.shared
         manager.clearAllData() // Start fresh
         
         tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
     }
     
-    override func tearDownWithError() throws {
+    override func tearDown() {
         try? FileManager.default.removeItem(at: tempDirectory)
         manager.clearAllData()
-        try super.tearDownWithError()
+        super.tearDown()
     }
     
     func testSafeDeleteSingleFile() throws {

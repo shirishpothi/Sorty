@@ -7,7 +7,7 @@
 
 import Foundation
 
-final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
+public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
     
     /// Helper to construct the full endpoint URL from a base URL
     static func constructEndpoint(from apiURL: String) -> String {
@@ -23,11 +23,11 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
              return "\(apiURL)/v1/chat/completions"
         }
     }
-    let config: AIConfig
+    public let config: AIConfig
     private let session: URLSession
-    @MainActor weak var streamingDelegate: StreamingDelegate?
+    @MainActor public weak var streamingDelegate: StreamingDelegate?
     
-    init(config: AIConfig) {
+    public init(config: AIConfig) {
         self.config = config
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.timeoutIntervalForRequest = config.requestTimeout
@@ -35,7 +35,7 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         self.session = URLSession(configuration: sessionConfig)
     }
     
-    func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         guard let apiURL = config.apiURL else {
             throw AIClientError.missingAPIURL
         }
@@ -55,7 +55,7 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
         
         // Use custom system prompt if provided, otherwise use default
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "")
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
             enableReasoning: config.enableReasoning, 
@@ -87,7 +87,7 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
-    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+    public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         guard let apiURL = config.apiURL else {
             throw AIClientError.missingAPIURL
         }
@@ -146,6 +146,44 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
         
         return content
+    }
+    
+    public func checkHealth() async throws {
+        guard let apiURL = config.apiURL else {
+            throw AIClientError.missingAPIURL
+        }
+        
+        // Base API URL for health check (stripping /chat/completions if present)
+        var baseURL = apiURL
+        if baseURL.hasSuffix("/chat/completions") {
+            baseURL = String(baseURL.dropLast("/chat/completions".count))
+        } else if baseURL.hasSuffix("/chat/completions/") {
+            baseURL = String(baseURL.dropLast("/chat/completions/".count))
+        }
+        
+        let modelsURL = baseURL.hasSuffix("/") ? "\(baseURL)models" : "\(baseURL)/models"
+        
+        guard let url = URL(string: modelsURL) else {
+            throw AIClientError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        
+        if config.requiresAPIKey, let apiKey = config.apiKey, !apiKey.isEmpty {
+            request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+        }
     }
     
     // MARK: - Non-Streaming Implementation
@@ -323,35 +361,6 @@ final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
                 streamingDelegate?.didFail(error: clientError)
             }
             throw clientError
-        }
-    }
-}
-
-enum AIClientError: LocalizedError, Sendable {
-    case missingAPIURL
-    case missingAPIKey
-    case invalidURL
-    case invalidResponse
-    case invalidResponseFormat
-    case apiError(statusCode: Int, message: String)
-    case networkError(Error)
-    
-    var errorDescription: String? {
-        switch self {
-        case .missingAPIURL:
-            return "API URL is required"
-        case .missingAPIKey:
-            return "API key is required. Disable 'Requires API Key' in Advanced Settings if your endpoint doesn't require authentication."
-        case .invalidURL:
-            return "Invalid API URL"
-        case .invalidResponse:
-            return "Invalid response from API"
-        case .invalidResponseFormat:
-            return "Response format is invalid"
-        case .apiError(let statusCode, let message):
-            return "API error (\(statusCode)): \(message)"
-        case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
         }
     }
 }

@@ -179,6 +179,10 @@ public class OrganizationHistory: ObservableObject {
     public var failedCount: Int {
         entries.filter { $0.status == .failed }.count
     }
+    
+    public var successCount: Int {
+        entries.filter { $0.status == .completed }.count
+    }
 
     public var totalRecoveredSpace: Int64 {
         entries.compactMap { $0.recoveredSpace }.reduce(0, +)

@@ -100,24 +100,24 @@ public enum PageTransitionStyle {
 // MARK: - Custom Animations
 
 extension Animation {
-    /// Smooth spring animation for page transitions
+    /// Smooth spring animation for page transitions - subtle
     public static var pageTransition: Animation {
-        .spring(response: 0.35, dampingFraction: 1.0, blendDuration: 0.1)
+        .easeOut(duration: 0.2)
     }
 
-    /// Bouncy spring animation for modals and sheets
+    /// Bouncy spring animation for modals and sheets - subtle
     public static var modalBounce: Animation {
-        .spring(response: 0.35, dampingFraction: 0.9, blendDuration: 0.1)
+        .easeOut(duration: 0.2)
     }
 
     /// Subtle bounce for interactive elements
     public static var subtleBounce: Animation {
-        .spring(response: 0.3, dampingFraction: 0.9, blendDuration: 0)
+        .easeOut(duration: 0.15)
     }
 
     /// Quick snap animation for selections
     public static var quickSnap: Animation {
-        .spring(response: 0.25, dampingFraction: 1.0, blendDuration: 0)
+        .easeOut(duration: 0.12)
     }
 
     /// Loading pulse animation
@@ -127,7 +127,7 @@ extension Animation {
 
     /// Smooth ease for general transitions
     public static var smoothEase: Animation {
-        .easeInOut(duration: 0.25)
+        .easeInOut(duration: 0.2)
     }
 }
 
@@ -203,16 +203,16 @@ struct PageTransitionModifier: ViewModifier {
     }
 }
 
-/// Modal bounce presentation modifier
+/// Modal bounce presentation modifier - subtle version
 struct ModalBounceModifier: ViewModifier {
     @State private var appeared = false
 
     func body(content: Content) -> some View {
         content
-            .scaleEffect(appeared ? 1.0 : 0.8)
-            .opacity(appeared ? 1.0 : 0.0)
+            .scaleEffect(appeared ? 1.0 : 0.96)
+            .opacity(appeared ? 1.0 : 0.5)
             .onAppear {
-                withAnimation(.modalBounce) {
+                withAnimation(.easeOut(duration: 0.2)) {
                     appeared = true
                 }
             }
@@ -300,17 +300,17 @@ struct ShimmerModifier: ViewModifier {
     }
 }
 
-/// Animated appearance modifier for list items
+/// Animated appearance modifier for list items - subtle version
 struct AnimatedAppearanceModifier: ViewModifier {
     let delay: Double
     @State private var appeared = false
 
     func body(content: Content) -> some View {
         content
-            .offset(y: appeared ? 0 : 20)
-            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 8)
+            .opacity(appeared ? 1 : 0.4)
             .onAppear {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.95).delay(delay)) {
+                withAnimation(.easeOut(duration: 0.2).delay(delay)) {
                     appeared = true
                 }
             }
@@ -371,32 +371,32 @@ extension View {
 
 // MARK: - Transition Helpers
 
-/// Namespace for commonly used transitions
+/// Namespace for commonly used transitions - subtle versions
 public enum TransitionStyles {
     public static let slideFromRight = AnyTransition.asymmetric(
-        insertion: .move(edge: .trailing).combined(with: .opacity),
-        removal: .move(edge: .leading).combined(with: .opacity)
+        insertion: .opacity.combined(with: .offset(x: 20)),
+        removal: .opacity.combined(with: .offset(x: -20))
     )
 
     public static let slideFromLeft = AnyTransition.asymmetric(
-        insertion: .move(edge: .leading).combined(with: .opacity),
-        removal: .move(edge: .trailing).combined(with: .opacity)
+        insertion: .opacity.combined(with: .offset(x: -20)),
+        removal: .opacity.combined(with: .offset(x: 20))
     )
 
     public static let slideFromBottom = AnyTransition.asymmetric(
-        insertion: .move(edge: .bottom).combined(with: .opacity),
-        removal: .move(edge: .top).combined(with: .opacity)
+        insertion: .opacity.combined(with: .offset(y: 15)),
+        removal: .opacity.combined(with: .offset(y: -15))
     )
 
     public static let scaleAndFade = AnyTransition.asymmetric(
-        insertion: .scale(scale: 0.9).combined(with: .opacity),
-        removal: .scale(scale: 0.9).combined(with: .opacity)
+        insertion: .scale(scale: 0.97).combined(with: .opacity),
+        removal: .scale(scale: 0.97).combined(with: .opacity)
     )
 
 
     public static let modalPresentation = AnyTransition.asymmetric(
-        insertion: .scale(scale: 0.85).combined(with: .opacity),
-        removal: .scale(scale: 0.95).combined(with: .opacity)
+        insertion: .scale(scale: 0.95).combined(with: .opacity),
+        removal: .scale(scale: 0.98).combined(with: .opacity)
     )
 }
 

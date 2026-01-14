@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import SwiftUI
+import UserNotifications
 #if canImport(SortyLib)
 import SortyLib
 #endif
@@ -19,6 +20,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     let watchedFoldersManager: WatchedFoldersManager
     let learningsManager: LearningsManager
     let continuousLearningObserver: ContinuousLearningObserver
+    private let notificationManager = NotificationManager.shared
     
     init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
         self.organizer = organizer
@@ -34,6 +36,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         self.folderWatcher.syncWithFolders(watchedFoldersManager.folders)
         
         setupNotifications()
+        requestNotificationPermission()
         
         // Start observing
         self.continuousLearningObserver.startObserving()
@@ -59,34 +62,148 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 self.folderWatcher.resume(folder)
             }
         }
+
+        NotificationCenter.default.addObserver(forName: .autoOrganizeDisabledGlobally, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self else { return }
+            let reason = notification.userInfo?["reason"] as? String ?? "Unknown reason"
+            
+            Task { @MainActor in
+                self.notificationManager.showError(message: "Auto-organization paused: \(reason)", isCritical: true)
+            }
+        }
+        
+        // Listen for organization completion
+        NotificationCenter.default.addObserver(forName: .organizationDidFinish, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self else { return }
+            
+            Task { @MainActor in
+                if let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry {
+                    let stats = self.extractBatchStats(from: entry)
+                    self.notificationManager.showBatchSummary(stats: stats)
+                }
+            }
+        }
     }
     
-    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>) {
+    /// Extract detailed batch statistics from an organization history entry
+    private func extractBatchStats(from entry: OrganizationHistoryEntry) -> BatchSummaryStats {
+        let folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
+        
+        // Count operations by type
+        var filesMoved = 0
+        var filesRenamed = 0
+        var filesTagged = 0
+        var foldersCreated = 0
+        
+        if let operations = entry.operations {
+            for op in operations {
+                switch op.type {
+                case .moveFile:
+                    filesMoved += 1
+                case .renameFile:
+                    filesRenamed += 1
+                case .tagFile:
+                    filesTagged += 1
+                case .createFolder:
+                    foldersCreated += 1
+                case .deleteFile, .copyFile:
+                    break
+                }
+            }
+        } else {
+            // Fallback to entry-level stats if operations not available
+            filesMoved = entry.filesOrganized
+            foldersCreated = entry.foldersCreated
+        }
+        
+        // Determine errors
+        let errors = entry.status == .failed ? 1 : 0
+        
+        // Calculate duration (approximate - from entry timestamp to now, or 0 if we can't determine)
+        // Note: For a more accurate duration, we'd need to track start time separately
+        let duration: TimeInterval = 0
+        
+        return BatchSummaryStats(
+            filesMoved: filesMoved,
+            foldersCreated: foldersCreated,
+            filesRenamed: filesRenamed,
+            filesTagged: filesTagged,
+            duplicatesFound: entry.duplicatesDeleted ?? 0,
+            errorsEncountered: errors,
+            duration: duration,
+            folderName: folderName
+        )
+    }
+    
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+    
+    func folderWatcher(_ watcher: FolderWatcher, didDetectStaleBookmarkFor folder: WatchedFolder, newBookmarkData: Data) {
+        var updatedFolder = folder
+        updatedFolder.bookmarkData = newBookmarkData
+        // Also ensure status is valid
+        updatedFolder.accessStatus = .valid
+        watchedFoldersManager.updateFolder(updatedFolder)
+        print("Coordinator: Updated stale bookmark for \(folder.name)")
+    }
+    
+    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>, resolvedURL: URL) {
         guard !newFiles.isEmpty else { return }
         
         Task {
             // Check if we can proceed (e.g. not already organizing)
-            guard organizer.state == .idle || organizer.state == .ready || organizer.state == .completed else {
+            // Only allow auto-organize when truly idle - not when viewing results (.completed)
+            // This prevents auto-triggering while user is reviewing organization results
+            guard organizer.state == .idle else {
+                print("Coordinator: Skipping auto-organize for \(folder.name) - organizer busy (state: \(organizer.state))")
                 return
             }
+            
+            // Validate AI provider is configured before attempting organization
+            guard organizer.aiClient != nil else {
+                print("Coordinator: Cannot auto-organize \(folder.name) - AI provider not configured")
+                notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no AI provider configured", isCritical: false)
+                return
+            }
+            
+            let startTime = Date()
             
             do {
                 folderWatcher.pause(folder) // Prevent loop
                 
                 watchedFoldersManager.markTriggered(folder)
                 
+                print("Coordinator: Auto-organizing \(newFiles.count) new files in \(folder.name): \(newFiles)")
+                
                 // Use Incremental Organization for Smart Drop
+                // Use resolvedURL which has security access
                 try await organizer.organizeIncremental(
-                    directory: folder.url, 
+                    directory: resolvedURL, 
                     specificFiles: Array(newFiles),
                     customPrompt: folder.customPrompt,
                     temperature: folder.temperature
                 )
                 
-                folderWatcher.resume(folder) // Resume after completion
+                // Snapshot is updated inside resume() automatically
+                folderWatcher.resume(folder)
+                
+                let duration = Date().timeIntervalSince(startTime)
+                print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
+                
+                // Show success notification with detailed stats
+                let stats = BatchSummaryStats(
+                    filesMoved: newFiles.count,
+                    foldersCreated: 0, // Will be updated by .organizationDidFinish if available
+                    duration: duration,
+                    folderName: folder.name
+                )
+                notificationManager.showBatchSummary(stats: stats)
                 
             } catch {
-                folderWatcher.resume(folder) // Ensure we resume even on error
+                print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
+                notificationManager.showError(message: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)", isCritical: false)
+                folderWatcher.resume(folder)
             }
         }
     }
@@ -96,19 +213,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             folderWatcher.pause(folder)
             do {
                 try await organizer.organize(directory: folder.url, customPrompt: folder.customPrompt, temperature: folder.temperature)
-                // Note: User still needs to click "Apply" for calibrate, which might be confusing if watcher is paused.
-                // Ideally calibrate should just be a manual "Organize" trigger from the UI.
-                // We'll let the UI handle the "Apply" state, but we need to ensure resume happens eventually.
-                // Actually, if we use the main organizer flow, the user controls it. 
-                // We should unpause when they finish or cancel.
-                // For simplicity in this iteration, we'll just Auto-Apply for calibrate too if it's auto-organize?
-                // No, User asked for "Calibrate" to set baseline. Usually implies manual review.
-                // We will NOT auto-apply calibrate. We will resume watcher when state goes back to idle/completed.
-                // NOTE: This requires observing state changes which is complex here.
-                // Alternative: Just resume immediately? No, that risks loops.
-                // Better: Just don't pause for calibrate? But then moves trigger watcher.
-                // Strategy: Pause, Run Full Organize, Auto-Apply (since it's explicit action)?
-                // Let's stick to: Calibrate = Full Organize + Auto Apply.
                  try await organizer.apply(at: folder.url, dryRun: false)
                  folderWatcher.resume(folder)
             } catch {

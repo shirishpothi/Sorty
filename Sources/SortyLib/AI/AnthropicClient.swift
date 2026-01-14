@@ -7,12 +7,12 @@
 
 import Foundation
 
-final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
-    let config: AIConfig
+public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
+    public let config: AIConfig
     private let session: URLSession
-    @MainActor var streamingDelegate: StreamingDelegate?
+    @MainActor public weak var streamingDelegate: StreamingDelegate?
     
-    init(config: AIConfig) {
+    public init(config: AIConfig) {
         self.config = config
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.timeoutIntervalForRequest = config.requestTimeout
@@ -20,7 +20,7 @@ final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         self.session = URLSession(configuration: sessionConfig)
     }
     
-    func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
             throw AIClientError.missingAPIKey
         }
@@ -31,7 +31,7 @@ final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.invalidURL
         }
         
-        let systemPrompt = config.systemPromptOverride ?? "You are a professional file organization assistant. Analyze the provided file metadata and return a JSON plan for organizing them. Use ONLY the specified JSON format. No conversational text."
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
         
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
@@ -106,7 +106,12 @@ final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         }
         
         if httpResponse.statusCode != 200 {
-            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Streaming error")
+            var errorData = Data()
+            for try await byte in bytes {
+                errorData.append(byte)
+            }
+            let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown streaming error"
+            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
         }
         
         var accumulatedContent = ""
@@ -141,7 +146,30 @@ final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         return try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
     }
     
-    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+    public func checkHealth() async throws {
+        guard let apiKey = config.apiKey, !apiKey.isEmpty else {
+            throw AIClientError.missingAPIKey
+        }
+        
+        let url = URL(string: "https://api.anthropic.com/v1/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+        }
+    }
+    
+    public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
             throw AIClientError.missingAPIKey
         }
