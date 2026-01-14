@@ -17,6 +17,10 @@ public struct WorkspaceHealthConfig: Codable, Equatable, Sendable {
     public var largeFileSizeThreshold: Int64
     public var oldFileThreshold: TimeInterval
     public var downloadClutterThreshold: TimeInterval
+    public var minScreenshotCount: Int
+    public var minDownloadCount: Int
+    public var minUnorganizedCount: Int
+    public var minOldFileCount: Int
     public var enabledChecks: Set<CleanupOpportunity.OpportunityType>
     public var ignoredPaths: [String]
     
@@ -24,12 +28,20 @@ public struct WorkspaceHealthConfig: Codable, Equatable, Sendable {
         largeFileSizeThreshold: Int64 = 100_000_000, // 100MB
         oldFileThreshold: TimeInterval = 365 * 86400, // 1 year
         downloadClutterThreshold: TimeInterval = 30 * 86400, // 30 days
+        minScreenshotCount: Int = 10,
+        minDownloadCount: Int = 5,
+        minUnorganizedCount: Int = 10,
+        minOldFileCount: Int = 10,
         enabledChecks: Set<CleanupOpportunity.OpportunityType> = Set(CleanupOpportunity.OpportunityType.allCases),
         ignoredPaths: [String] = []
     ) {
         self.largeFileSizeThreshold = largeFileSizeThreshold
         self.oldFileThreshold = oldFileThreshold
         self.downloadClutterThreshold = downloadClutterThreshold
+        self.minScreenshotCount = minScreenshotCount
+        self.minDownloadCount = minDownloadCount
+        self.minUnorganizedCount = minUnorganizedCount
+        self.minOldFileCount = minOldFileCount
         self.enabledChecks = enabledChecks
         self.ignoredPaths = ignoredPaths
     }
@@ -192,6 +204,29 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
     public let createdAt: Date
     public var isDismissed: Bool
     public let action: QuickAction?
+    
+    // NEW: Detailed fields for preview and smart actions
+    public let affectedFiles: [AffectedFile]
+    public let detailedReason: String
+    public let confidence: Int // 0-100
+
+    public struct AffectedFile: Codable, Identifiable, Sendable {
+        public let id: UUID
+        public let path: String
+        public let name: String
+        public let size: Int64
+        public let lastAccessed: Date?
+        public let reason: String // Why this specific file is flagged
+        
+        public init(id: UUID = UUID(), path: String, name: String, size: Int64, lastAccessed: Date?, reason: String) {
+            self.id = id
+            self.path = path
+            self.name = name
+            self.size = size
+            self.lastAccessed = lastAccessed
+            self.reason = reason
+        }
+    }
 
     public enum QuickAction: String, Codable, Sendable {
         case archiveOldDownloads = "Archive Old Downloads"
@@ -200,6 +235,7 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
         case pruneEmptyFolders = "Prune Empty Folders"
         case removeBrokenSymlinks = "Remove Broken Symlinks"
         case organizeRoot = "Organize Root Files"
+        case archiveVeryOldFiles = "Archive Very Old Files"
         
         public var icon: String {
             switch self {
@@ -209,6 +245,7 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
             case .pruneEmptyFolders: return "folder.badge.minus"
             case .removeBrokenSymlinks: return "link.badge.minus"
             case .organizeRoot: return "wand.and.stars"
+            case .archiveVeryOldFiles: return "archivebox.fill"
             }
         }
     }
@@ -304,7 +341,10 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
         priority: Priority = .medium,
         createdAt: Date = Date(),
         isDismissed: Bool = false,
-        action: QuickAction? = nil
+        action: QuickAction? = nil,
+        affectedFiles: [AffectedFile] = [],
+        detailedReason: String = "",
+        confidence: Int = 100
     ) {
         self.id = id
         self.type = type
@@ -316,12 +356,16 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
         self.createdAt = createdAt
         self.isDismissed = isDismissed
         self.action = action
+        self.affectedFiles = affectedFiles
+        self.detailedReason = detailedReason
+        self.confidence = confidence
     }
 
     public var formattedSavings: String {
         ByteCountFormatter.string(fromByteCount: estimatedSavings, countStyle: .file)
     }
 }
+
 
 /// Health insight notification for the user
 public struct HealthInsight: Codable, Identifiable, Sendable {
@@ -383,6 +427,34 @@ public struct HealthInsight: Codable, Identifiable, Sendable {
     }
 }
 
+// MARK: - History & Undo
+
+public struct CleanupHistoryItem: Codable, Identifiable, Sendable {
+    public let id: UUID
+    public let date: Date
+    public let actionName: String
+    public let affectedFilePaths: [String]
+    public let type: ActionType
+    
+    public enum ActionType: String, Codable, Sendable {
+        case move
+        case trash
+        case delete
+    }
+    
+    // For moves, we store where they went so we can move them back
+    public let destinationPaths: [String]? 
+    
+    public init(id: UUID = UUID(), date: Date = Date(), actionName: String, affectedFilePaths: [String], type: ActionType, destinationPaths: [String]? = nil) {
+        self.id = id
+        self.date = date
+        self.actionName = actionName
+        self.affectedFilePaths = affectedFilePaths
+        self.type = type
+        self.destinationPaths = destinationPaths
+    }
+}
+
 // MARK: - Workspace Health Manager
 
 @MainActor
@@ -391,6 +463,7 @@ public class WorkspaceHealthManager: ObservableObject {
     @Published public var snapshots: [String: [DirectorySnapshot]] = [:] // Path -> Snapshots
     @Published public var opportunities: [CleanupOpportunity] = []
     @Published public var insights: [HealthInsight] = []
+    @Published public var cleanupHistory: [CleanupHistoryItem] = []
     @Published public var isAnalyzing: Bool = false
     @Published public var lastAnalysisDate: Date?
 
@@ -399,6 +472,7 @@ public class WorkspaceHealthManager: ObservableObject {
     private let snapshotsKey = "workspaceSnapshots"
     private let opportunitiesKey = "cleanupOpportunities"
     private let insightsKey = "healthInsights"
+    private let historyKey = "cleanupHistory"
     private let maxSnapshotsPerDirectory = 52 // ~1 year of weekly snapshots
     
     // File Monitoring
@@ -503,161 +577,351 @@ public class WorkspaceHealthManager: ObservableObject {
         // Remove old opportunities for this path
         opportunities.removeAll { $0.directoryPath == path }
 
-        // Check for Screenshot Clutter
+        // --- Smart Detection Helpers ---
+        var projectDirCache: [String: Bool] = [:]
+        
+        func isFileInProject(_ file: FileItem) -> Bool {
+             let fileURL = URL(fileURLWithPath: file.path)
+             let dirPath = fileURL.deletingLastPathComponent().path
+             
+             // Check cache first
+             if let cached = projectDirCache[dirPath] { return cached }
+             
+             // Traverse up to root to find project markers
+             var current = fileURL.deletingLastPathComponent()
+             let rootURL = URL(fileURLWithPath: path)
+             var foundProject = false
+             
+             // Safety check for loop
+             while current.path.count >= rootURL.path.count {
+                 // Check cache for this level
+                 if let cached = projectDirCache[current.path] {
+                     foundProject = cached
+                     break
+                 }
+                 
+                 let gitPath = current.appendingPathComponent(".git").path
+                 let pkgPath = current.appendingPathComponent("package.json").path
+                 let swiftPath = current.appendingPathComponent("Package.swift").path
+                 let xcodePath = current.appendingPathComponent(".xcodeproj").path
+                 let xcworkspacePath = current.appendingPathComponent(".xcworkspace").path
+                 
+                 if FileManager.default.fileExists(atPath: gitPath) ||
+                    FileManager.default.fileExists(atPath: pkgPath) ||
+                    FileManager.default.fileExists(atPath: swiftPath) ||
+                    FileManager.default.fileExists(atPath: xcodePath) ||
+                    FileManager.default.fileExists(atPath: xcworkspacePath) {
+                     foundProject = true
+                     break
+                 }
+                 
+                 if current.path == rootURL.path { break }
+                 current = current.deletingLastPathComponent()
+             }
+             
+             // Cache result for the immediate directory
+             projectDirCache[dirPath] = foundProject
+             return foundProject
+        }
+        
+        let now = Date()
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        
+        // --- Checks ---
+
+        // 1. Screenshot Clutter
         if config.enabledChecks.contains(.screenshotClutter) {
             let screenshots = files.filter { isScreenshot($0) }
-            if screenshots.count >= 10 { // Still hardcoded min count for now, could be configurable
+            if screenshots.count >= config.minScreenshotCount {
+                let affected = screenshots.map { file -> CleanupOpportunity.AffectedFile in
+                    let dateStr = file.creationDate.map { dateFormatter.string(from: $0) } ?? "Unknown date"
+                    return CleanupOpportunity.AffectedFile(
+                        path: file.path,
+                        name: file.name,
+                        size: file.size,
+                        lastAccessed: file.lastAccessDate,
+                        reason: "Screenshot created on \(dateStr)"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .screenshotClutter,
                     directoryPath: path,
-                    description: "\(screenshots.count) screenshots detected. Consider organizing by date or project.",
-                    estimatedSavings: 0, // Not suggesting deletion
+                    description: "\(screenshots.count) screenshots detected.",
+                    estimatedSavings: 0,
                     fileCount: screenshots.count,
                     priority: screenshots.count >= 50 ? .high : .medium,
-                    action: .groupScreenshots
+                    action: .groupScreenshots,
+                    affectedFiles: affected,
+                    detailedReason: "Screenshots often accumulate on the desktop and downloads folder. Grouping them helps declutter your view.",
+                    confidence: 100
                 ))
             }
         }
 
-        // Check for Download Clutter
+        // 2. Download Clutter (Smart)
         if config.enabledChecks.contains(.downloadClutter) {
             let oldDownloads = files.filter { file in
-                guard let date = file.creationDate else { return false }
-                let age = Date().timeIntervalSince(date)
+                guard !isFileInProject(file) else { return false }
+                
+                // Use last access if available, otherwise creation
+                let relevantDate = file.lastAccessDate ?? file.creationDate
+                guard let date = relevantDate else { return false }
+                
+                let age = now.timeIntervalSince(date)
                 return age > config.downloadClutterThreshold
             }
-            if oldDownloads.count >= 20 {
+            
+            if oldDownloads.count >= config.minDownloadCount {
                 let totalSize = oldDownloads.reduce(0) { $0 + $1.size }
                 let days = Int(config.downloadClutterThreshold / 86400)
+                
+                let affected = oldDownloads.map { file -> CleanupOpportunity.AffectedFile in
+                    let date = file.lastAccessDate ?? file.creationDate
+                    let dateStr = date.map { dateFormatter.string(from: $0) } ?? "Unknown"
+                    return CleanupOpportunity.AffectedFile(
+                        path: file.path,
+                        name: file.name,
+                        size: file.size,
+                        lastAccessed: file.lastAccessDate,
+                        reason: "Not accessed since \(dateStr)"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .downloadClutter,
                     directoryPath: path,
-                    description: "\(oldDownloads.count) files are older than \(days) days.",
+                    description: "\(oldDownloads.count) unused downloads older than \(days) days.",
                     estimatedSavings: totalSize,
                     fileCount: oldDownloads.count,
                     priority: totalSize > 1_000_000_000 ? .high : .medium,
-                    action: .archiveOldDownloads
+                    action: .archiveOldDownloads,
+                    affectedFiles: affected,
+                    detailedReason: "These files have not been opened in over \(days) days. They are safe to archive or delete.",
+                    confidence: 90
                 ))
             }
         }
 
-        // Check for Large Files
+        // 3. Large Files (Smart)
         if config.enabledChecks.contains(.largeFiles) {
-            let largeFiles = files.filter { $0.size > config.largeFileSizeThreshold }
+            let largeFiles = files.filter { file in
+                // Smart check: Skip project files
+                if isFileInProject(file) { return false }
+                return file.size > config.largeFileSizeThreshold
+            }
+            
             if !largeFiles.isEmpty {
                 let totalSize = largeFiles.reduce(0) { $0 + $1.size }
                 let sizeStr = ByteCountFormatter.string(fromByteCount: config.largeFileSizeThreshold, countStyle: .file)
+                
+                let affected = largeFiles.map { file -> CleanupOpportunity.AffectedFile in
+                    let size = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
+                    return CleanupOpportunity.AffectedFile(
+                        path: file.path,
+                        name: file.name,
+                        size: file.size,
+                        lastAccessed: file.lastAccessDate,
+                        reason: "Large file occupying \(size)"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .largeFiles,
                     directoryPath: path,
-                    description: "\(largeFiles.count) large files (>\(sizeStr)) found. Review for archival.",
+                    description: "\(largeFiles.count) large files (>\(sizeStr)) found.",
                     estimatedSavings: totalSize,
                     fileCount: largeFiles.count,
-                    priority: largeFiles.count >= 5 ? .high : .low
+                    priority: largeFiles.count >= 5 ? .high : .low,
+                    affectedFiles: affected,
+                    detailedReason: "These files are taking up significant space and are not part of an active project.",
+                    confidence: 95
                 ))
             }
         }
 
-        // Check for Unorganized Files (Root)
+        // 4. Unorganized Files (Root)
         if config.enabledChecks.contains(.unorganizedFiles) {
             let rootFiles = files.filter { file in
                 let relativePath = file.path.replacingOccurrences(of: path + "/", with: "")
-                return !relativePath.contains("/") && !file.isDirectory
+                return !relativePath.contains("/") && !file.isDirectory && !file.name.hasPrefix(".")
             }
-            if rootFiles.count >= 20 {
+            if rootFiles.count >= config.minUnorganizedCount {
+                let affected = rootFiles.map { file -> CleanupOpportunity.AffectedFile in
+                    CleanupOpportunity.AffectedFile(
+                        path: file.path,
+                        name: file.name,
+                        size: file.size,
+                        lastAccessed: file.lastAccessDate,
+                        reason: "Loose file in root folder"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .unorganizedFiles,
                     directoryPath: path,
-                    description: "\(rootFiles.count) unorganized files in root. Let AI organize them!",
+                    description: "\(rootFiles.count) unorganized files in root.",
                     estimatedSavings: 0,
                     fileCount: rootFiles.count,
                     priority: rootFiles.count >= 50 ? .critical : .high,
-                    action: .organizeRoot
+                    action: .organizeRoot,
+                    affectedFiles: affected,
+                    detailedReason: "Too many files in the root folder makes it hard to find things. AI can help organize them.",
+                    confidence: 100
                 ))
             }
         }
 
-        // Check for Installers (Smart Grouping)
-        // We'll treat this as a subset of other file checks or a standalone check
+        // 5. Installers
         let installers = files.filter { ["dmg", "pkg", "iso"].contains($0.extension.lowercased()) }
         if !installers.isEmpty {
             let totalSize = installers.reduce(0) { $0 + $1.size }
+            let affected = installers.map { file -> CleanupOpportunity.AffectedFile in
+                CleanupOpportunity.AffectedFile(
+                    path: file.path,
+                    name: file.name,
+                    size: file.size,
+                    lastAccessed: file.lastAccessDate,
+                    reason: "Installer file"
+                )
+            }
+            
             opportunities.append(CleanupOpportunity(
-                type: .largeFiles, // Re-using large files type or could be new 'installerClutter' type
+                type: .largeFiles, // Keeping type for compatibility, logic separates them
                 directoryPath: path,
-                description: "\(installers.count) installer files found. Most can be safely deleted after installation.",
+                description: "\(installers.count) installer files found.",
                 estimatedSavings: totalSize,
                 fileCount: installers.count,
                 priority: .medium,
-                action: .cleanInstallers
+                action: .cleanInstallers,
+                affectedFiles: affected,
+                detailedReason: "Installers are usually not needed after the application is installed.",
+                confidence: 95
             ))
         }
 
-        // Check for Temporary/Cache Files
+        // 6. Temp/Cache
         if config.enabledChecks.contains(.temporaryFiles) || config.enabledChecks.contains(.cacheFiles) {
             let tempFiles = files.filter { isTempOrCacheFile($0) }
             if !tempFiles.isEmpty {
                 let totalSize = tempFiles.reduce(0) { $0 + $1.size }
+                let affected = tempFiles.map { file -> CleanupOpportunity.AffectedFile in
+                    CleanupOpportunity.AffectedFile(
+                        path: file.path,
+                        name: file.name,
+                        size: file.size,
+                        lastAccessed: file.lastAccessDate,
+                        reason: "Temporary/Cache file"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .temporaryFiles,
                     directoryPath: path,
-                    description: "\(tempFiles.count) temporary files can be safely removed.",
+                    description: "\(tempFiles.count) temporary files found.",
                     estimatedSavings: totalSize,
                     fileCount: tempFiles.count,
-                    priority: totalSize > 500_000_000 ? .high : .low
+                    priority: totalSize > 500_000_000 ? .high : .low,
+                    affectedFiles: affected,
+                    detailedReason: "These are temporary files created by system or apps and can be safely removed.",
+                    confidence: 100
                 ))
             }
         }
 
-        // Check for Very Old Files
+        // 7. Old Files
         if config.enabledChecks.contains(.veryOldFiles) || config.enabledChecks.contains(.oldFiles) {
             let veryOldFiles = files.filter { file in
+                if isFileInProject(file) { return false } // Smart check
                 guard let accessDate = file.lastAccessDate ?? file.modificationDate else { return false }
-                let age = Date().timeIntervalSince(accessDate)
+                let age = now.timeIntervalSince(accessDate)
                 return age > config.oldFileThreshold
             }
-            if veryOldFiles.count >= 10 {
+            if veryOldFiles.count >= config.minOldFileCount {
                 let totalSize = veryOldFiles.reduce(0) { $0 + $1.size }
                 let years = String(format: "%.1f", config.oldFileThreshold / (365 * 86400))
+                
+                let affected = veryOldFiles.map { file -> CleanupOpportunity.AffectedFile in
+                    let dateStr = (file.lastAccessDate ?? file.modificationDate).map { dateFormatter.string(from: $0) } ?? "Unknown"
+                    return CleanupOpportunity.AffectedFile(
+                        path: file.path,
+                        name: file.name,
+                        size: file.size,
+                        lastAccessed: file.lastAccessDate,
+                        reason: "Not accessed since \(dateStr)"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .veryOldFiles,
                     directoryPath: path,
-                    description: "\(veryOldFiles.count) files haven't been accessed in over \(years) years. Consider archiving.",
+                    description: "\(veryOldFiles.count) files inactive for >\(years) years.",
                     estimatedSavings: totalSize,
                     fileCount: veryOldFiles.count,
-                    priority: totalSize > 1_000_000_000 ? .high : .medium
+                    priority: totalSize > 1_000_000_000 ? .high : .medium,
+                    action: .archiveVeryOldFiles,
+                    affectedFiles: affected,
+                    detailedReason: "These files haven't been touched in a long time. Consider archiving them.",
+                    confidence: 85
                 ))
             }
         }
 
-        // Check for Empty Folders
+        // 8. Empty Folders
         if config.enabledChecks.contains(.emptyFolders) {
             let emptyFolders = await findEmptyFolders(at: path)
             if !emptyFolders.isEmpty {
+                let affected = emptyFolders.map { folderPath -> CleanupOpportunity.AffectedFile in
+                    CleanupOpportunity.AffectedFile(
+                        path: folderPath,
+                        name: URL(fileURLWithPath: folderPath).lastPathComponent,
+                        size: 0,
+                        lastAccessed: nil,
+                        reason: "Empty folder"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .emptyFolders,
                     directoryPath: path,
-                    description: "\(emptyFolders.count) empty folders can be removed to reduce clutter.",
+                    description: "\(emptyFolders.count) empty folders.",
                     estimatedSavings: 0,
                     fileCount: emptyFolders.count,
                     priority: emptyFolders.count >= 20 ? .medium : .low,
-                    action: .pruneEmptyFolders
+                    action: .pruneEmptyFolders,
+                    affectedFiles: affected,
+                    detailedReason: "Empty folders create visual clutter.",
+                    confidence: 100
                 ))
             }
         }
 
-        // Check for Broken Symlinks
+        // 9. Broken Symlinks
         if config.enabledChecks.contains(.brokenSymlinks) {
             let brokenSymlinks = await findBrokenSymlinks(at: path)
             if !brokenSymlinks.isEmpty {
+                let affected = brokenSymlinks.map { linkPath -> CleanupOpportunity.AffectedFile in
+                    CleanupOpportunity.AffectedFile(
+                        path: linkPath,
+                        name: URL(fileURLWithPath: linkPath).lastPathComponent,
+                        size: 0,
+                        lastAccessed: nil,
+                        reason: "Points to non-existent location"
+                    )
+                }
+                
                 opportunities.append(CleanupOpportunity(
                     type: .brokenSymlinks,
                     directoryPath: path,
-                    description: "\(brokenSymlinks.count) broken symbolic links found. These point to non-existent targets.",
+                    description: "\(brokenSymlinks.count) broken symbolic links.",
                     estimatedSavings: 0,
                     fileCount: brokenSymlinks.count,
                     priority: brokenSymlinks.count >= 5 ? .medium : .low,
-                    action: .removeBrokenSymlinks
+                    action: .removeBrokenSymlinks,
+                    affectedFiles: affected,
+                    detailedReason: "These shortcuts point to files that no longer exist.",
+                    confidence: 100
                 ))
             }
         }
@@ -796,33 +1060,80 @@ public class WorkspaceHealthManager: ObservableObject {
         monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
 
+    /// Undo the last cleanup action
+    public func undoLastAction() async throws {
+        guard let lastAction = cleanupHistory.last else { return }
+        let fileManager = FileManager.default
+        
+        switch lastAction.type {
+        case .trash:
+            // "Trash" actions in this context were moves to Trash
+            // To undo, we need to move them back from Trash to original paths.
+            // This is tricky because filenames might have changed or trash might be emptied.
+            // But we stored the destination path (in Trash) and original path.
+            
+            if let destinations = lastAction.destinationPaths {
+                for (index, trashPath) in destinations.enumerated() {
+                    let originalPath = lastAction.affectedFilePaths[index]
+                    let trashURL = URL(fileURLWithPath: trashPath)
+                    let originalURL = URL(fileURLWithPath: originalPath)
+                    
+                    if fileManager.fileExists(atPath: trashPath) {
+                        try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        try fileManager.moveItem(at: trashURL, to: originalURL)
+                    }
+                }
+            }
+            
+        case .move:
+            // Reverse the move
+            if let destinations = lastAction.destinationPaths {
+                for (index, destPath) in destinations.enumerated() {
+                    let originalPath = lastAction.affectedFilePaths[index]
+                    let destURL = URL(fileURLWithPath: destPath)
+                    let originalURL = URL(fileURLWithPath: originalPath)
+                    
+                    if fileManager.fileExists(atPath: destPath) {
+                        try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                        try fileManager.moveItem(at: destURL, to: originalURL)
+                    }
+                }
+            }
+            
+        case .delete:
+            // Hard deletes cannot be undone easily
+            throw NSError(domain: "Sorty", code: 400, userInfo: [NSLocalizedDescriptionKey: "Permanent deletions cannot be undone."])
+        }
+        
+        cleanupHistory.removeLast()
+        saveData()
+    }
+
     /// Perform a quick action for an opportunity
-    public func performAction(_ action: CleanupOpportunity.QuickAction, for opportunity: CleanupOpportunity) async throws {
+    public func performAction(_ action: CleanupOpportunity.QuickAction, for opportunity: CleanupOpportunity, selectedFiles: [CleanupOpportunity.AffectedFile]? = nil) async throws {
         let path = opportunity.directoryPath
+        
+        // If selectedFiles provided, use them. Otherwise default to all/auto logic.
+        // For now, we update the helpers to take the list if available.
         
         switch action {
         case .archiveOldDownloads:
-            try await archiveOldDownloads(at: path)
+            try await archiveOldDownloads(at: path, specificFiles: selectedFiles)
         case .groupScreenshots:
-            try await groupScreenshots(at: path)
+            try await groupScreenshots(at: path, specificFiles: selectedFiles)
         case .cleanInstallers:
-            try await cleanInstallers(at: path)
+            try await cleanInstallers(at: path, specificFiles: selectedFiles)
         case .pruneEmptyFolders:
-            try await pruneEmptyFoldersRecursively(at: path) // Renamed to disambiguate
+            try await pruneEmptyFoldersRecursively(at: path, specificFiles: selectedFiles)
         case .removeBrokenSymlinks:
-            try await removeBrokenSymlinks(at: path)
+            try await removeBrokenSymlinks(at: path, specificFiles: selectedFiles)
         case .organizeRoot:
-            // This is handled by the main organizer flow found elsewhere, 
-            // but we could trigger a specific mode here if needed.
-            // For now, we'll assume the UI routes this to the main organizer.
+            // Handled by UI routing or AI agent
             break
+        case .archiveVeryOldFiles:
+            try await archiveVeryOldFiles(at: path, specificFiles: selectedFiles)
         }
         
-        // Refresh analysis after action
-        // We need to re-scan the files. Since we don't have the file list here easily without re-scanning,
-        // we might need to rely on the UI to trigger a re-scan or do a lightweight check.
-        // For now, let's just mark the opportunity as dismissed/resolved relative to the UI state if possible,
-        // but ideally we re-analyze.
         dismissOpportunity(opportunity)
     }
 
@@ -954,7 +1265,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
     // MARK: - Action Helpers
     
-    private func archiveOldDownloads(at path: String) async throws {
+    private func archiveOldDownloads(at path: String, specificFiles: [CleanupOpportunity.AffectedFile]? = nil) async throws {
         let fileManager = FileManager.default
         let archiveFolder = URL(fileURLWithPath: path).appendingPathComponent("Archive")
         
@@ -963,124 +1274,297 @@ public class WorkspaceHealthManager: ObservableObject {
             try fileManager.createDirectory(at: archiveFolder, withIntermediateDirectories: true)
         }
         
-        let files = try fileManager.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles])
+        let filesToProcess: [URL]
         
-        for file in files {
-            guard !file.hasDirectoryPath else { continue }
+        if let specificFiles = specificFiles {
+            filesToProcess = specificFiles.map { URL(fileURLWithPath: $0.path) }
+        } else {
+            let allFiles = try fileManager.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles])
+            filesToProcess = allFiles.filter { file in
+                guard !file.hasDirectoryPath else { return false }
+                if let date = try? file.resourceValues(forKeys: [.creationDateKey]).creationDate,
+                   Date().timeIntervalSince(date) > config.downloadClutterThreshold {
+                    return true
+                }
+                return false
+            }
+        }
+        
+        var originalPaths: [String] = []
+        var destPaths: [String] = []
+        
+        for file in filesToProcess {
+             // Re-verify existence just in case
+             guard fileManager.fileExists(atPath: file.path) else { continue }
+             
+             let date = (try? file.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date()
+             let dateFormatter = DateFormatter()
+             dateFormatter.dateFormat = "yyyy-MM"
+             let dateFolder = archiveFolder.appendingPathComponent(dateFormatter.string(from: date))
+             
+             if !fileManager.fileExists(atPath: dateFolder.path) {
+                 try fileManager.createDirectory(at: dateFolder, withIntermediateDirectories: true)
+             }
+             
+             var destination = dateFolder.appendingPathComponent(file.lastPathComponent)
+             
+             if fileManager.fileExists(atPath: destination.path) {
+                 let fileName = file.deletingPathExtension().lastPathComponent
+                 let fileExt = file.pathExtension
+                 let timestamp = Date().filenameTimestamp
+                 let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
+                 destination = dateFolder.appendingPathComponent(uniqueName)
+             }
+             
+             try fileManager.moveItem(at: file, to: destination)
+             originalPaths.append(file.path)
+             destPaths.append(destination.path)
+        }
+        
+        // Record history
+        if !originalPaths.isEmpty {
+            let item = CleanupHistoryItem(
+                actionName: "Archive Old Downloads",
+                affectedFilePaths: originalPaths,
+                type: .move,
+                destinationPaths: destPaths
+            )
+            cleanupHistory.append(item)
+            saveData()
+        }
+    }
+    
+    private func groupScreenshots(at path: String, specificFiles: [CleanupOpportunity.AffectedFile]? = nil) async throws {
+        let fileManager = FileManager.default
+        let screenshotsFolder = URL(fileURLWithPath: path).appendingPathComponent("Screenshots")
+        
+        let filesToProcess: [URL]
+        
+        if let specificFiles = specificFiles {
+            filesToProcess = specificFiles.map { URL(fileURLWithPath: $0.path) }
+        } else {
+             // Fallback to old scanning logic if no list provided (e.g. from background task)
+             let allFiles = try fileManager.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles])
+             filesToProcess = allFiles.filter { file in
+                 let filename = file.lastPathComponent.lowercased()
+                 return ["screenshot", "screen shot", "capture"].contains { filename.contains($0) }
+             }
+        }
+        
+        var originalPaths: [String] = []
+        var destPaths: [String] = []
+        
+        for file in filesToProcess {
+            if !fileManager.fileExists(atPath: screenshotsFolder.path) {
+                try fileManager.createDirectory(at: screenshotsFolder, withIntermediateDirectories: true)
+            }
             
-            // customized for download clutter threshold
-            if let date = try? file.resourceValues(forKeys: [.creationDateKey]).creationDate,
-               Date().timeIntervalSince(date) > config.downloadClutterThreshold {
-                
+            var destination: URL
+            
+            if let date = try? file.resourceValues(forKeys: [.creationDateKey]).creationDate {
                 let dateFormatter = DateFormatter()
                 dateFormatter.dateFormat = "yyyy-MM"
-                let dateFolder = archiveFolder.appendingPathComponent(dateFormatter.string(from: date))
+                let dateFolder = screenshotsFolder.appendingPathComponent(dateFormatter.string(from: date))
                 
                 if !fileManager.fileExists(atPath: dateFolder.path) {
                     try fileManager.createDirectory(at: dateFolder, withIntermediateDirectories: true)
                 }
                 
-                var destination = dateFolder.appendingPathComponent(file.lastPathComponent)
-                
-                // If conflict exists in archive, append human-readable timestamp to make unique
-                if fileManager.fileExists(atPath: destination.path) {
-                    let fileName = file.deletingPathExtension().lastPathComponent
-                    let fileExt = file.pathExtension
-                    
-                    let timestamp = Date().filenameTimestamp
-                    let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
-                    destination = dateFolder.appendingPathComponent(uniqueName)
-                }
-                
-                try fileManager.moveItem(at: file, to: destination)
+                destination = dateFolder.appendingPathComponent(file.lastPathComponent)
+            } else {
+                destination = screenshotsFolder.appendingPathComponent(file.lastPathComponent)
             }
-        }
-    }
-    
-    private func groupScreenshots(at path: String) async throws {
-        let fileManager = FileManager.default
-        let screenshotsFolder = URL(fileURLWithPath: path).appendingPathComponent("Screenshots")
-        
-        let files = try fileManager.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.creationDateKey], options: [.skipsHiddenFiles])
-        
-        for file in files {
-            let filename = file.lastPathComponent.lowercased()
-            // Re-use isScreenshot logic but adapted for URL
-            let isScreenie = ["screenshot", "screen shot", "capture"].contains { filename.contains($0) }
             
-            if isScreenie {
-                if !fileManager.fileExists(atPath: screenshotsFolder.path) {
-                    try fileManager.createDirectory(at: screenshotsFolder, withIntermediateDirectories: true)
-                }
-                
-                // Group by year-month
-                if let date = try? file.resourceValues(forKeys: [.creationDateKey]).creationDate {
-                    let dateFormatter = DateFormatter()
-                    dateFormatter.dateFormat = "yyyy-MM"
-                    let dateFolder = screenshotsFolder.appendingPathComponent(dateFormatter.string(from: date))
-                    
-                    if !fileManager.fileExists(atPath: dateFolder.path) {
-                        try fileManager.createDirectory(at: dateFolder, withIntermediateDirectories: true)
-                    }
-                    
-                    let destination = dateFolder.appendingPathComponent(file.lastPathComponent)
-                    try fileManager.moveItem(at: file, to: destination)
-                } else {
-                    // Fallback to strict move if no date
-                       let destination = screenshotsFolder.appendingPathComponent(file.lastPathComponent)
-                       try fileManager.moveItem(at: file, to: destination)
-                }
-            }
+            try fileManager.moveItem(at: file, to: destination)
+            originalPaths.append(file.path)
+            destPaths.append(destination.path)
+        }
+        
+        if !originalPaths.isEmpty {
+            let item = CleanupHistoryItem(
+                actionName: "Group Screenshots",
+                affectedFilePaths: originalPaths,
+                type: .move,
+                destinationPaths: destPaths
+            )
+            cleanupHistory.append(item)
+            saveData()
         }
     }
     
-    private func cleanInstallers(at path: String) async throws {
+    private func cleanInstallers(at path: String, specificFiles: [CleanupOpportunity.AffectedFile]? = nil) async throws {
         let fileManager = FileManager.default
         let trashURL = fileManager.urls(for: .trashDirectory, in: .userDomainMask).first!
         
-        let files = try fileManager.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+        let filesToProcess: [URL]
         
-        for file in files {
-             let ext = file.pathExtension.lowercased()
-             if ["dmg", "pkg", "iso"].contains(ext) {
-                 var destination = trashURL.appendingPathComponent(file.lastPathComponent)
-                 
-                 // If conflict exists in trash, append human-readable timestamp to make unique
-                 if fileManager.fileExists(atPath: destination.path) {
-                     let fileName = file.deletingPathExtension().lastPathComponent
-                     let fileExt = file.pathExtension
-                     
-                     let timestamp = Date().filenameTimestamp
-                     let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
-                     destination = trashURL.appendingPathComponent(uniqueName)
-                 }
-                 
-                 try fileManager.moveItem(at: file, to: destination)
+        if let specificFiles = specificFiles {
+             filesToProcess = specificFiles.map { URL(fileURLWithPath: $0.path) }
+        } else {
+             let allFiles = try fileManager.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+             filesToProcess = allFiles.filter { ["dmg", "pkg", "iso"].contains($0.pathExtension.lowercased()) }
+        }
+        
+        var originalPaths: [String] = []
+        var destPaths: [String] = []
+        
+        for file in filesToProcess {
+             var destination = trashURL.appendingPathComponent(file.lastPathComponent)
+             
+             if fileManager.fileExists(atPath: destination.path) {
+                 let fileName = file.deletingPathExtension().lastPathComponent
+                 let fileExt = file.pathExtension
+                 let timestamp = Date().filenameTimestamp
+                 let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
+                 destination = trashURL.appendingPathComponent(uniqueName)
              }
+             
+             try fileManager.moveItem(at: file, to: destination)
+             originalPaths.append(file.path)
+             destPaths.append(destination.path)
+        }
+        
+        if !originalPaths.isEmpty {
+            let item = CleanupHistoryItem(
+                actionName: "Clean Installers",
+                affectedFilePaths: originalPaths,
+                type: .trash,
+                destinationPaths: destPaths
+            )
+            cleanupHistory.append(item)
+            saveData()
         }
     }
     
-    private func pruneEmptyFoldersRecursively(at path: String) async throws {
+    private func pruneEmptyFoldersRecursively(at path: String, specificFiles: [CleanupOpportunity.AffectedFile]? = nil) async throws {
         let fileManager = FileManager.default
-        // We need a depth-first traversal to remove nested empty folders
-        // Simple implementation: repeatedly find empty folders and remove them until none found
+        var removedFolders: [String] = []
         
-        var hasRemoved = true
-        while hasRemoved {
-            hasRemoved = false
-            let emptyFolders = await findEmptyFolders(at: path)
-            for folderPath in emptyFolders {
-                try fileManager.removeItem(atPath: folderPath)
-                hasRemoved = true
+        if let specificFiles = specificFiles {
+            // Just delete the specifically selected folders
+            for file in specificFiles {
+                 try fileManager.removeItem(atPath: file.path)
+                 removedFolders.append(file.path)
+            }
+        } else {
+            // Recursive iterative removal
+            var hasRemoved = true
+            while hasRemoved {
+                hasRemoved = false
+                let emptyFolders = await findEmptyFolders(at: path)
+                for folderPath in emptyFolders {
+                    try fileManager.removeItem(atPath: folderPath)
+                    removedFolders.append(folderPath)
+                    hasRemoved = true
+                }
             }
         }
+        
+        if !removedFolders.isEmpty {
+            let item = CleanupHistoryItem(
+                actionName: "Prune Empty Folders",
+                affectedFilePaths: removedFolders,
+                type: .delete
+            )
+            cleanupHistory.append(item)
+            saveData()
+        }
     }
     
-    private func removeBrokenSymlinks(at path: String) async throws {
+    private func removeBrokenSymlinks(at path: String, specificFiles: [CleanupOpportunity.AffectedFile]? = nil) async throws {
         let fileManager = FileManager.default
-        let brokenLinks = await findBrokenSymlinks(at: path)
-        for linkPath in brokenLinks {
-            try fileManager.removeItem(atPath: linkPath)
+        var removedLinks: [String] = []
+        
+        if let specificFiles = specificFiles {
+            for file in specificFiles {
+                try fileManager.removeItem(atPath: file.path)
+                removedLinks.append(file.path)
+            }
+        } else {
+            let brokenLinks = await findBrokenSymlinks(at: path)
+            for linkPath in brokenLinks {
+                try fileManager.removeItem(atPath: linkPath)
+                removedLinks.append(linkPath)
+            }
+        }
+        
+        if !removedLinks.isEmpty {
+            let item = CleanupHistoryItem(
+                actionName: "Remove Broken Symlinks",
+                affectedFilePaths: removedLinks,
+                type: .delete
+            )
+            cleanupHistory.append(item)
+            saveData()
+        }
+    }
+    
+    private func archiveVeryOldFiles(at path: String, specificFiles: [CleanupOpportunity.AffectedFile]? = nil) async throws {
+        let fileManager = FileManager.default
+        let archiveFolder = URL(fileURLWithPath: path).appendingPathComponent("Old Files Archive")
+        
+        // Create Archive folder if needed
+        if !fileManager.fileExists(atPath: archiveFolder.path) {
+            try fileManager.createDirectory(at: archiveFolder, withIntermediateDirectories: true)
+        }
+        
+        let filesToProcess: [URL]
+        
+        if let specificFiles = specificFiles {
+            filesToProcess = specificFiles.map { URL(fileURLWithPath: $0.path) }
+        } else {
+            // Fallback: find all very old files
+            let allFiles = try fileManager.contentsOfDirectory(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.contentModificationDateKey, .contentAccessDateKey], options: [.skipsHiddenFiles])
+            let now = Date()
+            filesToProcess = allFiles.filter { file in
+                guard !file.hasDirectoryPath else { return false }
+                let accessDate = (try? file.resourceValues(forKeys: [.contentAccessDateKey]).contentAccessDate) ??
+                                 (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+                guard let date = accessDate else { return false }
+                return now.timeIntervalSince(date) > config.oldFileThreshold
+            }
+        }
+        
+        var originalPaths: [String] = []
+        var destPaths: [String] = []
+        
+        for file in filesToProcess {
+            guard fileManager.fileExists(atPath: file.path) else { continue }
+            
+            // Organize by year of last modification
+            let modDate = (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "yyyy"
+            let yearFolder = archiveFolder.appendingPathComponent(dateFormatter.string(from: modDate))
+            
+            if !fileManager.fileExists(atPath: yearFolder.path) {
+                try fileManager.createDirectory(at: yearFolder, withIntermediateDirectories: true)
+            }
+            
+            var destination = yearFolder.appendingPathComponent(file.lastPathComponent)
+            
+            if fileManager.fileExists(atPath: destination.path) {
+                let fileName = file.deletingPathExtension().lastPathComponent
+                let fileExt = file.pathExtension
+                let timestamp = Date().filenameTimestamp
+                let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
+                destination = yearFolder.appendingPathComponent(uniqueName)
+            }
+            
+            try fileManager.moveItem(at: file, to: destination)
+            originalPaths.append(file.path)
+            destPaths.append(destination.path)
+        }
+        
+        if !originalPaths.isEmpty {
+            let item = CleanupHistoryItem(
+                actionName: "Archive Very Old Files",
+                affectedFilePaths: originalPaths,
+                type: .move,
+                destinationPaths: destPaths
+            )
+            cleanupHistory.append(item)
+            saveData()
         }
     }
 
@@ -1195,6 +1679,11 @@ public class WorkspaceHealthManager: ObservableObject {
            let decoded = try? JSONDecoder().decode([HealthInsight].self, from: data) {
             insights = decoded
         }
+        // Load history
+        if let data = userDefaults.data(forKey: historyKey),
+           let decoded = try? JSONDecoder().decode([CleanupHistoryItem].self, from: data) {
+            cleanupHistory = decoded
+        }
     }
 
     private func saveData() {
@@ -1212,6 +1701,10 @@ public class WorkspaceHealthManager: ObservableObject {
 
         if let encoded = try? JSONEncoder().encode(insights) {
             userDefaults.set(encoded, forKey: insightsKey)
+        }
+        
+        if let encoded = try? JSONEncoder().encode(cleanupHistory) {
+            userDefaults.set(encoded, forKey: historyKey)
         }
     }
 }

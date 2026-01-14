@@ -16,6 +16,7 @@
 13. [Menu Bar Commands](#menu-bar-commands)
 14. [Version & Updates](#version--updates)
 15. [Troubleshooting](#troubleshooting)
+    - [Update Check Issues](#update-check-issues)
 16. [Privacy & Data](#privacy--data)
 17. [FAQ](#faq)
 
@@ -283,40 +284,59 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 | `path` | Path to scan |
 | `autostart=true` | Automatically begin scan |
 
-### Management Routes
+### Persona Management
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://persona` | Manage personas |
-| `action=generate` | Generate a new persona |
-| `prompt` | Description for generation |
-| `generate=true` | Trigger generation immediately |
+| `sorty://persona` | | Open persona management |
+| | `action=generate` | Generate a new persona |
+| | `prompt=<description>` | Description for persona generation |
+| | `generate=true` | Trigger generation immediately |
 
-### Watched
+**Examples:**
+- `sorty://persona` - Open persona view
+- `sorty://persona?action=generate&prompt=sci-fi%20ebook%20collector` - Generate persona from description
+
+### Watched Folders
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://watched` | Manage watched folders |
-| `action=add` | Add a new watched folder |
-| `path` | Path to add |
+| `sorty://watched` | | Open watched folders view |
+| | `action=add` | Add a new watched folder |
+| | `path=<folder_path>` | Path to add as watched |
+
+**Examples:**
+- `sorty://watched` - Open watched folders
+- `sorty://watched?action=add&path=/Users/me/Downloads` - Add Downloads as watched
 
 ### Rules
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://rules` | Manage exclusion rules |
-| `action=add` | Add a new rule |
-| `pattern` | Pattern to exclude (e.g., "*.tmp") |
+| `sorty://rules` | | Open exclusion rules |
+| | `action=add` | Add a new rule |
+| | `type=<pattern\|folder\|extension>` | Type of exclusion rule |
+| | `pattern=<glob_pattern>` | Pattern to exclude (e.g., "*.tmp") |
+
+**Examples:**
+- `sorty://rules` - Open rules view
+- `sorty://rules?action=add&type=pattern&pattern=*.log` - Add pattern rule
+
+### Health
+
+| Route | Parameters | Description |
+|-------|------------|-------------|
+| `sorty://health` | | Open Workspace Health |
 
 ### Navigation Routes
 
 | Route | Parameters | Description |
 |-------|------------|-------------|
-| `sorty://settings` | Open Settings |
-| `sorty://learnings` | Open Learnings |
-| `sorty://history` | Open History |
-| `sorty://health` | Open Workspace Health |
-| `sorty://help` | Open Help |
+| `sorty://settings` | | Open Settings |
+| `sorty://learnings` | | Open Learnings |
+| `sorty://history` | | Open History |
+| `sorty://help` | | Open Help |
+| `sorty://help` | `section=updates` | Jump to updates section |
 
 ---
 
@@ -370,6 +390,22 @@ fileorg learnings
 fileorg health
 fileorg help
 ```
+
+### Command Reference
+
+| Command | Description |
+|---------|-------------|
+| `fileorg status` | Show current app status and selected folder |
+| `fileorg health` | Open Workspace Health view |
+| `fileorg settings` | Open Settings |
+| `fileorg persona [generate "description"]` | Manage or generate personas |
+| `fileorg watched [add <path>]` | Manage watched folders |
+| `fileorg rules [add "<pattern>"]` | Manage exclusion rules |
+| `fileorg organize <path> [--persona <id>] [--auto]` | Organize a folder |
+| `fileorg duplicates <path> [--auto]` | Scan for duplicates |
+| `fileorg learnings` | Open The Learnings dashboard |
+| `fileorg history` | Open organization history |
+| `fileorg help` | Open help (or `sorty://help?section=updates` for updates) |
 
 ---
 
@@ -575,6 +611,15 @@ Sorty includes a built-in update checker that helps you stay current with the la
 2. Sorty will check GitHub releases for a newer version
 3. If an update is available, you'll see release notes and a download link
 
+### How the Update System Works
+
+The update checker queries the **GitHub Releases API** to compare your installed version against the latest published release:
+
+1. **API Request**: Sorty fetches `https://api.github.com/repos/shirishpothi/Sorty/releases/latest`
+2. **Version Comparison**: The `tag_name` from the response is compared with the current app version
+3. **Release Notes**: If a newer version exists, the `body` field provides release notes
+4. **Download Link**: The `html_url` links directly to the release download page
+
 ### What's Included in Updates
 
 Updates may include:
@@ -587,6 +632,15 @@ Updates may include:
 ### Automatic Notifications
 
 Sorty periodically checks for updates in the background and will notify you when a new version is available. You can always manually check via the Help menu.
+
+### Update Check Troubleshooting
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| "Rate limit exceeded" | Too many API requests | Wait 60 minutes, then retry |
+| "Network error" | No internet connection | Check your connection and retry |
+| "404 Not Found" | No releases published yet | The repository has no releases; check back later |
+| Timeout | Slow connection or GitHub issues | Increase timeout in settings or retry later |
 
 ### Release Notes
 
@@ -633,6 +687,14 @@ View the full changelog at:
 - ✓ Check History tab for restoration options
 - ✓ Verify files weren't permanently deleted (Safe Deletion was ON)
 - ✓ Look in the original locations for restored files
+
+### Update Check Issues
+
+- ✓ **Rate limit error**: GitHub limits unauthenticated API requests to 60/hour. Wait and retry later.
+- ✓ **Network error**: Check your internet connection and firewall settings.
+- ✓ **404 Not Found**: No releases exist yet in the repository. This is normal for new installations.
+- ✓ **Timeout**: Try again later; GitHub may be experiencing issues.
+- ✓ **Version parsing error**: The release tag format may have changed. Check the [releases page](https://github.com/shirishpothi/Sorty/releases) manually.
 
 ---
 

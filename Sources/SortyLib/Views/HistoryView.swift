@@ -799,14 +799,34 @@ struct HistoryDetailSheet: View {
                     // Raw AI Response
                     if let raw = entry.rawAIResponse {
                         DisclosureGroup("Raw AI Response", isExpanded: $showRawAIResponse) {
-                            Text(raw)
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Spacer()
+                                    Button {
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(raw, forType: .string)
+                                        HapticFeedbackManager.shared.success()
+                                    } label: {
+                                        Label("Copy Raw JSON", systemImage: "doc.on.doc")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .accessibilityLabel("Copy raw JSON response to clipboard")
+                                    .accessibilityIdentifier("CopyRawJSONButton")
+                                }
+                                
+                                ScrollView(.horizontal, showsIndicators: true) {
+                                    Text(raw)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: 300, alignment: .leading)
                                 .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(Color.black.opacity(0.05))
                                 .cornerRadius(8)
                                 .accessibilityLabel("Raw AI response data")
+                            }
                         }
                         .accessibilityIdentifier("RawAIResponseDisclosure")
                         .onChange(of: showRawAIResponse) { _, _ in

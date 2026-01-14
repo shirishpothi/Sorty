@@ -8,12 +8,17 @@
 import Foundation
 
 struct FileOrganizationValidator {
-    static func validate(_ plan: OrganizationPlan, at baseURL: URL) throws {
+    static func validate(_ plan: OrganizationPlan, at baseURL: URL, maxTopLevelFolders: Int = 10) throws {
         let fileManager = FileManager.default
         
         // Check if base directory exists
         guard fileManager.fileExists(atPath: baseURL.path) else {
             throw ValidationError.baseDirectoryNotFound
+        }
+        
+        // Check folder count limit
+        if plan.suggestions.count > maxTopLevelFolders {
+            throw ValidationError.tooManyFolders(plan.suggestions.count, max: maxTopLevelFolders)
         }
         
         // Check for path conflicts
@@ -40,8 +45,15 @@ struct FileOrganizationValidator {
                 throw ValidationError.pathConflict(folderPath)
             }
             
-            if fileManager.fileExists(atPath: folderPath) {
-                throw ValidationError.pathExists(folderPath)
+            // Check if path exists - but only fail if it's a FILE where we expect a FOLDER
+            // If it's already a directory, that's fine - we'll use the existing folder
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: folderPath, isDirectory: &isDirectory) {
+                if !isDirectory.boolValue {
+                    // A file exists where we need a folder - this is a real conflict
+                    throw ValidationError.pathExists(folderPath)
+                }
+                // Otherwise, it's an existing directory - that's okay, we'll reuse it
             }
             
             existingPaths.insert(folderPath)
@@ -98,6 +110,7 @@ enum ValidationError: LocalizedError {
     case pathExists(String)
     case fileNotFound(String)
     case largeOperation(Int)
+    case tooManyFolders(Int, max: Int)
     
     var errorDescription: String? {
         switch self {
@@ -111,6 +124,8 @@ enum ValidationError: LocalizedError {
             return "File not found: \(path)"
         case .largeOperation(let count):
             return "Large operation detected (\(count) files). Please review carefully."
+        case .tooManyFolders(let count, let max):
+            return "Too many top-level folders (\(count)). Maximum allowed is \(max). Consider consolidating categories."
         }
     }
 }

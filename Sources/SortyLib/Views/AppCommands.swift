@@ -257,6 +257,7 @@ public class AppState: ObservableObject {
         case exclusions
         case watchedFolders
         case learnings
+        case storageLocations
     }
 
     public init() {
@@ -296,6 +297,11 @@ public class AppState: ObservableObject {
     public func resetSession() {
         selectedDirectory = nil
         organizer?.reset()
+    }
+    
+    /// Show the onboarding flow again (for revisiting setup)
+    public func showOnboarding() {
+        hasCompletedOnboarding = false
     }
 
     public func exportResults() {

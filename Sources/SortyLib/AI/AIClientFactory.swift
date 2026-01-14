@@ -10,7 +10,7 @@ import Foundation
 public struct AIClientFactory {
     public static func createClient(config: AIConfig) throws -> AIClientProtocol {
         switch config.provider {
-        case .openAI, .groq, .openAICompatible, .openRouter, .ollama:
+        case .openAI, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
             return OpenAIClient(config: config)
             
         case .githubCopilot:

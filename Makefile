@@ -1,6 +1,6 @@
 # Sorty Makefile
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now release
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now release prerelease prerelease-full
 
 # Default target
 all: build
@@ -85,6 +85,18 @@ release: build
 	@echo "   2. Upload releases/Sorty-macOS.zip"
 	@echo "   3. Remind users to run: xattr -cr /Applications/Sorty.app"
 
+# Pre-release validation - comprehensive checks before release
+prerelease:
+	@echo "🔍 Running pre-release validation..."
+	@chmod +x scripts/prerelease_check.sh
+	@./scripts/prerelease_check.sh
+
+# Pre-release validation with UI tests (slower, more thorough)
+prerelease-full:
+	@echo "🔍 Running full pre-release validation (including UI tests)..."
+	@chmod +x scripts/prerelease_check.sh
+	@./scripts/prerelease_check.sh --ui-tests
+
 help:
 	@echo "Sorty Build System"
 	@echo "=================="
@@ -100,10 +112,14 @@ help:
 	@echo "  make test-ui     - Run UI tests (macOS)"
 	@echo "  make test-full   - Run unit and UI tests"
 	@echo ""
+	@echo "Release:"
+	@echo "  make prerelease      - Run comprehensive pre-release validation"
+	@echo "  make prerelease-full - Pre-release validation with UI tests"
+	@echo "  make release         - Create a release zip for GitHub"
+	@echo ""
 	@echo "Utility:"
 	@echo "  make clean       - Remove all build artifacts and releases"
 	@echo "  make install     - Copy built app to /Applications"
 	@echo "  make cli         - Build the 'learnings' CLI tool"
 	@echo "  make install-cli - Install 'learnings' CLI to /usr/local/bin"
-	@echo "  make release     - Create a release zip for GitHub"
 	@echo "  make help        - Show this help message"

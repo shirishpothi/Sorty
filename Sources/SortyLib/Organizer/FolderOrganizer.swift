@@ -157,11 +157,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var currentPlan: OrganizationPlan?
     @Published public var errorMessage: String?
     @Published public var customInstructions: String = ""
+    
+    // Proactive AI Validation
+    @Published public var isAIConfigured: Bool = false
 
     // Streaming support
     @Published public var streamingContent: String = ""
+    @Published public var displayStreamingContent: String = "" // Throttled version for UI to prevent layout loops
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
+    
+    // Throttle timer for display content updates (prevents layout thrashing)
+    private var displayUpdateTask: Task<Void, Never>?
+    private var lastDisplayUpdate: Date = .distantPast
+    private let displayUpdateInterval: TimeInterval = 0.1 // 100ms throttle
+    
+    // Steady progress animation during streaming
+    private var steadyProgressTask: Task<Void, Never>?
+    private var lastChunkTime: Date = .distantPast
     
     // AI reasoning insights - extracted from streaming content
     @Published public var currentInsight: String = ""
@@ -177,6 +190,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // Track current directory for status checks
     @Published public var currentDirectory: URL?
+    
+    // Track file count for better progress estimation
+    public var scannedFileCount: Int = 0
 
     // CRITICAL: Cancellation token - must be checked frequently
     private var currentTask: Task<Void, Error>?
@@ -195,17 +211,41 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var personaManager: PersonaManager?
     public var customPersonaStore: CustomPersonaStore?
     public var learningsManager: LearningsManager?
+    public var storageLocationsManager: StorageLocationsManager?
     
     public init() {}
+    
+    #if DEBUG
+    /// Test-only method to inject a mock AI client for unit testing
+    public func setAIClientForTesting(_ client: AIClientProtocol?) {
+        self.aiClient = client
+        if client != nil {
+            self.isAIConfigured = true
+        }
+    }
+    #endif
 
     public func configure(with config: AIConfig) async throws {
-        var client = try AIClientFactory.createClient(config: config)
+        do {
+            var client = try AIClientFactory.createClient(config: config)
 
-        // Set up streaming delegate
-        client.streamingDelegate = self
+            // Set up streaming delegate
+            client.streamingDelegate = self
 
-        self.aiClient = client
-        self.aiConfig = config
+            self.aiClient = client
+            self.aiConfig = config
+            
+            await MainActor.run {
+                self.isAIConfigured = true
+            }
+        } catch {
+            self.aiClient = nil
+            self.aiConfig = config
+            await MainActor.run {
+                self.isAIConfigured = false
+            }
+            throw error
+        }
     }
 
     // MARK: - StreamingDelegate
@@ -216,26 +256,66 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             
             let isFirstChunk = self.streamingContent.isEmpty
             self.streamingContent += chunk
+            self.lastChunkTime = Date()
 
             if isFirstChunk {
                 self.isStreaming = true
                 self.organizationStage = "Receiving AI response..."
                 self.progress = 0.30
+                self.displayStreamingContent = self.streamingContent
+                
+                // Start steady progress task for smooth animation
+                self.startSteadyProgressTask()
             }
 
-            // Increment progress asymptotically towards 0.85 during streaming
-            // Use content length as a proxy for progress
-            let contentLength = self.streamingContent.count
-            let estimatedTotal = 4000 // Estimated total characters for typical response
-            let streamProgress = min(0.85, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.55)
+            // Throttle display updates to prevent layout loops (100ms)
+            let now = Date()
+            if now.timeIntervalSince(self.lastDisplayUpdate) >= self.displayUpdateInterval {
+                self.displayStreamingContent = self.streamingContent
+                self.lastDisplayUpdate = now
+            }
 
-            if self.progress < streamProgress {
-                self.progress = streamProgress
+            // Increment progress based on content received
+            // Estimate total based on file count (~100 chars per file in JSON output)
+            let contentLength = self.streamingContent.count
+            let estimatedTotal = max(3000, self.scannedFileCount * 100)
+            let contentProgress = min(0.80, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.50)
+
+            if self.progress < contentProgress {
+                self.progress = contentProgress
             }
             
             // Extract insights from streaming content (throttled)
             self.extractInsightsIfNeeded()
         }
+    }
+    
+    /// Starts a background task that ensures progress keeps moving even during pauses
+    private func startSteadyProgressTask() {
+        steadyProgressTask?.cancel()
+        steadyProgressTask = Task { @MainActor in
+            while !Task.isCancelled && !isCancellationRequested && isStreaming {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                guard !Task.isCancelled && !isCancellationRequested && isStreaming else { break }
+                
+                // If we haven't reached 0.82 and no recent chunk, nudge progress
+                if self.progress < 0.82 {
+                    let timeSinceLastChunk = Date().timeIntervalSince(self.lastChunkTime)
+                    
+                    // If it's been more than 1 second since last chunk, nudge progress
+                    if timeSinceLastChunk > 1.0 {
+                        // Small increment to keep progress moving (0.5% every 500ms)
+                        self.progress = min(0.82, self.progress + 0.005)
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Stops the steady progress task
+    private func stopSteadyProgressTask() {
+        steadyProgressTask?.cancel()
+        steadyProgressTask = nil
     }
     
     /// Extract meaningful insights from the streaming AI response
@@ -397,6 +477,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             self.isStreaming = false
             self.organizationStage = "Processing response..."
             self.stopTimeoutTimer()
+            self.stopSteadyProgressTask()
         }
     }
 
@@ -405,6 +486,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             self.isStreaming = false
             self.errorMessage = error.localizedDescription
             self.stopTimeoutTimer()
+            self.stopSteadyProgressTask()
         }
     }
 
@@ -485,6 +567,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             try checkCancellation()
 
             var files = try await scanner.scanDirectory(at: directory)
+            scannedFileCount = files.count
 
             updateProgress(0.15, stage: "Found \(files.count) files")
 
@@ -520,6 +603,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 instructions += "\n\n" + learnedContext
                 DebugLogger.log("Injected Learnings context into prompt")
             }
+            
+            // Add Storage Locations context (external destinations for files)
+            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+                instructions += "\n\n" + storageContext
+                DebugLogger.log("Injected Storage Locations context into prompt")
+            }
 
             let plan = try await client.analyze(files: files, customInstructions: instructions, personaPrompt: personaPrompt, temperature: temperature)
 
@@ -532,7 +621,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 isStreaming = false
             }
 
-            try validator.validate(plan, at: directory)
+            try validator.validate(plan, at: directory, maxTopLevelFolders: aiConfig?.maxTopLevelFolders ?? 10)
 
             try checkCancellation()
 
@@ -591,8 +680,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         state = .idle
         organizationStage = "Cancelled"
         isStreaming = false
+        displayStreamingContent = streamingContent // Sync final content
         isCancellationRequested = false
         userInitiatedAction = false
+        stopSteadyProgressTask()
     }
 
     @MainActor
@@ -734,6 +825,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             var finalPrompt = prompt
             if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
                 finalPrompt += "\n\n" + learnedContext
+            }
+            
+            // Add Storage Locations context
+            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+                finalPrompt += "\n\n" + storageContext
             }
             
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
@@ -900,6 +996,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 instructions += "\n\n" + learnedContext
             }
             
+            // Add Storage Locations context
+            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+                instructions += "\n\n" + storageContext
+            }
+            
             var newPlan = try await client.analyze(files: allFiles, customInstructions: instructions, personaPrompt: personaPrompt, temperature: nil)
             newPlan.version = (currentPlan.version) + 1
 
@@ -940,13 +1041,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Multi-State Undo/Redo
 
     /// Undoes a specific historical session
-    public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws {
-        guard let operations = entry.operations, !entry.isUndone else { return }
+    /// Returns the RestoreResult with details about any skipped files
+    @discardableResult
+    public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
+        guard let operations = entry.operations, !entry.isUndone else { 
+            return FileSystemManager.RestoreResult(successfulOperations: 0, missingFiles: [])
+        }
 
         updateState(.applying, stage: "Undoing changes...", progress: 0.3)
 
         do {
-            try await fileSystemManager.reverseOperations(operations)
+            let result = try await fileSystemManager.reverseOperations(operations)
 
             var updatedEntry = entry
             updatedEntry.isUndone = true
@@ -954,7 +1059,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             history.updateEntry(updatedEntry)
 
             await MainActor.run {
-                organizationStage = "Undo complete"
+                organizationStage = result.hasIssues ? "Undo complete (some files skipped)" : "Undo complete"
                 progress = 1.0
                 state = .idle
             }
@@ -964,9 +1069,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 object: nil,
                 userInfo: [
                     "url": URL(fileURLWithPath: entry.directoryPath),
-                    "entry": entry
+                    "entry": entry,
+                    "restoreResult": result
                 ]
             )
+            
+            return result
 
         } catch {
             await MainActor.run {
@@ -978,7 +1086,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     /// Restores to a previous state by undoing all intermediate sessions
-    public func restoreToState(targetEntry: OrganizationHistoryEntry) async throws {
+    /// Returns a combined RestoreResult with totals from all undone entries
+    @discardableResult
+    public func restoreToState(targetEntry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
         // Find all sessions on the same path that are after this one and not undone
         let path = targetEntry.directoryPath
         let entriesToUndo = history.entries.filter {
@@ -991,18 +1101,29 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         updateState(.applying, stage: "Rolling back states...", progress: 0.1)
 
         let total = Double(entriesToUndo.count)
+        var combinedSuccessCount = 0
+        var combinedMissingFiles: [String] = []
 
         for (index, entry) in entriesToUndo.enumerated() {
             updateProgress(Double(index) / total, stage: "Undoing session from \(entry.timestamp.formatted())...")
 
-            try await undoHistoryEntry(entry)
+            let result = try await undoHistoryEntry(entry)
+            combinedSuccessCount += result.successfulOperations
+            combinedMissingFiles.append(contentsOf: result.missingFiles)
         }
 
+        let combinedResult = FileSystemManager.RestoreResult(
+            successfulOperations: combinedSuccessCount,
+            missingFiles: combinedMissingFiles
+        )
+
         await MainActor.run {
-            organizationStage = "Restoration complete"
+            organizationStage = combinedResult.hasIssues ? "Restoration complete (some files skipped)" : "Restoration complete"
             progress = 1.0
             state = .idle
         }
+        
+        return combinedResult
     }
 
     public func redoOrganization(from entry: OrganizationHistoryEntry) async throws {
@@ -1022,13 +1143,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentPlan = nil
         errorMessage = nil
         streamingContent = ""
+        displayStreamingContent = ""
         organizationStage = ""
         isStreaming = false
         showTimeoutMessage = false
         elapsedTime = 0
         currentDirectory = nil
+        scannedFileCount = 0
         isCancellationRequested = false
         userInitiatedAction = false
+        lastDisplayUpdate = .distantPast
+        lastChunkTime = .distantPast
+        
+        // Stop background tasks
+        stopSteadyProgressTask()
         
         // Clear AI insights
         currentInsight = ""

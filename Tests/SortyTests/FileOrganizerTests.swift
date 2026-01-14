@@ -62,7 +62,7 @@ class SortyTests: XCTestCase {
         try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
 
         // 2. Setup: Inject mock client
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
 
         // 3. Setup: Define mock behavior
         await mockClient.setHandler { files in
@@ -91,7 +91,7 @@ class SortyTests: XCTestCase {
     @MainActor
     func testClientNotConfiguredError() async {
         // Ensure client is nil
-        folderOrganizer.aiClient = nil
+        folderOrganizer.setAIClientForTesting(nil)
 
         do {
             try await folderOrganizer.organize(directory: tempDirectory)
@@ -107,7 +107,7 @@ class SortyTests: XCTestCase {
         let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
         try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
 
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
 
         // Setup a slow handler
         await mockClient.setHandler { files in
@@ -136,7 +136,7 @@ class SortyTests: XCTestCase {
         let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
         try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
 
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
         await mockClient.setHandler { files in
             return OrganizationPlan(
                 suggestions: [FolderSuggestion(folderName: "Test", files: files)],

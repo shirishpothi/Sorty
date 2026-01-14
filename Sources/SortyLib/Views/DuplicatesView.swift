@@ -3,7 +3,7 @@
 //  Sorty
 //
 //  UI for displaying and managing duplicate files
-//  Enhanced with haptic feedback, "Liquid Glass" aesthetic, and card-based layout
+//  Enhanced with haptic feedback, "Liquid Glass" aesthetic, and Split View layout
 //
 
 import SwiftUI
@@ -78,28 +78,49 @@ struct DuplicatesView: View {
                         .transition(TransitionStyles.scaleAndFade)
                     }
                 } else {
-                    // Results State
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            // Summary Card
-                            DuplicatesSummaryCard(manager: detectionManager)
-                                .padding(.top, 16)
+                    // Results State: Split View Layout
+                    GeometryReader { geometry in
+                        HSplitView {
+                            // Left Pane: List of Groups
+                            VStack(spacing: 0) {
+                                // Summary Header
+                                DuplicatesSummaryCardMini(manager: detectionManager)
+                                    .padding()
+                                
+                                Divider()
+                                
+                                List(selection: $selectedGroup) {
+                                    ForEach(detectionManager.duplicateGroups) { group in
+                                        DuplicateGroupRow(group: group)
+                                            .tag(group)
+                                    }
+                                }
+                                .listStyle(.inset)
+                            }
+                            .frame(minWidth: 250, idealWidth: 300, maxWidth: 400)
                             
-                            ForEach(Array(detectionManager.duplicateGroups.enumerated()), id: \.element.id) { index, group in
-                                DuplicateGroupCard(
+                            // Right Pane: Detail View
+                            if let group = selectedGroup {
+                                DuplicateGroupDetailView(
                                     group: group,
                                     onDelete: { files in
                                         filesToDelete = files
                                         showDeleteConfirmation = true
                                     }
                                 )
-                                .animatedAppearance(delay: Double(index) * 0.03)
+                                .frame(minWidth: 400, maxWidth: .infinity)
+                            } else {
+                                VStack {
+                                    Image(systemName: "arrow.left")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(.secondary)
+                                    Text("Select a duplicate group to view details")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                             }
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
                     }
-                    .background(Color(NSColor.windowBackgroundColor))
                     .transition(TransitionStyles.slideFromRight)
                 }
             }
@@ -125,6 +146,11 @@ struct DuplicatesView: View {
                 contentOpacity = 1.0
             }
         }
+        .onChange(of: effectiveDirectory) { _, _ in
+            // Clear results when switching directories to prevent showing stale data
+            detectionManager.clearResults()
+            selectedGroup = nil
+        }
         .sheet(isPresented: $showSettings) {
             DuplicateSettingsView(settingsManager: settingsManager)
         }
@@ -139,6 +165,10 @@ struct DuplicatesView: View {
             do {
                 let files = try await scanner.scanDirectory(at: directory, computeHashes: true)
                 await detectionManager.scanForDuplicates(files: files)
+                // Auto-select first group
+                if let first = detectionManager.duplicateGroups.first {
+                    selectedGroup = first
+                }
                 HapticFeedbackManager.shared.success()
             } catch {
                 HapticFeedbackManager.shared.error()
@@ -195,6 +225,8 @@ struct DuplicatesView: View {
             HapticFeedbackManager.shared.error()
             DebugLogger.log("Delete failed: \(error)")
         }
+        
+        // Refresh the scan
         startScan()
     }
     
@@ -207,6 +239,7 @@ struct DuplicatesView: View {
         if panel.runModal() == .OK, let url = panel.url {
             localDirectory = url
             detectionManager.clearResults()
+            selectedGroup = nil
         }
     }
 
@@ -343,210 +376,184 @@ struct DuplicatesHeaderNew: View {
 
 // MARK: - Components
 
-struct DuplicateGroupCard: View {
+struct DuplicateGroupRow: View {
+    let group: DuplicateGroup
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.orange.opacity(0.1))
+                    .frame(width: 36, height: 36)
+                
+                Image(systemName: "doc.on.doc.fill")
+                    .foregroundStyle(.orange)
+                    .font(.body)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.files.first?.displayName ?? "Unknown File")
+                    .font(.headline)
+                    .lineLimit(1)
+                
+                HStack(spacing: 4) {
+                    Text("\(group.files.count) copies")
+                    Text("•")
+                    Text("Save \(ByteCountFormatter.string(fromByteCount: group.potentialSavings, countStyle: .file))")
+                        .foregroundStyle(.green)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct DuplicateGroupDetailView: View {
     let group: DuplicateGroup
     let onDelete: ([FileItem]) -> Void
-    @State private var isExpanded = false
-    @State private var isHovered = false
-
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Main Row
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(.orange.opacity(0.1))
-                        .frame(width: 36, height: 36)
-                    
-                    Image(systemName: "doc.on.doc.fill")
-                        .foregroundStyle(.orange)
-                        .font(.body)
-                }
-                
-                VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(group.files.first?.displayName ?? "Unknown File")
-                        .font(.headline)
+                        .font(.title2.bold())
                     
-                    Text("\(group.files.count) identical files • \(ByteCountFormatter.string(fromByteCount: group.files.first?.size ?? 0, countStyle: .file)) each")
+                    Text("\(group.files.count) identical files found")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                
+                Button("Keep First, Cleanup Others") {
+                    onDelete(Array(group.files.dropFirst()))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            
+            // File List
+            List {
+                ForEach(Array(group.files.enumerated()), id: \.element.id) { index, file in
+                    DuplicateFileDetailRow(file: file, isOriginal: index == 0, onDelete: {
+                        onDelete([file])
+                    })
+                }
+            }
+            .listStyle(.inset)
+        }
+    }
+}
+
+struct DuplicateFileDetailRow: View {
+    let file: FileItem
+    let isOriginal: Bool
+    let onDelete: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            if isOriginal {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(.yellow)
+                    .font(.title3)
+                    .frame(width: 30)
+                    .help("Original / Keeping")
+            } else {
+                Image(systemName: "doc")
+                    .foregroundStyle(.secondary)
+                    .font(.title3)
+                    .frame(width: 30)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(file.displayName)
+                    .font(.headline)
+                
+                Text(file.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                
+                HStack {
+                    Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
+                    if let date = file.creationDate {
+                        Text("•")
+                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            if !isOriginal {
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else {
+                Text("Original")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.green.opacity(0.1), in: Capsule())
+                    .foregroundStyle(.green)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+struct DuplicatesSummaryCardMini: View {
+    @ObservedObject var manager: DuplicateDetectionManager
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            Text("Scan Results")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+            
+            Spacer()
+            
+            HStack(spacing: 12) {
+                HStack(spacing: 4) {
+                    Text("\(manager.totalDuplicates)")
+                        .font(.subheadline.bold())
+                    Text("duplicates")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 
-                Spacer()
+                Divider()
+                    .frame(height: 16)
                 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("Save \(ByteCountFormatter.string(fromByteCount: group.potentialSavings, countStyle: .file))")
-                        .font(.caption.bold())
+                HStack(spacing: 4) {
+                    Text(manager.formattedSavings)
+                        .font(.subheadline.bold())
                         .foregroundStyle(.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(.green.opacity(0.1), in: Capsule())
-                    
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            isExpanded.toggle()
-                        }
-                    }) {
-                        Text(isExpanded ? "Hide Details" : "Show Details")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                    }
-                    .buttonStyle(.plain)
+                    Text("recoverable")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            }
-            .padding(16)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    isExpanded.toggle()
-                }
-            }
-            .onHover { isHovered = $0 }
-            
-            if isExpanded {
-                Divider().padding(.horizontal, 16)
-                
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(group.files.enumerated()), id: \.element.id) { index, file in
-                        HStack(spacing: 12) {
-                            if index == 0 {
-                                Image(systemName: "star.fill")
-                                    .foregroundStyle(.yellow)
-                                    .font(.caption2)
-                                    .help("Original / Keeping")
-                            } else {
-                                Image(systemName: "doc")
-                                    .foregroundStyle(.secondary)
-                                    .font(.caption2)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(file.displayName)
-                                    .font(.caption)
-                                    .fontWeight(index == 0 ? .medium : .regular)
-                                
-                                Text(file.path)
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.secondary.opacity(0.7))
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            
-                            Spacer()
-                            
-                            if index > 0 {
-                                Button { onDelete([file]) } label: {
-                                    Image(systemName: "trash")
-                                        .font(.caption)
-                                        .foregroundStyle(.red)
-                                }
-                                .buttonStyle(.plain)
-                                .accessibilityLabel("Delete \(file.displayName)")
-                                .accessibilityHint("Remove this duplicate file")
-                            }
-                        }
-                        .padding(.horizontal, 16)
-
-                    }
-                    
-                    HStack {
-                        Spacer()
-                        Button("Keep First, Cleanup Others") {
-                            onDelete(Array(group.files.dropFirst()))
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .tint(.red)
-
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                }
-                .padding(.vertical, 12)
-                .background(Color.black.opacity(0.02))
             }
         }
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor))
+        .cornerRadius(8)
     }
 }
 
-struct DuplicatesSummaryCard: View {
-    @ObservedObject var manager: DuplicateDetectionManager
-    
-    var body: some View {
-        HStack(spacing: 0) {
-            DuplicateStatItem(
-                title: "Duplicates",
-                value: "\(manager.totalDuplicates)",
-                icon: "doc.on.doc.fill",
-                color: .orange
-            )
-            .frame(maxWidth: .infinity)
-            
-            Divider()
-                .frame(height: 40)
-            
-            DuplicateStatItem(
-                title: "Recoverable",
-                value: manager.formattedSavings,
-                icon: "externaldrive.fill",
-                color: .green
-            )
-            .frame(maxWidth: .infinity)
-            
-            Divider()
-                .frame(height: 40)
-            
-            DuplicateStatItem(
-                title: "Groups",
-                value: "\(manager.duplicateGroups.count)",
-                icon: "square.grid.2x2.fill",
-                color: .blue
-            )
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 20)
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-    }
-}
-
-private struct DuplicateStatItem: View {
-    let title: String
-    let value: String
-    let icon: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(color)
-            
-            Text(value)
-                .font(.headline)
-            
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
+// Reused components
 struct DuplicatesEmptyStateView: View {
     let title: String
     let description: String
@@ -675,10 +682,4 @@ struct SafeDeletionInfoPopover: View {
         .padding(16)
         .frame(width: 280)
     }
-}
-
-#Preview {
-    DuplicatesView()
-        .environmentObject(AppState())
-        .frame(width: 800, height: 600)
 }

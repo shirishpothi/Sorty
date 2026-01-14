@@ -10,6 +10,7 @@ import SwiftUI
 struct OrganizationResultView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var appState: AppState
     @State private var isProcessing = false
     @State private var processError: String?
     @State private var hasUndone = false
@@ -162,6 +163,7 @@ struct OrganizationResultView: View {
                     .frame(minWidth: 130)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.large)
                 .disabled(isProcessing)
                 .accessibilityIdentifier("UndoChangesButton")
                 .accessibilityLabel("Undo organization changes")
@@ -185,6 +187,7 @@ struct OrganizationResultView: View {
                     .frame(minWidth: 130)
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.large)
                 .disabled(isProcessing)
                 .accessibilityIdentifier("RedoChangesButton")
                 .accessibilityLabel("Redo organization changes")
@@ -193,6 +196,7 @@ struct OrganizationResultView: View {
 
             Button {
                 HapticFeedbackManager.shared.success()
+                appState.selectedDirectory = nil
                 organizer.reset()
             } label: {
                 HStack(spacing: 6) {
@@ -224,6 +228,11 @@ struct OrganizationResultView: View {
                 icon: "clock",
                 label: "View History"
             ) {
+                HapticFeedbackManager.shared.tap()
+                organizer.reset()
+                withAnimation(.pageTransition) {
+                    appState.currentView = .history
+                }
             }
         }
         .padding(.bottom, 32)

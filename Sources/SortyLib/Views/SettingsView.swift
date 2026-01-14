@@ -15,7 +15,9 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case strategy = "Organization Strategy"
     case tuning = "Parameter Tuning"
     case finder = "Finder Integration"
+    case notifications = "Notifications"
     case advanced = "Advanced"
+    case troubleshooting = "Troubleshooting"
     
     var id: String { rawValue }
     
@@ -26,7 +28,9 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy: return "wand.and.stars"
         case .tuning: return "slider.horizontal.3"
         case .finder: return "folder.badge.plus"
+        case .notifications: return "bell"
         case .advanced: return "gearshape.2"
+        case .troubleshooting: return "wrench.and.screwdriver"
         }
     }
     
@@ -37,7 +41,9 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy: return .orange
         case .tuning: return .green
         case .finder: return .cyan
+        case .notifications: return .pink
         case .advanced: return .gray
+        case .troubleshooting: return .red
         }
     }
 }
@@ -49,6 +55,7 @@ struct SettingsView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var appState: AppState
     @StateObject private var healthManager = WorkspaceHealthManager()
+    @StateObject private var notificationSettings = NotificationSettingsManager.shared
     @State private var showingHealthSettings = false
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
 
@@ -61,6 +68,8 @@ struct SettingsView: View {
     @State private var hasCopiedCode = false
     @State private var isQuickActionInstalled = ExtensionCommunication.isQuickActionInstalled()
     @State private var quickActionMessage: String?
+    @State private var cacheSize: String = "Calculating..."
+    @State private var showingResetConfirmation = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -155,8 +164,12 @@ struct SettingsView: View {
             tuningSection
         case .finder:
             finderSection
+        case .notifications:
+            notificationsSection
         case .advanced:
             advancedSection
+        case .troubleshooting:
+            troubleshootingSection
         }
     }
     
@@ -186,6 +199,16 @@ struct SettingsView: View {
             .animatedAppearance(delay: 0.1)
             
             SettingsNavigationCard(
+                title: "Storage Locations",
+                description: "Add external destinations for files during organization",
+                icon: "externaldrive",
+                color: .purple
+            ) {
+                appState.currentView = .storageLocations
+            }
+            .animatedAppearance(delay: 0.15)
+            
+            SettingsNavigationCard(
                 title: "Workspace Health Rules",
                 description: "Set up health monitoring and cleanup policies",
                 icon: "heart.text.square",
@@ -193,13 +216,13 @@ struct SettingsView: View {
             ) {
                 showingHealthSettings = true
             }
-            .animatedAppearance(delay: 0.15)
+            .animatedAppearance(delay: 0.2)
             
             // Organization Style
             SettingsCard(title: "Organization Style", icon: "paintpalette", color: .purple) {
                 PersonaPickerView()
             }
-            .animatedAppearance(delay: 0.2)
+            .animatedAppearance(delay: 0.25)
         }
     }
     
@@ -237,13 +260,13 @@ struct SettingsView: View {
             if viewModel.config.provider == .githubCopilot {
                 copilotConfigSection
                     .animatedAppearance(delay: 0.1)
-            } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama].contains(viewModel.config.provider) {
+            } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
                 apiConfigSection
                     .animatedAppearance(delay: 0.1)
             }
             
             // Connection Test
-            if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .appleFoundationModel].contains(viewModel.config.provider) {
+            if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini, .appleFoundationModel].contains(viewModel.config.provider) {
                 connectionSection
                     .animatedAppearance(delay: 0.15)
             }
@@ -488,6 +511,48 @@ struct SettingsView: View {
     
     private var strategySection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            SettingsCard(title: "Folder Limits", icon: "folder.badge.questionmark", color: .purple) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Max Top-Level Folders")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(viewModel.config.maxTopLevelFolders)")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                            .contentTransition(.numericText())
+                    }
+                    
+                    Slider(
+                        value: Binding(
+                            get: { Double(viewModel.config.maxTopLevelFolders) },
+                            set: { viewModel.config.maxTopLevelFolders = Int($0) }
+                        ),
+                        in: 3...20,
+                        step: 1
+                    )
+                    .onChange(of: viewModel.config.maxTopLevelFolders) { _, _ in
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    
+                    HStack {
+                        Text("Minimal (3)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("Detailed (20)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Text("Limits how many main folders the AI creates. Subfolders are not limited.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
+                }
+            }
+            .animatedAppearance(delay: 0.05)
+            
             SettingsCard(title: "Scanning Options", icon: "doc.text.magnifyingglass", color: .blue) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(
@@ -505,7 +570,7 @@ struct SettingsView: View {
                     )
                 }
             }
-            .animatedAppearance(delay: 0.05)
+            .animatedAppearance(delay: 0.1)
             
             SettingsCard(title: "File Tagging", icon: "tag", color: .orange) {
                 SettingsToggle(
@@ -514,7 +579,7 @@ struct SettingsView: View {
                     description: "Allow AI to suggest and apply Finder tags to files"
                 )
             }
-            .animatedAppearance(delay: 0.1)
+            .animatedAppearance(delay: 0.15)
         }
     }
     
@@ -748,6 +813,287 @@ struct SettingsView: View {
             }
             .animatedAppearance(delay: 0.2)
         }
+    }
+    
+    // MARK: - Notifications Section
+    
+    private var notificationsSection: some View {
+        VStack(spacing: 16) {
+            // Permission Status
+            NotificationPermissionCard()
+                .animatedAppearance(delay: 0.0)
+            
+            // Delivery Method
+            SettingsCard(title: "Delivery Method", icon: "bell.badge", color: .pink) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.inAppHUD,
+                        title: "In-App HUD",
+                        description: "Show notifications as subtle bottom-left overlays"
+                    )
+                    
+                    Divider()
+                    
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.systemNotifications,
+                        title: "System Notifications",
+                        description: "Show in macOS Notification Center"
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .animatedAppearance(delay: 0.1)
+            
+            // Notification Types
+            SettingsCard(title: "Notification Types", icon: "list.bullet", color: .blue) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.processingComplete,
+                        title: "Processing Complete",
+                        description: "When file processing finishes successfully"
+                    )
+                    
+                    Divider()
+                    
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.processingErrors,
+                        title: "Processing Errors",
+                        description: "When errors occur during processing"
+                    )
+                    
+                    Divider()
+                    
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.batchSummary,
+                        title: "Batch Summary",
+                        description: "Summary notification after processing multiple files"
+                    )
+                    
+                    Divider()
+                    
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.alwaysShowCriticalErrors,
+                        title: "Always Show Critical Errors",
+                        description: "Display critical errors even if notifications are off"
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .animatedAppearance(delay: 0.15)
+            
+            // Sounds
+            SettingsCard(title: "Sounds", icon: "speaker.wave.2", color: .purple) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.systemNotificationSounds,
+                        title: "System Notification Sounds",
+                        description: "Play sound with system notifications"
+                    )
+                    
+                    Divider()
+                    
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.hudSounds,
+                        title: "HUD Sounds",
+                        description: "Play sound with in-app HUD notifications"
+                    )
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .animatedAppearance(delay: 0.2)
+            
+            // Test Notifications
+            SettingsCard(title: "Test", icon: "bell.and.waves.left.and.right", color: .green) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Send a test notification to verify your settings are working correctly.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    HStack(spacing: 12) {
+                        Button {
+                            NotificationManager.shared.showInfo(title: "Test Notification", message: "Your notifications are working correctly!")
+                            HapticFeedbackManager.shared.success()
+                        } label: {
+                            HStack {
+                                Image(systemName: "bell")
+                                Text("Send Test")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .animatedAppearance(delay: 0.25)
+        }
+    }
+    
+    // MARK: - Troubleshooting Section
+    
+    private var troubleshootingSection: some View {
+        VStack(spacing: 16) {
+            // Cache
+            SettingsCard(title: "Cache", icon: "internaldrive", color: .orange) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Cache Size")
+                            .font(.subheadline)
+                        Spacer()
+                        Text(cacheSize)
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Button {
+                        clearCache()
+                        HapticFeedbackManager.shared.success()
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Clear")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                }
+            }
+            .animatedAppearance(delay: 0.05)
+            .onAppear {
+                calculateCacheSize()
+            }
+            
+            // Reset Settings
+            SettingsCard(title: "Reset", icon: "arrow.counterclockwise", color: .red) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Reset all preferences to default values. This cannot be undone.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Button {
+                        showingResetConfirmation = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.counterclockwise")
+                            Text("Reset All Settings")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                }
+            }
+            .animatedAppearance(delay: 0.1)
+            .alert("Reset All Settings?", isPresented: $showingResetConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Reset", role: .destructive) {
+                    resetAllSettings()
+                }
+            } message: {
+                Text("This will reset all preferences to their default values. This action cannot be undone.")
+            }
+        }
+    }
+    
+    // MARK: - Helper Functions
+    
+    private func calculateCacheSize() {
+        Task {
+            let size = await getCacheSizeAsync()
+            await MainActor.run {
+                cacheSize = formatBytes(size)
+            }
+        }
+    }
+    
+    private func getCacheSizeAsync() async -> Int64 {
+        var totalSize: Int64 = 0
+        let fileManager = FileManager.default
+        
+        // App caches directory
+        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            totalSize += directorySize(at: cachesURL)
+        }
+        
+        // App support directory for temporary files
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let sortyCache = appSupportURL.appendingPathComponent("Sorty/Cache")
+            if fileManager.fileExists(atPath: sortyCache.path) {
+                totalSize += directorySize(at: sortyCache)
+            }
+        }
+        
+        // Temporary directory
+        let tempURL = fileManager.temporaryDirectory
+        totalSize += directorySize(at: tempURL)
+        
+        return totalSize
+    }
+    
+    private func directorySize(at url: URL) -> Int64 {
+        let fileManager = FileManager.default
+        var size: Int64 = 0
+        
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        
+        for case let fileURL as URL in enumerator {
+            do {
+                let resourceValues = try fileURL.resourceValues(forKeys: [.fileSizeKey, .isDirectoryKey])
+                if resourceValues.isDirectory == false {
+                    size += Int64(resourceValues.fileSize ?? 0)
+                }
+            } catch {
+                // Skip files we can't access
+            }
+        }
+        
+        return size
+    }
+    
+    private func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+    
+    private func clearCache() {
+        let fileManager = FileManager.default
+        
+        // Clear caches directory
+        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            try? fileManager.removeItem(at: cachesURL)
+            try? fileManager.createDirectory(at: cachesURL, withIntermediateDirectories: true)
+        }
+        
+        // Clear Sorty cache in app support
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let sortyCache = appSupportURL.appendingPathComponent("Sorty/Cache")
+            try? fileManager.removeItem(at: sortyCache)
+        }
+        
+        // Recalculate size
+        calculateCacheSize()
+    }
+    
+    private func resetAllSettings() {
+        // Reset AI config
+        viewModel.config = .default
+        
+        // Reset notification settings
+        notificationSettings.reset()
+        
+        // Clear user defaults for other settings
+        let defaults = UserDefaults.standard
+        let domain = Bundle.main.bundleIdentifier ?? ""
+        defaults.removePersistentDomain(forName: domain)
+        defaults.synchronize()
+        
+        // Reload settings
+        HapticFeedbackManager.shared.success()
     }
 
     private func testConnection() {
@@ -1055,6 +1401,135 @@ extension View {
             self.accessibilityIdentifier(id)
         } else {
             self
+        }
+    }
+}
+
+// MARK: - Notification Permission Card
+
+struct NotificationPermissionCard: View {
+    @ObservedObject private var notificationManager = NotificationManager.shared
+    @State private var isRequestingPermission = false
+    
+    private var statusInfo: (icon: String, color: Color, title: String, description: String) {
+        switch notificationManager.notificationPermissionStatus {
+        case .authorized:
+            return ("checkmark.circle.fill", .green, "Authorized", "System notifications are enabled")
+        case .denied:
+            return ("xmark.circle.fill", .red, "Denied", "Open System Settings to enable notifications")
+        case .provisional:
+            return ("bell.badge.circle.fill", .orange, "Provisional", "Notifications delivered quietly")
+        case .ephemeral:
+            return ("clock.circle.fill", .blue, "Temporary", "App Clip temporary permission")
+        case .notDetermined:
+            return ("questionmark.circle.fill", .secondary, "Not Set", "Request permission to enable system notifications")
+        @unknown default:
+            return ("questionmark.circle.fill", .secondary, "Unknown", "Unable to determine permission status")
+        }
+    }
+    
+    var body: some View {
+        SettingsCard(title: "System Notification Permission", icon: "bell.badge.circle", color: .cyan) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Status indicator
+                HStack(spacing: 12) {
+                    Image(systemName: statusInfo.icon)
+                        .font(.title2)
+                        .foregroundStyle(statusInfo.color)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(statusInfo.title)
+                            .font(.subheadline.weight(.medium))
+                        Text(statusInfo.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    // Action button based on status
+                    switch notificationManager.notificationPermissionStatus {
+                    case .notDetermined:
+                        Button {
+                            requestPermission()
+                        } label: {
+                            HStack(spacing: 4) {
+                                if isRequestingPermission {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "bell.badge")
+                                }
+                                Text("Enable")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isRequestingPermission)
+                        
+                    case .denied:
+                        Button {
+                            openSystemSettings()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "gear")
+                                Text("Open Settings")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        
+                    case .authorized, .provisional:
+                        Button {
+                            Task {
+                                await notificationManager.checkNotificationPermission()
+                            }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Refresh permission status")
+                        
+                    default:
+                        EmptyView()
+                    }
+                }
+                
+                // Note about HUD notifications
+                if notificationManager.notificationPermissionStatus != .authorized {
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.blue)
+                        Text("In-app HUD notifications work regardless of this setting.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .onAppear {
+            Task {
+                await notificationManager.checkNotificationPermission()
+            }
+        }
+    }
+    
+    private func requestPermission() {
+        isRequestingPermission = true
+        Task {
+            _ = await notificationManager.requestPermission()
+            await MainActor.run {
+                isRequestingPermission = false
+                HapticFeedbackManager.shared.success()
+            }
+        }
+    }
+    
+    private func openSystemSettings() {
+        // Open System Settings > Notifications
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+            NSWorkspace.shared.open(url)
+        } else if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+            NSWorkspace.shared.open(url)
         }
     }
 }
