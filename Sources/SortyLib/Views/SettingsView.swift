@@ -986,11 +986,11 @@ struct SettingsView: View {
             .animatedAppearance(delay: 0.1)
             .alert("Reset All Settings?", isPresented: $showingResetConfirmation) {
                 Button("Cancel", role: .cancel) {}
-                Button("Reset", role: .destructive) {
+                Button("Reset & Restart", role: .destructive) {
                     resetAllSettings()
                 }
             } message: {
-                Text("This will reset all preferences to their default values. This action cannot be undone.")
+                Text("This will completely reset Sorty to its initial state, clearing all settings, history, and learnings. The app will restart and you'll go through onboarding again. This cannot be undone.")
             }
         }
     }
@@ -1009,23 +1009,23 @@ struct SettingsView: View {
     private func getCacheSizeAsync() async -> Int64 {
         var totalSize: Int64 = 0
         let fileManager = FileManager.default
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         
-        // App caches directory
+        // Sorty-specific caches directory
         if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            totalSize += directorySize(at: cachesURL)
-        }
-        
-        // App support directory for temporary files
-        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let sortyCache = appSupportURL.appendingPathComponent("Sorty/Cache")
-            if fileManager.fileExists(atPath: sortyCache.path) {
-                totalSize += directorySize(at: sortyCache)
+            let sortyCaches = cachesURL.appendingPathComponent(bundleId)
+            if fileManager.fileExists(atPath: sortyCaches.path) {
+                totalSize += directorySize(at: sortyCaches)
             }
         }
         
-        // Temporary directory
-        let tempURL = fileManager.temporaryDirectory
-        totalSize += directorySize(at: tempURL)
+        // App support directory for Sorty
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let sortySupport = appSupportURL.appendingPathComponent("Sorty")
+            if fileManager.fileExists(atPath: sortySupport.path) {
+                totalSize += directorySize(at: sortySupport)
+            }
+        }
         
         return totalSize
     }
@@ -1062,17 +1062,21 @@ struct SettingsView: View {
     
     private func clearCache() {
         let fileManager = FileManager.default
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         
-        // Clear caches directory
+        // Clear only Sorty-specific caches directory (not the entire Mac cache)
         if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            try? fileManager.removeItem(at: cachesURL)
-            try? fileManager.createDirectory(at: cachesURL, withIntermediateDirectories: true)
+            let sortyCaches = cachesURL.appendingPathComponent(bundleId)
+            try? fileManager.removeItem(at: sortyCaches)
+            try? fileManager.createDirectory(at: sortyCaches, withIntermediateDirectories: true)
         }
         
-        // Clear Sorty cache in app support
+        // Clear Sorty data in app support (preserving the directory structure)
         if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let sortyCache = appSupportURL.appendingPathComponent("Sorty/Cache")
-            try? fileManager.removeItem(at: sortyCache)
+            let sortySupport = appSupportURL.appendingPathComponent("Sorty")
+            // Only clear cache subdirectory, not user data
+            let cacheDir = sortySupport.appendingPathComponent("Cache")
+            try? fileManager.removeItem(at: cacheDir)
         }
         
         // Recalculate size
@@ -1086,14 +1090,36 @@ struct SettingsView: View {
         // Reset notification settings
         notificationSettings.reset()
         
-        // Clear user defaults for other settings
+        // Clear ALL user defaults for this app
         let defaults = UserDefaults.standard
         let domain = Bundle.main.bundleIdentifier ?? ""
         defaults.removePersistentDomain(forName: domain)
         defaults.synchronize()
         
-        // Reload settings
+        // Clear app support data (learnings, history, etc.)
+        let fileManager = FileManager.default
+        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let sortySupport = appSupportURL.appendingPathComponent("Sorty")
+            try? fileManager.removeItem(at: sortySupport)
+        }
+        
+        // Clear Sorty caches
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
+        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            let sortyCaches = cachesURL.appendingPathComponent(bundleId)
+            try? fileManager.removeItem(at: sortyCaches)
+        }
+        
+        // Reset onboarding state to trigger fresh start
+        defaults.set(false, forKey: "hasCompletedOnboarding")
+        defaults.synchronize()
+        
         HapticFeedbackManager.shared.success()
+        
+        // Force app restart to apply all changes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            NSApplication.shared.terminate(nil)
+        }
     }
 
     private func testConnection() {

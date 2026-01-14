@@ -452,119 +452,184 @@ private struct ShortcutsContent: View {
 
 private struct TroubleshootingContent: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Use the guides below to diagnose and fix common issues. If problems persist, check the GitHub Issues page or contact support.")
-                .font(.body)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Quick solutions for common issues. Click any section to expand.")
+                .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            // API Connection Issues
-            TroubleshootItem(
-                problem: "AI Not Responding or Connection Failed",
-                solutions: [
-                    "Step 1: Click 'Test Connection' in Settings to verify connectivity",
-                    "Step 2: For OpenAI - verify your API key is correct and has credits",
-                    "Step 3: Check the API URL (should be 'https://api.openai.com' for OpenAI)",
-                    "Step 4: Try a different model (e.g., 'gpt-3.5-turbo' instead of 'gpt-4')",
-                    "Step 5: Increase Request Timeout to 120s in Advanced Settings",
-                    "Step 6: Check if you're behind a proxy or firewall blocking API access"
-                ]
-            )
-            
-            // Ollama Specific Issues
-            TroubleshootItem(
-                problem: "Ollama Connection Issues",
-                solutions: [
-                    "Ensure Ollama is running: open Terminal and run 'ollama serve'",
-                    "Verify the server URL (default: http://localhost:11434)",
-                    "Check if the model is downloaded: run 'ollama list' in Terminal",
-                    "Download missing models: run 'ollama pull llama3' in Terminal",
-                    "If using Apple Silicon, ensure Ollama is ARM-native for best performance",
-                    "For remote Ollama servers, enable API Key authentication if required"
-                ]
-            )
-            
-            // Files Not Moving
-            TroubleshootItem(
-                problem: "Files Not Moving After Apply",
-                solutions: [
-                    "Check Exclusion Rules in Settings to ensure files aren't protected",
-                    "Verify you have read/write permissions for both source and destination",
-                    "Ensure files aren't locked by another application (close other apps)",
-                    "Check for special characters in file names that may cause issues",
-                    "Verify sufficient disk space for file operations",
-                    "Try running Sorty with elevated permissions (right-click → Open)"
-                ]
-            )
-            
-            // Crash Recovery
-            TroubleshootItem(
-                problem: "App Crashed or Unexpected Behavior",
-                solutions: [
-                    "Files in History tab can be reverted if the operation was interrupted",
-                    "Check ~/Library/Preferences/ for backup settings if needed",
-                    "Force quit and restart the app if it becomes unresponsive",
-                    "Clear app cache: Help → Delete All Usage Data",
-                    "If crashes persist, check Console.app for crash logs",
-                    "Report persistent crashes on GitHub with system details"
-                ]
-            )
-            
-            // Performance
-            TroubleshootItem(
-                problem: "Slow Organization or High CPU Usage",
-                solutions: [
-                    "Disable Deep Scan for faster processing (uses less CPU)",
-                    "Use exclusion rules to skip large folders (node_modules, .git)",
-                    "Enable Streaming for progressive updates instead of waiting",
-                    "For 1000+ files, consider organizing in smaller batches",
-                    "Lower AI temperature for faster, more deterministic results",
-                    "Use a local model (Ollama) for faster response times"
-                ]
-            )
-            
-            // Tags Not Working
-            TroubleshootItem(
-                problem: "Finder Tags Not Appearing",
-                solutions: [
-                    "Ensure 'Enable File Tagging' is ON in Settings",
-                    "Tags only apply when you click 'Apply Changes'",
-                    "Refresh Finder: close and reopen the folder window",
-                    "Check File Info (⌘I) to see if tags were applied",
-                    "Enable 'Include Reasoning' to see if AI suggests tags",
-                    "Some file types may not support extended attributes for tags"
-                ]
-            )
-            
-            // Common Error Messages
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Common Error Messages")
-                    .font(.headline)
-                
-                ErrorExplanation(
-                    error: "Error 401: Unauthorized",
-                    explanation: "Your API key is invalid or expired. Check your key in Settings."
+            LazyVStack(alignment: .leading, spacing: 12) {
+                TroubleshootSection(
+                    icon: "wifi.exclamationmark",
+                    iconColor: .red,
+                    problem: "AI Not Responding",
+                    solutions: [
+                        ("checkmark.circle", "Test Connection in Settings"),
+                        ("key", "Verify API key is valid and has credits"),
+                        ("link", "Check API URL format"),
+                        ("clock", "Increase timeout to 120s"),
+                        ("shield", "Check firewall/proxy settings")
+                    ]
                 )
                 
-                ErrorExplanation(
-                    error: "Error 429: Rate Limited",
-                    explanation: "Too many requests. Wait a few minutes or upgrade your API plan."
+                TroubleshootSection(
+                    icon: "server.rack",
+                    iconColor: .purple,
+                    problem: "Ollama Issues",
+                    solutions: [
+                        ("terminal", "Run 'ollama serve' in Terminal"),
+                        ("network", "URL: http://localhost:11434"),
+                        ("arrow.down.circle", "Run 'ollama pull llama3'"),
+                        ("cpu", "Use ARM-native version on Apple Silicon")
+                    ]
                 )
                 
-                ErrorExplanation(
-                    error: "Connection Refused",
-                    explanation: "The server is not reachable. Check URL and network connection."
+                TroubleshootSection(
+                    icon: "folder.badge.questionmark",
+                    iconColor: .orange,
+                    problem: "Files Not Moving",
+                    solutions: [
+                        ("checklist", "Check Exclusion Rules"),
+                        ("lock.open", "Verify read/write permissions"),
+                        ("xmark.app", "Close apps using the files"),
+                        ("internaldrive", "Check disk space")
+                    ]
                 )
                 
-                ErrorExplanation(
-                    error: "Model Not Found",
-                    explanation: "The specified model doesn't exist. Check model name in Settings."
+                TroubleshootSection(
+                    icon: "exclamationmark.triangle",
+                    iconColor: .yellow,
+                    problem: "App Issues",
+                    solutions: [
+                        ("arrow.uturn.backward", "Use History to revert changes"),
+                        ("arrow.clockwise", "Force quit and restart"),
+                        ("trash", "Clear cache: Help → Delete All Usage Data"),
+                        ("doc.text", "Check Console.app for logs")
+                    ]
+                )
+                
+                TroubleshootSection(
+                    icon: "speedometer",
+                    iconColor: .blue,
+                    problem: "Performance",
+                    solutions: [
+                        ("hare", "Disable Deep Scan"),
+                        ("minus.circle", "Add exclusions for node_modules, .git"),
+                        ("waveform", "Enable Streaming mode"),
+                        ("house", "Use local Ollama model")
+                    ]
+                )
+                
+                TroubleshootSection(
+                    icon: "tag",
+                    iconColor: .green,
+                    problem: "Tags Not Working",
+                    solutions: [
+                        ("switch.2", "Enable File Tagging in Settings"),
+                        ("checkmark.square", "Click 'Apply Changes' first"),
+                        ("arrow.clockwise", "Refresh Finder window"),
+                        ("info.circle", "Check File Info (⌘I)")
+                    ]
                 )
             }
+            
+            // Quick Reference: Error Codes
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Error Code Reference")
+                    .font(.headline)
+                    .padding(.top, 8)
+                
+                HStack(spacing: 16) {
+                    ErrorBadge(code: "401", meaning: "Invalid API key", color: .red)
+                    ErrorBadge(code: "429", meaning: "Rate limited", color: .orange)
+                    ErrorBadge(code: "404", meaning: "Model not found", color: .yellow)
+                    ErrorBadge(code: "503", meaning: "Service down", color: .gray)
+                }
+            }
             .padding()
-            .background(Color.blue.opacity(0.05))
-            .cornerRadius(8)
+            .background(.ultraThinMaterial)
+            .cornerRadius(12)
+        }
+    }
+}
+
+private struct TroubleshootSection: View {
+    let icon: String
+    let iconColor: Color
+    let problem: String
+    let solutions: [(icon: String, text: String)]
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundColor(iconColor)
+                        .frame(width: 32)
+                    
+                    Text(problem)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(iconColor.opacity(0.08))
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+            
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(solutions, id: \.text) { solution in
+                        HStack(spacing: 10) {
+                            Image(systemName: solution.icon)
+                                .font(.caption)
+                                .foregroundColor(iconColor)
+                                .frame(width: 20)
+                            Text(solution.text)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .padding(.leading, 32)
+            }
+        }
+    }
+}
+
+private struct ErrorBadge: View {
+    let code: String
+    let meaning: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(code)
+                .font(.system(.caption, design: .monospaced).bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(color)
+                .cornerRadius(6)
+            Text(meaning)
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
 }
@@ -827,35 +892,7 @@ private struct ShortcutSection: View {
     }
 }
 
-private struct TroubleshootItem: View {
-    let problem: String
-    let solutions: [String]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "exclamationmark.circle.fill")
-                    .foregroundColor(.orange)
-                Text(problem)
-                    .font(.headline)
-            }
-            
-            ForEach(solutions, id: \.self) { solution in
-                HStack(alignment: .top, spacing: 8) {
-                    Text("•")
-                        .foregroundColor(.secondary)
-                    Text(solution)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.leading, 24)
-            }
-        }
-        .padding()
-        .background(Color.orange.opacity(0.05))
-        .cornerRadius(8)
-    }
-}
+
 
 #Preview {
     HelpView()
@@ -936,25 +973,23 @@ private struct UpdatesHelpContent: View {
                 Text("Update Check Troubleshooting")
                     .font(.headline)
                 
-                TroubleshootItem(
+                TroubleshootSection(
+                    icon: "arrow.down.circle.dotted",
+                    iconColor: .orange,
                     problem: "Update Check Failed",
                     solutions: [
-                        "Check your internet connection",
-                        "GitHub API rate limit may be exceeded - wait 60 minutes",
-                        "Firewall may be blocking api.github.com",
-                        "Try again later if GitHub is experiencing issues"
+                        ("wifi", "Check internet connection"),
+                        ("clock", "Rate limit - wait 60 minutes"),
+                        ("shield", "Firewall may block api.github.com"),
+                        ("arrow.clockwise", "Try again later")
                     ]
                 )
                 
-                ErrorExplanation(
-                    error: "Error 403: Rate Limited",
-                    explanation: "GitHub limits API requests. Wait an hour and try again."
-                )
-                
-                ErrorExplanation(
-                    error: "Error 404: Not Found",
-                    explanation: "No releases published yet. You have the latest version."
-                )
+                HStack(spacing: 16) {
+                    ErrorBadge(code: "403", meaning: "Rate limited", color: .orange)
+                    ErrorBadge(code: "404", meaning: "No releases yet", color: .gray)
+                }
+                .padding(.top, 8)
             }
             
             // Check Now Button
