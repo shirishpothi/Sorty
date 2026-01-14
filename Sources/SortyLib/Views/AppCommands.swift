@@ -199,6 +199,10 @@ public struct SortyCommands: Commands {
                 appState.showHelp()
             }
             .keyboardShortcut("?", modifiers: .command)
+            
+            Button("Restart Onboarding...") {
+                appState.showOnboarding()
+            }
 
             Button("Delete All Usage Data") {
                 appState.deleteUsageData()
