@@ -26,7 +26,12 @@ public struct ContentView: View {
             OnboardingView(hasCompletedOnboarding: $appState.hasCompletedOnboarding)
                 .transition(TransitionStyles.scaleAndFade)
         } else {
-            mainContent
+            ZStack {
+                mainContent
+                
+                // HUD notification overlay (bottom-left)
+                HUDNotificationOverlay()
+            }
         }
     }
     
@@ -148,6 +153,8 @@ public struct ContentView: View {
             WatchedFoldersView()
         case .learnings:
             LearningsView()
+        case .storageLocations:
+            StorageLocationsView()
         }
     }
 
@@ -162,7 +169,7 @@ public struct ContentView: View {
 
     private func determineDirection(from oldView: AppState.AppView, to newView: AppState.AppView) -> NavigationDirection {
         let viewOrder: [AppState.AppView] = [
-            .organize, .workspaceHealth, .duplicates, .settings, .history, .exclusions, .watchedFolders, .learnings
+            .organize, .workspaceHealth, .duplicates, .settings, .history, .exclusions, .watchedFolders, .storageLocations, .learnings
         ]
 
         guard let oldIndex = viewOrder.firstIndex(of: oldView),

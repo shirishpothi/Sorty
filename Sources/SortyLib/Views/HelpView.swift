@@ -53,6 +53,7 @@ struct HelpView: View {
 
 public enum HelpSection: String, CaseIterable {
     case gettingStarted
+    case onboarding
     case organizing
     case personas
     case learnings
@@ -69,6 +70,7 @@ public enum HelpSection: String, CaseIterable {
     var title: String {
         switch self {
         case .gettingStarted: return "Getting Started"
+        case .onboarding: return "Onboarding"
         case .organizing: return "Organizing Files"
         case .personas: return "Personas"
         case .learnings: return "The Learnings"
@@ -87,6 +89,7 @@ public enum HelpSection: String, CaseIterable {
     var icon: String {
         switch self {
         case .gettingStarted: return "star.fill"
+        case .onboarding: return "hand.wave.fill"
         case .organizing: return "folder.badge.gear"
         case .personas: return "person.3.fill"
         case .learnings: return "brain.head.profile"
@@ -107,6 +110,8 @@ public enum HelpSection: String, CaseIterable {
         switch self {
         case .gettingStarted:
             GettingStartedContent()
+        case .onboarding:
+            OnboardingHelpContent()
         case .organizing:
             OrganizingContent()
         case .personas:
@@ -159,6 +164,44 @@ private struct GettingStartedContent: View {
                 .padding()
                 .background(Color.blue.opacity(0.1))
                 .cornerRadius(8)
+        }
+    }
+}
+
+struct OnboardingHelpContent: View {
+    @EnvironmentObject var appState: AppState
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("The onboarding flow helps you set up Sortly for the first time. For new users, onboarding is mandatory and covers all the essential setup steps.")
+                .font(.body)
+            
+            Text("What's Covered in Onboarding")
+                .font(.headline)
+            
+            HelpFeatureView(icon: "cloud.fill", title: "AI Provider Setup", description: "Choose your AI provider (OpenAI, Anthropic, or Ollama) and enter your API key. Your data stays private - files are processed using your own API credentials.")
+            
+            HelpFeatureView(icon: "lock.shield.fill", title: "Permissions", description: "Grant necessary permissions for file access, Finder automation, and notifications to enable full functionality.")
+            
+            HelpFeatureView(icon: "person.crop.circle.badge.checkmark", title: "Workflow Selection", description: "Choose a persona that matches how you work - Developer, Photographer, Student, or General use.")
+            
+            HelpFeatureView(icon: "play.circle.fill", title: "Live Demo", description: "See Sortly in action! Select a real folder and watch as files are organized in real-time.")
+            
+            Divider()
+            
+            Text("Revisit Onboarding")
+                .font(.headline)
+            
+            Text("Want to see the onboarding flow again? Click the button below to restart the setup process.")
+                .font(.callout)
+                .foregroundColor(.secondary)
+            
+            Button(action: {
+                appState.showOnboarding()
+            }) {
+                Label("View Onboarding Again", systemImage: "arrow.counterclockwise")
+            }
+            .buttonStyle(.borderedProminent)
         }
     }
 }

@@ -55,7 +55,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
         
         // Use custom system prompt if provided, otherwise use default
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "")
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
             enableReasoning: config.enableReasoning, 

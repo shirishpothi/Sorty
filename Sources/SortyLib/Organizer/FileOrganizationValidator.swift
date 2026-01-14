@@ -8,12 +8,17 @@
 import Foundation
 
 struct FileOrganizationValidator {
-    static func validate(_ plan: OrganizationPlan, at baseURL: URL) throws {
+    static func validate(_ plan: OrganizationPlan, at baseURL: URL, maxTopLevelFolders: Int = 10) throws {
         let fileManager = FileManager.default
         
         // Check if base directory exists
         guard fileManager.fileExists(atPath: baseURL.path) else {
             throw ValidationError.baseDirectoryNotFound
+        }
+        
+        // Check folder count limit
+        if plan.suggestions.count > maxTopLevelFolders {
+            throw ValidationError.tooManyFolders(plan.suggestions.count, max: maxTopLevelFolders)
         }
         
         // Check for path conflicts
@@ -104,6 +109,7 @@ enum ValidationError: LocalizedError {
     case pathExists(String)
     case fileNotFound(String)
     case largeOperation(Int)
+    case tooManyFolders(Int, max: Int)
     
     var errorDescription: String? {
         switch self {
@@ -117,6 +123,8 @@ enum ValidationError: LocalizedError {
             return "File not found: \(path)"
         case .largeOperation(let count):
             return "Large operation detected (\(count) files). Please review carefully."
+        case .tooManyFolders(let count, let max):
+            return "Too many top-level folders (\(count)). Maximum allowed is \(max). Consider consolidating categories."
         }
     }
 }

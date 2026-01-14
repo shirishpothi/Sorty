@@ -74,6 +74,22 @@ public actor FileSystemManager {
             self.metadata = metadata
         }
     }
+    
+    /// Result of a restore/undo operation
+    public struct RestoreResult: Sendable {
+        public let successfulOperations: Int
+        public let missingFiles: [String]  // File paths that couldn't be restored because they no longer exist
+        
+        public var hasIssues: Bool { !missingFiles.isEmpty }
+        
+        public var summaryMessage: String {
+            if missingFiles.isEmpty {
+                return "Successfully restored \(successfulOperations) operations."
+            } else {
+                return "Restored \(successfulOperations) operations. \(missingFiles.count) file(s) couldn't be restored because they no longer exist."
+            }
+        }
+    }
 
     public init() {}
 
@@ -104,7 +120,15 @@ public actor FileSystemManager {
         var operations: [FileOperation] = []
 
         func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
-            let folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+            // Check if the folder name is an absolute path (storage location)
+            let folderURL: URL
+            if suggestion.folderName.hasPrefix("/") {
+                // Absolute path - use directly (likely a storage location)
+                folderURL = URL(fileURLWithPath: suggestion.folderName)
+            } else {
+                // Relative path - append to parent
+                folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+            }
 
             // Check exclusions
             if let manager = exclusionManager {
@@ -179,7 +203,15 @@ public actor FileSystemManager {
         var operations: [FileOperation] = []
 
         func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
-            let folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+            // Check if the folder name is an absolute path (storage location)
+            let folderURL: URL
+            if suggestion.folderName.hasPrefix("/") {
+                // Absolute path - use directly (likely a storage location)
+                folderURL = URL(fileURLWithPath: suggestion.folderName)
+            } else {
+                // Relative path - append to parent
+                folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+            }
 
             // Process files with potential renaming
             for file in suggestion.files {
@@ -269,7 +301,15 @@ public actor FileSystemManager {
         var operations: [FileOperation] = []
 
         func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
-            let folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+            // Check if the folder name is an absolute path (storage location)
+            let folderURL: URL
+            if suggestion.folderName.hasPrefix("/") {
+                // Absolute path - use directly (likely a storage location)
+                folderURL = URL(fileURLWithPath: suggestion.folderName)
+            } else {
+                // Relative path - append to parent
+                folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+            }
 
             // Look for tag mappings in this suggestion
             for mapping in suggestion.fileTagMappings {
@@ -418,15 +458,80 @@ public actor FileSystemManager {
                     try? removeEmptyFolder(at: folderPath)
                 }
             }
+            
+            // Additional cleanup: Scan ALL subdirectories in the base folder and remove empty ones
+            // This handles cases where the user wants to consolidate into fewer directories
+            var newlyCreatedFolders = Set<String>()
+            func collectFolderPaths(_ suggestion: FolderSuggestion, parentURL: URL) {
+                let folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+                newlyCreatedFolders.insert(folderURL.path)
+                for subfolder in suggestion.subfolders {
+                    collectFolderPaths(subfolder, parentURL: folderURL)
+                }
+            }
+            for suggestion in plan.suggestions {
+                collectFolderPaths(suggestion, parentURL: baseURL)
+            }
+            try? cleanupEmptySubdirectories(at: baseURL, excluding: newlyCreatedFolders)
         }
 
         return allOperations
     }
+    
+    /// Recursively find and remove empty subdirectories, excluding newly created folders
+    private func cleanupEmptySubdirectories(at baseURL: URL, excluding protectedPaths: Set<String>) throws {
+        let contents = try fileManager.contentsOfDirectory(at: baseURL, includingPropertiesForKeys: [.isDirectoryKey])
+        
+        for item in contents {
+            // Skip hidden files/folders
+            if item.lastPathComponent.hasPrefix(".") {
+                continue
+            }
+            
+            // Skip if this is one of the newly created folders (we want to keep those)
+            if protectedPaths.contains(item.path) {
+                continue
+            }
+            
+            let resourceValues = try? item.resourceValues(forKeys: [.isDirectoryKey])
+            let isDirectory = resourceValues?.isDirectory ?? false
+            
+            if isDirectory {
+                // Recursively clean up subdirectories first
+                try? cleanupEmptySubdirectories(at: item, excluding: protectedPaths)
+                
+                // Then try to remove this folder if it's empty
+                try? removeEmptyFolder(at: item.path)
+            }
+        }
+    }
 
     // MARK: - Reverse Operations (Undo/Revert)
+    
+    /// Pre-flight check for restore operations - returns list of files that are missing at destination
+    func preflightRestore(_ operations: [FileOperation]) -> [String] {
+        var missingFiles: [String] = []
+        
+        for operation in operations {
+            switch operation.type {
+            case .moveFile, .renameFile:
+                if let destinationPath = operation.destinationPath {
+                    if !fileManager.fileExists(atPath: destinationPath) {
+                        // File no longer exists at destination - can't restore
+                        missingFiles.append(URL(fileURLWithPath: destinationPath).lastPathComponent)
+                    }
+                }
+            case .createFolder, .deleteFile, .copyFile, .tagFile:
+                // These don't require the file to exist for undo
+                break
+            }
+        }
+        
+        return missingFiles
+    }
 
-    /// Reverses a set of operations - FIXED version with proper handling
-    func reverseOperations(_ operations: [FileOperation]) async throws {
+    /// Reverses a set of operations - returns result with details about skipped files
+    func reverseOperations(_ operations: [FileOperation]) async throws -> RestoreResult {
         // Collect all paths involved
         var involvedPaths: [String] = []
         for op in operations {
@@ -449,6 +554,10 @@ public actor FileSystemManager {
 
         // Track folders that may need cleanup
         var foldersToCleanup: Set<String> = []
+        
+        // Track results
+        var successCount = 0
+        var missingFiles: [String] = []
 
         // First pass: move files back
         for operation in reversedOps {
@@ -473,26 +582,35 @@ public actor FileSystemManager {
 
                         // Move file back
                         try fileManager.moveItem(atPath: destinationPath, toPath: finalSourcePath)
+                        successCount += 1
 
                         // Mark parent folder for potential cleanup
                         let parentFolder = URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path
                         foldersToCleanup.insert(parentFolder)
+                    } else {
+                        // File no longer exists - track as missing
+                        let filename = URL(fileURLWithPath: destinationPath).lastPathComponent
+                        missingFiles.append(filename)
+                        DebugLogger.log("Cannot restore - file no longer exists: \(destinationPath)")
                     }
                 }
 
             case .createFolder:
                 // Mark for cleanup (will be handled in second pass)
                 foldersToCleanup.insert(operation.sourcePath)
+                successCount += 1
 
             case .deleteFile:
                 // Cannot undo deletion without backup - log warning
                 DebugLogger.log("Cannot undo deletion: \(operation.sourcePath)")
+                missingFiles.append(URL(fileURLWithPath: operation.sourcePath).lastPathComponent)
 
             case .copyFile:
                 // Remove the copy if it exists
                 if let destinationPath = operation.destinationPath,
                    fileManager.fileExists(atPath: destinationPath) {
                     try fileManager.removeItem(atPath: destinationPath)
+                    successCount += 1
                 }
                 
             case .tagFile:
@@ -502,6 +620,7 @@ public actor FileSystemManager {
                    if fileManager.fileExists(atPath: url.path) {
                        let nsURL = url as NSURL
                        try? nsURL.setResourceValue(originalTags, forKey: .tagNamesKey)
+                       successCount += 1
                    }
                 }
             }
@@ -515,6 +634,8 @@ public actor FileSystemManager {
         for folderPath in sortedFolders {
             try? removeEmptyFolder(at: folderPath)
         }
+        
+        return RestoreResult(successfulOperations: successCount, missingFiles: missingFiles)
     }
 
     /// Remove a folder only if it's empty (including cleaning up parent folders)
@@ -584,7 +705,7 @@ public actor FileSystemManager {
             throw FileSystemError.noOperationToUndo
         }
 
-        try await reverseOperations([lastOperation])
+        _ = try await reverseOperations([lastOperation])
         undoStack.removeLast()
     }
 
@@ -634,10 +755,11 @@ public actor FileSystemManager {
 
     /// Rename a file
     func renameFile(at url: URL, to newName: String) throws -> FileOperation {
-        let newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+        var newURL = url.deletingLastPathComponent().appendingPathComponent(newName)
 
+        // Handle conflicts by generating a unique filename instead of throwing an error
         if fileManager.fileExists(atPath: newURL.path) {
-            throw FileSystemError.pathAlreadyExists(newURL.path)
+            newURL = generateUniqueURL(for: newURL)
         }
 
         try fileManager.moveItem(at: url, to: newURL)
@@ -650,7 +772,7 @@ public actor FileSystemManager {
             timestamp: Date(),
             metadata: FileOperation.OperationMetadata(
                 originalFilename: url.lastPathComponent,
-                newFilename: newName
+                newFilename: newURL.lastPathComponent
             )
         )
 

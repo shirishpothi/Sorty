@@ -34,7 +34,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "")
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             enableReasoning: config.enableReasoning,

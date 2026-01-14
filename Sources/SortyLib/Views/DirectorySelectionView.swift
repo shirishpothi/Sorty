@@ -132,6 +132,12 @@ struct DirectorySelectionView: View {
                 }
             }
         }
+        .onTapGesture {
+            HapticFeedbackManager.shared.tap()
+            selectDirectory()
+        }
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Click to browse for a folder")
     }
     
     private var quickTips: some View {

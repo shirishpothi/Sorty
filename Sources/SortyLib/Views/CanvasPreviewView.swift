@@ -343,8 +343,11 @@ struct CanvasPreviewView: View {
                     viewModel.selectedNodeId = nil
                 }
                 .onAppear {
-                    canvasSize = geometry.size
-                    viewModel.loadPlan(plan, canvasSize: geometry.size)
+                    // Guard against re-layout: only set once when zero
+                    if canvasSize == .zero {
+                        canvasSize = geometry.size
+                        viewModel.loadPlan(plan, canvasSize: geometry.size)
+                    }
                 }
             }
             .background(Color(NSColor.windowBackgroundColor))

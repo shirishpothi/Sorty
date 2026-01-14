@@ -26,11 +26,14 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 - 🖱️ **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
 - 📊 **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
 - 🔗 **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
-- ⌨️ **CLI Tooling**: A companion command-line tool `learnings` for managing organization projects and analysis from the terminal.
+- ⌨️ **CLI Tooling**: Two companion command-line tools: `learnings` for managing learning profiles and `fileorg` for controlling the app via terminal.
 - 🎛️ **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
 - 👁️ **Interactive Preview**: Review and tweak suggested organization before any files are moved.
 - 🗂️ **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
-- 🔄 **Check for Updates**: Built-in update checker to keep Sorty current with the latest features.
+- 🔄 **Check for Updates**: Built-in update checker with `sorty://` deeplinks for seamless update installation.
+- 📍 **Storage Locations**: Define custom storage destinations for organized files.
+- 🔔 **HUD & Toast Notifications**: Non-intrusive visual feedback for operations and status updates.
+- 🧹 **Cleanup Preview**: Preview and confirm cleanup actions before execution.
 - 🛡️ **Safe by Design**: Includes dry-run modes, comprehensive validation, duplicate protection settings, and exclusion rules.
 
 
@@ -45,7 +48,7 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 
 #### Option 1: Download Pre-Built Release (Easiest)
 
-1. Download the latest `.zip` from the [Releases](https://github.com/shirishpothi/FileOrganizer/releases) page.
+1. Download the latest `.zip` from the [Releases](https://github.com/shirishpothi/Sorty/releases) page.
 2. Unzip and drag `Sorty.app` to your `/Applications` folder.
    > **Note**: Moving the app to `/Applications` is highly recommended. It ensures that security bookmarks for "Watched Folders" persist reliably across app restarts.
 3. **Important**: Since the app is not notarized (no Apple Developer certificate), you need to remove the quarantine attribute:
@@ -61,7 +64,7 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 
 **Using Make (Recommended):**
 ```bash
-git clone https://github.com/shirishpothi/FileOrganizer.git
+git clone https://github.com/shirishpothi/Sorty.git
 cd FileOrganizer
 make run
 ```
@@ -105,11 +108,23 @@ If you see an error indicating that access to a watched folder has been lost (e.
 - If "Auto-Organize" is grayed out or not functioning, check **Settings → AI Provider**.
 - A valid API configuration (or Apple Intelligence setup) is required for the app to analyze and sort files.
 
+### Update Check Issues
+- If update checks fail, verify you have an active internet connection.
+- Check if you can access [GitHub Releases](https://github.com/shirishpothi/Sorty/releases) in your browser.
+- Rate limiting may occur if too many requests are made; wait a few minutes and try again.
+- To verify your current version: go to **About** (⌘,) and compare with the latest release.
+
+### Verifying App is Up to Date
+1. Open **Settings** and click **Check for Updates**.
+2. If the app shows "Up to date", you have the latest version.
+3. Alternatively, compare the version in **About** with the [latest release](https://github.com/shirishpothi/Sorty/releases/latest).
+
 ## 🛠 Project Structure
 
 - `Sources/SortyLib/`: Core implementation including AI, FileSystem, Models, and Views.
 - `Sources/SortyApp/`: Main macOS application entry and navigation.
 - `Sources/LearningsCLI/`: Implementation of the `learnings` command-line tool.
+- `CLI/fileorg`: Shell-based CLI for controlling the app via deeplinks.
 - `Tests/`: Unit and UI test suites organized by component.
 - `Assets/`: App icons and screenshots.
 - `scripts/`: Build and automation scripts.
@@ -146,3 +161,48 @@ Key test files include:
 - `CustomPersonaTests.swift` - Persona management
 - `DeeplinkTests.swift` - URL scheme handling
 - `UpdateManagerTests.swift` - Update checking functionality
+
+## ⌨️ CLI Commands
+
+### `learnings` CLI
+Manage your learning profile from the terminal:
+```bash
+learnings status      # Show learning status
+learnings stats       # Show detailed statistics
+learnings export      # Export profile data
+learnings clear       # Delete all learning data
+learnings withdraw    # Pause learning
+learnings info        # Show system information
+```
+
+### `fileorg` CLI
+Control the app via deeplinks:
+```bash
+fileorg organize <path> [--persona <id>] [--auto]   # Organize a directory
+fileorg duplicates <path> [--auto]                   # Scan for duplicates
+fileorg status                                       # View Workspace Health
+fileorg settings [section]                           # Open settings
+fileorg persona create                               # Create a persona
+fileorg persona generate <prompt>                    # Generate persona from description
+fileorg watched add <path>                           # Add a watched folder
+fileorg rules add <pattern>                          # Add exclusion rule
+fileorg learnings                                    # Open Learnings dashboard
+fileorg history                                      # Open History
+```
+
+## 🔗 Deeplinks Reference
+
+Sorty supports the `sorty://` URL scheme for automation and external control:
+
+| Deeplink | Description |
+|----------|-------------|
+| `sorty://organize?path=<path>&persona=<id>&autostart=true` | Start organization |
+| `sorty://duplicates?path=<path>&autostart=true` | Scan for duplicates |
+| `sorty://learnings?action=honing` | Open Learnings with specific action |
+| `sorty://settings?section=ai` | Open specific settings section |
+| `sorty://health` | Open Workspace Health |
+| `sorty://history` | Open organization history |
+| `sorty://persona?generate=true&prompt=<text>` | Generate a persona |
+| `sorty://watched?action=add&path=<path>` | Add watched folder |
+| `sorty://rules?action=add&pattern=<pattern>` | Add exclusion rule |
+| `sorty://help?section=<topic>` | Open help section |

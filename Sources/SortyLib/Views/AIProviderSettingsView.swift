@@ -42,14 +42,14 @@ struct AIProviderSettingsView: View {
                         copilotAuth: copilotAuth
                     )
                 }
-            } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama].contains(viewModel.config.provider) {
+            } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
                 SettingsCard(title: "Configuration", icon: "slider.horizontal.3", color: .orange) {
                     StandardAPIConfigView(viewModel: viewModel)
                 }
             }
             
             // 3. Connection Test
-            if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .appleFoundationModel].contains(viewModel.config.provider) {
+            if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini, .appleFoundationModel].contains(viewModel.config.provider) {
                 SettingsCard(title: "Connection", icon: "network", color: .blue) {
                     ConnectionTestView(
                         provider: viewModel.config.provider,
@@ -136,20 +136,49 @@ struct AIProviderRow: View {
     let isSelected: Bool
     let action: () -> Void
     
+    /// Load provider logo from bundle's Images folder
+    private var providerImage: Image {
+        if provider.usesSystemImage {
+            return Image(systemName: provider.logoImageName)
+        }
+        
+        // Try to load from Images folder in bundle
+        if let resourceURL = Bundle.module.url(forResource: provider.logoImageName, withExtension: "png", subdirectory: "Images"),
+           let nsImage = NSImage(contentsOf: resourceURL) {
+            return Image(nsImage: nsImage)
+        }
+        
+        // Fallback to asset catalog (for Xcode builds)
+        return Image(provider.logoImageName, bundle: .module)
+    }
+    
     var body: some View {
         Button(action: {
             if provider.isAvailable { action() }
         }) {
             HStack(spacing: 12) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .accentColor : .secondary)
-                    .font(.system(size: 18))
+                // Provider logo
+                providerImage
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
                 
                 Text(provider.displayName)
                     .foregroundColor(provider.isAvailable ? .primary : .secondary)
                     .fontWeight(isSelected ? .semibold : .regular)
                 
                 Spacer()
+                
+                // Selection indicator
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.accentColor)
+                        .font(.system(size: 18))
+                } else {
+                    Image(systemName: "circle")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 18))
+                }
                 
                 if !provider.isAvailable {
                     Text("Unavailable")

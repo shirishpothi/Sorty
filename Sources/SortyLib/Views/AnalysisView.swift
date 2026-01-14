@@ -10,6 +10,37 @@ import SwiftUI
 struct AnalysisView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @State private var hasAppeared = false
+    @State private var currentFunnyMessage: String = ""
+    @State private var currentFileDisplay: String = ""
+    @State private var funnyMessageOpacity: Double = 0
+    @State private var fileDisplayOpacity: Double = 0
+    @State private var showMultitaskingHint: Bool = false
+    @State private var funnyMessageTimer: Timer?
+    @State private var fileDisplayTimer: Timer?
+    
+    // Funny messages that cycle during organization
+    private let funnyMessages = [
+        "Teaching folders to play nice together...",
+        "Convincing files they belong somewhere...",
+        "Negotiating peace between PDFs and PNGs...",
+        "Whispering sweet nothings to your documents...",
+        "Giving your files a well-deserved spa day...",
+        "Herding digital cats into folders...",
+        "Making your chaos look intentional...",
+        "Turning your file salad into a proper meal...",
+        "Convincing duplicates to pick a side...",
+        "Teaching old files new tricks...",
+        "Sorting at the speed of thought...",
+        "Giving your desktop a makeover...",
+        "Playing matchmaker with your files...",
+        "Building tiny digital homes for your data...",
+        "Turning file spaghetti into lasagna...",
+        "Your files are learning to get along...",
+        "Orchestrating a symphony of folders...",
+        "Performing file feng shui...",
+        "Making Marie Kondo proud...",
+        "Alphabetizing... just kidding, we're smarter than that..."
+    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,6 +61,14 @@ struct AnalysisView: View {
                     timeoutMessage
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.95).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                }
+                
+                if showMultitaskingHint {
+                    multitaskingHint
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
                             removal: .opacity
                         ))
                 }
@@ -62,7 +101,145 @@ struct AnalysisView: View {
             withAnimation {
                 hasAppeared = true
             }
+            startFunnyMessageCycle()
+            startFileDisplayCycle()
         }
+        .onDisappear {
+            stopTimers()
+        }
+        .onChange(of: organizer.elapsedTime) { _, newTime in
+            // Show multitasking hint after 60-300 seconds (1-5 minutes)
+            if newTime >= 60 && !showMultitaskingHint {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    showMultitaskingHint = true
+                }
+            }
+        }
+    }
+    
+    private func startFunnyMessageCycle() {
+        // Initial message
+        currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+        withAnimation(.easeIn(duration: 0.5)) {
+            funnyMessageOpacity = 1
+        }
+        
+        // Cycle messages every 3 seconds
+        funnyMessageTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+            Task { @MainActor in
+                // Fade out
+                withAnimation(.easeOut(duration: 0.4)) {
+                    funnyMessageOpacity = 0
+                }
+                
+                // Wait for fade out, then change message and fade in
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                
+                currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+                
+                withAnimation(.easeIn(duration: 0.4)) {
+                    funnyMessageOpacity = 1
+                }
+            }
+        }
+    }
+    
+    private func startFileDisplayCycle() {
+        // Only show file names if we have scanned files
+        guard let plan = organizer.currentPlan else {
+            updateFileDisplayFromStream()
+            return
+        }
+        
+        // Collect all file names from the plan
+        func collectFileNames(from suggestions: [FolderSuggestion]) -> [String] {
+            var names: [String] = []
+            for suggestion in suggestions {
+                names.append(contentsOf: suggestion.files.map { $0.displayName })
+                names.append(contentsOf: collectFileNames(from: suggestion.subfolders))
+            }
+            return names
+        }
+        
+        let fileNames = collectFileNames(from: plan.suggestions) + plan.unorganizedFiles.map { $0.displayName }
+        guard !fileNames.isEmpty else {
+            updateFileDisplayFromStream()
+            return
+        }
+        
+        // Initial file
+        currentFileDisplay = fileNames.randomElement() ?? ""
+        withAnimation(.easeIn(duration: 0.3)) {
+            fileDisplayOpacity = 1
+        }
+        
+        // Cycle file names every 1.5 seconds
+        fileDisplayTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
+            Task { @MainActor in
+                withAnimation(.easeOut(duration: 0.25)) {
+                    fileDisplayOpacity = 0
+                }
+                
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                
+                currentFileDisplay = fileNames.randomElement() ?? ""
+                
+                withAnimation(.easeIn(duration: 0.25)) {
+                    fileDisplayOpacity = 1
+                }
+            }
+        }
+    }
+    
+    private func updateFileDisplayFromStream() {
+        // If no plan yet, try to extract file references from streaming content
+        fileDisplayTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
+            Task { @MainActor in
+                let content = organizer.displayStreamingContent
+                
+                // Try to extract a filename from the streaming content
+                if let fileName = extractFileNameFromContent(content) {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        fileDisplayOpacity = 0
+                    }
+                    
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    
+                    currentFileDisplay = fileName
+                    
+                    withAnimation(.easeIn(duration: 0.25)) {
+                        fileDisplayOpacity = 1
+                    }
+                }
+            }
+        }
+    }
+    
+    private func extractFileNameFromContent(_ content: String) -> String? {
+        // Look for patterns that might indicate file names
+        let patterns = [
+            "\"name\":\\s*\"([^\"]+)\"",
+            "\"file\":\\s*\"([^\"]+)\"",
+            "([\\w\\-\\.]+\\.(pdf|doc|docx|jpg|png|txt|md|swift|js|py|zip|mp3|mp4))"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(content.startIndex..., in: content)
+                let matches = regex.matches(in: content, options: [], range: range)
+                if let match = matches.last, let range = Range(match.range(at: 1), in: content) {
+                    return String(content[range])
+                }
+            }
+        }
+        return nil
+    }
+    
+    private func stopTimers() {
+        funnyMessageTimer?.invalidate()
+        funnyMessageTimer = nil
+        fileDisplayTimer?.invalidate()
+        fileDisplayTimer = nil
     }
     
     private var progressSection: some View {
@@ -86,12 +263,14 @@ struct AnalysisView: View {
                     Text("\(Int(organizer.progress * 100))%")
                         .font(.system(size: 28, weight: .semibold, design: .rounded))
                         .monospacedDigit()
+                        .contentTransition(.numericText())
                     
                     if organizer.elapsedTime > 0 {
                         Text(formatTime(organizer.elapsedTime))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                            .contentTransition(.numericText())
                     }
                 }
                 .accessibilityIdentifier("AnalysisPercentageText")
@@ -118,12 +297,30 @@ struct AnalysisView: View {
                     LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
                 }
             } else if organizer.isStreaming {
-                HStack(spacing: 6) {
-                    Text("Receiving response")
+                VStack(spacing: 8) {
+                    // Funny message with fade animation
+                    Text(currentFunnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-
-                    LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
+                        .opacity(funnyMessageOpacity)
+                        .frame(height: 20)
+                    
+                    // File being analyzed with fade animation
+                    if !currentFileDisplay.isEmpty {
+                        HStack(spacing: 4) {
+                            Text("Analyzing")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            Text(currentFileDisplay)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .opacity(fileDisplayOpacity)
+                        .frame(maxWidth: 300)
+                    }
                 }
             }
         }
@@ -172,12 +369,6 @@ struct AnalysisView: View {
             Text("AI organization can take a while depending on the number of files, model speed, and network conditions. For large directories, this may take a few minutes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-
-            if organizer.elapsedTime > 60 {
-                Text("Tip: Consider organizing smaller directories first, or check your AI provider settings.")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
         }
         .frame(maxWidth: 400)
         .padding(16)
@@ -191,6 +382,34 @@ struct AnalysisView: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Warning: Organization is taking longer than expected")
+    }
+    
+    private var multitaskingHint: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "macwindow.on.rectangle")
+                .font(.title3)
+                .foregroundStyle(.blue)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Feel free to switch apps!")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                Text("Sortly will keep organizing in the background. We'll notify you when it's done.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.blue.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .frame(maxWidth: 400)
     }
     
     // MARK: - AI Insights View
@@ -224,7 +443,6 @@ struct AnalysisView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-                .contentTransition(.numericText())
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -237,7 +455,7 @@ struct AnalysisView: View {
                         .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
                 )
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: organizer.currentInsight)
+        .animation(nil, value: organizer.currentInsight)
     }
     
     private var insightHistoryView: some View {
@@ -273,7 +491,7 @@ struct AnalysisView: View {
                             .id("bottom")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: organizer.streamingContent) { _, _ in
+                    .onChange(of: organizer.displayStreamingContent) { _, _ in
                         withAnimation(.easeOut(duration: 0.2)) {
                             proxy.scrollTo("bottom", anchor: .bottom)
                         }
@@ -295,7 +513,7 @@ struct AnalysisView: View {
     }
 
     private var truncatedStreamContent: String {
-        let content = organizer.streamingContent
+        let content = organizer.displayStreamingContent
         if content.count > 1000 {
             let start = content.index(content.endIndex, offsetBy: -1000)
             return "..." + String(content[start...])

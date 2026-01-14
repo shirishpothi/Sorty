@@ -8,6 +8,10 @@
 import Foundation
 import Combine
 
+public extension Notification.Name {
+    static let autoOrganizeDisabledGlobally = Notification.Name("autoOrganizeDisabledGlobally")
+}
+
 public enum FolderAccessStatus: String, Codable, Sendable {
     case valid
     case stale
@@ -116,6 +120,31 @@ public class WatchedFoldersManager: ObservableObject {
         if var updated = folders.first(where: { $0.id == folder.id }) {
             updated.lastTriggered = Date()
             updateFolder(updated)
+        }
+    }
+    
+    /// Disables auto-organize for all folders when AI provider becomes invalid
+    public func disableAutoOrganizeForAll(reason: String) {
+        var hasChanges = false
+        var updatedFolders = folders
+        
+        for (index, folder) in folders.enumerated() {
+            if folder.autoOrganize {
+                updatedFolders[index].autoOrganize = false
+                hasChanges = true
+            }
+        }
+        
+        if hasChanges {
+            folders = updatedFolders
+            saveFolders()
+            
+            // Post notification for user feedback
+            NotificationCenter.default.post(
+                name: .autoOrganizeDisabledGlobally,
+                object: nil,
+                userInfo: ["reason": reason]
+            )
         }
     }
     

@@ -12,7 +12,7 @@ import CoreServices
 /// Protocol for receiving folder change notifications
 @MainActor
 public protocol FolderWatcherDelegate: AnyObject {
-    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>)
+    func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>, resolvedURL: URL)
     func folderWatcher(_ watcher: FolderWatcher, didDetectStaleBookmarkFor folder: WatchedFolder, newBookmarkData: Data)
 }
 
@@ -275,8 +275,11 @@ public final class FolderWatcher: @unchecked Sendable {
         
         DebugLogger.log("New files detected in \(folder.name): \(newFiles)")
         
+        // Use resolved URL if available, otherwise fallback to path-based URL
+        let resolvedURL = resolvedURLs[folderId] ?? folder.url
+        
         Task { @MainActor in
-            self.delegate?.folderWatcher(self, didDetectChangesIn: folder, newFiles: newFiles)
+            self.delegate?.folderWatcher(self, didDetectChangesIn: folder, newFiles: newFiles, resolvedURL: resolvedURL)
         }
     }
     
@@ -287,7 +290,7 @@ public final class FolderWatcher: @unchecked Sendable {
         heartbeatTimer?.setEventHandler { [weak self] in
             guard let self = self else { return }
             // Verify streams are still valid (basic check)
-            for (id, stream) in self.streams {
+            for _ in self.streams {
                 // If needed, we could check stream status here
                 // For now just logging to confirm watcher is alive
                 // DebugLogger.log("Heartbeat: Monitoring \(self.watchedFolders[id]?.name ?? "unknown")")

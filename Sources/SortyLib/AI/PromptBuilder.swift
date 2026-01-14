@@ -8,8 +8,8 @@
 import Foundation
 
 struct PromptBuilder {
-    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String) -> String {
-        var prompt = SystemPrompt.prompt
+    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, maxTopLevelFolders: Int = 10) -> String {
+        var prompt = SystemPrompt.buildPrompt(maxTopLevelFolders: maxTopLevelFolders)
         
         // Add persona-specific instructions
         if !personaInfo.isEmpty {
@@ -55,11 +55,16 @@ struct PromptBuilder {
         return prompt
     }
     
-    static func buildOrganizationPrompt(files: [FileItem], enableReasoning: Bool = false, includeContentMetadata: Bool = false, customInstructions: String? = nil) -> String {
+    static func buildOrganizationPrompt(files: [FileItem], enableReasoning: Bool = false, includeContentMetadata: Bool = false, customInstructions: String? = nil, storageLocationsContext: String? = nil) -> String {
         var prompt = "Organize the following files into a logical folder structure:\n\n"
         
         if let instructions = customInstructions, !instructions.isEmpty {
             prompt += "USER INSTRUCTIONS: \(instructions)\n\n"
+        }
+        
+        // Add storage locations context if provided
+        if let storageContext = storageLocationsContext, !storageContext.isEmpty {
+            prompt += "\(storageContext)\n\n"
         }
         
         prompt += "Files to organize (\(files.count) total):\n\n"
@@ -92,6 +97,64 @@ struct PromptBuilder {
         }
         
         return prompt
+    }
+    
+    
+    /// Estimate token count (rough: 1 token ≈ 4 chars for English)
+    static func estimateTokens(_ text: String) -> Int {
+        return text.count / 4
+    }
+
+    /// Select compaction level based on file count and names
+    enum CompactionLevel {
+        case standard    // Current compact prompt
+        case ultra       // Minimal system prompt, truncated names
+        case summary     // Extension counts only + few examples
+    }
+
+    static func selectCompactionLevel(files: [FileItem], maxTokens: Int = 1500) -> CompactionLevel {
+        let samplePrompt = buildCompactPrompt(files: files)
+        let estimated = estimateTokens(samplePrompt)
+        
+        if estimated < 500 { return .standard }
+        if estimated < maxTokens { return .ultra }
+        return .summary
+    }
+
+    static func buildUltraCompactPrompt(files: [FileItem]) -> (system: String, user: String) {
+        // ~60 char system prompt
+        let system = "Sort files into folders. JSON:{\"folders\":[{\"name\":\"\",\"files\":[\"\"]}]}"
+        
+        var user = ""
+        let maxFiles = 30
+        let maxNameLen = 20
+        
+        for file in files.prefix(maxFiles) {
+            let name = String(file.name.prefix(maxNameLen))
+            user += "\(name)\n"
+        }
+        if files.count > maxFiles {
+            user += "(+\(files.count - maxFiles) more)"
+        }
+        
+        return (system, user)
+    }
+
+    static func buildSummaryPrompt(files: [FileItem]) -> (system: String, user: String) {
+        let system = "Sort files. JSON:{\"folders\":[{\"name\":\"\",\"files\":[\"\"]}]}"
+        
+        let grouped = Dictionary(grouping: files) { $0.extension.lowercased() }
+        var user = "Types:\n"
+        
+        for (ext, list) in grouped.sorted(by: { $0.value.count > $1.value.count }).prefix(8) {
+            let extLabel = ext.isEmpty ? "other" : ext
+            user += "\(extLabel):\(list.count)"
+            // Show 2 examples max
+            let examples = list.prefix(2).map { String($0.name.prefix(15)) }.joined(separator: ",")
+            user += " (\(examples))\n"
+        }
+        
+        return (system, user)
     }
     
     /// Compact prompt for Apple Intelligence (reduced context window)
@@ -137,12 +200,13 @@ struct PromptBuilder {
     }
     
     /// Compact system prompt for Apple Intelligence
-    static func buildCompactSystemPrompt(enableReasoning: Bool = false) -> String {
+    static func buildCompactSystemPrompt(enableReasoning: Bool = false, maxTopLevelFolders: Int = 10) -> String {
         let prompt = """
         You are a file organization assistant. Analyze files and suggest folders.
         
         Rules:
         - Max 3 levels deep
+        - Max \(maxTopLevelFolders) top-level folders
         - Use clear folder names
         - Group by type: Documents, Media, Code, Archives
         
@@ -158,7 +222,7 @@ struct PromptBuilder {
         return buildOrganizationPrompt(files: files, enableReasoning: false)
     }
     
-    static func buildPromptForProvider(_ provider: AIProvider, files: [FileItem], enableReasoning: Bool = false, customInstructions: String? = nil) -> String {
+    static func buildPromptForProvider(_ provider: AIProvider, files: [FileItem], enableReasoning: Bool = false, customInstructions: String? = nil, storageLocationsContext: String? = nil) -> String {
         switch provider {
         case .appleFoundationModel:
             // Append instructions
@@ -166,12 +230,15 @@ struct PromptBuilder {
             if let instructions = customInstructions, !instructions.isEmpty {
                 prompt = "USER INSTRUCTIONS: \(instructions)\n\n" + prompt
             }
+            if let storageContext = storageLocationsContext, !storageContext.isEmpty {
+                prompt = "\(storageContext)\n\n" + prompt
+            }
             return prompt
         case .anthropic:
             // Anthropic handles system prompts separately but we ensure the user prompt is robust
-            return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions)
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama:
-            return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions)
+            return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext)
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
+            return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext)
         }
     }
 }

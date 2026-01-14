@@ -17,6 +17,7 @@ struct SortyApp: App {
     @StateObject private var personaManager = PersonaManager()
     @StateObject private var customPersonaStore = CustomPersonaStore()
     @StateObject private var watchedFoldersManager = WatchedFoldersManager()
+    @StateObject private var storageLocationsManager = StorageLocationsManager()
     @StateObject private var organizer = FolderOrganizer()
     @StateObject private var exclusionRules = ExclusionRulesManager()
     @StateObject private var extensionListener = ExtensionListener()
@@ -38,9 +39,12 @@ struct SortyApp: App {
                 .environmentObject(extensionListener)
                 .environmentObject(deeplinkHandler)
                 .environmentObject(learningsManager) // Inject
+                .environmentObject(storageLocationsManager)
                 .onAppear {
                     // Restore sandbox access for watched folders
                     watchedFoldersManager.restoreSecurityScopedAccess()
+                    // Restore sandbox access for storage locations
+                    storageLocationsManager.restoreSecurityScopedAccess()
                     
                     if coordinator == nil {
                         coordinator = AppCoordinator(
@@ -54,6 +58,7 @@ struct SortyApp: App {
                     organizer.exclusionRules = exclusionRules
                     organizer.personaManager = personaManager
                     organizer.customPersonaStore = customPersonaStore
+                    organizer.storageLocationsManager = storageLocationsManager
                     appState.organizer = organizer
                     
                     appState.calibrateAction = { folder in
@@ -79,6 +84,14 @@ struct SortyApp: App {
                     Task {
                         try? await organizer.configure(with: newConfig)
                         learningsManager.configure(with: newConfig)
+                    }
+                }
+                .onChange(of: organizer.isAIConfigured) { oldValue, newValue in
+                    if oldValue == true && newValue == false {
+                        // AI became invalid - disable auto-organize on all folders
+                        watchedFoldersManager.disableAutoOrganizeForAll(
+                            reason: "AI provider is no longer configured"
+                        )
                     }
                 }
                 .onChange(of: watchedFoldersManager.folders) { oldValue, newValue in

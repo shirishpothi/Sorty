@@ -31,7 +31,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.invalidURL
         }
         
-        let systemPrompt = config.systemPromptOverride ?? "You are a professional file organization assistant. Analyze the provided file metadata and return a JSON plan for organizing them. Use ONLY the specified JSON format. No conversational text."
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
         
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
