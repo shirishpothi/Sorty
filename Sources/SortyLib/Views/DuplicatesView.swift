@@ -19,6 +19,9 @@ struct DuplicatesView: View {
     @State private var showSettings = false
     @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
     @State private var localDirectory: URL?
+    @State private var isScanning = false
+    @State private var currentScanTask: Task<Void, Never>?
+    @State private var capturedDirectory: URL?
     
     // Derived directory: Use local if set, otherwise fallback to global
     private var effectiveDirectory: URL? {
@@ -147,6 +150,9 @@ struct DuplicatesView: View {
             }
         }
         .onChange(of: effectiveDirectory) { _, _ in
+            // Cancel in-flight scan if directory changes
+            currentScanTask?.cancel()
+            isScanning = false
             // Clear results when switching directories to prevent showing stale data
             detectionManager.clearResults()
             selectedGroup = nil
@@ -160,20 +166,32 @@ struct DuplicatesView: View {
         guard let directory = effectiveDirectory else { return }
         HapticFeedbackManager.shared.tap()
 
-        Task {
+        // Cancel any in-flight scan
+        currentScanTask?.cancel()
+        
+        // Capture current directory
+        capturedDirectory = directory
+        isScanning = true
+        
+        currentScanTask = Task {
             let scanner = DirectoryScanner()
             do {
                 let files = try await scanner.scanDirectory(at: directory, computeHashes: true)
-                await detectionManager.scanForDuplicates(files: files)
-                // Auto-select first group
-                if let first = detectionManager.duplicateGroups.first {
-                    selectedGroup = first
+                
+                // Verify directory hasn't changed since scan started
+                if capturedDirectory == effectiveDirectory {
+                    await detectionManager.scanForDuplicates(files: files)
+                    // Auto-select first group
+                    if let first = detectionManager.duplicateGroups.first {
+                        selectedGroup = first
+                    }
+                    HapticFeedbackManager.shared.success()
                 }
-                HapticFeedbackManager.shared.success()
             } catch {
                 HapticFeedbackManager.shared.error()
                 DebugLogger.log("Duplicate scan failed: \(error)")
             }
+            isScanning = false
         }
     }
 

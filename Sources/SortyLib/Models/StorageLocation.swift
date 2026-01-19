@@ -9,6 +9,27 @@
 import Foundation
 import Combine
 
+/// RAII-style wrapper for security-scoped resource access
+public class ScopedSecurityAccess {
+    public let url: URL
+    private let didAccess: Bool
+    
+    public init(url: URL, didAccess: Bool) {
+        self.url = url
+        self.didAccess = didAccess
+    }
+    
+    deinit {
+        cleanup()
+    }
+    
+    public func cleanup() {
+        if didAccess {
+            url.stopAccessingSecurityScopedResource()
+        }
+    }
+}
+
 /// A storage location that can receive files during organization
 /// These directories are NOT organized - they serve as destination bins
 public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
@@ -148,9 +169,10 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     /// Resolves a storage location URL with security-scoped access
-    public func resolveURL(for location: StorageLocation) -> URL? {
+    /// Returns a wrapper that ensures balanced access (call .cleanup() when done)
+    public func resolveURL(for location: StorageLocation) -> ScopedSecurityAccess? {
         guard let bookmarkData = location.bookmarkData else {
-            return location.url
+            return ScopedSecurityAccess(url: location.url, didAccess: false)
         }
         
         var isStale = false
@@ -161,7 +183,7 @@ public class StorageLocationsManager: ObservableObject {
                               bookmarkDataIsStale: &isStale)
             
             if url.startAccessingSecurityScopedResource() {
-                return url
+                return ScopedSecurityAccess(url: url, didAccess: true)
             }
         } catch {
             DebugLogger.log("Failed to resolve storage location bookmark: \(error)")

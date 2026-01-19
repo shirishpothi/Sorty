@@ -267,15 +267,32 @@ public actor LocalRuleInferenceEngine {
                 let fileType = String(lowered[fileTypeRange]).trimmingCharacters(in: .whitespaces)
                 let folderName = String(lowered[folderRange]).trimmingCharacters(in: .whitespaces)
                 
-                // Try to map file type to extension or category
+                // Map file type to extension set with safe regex patterns
                 let extensionPattern: String
-                if ["pdf", "doc", "docx", "xls", "xlsx", "ppt", "jpg", "png", "mp3", "mp4"].contains(fileType) {
-                    extensionPattern = ".*\\.\(fileType)$"
-                } else if ["documents", "photos", "images", "videos", "music", "audio"].contains(fileType) {
-                    // Map to category
-                    extensionPattern = ".*" // Will be handled by category matching
+                let categoryExtensions: [String] = {
+                    switch fileType {
+                    case "documents":
+                        return ["pdf", "docx", "doc", "xls", "xlsx", "ppt", "pptx", "txt", "rtf"]
+                    case "photos", "images":
+                        return ["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp", "raw"]
+                    case "videos":
+                        return ["mp4", "mov", "mkv", "avi", "flv", "wmv", "m4v"]
+                    case "music", "audio":
+                        return ["mp3", "wav", "flac", "aac", "m4a", "wma", "ogg", "aiff"]
+                    case "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "jpg", "png", "mp3", "mp4":
+                        return [fileType]
+                    default:
+                        return []
+                    }
+                }()
+                
+                if !categoryExtensions.isEmpty {
+                    let escapedExts = categoryExtensions.map { NSRegularExpression.escapedPattern(for: $0) }
+                    extensionPattern = ".*\\.(" + escapedExts.joined(separator: "|") + ")$"
                 } else {
-                    extensionPattern = ".*\(fileType).*"
+                    // For unknown types, escape the user input before embedding
+                    let escapedFileType = NSRegularExpression.escapedPattern(for: fileType)
+                    extensionPattern = ".*" + escapedFileType + ".*"
                 }
                 
                 return InferredRule(

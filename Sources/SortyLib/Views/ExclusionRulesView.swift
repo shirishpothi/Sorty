@@ -381,6 +381,22 @@ struct ExclusionRuleRow: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
+        .contextMenu {
+            Button(role: .destructive) {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    rulesManager.removeRule(rule)
+                }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .accessibilityAction(named: Text("Delete")) {
+            HapticFeedbackManager.shared.tap()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                rulesManager.removeRule(rule)
+            }
+        }
     }
 
     private func iconForType(_ type: ExclusionRuleType) -> String {

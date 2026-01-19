@@ -201,6 +201,15 @@ public actor NotifiCLIService {
     private func buildNotifiCLI() async throws {
         let fm = FileManager.default
         
+        // Check for required tools upfront
+        guard fm.isExecutableFile(atPath: "/usr/bin/swiftc") else {
+            throw NotifiCLIError.setupFailed("swiftc not found at /usr/bin/swiftc")
+        }
+        
+        guard fm.isExecutableFile(atPath: "/usr/bin/codesign") else {
+            throw NotifiCLIError.setupFailed("codesign not found at /usr/bin/codesign")
+        }
+        
         // Create directory structure
         try fm.createDirectory(at: appSupportDir, withIntermediateDirectories: true)
         

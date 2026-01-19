@@ -302,8 +302,11 @@ public class GenerationOrchestrator: ObservableObject {
     }
     
     public func cancelAll() {
-        for (id, task) in runTasks {
-            task.cancel()
+        let ids = Array(runTasks.keys)
+        for id in ids {
+            if let task = runTasks[id] {
+                task.cancel()
+            }
             markCanceled(id: id)
         }
         runTasks.removeAll()

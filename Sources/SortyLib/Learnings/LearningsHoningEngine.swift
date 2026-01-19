@@ -190,6 +190,14 @@ public class LearningsHoningEngine: ObservableObject {
     /// Behavior context for generating targeted questions
     public var behaviorContext: BehaviorAnalysisContext?
     
+    public func startSession(questionCount: Int = 5, contextualTopics: [String] = []) async {
+        let session = HoningSession(targetQuestionCount: questionCount, contextualTopics: contextualTopics)
+        self.currentSession = session
+        isGenerating = true
+        
+        await generateNextQuestion()
+    }
+    
     private let honingCheckPrompt = """
     You are an expert Psycho-Analyst for Digital Organization Habits.
     Review the user's current answers and profile.
@@ -289,15 +297,8 @@ public class LearningsHoningEngine: ObservableObject {
     }
     
     /// Start a new honing session with contextual topics
-    public func startSession(questionCount: Int = 5, contextualTopics: [String] = []) async {
-        currentSession = HoningSession(targetQuestionCount: questionCount, contextualTopics: contextualTopics)
-        await generateNextQuestion()
-    }
+
     
-    /// Start a new honing session (legacy - no topics)
-    public func startSession(questionCount: Int = 5) async {
-        await startSession(questionCount: questionCount, contextualTopics: [])
-    }
     
     /// Start a targeted session focusing on specific topics from behavior analysis
     public func startTargetedSession(topics: [String], behaviorContext: BehaviorAnalysisContext? = nil) async {

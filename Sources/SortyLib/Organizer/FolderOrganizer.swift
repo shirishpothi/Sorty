@@ -950,7 +950,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var tempConfig = aiConfig ?? AIConfig.default
         tempConfig.provider = provider
         tempConfig.model = model ?? provider.defaultModel
-        tempConfig.apiURL = provider.defaultAPIURL
+        // Preserve custom apiURL if set, otherwise use provider default
+        if (aiConfig?.apiURL ?? "").isEmpty {
+            tempConfig.apiURL = provider.defaultAPIURL
+        }
         
         // Create a temporary client
         let tempClient = try AIClientFactory.createClient(config: tempConfig)

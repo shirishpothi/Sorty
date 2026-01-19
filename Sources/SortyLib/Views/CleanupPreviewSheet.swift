@@ -152,6 +152,8 @@ private struct FileRow: View {
                 set: { _ in toggleSelection() }
             ))
             .labelsHidden()
+            .allowsHitTesting(false)
+            .accessibilityLabel(Text(file.name))
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.name)

@@ -472,7 +472,7 @@ public class WorkspaceHealthManager: ObservableObject {
     private let snapshotsKey = "workspaceSnapshots"
     private let opportunitiesKey = "cleanupOpportunities"
     private let insightsKey = "healthInsights"
-    private let historyKey = "cleanupHistory"
+    private let historyStore = CleanupHistoryStore() // File-based storage
     private let maxSnapshotsPerDirectory = 52 // ~1 year of weekly snapshots
     
     // File Monitoring
@@ -603,16 +603,26 @@ public class WorkspaceHealthManager: ObservableObject {
                  let gitPath = current.appendingPathComponent(".git").path
                  let pkgPath = current.appendingPathComponent("package.json").path
                  let swiftPath = current.appendingPathComponent("Package.swift").path
-                 let xcodePath = current.appendingPathComponent(".xcodeproj").path
-                 let xcworkspacePath = current.appendingPathComponent(".xcworkspace").path
                  
                  if FileManager.default.fileExists(atPath: gitPath) ||
                     FileManager.default.fileExists(atPath: pkgPath) ||
-                    FileManager.default.fileExists(atPath: swiftPath) ||
-                    FileManager.default.fileExists(atPath: xcodePath) ||
-                    FileManager.default.fileExists(atPath: xcworkspacePath) {
+                    FileManager.default.fileExists(atPath: swiftPath) {
                      foundProject = true
                      break
+                 }
+                 
+                 // Check for .xcodeproj or .xcworkspace by scanning children
+                 do {
+                     let contents = try FileManager.default.contentsOfDirectory(atPath: current.path)
+                     for item in contents {
+                         if item.hasSuffix(".xcodeproj") || item.hasSuffix(".xcworkspace") {
+                             foundProject = true
+                             break
+                         }
+                     }
+                     if foundProject { break }
+                 } catch {
+                     // If we can't read directory, continue
                  }
                  
                  if current.path == rootURL.path { break }
@@ -1062,68 +1072,81 @@ public class WorkspaceHealthManager: ObservableObject {
 
     /// Undo the last cleanup action
     public func undoLastAction() async throws {
-        guard let lastAction = cleanupHistory.last else { return }
         let fileManager = FileManager.default
         
-        var allSucceeded = true
-        var lastError: Error?
-        
-        switch lastAction.type {
-        case .trash:
-            // "Trash" actions in this context were moves to Trash
-            // To undo, we need to move them back from Trash to original paths.
-            if let destinations = lastAction.destinationPaths {
-                // Use zip to safely iterate over both arrays and prevent index-out-of-bounds
-                for (trashPath, originalPath) in zip(destinations, lastAction.affectedFilePaths) {
-                    let trashURL = URL(fileURLWithPath: trashPath)
-                    let originalURL = URL(fileURLWithPath: originalPath)
-                    
-                    if fileManager.fileExists(atPath: trashPath) {
-                        do {
-                            try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                            try fileManager.moveItem(at: trashURL, to: originalURL)
-                        } catch {
-                            allSucceeded = false
-                            lastError = error
-                        }
-                    } else {
-                        allSucceeded = false
-                    }
-                }
+        // Find the first undoable action from the end
+        while let lastAction = cleanupHistory.last {
+            // Skip .delete actions as they cannot be undone
+            if lastAction.type == .delete {
+                cleanupHistory.removeLast()
+                saveData()
+                continue
             }
             
-        case .move:
-            // Reverse the move
-            if let destinations = lastAction.destinationPaths {
-                for (destPath, originalPath) in zip(destinations, lastAction.affectedFilePaths) {
-                    let destURL = URL(fileURLWithPath: destPath)
-                    let originalURL = URL(fileURLWithPath: originalPath)
-                    
-                    if fileManager.fileExists(atPath: destPath) {
-                        do {
-                            try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                            try fileManager.moveItem(at: destURL, to: originalURL)
-                        } catch {
+            var allSucceeded = true
+            var lastError: Error?
+            
+            switch lastAction.type {
+            case .trash:
+                // "Trash" actions in this context were moves to Trash
+                // To undo, we need to move them back from Trash to original paths.
+                if let destinations = lastAction.destinationPaths {
+                    // Use zip to safely iterate over both arrays and prevent index-out-of-bounds
+                    for (trashPath, originalPath) in zip(destinations, lastAction.affectedFilePaths) {
+                        let trashURL = URL(fileURLWithPath: trashPath)
+                        let originalURL = URL(fileURLWithPath: originalPath)
+                        
+                        if fileManager.fileExists(atPath: trashPath) {
+                            do {
+                                try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                                try fileManager.moveItem(at: trashURL, to: originalURL)
+                            } catch {
+                                allSucceeded = false
+                                lastError = error
+                            }
+                        } else {
                             allSucceeded = false
-                            lastError = error
                         }
-                    } else {
-                        allSucceeded = false
                     }
                 }
+                
+            case .move:
+                // Reverse the move
+                if let destinations = lastAction.destinationPaths {
+                    for (destPath, originalPath) in zip(destinations, lastAction.affectedFilePaths) {
+                        let destURL = URL(fileURLWithPath: destPath)
+                        let originalURL = URL(fileURLWithPath: originalPath)
+                        
+                        if fileManager.fileExists(atPath: destPath) {
+                            do {
+                                try? fileManager.createDirectory(at: originalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                                try fileManager.moveItem(at: destURL, to: originalURL)
+                            } catch {
+                                allSucceeded = false
+                                lastError = error
+                            }
+                        } else {
+                            allSucceeded = false
+                        }
+                    }
+                }
+                
+            case .delete:
+                // Already handled above
+                break
             }
             
-        case .delete:
-            // Hard deletes cannot be undone easily
-            throw NSError(domain: "Sorty", code: 400, userInfo: [NSLocalizedDescriptionKey: "Permanent deletions cannot be undone."])
+            if allSucceeded {
+                cleanupHistory.removeLast()
+                saveData()
+                return
+            } else {
+                throw lastError ?? NSError(domain: "Sorty", code: 500, userInfo: [NSLocalizedDescriptionKey: "Partial success: some files could not be restored."])
+            }
         }
         
-        if allSucceeded {
-            cleanupHistory.removeLast()
-            saveData()
-        } else {
-            throw lastError ?? NSError(domain: "Sorty", code: 500, userInfo: [NSLocalizedDescriptionKey: "Partial success: some files could not be restored."])
-        }
+        // No undoable entries found
+        throw NSError(domain: "Sorty", code: 404, userInfo: [NSLocalizedDescriptionKey: "No undoable cleanup actions found."])
     }
 
     /// Perform a quick action for an opportunity
@@ -1817,10 +1840,7 @@ public class WorkspaceHealthManager: ObservableObject {
             insights = decoded
         }
         // Load history
-        if let data = userDefaults.data(forKey: historyKey),
-           let decoded = try? JSONDecoder().decode([CleanupHistoryItem].self, from: data) {
-            cleanupHistory = decoded
-        }
+        cleanupHistory = historyStore.load()
     }
 
     private func saveData() {
@@ -1840,9 +1860,7 @@ public class WorkspaceHealthManager: ObservableObject {
             userDefaults.set(encoded, forKey: insightsKey)
         }
         
-        if let encoded = try? JSONEncoder().encode(cleanupHistory) {
-            userDefaults.set(encoded, forKey: historyKey)
-        }
+        historyStore.save(cleanupHistory)
     }
 }
 
@@ -1870,3 +1888,49 @@ public enum TimePeriod: String, CaseIterable, Identifiable, Sendable {
 
 // Required for notifications
 import UserNotifications
+
+/// Manages file-based persistence for cleanup history
+class CleanupHistoryStore {
+    private let fileManager = FileManager.default
+    private let maxHistoryItems = 100
+    
+    private var historyFileURL: URL {
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let directory = appSupport.appendingPathComponent("Sorty/Data", isDirectory: true)
+        
+        if !fileManager.fileExists(atPath: directory.path) {
+            try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        
+        return directory.appendingPathComponent("cleanup_history.json")
+    }
+    
+    func save(_ history: [CleanupHistoryItem]) {
+        do {
+            // Trim history if needed
+            let itemsToSave: [CleanupHistoryItem]
+            if history.count > maxHistoryItems {
+                itemsToSave = Array(history.suffix(maxHistoryItems))
+            } else {
+                itemsToSave = history
+            }
+            
+            let data = try JSONEncoder().encode(itemsToSave)
+            try data.write(to: historyFileURL, options: .atomic)
+        } catch {
+            DebugLogger.log("Failed to save cleanup history: \(error.localizedDescription)")
+        }
+    }
+    
+    func load() -> [CleanupHistoryItem] {
+        guard fileManager.fileExists(atPath: historyFileURL.path) else { return [] }
+        
+        do {
+            let data = try Data(contentsOf: historyFileURL)
+            return try JSONDecoder().decode([CleanupHistoryItem].self, from: data)
+        } catch {
+            DebugLogger.log("Failed to load cleanup history: \(error.localizedDescription)")
+            return []
+        }
+    }
+}

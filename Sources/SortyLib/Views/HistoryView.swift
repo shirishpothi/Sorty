@@ -987,7 +987,7 @@ struct HistoryDetailSheet: View {
             var restoredCount = 0
             for item in restorables {
                 do {
-                    try DuplicateRestorationManager.shared.restore(item: item)
+                    try await DuplicateRestorationManager.shared.restore(item: item)
                     restoredCount += 1
                 } catch {
                     // Continue with other items

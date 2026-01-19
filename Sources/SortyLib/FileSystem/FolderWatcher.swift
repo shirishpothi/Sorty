@@ -198,6 +198,9 @@ public final class FolderWatcher: @unchecked Sendable {
                                                latency,
                                                flags) else {
             DebugLogger.log("Failed to create FSEventStream for \(path)")
+            // Release the retained context on creation failure
+            Unmanaged<FolderWatcherContext>.fromOpaque(info).release()
+            callbackContexts.removeValue(forKey: folder.id)
             return
         }
         
@@ -209,6 +212,9 @@ public final class FolderWatcher: @unchecked Sendable {
             DebugLogger.log("FSEvents: Failed to start stream for \(path)")
             FSEventStreamInvalidate(stream)
             FSEventStreamRelease(stream)
+            // Release the retained context on start failure
+            Unmanaged<FolderWatcherContext>.fromOpaque(info).release()
+            callbackContexts.removeValue(forKey: folder.id)
         }
     }
     

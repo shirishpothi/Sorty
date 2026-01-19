@@ -180,8 +180,13 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.invalidURL
         }
         
+        guard let openAIAPIKey = UserDefaults.standard.string(forKey: "openAIAPIKey"), !openAIAPIKey.isEmpty else {
+            throw ModelCatalogError.fetchFailed
+        }
+        
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.setValue("Bearer \(openAIAPIKey)", forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await session.data(for: request)
         
@@ -213,8 +218,13 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.invalidURL
         }
         
+        guard let groqAPIKey = UserDefaults.standard.string(forKey: "groqAPIKey"), !groqAPIKey.isEmpty else {
+            throw ModelCatalogError.fetchFailed
+        }
+        
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.setValue("Bearer \(groqAPIKey)", forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await session.data(for: request)
         

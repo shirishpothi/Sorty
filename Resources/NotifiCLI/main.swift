@@ -12,7 +12,6 @@ var soundName: String?
 var replyPlaceholder: String?
 var openUrl: String?
 var iconPath: String?
-var persistent = false
 
 var args = CommandLine.arguments.dropFirst()
 while let arg = args.popFirst() {
@@ -37,15 +36,13 @@ while let arg = args.popFirst() {
         openUrl = args.popFirst()
     case "-icon":
         iconPath = args.popFirst()
-    case "-persistent":
-        persistent = true
     default:
         break
     }
 }
 
 guard let notificationTitle = title, let notificationMessage = message else {
-    print("Usage: NotifiCLI -title \"Title\" -message \"Message\" [-subtitle \"Subtitle\"] [-actions \"Yes,No\"] [-reply \"Placeholder\"] [-url \"https://...\"] [-image \"/path/to/image.png\"] [-sound \"Name\"] [-persistent]")
+    print("Usage: NotifiCLI -title \"Title\" -message \"Message\" [-subtitle \"Subtitle\"] [-actions \"Yes,No\"] [-reply \"Placeholder\"] [-url \"https://...\"] [-image \"/path/to/image.png\"] [-sound \"Name\"]")
     exit(1)
 }
 
