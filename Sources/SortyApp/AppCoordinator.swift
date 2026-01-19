@@ -83,11 +83,180 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 }
             }
         }
+        
+        // Handle "Undo" action from notification
+        NotificationCenter.default.addObserver(forName: .undoLastOrganization, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self else { return }
+            
+            Task { @MainActor in
+                await self.handleUndoAction(userInfo: notification.userInfo)
+            }
+        }
+        
+        // Handle "Open Folder" action from notification
+        NotificationCenter.default.addObserver(forName: .openOrganizedFolder, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self else { return }
+            
+            Task { @MainActor in
+                self.handleOpenFolderAction(userInfo: notification.userInfo)
+            }
+        }
+        
+        // Handle "Retry" action from notification
+        NotificationCenter.default.addObserver(forName: .retryLastOrganization, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self else { return }
+            
+            Task { @MainActor in
+                await self.handleRetryAction(userInfo: notification.userInfo)
+            }
+        }
+        
+        // Handle "Show Details" action from notification
+        NotificationCenter.default.addObserver(forName: .showOrganizationDetails, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+            
+            Task { @MainActor in
+                self.handleShowDetailsAction()
+            }
+        }
+    }
+    
+    // MARK: - Notification Action Handlers
+    
+    /// Handle undo action from notification
+    private func handleUndoAction(userInfo: [AnyHashable: Any]?) async {
+        // Get the folder path from userInfo, or use the last history entry
+        let folderPath = userInfo?["folderPath"] as? String
+        
+        // Find the entry to undo
+        guard let entryToUndo = findEntryToUndo(folderPath: folderPath) else {
+            print("Coordinator: No entry found to undo")
+            notificationManager.showError(message: "Nothing to undo", isCritical: false)
+            return
+        }
+        
+        guard !entryToUndo.isUndone else {
+            print("Coordinator: Entry already undone")
+            notificationManager.showError(message: "Already undone", isCritical: false)
+            return
+        }
+        
+        print("Coordinator: Undoing organization for \(entryToUndo.directoryPath)")
+        
+        do {
+            let result = try await organizer.undoHistoryEntry(entryToUndo)
+            
+            let message: String
+            if result.hasIssues {
+                message = "Undo complete (\(result.successfulOperations) restored, \(result.missingFiles.count) skipped)"
+            } else {
+                message = "Undo complete - \(result.successfulOperations) files restored"
+            }
+            
+            notificationManager.showInfo(
+                title: "Undo Successful",
+                message: message
+            )
+            
+        } catch {
+            print("Coordinator: Undo failed: \(error)")
+            notificationManager.showError(message: "Undo failed: \(error.localizedDescription)", isCritical: false)
+        }
+    }
+    
+    /// Find the most recent entry to undo, optionally filtered by folder path
+    private func findEntryToUndo(folderPath: String?) -> OrganizationHistoryEntry? {
+        let entries = organizer.history.entries
+        
+        if let path = folderPath {
+            // Find the most recent non-undone entry for this specific folder
+            return entries.first { $0.directoryPath == path && !$0.isUndone && $0.success }
+        } else {
+            // Find the most recent non-undone entry
+            return entries.first { !$0.isUndone && $0.success }
+        }
+    }
+    
+    /// Handle open folder action from notification
+    private func handleOpenFolderAction(userInfo: [AnyHashable: Any]?) {
+        // Get folder path from userInfo or last history entry
+        let folderPath: String?
+        if let path = userInfo?["folderPath"] as? String {
+            folderPath = path
+        } else if let lastEntry = organizer.history.entries.first {
+            folderPath = lastEntry.directoryPath
+        } else {
+            folderPath = nil
+        }
+        
+        guard let path = folderPath else {
+            print("Coordinator: No folder path to open")
+            return
+        }
+        
+        let url = URL(fileURLWithPath: path)
+        NSWorkspace.shared.open(url)
+        print("Coordinator: Opened folder \(path)")
+    }
+    
+    /// Handle retry action from notification
+    private func handleRetryAction(userInfo: [AnyHashable: Any]?) async {
+        // Get folder path from userInfo or last failed entry
+        let folderPath: String?
+        if let path = userInfo?["folderPath"] as? String {
+            folderPath = path
+        } else if let lastFailedEntry = organizer.history.entries.first(where: { $0.status == .failed }) {
+            folderPath = lastFailedEntry.directoryPath
+        } else {
+            folderPath = nil
+        }
+        
+        guard let path = folderPath else {
+            print("Coordinator: No folder path to retry")
+            notificationManager.showError(message: "No failed operation to retry", isCritical: false)
+            return
+        }
+        
+        // Check if we're already busy
+        guard organizer.state == .idle else {
+            print("Coordinator: Cannot retry - organizer is busy")
+            notificationManager.showError(message: "Organizer is busy, try again later", isCritical: false)
+            return
+        }
+        
+        print("Coordinator: Retrying organization for \(path)")
+        
+        do {
+            let url = URL(fileURLWithPath: path)
+            try await organizer.organize(directory: url, customPrompt: nil, temperature: nil)
+            try await organizer.apply(at: url, dryRun: false)
+            
+            notificationManager.showInfo(
+                title: "Retry Successful",
+                message: "Organization completed for \(url.lastPathComponent)"
+            )
+            
+        } catch {
+            print("Coordinator: Retry failed: \(error)")
+            notificationManager.showError(message: "Retry failed: \(error.localizedDescription)", isCritical: false)
+        }
+    }
+    
+    /// Handle show details action - bring app to front
+    private func handleShowDetailsAction() {
+        // Activate the app and bring it to front
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        
+        // Post notification to show history/results view
+        NotificationCenter.default.post(name: NSNotification.Name("SortyShowHistoryView"), object: nil)
+        
+        print("Coordinator: Activated app for details view")
     }
     
     /// Extract detailed batch statistics from an organization history entry
     private func extractBatchStats(from entry: OrganizationHistoryEntry) -> BatchSummaryStats {
         let folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
+        let folderPath = entry.directoryPath
         
         // Count operations by type
         var filesMoved = 0
@@ -119,6 +288,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         // Determine errors
         let errors = entry.status == .failed ? 1 : 0
         
+        // Check if undo is possible (has operations to undo)
+        let canUndo = (entry.operations?.isEmpty == false)
+        
         // Calculate duration (approximate - from entry timestamp to now, or 0 if we can't determine)
         // Note: For a more accurate duration, we'd need to track start time separately
         let duration: TimeInterval = 0
@@ -131,7 +303,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             duplicatesFound: entry.duplicatesDeleted ?? 0,
             errorsEncountered: errors,
             duration: duration,
-            folderName: folderName
+            folderName: folderName,
+            folderPath: folderPath,
+            canUndo: canUndo
         )
     }
     
@@ -196,7 +370,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                     filesMoved: newFiles.count,
                     foldersCreated: 0, // Will be updated by .organizationDidFinish if available
                     duration: duration,
-                    folderName: folder.name
+                    folderName: folder.name,
+                    folderPath: resolvedURL.path,
+                    canUndo: true
                 )
                 notificationManager.showBatchSummary(stats: stats)
                 

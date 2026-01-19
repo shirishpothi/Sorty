@@ -812,6 +812,29 @@ struct SettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.2)
+            
+            // Experimental Features
+            SettingsCard(title: "Experimental Features", icon: "flask", color: .purple) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsToggle(
+                        isOn: $viewModel.config.enableParallelGeneration,
+                        title: "Parallel Generation",
+                        description: "Compare multiple AI models side-by-side when organizing"
+                    )
+                    
+                    if viewModel.config.enableParallelGeneration {
+                        HStack(spacing: 6) {
+                            Image(systemName: "info.circle")
+                                .font(.caption)
+                            Text("When enabled, you'll see a 'Compare' option to generate organization plans from multiple models simultaneously.")
+                                .font(.caption)
+                        }
+                        .foregroundColor(.secondary)
+                        .padding(.top, 4)
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.25)
         }
     }
     
@@ -822,6 +845,10 @@ struct SettingsView: View {
             // Permission Status
             NotificationPermissionCard()
                 .animatedAppearance(delay: 0.0)
+            
+            // NotifiCLI Status Card
+            NotifiCLIStatusCard()
+                .animatedAppearance(delay: 0.05)
             
             // Delivery Method
             SettingsCard(title: "Delivery Method", icon: "bell.badge", color: .pink) {
@@ -839,10 +866,76 @@ struct SettingsView: View {
                         title: "System Notifications",
                         description: "Show in macOS Notification Center"
                     )
+                    
+                    if notificationSettings.settings.systemNotifications {
+                        Divider()
+                        
+                        // Backend Selection
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Notification Backend")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            
+                            Picker("Backend", selection: $notificationSettings.settings.notificationBackend) {
+                                ForEach(NotificationBackend.allCases, id: \.self) { backend in
+                                    Text(backend.displayName).tag(backend)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            
+                            Text(notificationSettings.settings.notificationBackend.description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .animatedAppearance(delay: 0.1)
+            
+            // NotifiCLI Settings (only show if NotifiCLI is selected)
+            if notificationSettings.settings.notificationBackend == .notifiCLI {
+                SettingsCard(title: "NotifiCLI Settings", icon: "bell.badge.waveform", color: .cyan) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        SettingsToggle(
+                            isOn: $notificationSettings.settings.persistentNotifications,
+                            title: "Persistent Notifications",
+                            description: "Notifications stay on screen until dismissed"
+                        )
+                        
+                        Divider()
+                        
+                        SettingsToggle(
+                            isOn: $notificationSettings.settings.showActionButtons,
+                            title: "Action Buttons",
+                            description: "Show Undo, Open Folder, and other action buttons"
+                        )
+                        
+                        Divider()
+                        
+                        // Sound Selection
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Notification Sound")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            
+                            Picker("Sound", selection: $notificationSettings.settings.notifiCLISound) {
+                                Text("None").tag("")
+                                ForEach(NotifiCLISound.allCases, id: \.rawValue) { sound in
+                                    Text(sound.rawValue).tag(sound.rawValue)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            
+                            Text("Sound played when notification appears")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .animatedAppearance(delay: 0.12)
+            }
             
             // Notification Types
             SettingsCard(title: "Notification Types", icon: "list.bullet", color: .blue) {
@@ -903,23 +996,187 @@ struct SettingsView: View {
             .animatedAppearance(delay: 0.2)
             
             // Test Notifications
-            SettingsCard(title: "Test", icon: "bell.and.waves.left.and.right", color: .green) {
+            SettingsCard(title: "Test Notifications", icon: "bell.and.waves.left.and.right", color: .green) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Send a test notification to verify your settings are working correctly.")
+                    Text("Send test notifications to verify your settings are working correctly.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    HStack(spacing: 12) {
+                    // Test buttons row 1 - Basic notification types
+                    HStack(spacing: 10) {
                         Button {
-                            NotificationManager.shared.showInfo(title: "Test Notification", message: "Your notifications are working correctly!")
+                            NotificationManager.shared.showInfo(
+                                title: "Test Info",
+                                message: "Your notifications are working correctly!"
+                            )
                             HapticFeedbackManager.shared.success()
                         } label: {
-                            HStack {
-                                Image(systemName: "bell")
-                                Text("Send Test")
+                            HStack(spacing: 4) {
+                                Image(systemName: "info.circle")
+                                Text("Info")
                             }
                         }
                         .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("testInfoButton")
+                        
+                        Button {
+                            NotificationManager.shared.showProcessingComplete(
+                                fileCount: 42,
+                                folderName: "Test Folder",
+                                folderPath: NSHomeDirectory() + "/Documents",
+                                canUndo: true
+                            )
+                            HapticFeedbackManager.shared.success()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle")
+                                Text("Success")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("testSuccessButton")
+                        
+                        Button {
+                            NotificationManager.shared.showError(
+                                message: "This is a test error notification",
+                                isCritical: false,
+                                canRetry: true
+                            )
+                            HapticFeedbackManager.shared.tap()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle")
+                                Text("Error")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("testErrorButton")
+                    }
+                    
+                    // Test buttons row 2 - Advanced notification types
+                    HStack(spacing: 10) {
+                        Button {
+                            NotificationManager.shared.showBatchSummary(
+                                stats: BatchSummaryStats(
+                                    filesMoved: 25,
+                                    foldersCreated: 5,
+                                    filesRenamed: 3,
+                                    filesTagged: 8,
+                                    duplicatesFound: 2,
+                                    errorsEncountered: 0,
+                                    duration: 4.5,
+                                    folderName: "Documents",
+                                    folderPath: NSHomeDirectory() + "/Documents",
+                                    canUndo: true
+                                )
+                            )
+                            HapticFeedbackManager.shared.success()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chart.bar")
+                                Text("Summary")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("testSummaryButton")
+                        
+                        Button {
+                            NotificationManager.shared.showError(
+                                message: "Critical: Unable to access folder permissions",
+                                isCritical: true,
+                                canRetry: false
+                            )
+                            HapticFeedbackManager.shared.tap()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.octagon")
+                                Text("Critical")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("testCriticalButton")
+                    }
+                    
+                    // NotifiCLI action test
+                    if notificationSettings.settings.notificationBackend == .notifiCLI {
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("NotifiCLI Enhanced Tests")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 10) {
+                                Button {
+                                    Task {
+                                        let response = await NotifiCLIService.shared.sendWithActions(
+                                            title: "Test Action Buttons",
+                                            message: "Click a button to test actionable notifications",
+                                            actions: ["Undo", "Open Folder", "Dismiss"],
+                                            sound: .glass,
+                                            persistent: true
+                                        )
+                                        await MainActor.run {
+                                            switch response {
+                                            case .action(let label):
+                                                NotificationManager.shared.showInfo(
+                                                    title: "Action Received",
+                                                    message: "You clicked: \(label)"
+                                                )
+                                            case .dismissed:
+                                                NotificationManager.shared.showInfo(
+                                                    title: "Dismissed",
+                                                    message: "Notification was dismissed"
+                                                )
+                                            case .timeout:
+                                                NotificationManager.shared.showInfo(
+                                                    title: "Timeout",
+                                                    message: "Notification timed out"
+                                                )
+                                            default:
+                                                break
+                                            }
+                                        }
+                                    }
+                                    HapticFeedbackManager.shared.success()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "hand.tap")
+                                        Text("Actions")
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .accessibilityIdentifier("testActionsButton")
+                                
+                                Button {
+                                    Task {
+                                        await NotifiCLIService.shared.sendWithURL(
+                                            title: "Open Link Test",
+                                            message: "Click to open Sorty documentation",
+                                            url: "https://github.com/shirishpothi/FileOrganizer",
+                                            sound: .ping
+                                        )
+                                    }
+                                    HapticFeedbackManager.shared.success()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "link")
+                                        Text("URL")
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .accessibilityIdentifier("testURLButton")
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1556,6 +1813,128 @@ struct NotificationPermissionCard: View {
             NSWorkspace.shared.open(url)
         } else if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
             NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+// MARK: - NotifiCLI Status Card
+
+struct NotifiCLIStatusCard: View {
+    @ObservedObject private var notificationManager = NotificationManager.shared
+    @State private var isRebuilding = false
+    @State private var installPath: String? = nil
+    
+    private var statusInfo: (icon: String, color: Color, title: String, description: String) {
+        if notificationManager.isNotifiCLIAvailable {
+            return ("checkmark.circle.fill", .green, "Ready", notificationManager.notifiCLISetupStatus)
+        } else if notificationManager.notifiCLISetupStatus.contains("Setting up") {
+            return ("arrow.triangle.2.circlepath", .blue, "Setting Up", notificationManager.notifiCLISetupStatus)
+        } else {
+            return ("exclamationmark.circle.fill", .orange, "Setup Required", "Tap Rebuild to setup enhanced notifications")
+        }
+    }
+    
+    var body: some View {
+        SettingsCard(title: "Enhanced Notifications", icon: "bell.badge.waveform", color: .indigo) {
+            VStack(alignment: .leading, spacing: 12) {
+                // Status indicator
+                HStack(spacing: 12) {
+                    if notificationManager.notifiCLISetupStatus.contains("Setting up") {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: statusInfo.icon)
+                            .font(.title2)
+                            .foregroundStyle(statusInfo.color)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(statusInfo.title)
+                            .font(.subheadline.weight(.medium))
+                        Text(statusInfo.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    
+                    Spacer()
+                    
+                    Button {
+                        rebuildNotifiCLI()
+                    } label: {
+                        if isRebuilding {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text(notificationManager.isNotifiCLIAvailable ? "Rebuild" : "Setup")
+                            }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isRebuilding)
+                }
+                
+                // Features list
+                if notificationManager.isNotifiCLIAvailable {
+                    Divider()
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Enhanced notification features:")
+                            .font(.caption.weight(.medium))
+                        
+                        FeatureRow(icon: "hand.tap", text: "Actionable buttons: Undo, Open Folder, Retry")
+                        FeatureRow(icon: "pin", text: "Persistent notifications that stay until dismissed")
+                        FeatureRow(icon: "bell.badge.waveform", text: "Reliable notifications even when app is in background")
+                        FeatureRow(icon: "speaker.wave.2", text: "Custom sounds: Glass, Ping, Pop, and more")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .onAppear {
+            loadInstallPath()
+        }
+    }
+    
+    private func rebuildNotifiCLI() {
+        isRebuilding = true
+        Task {
+            _ = await NotifiCLIService.shared.rebuild()
+            await notificationManager.checkNotifiCLIAvailability()
+            await MainActor.run {
+                isRebuilding = false
+                HapticFeedbackManager.shared.success()
+            }
+        }
+    }
+    
+    private func loadInstallPath() {
+        Task {
+            let info = await notificationManager.getNotifiCLIInfo()
+            await MainActor.run {
+                installPath = info.path
+            }
+        }
+    }
+}
+
+// MARK: - Feature Row Helper
+
+private struct FeatureRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

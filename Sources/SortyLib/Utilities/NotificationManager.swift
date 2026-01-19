@@ -3,12 +3,29 @@
 //  Sorty
 //
 //  Unified notification manager for HUD and system notifications
+//  Supports both native macOS notifications and NotifiCLI for enhanced features
 //
 
 import Foundation
 import SwiftUI
 import UserNotifications
 import AppKit
+
+// MARK: - Notification Names for Actions
+
+public extension NSNotification.Name {
+    /// Posted when user clicks "Undo" on a notification
+    static let undoLastOrganization = NSNotification.Name("SortyUndoLastOrganization")
+    
+    /// Posted when user clicks "Retry" on an error notification
+    static let retryLastOrganization = NSNotification.Name("SortyRetryLastOrganization")
+    
+    /// Posted when user clicks "Show Details" on a notification
+    static let showOrganizationDetails = NSNotification.Name("SortyShowOrganizationDetails")
+    
+    /// Posted when user clicks "Open Folder" on a notification
+    static let openOrganizedFolder = NSNotification.Name("SortyOpenOrganizedFolder")
+}
 
 /// Detailed statistics for batch organization summary
 public struct BatchSummaryStats: Sendable {
@@ -20,6 +37,8 @@ public struct BatchSummaryStats: Sendable {
     public let errorsEncountered: Int
     public let duration: TimeInterval
     public let folderName: String
+    public let folderPath: String?
+    public let canUndo: Bool
     
     public init(
         filesMoved: Int = 0,
@@ -29,7 +48,9 @@ public struct BatchSummaryStats: Sendable {
         duplicatesFound: Int = 0,
         errorsEncountered: Int = 0,
         duration: TimeInterval = 0,
-        folderName: String = ""
+        folderName: String = "",
+        folderPath: String? = nil,
+        canUndo: Bool = false
     ) {
         self.filesMoved = filesMoved
         self.foldersCreated = foldersCreated
@@ -39,6 +60,8 @@ public struct BatchSummaryStats: Sendable {
         self.errorsEncountered = errorsEncountered
         self.duration = duration
         self.folderName = folderName
+        self.folderPath = folderPath
+        self.canUndo = canUndo
     }
     
     /// Total number of operations performed
@@ -57,14 +80,34 @@ public struct BatchSummaryStats: Sendable {
     }
 }
 
+/// Actions that can be performed from notification buttons
+public enum NotificationAction: Sendable {
+    case undo
+    case openFolder(path: String)
+    case showDetails
+    case retry
+    case dismiss
+}
+
+/// Callback type for handling notification actions
+public typealias NotificationActionHandler = @Sendable (NotificationAction) async -> Void
+
 /// Types of notifications the app can show
 public enum NotificationType: Sendable {
-    case processingComplete(fileCount: Int, folderName: String)
-    case processingError(message: String, isCritical: Bool)
+    case processingComplete(fileCount: Int, folderName: String, folderPath: String?, canUndo: Bool)
+    case processingError(message: String, isCritical: Bool, canRetry: Bool)
     case batchSummary(stats: BatchSummaryStats)
     case info(title: String, message: String)
     
-    // Legacy initializer for backwards compatibility
+    // Legacy initializers for backwards compatibility
+    public static func processingComplete(fileCount: Int, folderName: String) -> NotificationType {
+        return .processingComplete(fileCount: fileCount, folderName: folderName, folderPath: nil, canUndo: false)
+    }
+    
+    public static func processingError(message: String, isCritical: Bool = false) -> NotificationType {
+        return .processingError(message: message, isCritical: isCritical, canRetry: false)
+    }
+    
     public static func batchSummary(processed: Int, errors: Int, duration: TimeInterval) -> NotificationType {
         return .batchSummary(stats: BatchSummaryStats(
             filesMoved: processed,
@@ -74,7 +117,7 @@ public enum NotificationType: Sendable {
     }
     
     var isCritical: Bool {
-        if case .processingError(_, let critical) = self {
+        if case .processingError(_, let critical, _) = self {
             return critical
         }
         return false
@@ -104,18 +147,65 @@ public class NotificationManager: ObservableObject {
     @Published public var currentHUDNotification: HUDNotification?
     @Published public var hudNotificationQueue: [HUDNotification] = []
     @Published public var notificationPermissionStatus: UNAuthorizationStatus = .notDetermined
+    @Published public var isNotifiCLIAvailable: Bool = false
+    @Published public var notifiCLISetupStatus: String = "Initializing..."
     
     private var settings: NotificationSettingsManager { NotificationSettingsManager.shared }
     private var dismissTask: Task<Void, Never>?
+    private var notifiCLISetupTask: Task<Void, Never>?
     
     private init() {
-        Task {
-            await requestSystemNotificationPermission()
-            await checkNotificationPermission()
+        // Start setup immediately
+        notifiCLISetupTask = Task {
+            await setupNotificationSystem()
+        }
+    }
+    
+    /// Initialize the notification system (call on app startup for faster first notification)
+    private func setupNotificationSystem() async {
+        // Request native notification permission
+        await requestSystemNotificationPermission()
+        await checkNotificationPermission()
+        
+        // Setup NotifiCLI in background (builds on first run)
+        await MainActor.run {
+            self.notifiCLISetupStatus = "Setting up enhanced notifications..."
+        }
+        
+        let available = await NotifiCLIService.shared.ensureSetup()
+        
+        await MainActor.run {
+            self.isNotifiCLIAvailable = available
+            self.notifiCLISetupStatus = available ? "Ready" : "Using native notifications"
+        }
+        
+        if available {
+            print("NotificationManager: NotifiCLI ready for enhanced notifications")
+        } else {
+            print("NotificationManager: Using native macOS notifications")
         }
     }
     
     // MARK: - Public API
+    
+    /// Check if NotifiCLI is installed and available
+    public func checkNotifiCLIAvailability() async {
+        let available = await NotifiCLIService.shared.checkAvailability()
+        await MainActor.run {
+            self.isNotifiCLIAvailable = available
+        }
+    }
+    
+    /// Ensure NotifiCLI is ready (waits for setup to complete)
+    public func ensureReady() async {
+        // Wait for initial setup to complete
+        await notifiCLISetupTask?.value
+    }
+    
+    /// Get NotifiCLI installation info
+    public func getNotifiCLIInfo() async -> (installed: Bool, path: String?) {
+        return await NotifiCLIService.shared.getInstallationInfo()
+    }
     
     /// Check current notification permission status
     public func checkNotificationPermission() async {
@@ -150,7 +240,7 @@ public class NotificationManager: ObservableObject {
                 print("NotificationManager: processingComplete notifications disabled")
                 return
             }
-        case .processingError(_, let isCritical):
+        case .processingError(_, let isCritical, _):
             if isCritical && settingsValue.alwaysShowCriticalErrors {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
@@ -180,10 +270,41 @@ public class NotificationManager: ObservableObject {
         // Show system notification if enabled
         if settingsValue.systemNotifications {
             Task {
-                await showSystemNotification(title: title, message: message, playSound: settingsValue.systemNotificationSounds)
+                await showSystemNotification(
+                    type: type,
+                    title: title,
+                    message: message,
+                    playSound: settingsValue.systemNotificationSounds
+                )
             }
         } else {
             print("NotificationManager: systemNotifications disabled, skipping system notification")
+        }
+    }
+    
+    /// Show a notification with a custom action handler
+    public func show(_ type: NotificationType, actionHandler: @escaping NotificationActionHandler) {
+        let settingsValue = settings.settings
+        
+        // Create notification content
+        let (title, message, icon, iconColor) = notificationContent(for: type)
+        
+        // Show in-app HUD if enabled
+        if settingsValue.inAppHUD {
+            showHUD(title: title, message: message, icon: icon, iconColor: iconColor, playSound: settingsValue.hudSounds)
+        }
+        
+        // Show system notification if enabled
+        if settingsValue.systemNotifications {
+            Task {
+                await showSystemNotification(
+                    type: type,
+                    title: title,
+                    message: message,
+                    playSound: settingsValue.systemNotificationSounds,
+                    actionHandler: actionHandler
+                )
+            }
         }
     }
     
@@ -197,9 +318,49 @@ public class NotificationManager: ObservableObject {
         show(.processingComplete(fileCount: fileCount, folderName: folderName))
     }
     
+    /// Show processing complete notification with folder path and undo support
+    public func showProcessingComplete(
+        fileCount: Int,
+        folderName: String,
+        folderPath: String?,
+        canUndo: Bool = false,
+        onAction: NotificationActionHandler? = nil
+    ) {
+        let type = NotificationType.processingComplete(
+            fileCount: fileCount,
+            folderName: folderName,
+            folderPath: folderPath,
+            canUndo: canUndo
+        )
+        if let handler = onAction {
+            show(type, actionHandler: handler)
+        } else {
+            show(type)
+        }
+    }
+    
     /// Show processing error notification
     public func showError(message: String, isCritical: Bool = false) {
         show(.processingError(message: message, isCritical: isCritical))
+    }
+    
+    /// Show processing error notification with retry option
+    public func showError(
+        message: String,
+        isCritical: Bool = false,
+        canRetry: Bool = false,
+        onAction: NotificationActionHandler? = nil
+    ) {
+        let type = NotificationType.processingError(
+            message: message,
+            isCritical: isCritical,
+            canRetry: canRetry
+        )
+        if let handler = onAction {
+            show(type, actionHandler: handler)
+        } else {
+            show(type)
+        }
     }
     
     /// Show batch summary notification
@@ -225,14 +386,14 @@ public class NotificationManager: ObservableObject {
     
     private func notificationContent(for type: NotificationType) -> (title: String, message: String, icon: String, iconColor: Color) {
         switch type {
-        case .processingComplete(let fileCount, let folderName):
+        case .processingComplete(let fileCount, let folderName, _, _):
             return (
                 "Processing Complete",
                 "Organized \(fileCount) file\(fileCount == 1 ? "" : "s") in \(folderName)",
                 "checkmark.circle.fill",
                 .green
             )
-        case .processingError(let message, let isCritical):
+        case .processingError(let message, let isCritical, _):
             return (
                 isCritical ? "Critical Error" : "Processing Error",
                 message,
@@ -353,11 +514,201 @@ public class NotificationManager: ObservableObject {
     }
     
     private func showSystemNotification(title: String, message: String, playSound: Bool) async {
-        // Check permission first
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        await showSystemNotification(
+            type: .info(title: title, message: message),
+            title: title,
+            message: message,
+            playSound: playSound
+        )
+    }
+    
+    private func showSystemNotification(
+        type: NotificationType,
+        title: String,
+        message: String,
+        playSound: Bool,
+        actionHandler: NotificationActionHandler? = nil
+    ) async {
+        let settingsValue = settings.settings
         
-        guard settings.authorizationStatus == .authorized else {
-            print("NotificationManager: System notifications not authorized (status: \(settings.authorizationStatus.rawValue))")
+        // Determine which backend to use
+        switch settingsValue.notificationBackend {
+        case .notifiCLI:
+            await showNotifiCLINotification(
+                type: type,
+                title: title,
+                message: message,
+                playSound: playSound,
+                actionHandler: actionHandler
+            )
+        case .native:
+            await showNativeNotification(title: title, message: message, playSound: playSound)
+        }
+    }
+    
+    /// Show notification using NotifiCLI with action buttons
+    private func showNotifiCLINotification(
+        type: NotificationType,
+        title: String,
+        message: String,
+        playSound: Bool,
+        actionHandler: NotificationActionHandler?
+    ) async {
+        let settingsValue = settings.settings
+        
+        // Build actions based on notification type and settings
+        var actions: [String] = []
+        var folderPath: String? = nil
+        var canUndo = false
+        var canRetry = false
+        
+        if settingsValue.showActionButtons {
+            switch type {
+            case .processingComplete(_, _, let path, let undo):
+                folderPath = path
+                canUndo = undo
+                if undo {
+                    actions.append("Undo")
+                }
+                if let _ = path {
+                    actions.append("Open Folder")
+                }
+                actions.append("Dismiss")
+                
+            case .processingError(_, _, let retry):
+                canRetry = retry
+                if retry {
+                    actions.append("Retry")
+                }
+                actions.append("Show Details")
+                actions.append("Dismiss")
+                
+            case .batchSummary(let stats):
+                folderPath = stats.folderPath
+                canUndo = stats.canUndo
+                if stats.canUndo {
+                    actions.append("Undo All")
+                }
+                if let _ = stats.folderPath {
+                    actions.append("Open Folder")
+                }
+                if stats.hasErrors {
+                    actions.append("Show Details")
+                }
+                actions.append("Dismiss")
+                
+            case .info:
+                // Simple info notifications don't need action buttons
+                break
+            }
+        }
+        
+        // Build NotifiCLI config
+        let config = NotifiCLIConfig(
+            title: title,
+            message: message,
+            actions: actions.isEmpty ? nil : actions,
+            icon: settingsValue.customNotificationIcon.isEmpty ? nil : settingsValue.customNotificationIcon,
+            sound: playSound ? settingsValue.notifiCLISound : nil,
+            persistent: settingsValue.persistentNotifications && !actions.isEmpty
+        )
+        
+        // Send notification and handle response
+        let response = await NotifiCLIService.shared.send(config)
+        
+        print("NotificationManager: NotifiCLI response: \(response)")
+        
+        // Handle the response
+        await handleNotifiCLIResponse(
+            response,
+            folderPath: folderPath,
+            canUndo: canUndo,
+            canRetry: canRetry,
+            actionHandler: actionHandler
+        )
+    }
+    
+    /// Handle response from NotifiCLI notification
+    private func handleNotifiCLIResponse(
+        _ response: NotifiCLIResponse,
+        folderPath: String?,
+        canUndo: Bool,
+        canRetry: Bool,
+        actionHandler: NotificationActionHandler?
+    ) async {
+        switch response {
+        case .action(let actionLabel):
+            switch actionLabel {
+            case "Undo", "Undo All":
+                if canUndo {
+                    await actionHandler?(.undo)
+                    // Post notification for undo action
+                    NotificationCenter.default.post(name: .undoLastOrganization, object: nil)
+                }
+                
+            case "Open Folder":
+                if let path = folderPath {
+                    await actionHandler?(.openFolder(path: path))
+                    // Post notification for open folder action
+                    NotificationCenter.default.post(
+                        name: .openOrganizedFolder,
+                        object: nil,
+                        userInfo: ["folderPath": path]
+                    )
+                    // Open folder in Finder
+                    let url = URL(fileURLWithPath: path)
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+                }
+                
+            case "Show Details":
+                await actionHandler?(.showDetails)
+                // Post notification to show details
+                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+                
+            case "Retry":
+                if canRetry {
+                    await actionHandler?(.retry)
+                    // Post notification for retry
+                    NotificationCenter.default.post(name: .retryLastOrganization, object: nil)
+                }
+                
+            case "Dismiss":
+                await actionHandler?(.dismiss)
+                
+            default:
+                // Unknown action, treat as custom action
+                print("NotificationManager: Unknown action: \(actionLabel)")
+            }
+            
+        case .defaultClick:
+            // User clicked the notification body - open folder if available
+            if let path = folderPath {
+                let url = URL(fileURLWithPath: path)
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+            }
+            
+        case .dismissed, .timeout:
+            // User dismissed or notification timed out
+            break
+            
+        case .reply(let text):
+            // Reply text received (not typically used for our notifications)
+            print("NotificationManager: Received reply: \(text)")
+            
+        case .error(let error):
+            print("NotificationManager: NotifiCLI error: \(error)")
+            // Fall back to native notification
+            await showNativeNotification(title: "Notification Error", message: error, playSound: false)
+        }
+    }
+    
+    /// Show notification using native macOS UNUserNotificationCenter (fallback)
+    private func showNativeNotification(title: String, message: String, playSound: Bool) async {
+        // Check permission first
+        let notificationSettings = await UNUserNotificationCenter.current().notificationSettings()
+        
+        guard notificationSettings.authorizationStatus == .authorized else {
+            print("NotificationManager: System notifications not authorized (status: \(notificationSettings.authorizationStatus.rawValue))")
             return
         }
         
@@ -376,7 +727,7 @@ public class NotificationManager: ObservableObject {
         
         do {
             try await UNUserNotificationCenter.current().add(request)
-            print("NotificationManager: System notification sent successfully")
+            print("NotificationManager: Native system notification sent successfully")
         } catch {
             print("NotificationManager: Failed to send system notification: \(error)")
         }

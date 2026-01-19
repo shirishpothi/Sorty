@@ -10,6 +10,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var selectedEntry: OrganizationHistoryEntry?
     @State private var isProcessing = false
     @State private var alertMessage: String?
@@ -73,7 +74,10 @@ struct HistoryView: View {
                                         }
                                     },
                                     onUndo: { handleUndo(entry) },
-                                    onRedo: { handleRedo(entry) }
+                                    onRedo: { handleRedo(entry) },
+                                    onRedoWithModel: { provider, model in
+                                        handleRedoWithModel(entry, provider: provider, model: model)
+                                    }
                                 )
                                 .animatedAppearance(delay: Double(index) * 0.03)
                             }
@@ -160,6 +164,28 @@ struct HistoryView: View {
                 try await organizer.redoOrganization(from: entry)
                 HapticFeedbackManager.shared.success()
                 alertMessage = "Organization re-applied."
+                showAlert = true
+            } catch {
+                HapticFeedbackManager.shared.error()
+                alertMessage = "Error: \(error.localizedDescription)"
+                showAlert = true
+            }
+            isProcessing = false
+        }
+    }
+    
+    private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
+        isProcessing = true
+        Task {
+            do {
+                // First set up the folder context from history entry
+                let directoryURL = URL(fileURLWithPath: entry.directoryPath)
+                organizer.currentDirectory = directoryURL
+                
+                // Generate new plan with specified provider/model
+                try await organizer.regenerateWithModel(provider: provider, model: model)
+                HapticFeedbackManager.shared.success()
+                alertMessage = "New organization generated with \(provider.displayName) (\(model))."
                 showAlert = true
             } catch {
                 HapticFeedbackManager.shared.error()
@@ -356,9 +382,12 @@ struct HistorySessionCard: View {
     let onSelect: () -> Void
     let onUndo: () -> Void
     let onRedo: () -> Void
+    var onRedoWithModel: ((AIProvider, String) -> Void)? = nil
 
     @State private var isExpanded = false
     @State private var isHovered = false
+    @State private var showRedoModelPicker = false
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
 
     private var statusColor: Color {
         switch entry.status {
@@ -502,6 +531,18 @@ struct HistorySessionCard: View {
                                 .accessibilityLabel("Undo organization")
                                 .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
                             }
+                            
+                            // Try with different model button
+                            Button {
+                                HapticFeedbackManager.shared.tap()
+                                showRedoModelPicker = true
+                            } label: {
+                                Label("Try Different Model", systemImage: "wand.and.stars")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .accessibilityLabel("Try organization with a different AI model")
+                            .accessibilityIdentifier("TryModelButton-\(entry.id.uuidString)")
                         }
 
                         Spacer()
@@ -522,6 +563,16 @@ struct HistorySessionCard: View {
         .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
             isHovered = hovering
+        }
+        .sheet(isPresented: $showRedoModelPicker) {
+            RedoWithModelPicker(
+                isPresented: $showRedoModelPicker,
+                currentProvider: settingsViewModel.config.provider,
+                currentModel: settingsViewModel.config.model,
+                onSelect: { provider, model in
+                    onRedoWithModel?(provider, model)
+                }
+            )
         }
     }
 }
@@ -564,7 +615,9 @@ struct HistoryDetailSheet: View {
     let onDismiss: () -> Void
 
     @State private var showRawAIResponse = false
+    @State private var showRedoModelPicker = false
     @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
 
     var body: some View {
         NavigationStack {
@@ -720,6 +773,18 @@ struct HistoryDetailSheet: View {
                                     .controlSize(.large)
                                     .accessibilityLabel("Restore folder to this state")
                                     .accessibilityIdentifier("RestoreStateButton")
+                                    
+                                    Button {
+                                        HapticFeedbackManager.shared.tap()
+                                        showRedoModelPicker = true
+                                    } label: {
+                                        Label("Try Different Model", systemImage: "wand.and.stars")
+                                            .frame(minWidth: 120)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.large)
+                                    .accessibilityLabel("Try organization with a different AI model")
+                                    .accessibilityIdentifier("TryModelSessionButton")
                                 }
                             }
                         }
@@ -848,6 +913,16 @@ struct HistoryDetailSheet: View {
             }
         }
         .frame(minWidth: 600, minHeight: 500)
+        .sheet(isPresented: $showRedoModelPicker) {
+            RedoWithModelPicker(
+                isPresented: $showRedoModelPicker,
+                currentProvider: settingsViewModel.config.provider,
+                currentModel: settingsViewModel.config.model,
+                onSelect: { provider, model in
+                    handleRedoWithModel(provider: provider, model: model)
+                }
+            )
+        }
     }
 
     private func handleUndo() {
@@ -922,6 +997,29 @@ struct HistoryDetailSheet: View {
             onAction("Restored \(restoredCount) files.")
             isProcessing = false
             onDismiss()
+        }
+    }
+    
+    private func handleRedoWithModel(provider: AIProvider, model: String) {
+        showRedoModelPicker = false
+        HapticFeedbackManager.shared.tap()
+        isProcessing = true
+        Task {
+            do {
+                // Set up folder context from history entry
+                let directoryURL = URL(fileURLWithPath: entry.directoryPath)
+                organizer.currentDirectory = directoryURL
+                
+                // Generate new plan with specified provider/model
+                try await organizer.regenerateWithModel(provider: provider, model: model)
+                HapticFeedbackManager.shared.success()
+                onAction("New organization generated with \(provider.displayName) (\(model)).")
+                onDismiss()
+            } catch {
+                HapticFeedbackManager.shared.error()
+                onAction("Error: \(error.localizedDescription)")
+            }
+            isProcessing = false
         }
     }
 }
@@ -1157,5 +1255,6 @@ struct FolderHistoryDetailRow: View {
 #Preview {
     HistoryView()
         .environmentObject(FolderOrganizer())
+        .environmentObject(SettingsViewModel())
         .frame(width: 900, height: 700)
 }

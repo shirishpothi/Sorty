@@ -16,57 +16,57 @@ struct DirectorySelectionView: View {
     @State private var hasAppeared = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        WorkflowContainer(currentStep: .selectFolder) {
             Spacer()
+                .frame(height: 40)
             
-            VStack(spacing: 32) {
-                dropZone
-                
-                VStack(spacing: 8) {
-                    Text("Select a directory to organize")
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 10)
+            WorkflowCard {
+                VStack(spacing: 24) {
+                    VStack(spacing: 8) {
+                        Text("Select a directory to organize")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .opacity(hasAppeared ? 1 : 0)
+                            .offset(y: hasAppeared ? 0 : 10)
 
-                    Text("Drag and drop a folder here, or click to browse")
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 10)
-                }
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    selectDirectory()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
-                        Text("Browse for Folder")
+                        Text("Drag and drop a folder here, or click to browse")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .opacity(hasAppeared ? 1 : 0)
+                            .offset(y: hasAppeared ? 0 : 10)
                     }
-                    .frame(minWidth: 160)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+                    
+                    dropZone
+
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        selectDirectory()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 14, weight: .medium))
+                            Text("Browse for Folder")
+                        }
+                        .frame(minWidth: 160)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .keyboardShortcut("o", modifiers: .command)
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 10)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+                    .accessibilityIdentifier("BrowseForFolderButton")
+                    .accessibilityLabel("Browse for Folder")
+                    .accessibilityHint("Opens a file picker to select a directory")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 10)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
-                .accessibilityIdentifier("BrowseForFolderButton")
-                .accessibilityLabel("Browse for Folder")
-                .accessibilityHint("Opens a file picker to select a directory")
+                .frame(maxWidth: .infinity)
             }
             
-            Spacer()
-            
             quickTips
-                .padding(.bottom, 40)
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
         }
@@ -89,10 +89,11 @@ struct DirectorySelectionView: View {
                 )
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(isTargeted ? Color.accentColor.opacity(0.08) : Color.clear)
+                        .fill(isTargeted ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.1))
                 )
-                .frame(width: 200, height: 200)
+                .frame(width: 240, height: 200)
                 .scaleEffect(isTargeted ? 1.02 : 1.0)
+                .shadow(color: isTargeted ? .accentColor.opacity(0.3) : .clear, radius: 16, y: 4)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
             
             VStack(spacing: 16) {
@@ -141,24 +142,18 @@ struct DirectorySelectionView: View {
     }
     
     private var quickTips: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             QuickTipItem(
                 icon: "hand.draw",
                 title: "Drag & Drop",
-                description: "Drop any folder directly"
+                description: "Drop any folder"
             )
-            
-            Divider()
-                .frame(height: 40)
             
             QuickTipItem(
                 icon: "cursorarrow.click.2",
                 title: "Right-Click",
-                description: "Use Finder extension"
+                description: "Finder extension"
             )
-            
-            Divider()
-                .frame(height: 40)
             
             QuickTipItem(
                 icon: "keyboard",
@@ -166,12 +161,8 @@ struct DirectorySelectionView: View {
                 description: "⌘O to browse"
             )
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor))
-        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private func selectDirectory() {

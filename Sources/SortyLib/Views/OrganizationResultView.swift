@@ -16,6 +16,8 @@ struct OrganizationResultView: View {
     @State private var hasUndone = false
     @State private var hasAppeared = false
     @State private var showConfetti = false
+    @State private var showRedoModelPicker = false
+    @State private var isRedoingWithModel = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,7 +62,7 @@ struct OrganizationResultView: View {
         }
         .padding(.horizontal, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(.background)
         .onAppear {
             withAnimation {
                 hasAppeared = true
@@ -225,6 +227,15 @@ struct OrganizationResultView: View {
             }
             
             QuickActionButton(
+                icon: "wand.and.stars",
+                label: "Try Different Model"
+            ) {
+                HapticFeedbackManager.shared.tap()
+                showRedoModelPicker = true
+            }
+            .disabled(isRedoingWithModel)
+            
+            QuickActionButton(
                 icon: "clock",
                 label: "View History"
             ) {
@@ -236,6 +247,40 @@ struct OrganizationResultView: View {
             }
         }
         .padding(.bottom, 32)
+        .sheet(isPresented: $showRedoModelPicker) {
+            RedoWithModelPicker(
+                isPresented: $showRedoModelPicker,
+                currentProvider: settingsViewModel.config.provider,
+                currentModel: settingsViewModel.config.model,
+                onSelect: { provider, model in
+                    redoWithProviderAndModel(provider, model: model)
+                }
+            )
+        }
+    }
+    
+    private func redoWithProviderAndModel(_ provider: AIProvider, model: String) {
+        isRedoingWithModel = true
+        processError = nil
+        
+        Task {
+            do {
+                // First undo the current organization if not already undone
+                if !hasUndone, let latestEntry = organizer.history.entries.first, latestEntry.success {
+                    try await organizer.undoHistoryEntry(latestEntry)
+                }
+                
+                // Now regenerate with the new provider and model
+                try await organizer.regenerateWithModel(provider: provider, model: model)
+                
+                HapticFeedbackManager.shared.success()
+                isRedoingWithModel = false
+            } catch {
+                HapticFeedbackManager.shared.error()
+                processError = "Failed to regenerate: \(error.localizedDescription)"
+                isRedoingWithModel = false
+            }
+        }
     }
 
     private func handleUndo() {
@@ -316,16 +361,17 @@ struct QuickActionButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                 
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            .frame(width: 80)
+            .frame(minWidth: 100)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

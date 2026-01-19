@@ -17,18 +17,24 @@ struct PreviewView: View {
     @EnvironmentObject var learningsManager: LearningsManager
     @StateObject private var previewManager = PreviewManager()
     @StateObject private var dragDropManager = DragDropManager()
+    @StateObject private var orchestrator = GenerationOrchestrator()
+    @StateObject private var previewStore: PreviewStore
     @State private var showApplyConfirmation = false
     @State private var isApplying = false
     @State private var editablePlan: OrganizationPlan
     @State private var hasEdits = false
     @State private var showPostOrganizationHoning = false
     @State private var isInstructionsExpanded = false
+    @State private var showComparisonDashboard = false
+    @State private var showRedoModelPicker = false
+    @State private var isRedoingWithModel = false
     @FocusState private var instructionsFocused: Bool
 
     init(plan: OrganizationPlan, baseURL: URL) {
         self.plan = plan
         self.baseURL = baseURL
         _editablePlan = State(initialValue: plan)
+        _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
     }
 
     // Reset isApplying when organizer state changes to completed
@@ -94,101 +100,29 @@ struct PreviewView: View {
             }
             
             Divider()
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(editablePlan.suggestions) { suggestion in
-                        EditableFolderTreeView(
-                            suggestion: suggestion,
-                            level: 0,
-                            plan: $editablePlan,
-                            dragDropManager: dragDropManager,
-                            onPlanChanged: { hasEdits = true }
-                        )
-                    }
-
-                    // Unorganized files section with drop support
-                    if !editablePlan.unorganizedFiles.isEmpty || dragDropManager.draggedFile != nil {
-                        UnorganizedFilesSection(
-                            plan: $editablePlan,
-                            dragDropManager: dragDropManager,
-                            onPlanChanged: { hasEdits = true }
-                        )
-                    }
+            
+            // Optimized flat-list tree for better performance
+            OptimizedPreviewTree(
+                store: previewStore,
+                dragDropManager: dragDropManager,
+                onPlanChanged: {
+                    hasEdits = true
+                    editablePlan = previewStore.plan
                 }
-                .padding()
-            }
+            )
 
             Divider()
 
+            // MARK: - Split Toolbar Bottom Bar
             VStack(spacing: 0) {
+                // Row 1: Guiding Instructions (compact inline)
                 if !isApplying {
-                    guidingInstructionsSection
+                    compactInstructionsRow
+                    Divider()
                 }
                 
-                Divider()
-                
-                HStack(spacing: 12) {
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        organizer.reset()
-                    } label: {
-                        Text("Cancel")
-                    }
-                    .keyboardShortcut(.cancelAction)
-                    .accessibilityIdentifier("PreviewCancelButton")
-                    .accessibilityLabel("Cancel organization")
-
-                    if hasEdits {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            editablePlan = plan
-                            hasEdits = false
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.counterclockwise")
-                                    .font(.system(size: 11))
-                                Text("Reset Edits")
-                            }
-                        }
-                        .foregroundColor(.orange)
-                        .accessibilityIdentifier("ResetEditsButton")
-                        .accessibilityLabel("Reset all manual edits")
-                    }
-
-                    Spacer()
-
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        regeneratePreview()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 12))
-                            Text("Try Another")
-                        }
-                    }
-                    .disabled(shouldDisableButtons)
-                    .accessibilityIdentifier("TryAnotherOrganisationButton")
-                    .accessibilityLabel("Generate a different organization suggestion")
-
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        showApplyConfirmation = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 12))
-                            Text("Apply Organization")
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(shouldDisableButtons)
-                    .accessibilityIdentifier("ApplyOrganizationButton")
-                    .accessibilityLabel("Apply this organization to your files")
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                // Row 2: Action buttons
+                actionButtonsRow
             }
         }
         .alert("Apply Organization?", isPresented: $showApplyConfirmation) {
@@ -215,6 +149,7 @@ struct PreviewView: View {
         .onChange(of: plan) { oldPlan, newPlan in
             // Update editable plan when organizer regenerates
             editablePlan = newPlan
+            previewStore.updatePlan(newPlan)
             hasEdits = false
         }
         .sheet(isPresented: $showPostOrganizationHoning) {
@@ -233,10 +168,212 @@ struct PreviewView: View {
                 }
             )
         }
+        .sheet(isPresented: $showRedoModelPicker) {
+            RedoWithModelPicker(
+                isPresented: $showRedoModelPicker,
+                currentProvider: settingsViewModel.config.provider,
+                currentModel: settingsViewModel.config.model,
+                onSelect: { provider, model in
+                    redoWithProviderAndModel(provider, model)
+                }
+            )
+        }
+        .sheet(isPresented: $showComparisonDashboard) {
+            OrchestrationDashboard(
+                orchestrator: orchestrator,
+                baseURL: baseURL,
+                onSelectPlan: { selectedPlan in
+                    editablePlan = selectedPlan
+                    previewStore.updatePlan(selectedPlan)
+                    hasEdits = true
+                    showComparisonDashboard = false
+                },
+                onDismiss: {
+                    showComparisonDashboard = false
+                }
+            )
+            .environmentObject(settingsViewModel)
+            .environmentObject(organizer)
+            .environmentObject(CustomPersonaStore())
+        }
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))
     }
-
+    
+    // MARK: - Compact Instructions Row (Row 1 of Split Toolbar)
+    
+    private var compactInstructionsRow: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "text.bubble")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            
+            TextField(
+                "Guiding instructions for regeneration...",
+                text: $organizer.customInstructions,
+                axis: .horizontal
+            )
+            .textFieldStyle(.plain)
+            .font(.system(size: 12))
+            .focused($instructionsFocused)
+            .onChange(of: organizer.customInstructions) { oldValue, newValue in
+                if !newValue.isEmpty && newValue != oldValue && learningsManager.consentManager.canCollectData {
+                    NotificationCenter.default.post(
+                        name: .steeringPromptProvided,
+                        object: nil,
+                        userInfo: ["prompt": newValue, "folderPath": baseURL.path]
+                    )
+                }
+            }
+            .accessibilityIdentifier("CompactInstructionsTextField")
+            .accessibilityLabel("Guiding instructions")
+            .accessibilityHint("Enter instructions to guide AI regeneration")
+            
+            if !organizer.customInstructions.isEmpty {
+                Button {
+                    organizer.customInstructions = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear instructions")
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+    }
+    
+    // MARK: - Action Buttons Row (Row 2 of Split Toolbar)
+    
+    private var actionButtonsRow: some View {
+        HStack(spacing: 12) {
+            // Left side: Cancel and Reset
+            Button {
+                HapticFeedbackManager.shared.tap()
+                organizer.reset()
+            } label: {
+                Text("Cancel")
+            }
+            .keyboardShortcut(.cancelAction)
+            .accessibilityIdentifier("PreviewCancelButton")
+            .accessibilityLabel("Cancel organization")
+            
+            if hasEdits {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    editablePlan = plan
+                    previewStore.updatePlan(plan)
+                    hasEdits = false
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 11))
+                        Text("Reset")
+                    }
+                }
+                .foregroundColor(.orange)
+                .accessibilityIdentifier("ResetEditsButton")
+                .accessibilityLabel("Reset all manual edits")
+            }
+            
+            Spacer()
+            
+            // Center: Regeneration controls
+            regenerationControls
+            
+            Spacer()
+            
+            // Right side: Apply
+            Button {
+                HapticFeedbackManager.shared.tap()
+                showApplyConfirmation = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12))
+                    Text("Apply")
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
+            .disabled(shouldDisableButtons)
+            .accessibilityIdentifier("ApplyOrganizationButton")
+            .accessibilityLabel("Apply this organization to your files")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+    
+    // MARK: - Regeneration Controls
+    
+    private var regenerationControls: some View {
+        HStack(spacing: 6) {
+            // Regenerate button
+            Button {
+                HapticFeedbackManager.shared.tap()
+                regeneratePreview()
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 11))
+                    Text("Regenerate")
+                        .font(.system(size: 12))
+                    if !organizer.customInstructions.isEmpty {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 5, height: 5)
+                    }
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(shouldDisableButtons || isRedoingWithModel)
+            .accessibilityIdentifier("RegenerateButton")
+            .accessibilityLabel("Regenerate with current model")
+            
+            // Choose Model button
+            Button {
+                HapticFeedbackManager.shared.tap()
+                showRedoModelPicker = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 10))
+                    Text("Model")
+                        .font(.system(size: 11))
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(shouldDisableButtons || isRedoingWithModel)
+            .accessibilityIdentifier("ChooseModelButton")
+            .accessibilityLabel("Choose a different model")
+            
+            // Compare Models button - opens comparison dashboard
+            Button {
+                HapticFeedbackManager.shared.tap()
+                showComparisonDashboard = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.grid.2x2")
+                        .font(.system(size: 10))
+                    Text("Compare")
+                        .font(.system(size: 11))
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(shouldDisableButtons)
+            .accessibilityIdentifier("CompareButton")
+            .accessibilityLabel("Compare different AI models")
+        }
+    }
+    
+    // MARK: - Legacy Guiding Instructions Section (kept for backward compatibility)
+    
     private var guidingInstructionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
@@ -303,15 +440,6 @@ struct PreviewView: View {
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
                             .focused($instructionsFocused)
-                            .onChange(of: organizer.customInstructions) { oldValue, newValue in
-                                if !newValue.isEmpty && newValue != oldValue && learningsManager.consentManager.canCollectData {
-                                    NotificationCenter.default.post(
-                                        name: .steeringPromptProvided,
-                                        object: nil,
-                                        userInfo: ["prompt": newValue, "folderPath": baseURL.path]
-                                    )
-                                }
-                            }
                     }
                     .frame(minHeight: 50, maxHeight: 70)
                     .background(
@@ -329,7 +457,7 @@ struct PreviewView: View {
                     .accessibilityLabel("Guiding instructions text field")
                     .accessibilityHint("Enter instructions to guide the AI when regenerating organization")
                     
-                    Text("These instructions will be used when you click \"Try Another\"")
+                    Text("These instructions will be applied when regenerating")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }
@@ -348,6 +476,8 @@ struct PreviewView: View {
         }
     }
     
+    // MARK: - Regenerate Preview
+    
     private func regeneratePreview() {
         if !organizer.customInstructions.isEmpty && learningsManager.consentManager.canCollectData {
             learningsManager.recordGuidingInstruction(organizer.customInstructions)
@@ -358,6 +488,28 @@ struct PreviewView: View {
                 try await organizer.regeneratePreview()
             } catch {
                 organizer.state = .error(error)
+            }
+        }
+    }
+    
+    private func redoWithProviderAndModel(_ provider: AIProvider, _ model: String) {
+        showRedoModelPicker = false
+        isRedoingWithModel = true
+        HapticFeedbackManager.shared.tap()
+        
+        Task {
+            do {
+                try await organizer.regenerateWithModel(provider: provider, model: model)
+                await MainActor.run {
+                    HapticFeedbackManager.shared.success()
+                    isRedoingWithModel = false
+                }
+            } catch {
+                await MainActor.run {
+                    HapticFeedbackManager.shared.error()
+                    isRedoingWithModel = false
+                    organizer.state = .error(error)
+                }
             }
         }
     }

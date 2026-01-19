@@ -9,14 +9,38 @@ import SwiftUI
 
 struct AnalysisView: View {
     @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var appState: AppState
     @State private var hasAppeared = false
     @State private var currentFunnyMessage: String = ""
     @State private var currentFileDisplay: String = ""
     @State private var funnyMessageOpacity: Double = 0
     @State private var fileDisplayOpacity: Double = 0
-    @State private var showMultitaskingHint: Bool = false
     @State private var funnyMessageTimer: Timer?
     @State private var fileDisplayTimer: Timer?
+    @State private var elapsedSeconds: Int = 0
+    
+    private enum MessageTier {
+        case none
+        case backgroundTip
+        case takingLonger
+    }
+    
+    private var currentMessageTier: MessageTier {
+        if elapsedSeconds >= 60 || organizer.showTimeoutMessage {
+            return .takingLonger
+        } else if elapsedSeconds >= 30 {
+            return .backgroundTip
+        }
+        return .none
+    }
+    
+    private let calmerMessages = [
+        "Still working...",
+        "Almost there...",
+        "Processing your files...",
+        "Organizing in progress...",
+        "Just a moment longer..."
+    ]
     
     // Funny messages that cycle during organization
     private let funnyMessages = [
@@ -43,9 +67,7 @@ struct AnalysisView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            
+        WorkflowContainer(currentStep: .analyze) {
             VStack(spacing: 28) {
                 progressSection
                     .opacity(hasAppeared ? 1 : 0)
@@ -57,21 +79,7 @@ struct AnalysisView: View {
                     .offset(y: hasAppeared ? 0 : 10)
                     .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
 
-                if organizer.showTimeoutMessage {
-                    timeoutMessage
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.95).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                }
-                
-                if showMultitaskingHint {
-                    multitaskingHint
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                }
+                tieredNoticeView
 
                 if organizer.isStreaming {
                     aiInsightsView
@@ -87,16 +95,14 @@ struct AnalysisView: View {
                 } label: {
                     Text("Cancel")
                 }
+                .buttonStyle(.bordered)
+                .foregroundStyle(.secondary)
                 .keyboardShortcut(.escape, modifiers: [])
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
                 .accessibilityIdentifier("AnalysisCancelButton")
             }
-            
-            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             withAnimation {
                 hasAppeared = true
@@ -108,12 +114,29 @@ struct AnalysisView: View {
             stopTimers()
         }
         .onChange(of: organizer.elapsedTime) { _, newTime in
-            // Show multitasking hint after 60-300 seconds (1-5 minutes)
-            if newTime >= 60 && !showMultitaskingHint {
-                withAnimation(.easeInOut(duration: 0.5)) {
-                    showMultitaskingHint = true
-                }
-            }
+            elapsedSeconds = Int(newTime)
+        }
+    }
+    
+    @ViewBuilder
+    private var tieredNoticeView: some View {
+        switch currentMessageTier {
+        case .none:
+            EmptyView()
+        case .backgroundTip:
+            multitaskingHint
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .opacity
+                ))
+        case .takingLonger:
+            timeoutMessage
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.95).combined(with: .opacity),
+                    removal: .opacity
+                ))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Warning: Organization is taking longer than usual")
         }
     }
     
@@ -124,8 +147,8 @@ struct AnalysisView: View {
             funnyMessageOpacity = 1
         }
         
-        // Cycle messages every 3 seconds
-        funnyMessageTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { _ in
+        // Cycle messages every 4 seconds
+        funnyMessageTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { _ in
             Task { @MainActor in
                 // Fade out
                 withAnimation(.easeOut(duration: 0.4)) {
@@ -135,7 +158,12 @@ struct AnalysisView: View {
                 // Wait for fade out, then change message and fade in
                 try? await Task.sleep(nanoseconds: 450_000_000)
                 
-                currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+                // After 30 seconds, use calmer messages instead
+                if elapsedSeconds > 30 {
+                    currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages[0]
+                } else {
+                    currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+                }
                 
                 withAnimation(.easeIn(duration: 0.4)) {
                     funnyMessageOpacity = 1
@@ -356,72 +384,45 @@ struct AnalysisView: View {
     }
     
     private var timeoutMessage: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "clock")
-                    .foregroundStyle(.orange)
-
-                Text("Taking longer than expected")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-
-            Text("AI organization can take a while depending on the number of files, model speed, and network conditions. For large directories, this may take a few minutes.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: 400)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.orange.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.2), lineWidth: 1)
-                )
+        InlineNotice(
+            icon: "clock",
+            title: "This is taking longer than usual",
+            message: "Large folders or complex content may take 1-3 minutes. You can try a faster model or disable Deep Scan.",
+            severity: .warning,
+            actions: [
+                InlineNoticeAction(title: "Open Settings", systemImage: "gear") {
+                    appState.currentView = .settings
+                }
+            ]
         )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Warning: Organization is taking longer than expected")
     }
     
     private var multitaskingHint: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "macwindow.on.rectangle")
-                .font(.title3)
-                .foregroundStyle(.blue)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Feel free to switch apps!")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                
-                Text("Sorty will keep organizing in the background. We'll notify you when it's done.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.blue.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-                )
+        InlineNotice(
+            icon: "bell.badge",
+            title: "Working in the background",
+            message: "Sorty will send a notification when your preview is ready",
+            severity: .tip
         )
-        .frame(maxWidth: 400)
+        .accessibilityLabel("Background processing")
+        .accessibilityHint("You will be notified when the preview is ready")
     }
     
     // MARK: - AI Insights View
     
     private var aiInsightsView: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Live Insights")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.secondary)
+            
             // Current insight (prominent display)
             if !organizer.currentInsight.isEmpty {
                 currentInsightBubble
             }
             
-            // Recent insights history
+            // Recent insights history (max 5)
             if organizer.insightHistory.count > 1 {
                 insightHistoryView
             }
@@ -443,6 +444,7 @@ struct AnalysisView: View {
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
+                .contentTransition(.opacity)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -455,13 +457,13 @@ struct AnalysisView: View {
                         .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
                 )
         )
-        .animation(nil, value: organizer.currentInsight)
+        .animation(.easeInOut(duration: 0.3), value: organizer.currentInsight)
     }
     
     private var insightHistoryView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(organizer.insightHistory.dropLast()) { insight in
+                ForEach(Array(organizer.insightHistory.dropLast().suffix(5))) { insight in
                     InsightPill(insight: insight)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -569,6 +571,148 @@ struct AnimatedProgressRing: View {
                 animatedProgress = progress
             }
         }
+    }
+}
+
+// MARK: - Inline Notice
+
+struct InlineNoticeAction {
+    let title: String
+    let systemImage: String?
+    let action: () -> Void
+    
+    init(title: String, systemImage: String? = nil, action: @escaping () -> Void) {
+        self.title = title
+        self.systemImage = systemImage
+        self.action = action
+    }
+}
+
+enum NoticeSeverity {
+    case info
+    case warning
+    case tip
+    
+    var color: Color {
+        switch self {
+        case .info: return .blue
+        case .warning: return .orange
+        case .tip: return .green
+        }
+    }
+    
+    var defaultIcon: String {
+        switch self {
+        case .info: return "info.circle.fill"
+        case .warning: return "exclamationmark.triangle.fill"
+        case .tip: return "lightbulb.fill"
+        }
+    }
+}
+
+struct InlineNotice: View {
+    let icon: String?
+    let title: String
+    let message: String?
+    let severity: NoticeSeverity
+    var actions: [InlineNoticeAction]
+    
+    init(
+        icon: String? = nil,
+        title: String,
+        message: String? = nil,
+        severity: NoticeSeverity = .info,
+        actions: [InlineNoticeAction] = []
+    ) {
+        self.icon = icon
+        self.title = title
+        self.message = message
+        self.severity = severity
+        self.actions = actions
+    }
+    
+    @available(*, deprecated, message: "Use severity-based initializer instead")
+    init(icon: String, title: String, message: String? = nil, tintColor: Color) {
+        self.icon = icon
+        self.title = title
+        self.message = message
+        self.severity = tintColor == .orange ? .warning : (tintColor == .green ? .tip : .info)
+        self.actions = []
+    }
+    
+    private var effectiveIcon: String {
+        icon ?? severity.defaultIcon
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: effectiveIcon)
+                    .font(.caption)
+                    .foregroundStyle(severity.color)
+                
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                
+                if let message = message {
+                    Text("—")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                
+                Spacer(minLength: 0)
+            }
+            
+            if !actions.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(actions.indices, id: \.self) { index in
+                        let action = actions[index]
+                        Button {
+                            action.action()
+                        } label: {
+                            HStack(spacing: 4) {
+                                if let systemImage = action.systemImage {
+                                    Image(systemName: systemImage)
+                                        .font(.caption2)
+                                }
+                                Text(action.title)
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(severity.color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(severity.color.opacity(0.12))
+                        )
+                    }
+                }
+                .padding(.leading, 20)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(severity.color.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(severity.color.opacity(0.15), lineWidth: 1)
+                )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityHint(message ?? "")
     }
 }
 

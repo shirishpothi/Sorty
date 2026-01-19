@@ -936,6 +936,214 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
+    // MARK: - Parallel Generation Support
+    
+    /// Generate organization plan with a specific provider (for parallel generation)
+    /// Returns a plan without updating the organizer's state
+    public func generatePlanWithProvider(
+        files: [FileItem],
+        provider: AIProvider,
+        model: String? = nil,
+        customInstructions: String? = nil
+    ) async throws -> OrganizationPlan {
+        // Create a temporary config for this provider
+        var tempConfig = aiConfig ?? AIConfig.default
+        tempConfig.provider = provider
+        tempConfig.model = model ?? provider.defaultModel
+        tempConfig.apiURL = provider.defaultAPIURL
+        
+        // Create a temporary client
+        let tempClient = try AIClientFactory.createClient(config: tempConfig)
+        
+        let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
+        
+        var instructions = customInstructions ?? self.customInstructions
+        if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+            instructions += "\n\n" + learnedContext
+        }
+        if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+            instructions += "\n\n" + storageContext
+        }
+        
+        let plan = try await tempClient.analyze(
+            files: files,
+            customInstructions: instructions,
+            personaPrompt: personaPrompt,
+            temperature: nil
+        )
+        
+        return plan
+    }
+    
+    /// Generate multiple organization plans in parallel using different providers and models
+    /// - Parameters:
+    ///   - files: Files to organize
+    ///   - modelSelections: Array of (provider, model) tuples specifying which models to use
+    ///   - onPlanGenerated: Callback when a plan is successfully generated
+    ///   - onPlanFailed: Callback when a plan generation fails
+    public func generateParallelPlans(
+        files: [FileItem],
+        modelSelections: [(provider: AIProvider, model: String)],
+        onPlanGenerated: @escaping (AIProvider, String, OrganizationPlan) -> Void,
+        onPlanFailed: @escaping (AIProvider, String, Error) -> Void
+    ) async {
+        await withTaskGroup(of: (AIProvider, String, Result<OrganizationPlan, Error>).self) { group in
+            for selection in modelSelections {
+                group.addTask {
+                    do {
+                        let plan = try await self.generatePlanWithProvider(
+                            files: files,
+                            provider: selection.provider,
+                            model: selection.model
+                        )
+                        return (selection.provider, selection.model, .success(plan))
+                    } catch {
+                        return (selection.provider, selection.model, .failure(error))
+                    }
+                }
+            }
+            
+            for await (provider, model, result) in group {
+                await MainActor.run {
+                    switch result {
+                    case .success(let plan):
+                        onPlanGenerated(provider, model, plan)
+                    case .failure(let error):
+                        onPlanFailed(provider, model, error)
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Legacy method for backward compatibility - generates plans using default models for providers
+    @available(*, deprecated, message: "Use generateParallelPlans(modelSelections:) instead")
+    public func generateParallelPlans(
+        files: [FileItem],
+        providers: [AIProvider],
+        onPlanGenerated: @escaping (AIProvider, OrganizationPlan) -> Void,
+        onPlanFailed: @escaping (AIProvider, Error) -> Void
+    ) async {
+        let modelSelections = providers.map { (provider: $0, model: $0.defaultModel) }
+        await generateParallelPlans(
+            files: files,
+            modelSelections: modelSelections,
+            onPlanGenerated: { provider, _, plan in
+                onPlanGenerated(provider, plan)
+            },
+            onPlanFailed: { provider, _, error in
+                onPlanFailed(provider, error)
+            }
+        )
+    }
+    
+    /// Get files from current plan for regeneration
+    public func getFilesFromCurrentPlan() -> [FileItem] {
+        guard let currentPlan = currentPlan else { return [] }
+        
+        var allFiles: [FileItem] = []
+        func collectFiles(_ suggestion: FolderSuggestion) {
+            allFiles.append(contentsOf: suggestion.files)
+            for subfolder in suggestion.subfolders {
+                collectFiles(subfolder)
+            }
+        }
+        for suggestion in currentPlan.suggestions {
+            collectFiles(suggestion)
+        }
+        allFiles.append(contentsOf: currentPlan.unorganizedFiles)
+        
+        return allFiles
+    }
+    
+    /// Regenerate preview with a specific provider
+    public func regenerateWithProvider(_ provider: AIProvider) async throws {
+        let files = getFilesFromCurrentPlan()
+        guard !files.isEmpty else {
+            throw OrganizationError.noCurrentPlan
+        }
+        
+        guard !isOperationInProgress() else {
+            return
+        }
+        
+        isCancellationRequested = false
+        
+        // Reset streaming state
+        await MainActor.run {
+            streamingContent = ""
+            isStreaming = false
+            showTimeoutMessage = false
+        }
+        
+        updateState(.organizing, stage: "Regenerating with \(provider.displayName)...", progress: 0.3)
+        
+        do {
+            var newPlan = try await generatePlanWithProvider(files: files, provider: provider)
+            newPlan.version = (currentPlan?.version ?? 0) + 1
+            
+            try checkCancellation()
+            
+            await MainActor.run {
+                isStreaming = false
+                organizationStage = "Ready!"
+                progress = 1.0
+                self.currentPlan = newPlan
+                state = .ready
+            }
+        } catch {
+            await MainActor.run {
+                state = .error(error)
+                errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+    
+    /// Regenerate preview with a specific provider and model
+    public func regenerateWithModel(provider: AIProvider, model: String) async throws {
+        let files = getFilesFromCurrentPlan()
+        guard !files.isEmpty else {
+            throw OrganizationError.noCurrentPlan
+        }
+        
+        guard !isOperationInProgress() else {
+            return
+        }
+        
+        isCancellationRequested = false
+        
+        // Reset streaming state
+        await MainActor.run {
+            streamingContent = ""
+            isStreaming = false
+            showTimeoutMessage = false
+        }
+        
+        updateState(.organizing, stage: "Regenerating with \(provider.displayName) (\(model))...", progress: 0.3)
+        
+        do {
+            var newPlan = try await generatePlanWithProvider(files: files, provider: provider, model: model)
+            newPlan.version = (currentPlan?.version ?? 0) + 1
+            
+            try checkCancellation()
+            
+            await MainActor.run {
+                isStreaming = false
+                organizationStage = "Ready!"
+                progress = 1.0
+                self.currentPlan = newPlan
+                state = .ready
+            }
+        } catch {
+            await MainActor.run {
+                state = .error(error)
+                errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+
     // MARK: - Regenerate Preview
 
     public func regeneratePreview() async throws {

@@ -97,21 +97,21 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     public var defaultModel: String {
         switch self {
         case .openAI:
-            return "gpt-4o"
+            return "gpt-5-mini"
         case .githubCopilot:
-            return "gpt-4o"
+            return "gpt-5-mini"
         case .groq:
-            return "llama-3.3-70b-versatile"
+            return "llama-4-70b-versatile"
         case .openAICompatible:
-            return "gpt-4"
+            return "gpt-5-mini"
         case .openRouter:
-            return "openai/gpt-4o"
+            return "anthropic/claude-haiku-4.5"
         case .ollama:
-            return "llama3"
+            return "llama4"
         case .anthropic:
-            return "claude-3-5-sonnet-20240620"
+            return "claude-haiku-4.5"
         case .gemini:
-            return "gemini-1.5-flash"
+            return "gemini-3-flash-preview"
         case .appleFoundationModel:
             return "default"
         }
@@ -155,6 +155,102 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
     
+    /// URL where users can get their API key
+    public var apiKeyURL: URL? {
+        switch self {
+        case .openAI:
+            return URL(string: "https://platform.openai.com/api-keys")
+        case .githubCopilot:
+            return URL(string: "https://github.com/settings/tokens")
+        case .groq:
+            return URL(string: "https://console.groq.com/keys")
+        case .openAICompatible:
+            return nil // Varies by provider
+        case .openRouter:
+            return URL(string: "https://openrouter.ai/keys")
+        case .ollama:
+            return URL(string: "https://ollama.ai/download")
+        case .anthropic:
+            return URL(string: "https://console.anthropic.com/settings/keys")
+        case .gemini:
+            return URL(string: "https://aistudio.google.com/app/apikey")
+        case .appleFoundationModel:
+            return nil
+        }
+    }
+    
+    /// Short label for the API key link
+    public var apiKeyLinkLabel: String {
+        switch self {
+        case .openAI:
+            return "platform.openai.com"
+        case .githubCopilot:
+            return "github.com/settings/tokens"
+        case .groq:
+            return "console.groq.com"
+        case .openAICompatible:
+            return "your provider's website"
+        case .openRouter:
+            return "openrouter.ai/keys"
+        case .ollama:
+            return "ollama.ai"
+        case .anthropic:
+            return "console.anthropic.com"
+        case .gemini:
+            return "aistudio.google.com"
+        case .appleFoundationModel:
+            return ""
+        }
+    }
+    
+    /// URL to the provider's model documentation
+    public var modelDocumentationURL: URL? {
+        switch self {
+        case .openAI:
+            return URL(string: "https://platform.openai.com/docs/models")
+        case .githubCopilot:
+            return URL(string: "https://docs.github.com/en/copilot/using-github-copilot/using-claude-sonnet-in-github-copilot")
+        case .groq:
+            return URL(string: "https://console.groq.com/docs/models")
+        case .openAICompatible:
+            return nil
+        case .openRouter:
+            return URL(string: "https://openrouter.ai/models")
+        case .ollama:
+            return URL(string: "https://ollama.ai/library")
+        case .anthropic:
+            return URL(string: "https://docs.anthropic.com/en/docs/about-claude/models")
+        case .gemini:
+            return URL(string: "https://ai.google.dev/gemini-api/docs/models/gemini")
+        case .appleFoundationModel:
+            return nil
+        }
+    }
+    
+    /// Short label for the model documentation link
+    public var modelDocsLinkLabel: String {
+        switch self {
+        case .openAI:
+            return "OpenAI Models"
+        case .githubCopilot:
+            return "Copilot Models"
+        case .groq:
+            return "Groq Models"
+        case .openAICompatible:
+            return "provider docs"
+        case .openRouter:
+            return "OpenRouter Models"
+        case .ollama:
+            return "Ollama Library"
+        case .anthropic:
+            return "Claude Models"
+        case .gemini:
+            return "Gemini Models"
+        case .appleFoundationModel:
+            return ""
+        }
+    }
+    
     public var logoImageName: String {
         switch self {
         case .openAI: return "ChatGPT"
@@ -173,6 +269,30 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         switch self {
         case .openAICompatible, .appleFoundationModel: return true
         default: return false
+        }
+    }
+    
+    /// Recommended models for this provider
+    public var recommendedModels: [String] {
+        switch self {
+        case .openAI:
+            return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"]
+        case .anthropic:
+            return ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"]
+        case .gemini:
+            return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro", "gemini-2.0-flash-exp"]
+        case .groq:
+            return ["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "llama3-groq-70b-8192-tool-use-preview"]
+        case .openRouter:
+            return ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-pro-1.5", "meta-llama/llama-3.1-70b-instruct"]
+        case .ollama:
+            return ["llama3", "mistral", "codellama", "phi3", "gemma2", "qwen2"]
+        case .githubCopilot:
+            return ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "claude-3.5-sonnet"]
+        case .openAICompatible:
+            return ["gpt-4", "gpt-3.5-turbo"]
+        case .appleFoundationModel:
+            return ["default"]
         }
     }
 }
@@ -206,6 +326,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
     
     // Organization limits (user-configurable)
     public var maxTopLevelFolders: Int // Maximum number of top-level folders AI can create (3-20)
+    
+    // Experimental Features
+    public var enableParallelGeneration: Bool // Enable multi-model comparison (experimental)
 
     public init(
         provider: AIProvider = .openAICompatible,
@@ -226,7 +349,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         showStatsForNerds: Bool = false,
         storeDuplicateMetadata: Bool = true,
         strictExclusions: Bool = true,
-        maxTopLevelFolders: Int = 10
+        maxTopLevelFolders: Int = 10,
+        enableParallelGeneration: Bool = false
     ) {
         self.provider = provider
         self.apiURL = apiURL
@@ -247,6 +371,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.storeDuplicateMetadata = storeDuplicateMetadata
         self.strictExclusions = strictExclusions
         self.maxTopLevelFolders = maxTopLevelFolders
+        self.enableParallelGeneration = enableParallelGeneration
     }
     
     public static let `default` = AIConfig(
@@ -267,7 +392,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         showStatsForNerds: false,
         storeDuplicateMetadata: true,
         strictExclusions: true,
-        maxTopLevelFolders: 10
+        maxTopLevelFolders: 10,
+        enableParallelGeneration: false
     )
 }
 

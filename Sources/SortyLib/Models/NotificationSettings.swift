@@ -7,6 +7,26 @@
 
 import Foundation
 
+/// Notification backend to use for system notifications
+public enum NotificationBackend: String, Codable, CaseIterable, Sendable {
+    case native = "native"       // UNUserNotificationCenter (macOS native)
+    case notifiCLI = "notificli" // NotifiCLI for actionable/persistent notifications
+    
+    public var displayName: String {
+        switch self {
+        case .native: return "Native (macOS)"
+        case .notifiCLI: return "NotifiCLI (Enhanced)"
+        }
+    }
+    
+    public var description: String {
+        switch self {
+        case .native: return "Standard macOS notifications via Notification Center"
+        case .notifiCLI: return "Actionable, persistent notifications with buttons"
+        }
+    }
+}
+
 /// Notification settings model for user preferences
 public struct NotificationSettings: Codable, Equatable {
     // MARK: - Delivery Method
@@ -16,6 +36,23 @@ public struct NotificationSettings: Codable, Equatable {
     
     /// Show in macOS Notification Center
     public var systemNotifications: Bool = true
+    
+    /// Which backend to use for system notifications
+    public var notificationBackend: NotificationBackend = .notifiCLI
+    
+    // MARK: - NotifiCLI Settings
+    
+    /// Make notifications persistent (stay until dismissed)
+    public var persistentNotifications: Bool = true
+    
+    /// Show action buttons on notifications (Undo, Open Folder, etc.)
+    public var showActionButtons: Bool = true
+    
+    /// Sound to play with NotifiCLI notifications
+    public var notifiCLISound: String = "Glass"
+    
+    /// Custom app icon for notifications (app path or shorthand)
+    public var customNotificationIcon: String = ""
     
     // MARK: - Notification Types
     

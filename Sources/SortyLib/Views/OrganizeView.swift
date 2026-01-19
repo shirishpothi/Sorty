@@ -13,8 +13,11 @@ struct OrganizeView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var customPersonaStore: CustomPersonaStore
 
     @State private var previousState: OrganizationState?
+    @State private var showOrchestrationDashboard = false
+    @StateObject private var orchestrator = GenerationOrchestrator()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,6 +62,28 @@ struct OrganizeView: View {
                 }
             }
         }
+        .sheet(isPresented: $showOrchestrationDashboard) {
+            if let baseURL = appState.selectedDirectory {
+                OrchestrationDashboard(
+                    orchestrator: orchestrator,
+                    baseURL: baseURL,
+                    onSelectPlan: { plan in
+                        organizer.currentPlan = plan
+                        organizer.state = .ready
+                        showOrchestrationDashboard = false
+                    },
+                    onDismiss: {
+                        showOrchestrationDashboard = false
+                    }
+                )
+                .environmentObject(settingsViewModel)
+                .environmentObject(organizer)
+                .environmentObject(customPersonaStore)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Organization workflow")
+        .accessibilityHint("Select a folder, configure options, or compare models")
         .onAppear {
             configureOrganizer()
         }
@@ -74,7 +99,9 @@ struct OrganizeView: View {
     private var stateContent: some View {
         Group {
             if case .idle = organizer.state {
-                ReadyToOrganizeView(onStart: startOrganization)
+                ReadyToOrganizeView(onStart: startOrganization, onCompare: {
+                    showOrchestrationDashboard = true
+                })
             } else if case .scanning = organizer.state {
                 AnalysisView()
             } else if case .organizing = organizer.state {
@@ -93,7 +120,7 @@ struct OrganizeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(.background)
     }
 
     private var stateIdentifier: String {
@@ -187,7 +214,9 @@ struct DirectoryHeader: View {
 
 struct ReadyToOrganizeView: View {
     let onStart: () -> Void
+    let onCompare: () -> Void
     @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     @State private var hasAppeared = false
     @State private var isTextFieldFocused = false
@@ -197,62 +226,87 @@ struct ReadyToOrganizeView: View {
     @FocusState private var textFieldFocus: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            
-            VStack(spacing: 28) {
+        WorkflowContainer(currentStep: .configure) {
+            // Compact header
+            VStack(spacing: 16) {
                 iconSection
-                    .opacity(hasAppeared ? 1 : 0)
-                    .scaleEffect(hasAppeared ? 1 : 0.8)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
-                
-                VStack(spacing: 8) {
+                VStack(spacing: 6) {
                     Text("Ready to Organize")
                         .font(.title2)
                         .fontWeight(.semibold)
-
                     Text("AI will analyze your files and suggest an organized folder structure")
-                        .font(.body)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                        .frame(maxWidth: 450)
                 }
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 10)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
-                
-                instructionsField
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 10)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
-                
-                // Storage Locations Section
-                storageLocationsSection
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 10)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.35), value: hasAppeared)
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .scaleEffect(hasAppeared ? 1 : 0.8)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+            
+            // Instructions card
+            WorkflowCard(title: "Instructions", icon: "text.bubble") {
+                instructionsContent
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            
+            // Storage locations card
+            WorkflowCard(title: "Storage Locations", icon: "externaldrive") {
+                storageLocationsContent
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            
+            // Start button - full width
+            Button {
+                HapticFeedbackManager.shared.tap()
+                onStart()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 12))
+                    Text("Start Organization")
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut("r", modifiers: .command)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
+            .accessibilityIdentifier("StartOrganizationButton")
+            .accessibilityLabel("Start organization")
+            .accessibilityHint("Begins analyzing the selected folder")
+            .accessibilityAddTraits(.isButton)
 
+            // Only show Compare Models button when parallel generation is enabled
+            if settingsViewModel.config.enableParallelGeneration {
                 Button {
                     HapticFeedbackManager.shared.tap()
-                    onStart()
+                    onCompare()
                 } label: {
                     HStack(spacing: 8) {
-                        Image(systemName: "play.fill")
+                        Image(systemName: "rectangle.3.group")
                             .font(.system(size: 12))
-                        Text("Start Organization")
+                        Text("Compare Models")
                     }
-                    .frame(minWidth: 180)
+                    .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.bordered)
                 .controlSize(.large)
-                .keyboardShortcut("r", modifiers: .command)
+                .keyboardShortcut("c", modifiers: [.command, .shift])
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(y: hasAppeared ? 0 : 10)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
-                .accessibilityIdentifier("StartOrganizationButton")
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.45), value: hasAppeared)
+                .accessibilityIdentifier("CompareModelsButton")
+                .accessibilityLabel("Compare models")
+                .accessibilityHint("Opens the parallel organization dashboard")
+                .accessibilityAddTraits(.isButton)
             }
-            
-            Spacer()
         }
         .fileImporter(
             isPresented: $showingFolderPicker,
@@ -281,9 +335,9 @@ struct ReadyToOrganizeView: View {
         }
     }
     
-    private var storageLocationsSection: some View {
-        VStack(spacing: 12) {
-            // Toggle header
+    private var storageLocationsContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Collapsible toggle header
             Button {
                 HapticFeedbackManager.shared.selection()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -291,14 +345,6 @@ struct ReadyToOrganizeView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "externaldrive.badge.plus")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.purple)
-                    
-                    Text("Storage Locations")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
                     if !storageLocationsManager.enabledLocations.isEmpty {
                         Text("\(storageLocationsManager.enabledLocations.count) active")
                             .font(.caption)
@@ -307,6 +353,10 @@ struct ReadyToOrganizeView: View {
                             .padding(.vertical, 2)
                             .background(Color.green.opacity(0.1))
                             .clipShape(Capsule())
+                    } else {
+                        Text("No locations configured")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     
                     Spacer()
@@ -315,27 +365,16 @@ struct ReadyToOrganizeView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .frame(width: 450)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.secondary.opacity(0.05))
-                )
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             
             if showStorageLocations {
-                VStack(spacing: 10) {
-                    // Description
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Files can be moved to these destination folders during organization")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 400)
                     
-                    // Active locations preview
                     if !storageLocationsManager.locations.isEmpty {
                         VStack(spacing: 6) {
                             ForEach(storageLocationsManager.locations.prefix(3)) { location in
@@ -348,11 +387,11 @@ struct ReadyToOrganizeView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        .frame(width: 400)
+                        .frame(maxWidth: .infinity)
                     }
                     
                     // Quick add suggestions
-                    VStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text("Quick add:")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
@@ -373,34 +412,25 @@ struct ReadyToOrganizeView: View {
                         }
                     }
                     
-                    // Add custom button
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        suggestedLocationName = nil
-                        showingFolderPicker = true
-                    } label: {
-                        Label("Add Custom Location", systemImage: "plus")
-                            .font(.caption)
+                    HStack {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            suggestedLocationName = nil
+                            showingFolderPicker = true
+                        } label: {
+                            Label("Add Custom Location", systemImage: "plus")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        
+                        Spacer()
+                        
+                        Text("More in Settings")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    
-                    // Link to settings
-                    Text("Configure all locations in Settings → Storage Locations")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
                 }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .frame(width: 450)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(NSColor.controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                )
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)),
                     removal: .opacity
@@ -413,100 +443,53 @@ struct ReadyToOrganizeView: View {
         ZStack {
             Circle()
                 .fill(Color.purple.opacity(0.1))
-                .frame(width: 100, height: 100)
+                .frame(width: 80, height: 80)
             
             Image(systemName: "wand.and.stars")
-                .font(.system(size: 48, weight: .light))
+                .font(.system(size: 36, weight: .light))
                 .foregroundStyle(.purple)
         }
     }
     
-    private var instructionsField: some View {
-        VStack(alignment: .center, spacing: 10) {
-            HStack(spacing: 6) {
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                Text("Additional Instructions")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                Text("(Optional)")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            
-            VStack(alignment: .center, spacing: 6) {
-                ZStack(alignment: .topLeading) {
-                    if organizer.customInstructions.isEmpty {
-                        Text("e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"...")
-                            .font(.body)
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .allowsHitTesting(false)
-                    }
-                    
-                    SubmittableTextEditor(text: $organizer.customInstructions) {
-                        // On Enter: Start organization
-                        onStart()
-                    }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
+    private var instructionsContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .topLeading) {
+                if organizer.customInstructions.isEmpty {
+                    Text("e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"...")
+                        .font(.body)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .allowsHitTesting(false)
                 }
-                .frame(minHeight: 60, maxHeight: 80)
-                .frame(width: 450)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(NSColor.textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-                .accessibilityIdentifier("CustomInstructionsTextField")
-                .accessibilityLabel("Additional instructions for organization")
-                .accessibilityHint("Press Enter to start organization, Command+Enter for new line")
                 
-                VStack(spacing: 4) {
-                    Text("These instructions will guide the AI in organizing your files")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    
-                    HStack(spacing: 12) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "return")
-                                .font(.system(size: 9, weight: .medium))
-                            Text("Send")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.secondary.opacity(0.1))
-                        )
-                        
-                        HStack(spacing: 4) {
-                            Image(systemName: "command")
-                                .font(.system(size: 9, weight: .medium))
-                            Image(systemName: "return")
-                                .font(.system(size: 9, weight: .medium))
-                            Text("New Line")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.secondary.opacity(0.1))
-                        )
-                    }
+                SubmittableTextEditor(text: $organizer.customInstructions) {
+                    onStart()
                 }
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
             }
+            .frame(minHeight: 60, maxHeight: 80)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(NSColor.textBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+            )
+            .accessibilityIdentifier("CustomInstructionsTextField")
+            .accessibilityLabel("Additional instructions for organization")
+            .accessibilityHint("Press Enter to start organization, Command+Enter for new line")
+            
+            HStack(spacing: 8) {
+                Text("⏎ Send")
+                Text("⌘⏎ New Line")
+            }
+            .font(.caption2)
+            .foregroundStyle(.quaternary)
         }
-        .frame(maxWidth: .infinity)
     }
 }
 

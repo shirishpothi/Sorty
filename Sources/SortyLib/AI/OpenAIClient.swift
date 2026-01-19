@@ -153,15 +153,28 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.missingAPIURL
         }
         
-        // Base API URL for health check (stripping /chat/completions if present)
-        var baseURL = apiURL
-        if baseURL.hasSuffix("/chat/completions") {
-            baseURL = String(baseURL.dropLast("/chat/completions".count))
-        } else if baseURL.hasSuffix("/chat/completions/") {
-            baseURL = String(baseURL.dropLast("/chat/completions/".count))
-        }
+        // Construct the models endpoint URL properly based on the base URL format
+        var modelsURL: String
         
-        let modelsURL = baseURL.hasSuffix("/") ? "\(baseURL)models" : "\(baseURL)/models"
+        if apiURL.hasSuffix("/chat/completions") {
+            // Strip /chat/completions and use /models
+            modelsURL = String(apiURL.dropLast("/chat/completions".count)) + "/models"
+        } else if apiURL.hasSuffix("/chat/completions/") {
+            modelsURL = String(apiURL.dropLast("/chat/completions/".count)) + "/models"
+        } else if apiURL.hasSuffix("/v1") {
+            // URL ends with /v1, add /models
+            modelsURL = apiURL + "/models"
+        } else if apiURL.hasSuffix("/v1/") {
+            modelsURL = apiURL + "models"
+        } else if apiURL.contains("/v1/") || apiURL.contains("/v1beta/") {
+            // URL already has versioning path (like OpenRouter or Gemini)
+            let baseURL = apiURL.hasSuffix("/") ? apiURL : apiURL + "/"
+            modelsURL = baseURL + "models"
+        } else {
+            // Standard API base URL (like https://api.openai.com), add /v1/models
+            let baseURL = apiURL.hasSuffix("/") ? String(apiURL.dropLast()) : apiURL
+            modelsURL = baseURL + "/v1/models"
+        }
         
         guard let url = URL(string: modelsURL) else {
             throw AIClientError.invalidURL
