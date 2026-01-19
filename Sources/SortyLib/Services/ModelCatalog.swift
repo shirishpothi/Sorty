@@ -53,9 +53,11 @@ public final class ModelCatalog: ObservableObject {
     }
     
     public func cachedModels(for provider: AIProvider) -> [ModelInfo] {
-        // Always return cached models, never fallback to hardcoded
-        // If empty, refresh will populate it
-        return modelsByProvider[provider] ?? []
+        let cached = modelsByProvider[provider] ?? []
+        if cached.isEmpty {
+            return fallbackModels(for: provider)
+        }
+        return cached
     }
     
     public func refresh(provider: AIProvider, force: Bool = false) async {
