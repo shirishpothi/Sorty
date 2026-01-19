@@ -374,6 +374,7 @@ public class GenerationOrchestrator: ObservableObject {
         runs[index].endTime = Date()
         runTasks[id] = nil
         lastProgressUpdate[id] = nil
+        streamingDelegates[id] = nil
         updateIsAnyRunning()
     }
     

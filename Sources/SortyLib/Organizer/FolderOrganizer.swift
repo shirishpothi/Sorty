@@ -950,10 +950,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         var tempConfig = aiConfig ?? AIConfig.default
         tempConfig.provider = provider
         tempConfig.model = model ?? provider.defaultModel
-        // Preserve custom apiURL if set, otherwise use provider default
-        if (aiConfig?.apiURL ?? "").isEmpty {
+        // SMART CONFIGURATION:
+        // 1. If the global config provider matches the requested provider, we might want to keep the custom URL if set.
+        // 2. If valid custom URL exists and providers match, keep it.
+        // 3. Otherwise (providers differ, or URL is empty), switch to the new provider's default.
+        
+        // Check if provider is same directly
+        let isSameProvider = aiConfig?.provider == provider
+        let hasCustomURL = !(aiConfig?.apiURL ?? "").isEmpty
+        
+        if !isSameProvider || !hasCustomURL {
             tempConfig.apiURL = provider.defaultAPIURL
         }
+        // Else: keep the existing custom URL from the copy
         
         // Create a temporary client
         let tempClient = try AIClientFactory.createClient(config: tempConfig)

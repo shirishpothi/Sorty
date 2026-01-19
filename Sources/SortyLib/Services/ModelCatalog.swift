@@ -182,7 +182,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.invalidURL
         }
         
-        guard let openAIAPIKey = UserDefaults.standard.string(forKey: "openAIAPIKey"), !openAIAPIKey.isEmpty else {
+        guard let openAIAPIKey = KeychainManager.get(key: "openAIAPIKey"), !openAIAPIKey.isEmpty else {
             throw ModelCatalogError.fetchFailed
         }
         
@@ -220,7 +220,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.invalidURL
         }
         
-        guard let groqAPIKey = UserDefaults.standard.string(forKey: "groqAPIKey"), !groqAPIKey.isEmpty else {
+        guard let groqAPIKey = KeychainManager.get(key: "groqAPIKey"), !groqAPIKey.isEmpty else {
             throw ModelCatalogError.fetchFailed
         }
         
@@ -390,15 +390,20 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.invalidURL
         }
         
+        // Check for API Key
+        guard let geminiAPIKey = KeychainManager.get(key: "geminiAPIKey"), !geminiAPIKey.isEmpty else {
+             return geminiModels()
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.setValue(geminiAPIKey, forHTTPHeaderField: "x-goog-api-key")
         request.timeoutInterval = 15
         
         do {
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                // API may require API key - return fallback
                 return geminiModels()
             }
             

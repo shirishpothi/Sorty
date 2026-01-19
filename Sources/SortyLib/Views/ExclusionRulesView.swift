@@ -374,6 +374,7 @@ struct ExclusionRuleRow: View {
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
+            .accessibilityLabel(rule.isEnabled ? "Disable rule: \(rule.displayDescription)" : "Enable rule: \(rule.displayDescription)")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

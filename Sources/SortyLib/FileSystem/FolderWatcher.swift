@@ -68,57 +68,60 @@ public final class FolderWatcher: @unchecked Sendable {
     /// Start watching a folder for changes
     public func startWatching(_ folder: WatchedFolder) {
         queue.async { [weak self] in
-            guard let self = self else { return }
-            guard folder.isEnabled else { return }
-            
-            // Stop existing watcher for this folder if any
-            self.stopWatchingSync(id: folder.id)
-            
-            // Store folder config
-            self.watchedFolders[folder.id] = folder
-            
-            var path = folder.path
-            
-            // Resolve Security Scoped Bookmark if present
-            if let bookmarkData = folder.bookmarkData {
-                var isStale = false
-                if let resolvedURL = try? URL(resolvingBookmarkData: bookmarkData,
-                                              options: .withSecurityScope,
-                                              relativeTo: nil,
-                                              bookmarkDataIsStale: &isStale) {
+            self?.startWatchingSync(folder)
+        }
+    }
+    
+    private func startWatchingSync(_ folder: WatchedFolder) {
+        guard folder.isEnabled else { return }
+        
+        // Stop existing watcher for this folder if any
+        stopWatchingSync(id: folder.id)
+        
+        // Store folder config
+        watchedFolders[folder.id] = folder
+        
+        var path = folder.path
+        
+        // Resolve Security Scoped Bookmark if present
+        if let bookmarkData = folder.bookmarkData {
+            var isStale = false
+            if let resolvedURL = try? URL(resolvingBookmarkData: bookmarkData,
+                                          options: .withSecurityScope,
+                                          relativeTo: nil,
+                                          bookmarkDataIsStale: &isStale) {
+                
+                if resolvedURL.startAccessingSecurityScopedResource() {
+                    resolvedURLs[folder.id] = resolvedURL
+                    path = resolvedURL.path
+                    DebugLogger.log("Successfully resolved bookmark for: \(path)")
                     
-                    if resolvedURL.startAccessingSecurityScopedResource() {
-                        self.resolvedURLs[folder.id] = resolvedURL
-                        path = resolvedURL.path
-                        DebugLogger.log("Successfully resolved bookmark for: \(path)")
-                        
-                        // If stale, notify delegate to update storage
-                        if isStale {
-                            Task { @MainActor [weak self] in
-                                guard let self = self else { return }
-                                // Re-create bookmark fresh
-                                if let newData = try? resolvedURL.bookmarkData(
-                                    options: .withSecurityScope,
-                                    includingResourceValuesForKeys: nil,
-                                    relativeTo: nil
-                                ) {
-                                    self.delegate?.folderWatcher(self, didDetectStaleBookmarkFor: folder, newBookmarkData: newData)
-                                }
+                    // If stale, notify delegate to update storage
+                    if isStale {
+                        Task { @MainActor [weak self] in
+                            guard let self = self else { return }
+                            // Re-create bookmark fresh
+                            if let newData = try? resolvedURL.bookmarkData(
+                                options: .withSecurityScope,
+                                includingResourceValuesForKeys: nil,
+                                relativeTo: nil
+                            ) {
+                                self.delegate?.folderWatcher(self, didDetectStaleBookmarkFor: folder, newBookmarkData: newData)
                             }
                         }
-                    } else {
-                        DebugLogger.log("Failed to access security scoped resource for: \(folder.path)")
                     }
                 } else {
-                    DebugLogger.log("Failed to resolve bookmark data for: \(folder.path)")
+                    DebugLogger.log("Failed to access security scoped resource for: \(folder.path)")
                 }
+            } else {
+                DebugLogger.log("Failed to resolve bookmark data for: \(folder.path)")
             }
-            
-            // Take initial snapshot
-            self.updateSnapshot(for: folder)
-            
-            self.createStream(for: folder, at: path)
         }
+        
+        // Take initial snapshot
+        updateSnapshot(for: folder)
+        
+        createStream(for: folder, at: path)
     }
     
     /// Stop watching a specific folder
@@ -158,7 +161,7 @@ public final class FolderWatcher: @unchecked Sendable {
                 if folder.isEnabled {
                     // If path changed or it's new, restart
                     if existingFolder == nil || existingFolder?.path != folder.path {
-                        self.startWatching(folder)
+                        self.startWatchingSync(folder)
                     } else {
                         // Just update metadata (delay, autoOrganize, etc.)
                         self.watchedFolders[folder.id] = folder

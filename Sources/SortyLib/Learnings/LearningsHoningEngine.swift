@@ -191,6 +191,10 @@ public class LearningsHoningEngine: ObservableObject {
     public var behaviorContext: BehaviorAnalysisContext?
     
     public func startSession(questionCount: Int = 5, contextualTopics: [String] = []) async {
+        // Clear previous session state
+        self.behaviorContext = nil
+        UserDefaults.standard.set(0, forKey: "HoningRetryCount")
+        
         let session = HoningSession(targetQuestionCount: questionCount, contextualTopics: contextualTopics)
         self.currentSession = session
         isGenerating = true
@@ -229,12 +233,22 @@ public class LearningsHoningEngine: ObservableObject {
         }
         
         // Add behavior context if available
+        // Add behavior context if available
         if let context = behaviorContext {
+            // Sanitize sensitive data
+            let sanitizedDestinations = context.topDestinationFolders.map { folder -> String in
+                if folder.range(of: "\\d{4}", options: .regularExpression) != nil { return "[Year/Date Folder]" }
+                if ["documents", "downloads", "desktop", "pictures", "movies", "music"].contains(folder.lowercased()) { return folder }
+                return "[Project/Category Folder]" 
+            }
+            
+            let sanitizedTypes  = context.topFileTypes.map { $0.uppercased() } // Extensions are generally safe
+            
             prompt += """
             USER BEHAVIOR ANALYSIS:
             - Recent corrections: \(context.recentCorrectionCount) files moved after AI organization
-            - Most common destination folders: \(context.topDestinationFolders.joined(separator: ", "))
-            - File types frequently organized: \(context.topFileTypes.joined(separator: ", "))
+            - Most common destination types: \(sanitizedDestinations.joined(separator: ", "))
+            - File types frequently organized: \(sanitizedTypes.joined(separator: ", "))
             - Reverts in last 30 days: \(context.recentRevertCount)
             
             Ask questions that address patterns in this behavior.
@@ -574,6 +588,9 @@ extension LearningsManager {
             topics.append(HoningTopic.folderDepthPreference.rawValue)
         }
         
+        // Remove duplicates while preserving order
+        topics = topics.orderedDeduplicated()
+        
         // Build context
         let context = BehaviorAnalysisContext(
             recentCorrectionCount: recentCorrections.count,
@@ -582,9 +599,6 @@ extension LearningsManager {
             topFileTypes: topTypes,
             frequentPatterns: topics
         )
-        
-        // Remove duplicates while preserving order
-        topics = topics.orderedDeduplicated()
         
         return (topics: topics, context: context)
     }

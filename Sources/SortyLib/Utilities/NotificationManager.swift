@@ -161,11 +161,30 @@ public class NotificationManager: ObservableObject {
         }
     }
     
+    /// Check if it's safe to use UNUserNotificationCenter (requires bundle ID and not running in tests)
+    private var isSafeToUseSystemNotifications: Bool {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return false }
+        
+        // Avoid running in xctest tool environment which crashes UNUserNotificationCenter with "bundleProxyForCurrentProcess is nil"
+        if bundleID == "com.apple.dt.xctest.tool" {
+            return false
+        }
+        
+        return true
+    }
+    
     /// Initialize the notification system (call on app startup for faster first notification)
     private func setupNotificationSystem() async {
         // Request native notification permission
-        await requestSystemNotificationPermission()
-        await checkNotificationPermission()
+        if isSafeToUseSystemNotifications {
+            await requestSystemNotificationPermission()
+            await checkNotificationPermission()
+        } else {
+            print("NotificationManager: Skipping system notification setup (CLI/Test environment)")
+            await MainActor.run {
+                self.notificationPermissionStatus = .denied
+            }
+        }
         
         // Setup NotifiCLI in background (builds on first run)
         await MainActor.run {
@@ -209,6 +228,8 @@ public class NotificationManager: ObservableObject {
     
     /// Check current notification permission status
     public func checkNotificationPermission() async {
+        guard isSafeToUseSystemNotifications else { return }
+        
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         await MainActor.run {
             self.notificationPermissionStatus = settings.authorizationStatus
@@ -217,6 +238,8 @@ public class NotificationManager: ObservableObject {
     
     /// Request notification permission
     public func requestPermission() async -> Bool {
+        guard isSafeToUseSystemNotifications else { return false }
+        
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
             await checkNotificationPermission()
@@ -704,6 +727,11 @@ public class NotificationManager: ObservableObject {
     
     /// Show notification using native macOS UNUserNotificationCenter (fallback)
     private func showNativeNotification(title: String, message: String, playSound: Bool) async {
+        guard isSafeToUseSystemNotifications else {
+            print("NotificationManager: Skipping native notification (CLI/Test environment)")
+            return
+        }
+        
         // Check permission first
         let notificationSettings = await UNUserNotificationCenter.current().notificationSettings()
         
@@ -734,6 +762,8 @@ public class NotificationManager: ObservableObject {
     }
     
     private func requestSystemNotificationPermission() async {
+        guard isSafeToUseSystemNotifications else { return }
+        
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
             print("NotificationManager: Permission \(granted ? "granted" : "denied")")

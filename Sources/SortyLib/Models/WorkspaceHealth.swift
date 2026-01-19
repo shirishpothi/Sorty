@@ -1480,21 +1480,27 @@ public class WorkspaceHealthManager: ObservableObject {
         let fileManager = FileManager.default
         let disposableFiles: Set<String> = [".DS_Store", "Thumbs.db", "desktop.ini", ".localized"]
         var removedFolders: [String] = []
+        var errors: [Error] = []
         
         if let specificFiles = specificFiles {
             // Just delete the specifically selected folders
             for file in specificFiles {
-                // First, remove any disposable files inside
-                if let contents = try? fileManager.contentsOfDirectory(atPath: file.path) {
-                    for item in contents {
-                        if disposableFiles.contains(item) {
-                            let itemPath = (file.path as NSString).appendingPathComponent(item)
-                            try? fileManager.removeItem(atPath: itemPath)
+                do {
+                    // First, remove any disposable files inside
+                    if let contents = try? fileManager.contentsOfDirectory(atPath: file.path) {
+                        for item in contents {
+                            if disposableFiles.contains(item) {
+                                let itemPath = (file.path as NSString).appendingPathComponent(item)
+                                try? fileManager.removeItem(atPath: itemPath)
+                            }
                         }
                     }
+                    try fileManager.removeItem(atPath: file.path)
+                    removedFolders.append(file.path)
+                } catch {
+                    errors.append(error)
+                    DebugLogger.log("Failed to remove folder: \(file.path), error: \(error.localizedDescription)")
                 }
-                try fileManager.removeItem(atPath: file.path)
-                removedFolders.append(file.path)
             }
         } else {
             // Find all empty folders (already identifies nested empties correctly)
@@ -1521,7 +1527,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     try fileManager.removeItem(atPath: folderPath)
                     removedFolders.append(folderPath)
                 } catch {
-                    // Log the error for debugging but continue processing other folders
+                    errors.append(error)
                     DebugLogger.log("Failed to remove empty folder at \(folderPath): \(error.localizedDescription)")
                 }
             }
@@ -1536,6 +1542,11 @@ public class WorkspaceHealthManager: ObservableObject {
             cleanupHistory.append(item)
             saveData()
             DebugLogger.log("Pruned \(removedFolders.count) empty folders")
+        }
+        
+        // Propagate error if significantly failed but still record partial success
+        if removedFolders.isEmpty && !errors.isEmpty {
+            throw errors.first!
         }
     }
     

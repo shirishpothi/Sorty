@@ -881,6 +881,14 @@ final class WorkspaceHealthEdgeCaseTests: XCTestCase {
     
     override func setUp() {
         super.setUp()
+        
+        // Clear shared state
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "workspaceHealthConfig")
+        defaults.removeObject(forKey: "workspaceSnapshots")
+        defaults.removeObject(forKey: "cleanupOpportunities")
+        defaults.removeObject(forKey: "healthInsights")
+        
         fileManager = FileManager.default
         tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)

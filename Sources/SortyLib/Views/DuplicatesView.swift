@@ -240,7 +240,12 @@ struct DuplicatesView: View {
                 }
             } else {
                 for file in files {
-                    try? fm.removeItem(atPath: file.path)
+                    do {
+                        try fm.removeItem(atPath: file.path)
+                    } catch {
+                         DebugLogger.log("Failed to remove file: \(file.path), error: \(error.localizedDescription)")
+                         // Continue deleting others
+                    }
                 }
             }
             HapticFeedbackManager.shared.success()

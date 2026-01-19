@@ -152,7 +152,7 @@ public actor NotifiCLIService {
         let binaryPath = notifiCLIAppPath.appendingPathComponent("Contents/MacOS/SortyNotifications").path
         let persistentBinaryPath = notifiPersistentAppPath.appendingPathComponent("Contents/MacOS/SortyNotificationsPersistent").path
         
-        if FileManager.default.isExecutableFile(atPath: binaryPath) {
+        if FileManager.default.isExecutableFile(atPath: binaryPath) && FileManager.default.isExecutableFile(atPath: persistentBinaryPath) {
             notificliPath = binaryPath
             notifiPersistentPath = persistentBinaryPath
             isAvailable = true
@@ -740,10 +740,17 @@ if let path = imagePath, (path.lowercased().hasPrefix("http://") || path.lowerca
     do {
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let dest = tempDir.appendingPathComponent(url.lastPathComponent.isEmpty ? UUID().uuidString : url.lastPathComponent)
-        if let data = try? Data(contentsOf: url) {
-            try data.write(to: dest)
-            imagePath = dest.path
+        
+        let sem = DispatchSemaphore(value: 0)
+        let task = URLSession.shared.dataTask(with: url) { data, _, error in
+            if let data = data {
+                try? data.write(to: dest)
+                imagePath = dest.path
+            }
+            sem.signal()
         }
+        task.resume()
+        _ = sem.wait(timeout: .now() + 30.0)
     } catch {}
 }
 
@@ -773,7 +780,8 @@ if let soundName = soundName {
 }
 
 if !actions.isEmpty || replyPlaceholder != nil || openUrl != nil {
-    while delegate.selectedAction == nil {
+    let deadline = Date().addingTimeInterval(60)
+    while delegate.selectedAction == nil && Date() < deadline {
         RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.1))
     }
     if let action = delegate.selectedAction { print(action) }

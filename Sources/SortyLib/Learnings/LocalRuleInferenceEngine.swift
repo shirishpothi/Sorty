@@ -117,9 +117,10 @@ public actor LocalRuleInferenceEngine {
             let destFolderName = URL(fileURLWithPath: destFolder).lastPathComponent
             let confidence = calculateConfidence(exampleCount: extChanges.count, isRecent: areRecent(extChanges.map { $0.timestamp }))
             
+            let escapedExt = NSRegularExpression.escapedPattern(for: ext)
             let rule = InferredRule(
                 id: "local-ext-\(ext)-\(UUID().uuidString.prefix(8))",
-                pattern: ".*\\.\(ext)$",
+                pattern: ".*\\.\(escapedExt)$",
                 template: "\(destFolder)/{filename}",
                 metadataCues: [],
                 priority: Int(confidence * 80), // Slightly lower priority than pattern-based
@@ -336,8 +337,9 @@ public actor LocalRuleInferenceEngine {
         // 2. Check for common extension grouping
         let extensions = Set(filenames.map { URL(fileURLWithPath: $0).pathExtension.lowercased() })
         if extensions.count == 1, let ext = extensions.first, !ext.isEmpty {
+            let escapedExt = NSRegularExpression.escapedPattern(for: ext)
             return DetectedPattern(
-                regex: ".*\\.\(ext)$",
+                regex: ".*\\.\(escapedExt)$",
                 description: ".\(ext.uppercased()) files"
             )
         }

@@ -91,11 +91,14 @@ let delegate = NotificationDelegate()
 center.delegate = delegate
 
 // Request authorization
+let authSemaphore = DispatchSemaphore(value: 0)
 center.requestAuthorization(options: [.alert, .sound]) { granted, error in
     if let error = error {
         print("Error requesting auth: \(error.localizedDescription)")
     }
+    authSemaphore.signal()
 }
+_ = authSemaphore.wait(timeout: .now() + 5.0)
 
 // Register action category if needed
 var notificationActions: [UNNotificationAction] = []
@@ -153,9 +156,29 @@ if let path = imagePath, (path.lowercased().hasPrefix("http://") || path.lowerca
         let fileName = url.lastPathComponent.isEmpty ? "image-\(UUID().uuidString)" : url.lastPathComponent
         let destinationURL = tempDir.appendingPathComponent(fileName)
         
-        if let data = try? Data(contentsOf: url) {
-            try data.write(to: destinationURL)
-            imagePath = destinationURL.path
+        let downloadSemaphore = DispatchSemaphore(value: 0)
+        var downloadError: Error?
+        
+        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+            if let error = error {
+                downloadError = error
+            } else if let data = data {
+                do {
+                    try data.write(to: destinationURL)
+                    imagePath = destinationURL.path
+                } catch {
+                    downloadError = error
+                }
+            }
+            downloadSemaphore.signal()
+        }
+        task.resume()
+        _ = downloadSemaphore.wait(timeout: .now() + 30.0)
+        
+        if let error = downloadError {
+             fputs("Warning: Failed to download remote image: \(error.localizedDescription)\n", stderr)
+             // Cleanup if needed
+             try? FileManager.default.removeItem(at: destinationURL)
         }
     } catch {
         fputs("Warning: Failed to process remote image: \(error.localizedDescription)\n", stderr)
@@ -229,11 +252,17 @@ if let soundName = soundName {
 
 // Wait for user response if actions exist or reply is requested
 if !actions.isEmpty || replyPlaceholder != nil || openUrl != nil {
-    while delegate.selectedAction == nil {
+    let timeoutSeconds: TimeInterval = 60 // 60 seconds timeout
+    let deadline = Date().addingTimeInterval(timeoutSeconds)
+    
+    while delegate.selectedAction == nil && Date() < deadline {
         RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.1))
     }
     
     if let action = delegate.selectedAction {
         print(action)
+    } else {
+         fputs("Timeout waiting for user interaction.\n", stderr)
+         exit(1)
     }
 }
