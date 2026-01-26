@@ -1121,7 +1121,7 @@ public class WorkspaceHealthManager: ObservableObject {
             do {
                 let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
                 if resourceValues.isDirectory == true {
-                    let depth = url.path.components(separatedBy: "/").count
+                    let depth = url.pathComponents.count
                     allDirectories.append((path: url.path, depth: depth))
                 }
             } catch {
