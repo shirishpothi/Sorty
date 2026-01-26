@@ -793,4 +793,65 @@ class WorkspaceHealthIntegrationTests: XCTestCase {
         XCTAssertTrue(healthManager.insights.first!.isRead)
         XCTAssertTrue(healthManager.unreadInsights.isEmpty)
     }
+    
+    @MainActor
+    func testEmptyFoldersDetection() async throws {
+        let healthManager = WorkspaceHealthManager()
+        
+        // Create a temporary test directory
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: tempDirectory)
+        }
+        
+        // Test case 1: Simple empty folder
+        let emptyFolder1 = tempDirectory.appendingPathComponent("EmptyFolder1")
+        try FileManager.default.createDirectory(at: emptyFolder1, withIntermediateDirectories: true)
+        
+        // Test case 2: Folder with only empty subfolders (the bug fix target)
+        let parentFolder = tempDirectory.appendingPathComponent("ParentFolder")
+        let emptyChild1 = parentFolder.appendingPathComponent("EmptyChild1")
+        let emptyChild2 = parentFolder.appendingPathComponent("EmptyChild2")
+        try FileManager.default.createDirectory(at: emptyChild1, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: emptyChild2, withIntermediateDirectories: true)
+        
+        // Test case 3: Deeply nested empty folders
+        let deepParent = tempDirectory.appendingPathComponent("DeepParent")
+        let deepChild = deepParent.appendingPathComponent("DeepChild")
+        let deepGrandchild = deepChild.appendingPathComponent("DeepGrandchild")
+        try FileManager.default.createDirectory(at: deepGrandchild, withIntermediateDirectories: true)
+        
+        // Test case 4: Folder with a file (should NOT be detected as empty)
+        let folderWithFile = tempDirectory.appendingPathComponent("FolderWithFile")
+        try FileManager.default.createDirectory(at: folderWithFile, withIntermediateDirectories: true)
+        try "content".write(to: folderWithFile.appendingPathComponent("file.txt"), atomically: true, encoding: .utf8)
+        
+        // Test case 5: Folder with only hidden files (should be detected as empty)
+        let folderWithHiddenFile = tempDirectory.appendingPathComponent("FolderWithHiddenFile")
+        try FileManager.default.createDirectory(at: folderWithHiddenFile, withIntermediateDirectories: true)
+        try "content".write(to: folderWithHiddenFile.appendingPathComponent(".DS_Store"), atomically: true, encoding: .utf8)
+        
+        // Analyze the directory
+        await healthManager.analyzeDirectory(path: tempDirectory.path, files: [])
+        
+        // Find the empty folders opportunity
+        let emptyFoldersOpp = healthManager.opportunities.first { $0.type == .emptyFolders }
+        
+        // Verify that the empty folders opportunity was detected
+        XCTAssertNotNil(emptyFoldersOpp, "Empty folders opportunity should be detected")
+        
+        if let opportunity = emptyFoldersOpp {
+            // Verify that all expected empty folders were found
+            // Should find: EmptyFolder1, ParentFolder, EmptyChild1, EmptyChild2, 
+            //              DeepParent, DeepChild, DeepGrandchild, FolderWithHiddenFile
+            // Total: 8 folders
+            XCTAssertGreaterThanOrEqual(opportunity.fileCount, 8, 
+                "Should detect at least 8 empty folders (including parent folders with only empty children)")
+            
+            // Verify description
+            XCTAssertTrue(opportunity.description.contains("empty folders"), 
+                "Description should mention empty folders")
+        }
+    }
 }
