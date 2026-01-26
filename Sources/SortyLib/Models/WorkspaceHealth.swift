@@ -1071,8 +1071,9 @@ public class WorkspaceHealthManager: ObservableObject {
         }
         
         // Remove all empty folders in one pass
+        // Use try? to continue processing even if a folder is already removed or locked
         for folderPath in sortedFolders {
-            try fileManager.removeItem(atPath: folderPath)
+            try? fileManager.removeItem(atPath: folderPath)
         }
     }
     
