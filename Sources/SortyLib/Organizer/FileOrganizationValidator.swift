@@ -40,8 +40,16 @@ struct FileOrganizationValidator {
                 throw ValidationError.pathConflict(folderPath)
             }
             
-            if fileManager.fileExists(atPath: folderPath) {
-                throw ValidationError.pathExists(folderPath)
+            // Allow organizing into existing directories since FileSystemManager
+            // uses createDirectory(withIntermediateDirectories:true) which handles this gracefully
+            // Only check if the path exists and is NOT a directory (i.e., it's a file)
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: folderPath, isDirectory: &isDirectory) {
+                if !isDirectory.boolValue {
+                    // Path exists but is a file, not a directory - this is a conflict
+                    throw ValidationError.pathExists(folderPath)
+                }
+                // If it's already a directory, that's fine - we can organize into it
             }
             
             existingPaths.insert(folderPath)
