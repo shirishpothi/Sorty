@@ -157,4 +157,86 @@ class SortyTests: XCTestCase {
         XCTAssertNil(folderOrganizer.currentPlan)
         XCTAssertEqual(folderOrganizer.progress, 0.0)
     }
+    
+    @MainActor
+    func testOrganizeIntoExistingDirectory() async throws {
+        // Setup: Create a file and an existing directory
+        let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
+        try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
+        
+        let existingDirURL = tempDirectory.appendingPathComponent("ExistingFolder")
+        try FileManager.default.createDirectory(at: existingDirURL, withIntermediateDirectories: true)
+        
+        folderOrganizer.aiClient = mockClient
+        
+        // Setup: Mock returns a plan with a folder name that already exists
+        await mockClient.setHandler { files in
+            return OrganizationPlan(
+                suggestions: [
+                    FolderSuggestion(
+                        folderName: "ExistingFolder",
+                        description: "Test folder",
+                        files: files,
+                        subfolders: [],
+                        reasoning: "Test"
+                    )
+                ],
+                unorganizedFiles: [],
+                notes: "Test Plan"
+            )
+        }
+        
+        // Act: This should NOT throw an error even though ExistingFolder already exists
+        try await folderOrganizer.organize(directory: tempDirectory)
+        
+        // Assert: Organization should succeed
+        XCTAssertEqual(folderOrganizer.state, .ready)
+        XCTAssertNotNil(folderOrganizer.currentPlan)
+        XCTAssertEqual(folderOrganizer.currentPlan?.suggestions.first?.folderName, "ExistingFolder")
+    }
+    
+    @MainActor
+    func testRejectOrganizingIntoExistingFile() async throws {
+        // Setup: Create test files including one that will conflict with the suggested folder name
+        let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
+        try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
+        
+        // Create a file (not directory) with the name we'll suggest as a folder
+        let existingFileURL = tempDirectory.appendingPathComponent("ConflictingFile")
+        try "existing file content".write(to: existingFileURL, atomically: true, encoding: .utf8)
+        
+        folderOrganizer.aiClient = mockClient
+        
+        // Setup: Mock returns a plan with a folder name that conflicts with an existing file
+        await mockClient.setHandler { files in
+            return OrganizationPlan(
+                suggestions: [
+                    FolderSuggestion(
+                        folderName: "ConflictingFile",
+                        description: "Test folder",
+                        files: files,
+                        subfolders: [],
+                        reasoning: "Test"
+                    )
+                ],
+                unorganizedFiles: [],
+                notes: "Test Plan"
+            )
+        }
+        
+        // Act & Assert: This should throw a validation error because ConflictingFile exists as a file
+        do {
+            try await folderOrganizer.organize(directory: tempDirectory)
+            XCTFail("Should have thrown a validation error")
+        } catch let error as ValidationError {
+            // Verify it's the correct error type
+            if case .pathExists(let path) = error {
+                XCTAssertTrue(path.contains("ConflictingFile"))
+            } else {
+                XCTFail("Wrong validation error type: \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
 }
