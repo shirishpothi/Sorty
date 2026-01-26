@@ -1062,17 +1062,18 @@ public class WorkspaceHealthManager: ObservableObject {
     
     private func pruneEmptyFoldersRecursively(at path: String) async throws {
         let fileManager = FileManager.default
-        // We need a depth-first traversal to remove nested empty folders
-        // Simple implementation: repeatedly find empty folders and remove them until none found
+        // Find all empty folders (already identifies nested empties correctly)
+        let emptyFolders = await findEmptyFolders(at: path)
         
-        var hasRemoved = true
-        while hasRemoved {
-            hasRemoved = false
-            let emptyFolders = await findEmptyFolders(at: path)
-            for folderPath in emptyFolders {
-                try fileManager.removeItem(atPath: folderPath)
-                hasRemoved = true
-            }
+        // Sort by depth (deepest first) to ensure child folders are removed before parents
+        let sortedFolders = emptyFolders.sorted { path1, path2 in
+            path1.components(separatedBy: "/").count > path2.components(separatedBy: "/").count
+        }
+        
+        // Remove all empty folders in one pass
+        // Use try? to continue processing even if a folder is already removed or locked
+        for folderPath in sortedFolders {
+            try? fileManager.removeItem(atPath: folderPath)
         }
     }
     
