@@ -155,4 +155,81 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: empty2.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: notEmpty.path))
     }
+    
+    @MainActor
+    func testArchiveVeryOldFiles() async throws {
+        // Setup: Create very old files and recent files
+        let oldFile1 = tempDirectory.appendingPathComponent("very_old_document.txt")
+        try "old content".write(to: oldFile1, atomically: true, encoding: .utf8)
+        let veryOldDate = Date().addingTimeInterval(-400 * 86400) // Over 1 year old
+        try FileManager.default.setAttributes([.modificationDate: veryOldDate], ofItemAtPath: oldFile1.path)
+        
+        let oldFile2 = tempDirectory.appendingPathComponent("ancient_file.pdf")
+        try "ancient content".write(to: oldFile2, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: veryOldDate], ofItemAtPath: oldFile2.path)
+        
+        let recentFile = tempDirectory.appendingPathComponent("recent_file.txt")
+        try "recent content".write(to: recentFile, atomically: true, encoding: .utf8)
+        
+        // Act
+        let opportunity = CleanupOpportunity(
+            type: .veryOldFiles,
+            directoryPath: tempDirectory.path,
+            description: "Test",
+            estimatedSavings: 200,
+            fileCount: 2,
+            action: .archiveVeryOldFiles
+        )
+        
+        try await healthManager.performAction(.archiveVeryOldFiles, for: opportunity)
+        
+        // Assert: Very old files moved to ~/Documents/Archives
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        let documentsFolder = homeDirectory.appendingPathComponent("Documents")
+        let archiveFolder = documentsFolder.appendingPathComponent("Archives")
+        
+        let archivedFile1 = archiveFolder.appendingPathComponent("very_old_document.txt")
+        let archivedFile2 = archiveFolder.appendingPathComponent("ancient_file.pdf")
+        
+        XCTAssertTrue(FileManager.default.fileExists(atPath: archivedFile1.path), "Old file should be archived")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: archivedFile2.path), "Old file should be archived")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile1.path), "Old file should be moved from source")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile2.path), "Old file should be moved from source")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: recentFile.path), "Recent file should remain")
+        
+        // Cleanup: Remove created archive files
+        try? FileManager.default.removeItem(at: archivedFile1)
+        try? FileManager.default.removeItem(at: archivedFile2)
+    }
+    
+    @MainActor
+    func testPruneEmptyFoldersWithDSStore() async throws {
+        // Setup: Create folder with only .DS_Store
+        let folderWithDSStore = tempDirectory.appendingPathComponent("FolderWithDSStore")
+        try FileManager.default.createDirectory(at: folderWithDSStore, withIntermediateDirectories: true)
+        
+        let dsStore = folderWithDSStore.appendingPathComponent(".DS_Store")
+        try "ds_store_content".write(to: dsStore, atomically: true, encoding: .utf8)
+        
+        let notEmptyFolder = tempDirectory.appendingPathComponent("NotEmpty")
+        try FileManager.default.createDirectory(at: notEmptyFolder, withIntermediateDirectories: true)
+        let realFile = notEmptyFolder.appendingPathComponent("real_file.txt")
+        try "content".write(to: realFile, atomically: true, encoding: .utf8)
+        
+        // Act
+        let opportunity = CleanupOpportunity(
+            type: .emptyFolders,
+            directoryPath: tempDirectory.path,
+            description: "Test",
+            estimatedSavings: 0,
+            fileCount: 1,
+            action: .pruneEmptyFolders
+        )
+        
+        try await healthManager.performAction(.pruneEmptyFolders, for: opportunity)
+        
+        // Assert: Folder with only .DS_Store should be removed
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderWithDSStore.path), "Folder with only .DS_Store should be removed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: notEmptyFolder.path), "Folder with real files should remain")
+    }
 }
