@@ -200,6 +200,7 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
         case pruneEmptyFolders = "Prune Empty Folders"
         case removeBrokenSymlinks = "Remove Broken Symlinks"
         case organizeRoot = "Organize Root Files"
+        case archiveVeryOldFiles = "Archive Very Old Files"
         
         public var icon: String {
             switch self {
@@ -209,6 +210,7 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
             case .pruneEmptyFolders: return "folder.badge.minus"
             case .removeBrokenSymlinks: return "link.badge.minus"
             case .organizeRoot: return "wand.and.stars"
+            case .archiveVeryOldFiles: return "archivebox.fill"
             }
         }
     }
@@ -625,7 +627,8 @@ public class WorkspaceHealthManager: ObservableObject {
                     description: "\(veryOldFiles.count) files haven't been accessed in over \(years) years. Consider archiving.",
                     estimatedSavings: totalSize,
                     fileCount: veryOldFiles.count,
-                    priority: totalSize > 1_000_000_000 ? .high : .medium
+                    priority: totalSize > 1_000_000_000 ? .high : .medium,
+                    action: .archiveVeryOldFiles
                 ))
             }
         }
@@ -816,6 +819,8 @@ public class WorkspaceHealthManager: ObservableObject {
             // but we could trigger a specific mode here if needed.
             // For now, we'll assume the UI routes this to the main organizer.
             break
+        case .archiveVeryOldFiles:
+            try await archiveVeryOldFiles(at: path)
         }
         
         // Refresh analysis after action
@@ -1062,6 +1067,8 @@ public class WorkspaceHealthManager: ObservableObject {
     
     private func pruneEmptyFoldersRecursively(at path: String) async throws {
         let fileManager = FileManager.default
+        let disposableFiles: Set<String> = [".DS_Store", "Thumbs.db", "desktop.ini", ".localized"]
+        
         // Find all empty folders (already identifies nested empties correctly)
         let emptyFolders = await findEmptyFolders(at: path)
         
@@ -1070,11 +1077,32 @@ public class WorkspaceHealthManager: ObservableObject {
             path1.components(separatedBy: "/").count > path2.components(separatedBy: "/").count
         }
         
+        var successCount = 0
+        var failureCount = 0
+        
         // Remove all empty folders in one pass
-        // Use try? to continue processing even if a folder is already removed or locked
         for folderPath in sortedFolders {
-            try? fileManager.removeItem(atPath: folderPath)
+            do {
+                // First, remove any disposable files inside
+                let contents = try fileManager.contentsOfDirectory(atPath: folderPath)
+                for item in contents {
+                    if disposableFiles.contains(item) {
+                        let itemPath = (folderPath as NSString).appendingPathComponent(item)
+                        try? fileManager.removeItem(atPath: itemPath)
+                    }
+                }
+                
+                // Now try to remove the folder itself
+                try fileManager.removeItem(atPath: folderPath)
+                successCount += 1
+            } catch {
+                // Log the error for debugging but continue processing other folders
+                DebugLogger.log("Failed to remove empty folder at \(folderPath): \(error.localizedDescription)")
+                failureCount += 1
+            }
         }
+        
+        DebugLogger.log("Pruned \(successCount) empty folders, \(failureCount) failures")
     }
     
     private func removeBrokenSymlinks(at path: String) async throws {
@@ -1083,6 +1111,57 @@ public class WorkspaceHealthManager: ObservableObject {
         for linkPath in brokenLinks {
             try fileManager.removeItem(atPath: linkPath)
         }
+    }
+    
+    private func archiveVeryOldFiles(at path: String) async throws {
+        let fileManager = FileManager.default
+        
+        // Get the user's home directory and create Archives folder in Documents
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser
+        let documentsFolder = homeDirectory.appendingPathComponent("Documents")
+        let archiveFolder = documentsFolder.appendingPathComponent("Archives")
+        
+        // Create Archives folder if it doesn't exist
+        if !fileManager.fileExists(atPath: archiveFolder.path) {
+            try fileManager.createDirectory(at: archiveFolder, withIntermediateDirectories: true)
+        }
+        
+        // Get all files in the directory
+        let files = try fileManager.contentsOfDirectory(
+            at: URL(fileURLWithPath: path), 
+            includingPropertiesForKeys: [.contentAccessDateKey, .contentModificationDateKey], 
+            options: [.skipsHiddenFiles]
+        )
+        
+        var movedCount = 0
+        
+        for file in files {
+            guard !file.hasDirectoryPath else { continue }
+            
+            // Check if file is "very old" using the same criteria as analysis
+            let resourceValues = try? file.resourceValues(forKeys: [.contentAccessDateKey, .contentModificationDateKey])
+            let accessDate = resourceValues?.contentAccessDate ?? resourceValues?.contentModificationDate
+            
+            if let lastAccess = accessDate,
+               Date().timeIntervalSince(lastAccess) > config.oldFileThreshold {
+                
+                var destination = archiveFolder.appendingPathComponent(file.lastPathComponent)
+                
+                // Handle filename conflicts by appending a timestamp
+                if fileManager.fileExists(atPath: destination.path) {
+                    let fileName = file.deletingPathExtension().lastPathComponent
+                    let ext = file.pathExtension
+                    let timestamp = Date().filenameTimestamp
+                    let uniqueName = ext.isEmpty ? "\(fileName)_\(timestamp)" : "\(fileName)_\(timestamp).\(ext)"
+                    destination = archiveFolder.appendingPathComponent(uniqueName)
+                }
+                
+                try fileManager.moveItem(at: file, to: destination)
+                movedCount += 1
+            }
+        }
+        
+        DebugLogger.log("Archived \(movedCount) very old files to \(archiveFolder.path)")
     }
 
     private func isScreenshot(_ file: FileItem) -> Bool {
@@ -1108,11 +1187,14 @@ public class WorkspaceHealthManager: ObservableObject {
     private func findEmptyFolders(at path: String) async -> [String] {
         let fileManager = FileManager.default
         var allDirectories: [(path: String, depth: Int)] = []
+        
+        // Disposable files that should be considered as "empty" content
+        let disposableFiles: Set<String> = [".DS_Store", "Thumbs.db", "desktop.ini", ".localized"]
 
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: path),
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
+            options: [] // Don't skip hidden files so we can find all directories
         ) else {
             return []
         }
@@ -1138,12 +1220,13 @@ public class WorkspaceHealthManager: ObservableObject {
         for directory in allDirectories {
             do {
                 let contents = try fileManager.contentsOfDirectory(atPath: directory.path)
-                // Filter out hidden files
-                let visibleContents = contents.filter { !$0.hasPrefix(".") }
                 
-                // Check if all visible contents are directories that are already marked as empty
+                // Filter out disposable files - treat them as if they don't exist
+                let significantContents = contents.filter { !disposableFiles.contains($0) }
+                
+                // Check if all significant contents are directories that are already marked as empty
                 var allContentsAreEmpty = true
-                for item in visibleContents {
+                for item in significantContents {
                     let itemPath = (directory.path as NSString).appendingPathComponent(item)
                     var isDirectory: ObjCBool = false
                     if fileManager.fileExists(atPath: itemPath, isDirectory: &isDirectory) {
@@ -1161,7 +1244,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     }
                 }
                 
-                if visibleContents.isEmpty || allContentsAreEmpty {
+                if significantContents.isEmpty || allContentsAreEmpty {
                     emptyFolders.insert(directory.path)
                 }
             } catch {
