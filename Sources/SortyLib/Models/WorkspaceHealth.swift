@@ -1103,10 +1103,10 @@ public class WorkspaceHealthManager: ObservableObject {
                name.hasSuffix("~")
     }
 
-    /// Find empty folders in a directory (non-recursive check for immediate children)
+    /// Find empty folders in a directory, including folders that only contain other empty folders
     private func findEmptyFolders(at path: String) async -> [String] {
         let fileManager = FileManager.default
-        var emptyFolders: [String] = []
+        var allDirectories: [(path: String, depth: Int)] = []
 
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: path),
@@ -1116,23 +1116,59 @@ public class WorkspaceHealthManager: ObservableObject {
             return []
         }
 
+        // First pass: collect all directories with their depth
         while let url = enumerator.nextObject() as? URL {
             do {
                 let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
                 if resourceValues.isDirectory == true {
-                    let contents = try fileManager.contentsOfDirectory(atPath: url.path)
-                    // Filter out hidden files
-                    let visibleContents = contents.filter { !$0.hasPrefix(".") }
-                    if visibleContents.isEmpty {
-                        emptyFolders.append(url.path)
-                    }
+                    let depth = url.path.components(separatedBy: "/").count
+                    allDirectories.append((path: url.path, depth: depth))
                 }
             } catch {
                 continue
             }
         }
 
-        return emptyFolders
+        // Sort by depth (deepest first) to process leaf directories before their parents
+        allDirectories.sort { $0.depth > $1.depth }
+
+        // Second pass: determine which directories are truly empty
+        var emptyFolders = Set<String>()
+        for directory in allDirectories {
+            do {
+                let contents = try fileManager.contentsOfDirectory(atPath: directory.path)
+                // Filter out hidden files
+                let visibleContents = contents.filter { !$0.hasPrefix(".") }
+                
+                // Check if all visible contents are directories that are already marked as empty
+                var allContentsAreEmpty = true
+                for item in visibleContents {
+                    let itemPath = (directory.path as NSString).appendingPathComponent(item)
+                    var isDirectory: ObjCBool = false
+                    if fileManager.fileExists(atPath: itemPath, isDirectory: &isDirectory) {
+                        if isDirectory.boolValue {
+                            // If it's a directory but not in our empty set, then this parent is not empty
+                            if !emptyFolders.contains(itemPath) {
+                                allContentsAreEmpty = false
+                                break
+                            }
+                        } else {
+                            // If it's a file, then this directory is not empty
+                            allContentsAreEmpty = false
+                            break
+                        }
+                    }
+                }
+                
+                if visibleContents.isEmpty || allContentsAreEmpty {
+                    emptyFolders.insert(directory.path)
+                }
+            } catch {
+                continue
+            }
+        }
+
+        return Array(emptyFolders)
     }
 
     /// Find broken symbolic links in a directory
