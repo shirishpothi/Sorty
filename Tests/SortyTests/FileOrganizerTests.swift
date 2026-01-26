@@ -197,7 +197,7 @@ class SortyTests: XCTestCase {
     
     @MainActor
     func testRejectOrganizingIntoExistingFile() async throws {
-        // Setup: Create a file and a file (not directory) with the same name as suggested folder
+        // Setup: Create test files including one that will conflict with the suggested folder name
         let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
         try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
         
