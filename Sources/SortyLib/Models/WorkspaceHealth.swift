@@ -1152,6 +1152,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     let fileName = file.deletingPathExtension().lastPathComponent
                     let ext = file.pathExtension
                     let timestamp = Date().filenameTimestamp
+                    // Add extension with dot only if file has an extension
                     let uniqueName = ext.isEmpty ? "\(fileName)_\(timestamp)" : "\(fileName)_\(timestamp).\(ext)"
                     destination = archiveFolder.appendingPathComponent(uniqueName)
                 }
@@ -1194,7 +1195,7 @@ public class WorkspaceHealthManager: ObservableObject {
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: path),
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [] // Don't skip hidden files so we can find all directories
+            options: [] // Don't skip hidden files - we need to check all content to identify truly empty folders
         ) else {
             return []
         }
