@@ -265,6 +265,18 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Whether this provider supports deep scanning (analyzing file content)
+    /// Some providers (like Apple Foundation Model) have limited context windows
+    /// that make deep scanning impractical or risky for stability.
+    public var supportsDeepScan: Bool {
+        switch self {
+        case .appleFoundationModel:
+            return false
+        default:
+            return true
+        }
+    }
+
     public var usesSystemImage: Bool {
         switch self {
         case .openAICompatible, .appleFoundationModel: return true
@@ -295,8 +307,60 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return ["default"]
         }
     }
+
+    /// The key used in Keychain to store the API key for this provider
+    public var keychainKey: String {
+        switch self {
+        case .openAI: return "openAIAPIKey"
+        case .anthropic: return "anthropicAPIKey"
+        case .gemini: return "geminiAPIKey"
+        case .groq: return "groqAPIKey"
+        case .openRouter: return "openRouterAPIKey"
+        case .ollama: return "ollamaAPIKey"
+        case .githubCopilot: return "github_access_token" // Special case handled by GitHubCopilotAuthManager
+        case .openAICompatible: return "openAICompatibleAPIKey"
+        case .appleFoundationModel: return "appleFoundationAPIKey"
+        }
+    }
 }
 
+public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
+    case organize          // Move files, no rename
+    case organizeAndRename // Move + rename
+    case renameOnly        // Rename in place, no moves
+    
+    public var displayName: String {
+        switch self {
+        case .organize: return "Organize Only"
+        case .organizeAndRename: return "Organize & Rename"
+        case .renameOnly: return "Intelligent Rename Only"
+        }
+    }
+    
+    public var description: String {
+        switch self {
+        case .organize: return "Move files into descriptive folders without changing filenames"
+        case .organizeAndRename: return "Move files into descriptive folders and improve their names"
+        case .renameOnly: return "Keep files where they are but improve their names"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .organize: return "Keep original names"
+        case .organizeAndRename: return "Move & Rename"
+        case .renameOnly: return "In-place Rename"
+        }
+    }
+    
+    public var iconName: String {
+        switch self {
+        case .organize: return "folder.badge.plus"
+        case .organizeAndRename: return "folder.badge.gearshape"
+        case .renameOnly: return "pencil.line"
+        }
+    }
+}
 
 public struct AIConfig: Codable, Sendable, Equatable {
     public var provider: AIProvider
@@ -317,7 +381,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var enableReasoning: Bool  // Ask AI to explain organization decisions
     
     // Deep Scanning & Duplicate Detection
+    public var mode: OrganizationMode
     public var enableDeepScan: Bool   // Analyze file content (PDF text, EXIF, etc.)
+    public var enableSmartRename: Bool // AI suggests better filenames
     public var detectDuplicates: Bool // Find duplicate files by hash
     public var enableFileTagging: Bool // Apply Finder tags to files
     public var showStatsForNerds: Bool // Show detailed stats about generation
@@ -327,8 +393,11 @@ public struct AIConfig: Codable, Sendable, Equatable {
     // Organization limits (user-configurable)
     public var maxTopLevelFolders: Int // Maximum number of top-level folders AI can create (3-20)
     
-    // Experimental Features
-    public var enableParallelGeneration: Bool // Enable multi-model comparison (experimental)
+    // Vision & Multimodal
+    public var enableVision: Bool // Use AI vision to analyze image content
+    public var namingStyle: NamingStyle // Preferred naming convention
+    public var customNamingInstructions: String? // Custom naming preferences
+    public var visionBatchSize: Int // Number of images to process in one AI call
 
     public init(
         provider: AIProvider = .openAICompatible,
@@ -343,14 +412,19 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableStreaming: Bool = true,
         requiresAPIKey: Bool = true,
         enableReasoning: Bool = false,
+        mode: OrganizationMode = .organize,
         enableDeepScan: Bool = false,
+        enableSmartRename: Bool = false,
         detectDuplicates: Bool = false,
         enableFileTagging: Bool = true,
         showStatsForNerds: Bool = false,
         storeDuplicateMetadata: Bool = true,
         strictExclusions: Bool = true,
         maxTopLevelFolders: Int = 10,
-        enableParallelGeneration: Bool = false
+        enableVision: Bool = false,
+        namingStyle: NamingStyle = .descriptive,
+        customNamingInstructions: String? = nil,
+        visionBatchSize: Int = 5
     ) {
         self.provider = provider
         self.apiURL = apiURL
@@ -364,14 +438,19 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.enableStreaming = enableStreaming
         self.requiresAPIKey = requiresAPIKey
         self.enableReasoning = enableReasoning
+        self.mode = mode
         self.enableDeepScan = enableDeepScan
+        self.enableSmartRename = enableSmartRename
         self.detectDuplicates = detectDuplicates
         self.enableFileTagging = enableFileTagging
         self.showStatsForNerds = showStatsForNerds
         self.storeDuplicateMetadata = storeDuplicateMetadata
         self.strictExclusions = strictExclusions
         self.maxTopLevelFolders = maxTopLevelFolders
-        self.enableParallelGeneration = enableParallelGeneration
+        self.enableVision = enableVision
+        self.namingStyle = namingStyle
+        self.customNamingInstructions = customNamingInstructions
+        self.visionBatchSize = visionBatchSize
     }
     
     public static let `default` = AIConfig(
@@ -386,15 +465,49 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableStreaming: true,
         requiresAPIKey: true,
         enableReasoning: false,
+        mode: .organize,
         enableDeepScan: false,
+        enableSmartRename: false,
         detectDuplicates: false,
         enableFileTagging: true,
         showStatsForNerds: false,
         storeDuplicateMetadata: true,
         strictExclusions: true,
         maxTopLevelFolders: 10,
-        enableParallelGeneration: false
+        enableVision: false,
+        namingStyle: .descriptive,
+        customNamingInstructions: nil,
+        visionBatchSize: 5
     )
+}
+
+public enum NamingStyle: String, Codable, CaseIterable, Sendable {
+    case descriptive // [Date]_[Subject]_[Type]
+    case minimalist  // [Subject]
+    case technical   // [Type]_[Date]_[ID]
+    case datePrefix  // YYYY-MM-DD - [Subject]
+    
+    public var displayName: String {
+        switch self {
+        case .descriptive: return "Descriptive (Date_Subject_Type)"
+        case .minimalist: return "Minimalist (Subject Only)"
+        case .technical: return "Technical (Type_Date_ID)"
+        case .datePrefix: return "Date First (YYYY-MM-DD - Subject)"
+        }
+    }
+    
+    public var promptInstructions: String {
+        switch self {
+        case .descriptive:
+            return "Use a descriptive style: [Date]_[Subject]_[Type].[ext] (e.g., 2024-01-15_TaxReturn_Invoice.pdf). Focus on extracting dates and subjects."
+        case .minimalist:
+            return "Use a minimalist style: [Subject].[ext] (e.g., TaxReturn.pdf). Keep it very short and remove all dates or technical codes."
+        case .technical:
+            return "Use a technical style: [Type]_[Date]_[ID].[ext] (e.g., INVOICE_20240115_ABC.pdf). Use uppercase for the type."
+        case .datePrefix:
+            return "Use a date-first style: YYYY-MM-DD - [Subject].[ext] (e.g., 2024-01-15 - TaxReturn.pdf)."
+        }
+    }
 }
 
 

@@ -59,6 +59,7 @@ struct SortyApp: App {
                     organizer.personaManager = personaManager
                     organizer.customPersonaStore = customPersonaStore
                     organizer.storageLocationsManager = storageLocationsManager
+                    organizer.learningsManager = learningsManager
                     appState.organizer = organizer
                     
                     appState.calibrateAction = { folder in
@@ -105,6 +106,12 @@ struct SortyApp: App {
                     // Small delay to ensure view transition happens before showing picker
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         learningsManager.showingImportPicker = true
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    // Ensure learnings are saved when app quits
+                    Task {
+                        await learningsManager.forceSave()
                     }
                 }
         }
@@ -163,8 +170,17 @@ struct SortyApp: App {
             case .learnings:
                 appState.currentView = .learnings
                 
-            case .settings: // Removed section param support as ViewModel doesn't support it
+            case .settings(let section):
                 appState.currentView = .settings
+                if let section = section {
+                    let category = SettingsCategory.allCases.first { 
+                        $0.rawValue.lowercased().contains(section.lowercased()) ||
+                        String(describing: $0).lowercased() == section.lowercased()
+                    }
+                    appState.selectedSettingsSection = category
+                } else {
+                    appState.selectedSettingsSection = nil
+                }
                 
             case .help:
                 appState.showHelp()

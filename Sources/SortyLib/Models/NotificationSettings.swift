@@ -59,6 +59,12 @@ public struct NotificationSettings: Codable, Equatable {
     /// When file processing finishes successfully
     public var processingComplete: Bool = true
     
+    /// When AI has finished generating a plan and it's ready for review
+    public var previewReady: Bool = true
+    
+    /// Show preview ready notification even when app is in foreground
+    public var showPreviewReadyInForeground: Bool = true
+    
     /// When errors occur during processing
     public var processingErrors: Bool = true
     
@@ -75,6 +81,9 @@ public struct NotificationSettings: Codable, Equatable {
     
     /// Play sound with in-app HUD notifications
     public var hudSounds: Bool = false
+    
+    /// Play a satisfying "ting" sound when organization completes successfully
+    public var playCompletionSound: Bool = true
     
     public init() {}
     

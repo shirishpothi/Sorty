@@ -38,6 +38,9 @@ class PreviewStore: ObservableObject {
     @Published private(set) var plan: OrganizationPlan
     @Published var expandedFolders: Set<String> = []
     
+    /// Pre-computed rename mappings to avoid expensive lookups during rendering
+    @Published private(set) var renameMappings: [UUID: FileRenameMapping] = [:]
+    
     private var folderIDToPath: [UUID: String] = [:]
     
     init(plan: OrganizationPlan) {
@@ -46,84 +49,65 @@ class PreviewStore: ObservableObject {
         rebuildFlattenedRows()
     }
     
-    func toggleFolder(id: String) {
-        if expandedFolders.contains(id) {
-            expandedFolders.remove(id)
-        } else {
-            expandedFolders.insert(id)
-        }
-        rebuildFlattenedRows()
-    }
-    
-    func moveFile(fileID: UUID, toFolderID: UUID) {
-        guard let file = findFile(by: fileID) else { return }
-        
-        var updatedPlan = plan
-        
-        updatedPlan.suggestions = updatedPlan.suggestions.map { folder in
-            removeFileFromFolder(file, from: folder)
-        }
-        updatedPlan.unorganizedFiles.removeAll { $0.id == fileID }
-        
-        updatedPlan.suggestions = updatedPlan.suggestions.map { folder in
-            addFileToFolder(file, to: folder, targetId: toFolderID)
-        }
-        
-        let finalPlan = OrganizationPlan(
-            id: updatedPlan.id,
-            suggestions: updatedPlan.suggestions,
-            unorganizedFiles: updatedPlan.unorganizedFiles,
-            unorganizedDetails: updatedPlan.unorganizedDetails,
-            notes: updatedPlan.notes,
-            timestamp: Date(),
-            version: updatedPlan.version + 1,
-            generationStats: updatedPlan.generationStats
-        )
-        
-        plan = finalPlan
-        rebuildFlattenedRows()
-    }
-    
-    func moveFileToUnorganized(fileID: UUID) {
-        guard let file = findFile(by: fileID) else { return }
-        
-        var updatedPlan = plan
-        
-        updatedPlan.suggestions = updatedPlan.suggestions.map { folder in
-            removeFileFromFolder(file, from: folder)
-        }
-        
-        if !updatedPlan.unorganizedFiles.contains(where: { $0.id == fileID }) {
-            updatedPlan.unorganizedFiles.append(file)
-        }
-        
-        let finalPlan = OrganizationPlan(
-            id: updatedPlan.id,
-            suggestions: updatedPlan.suggestions,
-            unorganizedFiles: updatedPlan.unorganizedFiles,
-            unorganizedDetails: updatedPlan.unorganizedDetails,
-            notes: updatedPlan.notes,
-            timestamp: Date(),
-            version: updatedPlan.version + 1,
-            generationStats: updatedPlan.generationStats
-        )
-        
-        plan = finalPlan
-        rebuildFlattenedRows()
-    }
-    
     func updatePlan(_ newPlan: OrganizationPlan) {
-        plan = newPlan
-        expandAllFolders()
+        self.plan = newPlan
         rebuildFlattenedRows()
     }
     
-    func rebuildFlattenedRows() {
+    private func expandAllFolders() {
+        var ids = Set<String>()
+        func traverse(_ folder: FolderSuggestion) {
+            ids.insert(folder.id.uuidString)
+            for sub in folder.subfolders {
+                traverse(sub)
+            }
+        }
+        for suggestion in plan.suggestions {
+            traverse(suggestion)
+        }
+        expandedFolders = ids
+    }
+    
+    private func rebuildFlattenedRows() {
         var rows: [FlattenedRow] = []
-        folderIDToPath = [:]
+        var mappings: [UUID: FileRenameMapping] = [:]
+        
+        func processFolder(_ folder: FolderSuggestion, depth: Int) {
+            let id = folder.id.uuidString
+            let isExpanded = expandedFolders.contains(id)
+            
+            rows.append(FlattenedRow(
+                id: id,
+                depth: depth,
+                type: .folder(folder),
+                isExpanded: isExpanded
+            ))
+            
+            if isExpanded {
+                // Add subfolders
+                for subfolder in folder.subfolders {
+                    processFolder(subfolder, depth: depth + 1)
+                }
+                
+                // Add files
+                for file in folder.files {
+                    rows.append(FlattenedRow(
+                        id: file.id.uuidString,
+                        depth: depth + 1,
+                        type: .file(file, parentFolderID: folder.id),
+                        isExpanded: false
+                    ))
+                    
+                    // Pre-compute mappings
+                    if let mapping = folder.renameMapping(for: file) {
+                        mappings[file.id] = mapping
+                    }
+                }
+            }
+        }
         
         for suggestion in plan.suggestions {
-            flattenFolder(suggestion, depth: 0, parentPath: "", into: &rows)
+            processFolder(suggestion, depth: 0)
         }
         
         if !plan.unorganizedFiles.isEmpty {
@@ -144,53 +128,124 @@ class PreviewStore: ObservableObject {
             }
         }
         
-        flattenedRows = rows
+        self.renameMappings = mappings
+        self.flattenedRows = rows
     }
     
-    // MARK: - Private Helpers
-    
-    private func expandAllFolders() {
-        expandedFolders.removeAll()
-        for suggestion in plan.suggestions {
-            collectAllFolderPaths(suggestion, parentPath: "")
+    func toggleFolder(id: String) {
+        if expandedFolders.contains(id) {
+            expandedFolders.remove(id)
+        } else {
+            expandedFolders.insert(id)
         }
+        rebuildFlattenedRows()
     }
     
-    private func collectAllFolderPaths(_ folder: FolderSuggestion, parentPath: String) {
-        let path = parentPath.isEmpty ? folder.id.uuidString : "\(parentPath)/\(folder.id.uuidString)"
-        expandedFolders.insert(path)
-        for subfolder in folder.subfolders {
-            collectAllFolderPaths(subfolder, parentPath: path)
+    func moveFileToUnorganized(fileID: UUID) {
+        guard let file = findFile(by: fileID) else { return }
+        
+        var updatedPlan = plan
+        for i in 0..<updatedPlan.suggestions.count {
+            updatedPlan.suggestions[i] = removeFileFromFolder(file, from: updatedPlan.suggestions[i])
         }
+        
+        if !updatedPlan.unorganizedFiles.contains(where: { $0.id == fileID }) {
+            updatedPlan.unorganizedFiles.append(file)
+        }
+        
+        updateInternalPlan(updatedPlan)
     }
     
-    private func flattenFolder(_ folder: FolderSuggestion, depth: Int, parentPath: String, into rows: inout [FlattenedRow]) {
-        let path = parentPath.isEmpty ? folder.id.uuidString : "\(parentPath)/\(folder.id.uuidString)"
-        let isExpanded = expandedFolders.contains(path)
-        
-        folderIDToPath[folder.id] = path
-        
-        rows.append(FlattenedRow(
-            id: path,
-            depth: depth,
-            type: .folder(folder),
-            isExpanded: isExpanded
-        ))
-        
-        if isExpanded {
-            for file in folder.files {
-                rows.append(FlattenedRow(
-                    id: "\(path)/file-\(file.id.uuidString)",
-                    depth: depth + 1,
-                    type: .file(file, parentFolderID: folder.id),
-                    isExpanded: false
-                ))
-            }
-            
-            for subfolder in folder.subfolders {
-                flattenFolder(subfolder, depth: depth + 1, parentPath: path, into: &rows)
+    func updateRename(fileID: UUID, folderID: UUID, newName: String) {
+        var updatedPlan = plan
+        for i in 0..<updatedPlan.suggestions.count {
+            if let updated = updateRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID, newName: newName) {
+                updatedPlan.suggestions[i] = updated
+                updateInternalPlan(updatedPlan)
+                return
             }
         }
+    }
+    
+    func rejectRename(fileID: UUID, folderID: UUID) {
+        var updatedPlan = plan
+        for i in 0..<updatedPlan.suggestions.count {
+            if let updated = rejectRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID) {
+                updatedPlan.suggestions[i] = updated
+                updateInternalPlan(updatedPlan)
+                return
+            }
+        }
+    }
+    
+    private func updateRenameInFolder(_ folder: FolderSuggestion, targetID: UUID, fileID: UUID, newName: String) -> FolderSuggestion? {
+        var updatedFolder = folder
+        if folder.id == targetID {
+            if let file = updatedFolder.files.first(where: { $0.id == fileID }) {
+                updatedFolder.updateRename(for: file, newName: newName)
+                return updatedFolder
+            }
+        }
+        
+        for i in 0..<updatedFolder.subfolders.count {
+            if let updated = updateRenameInFolder(updatedFolder.subfolders[i], targetID: targetID, fileID: fileID, newName: newName) {
+                updatedFolder.subfolders[i] = updated
+                return updatedFolder
+            }
+        }
+        return nil
+    }
+    
+    private func rejectRenameInFolder(_ folder: FolderSuggestion, targetID: UUID, fileID: UUID) -> FolderSuggestion? {
+        var updatedFolder = folder
+        if folder.id == targetID {
+            if let file = updatedFolder.files.first(where: { $0.id == fileID }) {
+                updatedFolder.updateRename(for: file, newName: nil)
+                return updatedFolder
+            }
+        }
+        
+        for i in 0..<updatedFolder.subfolders.count {
+            if let updated = rejectRenameInFolder(updatedFolder.subfolders[i], targetID: targetID, fileID: fileID) {
+                updatedFolder.subfolders[i] = updated
+                return updatedFolder
+            }
+        }
+        return nil
+    }
+    
+    private func updateInternalPlan(_ updatedPlan: OrganizationPlan) {
+        let finalPlan = OrganizationPlan(
+            id: updatedPlan.id,
+            suggestions: updatedPlan.suggestions,
+            unorganizedFiles: updatedPlan.unorganizedFiles,
+            unorganizedDetails: updatedPlan.unorganizedDetails,
+            notes: updatedPlan.notes,
+            timestamp: Date(),
+            version: updatedPlan.version + 1,
+            generationStats: updatedPlan.generationStats
+        )
+        plan = finalPlan
+        rebuildFlattenedRows()
+    }
+    
+    func moveFile(fileID: UUID, toFolderID: UUID) {
+        guard let file = findFile(by: fileID) else { return }
+        
+        var updatedPlan = plan
+        
+        // Remove from current location
+        for i in 0..<updatedPlan.suggestions.count {
+            updatedPlan.suggestions[i] = removeFileFromFolder(file, from: updatedPlan.suggestions[i])
+        }
+        updatedPlan.unorganizedFiles.removeAll { $0.id == fileID }
+        
+        // Add to new location
+        for i in 0..<updatedPlan.suggestions.count {
+            updatedPlan.suggestions[i] = addFileToFolder(file, to: updatedPlan.suggestions[i], targetId: toFolderID)
+        }
+        
+        updateInternalPlan(updatedPlan)
     }
     
     private func findFile(by id: UUID) -> FileItem? {
@@ -248,20 +303,50 @@ struct OptimizedPreviewTree: View {
     let onPlanChanged: () -> Void
     
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                ForEach(store.flattenedRows) { row in
-                    FlattenedRowView(
-                        row: row,
-                        store: store,
-                        dragDropManager: dragDropManager,
-                        onPlanChanged: onPlanChanged
-                    )
-                    .id(row.id)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4, pinnedViews: []) {
+                    ForEach(store.flattenedRows) { row in
+                        FlattenedRowView(
+                            row: row,
+                            store: store,
+                            dragDropManager: dragDropManager,
+                            onPlanChanged: onPlanChanged
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: rowHeight(for: row))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .id(row.id)
+                    }
                 }
+                .padding()
             }
-            .padding()
         }
+    }
+    
+    private func rowHeight(for row: FlattenedRow) -> CGFloat {
+        switch row.type {
+        case .folder:
+            return 28
+        case .file(let file, _):
+            // Use pre-computed mapping for height check
+            if let mapping = store.renameMappings[file.id], mapping.hasRename {
+                return 52 // Taller for rename info
+            }
+            return 24
+        case .unorganizedFile:
+            return 24
+        case .unorganizedHeader:
+            return 40
+        }
+    }
+
+    private func findFolderByID(_ id: UUID, in folder: FolderSuggestion) -> FolderSuggestion? {
+        if folder.id == id { return folder }
+        for sub in folder.subfolders {
+            if let found = findFolderByID(id, in: sub) { return found }
+        }
+        return nil
     }
 }
 
@@ -290,7 +375,9 @@ struct FlattenedRowView: View {
                 file: file,
                 depth: row.depth,
                 parentFolderID: parentFolderID,
-                dragDropManager: dragDropManager
+                store: store,
+                dragDropManager: dragDropManager,
+                onPlanChanged: onPlanChanged
             )
         case .unorganizedHeader:
             FlatUnorganizedHeaderView(
@@ -334,8 +421,12 @@ struct FlatFolderRowView: View {
                 .buttonStyle(.plain)
                 .frame(width: 20)
                 
-                Image(systemName: "folder.fill")
-                    .foregroundColor(isDropTarget ? .purple : .blue)
+                CompactFolderThumbnail(
+                    url: nil,  // New folders don't exist yet
+                    folderName: suggestion.folderName,
+                    size: 16
+                )
+                .opacity(isDropTarget ? 0.7 : 1.0)
                 
                 Text(suggestion.folderName)
                     .fontWeight(.medium)
@@ -404,30 +495,132 @@ struct FlatFileRowView: View {
     let file: FileItem
     let depth: Int
     let parentFolderID: UUID
+    @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
+    let onPlanChanged: () -> Void
     
     @State private var isDragging = false
+    @State private var isEditingName = false
+    @State private var editedName = ""
+    @FocusState private var isFocused: Bool
+    
+    private var renameMapping: FileRenameMapping? {
+        store.renameMappings[file.id]
+    }
     
     var body: some View {
-        HStack {
-            Image(systemName: "doc")
-                .foregroundColor(.secondary)
-            Text(file.displayName)
-            Spacer()
-            Text(file.formattedSize)
-                .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 20, height: 20))
+                
+                if isEditingName {
+                    TextField("New name", text: $editedName)
+                        .textFieldStyle(.plain)
+                        .focused($isFocused)
+                        .onSubmit {
+                            saveRename()
+                        }
+                        .onExitCommand {
+                            cancelRename()
+                        }
+                        .font(.body)
+                } else {
+                    Text(file.displayName)
+                        .lineLimit(1)
+                        .strikethrough(renameMapping?.hasRename ?? false, color: .secondary)
+                        .foregroundColor((renameMapping?.hasRename ?? false) ? .secondary : .primary)
+                }
+                
+                Spacer()
+                
+                if let mapping = renameMapping, mapping.hasRename {
+                    Image(systemName: "wand.and.stars")
+                        .font(.caption)
+                        .foregroundColor(.purple)
+                        .help(mapping.renameReason ?? "AI suggested rename")
+                }
+                
+                Text(file.formattedSize)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.6))
+            }
             
-            Image(systemName: "line.3.horizontal")
-                .font(.caption2)
-                .foregroundColor(.secondary.opacity(0.6))
+            if let mapping = renameMapping, mapping.hasRename, !isEditingName {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.right")
+                        .font(.caption2)
+                        .foregroundColor(.purple)
+                    
+                    Text(mapping.suggestedName ?? "")
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(.purple)
+                        .lineLimit(1)
+                    
+                    Spacer()
+                    
+                    Button {
+                        startEditing(initialValue: mapping.suggestedName ?? "")
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Edit suggested name")
+                    
+                    Button {
+                        store.rejectRename(fileID: file.id, folderID: parentFolderID)
+                        onPlanChanged()
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Keep original name")
+                }
+                .padding(.leading, 20)
+                .transition(.opacity)
+            }
         }
         .padding(.leading, CGFloat(depth * 20))
-        .padding(.vertical, 2)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
         .background(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isEditingName ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+            } label: {
+                Label("Open", systemImage: "arrow.up.right.square")
+            }
+            
+            Button {
+                NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                store.rejectRename(fileID: file.id, folderID: parentFolderID)
+                onPlanChanged()
+            } label: {
+                Label("Revert Name", systemImage: "arrow.uturn.backward")
+            }
+        }
+        .onTapGesture(count: 2) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+        }
         .opacity(isDragging ? 0.5 : 1.0)
         .onDrag {
             isDragging = true
@@ -438,6 +631,36 @@ struct FlatFileRowView: View {
             isDragging = false
             return false
         }
+    }
+    
+    private func fileIcon(for file: FileItem) -> String {
+        switch file.extension.lowercased() {
+        case "pdf": return "doc.richtext"
+        case "jpg", "jpeg", "png", "heic": return "photo"
+        case "mp4", "mov": return "video"
+        case "mp3", "wav", "aac", "m4a", "flac", "ogg": return "waveform"
+        case "zip", "gz", "rar": return "archivebox"
+        case "swift", "js", "py", "ts": return "doc.text.fill"
+        default: return "doc"
+        }
+    }
+    
+    private func startEditing(initialValue: String) {
+        editedName = initialValue
+        isEditingName = true
+        isFocused = true
+    }
+    
+    private func saveRename() {
+        if !editedName.isEmpty {
+            store.updateRename(fileID: file.id, folderID: parentFolderID, newName: editedName)
+            onPlanChanged()
+        }
+        isEditingName = false
+    }
+    
+    private func cancelRename() {
+        isEditingName = false
     }
 }
 
@@ -492,7 +715,7 @@ struct FlatUnorganizedFileRowView: View {
     
     var body: some View {
         HStack {
-            Image(systemName: "doc")
+            Image(systemName: fileIcon(for: file))
                 .foregroundColor(.secondary)
             Text(file.displayName)
             Spacer()
@@ -500,21 +723,48 @@ struct FlatUnorganizedFileRowView: View {
                 .foregroundColor(.secondary)
             
             Image(systemName: "line.3.horizontal")
-                .font(.caption2)
                 .foregroundColor(.secondary.opacity(0.6))
         }
-        .padding(.leading, 20)
-        .padding(.vertical, 2)
-        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
         .background(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
         )
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button {
+                NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+            } label: {
+                Label("Open", systemImage: "arrow.up.right.square")
+            }
+            
+            Button {
+                NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
+            } label: {
+                Label("Reveal in Finder", systemImage: "folder")
+            }
+        }
+        .onTapGesture(count: 2) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
+        }
         .opacity(isDragging ? 0.5 : 1.0)
         .onDrag {
             isDragging = true
             dragDropManager.startDrag(file)
             return NSItemProvider(object: file.id.uuidString as NSString)
+        }
+    }
+    
+    private func fileIcon(for file: FileItem) -> String {
+        switch file.extension.lowercased() {
+        case "pdf": return "doc.richtext"
+        case "jpg", "jpeg", "png", "heic": return "photo"
+        case "mp4", "mov": return "video"
+        case "mp3", "wav", "aac", "m4a", "flac", "ogg": return "waveform"
+        case "zip", "gz", "rar": return "archivebox"
+        case "swift", "js", "py", "ts": return "doc.text.fill"
+        default: return "doc"
         }
     }
 }

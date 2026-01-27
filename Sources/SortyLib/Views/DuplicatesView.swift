@@ -9,8 +9,6 @@
 import SwiftUI
 
 struct DuplicatesView: View {
-    @StateObject private var detectionManager = DuplicateDetectionManager()
-    @StateObject private var settingsManager = DuplicateSettingsManager()
     @EnvironmentObject var appState: AppState
     @State private var selectedGroup: DuplicateGroup?
     @State private var showDeleteConfirmation = false
@@ -19,13 +17,21 @@ struct DuplicatesView: View {
     @State private var showSettings = false
     @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
     @State private var localDirectory: URL?
-    @State private var isScanning = false
+    @State private var isPreparingScan = false
     @State private var currentScanTask: Task<Void, Never>?
     @State private var capturedDirectory: URL?
     
     // Derived directory: Use local if set, otherwise fallback to global
     private var effectiveDirectory: URL? {
         localDirectory ?? appState.selectedDirectory
+    }
+
+    private var detectionManager: DuplicateDetectionManager {
+        appState.duplicateManager
+    }
+
+    private var settingsManager: DuplicateSettingsManager {
+        appState.duplicateSettings
     }
 
     var body: some View {
@@ -53,10 +59,13 @@ struct DuplicatesView: View {
                         action: selectDirectory
                     )
                     .transition(TransitionStyles.scaleAndFade)
-                } else if detectionManager.isScanning {
+                } else if detectionManager.isScanning || isPreparingScan {
                     // Scanning State
-                    ScanProgressViewNew(progress: detectionManager.scanProgress)
-                        .transition(TransitionStyles.scaleAndFade)
+                    ScanProgressViewNew(
+                        progress: detectionManager.scanProgress,
+                        isPreparing: isPreparingScan
+                    )
+                    .transition(TransitionStyles.scaleAndFade)
                 } else if detectionManager.duplicateGroups.isEmpty {
                     if detectionManager.lastScanDate == nil {
                         // Ready State: Directory selected but not scanned
@@ -152,7 +161,7 @@ struct DuplicatesView: View {
         .onChange(of: effectiveDirectory) { _, _ in
             // Cancel in-flight scan if directory changes
             currentScanTask?.cancel()
-            isScanning = false
+            isPreparingScan = false
             // Clear results when switching directories to prevent showing stale data
             detectionManager.clearResults()
             selectedGroup = nil
@@ -171,27 +180,37 @@ struct DuplicatesView: View {
         
         // Capture current directory
         capturedDirectory = directory
-        isScanning = true
+        isPreparingScan = true
         
         currentScanTask = Task {
             let scanner = DirectoryScanner()
             do {
-                let files = try await scanner.scanDirectory(at: directory, computeHashes: true)
+                // Pass false for computeHashes because we compute them in detectionManager with progress
+                let files = try await scanner.scanDirectory(at: directory, computeHashes: false)
                 
                 // Verify directory hasn't changed since scan started
-                if capturedDirectory == effectiveDirectory {
+                if capturedDirectory == effectiveDirectory && !Task.isCancelled {
+                    isPreparingScan = false
                     await detectionManager.scanForDuplicates(files: files)
-                    // Auto-select first group
-                    if let first = detectionManager.duplicateGroups.first {
-                        selectedGroup = first
+                    
+                    if !Task.isCancelled {
+                        // Auto-select first group
+                        if let first = detectionManager.duplicateGroups.first {
+                            selectedGroup = first
+                        }
+                        HapticFeedbackManager.shared.success()
                     }
-                    HapticFeedbackManager.shared.success()
                 }
             } catch {
-                HapticFeedbackManager.shared.error()
-                DebugLogger.log("Duplicate scan failed: \(error)")
+                if !Task.isCancelled {
+                    isPreparingScan = false
+                    HapticFeedbackManager.shared.error()
+                    DebugLogger.log("Duplicate scan failed: \(error)")
+                }
             }
-            isScanning = false
+            if !Task.isCancelled {
+                isPreparingScan = false
+            }
         }
     }
 
@@ -379,14 +398,15 @@ struct DuplicatesHeaderNew: View {
                     } label: {
                         Label("Cleanup All", systemImage: "trash")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.onboardingPill)
                     .tint(.red)
                 }
                 
                 Button(action: onScan) {
                     Label(manager.lastScanDate == nil ? "Start Scan" : "Rescan", systemImage: "play.fill")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.onboardingPill)
+                .controlSize(.regular)
                 .disabled(manager.isScanning || currentDirectory == nil)
             }
         }
@@ -407,16 +427,25 @@ struct DuplicatesHeaderNew: View {
 struct DuplicateGroupRow: View {
     let group: DuplicateGroup
     
+    private var firstFileURL: URL? {
+        guard let path = group.files.first?.path else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+    
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(.orange.opacity(0.1))
-                    .frame(width: 36, height: 36)
-                
-                Image(systemName: "doc.on.doc.fill")
-                    .foregroundStyle(.orange)
-                    .font(.body)
+            if let url = firstFileURL {
+                FileThumbnailView(url: url, size: CGSize(width: 36, height: 36))
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.orange.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                    
+                    Image(systemName: "doc.on.doc.fill")
+                        .foregroundStyle(.orange)
+                        .font(.body)
+                }
             }
             
             VStack(alignment: .leading, spacing: 2) {
@@ -464,7 +493,7 @@ struct DuplicateGroupDetailView: View {
                     }
                     onDelete(Array(sortedFiles.dropFirst()))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.onboardingPill)
                 .tint(.red)
             }
             .padding()
@@ -494,20 +523,26 @@ struct DuplicateFileDetailRow: View {
     let isOriginal: Bool
     let onDelete: () -> Void
     
+    private var fileURL: URL {
+        URL(fileURLWithPath: file.path)
+    }
+    
     var body: some View {
         HStack(spacing: 12) {
-            if isOriginal {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.title3)
-                    .frame(width: 30)
-                    .help("Original / Keeping")
-            } else {
-                Image(systemName: "doc")
-                    .foregroundStyle(.secondary)
-                    .font(.title3)
-                    .frame(width: 30)
+            ZStack(alignment: .bottomTrailing) {
+                FileThumbnailView(url: fileURL, size: CGSize(width: 36, height: 36))
+                
+                if isOriginal {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.system(size: 10))
+                        .padding(2)
+                        .background(Circle().fill(.white))
+                        .offset(x: 4, y: 4)
+                        .help("Original / Keeping")
+                }
             }
+            .frame(width: 36)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(file.displayName)
@@ -556,14 +591,15 @@ struct DuplicatesSummaryCardMini: View {
     @ObservedObject var manager: DuplicateDetectionManager
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 0) {
             Text("Scan Results")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
+                .fixedSize()
             
             Spacer()
             
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 HStack(spacing: 4) {
                     Text("\(manager.totalDuplicates)")
                         .font(.subheadline.bold())
@@ -571,9 +607,10 @@ struct DuplicatesSummaryCardMini: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .fixedSize()
                 
                 Divider()
-                    .frame(height: 16)
+                    .frame(height: 12)
                 
                 HStack(spacing: 4) {
                     Text(manager.formattedSavings)
@@ -583,6 +620,7 @@ struct DuplicatesSummaryCardMini: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .fixedSize()
             }
         }
         .padding(.horizontal, 12)
@@ -622,11 +660,12 @@ struct DuplicatesEmptyStateView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(title). \(description)")
             
-            Button(action: action) {
-                Text(actionTitle)
-                    .frame(minWidth: 120)
-            }
-            .buttonStyle(.borderedProminent)
+                    Button(action: action) {
+                        Text(actionTitle)
+                            .frame(minWidth: 120)
+                    }
+                    .buttonStyle(.onboardingPill)
+
             .controlSize(.large)
             .accessibilityLabel(actionTitle)
             .accessibilityHint("Activate to \(actionTitle.lowercased())")
@@ -640,6 +679,7 @@ struct DuplicatesEmptyStateView: View {
 
 struct ScanProgressViewNew: View {
     let progress: Double
+    var isPreparing: Bool = false
 
     var body: some View {
         VStack(spacing: 28) {
@@ -649,31 +689,37 @@ struct ScanProgressViewNew: View {
                     .frame(width: 120, height: 120)
                 
                 Circle()
-                    .trim(from: 0, to: progress)
+                    .trim(from: 0, to: isPreparing ? 0.2 : progress)
                     .stroke(
                         Color.accentColor,
                         style: StrokeStyle(lineWidth: 10, lineCap: .round)
                     )
                     .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.spring(response: 0.4, dampingFraction: 0.8), value: progress)
+                    .rotationEffect(.degrees(isPreparing ? 360 : -90))
+                    .animation(isPreparing ? .linear(duration: 1).repeatForever(autoreverses: false) : .spring(response: 0.4, dampingFraction: 0.8), value: isPreparing ? true : false)
                 
-                VStack(spacing: 2) {
-                    Text("\(Int(progress * 100))%")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
-                    Text("Scanning")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                if isPreparing {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.accentColor)
+                } else {
+                    VStack(spacing: 2) {
+                        Text("\(Int(progress * 100))%")
+                            .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        Text("Scanning")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Scan progress")
-            .accessibilityValue("\(Int(progress * 100)) percent complete")
+            .accessibilityValue(isPreparing ? "Preparing scan" : "\(Int(progress * 100)) percent complete")
             
             VStack(spacing: 6) {
-                Text("Computing File Hashes")
+                Text(isPreparing ? "Preparing Scan..." : "Computing File Hashes")
                     .font(.subheadline.weight(.medium))
-                Text("Comparing file content to find exact matches...")
+                Text(isPreparing ? "Reading directory structure..." : "Comparing file content to find exact matches...")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 
@@ -681,12 +727,12 @@ struct ScanProgressViewNew: View {
                     .padding(.top, 6)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Computing file hashes to find exact duplicate matches")
+            .accessibilityLabel(isPreparing ? "Preparing to scan for duplicates" : "Computing file hashes to find exact duplicate matches")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Scanning for duplicate files, \(Int(progress * 100)) percent complete")
+        .accessibilityLabel(isPreparing ? "Preparing scan" : "Scanning for duplicate files, \(Int(progress * 100)) percent complete")
     }
 }
 

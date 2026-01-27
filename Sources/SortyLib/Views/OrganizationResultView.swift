@@ -2,384 +2,26 @@
 //  OrganizationResultView.swift
 //  Sorty
 //
-//  Post-organization feedback view with undo and redo support
+//  Display for organization results and stats
 //
 
 import SwiftUI
 
 struct OrganizationResultView: View {
-    @EnvironmentObject var organizer: FolderOrganizer
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var appState: AppState
-    @State private var isProcessing = false
-    @State private var processError: String?
-    @State private var hasUndone = false
-    @State private var hasAppeared = false
-    @State private var showConfetti = false
-    @State private var showRedoModelPicker = false
-    @State private var isRedoingWithModel = false
-
+    let stats: GenerationStats
+    var duplicatesFound: Int = 0
+    
     var body: some View {
         VStack(spacing: 0) {
-            if let stats = organizer.currentPlan?.generationStats {
-                GenerationStatsView(stats: stats)
-                    .opacity(hasAppeared ? 1 : 0)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
-            }
-
-            Spacer()
-
-            VStack(spacing: 32) {
-                successIcon
-                    .opacity(hasAppeared ? 1 : 0)
-                    .scaleEffect(hasAppeared ? 1 : 0.5)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
-                
-                statusSection
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 15)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
-
-                if let error = processError {
-                    errorBanner(error)
-                        .transition(.asymmetric(
-                            insertion: .scale(scale: 0.95).combined(with: .opacity),
-                            removal: .opacity
-                        ))
-                }
-
-                actionButtons
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 15)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
-            }
-
-            Spacer()
-            
-            quickActions
-                .opacity(hasAppeared ? 1 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5), value: hasAppeared)
+            GenerationStatsView(stats: stats, duplicatesFound: duplicatesFound)
         }
-        .padding(.horizontal, 40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
-        .onAppear {
-            withAnimation {
-                hasAppeared = true
-            }
-            if !hasUndone {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    showConfetti = true
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(hasUndone ? "Organization reverted" : "Organization complete")
-    }
-    
-    private var successIcon: some View {
-        ZStack {
-            Circle()
-                .fill(hasUndone ? Color.orange.opacity(0.1) : Color.green.opacity(0.1))
-                .frame(width: 120, height: 120)
-                .scaleEffect(showConfetti && !hasUndone ? 1.05 : 1.0)
-                .animation(.easeInOut(duration: 0.5).repeatCount(2, autoreverses: true), value: showConfetti)
-            
-            Image(systemName: hasUndone ? "arrow.uturn.backward.circle.fill" : "checkmark.circle.fill")
-                .font(.system(size: 64, weight: .light))
-                .foregroundStyle(hasUndone ? .orange : .green)
-                .symbolEffect(.bounce, value: hasAppeared)
-        }
-    }
-    
-    private var statusSection: some View {
-        VStack(spacing: 12) {
-            Text(hasUndone ? "Organization Reverted" : "Organization Complete!")
-                .font(.title2)
-                .fontWeight(.bold)
-
-            if let plan = organizer.currentPlan {
-                HStack(spacing: 16) {
-                    StatBadge(
-                        icon: "doc.fill",
-                        value: "\(plan.totalFiles)",
-                        label: "files"
-                    )
-                    
-                    StatBadge(
-                        icon: "folder.fill",
-                        value: "\(plan.totalFolders)",
-                        label: "folders"
-                    )
-                }
-            }
-            
-            if hasUndone {
-                Text("Your files have been restored to their original locations")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-    }
-    
-    private func errorBanner(_ error: String) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-            
-            Text(error)
-                .font(.subheadline)
-        }
-        .padding(12)
-        .frame(maxWidth: 400)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.red.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
-                )
-        )
-        .accessibilityLabel("Error: \(error)")
-    }
-
-    private var actionButtons: some View {
-        HStack(spacing: 16) {
-            if !hasUndone {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    handleUndo()
-                } label: {
-                    HStack(spacing: 6) {
-                        if isProcessing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .scaleEffect(0.7)
-                        } else {
-                            Image(systemName: "arrow.uturn.backward")
-                                .font(.system(size: 12))
-                        }
-                        Text("Undo Changes")
-                    }
-                    .frame(minWidth: 130)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isProcessing)
-                .accessibilityIdentifier("UndoChangesButton")
-                .accessibilityLabel("Undo organization changes")
-                .accessibilityHint("Restores files to their original locations")
-            } else {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    handleRedo()
-                } label: {
-                    HStack(spacing: 6) {
-                        if isProcessing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .scaleEffect(0.7)
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 12))
-                        }
-                        Text("Redo Changes")
-                    }
-                    .frame(minWidth: 130)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isProcessing)
-                .accessibilityIdentifier("RedoChangesButton")
-                .accessibilityLabel("Redo organization changes")
-                .accessibilityHint("Re-applies the organization")
-            }
-
-            Button {
-                HapticFeedbackManager.shared.success()
-                appState.selectedDirectory = nil
-                organizer.reset()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
-                    Text("Done")
-                }
-                .frame(minWidth: 100)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(isProcessing)
-            .accessibilityIdentifier("DoneButton")
-            .accessibilityLabel("Finish and return to folder selection")
-        }
-    }
-    
-    private var quickActions: some View {
-        HStack(spacing: 20) {
-            QuickActionButton(
-                icon: "folder",
-                label: "Open in Finder"
-            ) {
-                if let url = organizer.history.entries.first?.directoryPath {
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url)
-                }
-            }
-            
-            QuickActionButton(
-                icon: "wand.and.stars",
-                label: "Try Different Model"
-            ) {
-                HapticFeedbackManager.shared.tap()
-                showRedoModelPicker = true
-            }
-            .disabled(isRedoingWithModel)
-            
-            QuickActionButton(
-                icon: "clock",
-                label: "View History"
-            ) {
-                HapticFeedbackManager.shared.tap()
-                organizer.reset()
-                withAnimation(.pageTransition) {
-                    appState.currentView = .history
-                }
-            }
-        }
-        .padding(.bottom, 32)
-        .sheet(isPresented: $showRedoModelPicker) {
-            RedoWithModelPicker(
-                isPresented: $showRedoModelPicker,
-                currentProvider: settingsViewModel.config.provider,
-                currentModel: settingsViewModel.config.model,
-                onSelect: { provider, model in
-                    redoWithProviderAndModel(provider, model: model)
-                }
-            )
-        }
-    }
-    
-    private func redoWithProviderAndModel(_ provider: AIProvider, model: String) {
-        isRedoingWithModel = true
-        processError = nil
-        
-        Task {
-            do {
-                // First undo the current organization if not already undone
-                if !hasUndone, let latestEntry = organizer.history.entries.first, latestEntry.success {
-                    try await organizer.undoHistoryEntry(latestEntry)
-                }
-                
-                // Now regenerate with the new provider and model
-                try await organizer.regenerateWithModel(provider: provider, model: model)
-                
-                HapticFeedbackManager.shared.success()
-                isRedoingWithModel = false
-            } catch {
-                HapticFeedbackManager.shared.error()
-                processError = "Failed to regenerate: \(error.localizedDescription)"
-                isRedoingWithModel = false
-            }
-        }
-    }
-
-    private func handleUndo() {
-        guard let latestEntry = organizer.history.entries.first, latestEntry.success else { return }
-
-        isProcessing = true
-        processError = nil
-
-        Task {
-            do {
-                try await organizer.undoHistoryEntry(latestEntry)
-                HapticFeedbackManager.shared.success()
-                hasUndone = true
-                isProcessing = false
-            } catch {
-                HapticFeedbackManager.shared.error()
-                processError = "Undo failed: \(error.localizedDescription)"
-                isProcessing = false
-            }
-        }
-    }
-
-    private func handleRedo() {
-        guard let latestEntry = organizer.history.entries.first, latestEntry.isUndone else { return }
-
-        isProcessing = true
-        processError = nil
-
-        Task {
-            do {
-                try await organizer.redoOrganization(from: latestEntry)
-                HapticFeedbackManager.shared.success()
-                hasUndone = false
-                isProcessing = false
-            } catch {
-                HapticFeedbackManager.shared.error()
-                processError = "Redo failed: \(error.localizedDescription)"
-                isProcessing = false
-            }
-        }
-    }
-}
-
-struct StatBadge: View {
-    let icon: String
-    let value: String
-    let label: String
-    
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-            
-            Text(value)
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-            
-            Text(label)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(Color.secondary.opacity(0.08))
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value) \(label)")
-    }
-}
-
-struct QuickActionButton: View {
-    let icon: String
-    let label: String
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
-                
-                Text(label)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .frame(minWidth: 100)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .padding()
     }
 }
 
 struct GenerationStatsView: View {
     let stats: GenerationStats
+    var duplicatesFound: Int = 0
     @State private var isExpanded = false
     
     var body: some View {
@@ -404,6 +46,7 @@ struct GenerationStatsView: View {
                     HStack(spacing: 16) {
                         NerdStatPill(icon: "bolt.fill", value: String(format: "%.1f", stats.tps), unit: "tok/s", color: .orange)
                         NerdStatPill(icon: "clock.fill", value: String(format: "%.2f", stats.duration), unit: "s", color: .blue)
+                        NerdStatPill(icon: "timer", value: String(format: "%.2f", stats.ttft), unit: "s", color: .green)
                         NerdStatPill(icon: "cpu", value: stats.model, unit: nil, color: .purple)
                     }
                     
@@ -422,66 +65,125 @@ struct GenerationStatsView: View {
                 Divider()
                     .padding(.horizontal, 16)
                 
-                HStack(spacing: 0) {
-                    NerdStatCard(
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 12), 
+                    GridItem(.flexible(), spacing: 12), 
+                    GridItem(.flexible(), spacing: 12), 
+                    GridItem(.flexible(), spacing: 12)
+                ], spacing: 12) {
+                    NerdStatPillExpanded(
                         icon: "bolt.fill",
-                        iconColor: .orange,
+                        color: .orange,
                         title: "Throughput",
                         value: String(format: "%.1f", stats.tps),
-                        unit: "tokens/sec",
-                        description: "Generation speed"
+                        unit: "tok/s"
                     )
                     
-                    Divider()
-                        .frame(height: 50)
-                    
-                    NerdStatCard(
+                    NerdStatPillExpanded(
                         icon: "timer",
-                        iconColor: .green,
-                        title: "Time to First Token",
+                        color: .green,
+                        title: "Latency",
                         value: String(format: "%.2f", stats.ttft),
-                        unit: "seconds",
-                        description: "Initial response latency"
+                        unit: "s TTFT"
                     )
                     
-                    Divider()
-                        .frame(height: 50)
-                    
-                    NerdStatCard(
+                    NerdStatPillExpanded(
                         icon: "clock.fill",
-                        iconColor: .blue,
+                        color: .blue,
                         title: "Total Duration",
                         value: String(format: "%.2f", stats.duration),
-                        unit: "seconds",
-                        description: "End-to-end time"
+                        unit: "s"
                     )
                     
-                    Divider()
-                        .frame(height: 50)
-                    
-                    NerdStatCard(
+                    NerdStatPillExpanded(
                         icon: "number",
-                        iconColor: .teal,
-                        title: "Tokens Generated",
+                        color: .teal,
+                        title: "Output Size",
                         value: "\(stats.totalTokens)",
-                        unit: "tokens",
-                        description: "Estimated output size"
+                        unit: "tokens"
                     )
                     
-                    Divider()
-                        .frame(height: 50)
+                    if let promptTokens = stats.promptTokens {
+                        NerdStatPillExpanded(
+                            icon: "text.alignleft",
+                            color: .indigo,
+                            title: "Input Size",
+                            value: "\(promptTokens)",
+                            unit: "tokens"
+                        )
+                    }
                     
-                    NerdStatCard(
+                    if let scanned = stats.filesScanned {
+                        NerdStatPillExpanded(
+                            icon: "doc.text.magnifyingglass",
+                            color: .cyan,
+                            title: "Files Scanned",
+                            value: "\(scanned)",
+                            unit: "files"
+                        )
+                    }
+                    
+                    if let scanDuration = stats.scanDuration {
+                        NerdStatPillExpanded(
+                            icon: "magnifyingglass",
+                            color: .yellow,
+                            title: "Scan Duration",
+                            value: String(format: "%.2f", scanDuration),
+                            unit: "s"
+                        )
+                    }
+                    
+                    if let size = stats.totalFileSize {
+                        NerdStatPillExpanded(
+                            icon: "sdcard.fill",
+                            color: .gray,
+                            title: "Total Data Size",
+                            value: ByteCountFormatter.string(fromByteCount: size, countStyle: .file),
+                            unit: nil
+                        )
+                    }
+                    
+                    let dups = duplicatesFound > 0 ? duplicatesFound : (stats.duplicatesFound ?? 0)
+                    if dups > 0 {
+                        NerdStatPillExpanded(
+                            icon: "square.on.square",
+                            color: .red,
+                            title: "Duplicates Found",
+                            value: "\(dups)",
+                            unit: "files"
+                        )
+                    }
+                    
+                    if let cost = stats.estimatedCost {
+                        NerdStatPillExpanded(
+                            icon: "dollarsign.circle.fill",
+                            color: .green,
+                            title: "Estimated Cost",
+                            value: "\(cost)",
+                            unit: "USD"
+                        )
+                    }
+                    
+                    if let provider = stats.provider {
+                        NerdStatPillExpanded(
+                            icon: "cloud.fill",
+                            color: .blue,
+                            title: "AI Provider",
+                            value: provider,
+                            unit: nil
+                        )
+                    }
+                    
+                    NerdStatPillExpanded(
                         icon: "cpu",
-                        iconColor: .purple,
-                        title: "Model",
+                        color: .purple,
+                        title: "AI Model",
                         value: stats.model,
-                        unit: nil,
-                        description: "AI model used"
+                        unit: nil
                     )
                 }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 8)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 16)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .move(edge: .top)),
                     removal: .opacity
@@ -530,6 +232,62 @@ struct NerdStatPill: View {
     }
 }
 
+struct NerdStatPillExpanded: View {
+    let icon: String
+    let color: Color
+    let title: String
+    let value: String
+    let unit: String?
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 24, height: 24)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(color)
+            }
+            
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 2) {
+                    Text(value)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    
+                    if let unit = unit {
+                        Text(unit)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                
+                Text(title)
+                    .font(.system(size: 8, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+            }
+            
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(0.03))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                )
+        )
+        .help(title)
+    }
+}
+
 struct NerdStatCard: View {
     let icon: String
     let iconColor: Color
@@ -539,57 +297,49 @@ struct NerdStatCard: View {
     let description: String
     
     var body: some View {
-        VStack(alignment: .center, spacing: 6) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 10))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(iconColor)
                 
                 Text(title)
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
+                    .tracking(0.5)
             }
             
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                
-                if let unit = unit {
-                    Text(unit)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text(value)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    
+                    if let unit = unit {
+                        Text(unit)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                    }
                 }
+                
+                Text(description)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            
-            Text(description)
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
         }
-        .frame(maxWidth: .infinity)
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title): \(value) \(unit ?? "")")
-    }
-}
-
-struct StatItem: View {
-    let label: String
-    let value: String
-    var isMonospaced: Bool = true
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            
-            Text(value)
-                .font(isMonospaced ? .system(.caption, design: .monospaced) : .caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-        }
     }
 }

@@ -85,7 +85,7 @@ class FileSystemManagerTests: XCTestCase {
         let ops = try await fileSystemManager.applyOrganization(plan, at: tempDirectory)
         XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("NewDir/to_move.txt").path))
         
-        try await fileSystemManager.reverseOperations(ops)
+        _ = try await fileSystemManager.reverseOperations(ops)
         
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("NewDir/to_move.txt").path))
@@ -198,7 +198,7 @@ class FileSystemManagerTests: XCTestCase {
         let ops = try await fileSystemManager.tagFiles(plan, at: tempDirectory, dryRun: false)
         
         // Reverse the tagging
-        try await fileSystemManager.reverseOperations(ops)
+        _ = try await fileSystemManager.reverseOperations(ops)
         
         // Tags should be restored to original state
         let url = URL(fileURLWithPath: file.path)

@@ -29,6 +29,10 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     func checkHealth() async throws {
         // Success by default
     }
+
+    func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
+        return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
+    }
 }
 
 class SortyTests: XCTestCase {

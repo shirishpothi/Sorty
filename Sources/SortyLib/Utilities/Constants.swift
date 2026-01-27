@@ -498,46 +498,5 @@ public struct PulsingRingLoader: View {
     }
 }
 
-// MARK: - Button Styles
 
-/// Button style with haptic feedback and bounce animation
-public struct HapticBounceButtonStyle: ButtonStyle {
-    let feedbackType: HapticTapModifier.HapticFeedbackType
-
-    public init(feedbackType: HapticTapModifier.HapticFeedbackType = .tap) {
-        self.feedbackType = feedbackType
-    }
-
-    public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .animation(.subtleBounce, value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { oldValue, newValue in
-                if newValue {
-                    switch feedbackType {
-                    case .tap:
-                        HapticFeedbackManager.shared.tap()
-                    case .success:
-                        HapticFeedbackManager.shared.success()
-                    case .error:
-                        HapticFeedbackManager.shared.error()
-                    case .selection:
-                        HapticFeedbackManager.shared.selection()
-                    }
-                }
-            }
-    }
-}
-
-extension ButtonStyle where Self == HapticBounceButtonStyle {
-    /// Button style that provides haptic feedback and subtle bounce on press
-    public static var hapticBounce: HapticBounceButtonStyle {
-        HapticBounceButtonStyle()
-    }
-
-    /// Button style with success haptic feedback
-    public static var hapticSuccess: HapticBounceButtonStyle {
-        HapticBounceButtonStyle(feedbackType: .success)
-    }
-}
 

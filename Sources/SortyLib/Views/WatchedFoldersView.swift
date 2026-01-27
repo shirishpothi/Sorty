@@ -247,9 +247,8 @@ struct WatchedFolderCard: View {
         HStack(spacing: 16) {
             // Folder Icon with Status
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(folder.isEnabled ? .blue : .secondary)
+                FolderThumbnailView(url: URL(fileURLWithPath: folder.path), size: CGSize(width: 40, height: 40))
+                    .opacity(folder.isEnabled ? 1.0 : 0.6)
                 
                 Image(systemName: statusIcon)
                     .font(.system(size: 14))

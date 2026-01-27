@@ -264,14 +264,26 @@ public actor NotifiCLIService {
             <string>AppIcon</string>
             <key>LSUIElement</key>
             <true/>
+            <key>NSUserNotificationAlertStyle</key>
+            <string>\(name.contains("Persistent") ? "alert" : "banner")</string>
         </dict>
         </plist>
         """
         try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
         
-        // Copy app icon from main bundle if available
-        if let iconPath = Bundle.main.path(forResource: "AppIcon", ofType: "icns") {
-            try? fm.copyItem(atPath: iconPath, toPath: resourcesDir.appendingPathComponent("AppIcon.icns").path)
+        // Copy app icon from Sorty bundle if available
+        // We look in multiple potential locations for AppIcon.icns
+        let potentialIconPaths = [
+            Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/AppIcon.icns").path,
+            "/Applications/Sorty.app/Contents/Resources/AppIcon.icns"
+        ]
+        
+        for path in potentialIconPaths {
+            if let iconPath = path, fm.fileExists(atPath: iconPath) {
+                try? fm.copyItem(atPath: iconPath, toPath: resourcesDir.appendingPathComponent("AppIcon.icns").path)
+                break
+            }
         }
         
         // Write source file

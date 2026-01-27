@@ -430,11 +430,13 @@ public struct ExtensionCommunication {
     
     /// Get current integration status
     public static func getIntegrationStatus() -> FinderIntegrationStatus {
+        let finderSyncEnabled = UserDefaults.standard.bool(forKey: "enableFinderSyncExtension")
+        
         return FinderIntegrationStatus(
             quickActionInstalled: isQuickActionInstalled(),
-            toolbarAppInstalled: false, // FinderToolbarHelper removed
-            finderSyncEnabled: false, // Would check with SMAppService
-            menuBarEnabled: false // Would check if menu bar item is showing
+            toolbarAppInstalled: FinderToolbarHelper.isToolbarAppInstalled(),
+            finderSyncEnabled: finderSyncEnabled,
+            menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarIcon")
         )
     }
     

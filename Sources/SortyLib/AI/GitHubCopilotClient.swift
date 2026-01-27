@@ -9,15 +9,14 @@ import Foundation
 
 public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     public let config: AIConfig
-    private let session: URLSession
     @MainActor public weak var streamingDelegate: StreamingDelegate?
     
     public init(config: AIConfig) {
         self.config = config
-        let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest = config.requestTimeout
-        sessionConfig.timeoutIntervalForResource = config.resourceTimeout
-        self.session = URLSession(configuration: sessionConfig)
+    }
+    
+    private func getSession() async -> URLSession {
+        return await AISessionManager.shared.session(for: config.provider, config: config)
     }
     
     private func getHeaders() async throws -> [String: String] {
@@ -37,6 +36,8 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
+            mode: config.mode,
+            namingStyle: config.namingStyle,
             enableReasoning: config.enableReasoning,
             includeContentMetadata: true,
             customInstructions: customInstructions
@@ -65,6 +66,11 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
+    public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        // Implementation for Phase 2
+        return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
+    }
+    
     public func fetchAvailableModels() async throws -> [String] {
         let url = URL(string: "https://api.githubcopilot.com/models")!
         DebugLogger.log("Fetching available models")
@@ -76,6 +82,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             request.setValue(value, forHTTPHeaderField: key)
         }
         
+        let session = await getSession()
         do {
             let (data, response) = try await session.data(for: request)
             
@@ -113,6 +120,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             request.setValue(value, forHTTPHeaderField: key)
         }
         
+        let session = await getSession()
         let (_, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -146,6 +154,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -189,6 +198,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         do {
             let (data, response) = try await session.data(for: request)
             let endTime = Date()
@@ -254,6 +264,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         var firstTokenTime: Date?
         var accumulatedContentBuffer = "" // Local buffer to avoid Sendable capture issues
         
+        let session = await getSession()
         do {
             let (bytes, response) = try await session.bytes(for: request)
             

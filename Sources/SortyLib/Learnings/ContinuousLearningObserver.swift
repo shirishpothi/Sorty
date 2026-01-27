@@ -125,16 +125,18 @@ public class ContinuousLearningObserver: ObservableObject {
     }
     
     /// Record that a specific rule was applied to a file
-    public func recordRuleApplication(destinationPath: String, ruleId: String) {
-        guard canCollect, var session = currentSession else { return }
-        
-        session.appliedRules[destinationPath] = ruleId
-        session.usedRuleIds.insert(ruleId)
-        currentSession = session
-        
-        // Update in recentSessions array
-        if let idx = recentSessions.firstIndex(where: { $0.id == session.id }) {
-            recentSessions[idx] = session
+    public nonisolated func recordRuleApplication(destinationPath: String, ruleId: String) {
+        Task { @MainActor in
+            guard canCollect, var session = currentSession else { return }
+            
+            session.appliedRules[destinationPath] = ruleId
+            session.usedRuleIds.insert(ruleId)
+            currentSession = session
+            
+            // Update in recentSessions array
+            if let idx = recentSessions.firstIndex(where: { $0.id == session.id }) {
+                recentSessions[idx] = session
+            }
         }
     }
     

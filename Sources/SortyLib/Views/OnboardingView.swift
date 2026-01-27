@@ -255,81 +255,6 @@ struct OnboardingProgressBar: View {
     }
 }
 
-// MARK: - Onboarding Pill Button Style
-
-struct OnboardingPillButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
-    var isSecondary: Bool = false
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 14)
-            .background(
-                ZStack {
-                    if isSecondary {
-                        Capsule()
-                            .fill(Color.secondary.opacity(0.3))
-                    } else {
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: Color.accentColor.opacity(0.85), location: 0),
-                                        .init(color: Color.accentColor, location: 0.3),
-                                        .init(color: Color.accentColor.opacity(0.95), location: 0.5),
-                                        .init(color: Color.accentColor, location: 0.7),
-                                        .init(color: Color.accentColor.opacity(0.85), location: 1)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                        
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: Color.black.opacity(0.15), location: 0),
-                                        .init(color: Color.clear, location: 0.3),
-                                        .init(color: Color.clear, location: 0.7),
-                                        .init(color: Color.black.opacity(0.15), location: 1)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Capsule()
-                            .strokeBorder(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.25),
-                                        Color.white.opacity(0.1),
-                                        Color.clear
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                ),
-                                lineWidth: 1
-                            )
-                    }
-                }
-            )
-            .shadow(color: isSecondary ? .clear : Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .opacity(configuration.isPressed ? 0.9 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
-}
-
-extension ButtonStyle where Self == OnboardingPillButtonStyle {
-    static var onboardingPill: OnboardingPillButtonStyle { OnboardingPillButtonStyle() }
-    static var onboardingPillSecondary: OnboardingPillButtonStyle { OnboardingPillButtonStyle(isSecondary: true) }
-}
-
 // MARK: - Step 0: Welcome
 
 struct WelcomeStep: View {
@@ -1125,26 +1050,12 @@ struct OnboardingProviderRow: View {
     let isSelected: Bool
     let action: () -> Void
     
-    private var providerImage: Image {
-        if provider.usesSystemImage {
-            return Image(systemName: provider.logoImageName)
-        }
-        if let resourceURL = Bundle.module.url(forResource: provider.logoImageName, withExtension: "png", subdirectory: "Images"),
-           let nsImage = NSImage(contentsOf: resourceURL) {
-            return Image(nsImage: nsImage)
-        }
-        return Image(provider.logoImageName, bundle: .module)
-    }
-    
     var body: some View {
         Button(action: {
             if provider.isAvailable { action() }
         }) {
             HStack(spacing: 12) {
-                providerImage
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
+                ProviderLogoView(provider: provider, size: 24)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(provider.displayName)

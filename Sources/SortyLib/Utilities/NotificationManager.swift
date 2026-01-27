@@ -92,37 +92,61 @@ public enum NotificationAction: Sendable {
 /// Callback type for handling notification actions
 public typealias NotificationActionHandler = @Sendable (NotificationAction) async -> Void
 
-/// Types of notifications the app can show
-public enum NotificationType: Sendable {
-    case processingComplete(fileCount: Int, folderName: String, folderPath: String?, canUndo: Bool)
-    case processingError(message: String, isCritical: Bool, canRetry: Bool)
-    case batchSummary(stats: BatchSummaryStats)
-    case info(title: String, message: String)
-    
-    // Legacy initializers for backwards compatibility
-    public static func processingComplete(fileCount: Int, folderName: String) -> NotificationType {
-        return .processingComplete(fileCount: fileCount, folderName: folderName, folderPath: nil, canUndo: false)
-    }
-    
-    public static func processingError(message: String, isCritical: Bool = false) -> NotificationType {
-        return .processingError(message: message, isCritical: isCritical, canRetry: false)
-    }
-    
-    public static func batchSummary(processed: Int, errors: Int, duration: TimeInterval) -> NotificationType {
-        return .batchSummary(stats: BatchSummaryStats(
-            filesMoved: processed,
-            errorsEncountered: errors,
-            duration: duration
-        ))
-    }
-    
-    var isCritical: Bool {
-        if case .processingError(_, let critical, _) = self {
-            return critical
+    /// Types of notifications the app can show
+    public enum NotificationType: Sendable {
+        case processingComplete(fileCount: Int, folderName: String, folderPath: String?, canUndo: Bool)
+        case previewReady(folderName: String)
+        case processingError(message: String, isCritical: Bool, canRetry: Bool)
+        case batchSummary(stats: BatchSummaryStats)
+        case info(title: String, message: String)
+        
+        // Legacy initializers for backwards compatibility
+        public static func processingComplete(fileCount: Int, folderName: String) -> NotificationType {
+            return .processingComplete(fileCount: fileCount, folderName: folderName, folderPath: nil, canUndo: false)
         }
-        return false
+        
+        public static func processingError(message: String, isCritical: Bool = false) -> NotificationType {
+            return .processingError(message: message, isCritical: isCritical, canRetry: false)
+        }
+        
+        public static func batchSummary(processed: Int, errors: Int, duration: TimeInterval) -> NotificationType {
+            return .batchSummary(stats: BatchSummaryStats(
+                filesMoved: processed,
+                errorsEncountered: errors,
+                duration: duration
+            ))
+        }
+        
+        var isCritical: Bool {
+            if case .processingError(_, let critical, _) = self {
+                return critical
+            }
+            return false
+        }
+        
+        /// Whether the app is currently in the foreground
+        @MainActor
+        private static var isAppActive: Bool {
+            return NSApplication.shared.isActive
+        }
+        
+        /// Should this notification be shown as a system notification?
+        @MainActor
+        var shouldShowSystem: Bool {
+            // Always show if backgrounded or if it's a critical error
+            if !Self.isAppActive || isCritical {
+                return true
+            }
+            
+            // Check if previewReady should show in foreground
+            if case .previewReady = self {
+                return NotificationSettingsManager.shared.settings.showPreviewReadyInForeground
+            }
+            
+            // Otherwise, respect user settings for in-app HUD vs system
+            return false
+        }
     }
-}
 
 /// HUD notification data for display
 public struct HUDNotification: Identifiable, Equatable {
@@ -263,6 +287,11 @@ public class NotificationManager: ObservableObject {
                 print("NotificationManager: processingComplete notifications disabled")
                 return
             }
+        case .previewReady:
+            guard settingsValue.previewReady else {
+                print("NotificationManager: previewReady notifications disabled")
+                return
+            }
         case .processingError(_, let isCritical, _):
             if isCritical && settingsValue.alwaysShowCriticalErrors {
                 // Always show critical errors
@@ -283,15 +312,16 @@ public class NotificationManager: ObservableObject {
         // Create notification content
         let (title, message, icon, iconColor) = notificationContent(for: type)
         
-        // Show in-app HUD if enabled
-        if settingsValue.inAppHUD {
+        // Show in-app HUD if enabled AND app is active
+        if settingsValue.inAppHUD && NSApplication.shared.isActive {
             showHUD(title: title, message: message, icon: icon, iconColor: iconColor, playSound: settingsValue.hudSounds)
         } else {
-            print("NotificationManager: inAppHUD disabled, skipping HUD")
+            print("NotificationManager: skipping HUD (inAppHUD=\(settingsValue.inAppHUD), isActive=\(NSApplication.shared.isActive))")
         }
         
-        // Show system notification if enabled
-        if settingsValue.systemNotifications {
+        // Show system notification if enabled AND (app is backgrounded OR it's critical)
+        let shouldShowSystem = type.shouldShowSystem
+        if settingsValue.systemNotifications && shouldShowSystem {
             Task {
                 await showSystemNotification(
                     type: type,
@@ -301,7 +331,7 @@ public class NotificationManager: ObservableObject {
                 )
             }
         } else {
-            print("NotificationManager: systemNotifications disabled, skipping system notification")
+            print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem))")
         }
     }
     
@@ -312,13 +342,13 @@ public class NotificationManager: ObservableObject {
         // Create notification content
         let (title, message, icon, iconColor) = notificationContent(for: type)
         
-        // Show in-app HUD if enabled
-        if settingsValue.inAppHUD {
+        // Show in-app HUD if enabled AND app is active
+        if settingsValue.inAppHUD && NSApplication.shared.isActive {
             showHUD(title: title, message: message, icon: icon, iconColor: iconColor, playSound: settingsValue.hudSounds)
         }
         
-        // Show system notification if enabled
-        if settingsValue.systemNotifications {
+        // Show system notification if enabled AND (app is backgrounded OR it's critical)
+        if settingsValue.systemNotifications && type.shouldShowSystem {
             Task {
                 await showSystemNotification(
                     type: type,
@@ -415,6 +445,13 @@ public class NotificationManager: ObservableObject {
                 "Organized \(fileCount) file\(fileCount == 1 ? "" : "s") in \(folderName)",
                 "checkmark.circle.fill",
                 .green
+            )
+        case .previewReady(let folderName):
+            return (
+                "Preview Ready",
+                "Your organization preview for \(folderName) is ready to review",
+                "eye.fill",
+                .blue
             )
         case .processingError(let message, let isCritical, _):
             return (
@@ -623,6 +660,10 @@ public class NotificationManager: ObservableObject {
             case .info:
                 // Simple info notifications don't need action buttons
                 break
+                
+            case .previewReady:
+                actions.append("Review")
+                actions.append("Dismiss")
             }
         }
         

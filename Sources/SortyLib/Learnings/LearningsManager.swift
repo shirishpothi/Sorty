@@ -228,23 +228,60 @@ public class LearningsManager: ObservableObject {
     
     // MARK: - Debounced Saving
     
-    private var saveDebounceTimer: Timer?
-    private let saveDebounceInterval: TimeInterval = 2.0 // 2 seconds
+    private var saveTask: Task<Void, Never>?
+    private let saveDebounceInterval: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
     
     /// Debounced save to prevent rapid successive writes
     private func debouncedSave() {
-        saveDebounceTimer?.invalidate()
-        saveDebounceTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                await self?.saveProfile()
-            }
+        saveTask?.cancel()
+        saveTask = Task {
+            try? await Task.sleep(nanoseconds: saveDebounceInterval)
+            guard !Task.isCancelled else { return }
+            await saveProfile()
         }
     }
     
     /// Force immediate save (for critical operations)
     public func forceSave() async {
-        saveDebounceTimer?.invalidate()
+        saveTask?.cancel()
+        pruneOldData()
         await saveProfile()
+    }
+    
+    /// Caps history arrays at 100 items to prevent bloat
+    private func pruneOldData() {
+        guard var profile = currentProfile else { return }
+        
+        let cap = 100
+        if profile.additionalInstructionsHistory.count > cap {
+            profile.additionalInstructionsHistory = Array(profile.additionalInstructionsHistory.suffix(cap))
+        }
+        if profile.guidingInstructionsHistory.count > cap {
+            profile.guidingInstructionsHistory = Array(profile.guidingInstructionsHistory.suffix(cap))
+        }
+        if profile.steeringPrompts.count > cap {
+            profile.steeringPrompts = Array(profile.steeringPrompts.suffix(cap))
+        }
+        if profile.postOrganizationChanges.count > cap {
+            profile.postOrganizationChanges = Array(profile.postOrganizationChanges.suffix(cap))
+        }
+        if profile.historyReverts.count > cap {
+            profile.historyReverts = Array(profile.historyReverts.suffix(cap))
+        }
+        if profile.positiveExamples.count > cap {
+            profile.positiveExamples = Array(profile.positiveExamples.suffix(cap))
+        }
+        if profile.rejections.count > cap {
+            profile.rejections = Array(profile.rejections.suffix(cap))
+        }
+        if profile.corrections.count > cap {
+            profile.corrections = Array(profile.corrections.suffix(cap))
+        }
+        if profile.jobHistory.count > cap {
+            profile.jobHistory = Array(profile.jobHistory.suffix(cap))
+        }
+        
+        currentProfile = profile
     }
     
     // MARK: - Feedback Loop (Continuous Learning)
@@ -649,11 +686,12 @@ public class LearningsManager: ObservableObject {
         
         // 5. Inferred Rules (Derived from analysis)
         // Only include high priority or recently validated rules
-        let relevantRules = profile.inferredRules.sorted { $0.priority > $1.priority }.prefix(5)
-        if !relevantRules.isEmpty {
+        let activeRules = getActiveRules()
+        if !activeRules.isEmpty {
             context += "\nLEARNED PATTERNS:\n"
-            for rule in relevantRules {
-                context += "- \(rule.explanation)\n"
+            for rule in activeRules {
+                let confidence = rule.confidenceLevel.rawValue.capitalized
+                context += "- [Rule \(rule.id.prefix(4)), Confidence: \(confidence)] \(rule.explanation)\n"
             }
             hasContent = true
         }

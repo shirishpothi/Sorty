@@ -9,15 +9,14 @@ import Foundation
 
 public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
     public let config: AIConfig
-    private let session: URLSession
     @MainActor public weak var streamingDelegate: StreamingDelegate?
     
     public init(config: AIConfig) {
         self.config = config
-        let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest = config.requestTimeout
-        sessionConfig.timeoutIntervalForResource = config.resourceTimeout
-        self.session = URLSession(configuration: sessionConfig)
+    }
+    
+    private func getSession() async -> URLSession {
+        return await AISessionManager.shared.session(for: config.provider, config: config)
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
@@ -36,6 +35,8 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
+            mode: config.mode,
+            namingStyle: config.namingStyle,
             enableReasoning: config.enableReasoning, 
             includeContentMetadata: true,
             customInstructions: customInstructions
@@ -58,6 +59,63 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
+    public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        guard let apiKey = config.apiKey, !apiKey.isEmpty else {
+            throw AIClientError.missingAPIKey
+        }
+        
+        let urlString = "https://api.anthropic.com/v1/messages"
+        guard let url = URL(string: urlString) else {
+            throw AIClientError.invalidURL
+        }
+        
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
+        
+        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+            files: files, 
+            mode: config.mode,
+            namingStyle: config.namingStyle,
+            enableReasoning: config.enableReasoning, 
+            includeContentMetadata: true,
+            customInstructions: customInstructions
+        )
+        
+        // Build multimodal content for Claude Vision
+        var contentArray: [[String: Any]] = [
+            ["type": "text", "text": userPrompt]
+        ]
+        
+        // Add images in Claude's format
+        for (_, data) in imageData {
+            let base64 = data.base64EncodedString()
+            contentArray.append([
+                "type": "image",
+                "source": [
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": base64
+                ]
+            ])
+        }
+        
+        let requestBody: [String: Any] = [
+            "model": config.model,
+            "max_tokens": config.maxTokens ?? 4096,
+            "system": fullSystemPrompt,
+            "messages": [
+                ["role": "user", "content": contentArray]
+            ],
+            "temperature": temperature ?? config.temperature
+        ]
+        
+        if config.enableStreaming {
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
+        } else {
+            return try await analyzeStandard(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
+        }
+    }
+    
     private func analyzeStandard(url: URL, requestBody: [String: Any], apiKey: String, files: [FileItem]) async throws -> OrganizationPlan {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -67,6 +125,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -99,6 +158,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: streamingRequestBody)
         
+        let session = await getSession()
         let (bytes, response) = try await session.bytes(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -158,6 +218,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         
+        let session = await getSession()
         let (_, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -197,6 +258,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {

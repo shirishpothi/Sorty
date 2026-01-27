@@ -12,7 +12,7 @@ import Combine
 
 // MARK: - Rule Types
 
-public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable {
+public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable, Sendable {
     case fileExtension = "File Extension"
     case fileName = "File Name"
     case folderName = "Folder Name"
@@ -74,7 +74,7 @@ public enum ExclusionRuleType: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - File Type Categories
 
-public enum FileTypeCategory: String, Codable, CaseIterable, Identifiable {
+public enum FileTypeCategory: String, Codable, CaseIterable, Identifiable, Sendable {
     case images = "Images"
     case videos = "Videos"
     case audio = "Audio"
@@ -131,7 +131,7 @@ public enum FileTypeCategory: String, Codable, CaseIterable, Identifiable {
 
 // MARK: - Exclusion Rule Model
 
-public struct ExclusionRule: Codable, Identifiable, Hashable {
+public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public var type: ExclusionRuleType
     public var pattern: String

@@ -161,8 +161,11 @@ public class StorageLocationsManager: ObservableObject {
         
         prompt += """
         
-        When suggesting moves to storage locations, use the FULL PATH as the destination.
-        Only use storage locations when files clearly belong there based on the location's purpose.
+        IMPORTANT RULES FOR STORAGE LOCATIONS:
+        1. When suggesting moves to storage locations, use the FULL PATH as the destination.
+        2. ONLY use the storage locations listed above. Any other absolute path will be rejected.
+        3. Only use storage locations when files clearly belong there based on the location's purpose.
+        4. If a file doesn't fit a storage location, organize it within the source directory using relative paths.
         """
         
         return prompt

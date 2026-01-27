@@ -142,7 +142,7 @@ struct HistoryView: View {
 
     private func handleUndo(_ entry: OrganizationHistoryEntry) {
         isProcessing = true
-        Task {
+        Task { @MainActor in
             do {
                 try await organizer.undoHistoryEntry(entry)
                 HapticFeedbackManager.shared.success()
@@ -159,7 +159,7 @@ struct HistoryView: View {
 
     private func handleRedo(_ entry: OrganizationHistoryEntry) {
         isProcessing = true
-        Task {
+        Task { @MainActor in
             do {
                 try await organizer.redoOrganization(from: entry)
                 HapticFeedbackManager.shared.success()
@@ -176,7 +176,7 @@ struct HistoryView: View {
     
     private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
         isProcessing = true
-        Task {
+        Task { @MainActor in
             do {
                 // First set up the folder context from history entry
                 let directoryURL = URL(fileURLWithPath: entry.directoryPath)
@@ -422,9 +422,7 @@ struct HistorySessionCard: View {
             } label: {
                 HStack(spacing: 12) {
                     // Status Icon
-                    Image(systemName: statusIcon)
-                        .font(.title3)
-                        .foregroundStyle(statusColor)
+                    FolderThumbnailView(url: URL(fileURLWithPath: entry.directoryPath), size: CGSize(width: 32, height: 32))
                         .frame(width: 32)
                         .accessibilityHidden(true)
 
@@ -516,7 +514,7 @@ struct HistorySessionCard: View {
                                 } label: {
                                     Label("Redo", systemImage: "arrow.clockwise")
                                 }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.onboardingPill)
                                 .controlSize(.small)
                                 .accessibilityLabel("Redo organization")
                                 .accessibilityIdentifier("RedoButton-\(entry.id.uuidString)")
@@ -565,7 +563,7 @@ struct HistorySessionCard: View {
             isHovered = hovering
         }
         .sheet(isPresented: $showRedoModelPicker) {
-            RedoWithModelPicker(
+            ModelSelectionPopover(
                 isPresented: $showRedoModelPicker,
                 currentProvider: settingsViewModel.config.provider,
                 currentModel: settingsViewModel.config.model,
@@ -697,6 +695,86 @@ struct HistoryDetailSheet: View {
                                     }
                                 }
                             }
+
+                            // Nerd Stats Grid (if available)
+                            if let stats = entry.plan?.generationStats {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Generation Metrics")
+                                        .font(.headline)
+                                        .padding(.top, 4)
+
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 16) {
+                                            NerdStatCard(
+                                                icon: "bolt.fill",
+                                                iconColor: .orange,
+                                                title: "Speed",
+                                                value: String(format: "%.1f", stats.tps),
+                                                unit: "tok/s",
+                                                description: "Processing throughput"
+                                            )
+                                            .frame(width: 110)
+
+                                            NerdStatCard(
+                                                icon: "timer",
+                                                iconColor: .blue,
+                                                title: "Latency",
+                                                value: String(format: "%.2f", stats.ttft),
+                                                unit: "s",
+                                                description: "Time to first token"
+                                            )
+                                            .frame(width: 110)
+
+                                            NerdStatCard(
+                                                icon: "sum",
+                                                iconColor: .purple,
+                                                title: "Total",
+                                                value: "\(stats.totalTokens)",
+                                                unit: "tok",
+                                                description: "Context consumption"
+                                            )
+                                            .frame(width: 110)
+
+                                            if let scanned = stats.filesScanned {
+                                                NerdStatCard(
+                                                    icon: "doc.text.magnifyingglass",
+                                                    iconColor: .green,
+                                                    title: "Scanned",
+                                                    value: "\(scanned)",
+                                                    unit: "files",
+                                                    description: "Total files processed"
+                                                )
+                                                .frame(width: 110)
+                                            }
+
+                                            if let size = stats.totalFileSize {
+                                                NerdStatCard(
+                                                    icon: "internaldrive",
+                                                    iconColor: .cyan,
+                                                    title: "Volume",
+                                                    value: ByteCountFormatter.string(fromByteCount: size, countStyle: .file).replacingOccurrences(of: " ", with: ""),
+                                                    unit: nil,
+                                                    description: "Data footprint"
+                                                )
+                                                .frame(width: 110)
+                                            }
+
+                                            if let dups = stats.duplicatesFound {
+                                                NerdStatCard(
+                                                    icon: "doc.on.doc",
+                                                    iconColor: .red,
+                                                    title: "Duplicates",
+                                                    value: "\(dups)",
+                                                    unit: nil,
+                                                    description: "Content matches"
+                                                )
+                                                .frame(width: 110)
+                                            }
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -735,7 +813,7 @@ struct HistoryDetailSheet: View {
                                             Label("Restore Deleted Files", systemImage: "arrow.uturn.backward")
                                                 .frame(minWidth: 150)
                                         }
-                                        .buttonStyle(.borderedProminent)
+                                        .buttonStyle(.onboardingPill)
                                         .controlSize(.large)
                                         .accessibilityLabel("Restore deleted files")
                                         .accessibilityIdentifier("RestoreDuplicatesButton")
@@ -747,7 +825,7 @@ struct HistoryDetailSheet: View {
                                         Label("Re-Apply Organization", systemImage: "arrow.clockwise")
                                             .frame(minWidth: 150)
                                     }
-                                    .buttonStyle(.borderedProminent)
+                                    .buttonStyle(.onboardingPill)
                                     .controlSize(.large)
                                     .accessibilityLabel("Re-apply this organization")
                                     .accessibilityIdentifier("RedoSessionButton")
@@ -769,7 +847,7 @@ struct HistoryDetailSheet: View {
                                         Label("Restore to State", systemImage: "clock.arrow.circlepath")
                                             .frame(minWidth: 150)
                                     }
-                                    .buttonStyle(.borderedProminent)
+                                    .buttonStyle(.onboardingPill)
                                     .controlSize(.large)
                                     .accessibilityLabel("Restore folder to this state")
                                     .accessibilityIdentifier("RestoreStateButton")
@@ -914,7 +992,7 @@ struct HistoryDetailSheet: View {
         }
         .frame(minWidth: 600, minHeight: 500)
         .sheet(isPresented: $showRedoModelPicker) {
-            RedoWithModelPicker(
+            ModelSelectionPopover(
                 isPresented: $showRedoModelPicker,
                 currentProvider: settingsViewModel.config.provider,
                 currentModel: settingsViewModel.config.model,
@@ -987,7 +1065,7 @@ struct HistoryDetailSheet: View {
             var restoredCount = 0
             for item in restorables {
                 do {
-                    try await DuplicateRestorationManager.shared.restore(item: item)
+                    try DuplicateRestorationManager.shared.restore(item: item)
                     restoredCount += 1
                 } catch {
                     // Continue with other items
@@ -1210,10 +1288,8 @@ struct FolderHistoryDetailRow: View {
 
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(suggestion.files.enumerated()), id: \.element.id) { index, fileItem in
-                            HStack {
-                                Image(systemName: "doc")
-                                    .foregroundColor(.secondary)
-                                    .accessibilityHidden(true)
+                            HStack(spacing: 8) {
+                                FileThumbnailView(url: URL(fileURLWithPath: fileItem.path), size: CGSize(width: 20, height: 20))
                                 Text(fileItem.displayName)
                                 Spacer()
                                 Text(fileItem.formattedSize)

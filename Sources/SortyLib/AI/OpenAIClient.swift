@@ -24,15 +24,14 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     public let config: AIConfig
-    private let session: URLSession
     @MainActor public weak var streamingDelegate: StreamingDelegate?
     
     public init(config: AIConfig) {
         self.config = config
-        let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest = config.requestTimeout
-        sessionConfig.timeoutIntervalForResource = config.resourceTimeout
-        self.session = URLSession(configuration: sessionConfig)
+    }
+    
+    private func getSession() async -> URLSession {
+        return await AISessionManager.shared.session(for: config.provider, config: config)
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
@@ -58,7 +57,11 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
+            mode: config.mode,
+            namingStyle: config.namingStyle,
+            customNamingInstructions: config.customNamingInstructions,
             enableReasoning: config.enableReasoning, 
+            enableSmartRename: config.enableSmartRename,
             includeContentMetadata: true,
             customInstructions: customInstructions
         )
@@ -83,7 +86,74 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         if config.enableStreaming {
             return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
         } else {
-            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files)
+            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, systemPrompt: systemPrompt, userPrompt: userPrompt)
+        }
+    }
+    
+    public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        guard let apiURL = config.apiURL else {
+            throw AIClientError.missingAPIURL
+        }
+        
+        if config.requiresAPIKey && (config.apiKey == nil || config.apiKey?.isEmpty == true) {
+            throw AIClientError.missingAPIKey
+        }
+        
+        let endpoint = OpenAIClient.constructEndpoint(from: apiURL)
+        
+        guard let url = URL(string: endpoint) else {
+            throw AIClientError.invalidURL
+        }
+        
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+            files: files, 
+            mode: config.mode,
+            namingStyle: config.namingStyle,
+            customNamingInstructions: config.customNamingInstructions,
+            enableReasoning: config.enableReasoning, 
+            enableSmartRename: config.enableSmartRename,
+            includeContentMetadata: true,
+            customInstructions: customInstructions
+        )
+        
+        // Build multimodal content
+        var contentArray: [[String: Any]] = [
+            ["type": "text", "text": userPrompt]
+        ]
+        
+        // Add images as base64
+        for (_, data) in imageData {
+            let base64 = data.base64EncodedString()
+            contentArray.append([
+                "type": "image_url",
+                "image_url": [
+                    "url": "data:image/jpeg;base64,\(base64)",
+                    "detail": "auto"
+                ]
+            ])
+        }
+        
+        var requestBody: [String: Any] = [
+            "model": config.model,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": contentArray]
+            ],
+            "temperature": temperature ?? config.temperature,
+            "response_format": ["type": "json_object"]
+        ]
+        
+        if let maxTokens = config.maxTokens {
+            requestBody["max_tokens"] = maxTokens
+        }
+        
+        // Multimodal usually doesn't work well with streaming in some implementations, 
+        // but we'll follow the config if possible.
+        if config.enableStreaming {
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
+        } else {
+            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, systemPrompt: systemPrompt, userPrompt: userPrompt)
         }
     }
     
@@ -125,6 +195,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -188,6 +259,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
             request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
         
+        let session = await getSession()
         let (_, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -201,7 +273,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
     
     // MARK: - Non-Streaming Implementation
     
-    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], systemPrompt: String, userPrompt: String) async throws -> OrganizationPlan {
         let startTime = Date()
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -214,6 +286,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         do {
             let (data, response) = try await session.data(for: request)
             let endTime = Date()
@@ -250,7 +323,10 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
                 tps: tps,
                 ttft: duration, // approximate
                 totalTokens: estimatedTokens,
-                model: config.model
+                model: config.model,
+                filesScanned: files.count,
+                totalFileSize: files.reduce(0) { $0 + $1.size },
+                promptTokens: PromptBuilder.estimateTokens(systemPrompt + userPrompt)
             )
             
             var plan = try ResponseParser.parseResponse(content, originalFiles: files)
@@ -285,6 +361,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         var accumulatedContent = ""
         var tokenCountEstimate = 0
         
+        let session = await getSession()
         do {
             let (bytes, response) = try await session.bytes(for: request)
             
@@ -350,7 +427,10 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
                 tps: tps,
                 ttft: ttft,
                 totalTokens: estimatedTokens,
-                model: config.model
+                model: config.model,
+                filesScanned: files.count,
+                totalFileSize: files.reduce(0) { $0 + $1.size },
+                promptTokens: PromptBuilder.estimateTokens(accumulatedContent) // We don't have the exact prompt tokens here easily
             )
             
             // Notify completion

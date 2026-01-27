@@ -9,7 +9,7 @@ import SwiftUI
 
 // MARK: - Settings Category
 
-enum SettingsCategory: String, CaseIterable, Identifiable {
+public enum SettingsCategory: String, CaseIterable, Identifiable {
     case rules = "Organization Rules"
     case provider = "AI Provider"
     case strategy = "Organization Strategy"
@@ -19,9 +19,9 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
     case advanced = "Advanced"
     case troubleshooting = "Troubleshooting"
     
-    var id: String { rawValue }
+    public var id: String { rawValue }
     
-    var icon: String {
+    public var icon: String {
         switch self {
         case .rules: return "folder.badge.gearshape"
         case .provider: return "cpu"
@@ -34,7 +34,7 @@ enum SettingsCategory: String, CaseIterable, Identifiable {
         }
     }
     
-    var color: Color {
+    public var color: Color {
         switch self {
         case .rules: return .blue
         case .provider: return .purple
@@ -70,6 +70,7 @@ struct SettingsView: View {
     @State private var quickActionMessage: String?
     @State private var cacheSize: String = "Calculating..."
     @State private var showingResetConfirmation = false
+    @State private var showModelPicker = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -94,10 +95,22 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .opacity(contentOpacity)
         .onAppear {
+            // Restore from appState if requested
+            if let section = appState.selectedSettingsSection {
+                selectedCategory = section
+            }
+            
             // Async dispatch to avoid layout loop during view initialization
             DispatchQueue.main.async {
                 withAnimation(.easeOut(duration: 0.3)) {
                     contentOpacity = 1.0
+                }
+            }
+        }
+        .onChange(of: appState.selectedSettingsSection) { _, newSection in
+            if let section = newSection {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    selectedCategory = section
                 }
             }
         }
@@ -111,16 +124,18 @@ struct SettingsView: View {
     private var settingsSidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(SettingsCategory.allCases) { category in
-                SidebarButton(
-                    title: category.rawValue,
-                    icon: category.icon,
-                    color: category.color,
-                    isSelected: selectedCategory == category
-                ) {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        selectedCategory = category
+                if category != .finder || FeatureFlags.finderSyncEnabled {
+                    SidebarButton(
+                        title: category.rawValue,
+                        icon: category.icon,
+                        color: category.color,
+                        isSelected: selectedCategory == category
+                    ) {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            selectedCategory = category
+                        }
+                        HapticFeedbackManager.shared.selection()
                     }
-                    HapticFeedbackManager.shared.selection()
                 }
             }
             
@@ -163,7 +178,19 @@ struct SettingsView: View {
         case .tuning:
             tuningSection
         case .finder:
-            finderSection
+            if FeatureFlags.finderSyncEnabled {
+                finderSection
+            } else {
+                VStack(spacing: 20) {
+                    Image(systemName: "puzzlepiece.extension")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                    Text("Finder Integration is currently disabled")
+                        .font(.headline)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, 40)
+            }
         case .notifications:
             notificationsSection
         case .advanced:
@@ -375,9 +402,8 @@ struct SettingsView: View {
                             Text("Sign in with GitHub")
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.onboardingPill)
                     .tint(.black)
                     
                     if let error = copilotAuth.authError {
@@ -423,12 +449,29 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                SettingsTextField(
-                    title: "Model",
-                    text: $viewModel.config.model,
-                    placeholder: viewModel.config.provider.defaultModel
-                )
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Model")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    
+                    ModelSelectorRow(
+                        provider: viewModel.config.provider,
+                        model: viewModel.config.model,
+                        onTap: { showModelPicker = true }
+                    )
+                }
             }
+        }
+        .sheet(isPresented: $showModelPicker) {
+            ModelSelectionPopover(
+                isPresented: $showModelPicker,
+                currentProvider: viewModel.config.provider,
+                currentModel: viewModel.config.model,
+                onSelect: { provider, model in
+                    viewModel.config.provider = provider
+                    viewModel.config.model = model
+                }
+            )
         }
     }
     
@@ -555,10 +598,28 @@ struct SettingsView: View {
             
             SettingsCard(title: "Scanning Options", icon: "doc.text.magnifyingglass", color: .blue) {
                 VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        SettingsToggle(
+                            isOn: $viewModel.config.enableDeepScan,
+                            title: "Deep Scanning",
+                            description: "Analyze file content (PDF text, EXIF data) for smarter organization"
+                        )
+                        .disabled(!viewModel.config.provider.supportsDeepScan)
+                        
+                        if !viewModel.config.provider.supportsDeepScan {
+                            Text("Not supported by \(viewModel.config.provider.displayName) due to context limits.")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                                .padding(.leading, 32)
+                        }
+                    }
+                    
+                    Divider()
+                    
                     SettingsToggle(
-                        isOn: $viewModel.config.enableDeepScan,
-                        title: "Deep Scanning",
-                        description: "Analyze file content (PDF text, EXIF data) for smarter organization"
+                        isOn: $viewModel.config.enableSmartRename,
+                        title: "Smart Renaming",
+                        description: "AI suggests more descriptive filenames based on content"
                     )
                     
                     Divider()
@@ -580,6 +641,110 @@ struct SettingsView: View {
                 )
             }
             .animatedAppearance(delay: 0.15)
+            
+            // Vision AI Section
+            SettingsCard(title: "AI Vision", icon: "eye", color: .teal) {
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsToggle(
+                        isOn: $viewModel.config.enableVision,
+                        title: "Use AI Vision for Images",
+                        description: "Send images to the AI for content-aware organization"
+                    )
+                    .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
+                    
+                    if viewModel.config.enableVision {
+                        Divider()
+                        
+                        HStack {
+                            Text("Images per Batch")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(viewModel.config.visionBatchSize)")
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Slider(
+                            value: Binding(
+                                get: { Double(viewModel.config.visionBatchSize) },
+                                set: { viewModel.config.visionBatchSize = Int($0) }
+                            ),
+                            in: 1...10,
+                            step: 1
+                        )
+                        
+                        HStack(spacing: 4) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundColor(.orange)
+                            Text("Vision uses more tokens and may incur higher API costs.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 4)
+                    }
+                    
+                    if !ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "info.circle")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                            Text("Switch to a vision model (e.g., gpt-4o, claude-3-5-sonnet) to enable.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.2)
+            
+            // Naming Style Section
+            SettingsCard(title: "Naming Style", icon: "textformat", color: .indigo) {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Picker("Naming Style", selection: $viewModel.config.namingStyle) {
+                            ForEach(NamingStyle.allCases, id: \.self) { style in
+                                Text(style.displayName).tag(style)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        
+                        Text("Determines how the AI suggests file names when Smart Rename is enabled.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if viewModel.config.enableSmartRename {
+                        Divider()
+                        
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Custom Naming Instructions")
+                                .font(.subheadline.weight(.medium))
+                            
+                            TextEditor(text: Binding(
+                                get: { viewModel.config.customNamingInstructions ?? "" },
+                                set: { viewModel.config.customNamingInstructions = $0.isEmpty ? nil : $0 }
+                            ))
+                            .font(.system(.body, design: .monospaced))
+                            .frame(height: 60)
+                            .padding(4)
+                            .background(Color(NSColor.controlBackgroundColor))
+                            .cornerRadius(6)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                            )
+                            
+                            Text("Extra rules for the AI (e.g., 'Use camelCase for subjects')")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.25)
         }
     }
     
@@ -649,7 +814,7 @@ struct SettingsView: View {
                                     HapticFeedbackManager.shared.success()
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortySecondary(size: .regular))
                         } else {
                             Button("Install") {
                                 let result = ExtensionCommunication.installQuickAction()
@@ -661,7 +826,7 @@ struct SettingsView: View {
                                     HapticFeedbackManager.shared.error()
                                 }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.sortyPrimary(size: .regular))
                         }
                     }
                     
@@ -690,6 +855,8 @@ struct SettingsView: View {
                         URLSchemeRow(scheme: "sorty://organize?path=/path/to/folder", description: "Organize a folder")
                         URLSchemeRow(scheme: "sorty://duplicates?path=/path", description: "Find duplicates")
                         URLSchemeRow(scheme: "sorty://settings", description: "Open settings")
+                        URLSchemeRow(scheme: "sorty://settings?section=provider", description: "Open AI Provider settings")
+                        URLSchemeRow(scheme: "sorty://settings?section=notifications", description: "Open Notification settings")
                     }
                 }
             }
@@ -713,8 +880,7 @@ struct SettingsView: View {
                     Button("Open Extension Preferences") {
                         ExtensionCommunication.openFinderExtensionSettings()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(.sortySecondary(size: .small))
                 }
             }
             .animatedAppearance(delay: 0.15)
@@ -812,29 +978,6 @@ struct SettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.2)
-            
-            // Experimental Features
-            SettingsCard(title: "Experimental Features", icon: "flask", color: .purple) {
-                VStack(alignment: .leading, spacing: 12) {
-                    SettingsToggle(
-                        isOn: $viewModel.config.enableParallelGeneration,
-                        title: "Parallel Generation",
-                        description: "Compare multiple AI models side-by-side when organizing"
-                    )
-                    
-                    if viewModel.config.enableParallelGeneration {
-                        HStack(spacing: 6) {
-                            Image(systemName: "info.circle")
-                                .font(.caption)
-                            Text("When enabled, you'll see a 'Compare' option to generate organization plans from multiple models simultaneously.")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.secondary)
-                        .padding(.top, 4)
-                    }
-                }
-            }
-            .animatedAppearance(delay: 0.25)
         }
     }
     
@@ -949,6 +1092,23 @@ struct SettingsView: View {
                     Divider()
                     
                     SettingsToggle(
+                        isOn: $notificationSettings.settings.previewReady,
+                        title: "Preview Ready",
+                        description: "When AI has finished generating the organization plan"
+                    )
+                    
+                    if notificationSettings.settings.previewReady {
+                        SettingsToggle(
+                            isOn: $notificationSettings.settings.showPreviewReadyInForeground,
+                            title: "Show Preview Ready in foreground",
+                            description: "Show system notification even when the app is active"
+                        )
+                        .padding(.leading, 12)
+                    }
+                    
+                    Divider()
+                    
+                    SettingsToggle(
                         isOn: $notificationSettings.settings.processingErrors,
                         title: "Processing Errors",
                         description: "When errors occur during processing"
@@ -989,6 +1149,14 @@ struct SettingsView: View {
                         isOn: $notificationSettings.settings.hudSounds,
                         title: "HUD Sounds",
                         description: "Play sound with in-app HUD notifications"
+                    )
+                    
+                    Divider()
+                    
+                    SettingsToggle(
+                        isOn: $notificationSettings.settings.playCompletionSound,
+                        title: "Completion Sound",
+                        description: "Play a satisfying sound when organization finishes"
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1037,6 +1205,19 @@ struct SettingsView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                         .accessibilityIdentifier("testSuccessButton")
+                        
+                        Button {
+                            NotificationManager.shared.show(.previewReady(folderName: "Test Folder"))
+                            HapticFeedbackManager.shared.success()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "eye")
+                                Text("Preview")
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("testPreviewButton")
                         
                         Button {
                             NotificationManager.shared.showError(
@@ -1203,7 +1384,6 @@ struct SettingsView: View {
                     
                     Button {
                         clearCache()
-                        HapticFeedbackManager.shared.success()
                     } label: {
                         HStack {
                             Image(systemName: "trash")
@@ -1211,7 +1391,7 @@ struct SettingsView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.onboardingPill)
                     .tint(.orange)
                 }
             }
@@ -1236,7 +1416,7 @@ struct SettingsView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.onboardingPill)
                     .tint(.red)
                 }
             }

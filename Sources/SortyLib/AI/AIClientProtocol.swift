@@ -17,6 +17,7 @@ public protocol StreamingDelegate: AnyObject {
 
 public protocol AIClientProtocol: Sendable {
     func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan
+    func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan
     func generateText(prompt: String, systemPrompt: String?) async throws -> String
     func checkHealth() async throws
     var config: AIConfig { get }

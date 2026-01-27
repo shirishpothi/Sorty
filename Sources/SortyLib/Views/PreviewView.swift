@@ -17,31 +17,29 @@ struct PreviewView: View {
     @EnvironmentObject var learningsManager: LearningsManager
     @StateObject private var previewManager = PreviewManager()
     @StateObject private var dragDropManager = DragDropManager()
-    @StateObject private var orchestrator = GenerationOrchestrator()
     @StateObject private var previewStore: PreviewStore
     @State private var showApplyConfirmation = false
     @State private var isApplying = false
     @State private var editablePlan: OrganizationPlan
     @State private var hasEdits = false
     @State private var showPostOrganizationHoning = false
-    @State private var isInstructionsExpanded = false
-    @State private var showComparisonDashboard = false
     @State private var showRedoModelPicker = false
     @State private var isRedoingWithModel = false
+    @State private var isInstructionsExpanded = false
     @FocusState private var instructionsFocused: Bool
-
+    
     init(plan: OrganizationPlan, baseURL: URL) {
         self.plan = plan
         self.baseURL = baseURL
+        let store = PreviewStore(plan: plan)
+        _previewStore = StateObject(wrappedValue: store)
         _editablePlan = State(initialValue: plan)
-        _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
     }
-
-    // Reset isApplying when organizer state changes to completed
-    private var shouldDisableButtons: Bool {
-        isApplying || (organizer.state == .applying)
+    
+    private var renameCount: Int {
+        editablePlan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count }
     }
-
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header with version info
@@ -89,6 +87,20 @@ struct PreviewView: View {
                 Text("\(editablePlan.totalFiles) files • \(editablePlan.totalFolders) folders")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                
+                if renameCount > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "wand.and.stars")
+                        Text("\(renameCount) renames")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.purple)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(4)
+                }
             }
             .padding()
             .background(Color(NSColor.controlBackgroundColor))
@@ -121,8 +133,32 @@ struct PreviewView: View {
                     Divider()
                 }
                 
-                // Row 2: Action buttons
-                actionButtonsRow
+                // Row 2: Action buttons / Progress
+                if isApplying || organizer.state == .applying {
+                    VStack(spacing: 12) {
+                        HStack {
+                            ProgressView(value: organizer.progress, total: 1.0)
+                                .accentColor(.purple)
+                            
+                            Button {
+                                organizer.cancel()
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        
+                        Text(organizer.organizationStage)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(Color(NSColor.controlBackgroundColor))
+                } else {
+                    actionButtonsRow
+                }
             }
         }
         .alert("Apply Organization?", isPresented: $showApplyConfirmation) {
@@ -131,7 +167,8 @@ struct PreviewView: View {
                 applyOrganization()
             }
         } message: {
-            Text("This will create \(editablePlan.totalFolders) folders and move \(editablePlan.totalFiles) files. This action can be undone.")
+            let unorganizedCount = editablePlan.unorganizedFiles.count
+            Text("\(editablePlan.totalFiles) files will be organized. \(unorganizedCount) files will remain in place. This action can be undone.")
         }
         .onChange(of: organizer.state) { oldState, newState in
             if case .completed = newState {
@@ -169,7 +206,7 @@ struct PreviewView: View {
             )
         }
         .sheet(isPresented: $showRedoModelPicker) {
-            RedoWithModelPicker(
+            ModelSelectionPopover(
                 isPresented: $showRedoModelPicker,
                 currentProvider: settingsViewModel.config.provider,
                 currentModel: settingsViewModel.config.model,
@@ -177,24 +214,6 @@ struct PreviewView: View {
                     redoWithProviderAndModel(provider, model)
                 }
             )
-        }
-        .sheet(isPresented: $showComparisonDashboard) {
-            OrchestrationDashboard(
-                orchestrator: orchestrator,
-                baseURL: baseURL,
-                onSelectPlan: { selectedPlan in
-                    editablePlan = selectedPlan
-                    previewStore.updatePlan(selectedPlan)
-                    hasEdits = true
-                    showComparisonDashboard = false
-                },
-                onDismiss: {
-                    showComparisonDashboard = false
-                }
-            )
-            .environmentObject(settingsViewModel)
-            .environmentObject(organizer)
-            .environmentObject(CustomPersonaStore())
         }
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))
@@ -253,10 +272,11 @@ struct PreviewView: View {
             // Left side: Cancel and Reset
             Button {
                 HapticFeedbackManager.shared.tap()
-                organizer.reset()
+                organizer.cancel()
             } label: {
                 Text("Cancel")
             }
+            .buttonStyle(.sortySecondary)
             .keyboardShortcut(.cancelAction)
             .accessibilityIdentifier("PreviewCancelButton")
             .accessibilityLabel("Cancel organization")
@@ -274,7 +294,7 @@ struct PreviewView: View {
                         Text("Reset")
                     }
                 }
-                .foregroundColor(.orange)
+                .buttonStyle(.sortySecondary(color: .orange))
                 .accessibilityIdentifier("ResetEditsButton")
                 .accessibilityLabel("Reset all manual edits")
             }
@@ -297,7 +317,7 @@ struct PreviewView: View {
                     Text("Apply")
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.sortyPrimary)
             .keyboardShortcut(.defaultAction)
             .disabled(shouldDisableButtons)
             .accessibilityIdentifier("ApplyOrganizationButton")
@@ -328,8 +348,7 @@ struct PreviewView: View {
                     }
                 }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.sortySecondary(size: .small))
             .disabled(shouldDisableButtons || isRedoingWithModel)
             .accessibilityIdentifier("RegenerateButton")
             .accessibilityLabel("Regenerate with current model")
@@ -346,29 +365,11 @@ struct PreviewView: View {
                         .font(.system(size: 11))
                 }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
+            .buttonStyle(.sortySecondary(size: .small))
             .disabled(shouldDisableButtons || isRedoingWithModel)
             .accessibilityIdentifier("ChooseModelButton")
             .accessibilityLabel("Choose a different model")
             
-            // Compare Models button - opens comparison dashboard
-            Button {
-                HapticFeedbackManager.shared.tap()
-                showComparisonDashboard = true
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "square.grid.2x2")
-                        .font(.system(size: 10))
-                    Text("Compare")
-                        .font(.system(size: 11))
-                }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(shouldDisableButtons)
-            .accessibilityIdentifier("CompareButton")
-            .accessibilityLabel("Compare different AI models")
         }
     }
     
@@ -512,6 +513,10 @@ struct PreviewView: View {
                 }
             }
         }
+    }
+
+    private var shouldDisableButtons: Bool {
+        isApplying || organizer.state == .scanning || organizer.state == .organizing
     }
 
     private func applyOrganization() {

@@ -19,32 +19,46 @@ public struct FinderIntegrationView: View {
     public init() {}
     
     public var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Header
-                headerSection
-                
-                // Status Overview
-                statusOverview
-                
-                // Integration Options
-                integrationOptions
-                
-                // Instructions
-                if showingInstructions {
-                    instructionsSection
-                }
-                
-                // Installation Results
-                if !installationResults.isEmpty {
-                    resultsSection
-                }
+        if !FeatureFlags.finderSyncEnabled {
+            VStack {
+                Image(systemName: "puzzlepiece.extension")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+                Text("Finder Integration is currently disabled.")
+                    .font(.title3)
+                Text("This feature is undergoing maintenance.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-            .padding(24)
-        }
-        .frame(minWidth: 600, minHeight: 500)
-        .onAppear {
-            refreshStatus()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    headerSection
+                    
+                    // Status Overview
+                    statusOverview
+                    
+                    // Integration Options
+                    integrationOptions
+                    
+                    // Instructions
+                    if showingInstructions {
+                        instructionsSection
+                    }
+                    
+                    // Installation Results
+                    if !installationResults.isEmpty {
+                        resultsSection
+                    }
+                }
+                .padding(24)
+            }
+            .frame(minWidth: 600, minHeight: 500)
+            .onAppear {
+                refreshStatus()
+            }
         }
     }
     
@@ -146,6 +160,20 @@ public struct FinderIntegrationView: View {
                 secondaryLabel: nil,
                 actionLabel: "Open Panel"
             )
+            
+            // Finder Sync Extension (Experimental/Hidden)
+            if UserDefaults.standard.bool(forKey: "showExperimentalFeatures") {
+                IntegrationRow(
+                    title: "Finder Sync Extension",
+                    subtitle: "Icon overlays and sidebar icons",
+                    icon: "externaldrive.fill.badge.checkmark",
+                    isInstalled: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension"),
+                    action: toggleFinderSync,
+                    secondaryAction: nil,
+                    secondaryLabel: nil,
+                    actionLabel: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension") ? "Disable" : "Enable"
+                )
+            }
             
             // Install All Button
             HStack {
@@ -286,6 +314,12 @@ public struct FinderIntegrationView: View {
     
     private func showQuickPanel() {
         QuickOrganizePanelController.shared.showPanel()
+    }
+    
+    private func toggleFinderSync() {
+        let current = UserDefaults.standard.bool(forKey: "enableFinderSyncExtension")
+        UserDefaults.standard.set(!current, forKey: "enableFinderSyncExtension")
+        refreshStatus()
     }
     
     private func installAll() {

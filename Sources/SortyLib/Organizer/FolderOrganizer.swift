@@ -62,6 +62,7 @@ public struct AIInsight: Identifiable, Sendable {
     public let text: String
     public let category: Category
     public let timestamp: Date
+    public let filePath: String? // Optional path for thumbnails
     
     public enum Category: String, Sendable {
         case file = "File"
@@ -94,10 +95,11 @@ public struct AIInsight: Identifiable, Sendable {
         }
     }
     
-    public init(text: String, category: Category) {
+    public init(text: String, category: Category, filePath: String? = nil) {
         self.text = text
         self.category = category
         self.timestamp = Date()
+        self.filePath = filePath
     }
 }
 
@@ -191,6 +193,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // Track current directory for status checks
     @Published public var currentDirectory: URL?
     
+    // Track detected duplicates for the current session
+    @Published public var detectedDuplicates: [DuplicateGroup] = []
+    
     // Track file count for better progress estimation
     public var scannedFileCount: Int = 0
 
@@ -212,6 +217,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var customPersonaStore: CustomPersonaStore?
     public var learningsManager: LearningsManager?
     public var storageLocationsManager: StorageLocationsManager?
+    
+    /// Exclusion enforcer for post-AI validation (lazily initialized)
+    private var exclusionEnforcer: ExclusionEnforcer?
+    
+    /// Learning observer reference for rule tracking
+    public var learningsObserver: ContinuousLearningObserver?
+    
+    private let visionAnalyzer = ImageVisionAnalyzer()
     
     public init() {}
     
@@ -385,11 +398,23 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                let range = Range(match.range(at: 1), in: text) {
                 let fileName = String(text[range]).trimmingCharacters(in: .whitespaces)
                 if !fileName.isEmpty && fileName.count < 50 {
-                    return AIInsight(text: "Analyzing \(fileName)", category: .file)
+                    // Try to match with an actual file path from the scan if possible
+                    let filePath = findScannedFilePath(for: fileName)
+                    return AIInsight(text: "Analyzing \(fileName)", category: .file, filePath: filePath)
                 }
             }
         }
         return nil
+    }
+
+    private func findScannedFilePath(for fileName: String) -> String? {
+        // Search through scanned files to find a matching path
+        // We can only do this if we have the current plan or scanned files list
+        guard currentDirectory != nil else { return nil }
+        
+        // This is a simplified search - in a real app we might want to cache these
+        // or have a more efficient lookup in the DirectoryScanner
+        return nil // Placeholder for now - will enhance if we have access to file list
     }
     
     private func extractFolderInsight(from text: String) -> AIInsight? {
@@ -462,11 +487,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Get the last meaningful sentence
         for sentence in sentences.reversed() {
             let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.count >= 15 && trimmed.count <= 80 {
-                // Skip if it looks like JSON or code
-                if !trimmed.contains("{") && !trimmed.contains("}") && !trimmed.contains("[") {
-                    return AIInsight(text: trimmed, category: .general)
-                }
+            
+            // Refined JSON/Code detection
+            guard trimmed.count >= 15 && trimmed.count <= 80 else { continue }
+            
+            // Skip if it looks like JSON or code
+            let isProbablyJSON = trimmed.contains("{") || 
+                                 trimmed.contains("}") || 
+                                 trimmed.contains("[") || 
+                                 trimmed.contains("]") ||
+                                 trimmed.contains("\":") ||
+                                 trimmed.contains("':") ||
+                                 (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""))
+            
+            if !isProbablyJSON {
+                return AIInsight(text: trimmed, category: .general)
             }
         }
         return nil
@@ -566,19 +601,49 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // Check cancellation frequently
             try checkCancellation()
 
-            var files = try await scanner.scanDirectory(at: directory)
-            scannedFileCount = files.count
+            let filesFound = try await scanner.scanDirectory(
+                at: directory,
+                deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true)
+            )
+            scannedFileCount = filesFound.count
 
-            updateProgress(0.15, stage: "Found \(files.count) files")
+            updateProgress(0.15, stage: "Found \(filesFound.count) files")
 
             try checkCancellation()
 
+            var files = filesFound
             if let exclusionRules = exclusionRules {
                 files = exclusionRules.filterFiles(files)
                 updateProgress(0.20, stage: "Filtered to \(files.count) files")
             }
 
             try checkCancellation()
+            
+            // Phase 1.5: Duplicate Detection
+            var duplicateContext: String = ""
+            if aiConfig?.detectDuplicates ?? false {
+                updateProgress(0.21, stage: "Checking for duplicates...")
+                let duplicates = await DuplicateDetector().findDuplicates(in: files)
+                await MainActor.run {
+                    self.detectedDuplicates = duplicates
+                }
+                if !duplicates.isEmpty {
+                    duplicateContext = "\n\nDUPLICATE FILES DETECTED:\n"
+                    for group in duplicates {
+                        duplicateContext += "- The following files are identical (SHA-256 hash: \(group.hash)):\n"
+                        for file in group.files {
+                            duplicateContext += "  • \(file.displayName) (\(file.path))\n"
+                        }
+                    }
+                    duplicateContext += "\nRECOMMENDATION FOR DUPLICATES:\n"
+                    duplicateContext += "1. If you suggest moving duplicates, try to consolidate them or use a 'Duplicates' folder.\n"
+                    duplicateContext += "2. You can suggest better names for them, but keep them in mind for organization.\n"
+                }
+            } else {
+                await MainActor.run {
+                    self.detectedDuplicates = []
+                }
+            }
 
             updateState(.organizing, stage: "Establishing connection...", progress: 0.22)
             await MainActor.run {
@@ -593,6 +658,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             
             // Add exclusion context to prompt
             var instructions = customPrompt ?? customInstructions
+            if !duplicateContext.isEmpty {
+                instructions += duplicateContext
+            }
             if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
                 let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
                 instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
@@ -610,7 +678,43 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 DebugLogger.log("Injected Storage Locations context into prompt")
             }
 
-            let plan = try await client.analyze(files: files, customInstructions: instructions, personaPrompt: personaPrompt, temperature: temperature)
+            // Phase 2: Vision Integration
+            var imagePayload: [String: Data] = [:]
+            if aiConfig?.enableVision ?? false,
+               let modelId = aiConfig?.model,
+               let provider = aiConfig?.provider,
+               ModelCatalog.shared.supportsVision(modelId: modelId, provider: provider) {
+                
+                let imageFiles = files.filter { ["jpg", "jpeg", "png", "heic", "webp"].contains($0.extension.lowercased()) }
+                if !imageFiles.isEmpty {
+                    updateProgress(0.25, stage: "Analyzing \(imageFiles.count) images with Vision AI...")
+                    let batch = Array(imageFiles.prefix(aiConfig?.visionBatchSize ?? 5))
+                    let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: batch.compactMap { $0.url })
+                    // Convert URL keys to filename strings
+                    for (url, data) in urlPayload {
+                        imagePayload[url.lastPathComponent] = data
+                    }
+                    DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis")
+                }
+            }
+
+            let plan: OrganizationPlan
+            if !imagePayload.isEmpty {
+                plan = try await client.analyzeWithImages(
+                    files: files,
+                    imageData: imagePayload,
+                    customInstructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            } else {
+                plan = try await client.analyze(
+                    files: files, 
+                    customInstructions: instructions, 
+                    personaPrompt: personaPrompt, 
+                    temperature: temperature
+                )
+            }
 
             try checkCancellation()
 
@@ -621,13 +725,68 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 isStreaming = false
             }
 
-            try validator.validate(plan, at: directory, maxTopLevelFolders: aiConfig?.maxTopLevelFolders ?? 10)
+            // In rename-only mode, we don't need to validate folder depth limits strictly
+            // but we still validate the overall JSON structure.
+            try validator.validate(
+                plan, 
+                at: directory, 
+                allowedStorageLocations: storageLocationsManager?.enabledLocations ?? [],
+                maxTopLevelFolders: aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
+            )
 
             try checkCancellation()
+            
+            // Post-AI exclusion validation
+            var validatedPlan = plan
+            if let exclusionRules = exclusionRules {
+                let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
+                self.exclusionEnforcer = enforcer
+                
+                let validationResult = enforcer.validate(plan)
+                
+                if validationResult.hasViolations {
+                    LogManager.shared.log("Exclusion violations detected: \(validationResult.violationCount) files", category: "FolderOrganizer")
+                    
+                    // Try to retry once with enhanced prompt
+                    if let retryPlan = await retryWithExclusionEnhancement(
+                        files: files,
+                        client: client,
+                        violations: validationResult.violations,
+                        instructions: instructions,
+                        personaPrompt: personaPrompt,
+                        temperature: temperature,
+                        imagePayload: imagePayload
+                    ) {
+                        // Validate retry result
+                        let retryValidation = enforcer.validate(retryPlan)
+                        if retryValidation.hasViolations {
+                            // Still violations, strip them and proceed with warning
+                            LogManager.shared.log("Retry still has \(retryValidation.violationCount) violations, stripping", category: "FolderOrganizer")
+                            validatedPlan = retryValidation.cleanedPlan ?? retryPlan
+                        } else {
+                            validatedPlan = retryPlan
+                        }
+                    } else {
+                        // Retry failed, use cleaned plan
+                        validatedPlan = validationResult.cleanedPlan ?? plan
+                    }
+                }
+            }
 
             updateState(.ready, stage: "Ready!", progress: 1.0)
             await MainActor.run {
-                currentPlan = plan
+                currentPlan = validatedPlan
+            }
+
+            // Send notification when preview is ready
+            NotificationManager.shared.show(.previewReady(folderName: directory.lastPathComponent))
+            
+            // Start learning session for the new plan
+            if let learningsObserver = learningsObserver {
+                learningsObserver.startSession(folderPath: directory.path, historyEntryId: nil)
+                
+                // Track which rules were applied to each file
+                recordPlanRules(plan, observer: learningsObserver)
             }
 
         } catch is CancellationError {
@@ -677,6 +836,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     private func resetToIdle() {
+        // Record cancellation in history if we were in a meaningful state
+        if state == .organizing || state == .ready {
+            if let directory = currentDirectory {
+                let cancelledEntry = OrganizationHistoryEntry(
+                    directoryPath: directory.path,
+                    filesOrganized: 0,
+                    foldersCreated: 0,
+                    plan: currentPlan,
+                    success: false,
+                    status: .cancelled,
+                    errorMessage: "User cancelled the operation",
+                    rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
+                )
+                history.addEntry(cancelledEntry)
+                DebugLogger.log("Saved cancelled operation to history")
+            }
+        }
+
         state = .idle
         organizationStage = "Cancelled"
         isStreaming = false
@@ -714,6 +891,51 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
+    // MARK: - Exclusion Retry
+    
+    /// Retry AI call with enhanced exclusion prompt after violations
+    private func retryWithExclusionEnhancement(
+        files: [FileItem],
+        client: AIClientProtocol,
+        violations: [ExclusionViolation],
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?,
+        imagePayload: [String: Data]
+    ) async -> OrganizationPlan? {
+        guard let enforcer = exclusionEnforcer else { return nil }
+        
+        LogManager.shared.log("Retrying with enhanced exclusion prompt", category: "FolderOrganizer")
+        updateProgress(0.87, stage: "Correcting exclusions...")
+        
+        // Generate enhanced prompt with violation details
+        let enhancedPrompt = instructions + enforcer.generateRetryPromptEnhancement(for: violations)
+        
+        do {
+            let retryPlan: OrganizationPlan
+            if !imagePayload.isEmpty {
+                retryPlan = try await client.analyzeWithImages(
+                    files: files,
+                    imageData: imagePayload,
+                    customInstructions: enhancedPrompt,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            } else {
+                retryPlan = try await client.analyze(
+                    files: files,
+                    customInstructions: enhancedPrompt,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            }
+            return retryPlan
+        } catch {
+            LogManager.shared.log("Exclusion retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
+            return nil
+        }
+    }
+    
     // MARK: - State Updates with Progress
 
     @MainActor
@@ -874,7 +1096,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         try checkCancellation()
 
-        updateState(.applying, stage: "Applying changes...", progress: 0.0)
+        updateState(.applying, stage: "Preparing organization...", progress: 0.0)
 
         do {
             let operations = try await fileSystemManager.applyOrganization(
@@ -883,7 +1105,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 dryRun: dryRun, 
                 enableTagging: enableTagging,
                 strictExclusions: aiConfig?.strictExclusions ?? true,
-                exclusionManager: exclusionRules
+                exclusionManager: exclusionRules,
+                progress: { [weak self] percent, message in
+                    Task { @MainActor in
+                        self?.progress = percent
+                        self?.organizationStage = message
+                    }
+                }
             )
 
             try checkCancellation()
@@ -915,6 +1143,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     "operations": operations
                 ]
             )
+            
+            // End learning session
+            if let learningsObserver = learningsObserver {
+                learningsObserver.endSession()
+            }
+            
+            // Refresh Finder for the organized folder asynchronously to avoid UI lag
+            Task.detached(priority: .background) {
+                self.refreshFinder(at: baseURL)
+            }
 
         } catch {
             let failedEntry = OrganizationHistoryEntry(
@@ -936,35 +1174,55 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    // MARK: - Parallel Generation Support
-    
-    /// Generate organization plan with a specific provider (for parallel generation)
+    @MainActor
+    public func redoOrganization(from entry: OrganizationHistoryEntry) async throws {
+        guard let _ = entry.plan, let baseURL = currentDirectory ?? URL(string: "file://" + entry.directoryPath) else {
+            throw OrganizationError.noCurrentPlan
+        }
+
+        updateState(.applying, stage: "Re-applying organization...", progress: 0.3)
+
+        do {
+            try await apply(at: baseURL, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
+            
+            var updatedEntry = entry
+            updatedEntry.isUndone = false
+            updatedEntry.status = .completed
+            history.updateEntry(updatedEntry)
+            
+            await MainActor.run {
+                organizationStage = "Redo complete"
+                progress = 1.0
+                state = .completed
+            }
+        } catch {
+            await MainActor.run {
+                state = .error(error)
+                errorMessage = error.localizedDescription
+            }
+            throw error
+        }
+    }
+
+    /// Generate organization plan with a specific provider
     /// Returns a plan without updating the organizer's state
-    public func generatePlanWithProvider(
+    private func generatePlanWithProvider(
         files: [FileItem],
         provider: AIProvider,
         model: String? = nil,
         customInstructions: String? = nil
     ) async throws -> OrganizationPlan {
-        // Create a temporary config for this provider
         var tempConfig = aiConfig ?? AIConfig.default
         tempConfig.provider = provider
         tempConfig.model = model ?? provider.defaultModel
-        // SMART CONFIGURATION:
-        // 1. If the global config provider matches the requested provider, we might want to keep the custom URL if set.
-        // 2. If valid custom URL exists and providers match, keep it.
-        // 3. Otherwise (providers differ, or URL is empty), switch to the new provider's default.
         
-        // Check if provider is same directly
         let isSameProvider = aiConfig?.provider == provider
         let hasCustomURL = !(aiConfig?.apiURL ?? "").isEmpty
         
         if !isSameProvider || !hasCustomURL {
             tempConfig.apiURL = provider.defaultAPIURL
         }
-        // Else: keep the existing custom URL from the copy
         
-        // Create a temporary client
         let tempClient = try AIClientFactory.createClient(config: tempConfig)
         
         let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
@@ -986,69 +1244,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         return plan
     }
-    
-    /// Generate multiple organization plans in parallel using different providers and models
-    /// - Parameters:
-    ///   - files: Files to organize
-    ///   - modelSelections: Array of (provider, model) tuples specifying which models to use
-    ///   - onPlanGenerated: Callback when a plan is successfully generated
-    ///   - onPlanFailed: Callback when a plan generation fails
-    public func generateParallelPlans(
-        files: [FileItem],
-        modelSelections: [(provider: AIProvider, model: String)],
-        onPlanGenerated: @escaping (AIProvider, String, OrganizationPlan) -> Void,
-        onPlanFailed: @escaping (AIProvider, String, Error) -> Void
-    ) async {
-        await withTaskGroup(of: (AIProvider, String, Result<OrganizationPlan, Error>).self) { group in
-            for selection in modelSelections {
-                group.addTask {
-                    do {
-                        let plan = try await self.generatePlanWithProvider(
-                            files: files,
-                            provider: selection.provider,
-                            model: selection.model
-                        )
-                        return (selection.provider, selection.model, .success(plan))
-                    } catch {
-                        return (selection.provider, selection.model, .failure(error))
-                    }
-                }
-            }
-            
-            for await (provider, model, result) in group {
-                await MainActor.run {
-                    switch result {
-                    case .success(let plan):
-                        onPlanGenerated(provider, model, plan)
-                    case .failure(let error):
-                        onPlanFailed(provider, model, error)
-                    }
-                }
-            }
-        }
-    }
-    
-    /// Legacy method for backward compatibility - generates plans using default models for providers
-    @available(*, deprecated, message: "Use generateParallelPlans(modelSelections:) instead")
-    public func generateParallelPlans(
-        files: [FileItem],
-        providers: [AIProvider],
-        onPlanGenerated: @escaping (AIProvider, OrganizationPlan) -> Void,
-        onPlanFailed: @escaping (AIProvider, Error) -> Void
-    ) async {
-        let modelSelections = providers.map { (provider: $0, model: $0.defaultModel) }
-        await generateParallelPlans(
-            files: files,
-            modelSelections: modelSelections,
-            onPlanGenerated: { provider, _, plan in
-                onPlanGenerated(provider, plan)
-            },
-            onPlanFailed: { provider, _, error in
-                onPlanFailed(provider, error)
-            }
-        )
-    }
-    
+
     /// Get files from current plan for regeneration
     public func getFilesFromCurrentPlan() -> [FileItem] {
         guard let currentPlan = currentPlan else { return [] }
@@ -1356,13 +1552,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return combinedResult
     }
 
-    public func redoOrganization(from entry: OrganizationHistoryEntry) async throws {
-        guard let plan = entry.plan else { return }
-        // To "redo" an undone version, we just apply its plan again
-        currentPlan = plan
-        try await apply(at: URL(fileURLWithPath: entry.directoryPath))
-    }
-
     // MARK: - Reset
 
     public func reset() {
@@ -1392,5 +1581,58 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentInsight = ""
         insightHistory = []
         lastInsightExtraction = .distantPast
+    }
+    private func recordPlanRules(_ plan: OrganizationPlan, observer: ContinuousLearningObserver) {
+        // Recursively record rules
+        let rootPath = currentDirectory?.path ?? ""
+        
+        func processSuggestion(_ suggestion: FolderSuggestion, currentPath: String) {
+            let folderPath = (currentPath as NSString).appendingPathComponent(suggestion.folderName)
+            
+            // Record rules for files in this folder
+            for _ in suggestion.files {
+                let destinationPath = folderPath // Approximate destination path for the file
+                
+                // If the suggestion has a rule ID (from Learnings analysis), record it
+                if let ruleId = suggestion.semanticTags.first(where: { $0.hasPrefix("rule:") })?.replacingOccurrences(of: "rule:", with: "") {
+                    observer.recordRuleApplication(destinationPath: destinationPath, ruleId: ruleId)
+                }
+            }
+            
+            // Recurse
+            for subfolder in suggestion.subfolders {
+                processSuggestion(subfolder, currentPath: folderPath)
+            }
+        }
+        
+        for suggestion in plan.suggestions {
+            processSuggestion(suggestion, currentPath: rootPath)
+        }
+    }
+}
+
+    // MARK: - Finder Refresh
+    extension FolderOrganizer {
+    nonisolated private func refreshFinder(at url: URL) {
+        let scriptSource = """
+        tell application "Finder"
+            try
+                set theFolder to POSIX file "\(url.path)" as alias
+                repeat with theWindow in (every window)
+                    if (target of theWindow as alias) is theFolder then
+                        update theWindow
+                    end if
+                end repeat
+            end try
+        end tell
+        """
+        
+        if let script = NSAppleScript(source: scriptSource) {
+            var error: NSDictionary?
+            script.executeAndReturnError(&error)
+            if let err = error {
+                DebugLogger.log("Finder refresh AppleScript error: \(err)")
+            }
+        }
     }
 }

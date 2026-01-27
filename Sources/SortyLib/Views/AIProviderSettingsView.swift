@@ -136,32 +136,13 @@ struct AIProviderRow: View {
     let isSelected: Bool
     let action: () -> Void
     
-    /// Load provider logo from bundle's Images folder
-    private var providerImage: Image {
-        if provider.usesSystemImage {
-            return Image(systemName: provider.logoImageName)
-        }
-        
-        // Try to load from Images folder in bundle
-        if let resourceURL = Bundle.module.url(forResource: provider.logoImageName, withExtension: "png", subdirectory: "Images"),
-           let nsImage = NSImage(contentsOf: resourceURL) {
-            return Image(nsImage: nsImage)
-        }
-        
-        // Fallback to asset catalog (for Xcode builds)
-        return Image(provider.logoImageName, bundle: .module)
-    }
-    
     var body: some View {
         Button(action: {
             if provider.isAvailable { action() }
         }) {
             HStack(spacing: 12) {
                 // Provider logo
-                providerImage
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
+                ProviderLogoView(provider: provider, size: 24)
                 
                 Text(provider.displayName)
                     .foregroundColor(provider.isAvailable ? .primary : .secondary)
@@ -233,21 +214,33 @@ struct CopilotConfigView: View {
                     .buttonStyle(.bordered)
                 }
                 
-                Group {
-                    if !viewModel.availableModels.isEmpty {
-                        Picker("Model", selection: $viewModel.config.model) {
-                            ForEach(viewModel.availableModels, id: \.self) { model in
-                                Text(model).tag(model)
+                HStack {
+                    if copilotAuth.isAuthenticated {
+                        if !viewModel.availableModels.isEmpty {
+                            Picker("Model", selection: $viewModel.config.model) {
+                                ForEach(viewModel.availableModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                        } else if viewModel.isLoadingModels {
+                            HStack {
+                                Text("Loading models...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                BouncingSpinner(size: 8, color: .secondary)
                             }
                         }
-                        .pickerStyle(.menu)
-                    } else if viewModel.isLoadingModels {
-                        HStack {
-                            Text("Loading models...")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            BouncingSpinner(size: 8, color: .secondary)
+                        
+                        Button {
+                            viewModel.updateAvailableModels(force: true)
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
                         }
+                        .buttonStyle(.plain)
+                        .help("Refresh model list")
+                        .disabled(viewModel.isLoadingModels)
                     }
                 }
                 .onAppear {
@@ -378,10 +371,42 @@ struct StandardAPIConfigView: View {
             }
             
             VStack(alignment: .leading, spacing: 6) {
-                Text("Model Name")
+                Text("Model")
                     .font(.subheadline)
-                TextField(viewModel.config.provider.defaultModel, text: $viewModel.config.model)
-                    .textFieldStyle(.roundedBorder)
+                
+                HStack {
+                    if !viewModel.availableModels.isEmpty {
+                        Picker("Model", selection: $viewModel.config.model) {
+                            ForEach(viewModel.availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    } else if viewModel.isLoadingModels {
+                        HStack {
+                            Text("Loading models...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            BouncingSpinner(size: 8, color: .secondary)
+                        }
+                    } else {
+                        TextField(viewModel.config.provider.defaultModel, text: $viewModel.config.model)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    
+                    Button {
+                        viewModel.updateAvailableModels(force: true)
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Refresh model list")
+                    .disabled(viewModel.isLoadingModels)
+                }
+            }
+            .onAppear {
+                viewModel.updateAvailableModels()
             }
         }
     }

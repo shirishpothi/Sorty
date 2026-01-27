@@ -19,13 +19,12 @@ struct LiquidGlassModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         content
-            .background(.ultraThinMaterial)
+            .background(Color(NSColor.controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 1)
+                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -99,7 +98,7 @@ struct LearningsView: View {
             Image(systemName: manager.securityManager.biometryType == .touchID ? "touchid" : 
                   manager.securityManager.biometryType == .faceID ? "faceid" : "lock.shield.fill")
                 .font(.system(size: 60))
-                .foregroundStyle(.linearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .foregroundStyle(.blue)
                 .padding(32)
                 .liquidGlassCard(cornerRadius: 30)
                 .accessibilityHidden(true)
@@ -157,7 +156,7 @@ struct LearningsView: View {
             
             Image(systemName: "brain.head.profile")
                 .font(.system(size: 60))
-                .foregroundStyle(.linearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .foregroundStyle(.purple)
                 .padding(32)
                 .liquidGlassCard(cornerRadius: 30)
                 .accessibilityHidden(true)
@@ -1425,6 +1424,10 @@ struct AccessibleActivityRow: View {
         URL(fileURLWithPath: change.originalPath).lastPathComponent
     }
     
+    private var fileURL: URL {
+        URL(fileURLWithPath: change.newPath)
+    }
+    
     private var srcFolder: String {
         URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent
     }
@@ -1435,10 +1438,19 @@ struct AccessibleActivityRow: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: change.wasAIOrganized ? "arrow.triangle.2.circlepath" : "folder.fill")
-                .font(.body.bold())
-                .foregroundColor(change.wasAIOrganized ? .blue : .secondary)
-                .frame(width: 24)
+            ZStack(alignment: .bottomTrailing) {
+                FileThumbnailView(url: fileURL, size: CGSize(width: 28, height: 28))
+                
+                if change.wasAIOrganized {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(2)
+                        .background(Circle().fill(.blue))
+                        .offset(x: 4, y: 4)
+                }
+            }
+            .frame(width: 28)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(fileName)

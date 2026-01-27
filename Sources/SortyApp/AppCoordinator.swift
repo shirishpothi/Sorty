@@ -20,6 +20,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     let watchedFoldersManager: WatchedFoldersManager
     let learningsManager: LearningsManager
     let continuousLearningObserver: ContinuousLearningObserver
+    let learningsFSMonitor: LearningsFSMonitor
     private let notificationManager = NotificationManager.shared
     
     init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
@@ -30,7 +31,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             history: organizer.history,
             learningsManager: learningsManager
         )
+        self.learningsFSMonitor = LearningsFSMonitor()
         self.folderWatcher.delegate = self
+        
+        // Inject observer into organizer
+        organizer.learningsObserver = self.continuousLearningObserver
         
         // Initial sync
         self.folderWatcher.syncWithFolders(watchedFoldersManager.folders)
@@ -40,6 +45,13 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         // Start observing
         self.continuousLearningObserver.startObserving()
+        
+        // Wire up FSMonitor to ContinuousLearningObserver
+        self.learningsFSMonitor.onFileMoveDetected = { [weak self] move in
+            Task { @MainActor in
+                self?.continuousLearningObserver.handleFileMove(from: move.fromPath, to: move.toPath)
+            }
+        }
     }
     
     deinit {
@@ -80,6 +92,10 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 if let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry {
                     let stats = self.extractBatchStats(from: entry)
                     self.notificationManager.showBatchSummary(stats: stats)
+                    
+                    // Start FSMonitor for learning from user corrections
+                    let folderURL = URL(fileURLWithPath: entry.directoryPath)
+                    self.learningsFSMonitor.startMonitoring(directory: folderURL)
                 }
             }
         }
@@ -374,6 +390,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                     folderPath: resolvedURL.path,
                     canUndo: true
                 )
+                
+                // Ensure notification is shown during auto-organization
+                // showBatchSummary logic will respect user settings for HUD vs System
                 notificationManager.showBatchSummary(stats: stats)
                 
             } catch {

@@ -28,6 +28,10 @@ final class LLMRuleInducerTests: XCTestCase {
         func checkHealth() async throws {
             // Success by default
         }
+
+        func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
+            fatalError("Not implemented for this test")
+        }
     }
     
     var inducer: LLMRuleInducer!

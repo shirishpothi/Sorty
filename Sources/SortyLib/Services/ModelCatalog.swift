@@ -31,6 +31,7 @@ public final class ModelCatalog: ObservableObject {
     @Published public var isFetching: [AIProvider: Bool] = [:]
     @Published public var lastError: [AIProvider: Error?] = [:]
     @Published public var searchResults: [(provider: AIProvider, models: [ModelInfo])] = []
+    @Published public var usingFallback: [AIProvider: Bool] = [:]
     
     private var cacheTimestamps: [AIProvider: Date] = [:]
     private let session: URLSession
@@ -72,16 +73,19 @@ public final class ModelCatalog: ObservableObject {
         lastError[provider] = nil
         
         do {
-            let models = try await fetchModels(for: provider)
-            let sortedModels = models.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            let result = try await fetchModels(for: provider)
+            let sortedModels = result.models.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
             modelsByProvider[provider] = sortedModels
-            cacheTimestamps[provider] = Date()
-            saveCacheToDisk(provider: provider, models: sortedModels)
+            usingFallback[provider] = result.isFallback
+            
+            // Only update cache and timestamp if NOT using fallback
+            if !result.isFallback {
+                cacheTimestamps[provider] = Date()
+                saveCacheToDisk(provider: provider, models: sortedModels)
+            }
         } catch {
             await MainActor.run {
                 lastError[provider] = error
-                // Don't fall back to hardcoded models - keep existing cache if available
-                // This ensures we always use ModelCatalog data
             }
         }
         
@@ -154,26 +158,26 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    private func fetchModels(for provider: AIProvider) async throws -> [ModelInfo] {
+    private func fetchModels(for provider: AIProvider) async throws -> (models: [ModelInfo], isFallback: Bool) {
         switch provider {
         case .openAI:
-            return try await fetchOpenAIModels()
+            return (try await fetchOpenAIModels(), false)
         case .anthropic:
-            return anthropicModels()
+            return try await fetchAnthropicModels()
         case .gemini:
             return try await fetchGeminiModels()
         case .groq:
-            return try await fetchGroqModels()
+            return (try await fetchGroqModels(), false)
         case .openRouter:
-            return try await fetchOpenRouterModels()
+            return (try await fetchOpenRouterModels(), false)
         case .ollama:
-            return try await fetchOllamaModels()
+            return (try await fetchOllamaModels(), false)
         case .githubCopilot:
             return try await fetchGitHubCopilotModels()
         case .appleFoundationModel:
-            return appleFoundationModels()
+            return (appleFoundationModels(), false)
         case .openAICompatible:
-            return openAICompatibleFallback()
+            return try await fetchOpenAICompatibleModels()
         }
     }
     
@@ -182,7 +186,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.invalidURL
         }
         
-        guard let openAIAPIKey = KeychainManager.get(key: "openAIAPIKey"), !openAIAPIKey.isEmpty else {
+        guard let openAIAPIKey = KeychainManager.get(key: AIProvider.openAI.keychainKey), !openAIAPIKey.isEmpty else {
             throw ModelCatalogError.fetchFailed
         }
         
@@ -220,7 +224,7 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.invalidURL
         }
         
-        guard let groqAPIKey = KeychainManager.get(key: "groqAPIKey"), !groqAPIKey.isEmpty else {
+        guard let groqAPIKey = KeychainManager.get(key: AIProvider.groq.keychainKey), !groqAPIKey.isEmpty else {
             throw ModelCatalogError.fetchFailed
         }
         
@@ -260,6 +264,10 @@ public final class ModelCatalog: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        
+        if let apiKey = KeychainManager.get(key: AIProvider.openRouter.keychainKey), !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
         
         let (data, response) = try await session.data(for: request)
         
@@ -323,23 +331,144 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    private func fetchGitHubCopilotModels() async throws -> [ModelInfo] {
-        // GitHub Copilot requires auth headers, so we fetch via GitHubCopilotClient
-        // For now, try the API directly; if it fails, use fallback
-        guard let url = URL(string: "https://api.githubcopilot.com/models") else {
+    private func fetchAnthropicModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
+        guard let url = URL(string: "https://api.anthropic.com/v1/models") else {
             throw ModelCatalogError.invalidURL
+        }
+        
+        guard let anthropicAPIKey = KeychainManager.get(key: AIProvider.anthropic.keychainKey), !anthropicAPIKey.isEmpty else {
+            return (anthropicFallbackModels(), true)
         }
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
+        request.setValue(anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         
         do {
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                // API requires auth - return fallback
-                return githubCopilotFallbackModels()
+                return (anthropicFallbackModels(), true)
+            }
+            
+            struct AnthropicModelsResponse: Decodable {
+                let data: [AnthropicModel]
+            }
+            struct AnthropicModel: Decodable {
+                let id: String
+                let display_name: String?
+            }
+            
+            let decoded = try JSONDecoder().decode(AnthropicModelsResponse.self, from: data)
+            if decoded.data.isEmpty {
+                return (anthropicFallbackModels(), true)
+            }
+            
+            let models = decoded.data.map { model in
+                ModelInfo(
+                    id: model.id,
+                    displayName: model.display_name ?? model.id,
+                    provider: .anthropic,
+                    updatedAt: Date()
+                )
+            }
+            return (models, false)
+        } catch {
+            return (anthropicFallbackModels(), true)
+        }
+    }
+
+    private func fetchOpenAICompatibleModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
+        // We need to get the URL from the current config
+        // This is a bit tricky as ModelCatalog is a singleton and doesn't know about SettingsViewModel
+        // However, we can try to use the stored URL in UserDefaults or just fallback
+        
+        let userDefaults = UserDefaults.standard
+        let configKey = "aiConfig"
+        
+        var apiURL = "https://api.openai.com"
+        var apiKey: String?
+        
+        if let data = userDefaults.data(forKey: configKey),
+           let decoded = try? JSONDecoder().decode(AIConfig.self, from: data) {
+            if decoded.provider == .openAICompatible {
+                apiURL = decoded.apiURL ?? apiURL
+            }
+        }
+        
+        apiKey = KeychainManager.get(key: AIProvider.openAICompatible.keychainKey)
+        
+        // Ensure URL ends with /v1/models or similar if it's just a base URL
+        var urlString = apiURL
+        if !urlString.hasSuffix("/models") {
+            if urlString.hasSuffix("/") {
+                urlString += "v1/models"
+            } else {
+                urlString += "/v1/models"
+            }
+        }
+        
+        guard let url = URL(string: urlString) else {
+            return (openAICompatibleFallback(), true)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        if let key = apiKey, !key.isEmpty {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+        
+        do {
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return (openAICompatibleFallback(), true)
+            }
+            
+            struct OpenAIModelsResponse: Decodable {
+                let data: [OpenAIModel]
+            }
+            struct OpenAIModel: Decodable {
+                let id: String
+            }
+            
+            let decoded = try JSONDecoder().decode(OpenAIModelsResponse.self, from: data)
+            let models = decoded.data.map { model in
+                ModelInfo(
+                    id: model.id,
+                    displayName: model.id,
+                    provider: .openAICompatible,
+                    updatedAt: Date()
+                )
+            }
+            return (models, false)
+        } catch {
+            return (openAICompatibleFallback(), true)
+        }
+    }
+    
+    private func fetchGitHubCopilotModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
+        guard let url = URL(string: "https://api.githubcopilot.com/models") else {
+            throw ModelCatalogError.invalidURL
+        }
+        
+        let token = try await GitHubCopilotAuthManager.shared.getCopilotToken()
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("vscode/1.85.1", forHTTPHeaderField: "Editor-Version")
+        request.setValue("copilot/1.138.0", forHTTPHeaderField: "Editor-Plugin-Version")
+        request.setValue("Sorty/1.0", forHTTPHeaderField: "User-Agent")
+        
+        do {
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+                throw ModelCatalogError.fetchFailed
             }
             
             struct ModelsResponse: Decodable {
@@ -351,10 +480,10 @@ public final class ModelCatalog: ObservableObject {
             
             let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
             if decoded.data.isEmpty {
-                return githubCopilotFallbackModels()
+                throw ModelCatalogError.fetchFailed
             }
             
-            return decoded.data.map { model in
+            let models = decoded.data.map { model in
                 ModelInfo(
                     id: model.id,
                     displayName: model.id,
@@ -362,37 +491,19 @@ public final class ModelCatalog: ObservableObject {
                     updatedAt: Date()
                 )
             }
+            return (models, false)
         } catch {
-            // Auth required or network error - return fallback
-            return githubCopilotFallbackModels()
+            throw error
         }
     }
     
-    private func githubCopilotFallbackModels() -> [ModelInfo] {
-        // Known models available via GitHub Copilot
-        let models = [
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4",
-            "gpt-4-turbo",
-            "gpt-3.5-turbo",
-            "claude-3.5-sonnet",
-            "claude-3-opus",
-            "o1-preview",
-            "o1-mini"
-        ]
-        return models.map { ModelInfo(id: $0, displayName: $0, provider: .githubCopilot) }
-    }
-    
-    private func fetchGeminiModels() async throws -> [ModelInfo] {
-        // Google's models list API
+    private func fetchGeminiModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1/models") else {
             throw ModelCatalogError.invalidURL
         }
         
-        // Check for API Key
-        guard let geminiAPIKey = KeychainManager.get(key: "geminiAPIKey"), !geminiAPIKey.isEmpty else {
-             return geminiModels()
+        guard let geminiAPIKey = KeychainManager.get(key: AIProvider.gemini.keychainKey), !geminiAPIKey.isEmpty else {
+             return (geminiFallbackModels(), true)
         }
 
         var request = URLRequest(url: url)
@@ -404,7 +515,7 @@ public final class ModelCatalog: ObservableObject {
             let (data, response) = try await session.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                return geminiModels()
+                return (geminiFallbackModels(), true)
             }
             
             struct GeminiModelsResponse: Decodable {
@@ -417,13 +528,11 @@ public final class ModelCatalog: ObservableObject {
             
             let decoded = try JSONDecoder().decode(GeminiModelsResponse.self, from: data)
             if decoded.models.isEmpty {
-                return geminiModels()
+                return (geminiFallbackModels(), true)
             }
             
-            return decoded.models.compactMap { model in
-                // name format is "models/gemini-pro", extract model id
+            let models = decoded.models.map { model in
                 let id = model.name.replacingOccurrences(of: "models/", with: "")
-                guard id.contains("gemini") else { return nil }
                 return ModelInfo(
                     id: id,
                     displayName: model.displayName ?? id,
@@ -431,36 +540,37 @@ public final class ModelCatalog: ObservableObject {
                     updatedAt: Date()
                 )
             }
+            return (models, false)
         } catch {
-            return geminiModels()
+            return (geminiFallbackModels(), true)
         }
     }
     
-    private func anthropicModels() -> [ModelInfo] {
+    private func anthropicFallbackModels() -> [ModelInfo] {
         let models = [
             "claude-3-5-sonnet-20241022",
+            "claude-3-5-sonnet-latest",
             "claude-3-5-haiku-20241022",
+            "claude-3-5-haiku-latest",
             "claude-3-opus-20240229",
+            "claude-3-opus-latest",
             "claude-3-sonnet-20240229",
             "claude-3-haiku-20240307"
         ]
         return models.map { ModelInfo(id: $0, displayName: $0, provider: .anthropic) }
     }
     
-    private func geminiModels() -> [ModelInfo] {
-        // Fallback Gemini models when API is unavailable
+    private func geminiFallbackModels() -> [ModelInfo] {
         let models = [
             "gemini-2.0-flash-exp",
             "gemini-1.5-pro",
+            "gemini-1.5-pro-latest",
             "gemini-1.5-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash-8b",
             "gemini-1.0-pro"
         ]
         return models.map { ModelInfo(id: $0, displayName: $0, provider: .gemini) }
-    }
-    
-    // Kept for backward compatibility but no longer used directly
-    private func githubCopilotModels() -> [ModelInfo] {
-        return githubCopilotFallbackModels()
     }
     
     private func appleFoundationModels() -> [ModelInfo] {
@@ -509,6 +619,42 @@ public final class ModelCatalog: ObservableObject {
             try data.write(to: cacheFile)
         } catch {
             return
+        }
+    }
+
+    // MARK: - Vision Support
+
+    /// Known models that support vision (multimodal)
+    private static let knownVisionModels: Set<String> = [
+        // OpenAI
+        "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview",
+        // Anthropic
+        "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest", "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
+        // Gemini
+        "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-exp",
+        // Groq
+        "llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"
+    ]
+
+    /// Check if a specific model supports vision capabilities
+    public func supportsVision(modelId: String, provider: AIProvider) -> Bool {
+        // First check explicitly known models
+        if Self.knownVisionModels.contains(modelId) {
+            return true
+        }
+
+        // Provider-specific heuristics
+        switch provider {
+        case .ollama:
+            // Ollama often uses models like 'llava', 'bakllava' for vision
+            let visionKeywords = ["llava", "vision", "moondream", "minicpm"]
+            return visionKeywords.contains { modelId.lowercased().contains($0) }
+        case .openRouter:
+            // OpenRouter often includes vision in the name or we can check the ID
+            return modelId.lowercased().contains("vision") || modelId.lowercased().contains("vl")
+        default:
+            return modelId.lowercased().contains("vision") || modelId.lowercased().contains("flash")
         }
     }
 }

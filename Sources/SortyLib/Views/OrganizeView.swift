@@ -16,8 +16,6 @@ struct OrganizeView: View {
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
 
     @State private var previousState: OrganizationState?
-    @State private var showOrchestrationDashboard = false
-    @StateObject private var orchestrator = GenerationOrchestrator()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -62,28 +60,9 @@ struct OrganizeView: View {
                 }
             }
         }
-        .sheet(isPresented: $showOrchestrationDashboard) {
-            if let baseURL = appState.selectedDirectory {
-                OrchestrationDashboard(
-                    orchestrator: orchestrator,
-                    baseURL: baseURL,
-                    onSelectPlan: { plan in
-                        organizer.currentPlan = plan
-                        organizer.state = .ready
-                        showOrchestrationDashboard = false
-                    },
-                    onDismiss: {
-                        showOrchestrationDashboard = false
-                    }
-                )
-                .environmentObject(settingsViewModel)
-                .environmentObject(organizer)
-                .environmentObject(customPersonaStore)
-            }
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Organization workflow")
-        .accessibilityHint("Select a folder, configure options, or compare models")
+        .accessibilityHint("Select a folder and configure options")
         .onAppear {
             configureOrganizer()
         }
@@ -93,34 +72,64 @@ struct OrganizeView: View {
         .onChange(of: organizer.state) { oldValue, newValue in
             handleStateChange(to: newValue)
         }
+        .onChange(of: appState.selectedDirectory) { oldValue, newValue in
+            // Prewarm AI connection when user selects a folder
+            if newValue != nil {
+                Task {
+                    await prewarmAIConnection()
+                }
+            }
+        }
     }
 
     @ViewBuilder
     private var stateContent: some View {
-        Group {
-            if case .idle = organizer.state {
-                ReadyToOrganizeView(onStart: startOrganization, onCompare: {
-                    showOrchestrationDashboard = true
-                })
-            } else if case .scanning = organizer.state {
-                AnalysisView()
-            } else if case .organizing = organizer.state {
-                AnalysisView()
-            } else if case .ready = organizer.state, let plan = organizer.currentPlan {
+        stateContentInner
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.background)
+    }
+    
+    @ViewBuilder
+    private var stateContentInner: some View {
+        switch organizer.state {
+        case .idle:
+            ReadyToOrganizeView(onStart: startOrganization)
+        case .scanning:
+            AnalysisView()
+        case .organizing:
+            AnalysisView()
+        case .ready:
+            if let plan = organizer.currentPlan {
                 PreviewView(plan: plan, baseURL: appState.selectedDirectory!)
-            } else if case .completed = organizer.state {
-                OrganizationResultView()
-            } else if case .error(let error) = organizer.state {
-                ErrorView(error: error) {
-                    HapticFeedbackManager.shared.tap()
-                    withAnimation(.pageTransition) {
-                        organizer.reset()
-                    }
+            } else {
+                ProgressView()
+            }
+        case .applying:
+            AnalysisView()
+        case .completed:
+            if let plan = organizer.currentPlan {
+                OrganizationCompleteView(
+                    stats: plan.generationStats,
+                    totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
+                    totalFolders: plan.suggestions.count,
+                    directoryURL: appState.selectedDirectory!
+                )
+            } else {
+                OrganizationCompleteView(
+                    stats: nil,
+                    totalFiles: 0,
+                    totalFolders: 0,
+                    directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/")
+                )
+            }
+        case .error(let error):
+            ErrorView(error: error) {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.pageTransition) {
+                    organizer.reset()
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
     }
 
     private var stateIdentifier: String {
@@ -173,6 +182,12 @@ struct OrganizeView: View {
             }
         }
     }
+    
+    private func prewarmAIConnection() async {
+        let provider = settingsViewModel.config.provider
+        let config = settingsViewModel.config
+        await AISessionManager.shared.prewarm(provider: provider, config: config)
+    }
 }
 
 // MARK: - Directory Header
@@ -183,8 +198,7 @@ struct DirectoryHeader: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "folder.fill")
-                .foregroundStyle(.blue)
+            FolderThumbnailView(url: url, size: CGSize(width: 32, height: 32))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(url.lastPathComponent)
@@ -214,10 +228,10 @@ struct DirectoryHeader: View {
 
 struct ReadyToOrganizeView: View {
     let onStart: () -> Void
-    let onCompare: () -> Void
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+    @StateObject private var sessionManager = AISessionManager.shared
     @State private var hasAppeared = false
     @State private var isTextFieldFocused = false
     @State private var showStorageLocations = false
@@ -282,31 +296,12 @@ struct ReadyToOrganizeView: View {
             .accessibilityLabel("Start organization")
             .accessibilityHint("Begins analyzing the selected folder")
             .accessibilityAddTraits(.isButton)
-
-            // Only show Compare Models button when parallel generation is enabled
-            if settingsViewModel.config.enableParallelGeneration {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    onCompare()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "rectangle.3.group")
-                            .font(.system(size: 12))
-                        Text("Compare Models")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .keyboardShortcut("c", modifiers: [.command, .shift])
+            
+            // Connection status indicator
+            connectionStatusView
                 .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 10)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.45), value: hasAppeared)
-                .accessibilityIdentifier("CompareModelsButton")
-                .accessibilityLabel("Compare models")
-                .accessibilityHint("Opens the parallel organization dashboard")
-                .accessibilityAddTraits(.isButton)
-            }
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5), value: hasAppeared)
+
         }
         .fileImporter(
             isPresented: $showingFolderPicker,
@@ -449,6 +444,36 @@ struct ReadyToOrganizeView: View {
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(.purple)
         }
+    }
+    
+    @ViewBuilder
+    private var connectionStatusView: some View {
+        HStack(spacing: 6) {
+            if sessionManager.prewarmingProvider != nil {
+                ProgressView()
+                    .scaleEffect(0.6)
+                    .frame(width: 12, height: 12)
+                Text("Connecting to \(settingsViewModel.config.provider.displayName)...")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if sessionManager.isPrewarmed {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.green)
+                Text("Connected to \(settingsViewModel.config.provider.displayName)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else if let error = sessionManager.prewarmError {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+                Text("Connection warning: \(error.prefix(40))...")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(height: 16)
     }
     
     private var instructionsContent: some View {

@@ -27,7 +27,7 @@ struct TimelineView: View {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.title2)
-                    .foregroundColor(.purple)
+                    .foregroundColor(.blue)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Organization Timeline")
@@ -68,11 +68,12 @@ struct TimelineView: View {
             }
         }
         .padding()
-        .background(Color.purple.opacity(0.03))
+        .background(.ultraThinMaterial)
         .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.purple.opacity(0.1), lineWidth: 1)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
         )
     }
 }
@@ -92,20 +93,14 @@ struct TimelineSliderTrack: View {
             ZStack(alignment: .leading) {
                 // Track line
                 Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.purple.opacity(0.3), .blue.opacity(0.3)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(.primary.opacity(0.1))
                     .frame(height: 4)
                     .cornerRadius(2)
                 
                 // Filled portion up to selected
                 if selectedIndex > 0 && entries.count > 1 {
                     Rectangle()
-                        .fill(Color.purple)
+                        .fill(.primary.opacity(0.4))
                         .frame(width: nodeSpacing * CGFloat(selectedIndex), height: 4)
                         .cornerRadius(2)
                 }
@@ -149,16 +144,16 @@ struct TimelineNode: View {
     
     var body: some View {
         ZStack {
-            // Halo for selection
+            // Subtle halo for selection
             if isSelected {
                 Circle()
-                    .fill(Color.purple.opacity(0.2))
+                    .fill(Color.primary.opacity(0.08))
                     .frame(width: 32, height: 32)
             }
             
             // Core node
             Circle()
-                .fill(entry.isUndone ? Color.orange : (entry.success ? Color.purple : Color.red))
+                .fill(entry.isUndone ? Color.orange : (entry.success ? Color.blue : Color.red))
                 .frame(width: nodeSize, height: nodeSize)
                 .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
             
@@ -240,7 +235,7 @@ struct SelectedEntryCard: View {
                         .fontWeight(.medium)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .tint(.blue)
             }
         }
         .padding(16)

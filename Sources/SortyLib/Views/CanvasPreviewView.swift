@@ -627,9 +627,11 @@ struct FolderNodeView: View {
                     )
 
                 VStack(spacing: 8) {
-                    Image(systemName: "folder.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.blue)
+                    CompactFolderThumbnail(
+                        url: nil,  // New folders don't exist yet in preview
+                        folderName: suggestion.folderName,
+                        size: 32
+                    )
 
                     Text(suggestion.folderName)
                         .font(.headline)
@@ -659,8 +661,7 @@ struct FileNodeView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: iconForExtension(file.extension))
-                .foregroundStyle(colorForExtension(file.extension))
+            FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 24, height: 24))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(file.displayName)
@@ -688,32 +689,6 @@ struct FileNodeView: View {
         )
         .scaleEffect(isDragging ? 1.1 : 1.0)
         .animation(.spring(response: 0.3), value: isDragging)
-    }
-
-    private func iconForExtension(_ ext: String) -> String {
-        switch ext.lowercased() {
-        case "pdf": return "doc.fill"
-        case "jpg", "jpeg", "png", "gif", "heic": return "photo.fill"
-        case "mp4", "mov", "avi": return "film.fill"
-        case "mp3", "wav", "m4a": return "music.note"
-        case "zip", "rar", "7z": return "archivebox.fill"
-        case "swift", "py", "js": return "chevron.left.forwardslash.chevron.right"
-        default: return "doc.fill"
-        }
-    }
-
-    private func colorForExtension(_ ext: String) -> Color {
-        switch ext.lowercased() {
-        case "pdf": return .red
-        case "jpg", "jpeg", "png", "gif", "heic": return .purple
-        case "mp4", "mov", "avi": return .pink
-        case "mp3", "wav", "m4a": return .orange
-        case "zip", "rar", "7z": return .brown
-        case "swift": return .orange
-        case "py": return .blue
-        case "js": return .yellow
-        default: return .gray
-        }
     }
 }
 

@@ -65,7 +65,7 @@ public actor DuplicateDetector {
     public func computeHashes(for files: inout [FileItem], progressHandler: ((Int, Int) -> Void)? = nil) async {
         for i in 0..<files.count {
             if files[i].sha256Hash == nil {
-                files[i].sha256Hash = computeSHA256(for: URL(fileURLWithPath: files[i].path))
+                files[i].sha256Hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: files[i].path))
             }
             progressHandler?(i + 1, files.count)
             
@@ -76,14 +76,9 @@ public actor DuplicateDetector {
         }
     }
     
-    /// Compute SHA-256 hash for a file
+    /// Compute SHA-256 hash for a file (DEPRECATED: Use HashUtility instead)
     private func computeSHA256(for url: URL) -> String? {
-        guard let data = try? Data(contentsOf: url) else {
-            return nil
-        }
-        
-        let digest = SHA256.hash(data: data)
-        return digest.compactMap { String(format: "%02x", $0) }.joined()
+        HashUtility.computeSHA256(for: url)
     }
     
     /// Get total potential savings from all duplicate groups
@@ -131,15 +126,26 @@ public class DuplicateDetectionManager: ObservableObject {
         
         // Compute hashes inline to avoid Sendable closure issues
         for i in 0..<mutableFiles.count {
-            if mutableFiles[i].sha256Hash == nil {
-                mutableFiles[i].sha256Hash = Self.computeSHA256(for: URL(fileURLWithPath: mutableFiles[i].path))
-            }
-            scanProgress = Double(i + 1) / Double(total)
+            if Task.isCancelled { break }
             
-            // Yield periodically for UI updates
-            if i % 10 == 0 {
+            if mutableFiles[i].sha256Hash == nil {
+                mutableFiles[i].sha256Hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: mutableFiles[i].path))
+            }
+            
+            // Only update progress if not cancelled
+            if !Task.isCancelled {
+                scanProgress = Double(i + 1) / Double(total)
+            }
+            
+            // Yield periodically for UI updates and to allow cancellation
+            if i % 5 == 0 {
                 await Task.yield()
             }
+        }
+        
+        if Task.isCancelled {
+            isScanning = false
+            return
         }
         
         // Find duplicates
@@ -151,13 +157,9 @@ public class DuplicateDetectionManager: ObservableObject {
         scanProgress = 1.0
     }
     
-    /// Compute SHA-256 hash for a file (static to avoid actor issues)
+    /// Compute SHA-256 hash for a file (DEPRECATED: Use HashUtility instead)
     private static func computeSHA256(for url: URL) -> String? {
-        guard let data = try? Data(contentsOf: url) else {
-            return nil
-        }
-        let digest = SHA256.hash(data: data)
-        return digest.compactMap { String(format: "%02x", $0) }.joined()
+        HashUtility.computeSHA256(for: url)
     }
     
     public func clearResults() {

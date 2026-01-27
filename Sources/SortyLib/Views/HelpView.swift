@@ -776,6 +776,7 @@ private struct AboutContent: View {
             // Buttons
             HStack(spacing: 16) {
                 Button(action: {
+                    print("Update button clicked")
                     Task {
                         await appState.updateManager.checkForUpdates()
                     }

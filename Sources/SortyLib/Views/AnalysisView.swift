@@ -408,69 +408,128 @@ struct AnalysisView: View {
         .accessibilityHint("You will be notified when the preview is ready")
     }
     
+    @State private var isHoveringHistory = false
+    @State private var showDebugStream = false
+    
     // MARK: - AI Insights View
     
     private var aiInsightsView: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Live Insights")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(.secondary)
-            
-            // Current insight (prominent display)
-            if !organizer.currentInsight.isEmpty {
-                currentInsightBubble
-            }
-            
-            // Recent insights history (max 5)
-            if organizer.insightHistory.count > 1 {
-                insightHistoryView
-            }
-        }
-        .frame(maxWidth: 500)
-    }
-    
-    private var currentInsightBubble: some View {
-        HStack(spacing: 10) {
-            // Pulsing indicator
-            Circle()
-                .fill(Color.accentColor)
-                .frame(width: 8, height: 8)
-                .scaleEffect(organizer.isStreaming ? 1.2 : 1.0)
-                .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: organizer.isStreaming)
-            
-            Text(organizer.currentInsight)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-                .contentTransition(.opacity)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.accentColor.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
-                )
-        )
-        .animation(.easeInOut(duration: 0.3), value: organizer.currentInsight)
-    }
-    
-    private var insightHistoryView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        VStack(spacing: 16) {
+            // Header
             HStack(spacing: 8) {
-                ForEach(Array(organizer.insightHistory.dropLast().suffix(5))) { insight in
-                    InsightPill(insight: insight)
-                        .transition(.scale.combined(with: .opacity))
+                if organizer.isStreaming {
+                    LoadingDotsView(dotCount: 3, dotSize: 4, color: .purple.opacity(0.6))
+                } else {
+                    Image(systemName: "brain")
+                        .font(.caption)
+                        .foregroundStyle(.purple.opacity(0.8))
+                }
+                
+                Text(organizer.isStreaming ? "AI is reasoning..." : "Analysis complete")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                
+                Spacer()
+                
+                if appState.debugMode {
+                    Button {
+                        withAnimation(.spring()) {
+                            showDebugStream.toggle()
+                        }
+                    } label: {
+                        Image(systemName: showDebugStream ? "terminal.fill" : "terminal")
+                            .font(.caption)
+                            .foregroundStyle(showDebugStream ? .purple : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Toggle raw AI stream")
                 }
             }
             .padding(.horizontal, 4)
+            
+            // Current insight (Integrated Pill style)
+            if !organizer.currentInsight.isEmpty {
+                currentInsightPill
+            }
+            
+            // Recent insights history (wrapped pills)
+            if organizer.insightHistory.count > 1 {
+                insightHistoryWrap
+            }
+            
+            // Raw stream (Debug only)
+            if showDebugStream && appState.debugMode {
+                streamingPreview
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .frame(height: 32)
+        .frame(maxWidth: 550)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.primary.opacity(0.02))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                )
+        )
+    }
+    
+    private var currentInsightPill: some View {
+        HStack(spacing: 12) {
+            // Pulsing indicator
+            ZStack {
+                Circle()
+                    .fill(Color.purple.opacity(0.2))
+                    .frame(width: 20, height: 20)
+                    .scaleEffect(organizer.isStreaming ? 1.4 : 1.0)
+                
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.purple)
+            }
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: organizer.isStreaming)
+            
+            Text(organizer.currentInsight)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color.purple.opacity(0.1))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                )
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: organizer.currentInsight)
+    }
+    
+    private var insightHistoryWrap: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FlowLayout(spacing: 8) {
+                ForEach(Array(organizer.insightHistory.dropLast().reversed().prefix(4))) { insight in
+                    InsightPill(insight: insight)
+                        .opacity(isHoveringHistory ? 1.0 : 0.4)
+                        .blur(radius: isHoveringHistory ? 0 : 0.5)
+                        .animation(.spring(response: 0.3), value: isHoveringHistory)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.3)) {
+                isHoveringHistory = hovering
+            }
+        }
     }
     
     private var streamingPreview: some View {
@@ -733,10 +792,14 @@ struct InsightPill: View {
     }
     
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: insight.category.icon)
-                .font(.caption2)
-                .foregroundStyle(iconColor)
+        HStack(spacing: 6) {
+            if let filePath = insight.filePath {
+                FileThumbnailView(url: URL(fileURLWithPath: filePath), size: CGSize(width: 14, height: 14))
+            } else {
+                Image(systemName: insight.category.icon)
+                    .font(.caption2)
+                    .foregroundStyle(iconColor)
+            }
             
             Text(insight.text)
                 .font(.caption2)
@@ -745,8 +808,51 @@ struct InsightPill: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.secondary.opacity(0.1))
-        .clipShape(Capsule())
+        .background(
+            Capsule()
+                .fill(Color.secondary.opacity(0.1))
+        )
+    }
+}
+
+// MARK: - Flow Layout
+
+public struct FlowLayout: Layout {
+    public var spacing: CGFloat = 8
+    
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = layoutResult(for: subviews, in: proposal.width ?? 0)
+        return CGSize(width: proposal.width ?? 0, height: result.height)
+    }
+    
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = layoutResult(for: subviews, in: bounds.width)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+    
+    private func layoutResult(for subviews: Subviews, in width: CGFloat) -> (positions: [CGPoint], height: CGFloat) {
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            
+            if x + size.width > width && x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            
+            positions.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+        }
+        
+        return (positions, y + rowHeight)
     }
 }
 

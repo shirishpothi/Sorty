@@ -236,6 +236,10 @@ public class AppState: ObservableObject {
     @Published public var showDirectoryPicker: Bool = false
     @Published public var selectedDirectory: URL?
     @Published public var updateManager = UpdateManager()
+    @Published public var selectedSettingsSection: SettingsCategory?
+    @Published public var duplicateManager = DuplicateDetectionManager()
+    @Published public var duplicateSettings = DuplicateSettingsManager()
+    @Published public var debugMode: Bool = false
     
     @Published public var hasCompletedOnboarding: Bool {
         didSet {

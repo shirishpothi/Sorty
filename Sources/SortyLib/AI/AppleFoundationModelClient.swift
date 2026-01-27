@@ -38,8 +38,8 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         
         switch compactionLevel {
         case .standard:
-            systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildCompactSystemPrompt(enableReasoning: config.enableReasoning, maxTopLevelFolders: config.maxTopLevelFolders)
-            userPrompt = PromptBuilder.buildCompactPrompt(files: files, enableReasoning: config.enableReasoning)
+            systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildCompactSystemPrompt(mode: config.mode, enableReasoning: config.enableReasoning, enableSmartRename: config.enableSmartRename, maxTopLevelFolders: config.maxTopLevelFolders)
+            userPrompt = PromptBuilder.buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
         case .ultra:
             let prompts = PromptBuilder.buildUltraCompactPrompt(files: files)
             systemPrompt = prompts.system
@@ -100,7 +100,10 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
                 tps: tps,
                 ttft: 0.1, // Near instant for on-device
                 totalTokens: estimatedTokens,
-                model: "Apple Foundation Model"
+                model: "Apple Foundation Model",
+                filesScanned: files.count,
+                totalFileSize: files.reduce(0) { $0 + $1.size },
+                promptTokens: nil
             )
             
             return plan
@@ -115,6 +118,12 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         } catch {
             throw AIClientError.networkError(error)
         }
+    }
+    
+    public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        // AFM doesn't yet support multimodal analysis via this private API.
+        // Fallback to text analysis.
+        return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
     }
     
     public func checkHealth() async throws {
