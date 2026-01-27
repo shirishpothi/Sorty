@@ -56,6 +56,13 @@ jobs:
           xcode-version: '15.0' # Adjust as needed for the project
 
       # ===========================================
+      # 2b. Run Unit Tests
+      # ===========================================
+      - name: Run Unit Tests
+        run: |
+          swift test --parallel 2>&1 | tail -100
+
+      # ===========================================
       # 3. Extract version from tag or input
       # ===========================================
       - name: Get version
@@ -107,6 +114,15 @@ jobs:
         run: |
           chmod +x ./scripts/package.sh
           ./scripts/package.sh
+
+      - name: Verify Notarization Stapling
+        run: |
+          if xcrun stapler validate "releases/${{ env.PROJECT_NAME }}.dmg"; then
+            echo "Stapling verified successfully"
+          else
+            echo "Warning: Stapling validation failed or was skipped (ad-hoc signing)"
+          fi
+
       # ===========================================
       # 8. Generate Appcast with Sparkle signing
       # ===========================================

@@ -16,17 +16,36 @@ final class DeeplinkTests: XCTestCase {
     func testOrganizeDeeplink() {
         let handler = DeeplinkHandler.shared
         
-        let url = URL(string: "sorty://organize?path=/Users/test/Downloads")!
+        let url = URL(string: "sorty://organize?path=/Users/test/Downloads&persona=developer")!
         handler.handle(url: url)
         
-        if case .organize(let path, _, _) = handler.pendingDestination {
+        if case .organize(let path, let persona, let autostart) = handler.pendingDestination {
             XCTAssertEqual(path, "/Users/test/Downloads")
+            XCTAssertEqual(persona, "developer")
+            XCTAssertFalse(autostart)
         } else {
             XCTFail("Expected organize destination")
         }
         
         handler.clearPending()
         XCTAssertNil(handler.pendingDestination)
+    }
+
+    @MainActor
+    func testOrganizeDeeplinkWithAutostart() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty://organize?path=/tmp&autostart=true")!
+        handler.handle(url: url)
+        
+        if case let .organize(path, _, autostart) = handler.pendingDestination {
+            XCTAssertEqual(path, "/tmp")
+            XCTAssertTrue(autostart)
+        } else {
+            XCTFail("Expected .organize destination with autostart")
+        }
+        
+        handler.clearPending()
     }
     
     @MainActor
@@ -52,8 +71,26 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty://duplicates?path=/tmp/test")!
         handler.handle(url: url)
         
-        if case .duplicates(let path, _) = handler.pendingDestination {
+        if case .duplicates(let path, let autostart) = handler.pendingDestination {
             XCTAssertEqual(path, "/tmp/test")
+            XCTAssertFalse(autostart)
+        } else {
+            XCTFail("Expected duplicates destination")
+        }
+        
+        handler.clearPending()
+    }
+
+    @MainActor
+    func testDuplicatesDeeplinkWithAutostart() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty://duplicates?path=/tmp/test&autostart=true")!
+        handler.handle(url: url)
+        
+        if case .duplicates(let path, let autostart) = handler.pendingDestination {
+            XCTAssertEqual(path, "/tmp/test")
+            XCTAssertTrue(autostart)
         } else {
             XCTFail("Expected duplicates destination")
         }
@@ -248,6 +285,39 @@ final class DeeplinkTests: XCTestCase {
         handler.handle(url: url)
         
         XCTAssertNil(handler.pendingDestination)
+    }
+    
+    @MainActor
+    func testDeeplinkWithEncodedSpaces() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty://organize?path=/Users/test/My%20Documents")!
+        handler.handle(url: url)
+        
+        if case .organize(let path, _, _) = handler.pendingDestination {
+            XCTAssertEqual(path, "/Users/test/My Documents", "Should decode URL-encoded spaces")
+        } else {
+            XCTFail("Expected organize destination")
+        }
+        
+        handler.clearPending()
+    }
+    
+    @MainActor
+    func testDeeplinkWithEncodedUnicode() {
+        let handler = DeeplinkHandler.shared
+        
+        // "文件" URL-encoded
+        let url = URL(string: "sorty://organize?path=/tmp/%E6%96%87%E4%BB%B6")!
+        handler.handle(url: url)
+        
+        if case .organize(let path, _, _) = handler.pendingDestination {
+            XCTAssertEqual(path, "/tmp/文件", "Should decode URL-encoded unicode")
+        } else {
+            XCTFail("Expected organize destination")
+        }
+        
+        handler.clearPending()
     }
     
     // MARK: - URL Generation Tests
