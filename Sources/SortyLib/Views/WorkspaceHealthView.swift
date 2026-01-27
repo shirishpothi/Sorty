@@ -14,46 +14,77 @@ public struct WorkspaceHealthView: View {
     @State private var selectedDirectory: URL?
     @State private var isAnalyzing = false
     @State private var showSettings = false
+    @State private var selectedOpportunity: CleanupOpportunity?
+    @State private var toastMessage: String?
+    @State private var showToast = false
     
     public init() {}
     
     public var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Header
-                headerSection
-                
-                // Directory Selector
-                directorySelector
-                
-                if selectedDirectory != nil {
-                    // Stats Overview
-                    statsOverview
+        ZStack(alignment: .bottom) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
+                    headerSection
                     
-                    // Growth Chart (if data available)
-                    if let growth = healthManager.getGrowth(for: selectedDirectory?.path ?? "") {
-                        growthSection(growth)
+                    // Directory Selector
+                    directorySelector
+                    
+                    if selectedDirectory != nil {
+                        // Stats Overview
+                        statsOverview
+                        
+                        // Growth Chart (if data available)
+                        if let growth = healthManager.getGrowth(for: selectedDirectory?.path ?? "") {
+                            growthSection(growth)
+                        }
+                        
+                        // Cleanup Opportunities
+                        opportunitiesSection
+                        
+                        // Insights
+                        insightsSection
+                    } else {
+                        emptyState
                     }
-                    
-                    // Cleanup Opportunities
-                    opportunitiesSection
-                    
-                    // Insights
-                    insightsSection
-                } else {
-                    emptyState
                 }
+                .padding(32)
             }
-            .padding(32)
+            .background(Color(NSColor.windowBackgroundColor))
+            
+            if showToast, let message = toastMessage {
+                ToastOverlay(
+                    message: message,
+                    actionLabel: "Undo",
+                    action: {
+                        Task {
+                            try? await healthManager.undoLastAction()
+                            await refreshAnalysis()
+                            showToast = false
+                        }
+                    },
+                    onDismiss: {
+                        showToast = false
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(100)
+            }
         }
-        .background(
-            LinearGradient(
-                colors: [Color.black.opacity(0.02), Color.blue.opacity(0.03)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task {
+                        try? await healthManager.undoLastAction()
+                        await refreshAnalysis()
+                    }
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .disabled(healthManager.cleanupHistory.isEmpty)
+                .help("Undo last cleanup action")
+            }
+            
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showSettings = true
@@ -110,30 +141,51 @@ public struct WorkspaceHealthView: View {
     private func healthScoreBadge(snapshot: DirectorySnapshot) -> some View {
         let score = calculateHealthScore(snapshot: snapshot)
         let color = scoreColor(score)
+        let healthDescription = scoreDescription(score)
         
-        return VStack(spacing: 4) {
+        return VStack(spacing: 16) {
             ZStack {
                 Circle()
                     .stroke(color.opacity(0.2), lineWidth: 8)
                     .frame(width: 80, height: 80)
+                    .accessibilityHidden(true)
                 
                 Circle()
                     .trim(from: 0, to: CGFloat(score) / 100)
                     .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .frame(width: 80, height: 80)
                     .rotationEffect(.degrees(-90))
+                    .accessibilityHidden(true)
                 
                 Text("\(score)")
                     .font(.title.bold())
                     .foregroundColor(color)
+                    .accessibilityHidden(true)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Health Score")
+            .accessibilityValue("\(score) out of 100, \(healthDescription)")
+            .accessibilityAddTraits(.updatesFrequently)
             
             Text("Health Score")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Workspace Health Score")
+        .accessibilityHint("Shows the overall health of your workspace from 0 to 100")
+    }
+    
+    private func scoreDescription(_ score: Int) -> String {
+        switch score {
+        case 80...100: return "Excellent"
+        case 60..<80: return "Good"
+        case 40..<60: return "Fair"
+        default: return "Needs Attention"
+        }
     }
     
     // MARK: - Directory Selector
@@ -295,11 +347,18 @@ public struct WorkspaceHealthView: View {
                     OpportunityCard(
                         opportunity: opportunity,
                         onAction: {
-                            Task {
-                                if let action = opportunity.action {
+                            if let action = opportunity.action,
+                               UserDefaults.standard.bool(forKey: "skipPreview_\(action.rawValue.replacingOccurrences(of: " ", with: "_"))") {
+                                Task {
                                     try? await healthManager.performAction(action, for: opportunity)
                                     await refreshAnalysis()
+                                    await MainActor.run {
+                                        toastMessage = "Action completed"
+                                        showToast = true
+                                    }
                                 }
+                            } else {
+                                selectedOpportunity = opportunity
                             }
                         },
                         onDismiss: {
@@ -311,6 +370,31 @@ public struct WorkspaceHealthView: View {
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .sheet(item: $selectedOpportunity) { opportunity in
+            CleanupPreviewSheet(
+                opportunity: opportunity,
+                onConfirm: { selectedFiles in
+                    Task {
+                        if let action = opportunity.action {
+                             // Pass the filtered list of files to the action handler
+                             // We might need to update performAction to accept file lists
+                             // For now, we'll just perform the action as before but note that
+                             // in step 3 we will update the manager to handle specific files
+                            try? await healthManager.performAction(action, for: opportunity, selectedFiles: selectedFiles)
+                            await refreshAnalysis()
+                            
+                            // Show toast
+                            toastMessage = "Action completed"
+                            showToast = true
+                        }
+                        selectedOpportunity = nil
+                    }
+                },
+                onCancel: {
+                    selectedOpportunity = nil
+                }
+            )
+        }
     }
     
     // MARK: - Insights Section

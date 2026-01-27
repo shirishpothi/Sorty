@@ -142,6 +142,42 @@ struct ResponseParser {
             throw ParserError.invalidJSON
         }
 
+        // Check for ultra-compact format first
+        if let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+            if let compactFolders = jsonObject["f"] as? [[String: Any]] {
+                // Parse ultra-compact format: {"f":[{"n":"Folder","files":[]}]}
+                let suggestions = compactFolders.compactMap { dict -> FolderSuggestion? in
+                    guard let name = dict["n"] as? String,
+                          let fileNames = dict["files"] as? [String] else { return nil }
+                    
+                    var files: [FileItem] = []
+                    for fileName in fileNames {
+                        if let file = findFile(named: fileName, in: originalFiles) {
+                            files.append(file)
+                        }
+                    }
+                    
+                    return FolderSuggestion(
+                        folderName: name,
+                        files: files,
+                        reasoning: "Generated from ultra-compact format"
+                    )
+                }
+                
+                // Identify unorganized files
+                let organizedIds = Set(suggestions.flatMap { $0.files }.map { $0.id })
+                let unorganizedFiles = originalFiles.filter { !organizedIds.contains($0.id) }
+                
+                return OrganizationPlan(
+                    suggestions: suggestions,
+                    unorganizedFiles: unorganizedFiles,
+                    notes: "Processed via ultra-compact strategy",
+                    timestamp: Date(),
+                    version: 1
+                )
+            }
+        }
+
         let decoder = JSONDecoder()
         // Do NOT use convertFromSnakeCase here as we handle it in CodingKeys
         

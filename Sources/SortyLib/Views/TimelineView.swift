@@ -27,7 +27,7 @@ struct TimelineView: View {
             HStack {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.title2)
-                    .foregroundColor(.purple)
+                    .foregroundColor(.blue)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Organization Timeline")
@@ -60,6 +60,7 @@ struct TimelineView: View {
                     if selectedIndex < filteredEntries.count {
                         SelectedEntryCard(
                             entry: filteredEntries[selectedIndex],
+                            allEntries: filteredEntries,
                             onRestore: onRestore
                         )
                     }
@@ -67,11 +68,12 @@ struct TimelineView: View {
             }
         }
         .padding()
-        .background(Color.purple.opacity(0.03))
+        .background(.ultraThinMaterial)
         .cornerRadius(12)
+        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.purple.opacity(0.1), lineWidth: 1)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
         )
     }
 }
@@ -91,20 +93,14 @@ struct TimelineSliderTrack: View {
             ZStack(alignment: .leading) {
                 // Track line
                 Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.purple.opacity(0.3), .blue.opacity(0.3)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(.primary.opacity(0.1))
                     .frame(height: 4)
                     .cornerRadius(2)
                 
                 // Filled portion up to selected
                 if selectedIndex > 0 && entries.count > 1 {
                     Rectangle()
-                        .fill(Color.purple)
+                        .fill(.primary.opacity(0.4))
                         .frame(width: nodeSpacing * CGFloat(selectedIndex), height: 4)
                         .cornerRadius(2)
                 }
@@ -148,16 +144,16 @@ struct TimelineNode: View {
     
     var body: some View {
         ZStack {
-            // Halo for selection
+            // Subtle halo for selection
             if isSelected {
                 Circle()
-                    .fill(Color.purple.opacity(0.2))
+                    .fill(Color.primary.opacity(0.08))
                     .frame(width: 32, height: 32)
             }
             
             // Core node
             Circle()
-                .fill(entry.isUndone ? Color.orange : (entry.success ? Color.purple : Color.red))
+                .fill(entry.isUndone ? Color.orange : (entry.success ? Color.blue : Color.red))
                 .frame(width: nodeSize, height: nodeSize)
                 .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
             
@@ -185,6 +181,7 @@ struct TimelineNode: View {
 
 struct SelectedEntryCard: View {
     let entry: OrganizationHistoryEntry
+    let allEntries: [OrganizationHistoryEntry] // All filtered entries to determine current state
     let onRestore: (OrganizationHistoryEntry) -> Void
     
     @State private var showRestoreConfirmation = false
@@ -238,7 +235,7 @@ struct SelectedEntryCard: View {
                         .fontWeight(.medium)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.purple)
+                .tint(.blue)
             }
         }
         .padding(16)
@@ -256,10 +253,16 @@ struct SelectedEntryCard: View {
     }
     
     private var isCurrentState: Bool {
-        // Logic should be more robust: first item in the list that isn't undone
-        // For simplicity in this view, we'll check if it's not undone, 
-        // but in a real app we'd compare against the current head of the timeline.
-        !entry.isUndone
+        // This entry is "current" if it's the most recent non-undone entry
+        guard !entry.isUndone else { return false }
+        
+        // Find the most recent non-undone entry
+        let mostRecentActive = allEntries
+            .filter { !$0.isUndone }
+            .sorted { $0.timestamp > $1.timestamp }
+            .first
+        
+        return mostRecentActive?.id == entry.id
     }
 }
 
@@ -295,6 +298,9 @@ struct CompactTimelineView: View {
     @State private var isProcessing = false
     @State private var showAlert = false
     @State private var alertMessage: String?
+    @State private var showMissingFilesConfirmation = false
+    @State private var missingFilesForConfirmation: [String] = []
+    @State private var pendingRestoreEntry: OrganizationHistoryEntry?
     
     private var filteredEntries: [OrganizationHistoryEntry] {
         entries.filter { $0.directoryPath == directoryPath && $0.success }
@@ -324,15 +330,69 @@ struct CompactTimelineView: View {
                 Text(msg)
             }
         }
+        .alert("Missing Files", isPresented: $showMissingFilesConfirmation) {
+            Button("Cancel", role: .cancel) {
+                pendingRestoreEntry = nil
+                missingFilesForConfirmation = []
+            }
+            Button("Continue Anyway") {
+                if let entry = pendingRestoreEntry {
+                    performRestore(entry)
+                }
+            }
+        } message: {
+            Text("\(missingFilesForConfirmation.count) file(s) no longer exist and cannot be restored:\n\n\(missingFilesForConfirmation.prefix(5).joined(separator: "\n"))\(missingFilesForConfirmation.count > 5 ? "\n...and \(missingFilesForConfirmation.count - 5) more" : "")\n\nContinue with partial restore?")
+        }
     }
     
     private func handleRestore(_ entry: OrganizationHistoryEntry) {
+        // Find all entries that would be undone
+        let entriesToUndo = filteredEntries.filter {
+            $0.timestamp > entry.timestamp &&
+            $0.status == .completed &&
+            !$0.isUndone
+        }
+        
+        // Collect all operations that would be reversed
+        var allOperations: [FileSystemManager.FileOperation] = []
+        for e in entriesToUndo {
+            if let ops = e.operations {
+                allOperations.append(contentsOf: ops)
+            }
+        }
+        
+        // Perform preflight check asynchronously
+        Task {
+            let fileSystemManager = FileSystemManager()
+            let missingFiles = await fileSystemManager.preflightRestore(allOperations)
+            
+            await MainActor.run {
+                if !missingFiles.isEmpty {
+                    // Show confirmation dialog
+                    missingFilesForConfirmation = missingFiles
+                    pendingRestoreEntry = entry
+                    showMissingFilesConfirmation = true
+                } else {
+                    // No missing files, proceed directly
+                    performRestore(entry)
+                }
+            }
+        }
+    }
+    
+    private func performRestore(_ entry: OrganizationHistoryEntry) {
         isProcessing = true
+        pendingRestoreEntry = nil
+        missingFilesForConfirmation = []
         
         Task {
             do {
-                try await organizer.restoreToState(targetEntry: entry)
-                alertMessage = "Successfully restored to \(entry.timestamp.formatted())"
+                let result = try await organizer.restoreToState(targetEntry: entry)
+                if result.hasIssues {
+                    alertMessage = "Restored to \(entry.timestamp.formatted())\n\n\(result.summaryMessage)"
+                } else {
+                    alertMessage = "Successfully restored to \(entry.timestamp.formatted())"
+                }
             } catch {
                 alertMessage = "Restore failed: \(error.localizedDescription)"
             }

@@ -7,17 +7,16 @@
 
 import Foundation
 
-final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
-    let config: AIConfig
-    private let session: URLSession
-    @MainActor weak var streamingDelegate: StreamingDelegate?
+public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
+    public let config: AIConfig
+    @MainActor public weak var streamingDelegate: StreamingDelegate?
     
-    init(config: AIConfig) {
+    public init(config: AIConfig) {
         self.config = config
-        let sessionConfig = URLSessionConfiguration.default
-        sessionConfig.timeoutIntervalForRequest = config.requestTimeout
-        sessionConfig.timeoutIntervalForResource = config.resourceTimeout
-        self.session = URLSession(configuration: sessionConfig)
+    }
+    
+    private func getSession() async -> URLSession {
+        return await AISessionManager.shared.session(for: config.provider, config: config)
     }
     
     private func getHeaders() async throws -> [String: String] {
@@ -31,12 +30,14 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         ]
     }
     
-    func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "")
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
+            mode: config.mode,
+            namingStyle: config.namingStyle,
             enableReasoning: config.enableReasoning,
             includeContentMetadata: true,
             customInstructions: customInstructions
@@ -65,9 +66,71 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
     }
     
-    func fetchAvailableModels() async throws -> [String] {
+    public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        // Check if model supports vision - if not, fall back to text-only
+        let modelId = config.model.lowercased()
+        let supportsVision = modelId.contains("gpt-4o") ||
+                             modelId.contains("gpt-4-turbo") ||
+                             modelId.contains("claude-3") ||
+                             modelId.contains("gemini")
+        
+        guard supportsVision, !imageData.isEmpty else {
+            return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
+        }
+        
+        let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
+        
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let userPrompt = PromptBuilder.buildOrganizationPrompt(
+            files: files,
+            mode: config.mode,
+            namingStyle: config.namingStyle,
+            enableReasoning: config.enableReasoning,
+            includeContentMetadata: true,
+            customInstructions: customInstructions
+        )
+        
+        // Build multimodal content array (OpenAI-compatible format)
+        var userContent: [[String: Any]] = [
+            ["type": "text", "text": userPrompt]
+        ]
+        
+        // Add images (limit to first 5 to avoid token limits)
+        for (filename, data) in imageData.prefix(5) {
+            let base64 = data.base64EncodedString()
+            let mimeType = filename.lowercased().hasSuffix(".png") ? "image/png" : "image/jpeg"
+            userContent.append([
+                "type": "image_url",
+                "image_url": [
+                    "url": "data:\(mimeType);base64,\(base64)",
+                    "detail": "low"
+                ]
+            ])
+        }
+        
+        var requestBody: [String: Any] = [
+            "model": config.model,
+            "messages": [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": userContent]
+            ],
+            "temperature": temperature ?? config.temperature
+        ]
+        
+        if let maxTokens = config.maxTokens {
+            requestBody["max_tokens"] = maxTokens
+        }
+        
+        if config.enableStreaming {
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
+        } else {
+            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files)
+        }
+    }
+    
+    public func fetchAvailableModels() async throws -> [String] {
         let url = URL(string: "https://api.githubcopilot.com/models")!
-        LogManager.shared.log("Fetching available models", category: "CopilotClient")
+        DebugLogger.log("Fetching available models")
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         
@@ -76,6 +139,7 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             request.setValue(value, forHTTPHeaderField: key)
         }
         
+        let session = await getSession()
         do {
             let (data, response) = try await session.data(for: request)
             
@@ -97,12 +161,35 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             
         } catch {
              // Fallback on error
-             LogManager.shared.log("Failed to fetch models: \(error), using defaults", level: .error, category: "CopilotClient")
+             DebugLogger.log("Failed to fetch models: \(error), using defaults")
              return ["gpt-4", "gpt-3.5-turbo"]
         }
     }
     
-    func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
+    public func checkHealth() async throws {
+        let url = URL(string: "https://api.githubcopilot.com/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10
+        
+        let headers = try await getHeaders()
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
+        
+        let session = await getSession()
+        let (_, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIClientError.invalidResponse
+        }
+        
+        if !(200...299).contains(httpResponse.statusCode) {
+             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+        }
+    }
+    
+    public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         
         let requestBody: [String: Any] = [
@@ -124,6 +211,7 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         let (data, response) = try await session.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -167,6 +255,7 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
+        let session = await getSession()
         do {
             let (data, response) = try await session.data(for: request)
             let endTime = Date()
@@ -232,6 +321,7 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         var firstTokenTime: Date?
         var accumulatedContentBuffer = "" // Local buffer to avoid Sendable capture issues
         
+        let session = await getSession()
         do {
             let (bytes, response) = try await session.bytes(for: request)
             
@@ -263,7 +353,7 @@ final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                         let firstChoice = choices?.first
                         let delta = firstChoice?["delta"] as? [String: Any]
                         let deltaContent = delta?["content"] as? String
-
+ 
                         if let content = deltaContent {
                             if firstTokenTime == nil {
                                 firstTokenTime = Date()

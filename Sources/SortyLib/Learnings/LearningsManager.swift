@@ -28,6 +28,14 @@ public class LearningsManager: ObservableObject {
     public let securityManager = SecurityManager()
     public let consentManager = LearningsConsentManager()
     
+    // Learning Controls
+    @Published public var learningStrength: Double = 0.5 {
+        didSet {
+            UserDefaults.standard.set(learningStrength, forKey: "learningStrength")
+        }
+    }
+    @Published public var behaviorPreferences: BehaviorPreferences?
+    
     // MARK: - Dependencies
     
     public let analyzer = LearningsAnalyzer()
@@ -35,6 +43,9 @@ public class LearningsManager: ObservableObject {
     public init() {
         // Check if initial setup is required
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
+        // Load learning strength from UserDefaults
+        learningStrength = UserDefaults.standard.double(forKey: "learningStrength")
+        if learningStrength == 0 { learningStrength = 0.5 } // Default if not set
     }
     
     public func configure(with config: AIConfig) {
@@ -146,12 +157,15 @@ public class LearningsManager: ObservableObject {
     // MARK: - Behavior Tracking
     
     /// Record additional instructions provided by user
-    public func recordAdditionalInstruction(_ instruction: String, for folderPath: String) {
+    public func recordAdditionalInstruction(_ instruction: String, for folderPath: String, fileCount: Int? = nil) {
         guard consentManager.canCollectData, var profile = currentProfile else { return }
         
         let userInstruction = UserInstruction(
             instruction: instruction,
-            context: folderPath
+            context: "pre_organization",
+            folderPath: folderPath,
+            fileCount: fileCount,
+            isRegeneration: false
         )
         profile.additionalInstructionsHistory.append(userInstruction)
         currentProfile = profile
@@ -159,14 +173,66 @@ public class LearningsManager: ObservableObject {
     }
     
     /// Record guiding instructions for next attempt
-    public func recordGuidingInstruction(_ instruction: String) {
+    public func recordGuidingInstruction(_ instruction: String, for folderPath: String? = nil, fileCount: Int? = nil) {
         guard consentManager.canCollectData, var profile = currentProfile else { return }
         
         let userInstruction = UserInstruction(
             instruction: instruction,
-            context: "guiding_instruction"
+            context: "regeneration",
+            folderPath: folderPath,
+            fileCount: fileCount,
+            isRegeneration: true
         )
         profile.guidingInstructionsHistory.append(userInstruction)
+        currentProfile = profile
+        debouncedSave()
+    }
+
+    /// Record a cancelled organization session with rich context for learning
+    public func recordCancelledOrganization(
+        folderPath: String,
+        fileCount: Int,
+        proposedFolderCount: Int,
+        instructions: String? = nil,
+        stage: String,
+        proposedFolderNames: [String]? = nil,
+        proposedStructureSummary: String? = nil,
+        fileExtensionCounts: [String: Int]? = nil,
+        regenerationCount: Int = 0,
+        regenerationInstructions: [String]? = nil,
+        aiModel: String? = nil
+    ) {
+        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        
+        let cancelled = CancelledOrganization(
+            folderPath: folderPath,
+            fileCount: fileCount,
+            proposedFolderCount: proposedFolderCount,
+            instructions: instructions,
+            cancelledAtStage: stage,
+            proposedFolderNames: proposedFolderNames,
+            proposedStructureSummary: proposedStructureSummary,
+            fileExtensionCounts: fileExtensionCounts,
+            regenerationCount: regenerationCount,
+            regenerationInstructions: regenerationInstructions,
+            aiModel: aiModel
+        )
+        profile.cancelledOrganizations.append(cancelled)
+        currentProfile = profile
+        debouncedSave()
+    }
+    
+    /// Record a regenerated organization session
+    public func recordRegeneratedOrganization(folderPath: String, previousPlanSummary: String? = nil, guidingInstruction: String? = nil, regenerationCount: Int) {
+        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        
+        let regenerated = RegeneratedOrganization(
+            folderPath: folderPath,
+            previousPlanSummary: previousPlanSummary,
+            guidingInstruction: guidingInstruction,
+            regenerationCount: regenerationCount
+        )
+        profile.regeneratedOrganizations.append(regenerated)
         currentProfile = profile
         debouncedSave()
     }
@@ -217,23 +283,66 @@ public class LearningsManager: ObservableObject {
     
     // MARK: - Debounced Saving
     
-    private var saveDebounceTimer: Timer?
-    private let saveDebounceInterval: TimeInterval = 2.0 // 2 seconds
+    private var saveTask: Task<Void, Never>?
+    private let saveDebounceInterval: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
     
     /// Debounced save to prevent rapid successive writes
     private func debouncedSave() {
-        saveDebounceTimer?.invalidate()
-        saveDebounceTimer = Timer.scheduledTimer(withTimeInterval: saveDebounceInterval, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                await self?.saveProfile()
-            }
+        saveTask?.cancel()
+        saveTask = Task {
+            try? await Task.sleep(nanoseconds: saveDebounceInterval)
+            guard !Task.isCancelled else { return }
+            await saveProfile()
         }
     }
     
     /// Force immediate save (for critical operations)
     public func forceSave() async {
-        saveDebounceTimer?.invalidate()
+        saveTask?.cancel()
+        pruneOldData()
         await saveProfile()
+    }
+    
+    /// Caps history arrays at 100 items to prevent bloat
+    private func pruneOldData() {
+        guard var profile = currentProfile else { return }
+        
+        let cap = 100
+        if profile.additionalInstructionsHistory.count > cap {
+            profile.additionalInstructionsHistory = Array(profile.additionalInstructionsHistory.suffix(cap))
+        }
+        if profile.guidingInstructionsHistory.count > cap {
+            profile.guidingInstructionsHistory = Array(profile.guidingInstructionsHistory.suffix(cap))
+        }
+        if profile.steeringPrompts.count > cap {
+            profile.steeringPrompts = Array(profile.steeringPrompts.suffix(cap))
+        }
+        if profile.postOrganizationChanges.count > cap {
+            profile.postOrganizationChanges = Array(profile.postOrganizationChanges.suffix(cap))
+        }
+        if profile.historyReverts.count > cap {
+            profile.historyReverts = Array(profile.historyReverts.suffix(cap))
+        }
+        if profile.positiveExamples.count > cap {
+            profile.positiveExamples = Array(profile.positiveExamples.suffix(cap))
+        }
+        if profile.rejections.count > cap {
+            profile.rejections = Array(profile.rejections.suffix(cap))
+        }
+        if profile.corrections.count > cap {
+            profile.corrections = Array(profile.corrections.suffix(cap))
+        }
+        if profile.jobHistory.count > cap {
+            profile.jobHistory = Array(profile.jobHistory.suffix(cap))
+        }
+        if profile.cancelledOrganizations.count > cap {
+            profile.cancelledOrganizations = Array(profile.cancelledOrganizations.suffix(cap))
+        }
+        if profile.regeneratedOrganizations.count > cap {
+            profile.regeneratedOrganizations = Array(profile.regeneratedOrganizations.suffix(cap))
+        }
+        
+        currentProfile = profile
     }
     
     // MARK: - Feedback Loop (Continuous Learning)
@@ -250,6 +359,9 @@ public class LearningsManager: ObservableObject {
         profile.corrections.append(example)
         currentProfile = profile
         debouncedSave()
+        
+        // Trigger auto-inference check after recording correction
+        Task { await checkAndTriggerAutoInference() }
     }
     
     /// Record a rejection (File reverted or explicitly rejected)
@@ -263,7 +375,10 @@ public class LearningsManager: ObservableObject {
         )
         profile.rejections.append(example)
         currentProfile = profile
-        Task { await saveProfile() }
+        Task { 
+            await saveProfile() 
+            await checkAndTriggerAutoInference()
+        }
     }
     
     // MARK: - Legacy Project Method Removals
@@ -301,7 +416,11 @@ public class LearningsManager: ObservableObject {
         }
         
         currentProfile = profile
-        Task { await saveProfile() }
+        Task { 
+            await saveProfile()
+            // Trigger auto-inference check after adding example
+            await checkAndTriggerAutoInference()
+        }
     }
     
     // MARK: - Analysis
@@ -581,91 +700,210 @@ public class LearningsManager: ObservableObject {
     
     /// Generates a prompt context string based on the current profile
     /// This is the bridge between learned data and the AI organization engine
+    /// Uses weighted priorities: Explicit preferences > High-confidence rules > Recent feedback > General patterns
     public func generatePromptContext() -> String {
         guard let profile = currentProfile, profile.consentGranted else {
             return ""
         }
         
-        var context = "Based on the user's past behavior and explicit preferences, follow these rules:\n"
+        var context = "Based on the user's past behavior and explicit preferences, follow these rules (sorted by priority):\n"
         var hasContent = false
         
-        // 1. Honing Answers (High Priority - Explicit preferences)
+        // Priority 1 (Weight: CRITICAL) - Honing Answers (Explicit user preferences)
         if !profile.honingAnswers.isEmpty {
-            context += "\nPREFERENCES (User-confirmed philosophy):\n"
+            context += "\n## CRITICAL PREFERENCES (User-confirmed, always follow):\n"
             for answer in profile.honingAnswers {
-                context += "- \(answer.selectedOption)\n"
+                context += "- ✓ \(answer.selectedOption)\n"
             }
             hasContent = true
         }
         
-        // 2. Steering Prompts (High Priority - Post-organization feedback)
-        // Weight recent prompts more heavily (last 10)
-        let recentSteering = profile.steeringPrompts.suffix(10)
+        // Priority 1.5 (Weight: HIGH) - Behavior Preferences (Structural preferences from honing)
+        extractBehaviorPreferences()
+        if let prefs = behaviorPreferences {
+            var prefsContent: [String] = []
+            prefsContent.append("- Deletion policy: \(prefs.deletionVsArchive.displayName)")
+            prefsContent.append("- Folder structure: \(prefs.folderDepthPreference.displayName)")
+            prefsContent.append("- Primary organization: \(prefs.dateVsContentPreference.displayName)")
+            prefsContent.append("- Duplicate handling: \(prefs.duplicateKeeperStrategy.displayName)")
+            
+            // Only add if we have meaningful (non-default) preferences
+            if prefs != BehaviorPreferences() {
+                context += "\n## STRUCTURAL PREFERENCES (User's organization philosophy):\n"
+                for pref in prefsContent {
+                    context += "\(pref)\n"
+                }
+                hasContent = true
+            }
+        }
+        
+        // Priority 2 (Weight: HIGH) - High-confidence inferred rules
+        let highConfidenceRules = getActiveRules().filter { 
+            $0.confidenceLevel == .high && $0.successRate > 0.7 
+        }
+        if !highConfidenceRules.isEmpty {
+            context += "\n## HIGH-CONFIDENCE RULES (Proven patterns, strongly follow):\n"
+            for rule in highConfidenceRules.prefix(5) {
+                let successPct = Int(rule.successRate * 100)
+                context += "- [\(successPct)% success] \(rule.explanation)\n"
+            }
+            hasContent = true
+        }
+        
+        // Priority 3 (Weight: MEDIUM-HIGH) - Recent steering prompts (post-org feedback)
+        let recentSteering = profile.steeringPrompts.suffix(5)
         if !recentSteering.isEmpty {
-            context += "\nRECENT FEEDBACK (Apply these adjustments):\n"
+            context += "\n## RECENT FEEDBACK (Apply these adjustments):\n"
             for prompt in recentSteering {
                 context += "- \(prompt.prompt)\n"
             }
             hasContent = true
         }
         
-        // 3. Additional Instructions (Explicit User Commands)
-        // Take unique latest 5 instructions to keep context concise
+        // Priority 4 (Weight: MEDIUM) - Additional Instructions (Explicit user commands)
         let uniqueInstructions = profile.additionalInstructionsHistory
             .map { $0.instruction }
             .orderedDeduplicated()
-            .suffix(5)
+            .suffix(3)
         if !uniqueInstructions.isEmpty {
-            context += "\nUSER INSTRUCTIONS:\n"
+            context += "\n## USER INSTRUCTIONS:\n"
             for instruction in uniqueInstructions {
                 context += "- \(instruction)\n"
             }
             hasContent = true
         }
         
-        // 4. Guiding Instructions (Pre-organization feedback)
+        // Priority 5 (Weight: MEDIUM) - Guiding Instructions (Pre-organization feedback)
         let uniqueGuidingInstructions = profile.guidingInstructionsHistory
             .map { $0.instruction }
             .orderedDeduplicated()
-            .suffix(5)
+            .suffix(3)
         if !uniqueGuidingInstructions.isEmpty {
-            context += "\nGUIDING INSTRUCTIONS:\n"
+            context += "\n## GUIDING INSTRUCTIONS:\n"
             for instruction in uniqueGuidingInstructions {
                 context += "- \(instruction)\n"
             }
             hasContent = true
         }
         
-        // 5. Inferred Rules (Derived from analysis)
-        // Only include high priority or recently validated rules
-        let relevantRules = profile.inferredRules.sorted { $0.priority > $1.priority }.prefix(5)
-        if !relevantRules.isEmpty {
-            context += "\nLEARNED PATTERNS:\n"
-            for rule in relevantRules {
-                context += "- \(rule.explanation)\n"
+        // Priority 5.5 (Weight: MEDIUM) - Patterns from Regenerations
+        let recentRegenerations = profile.regeneratedOrganizations.suffix(5)
+        if !recentRegenerations.isEmpty {
+            context += "\n## REGENERATION PATTERNS (User requested changes previously):\n"
+            for regen in recentRegenerations {
+                if let guide = regen.guidingInstruction, !guide.isEmpty {
+                    context += "- When seeing '\(regen.previousPlanSummary ?? "previous structure")', user preferred: \(guide)\n"
+                }
+            }
+            hasContent = true
+        }
+
+        // Priority 5.6 (Weight: MEDIUM) - Patterns from Cancellations
+        let recentCancellations = profile.cancelledOrganizations.suffix(5)
+        if !recentCancellations.isEmpty {
+            context += "\n## AVOID THESE STRUCTURES (User cancelled these types of plans):\n"
+            var cancelledSummaries: [String] = []
+            for cancel in recentCancellations {
+                if let instr = cancel.instructions, !instr.isEmpty {
+                    cancelledSummaries.append("Plan with instructions '\(instr)' at stage \(cancel.cancelledAtStage)")
+                }
+            }
+            for summary in Set(cancelledSummaries).prefix(3) {
+                context += "- AVOID: \(summary)\n"
             }
             hasContent = true
         }
         
-        // 6. Recent Corrections (User explicitly corrected AI - weighted by recency)
+        // Priority 6 (Weight: LOW-MEDIUM) - Medium-confidence rules
+        let mediumConfidenceRules = getActiveRules().filter { 
+            $0.confidenceLevel == .medium || ($0.confidenceLevel == .high && $0.successRate <= 0.7)
+        }
+        if !mediumConfidenceRules.isEmpty {
+            context += "\n## LEARNED PATTERNS (Consider these tendencies):\n"
+            for rule in mediumConfidenceRules.prefix(5) {
+                let confidence = rule.confidenceLevel.rawValue.capitalized
+                context += "- [\(confidence)] \(rule.explanation)\n"
+            }
+            hasContent = true
+        }
+        
+        // Priority 6.5 (Weight: MEDIUM) - Positive Examples (What user explicitly likes)
+        let recentPositives = profile.positiveExamples.suffix(15)
+        if !recentPositives.isEmpty {
+            context += "\n## POSITIVE PATTERNS (User explicitly approves these placements):\n"
+            // Group by destination folder for cleaner output
+            var positivePatterns: [String: [(file: String, ext: String)]] = [:]
+            for example in recentPositives {
+                let srcFile = URL(fileURLWithPath: example.srcPath).lastPathComponent
+                let dstFolder = URL(fileURLWithPath: example.dstPath).deletingLastPathComponent().lastPathComponent
+                let ext = URL(fileURLWithPath: example.srcPath).pathExtension.lowercased()
+                positivePatterns[dstFolder, default: []].append((file: srcFile, ext: ext))
+            }
+            
+            for (folder, files) in positivePatterns.prefix(5) {
+                // Group by extension within folder
+                let extCounts = Dictionary(grouping: files) { $0.ext }.mapValues { $0.count }
+                let topExtensions = extCounts.sorted { $0.value > $1.value }.prefix(2)
+                let extList = topExtensions.map { ".\($0.key)" }.joined(separator: ", ")
+                if !extList.isEmpty {
+                    context += "- '\(folder)/' is good for: \(extList) files (\(files.count) examples)\n"
+                } else {
+                    context += "- '\(folder)/' is an approved destination (\(files.count) examples)\n"
+                }
+            }
+            hasContent = true
+        }
+        
+        // Priority 7 (Weight: HIGH for corrections) - Recent corrections (MUST avoid repeating)
         let recentCorrections = profile.postOrganizationChanges
             .filter { $0.wasAIOrganized }
             .suffix(10)
         if !recentCorrections.isEmpty {
-            context += "\nRECENT CORRECTIONS (Avoid repeating these mistakes):\n"
+            context += "\n## CORRECTIONS (IMPORTANT - Avoid repeating these mistakes):\n"
+            // Group corrections by pattern for clearer guidance
+            var correctionPatterns: [String: [(from: String, to: String)]] = [:]
             for change in recentCorrections {
                 let srcFolder = URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent
                 let dstFolder = URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent
-                let fileName = URL(fileURLWithPath: change.originalPath).lastPathComponent
-                context += "- User moved '\(fileName)' from '\(srcFolder)/' to '\(dstFolder)/'\n"
+                let ext = URL(fileURLWithPath: change.originalPath).pathExtension.lowercased()
+                let key = ext.isEmpty ? "misc" : ext
+                correctionPatterns[key, default: []].append((from: srcFolder, to: dstFolder))
+            }
+            
+            for (fileType, moves) in correctionPatterns.prefix(5) {
+                let uniqueMoves = Dictionary(grouping: moves) { "\($0.from)->\($0.to)" }
+                for (_, group) in uniqueMoves.prefix(2) {
+                    if let move = group.first {
+                        context += "- .\(fileType) files: User prefers '\(move.to)/' over '\(move.from)/'\n"
+                    }
+                }
             }
             hasContent = true
         }
         
-        // 7. Revert Patterns (If many reverts, be more conservative)
+        // Priority 7.5 (Weight: HIGH) - Rejection Patterns (AVOID these placements)
+        let recentRejections = profile.rejections.suffix(10)
+        if !recentRejections.isEmpty {
+            context += "\n## REJECTION PATTERNS (AVOID these - user explicitly rejected):\n"
+            var rejectionPatterns: [String: Int] = [:]
+            for rejection in recentRejections {
+                let ext = URL(fileURLWithPath: rejection.srcPath).pathExtension.lowercased()
+                let folder = URL(fileURLWithPath: rejection.dstPath).deletingLastPathComponent().lastPathComponent
+                if !folder.isEmpty {
+                    let pattern = ext.isEmpty ? "files → \(folder)" : ".\(ext) → \(folder)"
+                    rejectionPatterns[pattern, default: 0] += 1
+                }
+            }
+            for (pattern, count) in rejectionPatterns.sorted(by: { $0.value > $1.value }).prefix(5) {
+                context += "- DO NOT place \(pattern) (rejected \(count)x)\n"
+            }
+            hasContent = true
+        }
+        
+        // Priority 8 (Weight: ADVISORY) - Revert patterns
         let recentReverts = profile.historyReverts.suffix(5)
-        if recentReverts.count >= 3 {
-            context += "\nNOTE: User has reverted \(recentReverts.count) recent organizations. Be more conservative and ask for confirmation on uncertain categorizations.\n"
+        if recentReverts.count >= 2 {
+            context += "\n## CAUTION: User has reverted \(recentReverts.count) recent organizations. Be more conservative.\n"
             hasContent = true
         }
         
@@ -711,6 +949,135 @@ public class LearningsManager: ObservableObject {
         }
         
         return topics
+    }
+    
+    // MARK: - Impact Metrics
+    
+    /// Compute a summary of how learnings have affected organization results
+    public func computeImpactSummary(lastNRuns: Int = 10) -> LearningsImpactSummary? {
+        guard let profile = currentProfile else { return nil }
+        
+        // Count runs with learnings (based on whether we had rules/preferences at the time)
+        let totalRuns = profile.jobHistory.count
+        let runsWithLearnings = profile.jobHistory.filter { $0.status == .completed }.count
+        
+        // Files routed by learnings (estimate from successful rule applications)
+        let filesRoutedByLearnings = profile.inferredRules.reduce(0) { $0 + $1.successCount }
+        
+        // Corrections after AI
+        let correctionsAfterAI = profile.postOrganizationChanges.filter { $0.wasAIOrganized }.count
+        
+        // Reverts
+        let reverts = profile.historyReverts.count
+        
+        return LearningsImpactSummary(
+            runsWithLearnings: runsWithLearnings,
+            totalRuns: totalRuns,
+            filesRoutedByLearnings: filesRoutedByLearnings,
+            correctionsAfterAI: correctionsAfterAI,
+            reverts: reverts
+        )
+    }
+    
+    // MARK: - Rule Management
+    
+    /// Enable or disable a specific inferred rule
+    public func setRuleEnabled(ruleId: String, enabled: Bool) async {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].isEnabled = enabled
+            currentProfile = profile
+            await saveProfile()
+        }
+    }
+    
+    /// Record a rule success (applied and no correction followed)
+    public func recordRuleSuccess(ruleId: String) {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].successCount += 1
+            profile.inferredRules[index].lastAppliedAt = Date()
+            currentProfile = profile
+            debouncedSave()
+        }
+    }
+    
+    /// Record a rule failure (applied but user corrected)
+    public func recordRuleFailure(ruleId: String) {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].failureCount += 1
+            
+            // Auto-disable rules with high failure rate
+            let rule = profile.inferredRules[index]
+            if rule.failureRate > 0.3 && (rule.successCount + rule.failureCount) >= 5 {
+                profile.inferredRules[index].isEnabled = false
+                DebugLogger.log("Auto-disabled rule '\(rule.explanation)' due to high failure rate")
+            }
+            
+            currentProfile = profile
+            debouncedSave()
+        }
+    }
+    
+    /// Get active rules filtered by learning strength
+    public func getActiveRules() -> [InferredRule] {
+        guard let profile = currentProfile else { return [] }
+        
+        // Filter enabled rules
+        var activeRules = profile.inferredRules.filter { $0.isEnabled }
+        
+        // Sort by priority
+        activeRules.sort { $0.priority > $1.priority }
+        
+        // Apply learning strength to limit number of rules
+        let maxRules = Int(Double(activeRules.count) * learningStrength) + 1
+        return Array(activeRules.prefix(maxRules))
+    }
+    
+    /// Extract behavior preferences from honing answers
+    public func extractBehaviorPreferences() {
+        guard let profile = currentProfile else { return }
+        
+        var prefs = BehaviorPreferences()
+        
+        for answer in profile.honingAnswers {
+            let option = answer.selectedOption.lowercased()
+            
+            // Map answers to preferences based on keywords
+            if option.contains("archive") && option.contains("year") {
+                prefs.deletionVsArchive = .archiveByYear
+            } else if option.contains("archive") {
+                prefs.deletionVsArchive = .archive
+            } else if option.contains("delete") {
+                prefs.deletionVsArchive = .delete
+            }
+            
+            if option.contains("flat") {
+                prefs.folderDepthPreference = .flat
+            } else if option.contains("deep") || option.contains("hierarchy") {
+                prefs.folderDepthPreference = .deep
+            }
+            
+            if option.contains("date") || option.contains("year") || option.contains("month") {
+                prefs.dateVsContentPreference = .date
+            } else if option.contains("project") {
+                prefs.dateVsContentPreference = .project
+            } else if option.contains("content") || option.contains("type") {
+                prefs.dateVsContentPreference = .content
+            }
+            
+            if option.contains("newest") || option.contains("recent") {
+                prefs.duplicateKeeperStrategy = .keepNewest
+            } else if option.contains("oldest") || option.contains("original") {
+                prefs.duplicateKeeperStrategy = .keepOldest
+            }
+        }
+        
+        behaviorPreferences = prefs
     }
 }
 

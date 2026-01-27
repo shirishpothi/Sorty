@@ -1,4 +1,4 @@
-//
+ //
 //  DeeplinkTests.swift
 //  SortyTests
 //
@@ -86,6 +86,22 @@ final class DeeplinkTests: XCTestCase {
         handler.handle(url: url)
         
         XCTAssertEqual(handler.pendingDestination, .settings(section: nil))
+        handler.clearPending()
+    }
+
+    @MainActor
+    func testSettingsWithSectionDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty://settings?section=provider")!
+        handler.handle(url: url)
+        
+        XCTAssertEqual(handler.pendingDestination, .settings(section: "provider"))
+        handler.clearPending()
+        
+        let url2 = URL(string: "sorty://settings?section=notifications")!
+        handler.handle(url: url2)
+        XCTAssertEqual(handler.pendingDestination, .settings(section: "notifications"))
         handler.clearPending()
     }
     

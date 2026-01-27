@@ -25,9 +25,39 @@ public class UpdateManager: ObservableObject {
     private let repoOwner: String
     private let repoName: String
     
+    // UserDefaults key for persisting last check date
+    private static let lastAutoCheckKey = "lastAutoUpdateCheckDate"
+    
     public init(repoOwner: String = "shirishpothi", repoName: String = "Sorty") {
         self.repoOwner = repoOwner
         self.repoName = repoName
+        
+        // Restore last check date from UserDefaults
+        if let savedDate = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
+            self.lastCheckDate = savedDate
+        }
+    }
+    
+    /// Check for updates on app launch if sufficient time has passed
+    /// - Parameter minimumInterval: Minimum time between automatic checks (default: 24 hours)
+    public func checkOnLaunchIfNeeded(minimumInterval: TimeInterval = 24 * 60 * 60) async {
+        // Skip if already checking
+        guard state != .checking else { return }
+        
+        // Check if enough time has passed since last check
+        if let lastCheck = UserDefaults.standard.object(forKey: Self.lastAutoCheckKey) as? Date {
+            let elapsed = Date().timeIntervalSince(lastCheck)
+            if elapsed < minimumInterval {
+                LogManager.shared.log("Skipping auto-update check, last check was \(Int(elapsed / 60)) minutes ago", category: "UpdateManager")
+                return
+            }
+        }
+        
+        LogManager.shared.log("Performing automatic update check on launch", category: "UpdateManager")
+        await checkForUpdates()
+        
+        // Persist the check date
+        UserDefaults.standard.set(Date(), forKey: Self.lastAutoCheckKey)
     }
     
     /// Checks for updates from GitHub Releases

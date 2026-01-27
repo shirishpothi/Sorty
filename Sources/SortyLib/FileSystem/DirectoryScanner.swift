@@ -86,7 +86,7 @@ actor DirectoryScanner {
         // Hash computation for duplicate detection
         var sha256Hash: String?
         if computeHashes {
-            sha256Hash = computeSHA256(for: url)
+            sha256Hash = HashUtility.computeSHA256(for: url)
         }
         
         return FileItem(
@@ -156,7 +156,7 @@ actor DirectoryScanner {
             // Hash computation for duplicate detection
             var sha256Hash: String?
             if computeHashes {
-                sha256Hash = computeSHA256(for: fileURL)
+                sha256Hash = HashUtility.computeSHA256(for: fileURL)
             }
             
             let fileItem = FileItem(
@@ -178,16 +178,6 @@ actor DirectoryScanner {
                 await Task.yield()
             }
         }
-    }
-    
-    /// Compute SHA-256 hash for duplicate detection
-    private func computeSHA256(for url: URL) -> String? {
-        guard let data = try? Data(contentsOf: url) else {
-            return nil
-        }
-        
-        let digest = SHA256.hash(data: data)
-        return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
     
     func getProgress() -> Int {

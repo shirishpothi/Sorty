@@ -8,8 +8,8 @@
 import Foundation
 
 struct PromptBuilder {
-    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String) -> String {
-        var prompt = SystemPrompt.prompt
+    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, maxTopLevelFolders: Int = 10) -> String {
+        var prompt = SystemPrompt.buildPrompt(maxTopLevelFolders: maxTopLevelFolders)
         
         // Add persona-specific instructions
         if !personaInfo.isEmpty {
@@ -55,14 +55,52 @@ struct PromptBuilder {
         return prompt
     }
     
-    static func buildOrganizationPrompt(files: [FileItem], enableReasoning: Bool = false, includeContentMetadata: Bool = false, customInstructions: String? = nil) -> String {
-        var prompt = "Organize the following files into a logical folder structure:\n\n"
+    static func buildOrganizationPrompt(files: [FileItem], mode: OrganizationMode = .organize, namingStyle: NamingStyle = .descriptive, customNamingInstructions: String? = nil, enableReasoning: Bool = false, enableSmartRename: Bool = false, includeContentMetadata: Bool = false, customInstructions: String? = nil, storageLocationsContext: String? = nil, existingFoldersContext: String? = nil) -> String {
+        var prompt: String
+        
+        if mode == .renameOnly {
+            prompt = "Suggest intelligent and descriptive filenames for the following files. DO NOT suggest any folder structure; ALL files must be returned in a single root folder named '.'. Focus purely on making filenames more informative based on their content and metadata. This mode is strictly for renaming files in their current location.\n\n"
+        } else if mode == .organizeAndRename {
+            prompt = "Organize the following files into a logical folder structure. You should suggest both descriptive folders and improved filenames within those folders:\n\n"
+        } else {
+            prompt = "Organize the following files into a logical folder structure. Suggest descriptive folders but KEEP the original filenames unchanged:\n\n"
+        }
         
         if let instructions = customInstructions, !instructions.isEmpty {
             prompt += "USER INSTRUCTIONS: \(instructions)\n\n"
         }
         
-        prompt += "Files to organize (\(files.count) total):\n\n"
+        // Add storage locations context if provided
+        if let storageContext = storageLocationsContext, !storageContext.isEmpty {
+            prompt += "\(storageContext)\n\n"
+        }
+        
+        // Add existing folders context - encourage reuse of existing structure
+        if let existingContext = existingFoldersContext, !existingContext.isEmpty {
+            prompt += "\(existingContext)\n\n"
+        }
+        
+        if mode == .renameOnly || mode == .organizeAndRename || enableSmartRename {
+            prompt += """
+            ## INTELLIGENT RENAMING
+            Suggest meaningful, descriptive filenames that help users understand file contents at a glance.
+            - \(namingStyle.promptInstructions)
+            """
+            
+            if let customNaming = customNamingInstructions, !customNaming.isEmpty {
+                prompt += "\n- CUSTOM NAMING PREFERENCE: \(customNaming)"
+            }
+            
+            prompt += """
+            
+            - Remove redundant prefixes like "IMG_", "DSC_", "Screenshot ", "Document (1)".
+            - Keep filenames concise (max 60 chars) but highly informative.
+            - Ensure names are valid for macOS filesystem and keep extensions unchanged.
+            
+            """
+        }
+        
+        prompt += "Files to process (\(files.count) total):\n\n"
         
         // Group files by extension for better context
         let groupedByExtension = Dictionary(grouping: files) { $0.extension.lowercased() }
@@ -85,7 +123,9 @@ struct PromptBuilder {
             }
         }
         
-        if enableReasoning {
+        if mode == .renameOnly {
+            prompt += "\nReturn the suggestions in JSON format. Use a single folder named '.' to represent the current location for all files."
+        } else if enableReasoning {
             prompt += "\nProvide detailed reasoning for each folder. Include the organization structure in JSON format."
         } else {
             prompt += "\nProvide the organization structure in JSON format."
@@ -94,9 +134,72 @@ struct PromptBuilder {
         return prompt
     }
     
+    
+    /// Estimate token count (rough: 1 token ≈ 4 chars for English)
+    static func estimateTokens(_ text: String) -> Int {
+        return text.count / 4
+    }
+
+    /// Select compaction level based on file count and names
+    enum CompactionLevel {
+        case standard    // Current compact prompt
+        case ultra       // Minimal system prompt, truncated names
+        case summary     // Extension counts only + few examples
+    }
+
+    static func selectCompactionLevel(files: [FileItem], maxTokens: Int = 1500) -> CompactionLevel {
+        let samplePrompt = buildCompactPrompt(files: files)
+        let estimated = estimateTokens(samplePrompt)
+        
+        if estimated < 500 { return .standard }
+        if estimated < maxTokens { return .ultra }
+        return .summary
+    }
+
+    static func buildUltraCompactPrompt(files: [FileItem]) -> (system: String, user: String) {
+        // ~60 char system prompt
+        let system = "Sort files into folders. JSON:{\"folders\":[{\"name\":\"\",\"files\":[\"\"]}]}"
+        
+        var user = ""
+        let maxFiles = 30
+        let maxNameLen = 20
+        
+        for file in files.prefix(maxFiles) {
+            let name = String(file.name.prefix(maxNameLen))
+            user += "\(name)\n"
+        }
+        if files.count > maxFiles {
+            user += "(+\(files.count - maxFiles) more)"
+        }
+        
+        return (system, user)
+    }
+
+    static func buildSummaryPrompt(files: [FileItem]) -> (system: String, user: String) {
+        let system = "Sort files. JSON:{\"folders\":[{\"name\":\"\",\"files\":[\"\"]}]}"
+        
+        let grouped = Dictionary(grouping: files) { $0.extension.lowercased() }
+        var user = "Types:\n"
+        
+        for (ext, list) in grouped.sorted(by: { $0.value.count > $1.value.count }).prefix(8) {
+            let extLabel = ext.isEmpty ? "other" : ext
+            user += "\(extLabel):\(list.count)"
+            // Show 2 examples max
+            let examples = list.prefix(2).map { String($0.name.prefix(15)) }.joined(separator: ",")
+            user += " (\(examples))\n"
+        }
+        
+        return (system, user)
+    }
+    
     /// Compact prompt for Apple Intelligence (reduced context window)
-    static func buildCompactPrompt(files: [FileItem], enableReasoning: Bool = false) -> String {
-        var prompt = "Organize these files:\n\n"
+    static func buildCompactPrompt(files: [FileItem], mode: OrganizationMode = .organize, enableReasoning: Bool = false) -> String {
+        var prompt: String
+        if mode == .renameOnly {
+            prompt = "Suggest better names for these files (keep in place):\n\n"
+        } else {
+            prompt = "Organize these files:\n\n"
+        }
         
         // Group by extension
         let grouped = Dictionary(grouping: files) { $0.extension.lowercased() }
@@ -128,7 +231,12 @@ struct PromptBuilder {
             }
         }
         
-        prompt += "\nReturn JSON with folder structure."
+        if mode == .renameOnly {
+            prompt += "\nReturn JSON with suggested names in '.' folder."
+        } else {
+            prompt += "\nReturn JSON with folder structure."
+        }
+        
         if enableReasoning {
             prompt += " Include reasoning for each folder."
         }
@@ -137,17 +245,25 @@ struct PromptBuilder {
     }
     
     /// Compact system prompt for Apple Intelligence
-    static func buildCompactSystemPrompt(enableReasoning: Bool = false) -> String {
-        let prompt = """
-        You are a file organization assistant. Analyze files and suggest folders.
+    static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, maxTopLevelFolders: Int = 10) -> String {
+        var prompt = "You are a file management assistant. "
         
+        if mode == .renameOnly {
+            prompt += "Analyze files and suggest better filenames. Keep files in the '.' folder.\n\n"
+        } else {
+            prompt += "Analyze files and suggest folders.\n\n"
+        }
+        
+        prompt += """
         Rules:
         - Max 3 levels deep
+        - Max \(maxTopLevelFolders) top-level folders
         - Use clear folder names
         - Group by type: Documents, Media, Code, Archives
+        \(mode == .renameOnly || enableSmartRename ? "- Suggest better filenames where appropriate" : "")
         
         Return JSON:
-        {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")"files":[""],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")"files":[\(mode == .renameOnly || enableSmartRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\"}" : "\"\"")],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """
         
         return prompt
@@ -158,21 +274,78 @@ struct PromptBuilder {
         return buildOrganizationPrompt(files: files, enableReasoning: false)
     }
     
-    static func buildPromptForProvider(_ provider: AIProvider, files: [FileItem], enableReasoning: Bool = false, customInstructions: String? = nil) -> String {
+    static func buildPromptForProvider(_ provider: AIProvider, files: [FileItem], mode: OrganizationMode = .organize, namingStyle: NamingStyle = .descriptive, customNamingInstructions: String? = nil, enableReasoning: Bool = false, enableSmartRename: Bool = false, customInstructions: String? = nil, storageLocationsContext: String? = nil, existingFoldersContext: String? = nil) -> String {
         switch provider {
         case .appleFoundationModel:
             // Append instructions
-            var prompt = buildCompactPrompt(files: files, enableReasoning: enableReasoning)
+            var prompt = buildCompactPrompt(files: files, mode: mode, enableReasoning: enableReasoning)
+            if mode == .renameOnly || enableSmartRename {
+                prompt += " (\(namingStyle.displayName))"
+                if let customNaming = customNamingInstructions, !customNaming.isEmpty {
+                    prompt += " Custom style: \(customNaming)"
+                }
+            }
             if let instructions = customInstructions, !instructions.isEmpty {
                 prompt = "USER INSTRUCTIONS: \(instructions)\n\n" + prompt
+            }
+            if let storageContext = storageLocationsContext, !storageContext.isEmpty {
+                prompt = "\(storageContext)\n\n" + prompt
+            }
+            if let existingContext = existingFoldersContext, !existingContext.isEmpty {
+                prompt = "\(existingContext)\n\n" + prompt
             }
             return prompt
         case .anthropic:
             // Anthropic handles system prompts separately but we ensure the user prompt is robust
-            return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions)
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama:
-            return buildOrganizationPrompt(files: files, enableReasoning: enableReasoning, includeContentMetadata: true, customInstructions: customInstructions)
+            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
+            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
         }
+    }
+    
+    /// Scan a directory for existing folders (1-2 levels deep) to include in the prompt
+    static func buildExistingFoldersContext(at directoryURL: URL, maxDepth: Int = 2) -> String? {
+        let fileManager = FileManager.default
+        var existingFolders: [String] = []
+        
+        func scanDirectory(_ url: URL, depth: Int, prefix: String = "") {
+            guard depth <= maxDepth else { return }
+            
+            guard let contents = try? fileManager.contentsOfDirectory(at: url, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) else {
+                return
+            }
+            
+            for item in contents {
+                guard let isDirectory = try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory, isDirectory == true else {
+                    continue
+                }
+                
+                let folderName = prefix.isEmpty ? item.lastPathComponent : "\(prefix)/\(item.lastPathComponent)"
+                existingFolders.append(folderName)
+                
+                // Recurse for subfolders
+                if depth < maxDepth {
+                    scanDirectory(item, depth: depth + 1, prefix: folderName)
+                }
+            }
+        }
+        
+        scanDirectory(directoryURL, depth: 1)
+        
+        guard !existingFolders.isEmpty else { return nil }
+        
+        // Limit to first 30 folders to keep prompt size reasonable
+        let foldersToShow = existingFolders.prefix(30)
+        let truncated = existingFolders.count > 30
+        
+        var context = "## EXISTING FOLDERS (prefer reusing these when semantically appropriate):\n"
+        context += foldersToShow.joined(separator: ", ")
+        if truncated {
+            context += ", ... and \(existingFolders.count - 30) more"
+        }
+        context += "\n\nIMPORTANT: Prefer organizing files into existing folders when the folder name matches the file's purpose. Only create new folders when no existing folder is suitable."
+        
+        return context
     }
 }
 

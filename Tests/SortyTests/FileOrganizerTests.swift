@@ -25,6 +25,14 @@ actor MockAIClient: AIClientProtocol, @unchecked Sendable {
     func generateText(prompt: String, systemPrompt: String?) async throws -> String {
         return "Mock response"
     }
+    
+    func checkHealth() async throws {
+        // Success by default
+    }
+
+    func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
+        return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
+    }
 }
 
 class SortyTests: XCTestCase {
@@ -62,7 +70,7 @@ class SortyTests: XCTestCase {
         try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
 
         // 2. Setup: Inject mock client
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
 
         // 3. Setup: Define mock behavior
         await mockClient.setHandler { files in
@@ -91,7 +99,7 @@ class SortyTests: XCTestCase {
     @MainActor
     func testClientNotConfiguredError() async {
         // Ensure client is nil
-        folderOrganizer.aiClient = nil
+        folderOrganizer.setAIClientForTesting(nil)
 
         do {
             try await folderOrganizer.organize(directory: tempDirectory)
@@ -107,7 +115,7 @@ class SortyTests: XCTestCase {
         let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
         try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
 
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
 
         // Setup a slow handler
         await mockClient.setHandler { files in
@@ -136,7 +144,7 @@ class SortyTests: XCTestCase {
         let dummyFileURL = tempDirectory.appendingPathComponent("test.txt")
         try "content".write(to: dummyFileURL, atomically: true, encoding: .utf8)
 
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
         await mockClient.setHandler { files in
             return OrganizationPlan(
                 suggestions: [FolderSuggestion(folderName: "Test", files: files)],

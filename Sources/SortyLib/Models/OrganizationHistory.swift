@@ -134,7 +134,9 @@ public class OrganizationHistory: ObservableObject {
     }
     
     public func addEntry(_ entry: OrganizationHistoryEntry) {
-        entries.insert(entry, at: 0)
+        var cleanEntry = entry
+        cleanEntry.isUndone = false // Enforce clean state for new entries
+        entries.insert(cleanEntry, at: 0)
         if entries.count > maxEntries {
             entries.removeLast()
         }
@@ -178,6 +180,10 @@ public class OrganizationHistory: ObservableObject {
     
     public var failedCount: Int {
         entries.filter { $0.status == .failed }.count
+    }
+    
+    public var successCount: Int {
+        entries.filter { $0.status == .completed }.count
     }
 
     public var totalRecoveredSpace: Int64 {

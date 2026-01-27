@@ -37,6 +37,12 @@ public struct LearningsProfile: Codable, Sendable {
     /// History reverts the user has performed
     public var historyReverts: [RevertEvent]
     
+    /// Cancelled organization sessions (user cancelled before applying)
+    public var cancelledOrganizations: [CancelledOrganization]
+    
+    /// Regenerated organization sessions (user wasn't satisfied with first result)
+    public var regeneratedOrganizations: [RegeneratedOrganization]
+    
     // MARK: - Existing Properties
     
     /// User's philosophical preferences derived from Honing sessions
@@ -66,6 +72,8 @@ public struct LearningsProfile: Codable, Sendable {
         steeringPrompts: [SteeringPrompt] = [],
         postOrganizationChanges: [DirectoryChange] = [],
         historyReverts: [RevertEvent] = [],
+        cancelledOrganizations: [CancelledOrganization] = [],
+        regeneratedOrganizations: [RegeneratedOrganization] = [],
         honingAnswers: [HoningAnswer] = [],
         inferredRules: [InferredRule] = [],
         corrections: [LabeledExample] = [],
@@ -81,6 +89,8 @@ public struct LearningsProfile: Codable, Sendable {
         self.steeringPrompts = steeringPrompts
         self.postOrganizationChanges = postOrganizationChanges
         self.historyReverts = historyReverts
+        self.cancelledOrganizations = cancelledOrganizations
+        self.regeneratedOrganizations = regeneratedOrganizations
         self.honingAnswers = honingAnswers
         self.inferredRules = inferredRules
         self.corrections = corrections
@@ -98,17 +108,101 @@ public struct UserInstruction: Codable, Sendable, Identifiable {
     public let timestamp: Date
     public let instruction: String
     public let context: String?  // e.g., folder path or organization context
+    public let folderPath: String?
+    public let fileCount: Int?
+    public let isRegeneration: Bool?
     
     public init(
         id: String = UUID().uuidString,
         timestamp: Date = Date(),
         instruction: String,
-        context: String? = nil
+        context: String? = nil,
+        folderPath: String? = nil,
+        fileCount: Int? = nil,
+        isRegeneration: Bool? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
         self.instruction = instruction
         self.context = context
+        self.folderPath = folderPath
+        self.fileCount = fileCount
+        self.isRegeneration = isRegeneration
+    }
+}
+
+/// Represents a cancelled organization session with rich context for learning
+public struct CancelledOrganization: Codable, Sendable, Identifiable {
+    public let id: String
+    public let timestamp: Date
+    public let folderPath: String
+    public let fileCount: Int
+    public let proposedFolderCount: Int
+    public let instructions: String?
+    public let cancelledAtStage: String
+    
+    // Enhanced fields for richer learning
+    public let proposedFolderNames: [String]?
+    public let proposedStructureSummary: String?
+    public let fileExtensionCounts: [String: Int]?
+    public let regenerationCount: Int
+    public let regenerationInstructions: [String]?
+    public let aiModel: String?
+    
+    public init(
+        id: String = UUID().uuidString,
+        timestamp: Date = Date(),
+        folderPath: String,
+        fileCount: Int,
+        proposedFolderCount: Int,
+        instructions: String? = nil,
+        cancelledAtStage: String,
+        proposedFolderNames: [String]? = nil,
+        proposedStructureSummary: String? = nil,
+        fileExtensionCounts: [String: Int]? = nil,
+        regenerationCount: Int = 0,
+        regenerationInstructions: [String]? = nil,
+        aiModel: String? = nil
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.folderPath = folderPath
+        self.fileCount = fileCount
+        self.proposedFolderCount = proposedFolderCount
+        self.instructions = instructions
+        self.cancelledAtStage = cancelledAtStage
+        self.proposedFolderNames = proposedFolderNames
+        self.proposedStructureSummary = proposedStructureSummary
+        self.fileExtensionCounts = fileExtensionCounts
+        self.regenerationCount = regenerationCount
+        self.regenerationInstructions = regenerationInstructions
+        self.aiModel = aiModel
+    }
+}
+
+/// Represents a regenerated organization session
+public struct RegeneratedOrganization: Codable, Sendable, Identifiable {
+    public let id: String
+    public let timestamp: Date
+    public let folderPath: String
+    public let previousPlanSummary: String?
+    public let guidingInstruction: String?
+    public let regenerationCount: Int
+    
+    public init(
+        id: String = UUID().uuidString,
+        timestamp: Date = Date(),
+        folderPath: String,
+        previousPlanSummary: String? = nil,
+        guidingInstruction: String? = nil,
+        regenerationCount: Int
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.folderPath = folderPath
+        self.previousPlanSummary = previousPlanSummary
+        self.guidingInstruction = guidingInstruction
+        self.regenerationCount = regenerationCount
     }
 }
 

@@ -8,13 +8,21 @@
 import Foundation
 
 struct FileOrganizationValidator {
-    static func validate(_ plan: OrganizationPlan, at baseURL: URL) throws {
+    static func validate(_ plan: OrganizationPlan, at baseURL: URL, allowedStorageLocations: [StorageLocation] = [], maxTopLevelFolders: Int = 10) throws {
         let fileManager = FileManager.default
         
         // Check if base directory exists
         guard fileManager.fileExists(atPath: baseURL.path) else {
             throw ValidationError.baseDirectoryNotFound
         }
+        
+        // Check folder count limit
+        if plan.suggestions.count > maxTopLevelFolders {
+            throw ValidationError.tooManyFolders(plan.suggestions.count, max: maxTopLevelFolders)
+        }
+        
+        // Check for storage location and depth validity
+        try validateDestinations(plan, at: baseURL, allowedLocations: allowedStorageLocations)
         
         // Check for path conflicts
         try checkConflicts(plan, at: baseURL)
@@ -25,6 +33,34 @@ struct FileOrganizationValidator {
         // Warn about large operations
         if plan.totalFiles > 1000 {
             throw ValidationError.largeOperation(plan.totalFiles)
+        }
+    }
+
+    private static func validateDestinations(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {
+        func checkSuggestion(_ suggestion: FolderSuggestion, depth: Int) throws {
+            // Check depth limit (max 3 levels as per instructions)
+            if depth > 3 {
+                throw ValidationError.folderTooDeep(suggestion.folderName)
+            }
+
+            // Check if it's an absolute path
+            if suggestion.folderName.hasPrefix("/") {
+                let path = suggestion.folderName
+                let isValidLocation = allowedLocations.contains { $0.path == path }
+                
+                if !isValidLocation {
+                    throw ValidationError.invalidStorageLocation(path)
+                }
+            }
+
+            // Check subfolders
+            for subfolder in suggestion.subfolders {
+                try checkSuggestion(subfolder, depth: depth + 1)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            try checkSuggestion(suggestion, depth: 1)
         }
     }
     
@@ -104,6 +140,9 @@ enum ValidationError: LocalizedError {
     case pathExists(String)
     case fileNotFound(String)
     case largeOperation(Int)
+    case tooManyFolders(Int, max: Int)
+    case invalidStorageLocation(String)
+    case folderTooDeep(String)
     
     var errorDescription: String? {
         switch self {
@@ -117,6 +156,12 @@ enum ValidationError: LocalizedError {
             return "File not found: \(path)"
         case .largeOperation(let count):
             return "Large operation detected (\(count) files). Please review carefully."
+        case .tooManyFolders(let count, let max):
+            return "Too many top-level folders (\(count)). Maximum allowed is \(max). Consider consolidating categories."
+        case .invalidStorageLocation(let path):
+            return "Invalid storage location: \(path). The AI suggested a path that is not in your approved storage locations list."
+        case .folderTooDeep(let folder):
+            return "Folder structure is too deep at '\(folder)'. Maximum depth is 3 levels."
         }
     }
 }

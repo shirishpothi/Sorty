@@ -225,10 +225,23 @@ class GitHubCopilotAuthManager: ObservableObject {
         // Return cached token if valid
         if let cached = KeychainManager.get(key: "github_copilot_token"),
            let expiry = UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date,
-           expiry > Date().addingTimeInterval(300) { // Buffer of 5 mins
+           expiry > Date().addingTimeInterval(900) { // Buffer increased to 15 mins (900s)
+            
+            // Proactive refresh: if token expires in less than 20 mins, refresh in background
+            if expiry < Date().addingTimeInterval(1200) {
+                Task {
+                    try? await refreshCopilotToken()
+                }
+            }
+            
             return cached
         }
         
+        return try await refreshCopilotToken()
+    }
+    
+    @discardableResult
+    private func refreshCopilotToken() async throws -> String {
         guard let accessToken = KeychainManager.get(key: "github_access_token") else {
             throw GitHubAuthError.accessDenied
         }
@@ -244,7 +257,6 @@ class GitHubCopilotAuthManager: ObservableObject {
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             // If 401/403, might need to re-auth
             if let httpResponse = response as? HTTPURLResponse, (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) {
-                 // Trigger re-auth flow or notifications if needed
                  throw GitHubAuthError.accessDenied
             }
             throw GitHubAuthError.invalidResponse
@@ -256,6 +268,8 @@ class GitHubCopilotAuthManager: ObservableObject {
         _ = KeychainManager.save(key: "github_copilot_token", value: tokenResponse.token)
         let expiryDate = Date(timeIntervalSince1970: TimeInterval(tokenResponse.expiresAt))
         UserDefaults.standard.set(expiryDate, forKey: "github_copilot_token_expiry")
+        
+        LogManager.shared.log("Refreshed GitHub Copilot token, expires at \(expiryDate)", category: "AuthManager")
         
         return tokenResponse.token
     }

@@ -15,6 +15,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case openRouter = "open_router"
     case ollama = "ollama"
     case anthropic = "anthropic"
+    case gemini = "gemini"
     case appleFoundationModel = "apple_foundation_model"
     
     public var displayName: String {
@@ -33,6 +34,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "Ollama (Local)"
         case .anthropic:
             return "Anthropic (Claude)"
+        case .gemini:
+            return "Google Gemini"
         case .appleFoundationModel:
             return "Apple Foundation Model"
         }
@@ -40,7 +43,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var isAvailable: Bool {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
             return true
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
@@ -54,7 +57,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     
     public var unavailabilityReason: String? {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
             return nil
         case .appleFoundationModel:
             #if canImport(FoundationModels) && os(macOS)
@@ -83,6 +86,8 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "http://localhost:11434"
         case .anthropic:
             return "https://api.anthropic.com/v1/messages"
+        case .gemini:
+            return "https://generativelanguage.googleapis.com/v1beta/openai"
         case .appleFoundationModel:
             return nil
         }
@@ -92,19 +97,21 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     public var defaultModel: String {
         switch self {
         case .openAI:
-            return "gpt-4o"
+            return "gpt-5-mini"
         case .githubCopilot:
-            return "gpt-4o"
+            return "gpt-5-mini"
         case .groq:
-            return "llama-3.3-70b-versatile"
+            return "llama-4-70b-versatile"
         case .openAICompatible:
-            return "gpt-4"
+            return "gpt-5-mini"
         case .openRouter:
-            return "openai/gpt-4o"
+            return "anthropic/claude-haiku-4.5"
         case .ollama:
-            return "llama3"
+            return "llama4"
         case .anthropic:
-            return "claude-3-5-sonnet-20240620"
+            return "claude-haiku-4.5"
+        case .gemini:
+            return "gemini-3-flash-preview"
         case .appleFoundationModel:
             return "default"
         }
@@ -113,9 +120,13 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     /// Whether this provider typically requires an API key
     public var typicallyRequiresAPIKey: Bool {
         switch self {
-        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic:
+        case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .gemini:
             return true
-        case .ollama, .appleFoundationModel:
+        case .ollama:
+            return false
+        case .appleFoundationModel:
+            // CRITICAL: Apple Foundation Model runs strictly on-device via FoundationModels.framework
+            // it does NOT use an API key and this must remain 'false'.
             return false
         }
     }
@@ -137,12 +148,219 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "API key is optional for local Ollama instances"
         case .anthropic:
             return "Get your API key from console.anthropic.com"
+        case .gemini:
+            return "Get your API key from aistudio.google.com"
         case .appleFoundationModel:
             return "No API key required"
         }
     }
+    
+    /// URL where users can get their API key
+    public var apiKeyURL: URL? {
+        switch self {
+        case .openAI:
+            return URL(string: "https://platform.openai.com/api-keys")
+        case .githubCopilot:
+            return URL(string: "https://github.com/settings/tokens")
+        case .groq:
+            return URL(string: "https://console.groq.com/keys")
+        case .openAICompatible:
+            return nil // Varies by provider
+        case .openRouter:
+            return URL(string: "https://openrouter.ai/keys")
+        case .ollama:
+            return URL(string: "https://ollama.ai/download")
+        case .anthropic:
+            return URL(string: "https://console.anthropic.com/settings/keys")
+        case .gemini:
+            return URL(string: "https://aistudio.google.com/app/apikey")
+        case .appleFoundationModel:
+            return nil
+        }
+    }
+    
+    /// Short label for the API key link
+    public var apiKeyLinkLabel: String {
+        switch self {
+        case .openAI:
+            return "platform.openai.com"
+        case .githubCopilot:
+            return "github.com/settings/tokens"
+        case .groq:
+            return "console.groq.com"
+        case .openAICompatible:
+            return "your provider's website"
+        case .openRouter:
+            return "openrouter.ai/keys"
+        case .ollama:
+            return "ollama.ai"
+        case .anthropic:
+            return "console.anthropic.com"
+        case .gemini:
+            return "aistudio.google.com"
+        case .appleFoundationModel:
+            return ""
+        }
+    }
+    
+    /// URL to the provider's model documentation
+    public var modelDocumentationURL: URL? {
+        switch self {
+        case .openAI:
+            return URL(string: "https://platform.openai.com/docs/models")
+        case .githubCopilot:
+            return URL(string: "https://docs.github.com/en/copilot/using-github-copilot/using-claude-sonnet-in-github-copilot")
+        case .groq:
+            return URL(string: "https://console.groq.com/docs/models")
+        case .openAICompatible:
+            return nil
+        case .openRouter:
+            return URL(string: "https://openrouter.ai/models")
+        case .ollama:
+            return URL(string: "https://ollama.ai/library")
+        case .anthropic:
+            return URL(string: "https://docs.anthropic.com/en/docs/about-claude/models")
+        case .gemini:
+            return URL(string: "https://ai.google.dev/gemini-api/docs/models/gemini")
+        case .appleFoundationModel:
+            return nil
+        }
+    }
+    
+    /// Short label for the model documentation link
+    public var modelDocsLinkLabel: String {
+        switch self {
+        case .openAI:
+            return "OpenAI Models"
+        case .githubCopilot:
+            return "Copilot Models"
+        case .groq:
+            return "Groq Models"
+        case .openAICompatible:
+            return "provider docs"
+        case .openRouter:
+            return "OpenRouter Models"
+        case .ollama:
+            return "Ollama Library"
+        case .anthropic:
+            return "Claude Models"
+        case .gemini:
+            return "Gemini Models"
+        case .appleFoundationModel:
+            return ""
+        }
+    }
+    
+    public var logoImageName: String {
+        switch self {
+        case .openAI: return "ChatGPT"
+        case .githubCopilot: return "GitHubCopilot"
+        case .groq: return "Groq"
+        case .openRouter: return "OpenRouter"
+        case .ollama: return "Ollama"
+        case .anthropic: return "Claude"
+        case .gemini: return "Gemini"
+        case .openAICompatible: return "server.rack"
+        case .appleFoundationModel: return "apple.logo"
+        }
+    }
+
+    /// Whether this provider supports deep scanning (analyzing file content)
+    /// Some providers (like Apple Foundation Model) have limited context windows
+    /// that make deep scanning impractical or risky for stability.
+    public var supportsDeepScan: Bool {
+        switch self {
+        case .appleFoundationModel:
+            return false
+        default:
+            return true
+        }
+    }
+
+    public var usesSystemImage: Bool {
+        switch self {
+        case .openAICompatible, .appleFoundationModel: return true
+        default: return false
+        }
+    }
+    
+    /// Recommended models for this provider
+    public var recommendedModels: [String] {
+        switch self {
+        case .openAI:
+            return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"]
+        case .anthropic:
+            return ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"]
+        case .gemini:
+            return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro", "gemini-2.0-flash-exp"]
+        case .groq:
+            return ["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "llama3-groq-70b-8192-tool-use-preview"]
+        case .openRouter:
+            return ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-pro-1.5", "meta-llama/llama-3.1-70b-instruct"]
+        case .ollama:
+            return ["llama3", "mistral", "codellama", "phi3", "gemma2", "qwen2"]
+        case .githubCopilot:
+            return ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "claude-3.5-sonnet"]
+        case .openAICompatible:
+            return ["gpt-4", "gpt-3.5-turbo"]
+        case .appleFoundationModel:
+            return ["default"]
+        }
+    }
+
+    /// The key used in Keychain to store the API key for this provider
+    public var keychainKey: String {
+        switch self {
+        case .openAI: return "openAIAPIKey"
+        case .anthropic: return "anthropicAPIKey"
+        case .gemini: return "geminiAPIKey"
+        case .groq: return "groqAPIKey"
+        case .openRouter: return "openRouterAPIKey"
+        case .ollama: return "ollamaAPIKey"
+        case .githubCopilot: return "github_access_token" // Special case handled by GitHubCopilotAuthManager
+        case .openAICompatible: return "openAICompatibleAPIKey"
+        case .appleFoundationModel: return "appleFoundationAPIKey"
+        }
+    }
 }
 
+public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
+    case organize          // Move files, no rename
+    case organizeAndRename // Move + rename
+    case renameOnly        // Rename in place, no moves
+    
+    public var displayName: String {
+        switch self {
+        case .organize: return "Organize Only"
+        case .organizeAndRename: return "Organize & Rename"
+        case .renameOnly: return "Intelligent Rename Only"
+        }
+    }
+    
+    public var description: String {
+        switch self {
+        case .organize: return "Move files into descriptive folders without changing filenames"
+        case .organizeAndRename: return "Move files into descriptive folders and improve their names"
+        case .renameOnly: return "Keep files where they are but improve their names"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .organize: return "Keep original names"
+        case .organizeAndRename: return "Move & Rename"
+        case .renameOnly: return "In-place Rename"
+        }
+    }
+    
+    public var iconName: String {
+        switch self {
+        case .organize: return "folder.badge.plus"
+        case .organizeAndRename: return "folder.badge.gearshape"
+        case .renameOnly: return "pencil.line"
+        }
+    }
+}
 
 public struct AIConfig: Codable, Sendable, Equatable {
     public var provider: AIProvider
@@ -157,16 +375,29 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var systemPromptOverride: String?
     public var maxTokens: Int?
     public var enableStreaming: Bool
+    /// Whether the current provider requires an API key. 
+    /// NOTE: For .appleFoundationModel and .ollama (usually), this should be false.
     public var requiresAPIKey: Bool
     public var enableReasoning: Bool  // Ask AI to explain organization decisions
     
     // Deep Scanning & Duplicate Detection
+    public var mode: OrganizationMode
     public var enableDeepScan: Bool   // Analyze file content (PDF text, EXIF, etc.)
+    public var enableSmartRename: Bool // AI suggests better filenames
     public var detectDuplicates: Bool // Find duplicate files by hash
     public var enableFileTagging: Bool // Apply Finder tags to files
     public var showStatsForNerds: Bool // Show detailed stats about generation
     public var storeDuplicateMetadata: Bool // Save original metadata for duplicates (opt-in)
     public var strictExclusions: Bool // Higher-level screening for exclusions
+    
+    // Organization limits (user-configurable)
+    public var maxTopLevelFolders: Int // Maximum number of top-level folders AI can create (3-20)
+    
+    // Vision & Multimodal
+    public var enableVision: Bool // Use AI vision to analyze image content
+    public var namingStyle: NamingStyle // Preferred naming convention
+    public var customNamingInstructions: String? // Custom naming preferences
+    public var visionBatchSize: Int // Number of images to process in one AI call
 
     public init(
         provider: AIProvider = .openAICompatible,
@@ -181,12 +412,19 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableStreaming: Bool = true,
         requiresAPIKey: Bool = true,
         enableReasoning: Bool = false,
+        mode: OrganizationMode = .organize,
         enableDeepScan: Bool = false,
+        enableSmartRename: Bool = false,
         detectDuplicates: Bool = false,
         enableFileTagging: Bool = true,
         showStatsForNerds: Bool = false,
         storeDuplicateMetadata: Bool = true,
-        strictExclusions: Bool = true
+        strictExclusions: Bool = true,
+        maxTopLevelFolders: Int = 10,
+        enableVision: Bool = false,
+        namingStyle: NamingStyle = .descriptive,
+        customNamingInstructions: String? = nil,
+        visionBatchSize: Int = 5
     ) {
         self.provider = provider
         self.apiURL = apiURL
@@ -200,12 +438,19 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.enableStreaming = enableStreaming
         self.requiresAPIKey = requiresAPIKey
         self.enableReasoning = enableReasoning
+        self.mode = mode
         self.enableDeepScan = enableDeepScan
+        self.enableSmartRename = enableSmartRename
         self.detectDuplicates = detectDuplicates
         self.enableFileTagging = enableFileTagging
         self.showStatsForNerds = showStatsForNerds
         self.storeDuplicateMetadata = storeDuplicateMetadata
         self.strictExclusions = strictExclusions
+        self.maxTopLevelFolders = maxTopLevelFolders
+        self.enableVision = enableVision
+        self.namingStyle = namingStyle
+        self.customNamingInstructions = customNamingInstructions
+        self.visionBatchSize = visionBatchSize
     }
     
     public static let `default` = AIConfig(
@@ -220,13 +465,49 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableStreaming: true,
         requiresAPIKey: true,
         enableReasoning: false,
+        mode: .organize,
         enableDeepScan: false,
+        enableSmartRename: false,
         detectDuplicates: false,
         enableFileTagging: true,
         showStatsForNerds: false,
         storeDuplicateMetadata: true,
-        strictExclusions: true
+        strictExclusions: true,
+        maxTopLevelFolders: 10,
+        enableVision: false,
+        namingStyle: .descriptive,
+        customNamingInstructions: nil,
+        visionBatchSize: 5
     )
+}
+
+public enum NamingStyle: String, Codable, CaseIterable, Sendable {
+    case descriptive // [Date]_[Subject]_[Type]
+    case minimalist  // [Subject]
+    case technical   // [Type]_[Date]_[ID]
+    case datePrefix  // YYYY-MM-DD - [Subject]
+    
+    public var displayName: String {
+        switch self {
+        case .descriptive: return "Descriptive (Date_Subject_Type)"
+        case .minimalist: return "Minimalist (Subject Only)"
+        case .technical: return "Technical (Type_Date_ID)"
+        case .datePrefix: return "Date First (YYYY-MM-DD - Subject)"
+        }
+    }
+    
+    public var promptInstructions: String {
+        switch self {
+        case .descriptive:
+            return "Use a descriptive style: [Date]_[Subject]_[Type].[ext] (e.g., 2024-01-15_TaxReturn_Invoice.pdf). Focus on extracting dates and subjects."
+        case .minimalist:
+            return "Use a minimalist style: [Subject].[ext] (e.g., TaxReturn.pdf). Keep it very short and remove all dates or technical codes."
+        case .technical:
+            return "Use a technical style: [Type]_[Date]_[ID].[ext] (e.g., INVOICE_20240115_ABC.pdf). Use uppercase for the type."
+        case .datePrefix:
+            return "Use a date-first style: YYYY-MM-DD - [Subject].[ext] (e.g., 2024-01-15 - TaxReturn.pdf)."
+        }
+    }
 }
 
 

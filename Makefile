@@ -1,6 +1,6 @@
 # Sorty Makefile
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now release prerelease prerelease-full
 
 # Default target
 all: build
@@ -74,6 +74,29 @@ install-cli: cli
 	@sudo cp .build/debug/learnings /usr/local/bin/learnings
 	@echo "✅ Installed! Run with: learnings --help"
 
+# Create a release zip for GitHub
+release: build
+	@echo "📦 Creating release package..."
+	@cd releases && zip -r Sorty-macOS.zip Sorty.app
+	@echo "✅ Release package created: releases/Sorty-macOS.zip"
+	@echo ""
+	@echo "📋 Next steps:"
+	@echo "   1. Create a new release on GitHub"
+	@echo "   2. Upload releases/Sorty-macOS.zip"
+	@echo "   3. Remind users to run: xattr -cr /Applications/Sorty.app"
+
+# Pre-release validation - comprehensive checks before release
+prerelease:
+	@echo "🔍 Running pre-release validation..."
+	@chmod +x scripts/prerelease_check.sh
+	@./scripts/prerelease_check.sh
+
+# Pre-release validation with UI tests (slower, more thorough)
+prerelease-full:
+	@echo "🔍 Running full pre-release validation (including UI tests)..."
+	@chmod +x scripts/prerelease_check.sh
+	@./scripts/prerelease_check.sh --ui-tests
+
 help:
 	@echo "Sorty Build System"
 	@echo "=================="
@@ -88,6 +111,11 @@ help:
 	@echo "  make test        - Run unit tests"
 	@echo "  make test-ui     - Run UI tests (macOS)"
 	@echo "  make test-full   - Run unit and UI tests"
+	@echo ""
+	@echo "Release:"
+	@echo "  make prerelease      - Run comprehensive pre-release validation"
+	@echo "  make prerelease-full - Pre-release validation with UI tests"
+	@echo "  make release         - Create a release zip for GitHub"
 	@echo ""
 	@echo "Utility:"
 	@echo "  make clean       - Remove all build artifacts and releases"

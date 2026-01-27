@@ -63,12 +63,44 @@ public struct GenerationStats: Codable, Sendable, Hashable {
     public let totalTokens: Int
     public let model: String
     
-    public init(duration: TimeInterval, tps: Double, ttft: TimeInterval, totalTokens: Int, model: String) {
+    // Additional metrics
+    public var filesScanned: Int?
+    public var totalFileSize: Int64?
+    public var duplicatesFound: Int?
+    public var promptTokens: Int?
+    public var retryCount: Int?
+    public var provider: String?
+    public var scanDuration: TimeInterval?
+    public var estimatedCost: Decimal?
+    
+    public init(
+        duration: TimeInterval, 
+        tps: Double, 
+        ttft: TimeInterval, 
+        totalTokens: Int, 
+        model: String,
+        filesScanned: Int? = nil,
+        totalFileSize: Int64? = nil,
+        duplicatesFound: Int? = nil,
+        promptTokens: Int? = nil,
+        retryCount: Int? = nil,
+        provider: String? = nil,
+        scanDuration: TimeInterval? = nil,
+        estimatedCost: Decimal? = nil
+    ) {
         self.duration = duration
         self.tps = tps
         self.ttft = ttft
         self.totalTokens = totalTokens
         self.model = model
+        self.filesScanned = filesScanned
+        self.totalFileSize = totalFileSize
+        self.duplicatesFound = duplicatesFound
+        self.promptTokens = promptTokens
+        self.retryCount = retryCount
+        self.provider = provider
+        self.scanDuration = scanDuration
+        self.estimatedCost = estimatedCost
     }
 }
 

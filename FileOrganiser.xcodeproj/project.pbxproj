@@ -115,6 +115,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		AABBCC330000000000000001 /* Sorty.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sorty.entitlements; sourceTree = "<group>"; };
 		0C803137980F429E8E946D30 /* LearningsHoningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsHoningView.swift; sourceTree = "<group>"; };
 		A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
 		9AD0E58548934B6E962C2293 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
@@ -379,6 +380,7 @@
 		3353FC462F0124320097CD23 = {
 			isa = PBXGroup;
 			children = (
+				AABBCC330000000000000001 /* Sorty.entitlements */,
 				141AC570FAC743F08B8A7DD4 /* Learnings */,
 				3353FC222F0124320097CD23 /* AI */,
 				3353FC252F0124320097CD23 /* FileSystem */,
@@ -796,6 +798,7 @@
 		33A128842F01230200A86470 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Sorty.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
@@ -838,6 +841,7 @@
 		33A128852F01230200A86470 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Sorty.entitlements;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;

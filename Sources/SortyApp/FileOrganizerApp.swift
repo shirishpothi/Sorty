@@ -17,6 +17,7 @@ struct SortyApp: App {
     @StateObject private var personaManager = PersonaManager()
     @StateObject private var customPersonaStore = CustomPersonaStore()
     @StateObject private var watchedFoldersManager = WatchedFoldersManager()
+    @StateObject private var storageLocationsManager = StorageLocationsManager()
     @StateObject private var organizer = FolderOrganizer()
     @StateObject private var exclusionRules = ExclusionRulesManager()
     @StateObject private var extensionListener = ExtensionListener()
@@ -38,7 +39,13 @@ struct SortyApp: App {
                 .environmentObject(extensionListener)
                 .environmentObject(deeplinkHandler)
                 .environmentObject(learningsManager) // Inject
+                .environmentObject(storageLocationsManager)
                 .onAppear {
+                    // Restore sandbox access for watched folders
+                    watchedFoldersManager.restoreSecurityScopedAccess()
+                    // Restore sandbox access for storage locations
+                    storageLocationsManager.restoreSecurityScopedAccess()
+                    
                     if coordinator == nil {
                         coordinator = AppCoordinator(
                             organizer: organizer, 
@@ -51,6 +58,8 @@ struct SortyApp: App {
                     organizer.exclusionRules = exclusionRules
                     organizer.personaManager = personaManager
                     organizer.customPersonaStore = customPersonaStore
+                    organizer.storageLocationsManager = storageLocationsManager
+                    organizer.learningsManager = learningsManager
                     appState.organizer = organizer
                     
                     appState.calibrateAction = { folder in
@@ -61,6 +70,9 @@ struct SortyApp: App {
                     Task {
                         try? await organizer.configure(with: settingsViewModel.config)
                         learningsManager.configure(with: settingsViewModel.config)
+                        
+                        // Check for updates on launch (once per 24 hours)
+                        await appState.updateManager.checkOnLaunchIfNeeded()
                     }
                     
                     // Testability Hook for UI Tests to trigger deeplinks reliably
@@ -78,6 +90,14 @@ struct SortyApp: App {
                         learningsManager.configure(with: newConfig)
                     }
                 }
+                .onChange(of: organizer.isAIConfigured) { oldValue, newValue in
+                    if oldValue == true && newValue == false {
+                        // AI became invalid - disable auto-organize on all folders
+                        watchedFoldersManager.disableAutoOrganizeForAll(
+                            reason: "AI provider is no longer configured"
+                        )
+                    }
+                }
                 .onChange(of: watchedFoldersManager.folders) { oldValue, newValue in
                     coordinator?.syncWatchedFolders()
                 }
@@ -89,6 +109,12 @@ struct SortyApp: App {
                     // Small delay to ensure view transition happens before showing picker
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         learningsManager.showingImportPicker = true
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    // Ensure learnings are saved when app quits
+                    Task {
+                        await learningsManager.forceSave()
                     }
                 }
         }
@@ -147,8 +173,17 @@ struct SortyApp: App {
             case .learnings:
                 appState.currentView = .learnings
                 
-            case .settings: // Removed section param support as ViewModel doesn't support it
+            case .settings(let section):
                 appState.currentView = .settings
+                if let section = section {
+                    let category = SettingsCategory.allCases.first { 
+                        $0.rawValue.lowercased().contains(section.lowercased()) ||
+                        String(describing: $0).lowercased() == section.lowercased()
+                    }
+                    appState.selectedSettingsSection = category
+                } else {
+                    appState.selectedSettingsSection = nil
+                }
                 
             case .help:
                 appState.showHelp()
