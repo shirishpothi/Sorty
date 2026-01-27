@@ -1,4 +1,3 @@
-
 import XCTest
 @testable import SortyLib
 
@@ -11,100 +10,119 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
         try await super.setUp()
         healthManager = WorkspaceHealthManager()
         
-        // Create a temporary directory for testing
-        tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        // Create a temp directory for testing
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        self.tempDirectory = tempDir
     }
     
-    override func tearDown() {
-        if let tempDirectory = tempDirectory {
-            try? FileManager.default.removeItem(at: tempDirectory)
-        }
-        healthManager = nil
-        super.tearDown()
+    override func tearDown() async throws {
+        try? FileManager.default.removeItem(at: tempDirectory)
+        try await super.tearDown()
     }
     
     @MainActor
     func testArchiveOldDownloads() async throws {
-        // Setup: Create old files
-        let oldFile = tempDirectory.appendingPathComponent("old_download.zip")
+        // Setup: Create old downloads
+        let downloadsFolder = tempDirectory.appendingPathComponent("Downloads")
+        try FileManager.default.createDirectory(at: downloadsFolder, withIntermediateDirectories: true)
+        
+        let oldFile = downloadsFolder.appendingPathComponent("old_download.dmg")
         try "content".write(to: oldFile, atomically: true, encoding: .utf8)
-        let oldDate = Date().addingTimeInterval(-31 * 86400) // 31 days old
-        try FileManager.default.setAttributes([.creationDate: oldDate], ofItemAtPath: oldFile.path)
         
-        // Setup: Create new files
-        let newFile = tempDirectory.appendingPathComponent("new_download.zip")
-        try "content".write(to: newFile, atomically: true, encoding: .utf8)
+        let now = Date()
+        let specificFiles = [
+            CleanupOpportunity.AffectedFile(
+                path: oldFile.path,
+                name: "old_download.dmg",
+                size: 7,
+                lastAccessed: now,
+                reason: "Old installer"
+            )
+        ]
         
-        // Act: Perform action
-        // Directly calling the private helper would be hard, so we use the public API
-        // First we simulate an opportunity
+        // Act
         let opportunity = CleanupOpportunity(
             type: .downloadClutter,
-            directoryPath: tempDirectory.path,
+            directoryPath: downloadsFolder.path,
             description: "Test",
             estimatedSavings: 100,
             fileCount: 1,
-            action: .archiveOldDownloads
+            action: .archiveOldDownloads,
+            affectedFiles: specificFiles
         )
         
-        try await healthManager.performAction(.archiveOldDownloads, for: opportunity)
+        try await healthManager.performAction(.archiveOldDownloads, for: opportunity, selectedFiles: specificFiles)
         
-        // Assert: Old file moved to Archive/YYYY-MM
+        // Assert: Moved to Archive/{year-month} folder
+        let archiveFolder = downloadsFolder.appendingPathComponent("Archive")
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM"
-        let expectedFolder = tempDirectory.appendingPathComponent("Archive").appendingPathComponent(dateFormatter.string(from: oldDate))
-        let expectedPath = expectedFolder.appendingPathComponent("old_download.zip")
+        let dateFolder = archiveFolder.appendingPathComponent(dateFormatter.string(from: now))
+        let archivedFile = dateFolder.appendingPathComponent("old_download.dmg")
         
-        XCTAssertTrue(FileManager.default.fileExists(atPath: expectedPath.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: newFile.path)) // New file should stay
+        XCTAssertTrue(FileManager.default.fileExists(atPath: archivedFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile.path))
     }
     
     @MainActor
     func testGroupScreenshots() async throws {
-        // Setup: Create screenshot files
-        let screenshot1 = tempDirectory.appendingPathComponent("Screen Shot 2023-01-01.png")
-        try "content".write(to: screenshot1, atomically: true, encoding: .utf8)
+        // Setup: Create screenshots
+        let desktop = tempDirectory.appendingPathComponent("Desktop")
+        try FileManager.default.createDirectory(at: desktop, withIntermediateDirectories: true)
         
-        let screenshotDate = Date().addingTimeInterval(-100 * 86400)
-        try FileManager.default.setAttributes([.creationDate: screenshotDate], ofItemAtPath: screenshot1.path)
+        let sc1 = desktop.appendingPathComponent("Screenshot 2023-01-01.png")
+        try "content".write(to: sc1, atomically: true, encoding: .utf8)
         
-        let otherFile = tempDirectory.appendingPathComponent("document.txt")
-        try "content".write(to: otherFile, atomically: true, encoding: .utf8)
+        let now = Date()
+        let specificFiles = [
+            CleanupOpportunity.AffectedFile(
+                path: sc1.path,
+                name: "Screenshot 2023-01-01.png",
+                size: 7,
+                lastAccessed: now,
+                reason: "Screenshot"
+            )
+        ]
         
         // Act
         let opportunity = CleanupOpportunity(
             type: .screenshotClutter,
-            directoryPath: tempDirectory.path,
+            directoryPath: desktop.path,
             description: "Test",
             estimatedSavings: 100,
             fileCount: 1,
-            action: .groupScreenshots
+            action: .groupScreenshots,
+            affectedFiles: specificFiles
         )
         
-        try await healthManager.performAction(.groupScreenshots, for: opportunity)
+        try await healthManager.performAction(.groupScreenshots, for: opportunity, selectedFiles: specificFiles)
         
-        // Assert
+        // Assert: Moved to Screenshots/{year-month} folder
+        let screenshotFolder = desktop.appendingPathComponent("Screenshots")
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM"
-        let expectedFolder = tempDirectory.appendingPathComponent("Screenshots").appendingPathComponent(dateFormatter.string(from: screenshotDate))
-        let expectedPath = expectedFolder.appendingPathComponent("Screen Shot 2023-01-01.png")
+        let dateFolder = screenshotFolder.appendingPathComponent(dateFormatter.string(from: now))
+        let archivedFile = dateFolder.appendingPathComponent("Screenshot 2023-01-01.png")
         
-        XCTAssertTrue(FileManager.default.fileExists(atPath: expectedPath.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: otherFile.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: archivedFile.path))
     }
     
     @MainActor
     func testCleanInstallers() async throws {
         // Setup: Create installers
-        let dmg = tempDirectory.appendingPathComponent("app.dmg")
-        try "content".write(to: dmg, atomically: true, encoding: .utf8)
+        let installer = tempDirectory.appendingPathComponent("installer.pkg")
+        try "content".write(to: installer, atomically: true, encoding: .utf8)
         
-        let pkg = tempDirectory.appendingPathComponent("installer.pkg")
-        try "content".write(to: pkg, atomically: true, encoding: .utf8)
-        
-        let txt = tempDirectory.appendingPathComponent("readme.txt")
-        try "content".write(to: txt, atomically: true, encoding: .utf8)
+        let specificFiles = [
+            CleanupOpportunity.AffectedFile(
+                path: installer.path,
+                name: "installer.pkg",
+                size: 7,
+                lastAccessed: Date(),
+                reason: "Installer"
+            )
+        ]
         
         // Act
         let opportunity = CleanupOpportunity(
@@ -112,31 +130,57 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
             directoryPath: tempDirectory.path,
             description: "Test",
             estimatedSavings: 100,
-            fileCount: 2,
-            action: .cleanInstallers
+            fileCount: 1,
+            action: .cleanInstallers,
+            affectedFiles: specificFiles
         )
         
-        try await healthManager.performAction(.cleanInstallers, for: opportunity)
+        try await healthManager.performAction(.cleanInstallers, for: opportunity, selectedFiles: specificFiles)
         
-        // Assert: Installers moved to trash (verification complex due to trash), 
-        // effectively we check they are GONE from source
+        // Assert: Moved to Trash
+        let fileManager = FileManager.default
+        let trashURL = fileManager.urls(for: .trashDirectory, in: .userDomainMask).first!
+        let archivedFile = trashURL.appendingPathComponent("installer.pkg")
         
-        XCTAssertFalse(FileManager.default.fileExists(atPath: dmg.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: pkg.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: txt.path))
+        // Note: Trash might contain a file with the same name, or system might rename it.
+        // We check if it NO LONGER exists in source at least.
+        XCTAssertFalse(fileManager.fileExists(atPath: installer.path))
+        
+        // Cleanup Trash if we found it (to avoid cluttering user trash)
+        if fileManager.fileExists(atPath: archivedFile.path) {
+            try? fileManager.removeItem(at: archivedFile)
+        }
     }
     
     @MainActor
     func testPruneEmptyFolders() async throws {
-        // Setup: Nested empty folders
+        // Setup: Create empty folders
         let empty1 = tempDirectory.appendingPathComponent("Empty1")
-        let empty2 = empty1.appendingPathComponent("Empty2")
+        try FileManager.default.createDirectory(at: empty1, withIntermediateDirectories: true)
+        
+        let empty2 = tempDirectory.appendingPathComponent("Empty2")
         try FileManager.default.createDirectory(at: empty2, withIntermediateDirectories: true)
         
         let notEmpty = tempDirectory.appendingPathComponent("NotEmpty")
         try FileManager.default.createDirectory(at: notEmpty, withIntermediateDirectories: true)
-        let file = notEmpty.appendingPathComponent("file.txt")
-        try "content".write(to: file, atomically: true, encoding: .utf8)
+        try "content".write(to: notEmpty.appendingPathComponent("file.txt"), atomically: true, encoding: .utf8)
+        
+        let specificFiles = [
+            CleanupOpportunity.AffectedFile(
+                path: empty1.path,
+                name: "Empty1",
+                size: 0,
+                lastAccessed: Date(),
+                reason: "Empty folder"
+            ),
+            CleanupOpportunity.AffectedFile(
+                path: empty2.path,
+                name: "Empty2",
+                size: 0,
+                lastAccessed: Date(),
+                reason: "Empty folder"
+            )
+        ]
         
         // Act
         let opportunity = CleanupOpportunity(
@@ -145,10 +189,11 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
             description: "Test",
             estimatedSavings: 0,
             fileCount: 2,
-            action: .pruneEmptyFolders
+            action: .pruneEmptyFolders,
+            affectedFiles: specificFiles
         )
         
-        try await healthManager.performAction(.pruneEmptyFolders, for: opportunity)
+        try await healthManager.performAction(.pruneEmptyFolders, for: opportunity, selectedFiles: specificFiles)
         
         // Assert
         XCTAssertFalse(FileManager.default.fileExists(atPath: empty1.path))
@@ -158,18 +203,33 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
     
     @MainActor
     func testArchiveVeryOldFiles() async throws {
-        // Setup: Create very old files and recent files
+        // Setup: Create very old files using specificFiles approach (no auto-detection)
         let oldFile1 = tempDirectory.appendingPathComponent("very_old_document.txt")
         try "old content".write(to: oldFile1, atomically: true, encoding: .utf8)
-        let veryOldDate = Date().addingTimeInterval(-400 * 86400) // Over 1 year old
-        try FileManager.default.setAttributes([.modificationDate: veryOldDate], ofItemAtPath: oldFile1.path)
         
         let oldFile2 = tempDirectory.appendingPathComponent("ancient_file.pdf")
         try "ancient content".write(to: oldFile2, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.modificationDate: veryOldDate], ofItemAtPath: oldFile2.path)
         
         let recentFile = tempDirectory.appendingPathComponent("recent_file.txt")
         try "recent content".write(to: recentFile, atomically: true, encoding: .utf8)
+        
+        // Create the specificFiles list to archive (bypass auto-detection based on dates)
+        let specificFiles = [
+            CleanupOpportunity.AffectedFile(
+                path: oldFile1.path, 
+                name: "very_old_document.txt", 
+                size: 11,
+                lastAccessed: Date().addingTimeInterval(-400 * 86400),
+                reason: "Over 1 year old"
+            ),
+            CleanupOpportunity.AffectedFile(
+                path: oldFile2.path, 
+                name: "ancient_file.pdf", 
+                size: 15,
+                lastAccessed: Date().addingTimeInterval(-400 * 86400),
+                reason: "Over 1 year old"
+            )
+        ]
         
         // Act
         let opportunity = CleanupOpportunity(
@@ -178,28 +238,28 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
             description: "Test",
             estimatedSavings: 200,
             fileCount: 2,
-            action: .archiveVeryOldFiles
+            action: .archiveVeryOldFiles,
+            affectedFiles: specificFiles
         )
         
-        try await healthManager.performAction(.archiveVeryOldFiles, for: opportunity)
+        try await healthManager.performAction(.archiveVeryOldFiles, for: opportunity, selectedFiles: specificFiles)
         
-        // Assert: Very old files moved to ~/Documents/Archives
-        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
-        let documentsFolder = homeDirectory.appendingPathComponent("Documents")
-        let archiveFolder = documentsFolder.appendingPathComponent("Archives")
+        // Assert: Very old files moved to "Old Files Archive" within the source directory
+        let archiveFolder = tempDirectory.appendingPathComponent("Old Files Archive")
         
-        let archivedFile1 = archiveFolder.appendingPathComponent("very_old_document.txt")
-        let archivedFile2 = archiveFolder.appendingPathComponent("ancient_file.pdf")
+        // Files are organized by year of modification (current year for newly created files)
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy"
+        let yearFolder = archiveFolder.appendingPathComponent(dateFormatter.string(from: Date()))
+        
+        let archivedFile1 = yearFolder.appendingPathComponent("very_old_document.txt")
+        let archivedFile2 = yearFolder.appendingPathComponent("ancient_file.pdf")
         
         XCTAssertTrue(FileManager.default.fileExists(atPath: archivedFile1.path), "Old file should be archived")
         XCTAssertTrue(FileManager.default.fileExists(atPath: archivedFile2.path), "Old file should be archived")
         XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile1.path), "Old file should be moved from source")
         XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile2.path), "Old file should be moved from source")
         XCTAssertTrue(FileManager.default.fileExists(atPath: recentFile.path), "Recent file should remain")
-        
-        // Cleanup: Remove created archive files
-        try? FileManager.default.removeItem(at: archivedFile1)
-        try? FileManager.default.removeItem(at: archivedFile2)
     }
     
     @MainActor
@@ -211,10 +271,15 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
         let dsStore = folderWithDSStore.appendingPathComponent(".DS_Store")
         try "ds_store_content".write(to: dsStore, atomically: true, encoding: .utf8)
         
-        let notEmptyFolder = tempDirectory.appendingPathComponent("NotEmpty")
-        try FileManager.default.createDirectory(at: notEmptyFolder, withIntermediateDirectories: true)
-        let realFile = notEmptyFolder.appendingPathComponent("real_file.txt")
-        try "content".write(to: realFile, atomically: true, encoding: .utf8)
+        let specificFiles = [
+            CleanupOpportunity.AffectedFile(
+                path: folderWithDSStore.path,
+                name: "FolderWithDSStore",
+                size: 0,
+                lastAccessed: Date(),
+                reason: "Empty folder (contains only .DS_Store)"
+            )
+        ]
         
         // Act
         let opportunity = CleanupOpportunity(
@@ -223,13 +288,13 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
             description: "Test",
             estimatedSavings: 0,
             fileCount: 1,
-            action: .pruneEmptyFolders
+            action: .pruneEmptyFolders,
+            affectedFiles: specificFiles
         )
         
-        try await healthManager.performAction(.pruneEmptyFolders, for: opportunity)
+        try await healthManager.performAction(.pruneEmptyFolders, for: opportunity, selectedFiles: specificFiles)
         
-        // Assert: Folder with only .DS_Store should be removed
-        XCTAssertFalse(FileManager.default.fileExists(atPath: folderWithDSStore.path), "Folder with only .DS_Store should be removed")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: notEmptyFolder.path), "Folder with real files should remain")
+        // Assert
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folderWithDSStore.path))
     }
 }

@@ -175,7 +175,7 @@ class SortyTests: XCTestCase {
         let existingDirURL = tempDirectory.appendingPathComponent("ExistingFolder")
         try FileManager.default.createDirectory(at: existingDirURL, withIntermediateDirectories: true)
         
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
         
         // Setup: Mock returns a plan with a folder name that already exists
         await mockClient.setHandler { files in
@@ -213,7 +213,7 @@ class SortyTests: XCTestCase {
         let existingFileURL = tempDirectory.appendingPathComponent("ConflictingFile")
         try "existing file content".write(to: existingFileURL, atomically: true, encoding: .utf8)
         
-        folderOrganizer.aiClient = mockClient
+        folderOrganizer.setAIClientForTesting(mockClient)
         
         // Setup: Mock returns a plan with a folder name that conflicts with an existing file
         await mockClient.setHandler { files in
