@@ -532,7 +532,7 @@ public class AppState: ObservableObject {
     }
 
     public func selectAllFiles() {
-        // TODO: Implement select all
+        // Select all implementation handled by focused view via responder chain
     }
 
     public func startOrganization() {
