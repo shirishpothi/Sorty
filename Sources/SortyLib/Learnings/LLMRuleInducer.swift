@@ -235,11 +235,26 @@ public actor LLMRuleInducer {
             let llmRules = try JSONDecoder().decode([LLMRuleResponse].self, from: data)
             
             return llmRules.map { rule in
-                InferredRule(
+                // Determine initial confidence from LLM's reported confidence
+                let initialConf: RuleConfidence?
+                if let conf = rule.confidence {
+                    if conf >= 0.8 {
+                        initialConf = .high
+                    } else if conf >= 0.5 {
+                        initialConf = .medium
+                    } else {
+                        initialConf = .low
+                    }
+                } else {
+                    initialConf = nil
+                }
+                
+                return InferredRule(
                     pattern: rule.pattern,
                     template: rule.template,
                     priority: rule.priority,
-                    explanation: rule.explanation
+                    explanation: rule.explanation,
+                    initialConfidence: initialConf
                 )
             }
         } catch {

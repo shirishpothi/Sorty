@@ -63,6 +63,9 @@ public struct InferredRule: Codable, Identifiable, Sendable {
     public var lastAppliedAt: Date?       // Last time this rule was used
     public var supportCount: Int          // Number of examples supporting this rule
     
+    // Initial confidence from LLM (used before usage data is available)
+    public var initialConfidence: RuleConfidence?
+    
     /// Calculate failure rate for quality assessment
     public var failureRate: Double {
         let total = successCount + failureCount
@@ -70,8 +73,29 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         return Double(failureCount) / Double(total)
     }
     
-    /// Confidence level based on support and failure rate
+    /// Calculate success rate for quality assessment
+    public var successRate: Double {
+        let total = successCount + failureCount
+        guard total > 0 else { return 0 }
+        return Double(successCount) / Double(total)
+    }
+    
+    /// Confidence level based on support, failure rate, and initial LLM confidence
     public var confidenceLevel: RuleConfidence {
+        // If we have usage data, calculate from that
+        let totalUsage = successCount + failureCount
+        if totalUsage >= 3 {
+            if failureRate > 0.3 { return .low }
+            if supportCount >= 5 && failureRate < 0.1 { return .high }
+            return .medium
+        }
+        
+        // Otherwise use initial confidence from LLM if available
+        if let initial = initialConfidence {
+            return initial
+        }
+        
+        // Default fallback based on support count
         if failureRate > 0.3 { return .low }
         if supportCount >= 5 && failureRate < 0.1 { return .high }
         return .medium
@@ -89,7 +113,8 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         failureCount: Int = 0,
         isEnabled: Bool = true,
         lastAppliedAt: Date? = nil,
-        supportCount: Int = 1
+        supportCount: Int = 1,
+        initialConfidence: RuleConfidence? = nil
     ) {
         self.id = id
         self.pattern = pattern
@@ -103,6 +128,7 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         self.isEnabled = isEnabled
         self.lastAppliedAt = lastAppliedAt
         self.supportCount = supportCount
+        self.initialConfidence = initialConfidence
     }
 }
 

@@ -18,11 +18,12 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 ## ✨ Features
 
 - 🤖 **Intelligent Organization**: Uses AI to understand file content and context for accurate categorization.
-- 🧠 **The Learnings Profile**: A passive learning system that trains a local, example-based AI organizer from your existing folder structures and manual examples.
+- 🧠 **The Learnings Profile**: A passive learning system that trains from your existing folder structures, manual corrections, and even cancelled organizations to continuously improve future suggestions.
 - 🎭 **Custom Personas**: Create and edit specialized AI profiles for different workflows (e.g., Developer, Photographer, Student).
 - 🔌 **Multiple AI Providers**: 
-  - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, etc.)
+  - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, Groq, Ollama, etc.)
   - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
+- 👁️ **AI Vision Support**: Multimodal analysis for providers that support it (GPT-4o, Claude 3, Gemini) to understand image content when organizing.
 - 🖱️ **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
 - 📊 **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
 - 🔗 **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
@@ -30,7 +31,7 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 - 🎛️ **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
 - 👁️ **Interactive Preview**: Review and tweak suggested organization before any files are moved.
 - 🗂️ **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
-- 🔄 **Check for Updates**: Built-in update checker with `sorty://` deeplinks for seamless update installation.
+- 🔄 **Automatic Updates**: Background update checking on app launch (once per 24 hours) with manual check available via menu.
 - 📍 **Storage Locations**: Define custom storage destinations for organized files.
 - 🔔 **HUD & Toast Notifications**: Non-intrusive visual feedback for operations and status updates.
 - 🧹 **Cleanup Preview**: Preview and confirm cleanup actions before execution.

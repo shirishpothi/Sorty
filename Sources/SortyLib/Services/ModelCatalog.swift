@@ -636,6 +636,14 @@ public final class ModelCatalog: ObservableObject {
         // Groq
         "llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"
     ]
+    
+    /// Known model prefixes that support vision (for partial matching)
+    private static let visionModelPrefixes: [String] = [
+        "gpt-4o", "gpt-4-turbo", "gpt-4-vision",
+        "claude-3-5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5",
+        "gemini-1.5", "gemini-2.0", "gemini-pro-vision",
+        "llama-3.2-11b-vision", "llama-3.2-90b-vision"
+    ]
 
     /// Check if a specific model supports vision capabilities
     public func supportsVision(modelId: String, provider: AIProvider) -> Bool {
@@ -643,18 +651,39 @@ public final class ModelCatalog: ObservableObject {
         if Self.knownVisionModels.contains(modelId) {
             return true
         }
+        
+        let lowercaseId = modelId.lowercased()
 
         // Provider-specific heuristics
         switch provider {
+        case .githubCopilot:
+            // GitHub Copilot exposes OpenAI and Anthropic models that support vision
+            // Check against known vision-capable model prefixes
+            for prefix in Self.visionModelPrefixes {
+                if lowercaseId.contains(prefix.lowercased()) {
+                    return true
+                }
+            }
+            // Additional check for common vision model patterns
+            return lowercaseId.contains("gpt-4o") ||
+                   lowercaseId.contains("gpt-4-turbo") ||
+                   lowercaseId.contains("claude-3") ||
+                   lowercaseId.contains("gemini")
         case .ollama:
             // Ollama often uses models like 'llava', 'bakllava' for vision
             let visionKeywords = ["llava", "vision", "moondream", "minicpm"]
-            return visionKeywords.contains { modelId.lowercased().contains($0) }
+            return visionKeywords.contains { lowercaseId.contains($0) }
         case .openRouter:
             // OpenRouter often includes vision in the name or we can check the ID
-            return modelId.lowercased().contains("vision") || modelId.lowercased().contains("vl")
+            return lowercaseId.contains("vision") || lowercaseId.contains("vl")
         default:
-            return modelId.lowercased().contains("vision") || modelId.lowercased().contains("flash")
+            // Check against known prefixes for other providers
+            for prefix in Self.visionModelPrefixes {
+                if lowercaseId.contains(prefix.lowercased()) {
+                    return true
+                }
+            }
+            return lowercaseId.contains("vision") || lowercaseId.contains("flash")
         }
     }
 }

@@ -181,10 +181,56 @@ public actor LocalRuleInferenceEngine {
     // MARK: - Rejection-based Inference
     
     private func inferRulesFromRejections(_ rejections: [LabeledExample]) -> [InferredRule] {
-        // For rejections, we don't create positive rules - instead we could create
-        // "avoid" rules or just use this data to reduce confidence in matching patterns
-        // For now, we skip rejection-based rules to avoid complexity
-        return []
+        // For rejections, we create "avoid" rules with negative patterns
+        // These help the AI understand what NOT to do
+        var rules: [InferredRule] = []
+        
+        // Group rejections by the folder they were rejected from
+        var byRejectedFolder: [String: [LabeledExample]] = [:]
+        for rejection in rejections {
+            let folder = URL(fileURLWithPath: rejection.dstPath).deletingLastPathComponent().lastPathComponent
+            if !folder.isEmpty {
+                byRejectedFolder[folder, default: []].append(rejection)
+            }
+        }
+        
+        // Create avoidance rules for patterns with multiple rejections
+        for (folder, folderRejections) in byRejectedFolder where folderRejections.count >= minExamplesForRule {
+            // Group by file extension
+            var byExtension: [String: Int] = [:]
+            for rejection in folderRejections {
+                let ext = URL(fileURLWithPath: rejection.srcPath).pathExtension.lowercased()
+                if !ext.isEmpty {
+                    byExtension[ext, default: 0] += 1
+                }
+            }
+            
+            // Create rules for extensions with multiple rejections
+            for (ext, count) in byExtension where count >= minExamplesForRule {
+                let confidence = min(0.7, calculateConfidence(exampleCount: count, isRecent: areRecent(folderRejections.map { $0.timestamp })))
+                let escapedExt = NSRegularExpression.escapedPattern(for: ext)
+                
+                // Create a rule with negative priority to indicate avoidance
+                let rule = InferredRule(
+                    id: "local-avoid-\(ext)-\(folder)-\(UUID().uuidString.prefix(8))",
+                    pattern: ".*\\.\(escapedExt)$",
+                    template: "AVOID:\(folder)/{filename}", // Special AVOID prefix for downstream handling
+                    metadataCues: [],
+                    priority: -Int(confidence * 50), // Negative priority indicates avoidance
+                    exampleIds: folderRejections.map { $0.id },
+                    explanation: "AVOID placing .\(ext.uppercased()) files in '\(folder)/' (rejected \(count)x)",
+                    successCount: 0,
+                    failureCount: 0,
+                    isEnabled: true,
+                    lastAppliedAt: nil,
+                    supportCount: count,
+                    initialConfidence: .medium
+                )
+                rules.append(rule)
+            }
+        }
+        
+        return rules
     }
     
     // MARK: - Steering Prompt Inference

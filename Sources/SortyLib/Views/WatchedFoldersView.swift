@@ -505,9 +505,10 @@ struct WatchedFolderConfigView: View {
             // Header
             HStack {
                 HStack(spacing: 12) {
-                    Image(systemName: "folder.fill")
-                        .font(.title2)
-                        .foregroundStyle(.blue)
+                    FolderThumbnailView(
+                        url: URL(fileURLWithPath: folder.path),
+                        size: CGSize(width: 32, height: 32)
+                    )
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(folder.name)

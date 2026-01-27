@@ -1242,11 +1242,14 @@ struct FolderHistoryDetailRow: View {
                         .foregroundColor(.secondary)
                         .accessibilityHidden(true)
 
-                    Image(systemName: "folder.fill")
-                        .foregroundColor(.blue)
-                        .scaleEffect(isHovered ? 1.1 : 1.0)
-                        .animation(.subtleBounce, value: isHovered)
-                        .accessibilityHidden(true)
+                    CompactFolderThumbnail(
+                        url: nil,
+                        folderName: suggestion.folderName,
+                        size: 18
+                    )
+                    .scaleEffect(isHovered ? 1.1 : 1.0)
+                    .animation(.subtleBounce, value: isHovered)
+                    .accessibilityHidden(true)
 
                     Text(suggestion.folderName)
                         .fontWeight(.semibold)

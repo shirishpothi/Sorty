@@ -640,6 +640,8 @@ struct FlatFileRowView: View {
         case "mp4", "mov": return "video"
         case "mp3", "wav", "aac", "m4a", "flac", "ogg": return "waveform"
         case "zip", "gz", "rar": return "archivebox"
+        case "dmg", "iso": return "externaldrive"
+        case "pkg", "app": return "shippingbox"
         case "swift", "js", "py", "ts": return "doc.text.fill"
         default: return "doc"
         }
@@ -763,6 +765,8 @@ struct FlatUnorganizedFileRowView: View {
         case "mp4", "mov": return "video"
         case "mp3", "wav", "aac", "m4a", "flac", "ogg": return "waveform"
         case "zip", "gz", "rar": return "archivebox"
+        case "dmg", "iso": return "externaldrive"
+        case "pkg", "app": return "shippingbox"
         case "swift", "js", "py", "ts": return "doc.text.fill"
         default: return "doc"
         }

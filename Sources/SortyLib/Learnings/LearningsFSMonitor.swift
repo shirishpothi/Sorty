@@ -161,9 +161,12 @@ public class LearningsFSMonitor: ObservableObject {
         
         var context = FSEventStreamContext(
             version: 0,
-            info: Unmanaged.passUnretained(self).toOpaque(),
+            info: Unmanaged.passRetained(self).toOpaque(),
             retain: nil,
-            release: nil,
+            release: { info in
+                guard let info = info else { return }
+                Unmanaged<LearningsFSMonitor>.fromOpaque(info).release()
+            },
             copyDescription: nil
         )
         
@@ -173,9 +176,12 @@ public class LearningsFSMonitor: ObservableObject {
             
             guard let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] else { return }
             
+            // Copy flags synchronously BEFORE escaping the callback to avoid dangling pointer
+            let flagsCopy = Array(UnsafeBufferPointer(start: eventFlags, count: numEvents))
+            
             // Post to main actor
             Task { @MainActor in
-                monitor.handleFSEvents(paths: paths, flags: Array(UnsafeBufferPointer(start: eventFlags, count: numEvents)))
+                monitor.handleFSEvents(paths: paths, flags: flagsCopy)
             }
         }
         

@@ -14,22 +14,22 @@ import UniformTypeIdentifiers
 // MARK: - Liquid Glass Styles
 
 struct LiquidGlassModifier: ViewModifier {
-    var cornerRadius: CGFloat = 20
+    var cornerRadius: CGFloat = 12
     @Environment(\.colorScheme) var colorScheme
     
     func body(content: Content) -> some View {
         content
-            .background(Color(NSColor.controlBackgroundColor))
+            .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
             )
     }
 }
 
 extension View {
-    func liquidGlassCard(cornerRadius: CGFloat = 20) -> some View {
+    func liquidGlassCard(cornerRadius: CGFloat = 12) -> some View {
         self.modifier(LiquidGlassModifier(cornerRadius: cornerRadius))
     }
 }
@@ -1221,8 +1221,8 @@ struct EnhancedInsightCard: View {
             .toggleStyle(.switch)
             .scaleEffect(0.8)
         }
-        .padding(16)
-        .liquidGlassCard(cornerRadius: 16)
+        .padding(12)
+        .liquidGlassCard(cornerRadius: 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(rule.explanation). Applied \(rule.successCount) times, corrected \(rule.failureCount) times. \(rule.isEnabled ? "Enabled" : "Disabled")")
         .accessibilityHint("Toggle to enable or disable this pattern")
@@ -1239,19 +1239,25 @@ struct AccessibleStatCard: View {
     let hint: String
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.title2.bold())
-                .foregroundColor(color)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.7)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             Text(value)
                 .font(.title3.bold())
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .bold))
+            Text(label)
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(20)
-        .liquidGlassCard(cornerRadius: 20)
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value)")
         .accessibilityHint(hint)
@@ -1283,14 +1289,14 @@ struct AccessiblePreferenceGroup<Content: View>: View {
             .accessibilityLabel("\(title): \(subtitle)")
             .accessibilityAddTraits(.isHeader)
             
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 content
             }
-            .padding(16)
-            .liquidGlassCard(cornerRadius: 16)
+            .padding(12)
+            .liquidGlassCard(cornerRadius: 12)
         }
-        .padding(24)
-        .liquidGlassCard(cornerRadius: 24)
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 12)
         .accessibilityElement(children: .contain)
     }
 }

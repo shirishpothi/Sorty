@@ -677,6 +677,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 instructions += "\n\n" + storageContext
                 DebugLogger.log("Injected Storage Locations context into prompt")
             }
+            
+            // Add Existing Folders context (prefer reusing existing structure)
+            if let existingFoldersContext = PromptBuilder.buildExistingFoldersContext(at: directory) {
+                instructions += "\n\n" + existingFoldersContext
+                DebugLogger.log("Injected Existing Folders context into prompt")
+            }
 
             // Phase 2: Vision Integration
             var imagePayload: [String: Data] = [:]
@@ -851,6 +857,49 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 )
                 history.addEntry(cancelledEntry)
                 DebugLogger.log("Saved cancelled operation to history")
+
+                // Record to learnings with rich context
+                let fileCount = (try? FileManager.default.contentsOfDirectory(atPath: directory.path).count) ?? 0
+                let proposedFolders = currentPlan?.suggestions.count ?? 0
+                
+                // Extract folder names from current plan
+                let folderNames = currentPlan?.suggestions.map { $0.folderName }
+                
+                // Build a compressed structure summary
+                let structureSummary = currentPlan.map { plan -> String in
+                    let summary = plan.suggestions.prefix(10).map { folder -> String in
+                        let fileCount = folder.files.count
+                        let subfolderCount = folder.subfolders.count
+                        return "\(folder.folderName)(\(fileCount)f\(subfolderCount > 0 ? ",\(subfolderCount)sf" : ""))"
+                    }.joined(separator: ";")
+                    return plan.suggestions.count > 10 ? "\(summary);+\(plan.suggestions.count - 10)more" : summary
+                }
+                
+                // Extract file extension counts from directory
+                var extensionCounts: [String: Int]?
+                if let contents = try? FileManager.default.contentsOfDirectory(atPath: directory.path) {
+                    var counts: [String: Int] = [:]
+                    for item in contents {
+                        let ext = (item as NSString).pathExtension.lowercased()
+                        let key = ext.isEmpty ? "other" : ext
+                        counts[key, default: 0] += 1
+                    }
+                    extensionCounts = counts
+                }
+                
+                learningsManager?.recordCancelledOrganization(
+                    folderPath: directory.path,
+                    fileCount: fileCount,
+                    proposedFolderCount: proposedFolders,
+                    instructions: customInstructions.isEmpty ? nil : customInstructions,
+                    stage: organizationStage,
+                    proposedFolderNames: folderNames,
+                    proposedStructureSummary: structureSummary,
+                    fileExtensionCounts: extensionCounts,
+                    regenerationCount: currentPlan?.version ?? 0,
+                    regenerationInstructions: nil,
+                    aiModel: aiConfig?.model
+                )
             }
         }
 
@@ -1097,6 +1146,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         try checkCancellation()
 
         updateState(.applying, stage: "Preparing organization...", progress: 0.0)
+        
+        // Start learning session for rule tracking
+        if let learningsObserver = learningsObserver {
+            learningsObserver.startSession(folderPath: baseURL.path, historyEntryId: nil)
+        }
 
         do {
             let operations = try await fileSystemManager.applyOrganization(
@@ -1115,6 +1169,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
 
             try checkCancellation()
+            
+            // Track rule applications for learning feedback
+            if let learningsObserver = learningsObserver, !dryRun {
+                recordRuleApplications(for: plan, operations: operations, observer: learningsObserver)
+            }
 
             let historyEntry = OrganizationHistoryEntry(
                 directoryPath: baseURL.path,
@@ -1262,6 +1321,33 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         allFiles.append(contentsOf: currentPlan.unorganizedFiles)
         
         return allFiles
+    }
+    
+    /// Record which files were moved by which inferred rules (for learning feedback)
+    private func recordRuleApplications(for plan: OrganizationPlan, operations: [FileSystemManager.FileOperation], observer: ContinuousLearningObserver) {
+        guard let profile = learningsManager?.currentProfile else { return }
+        
+        let activeRules = profile.inferredRules.filter { $0.isEnabled }
+        guard !activeRules.isEmpty else { return }
+        
+        for operation in operations {
+            guard operation.type == .moveFile || operation.type == .renameFile else { continue }
+            guard let destPath = operation.destinationPath else { continue }
+            
+            let fileName = URL(fileURLWithPath: operation.sourcePath).lastPathComponent
+            
+            // Find matching rule by pattern (heuristic: check if rule's regex pattern matches the filename)
+            for rule in activeRules {
+                // Try to match the rule's regex pattern against the filename
+                if let regex = try? NSRegularExpression(pattern: rule.pattern, options: .caseInsensitive) {
+                    let range = NSRange(fileName.startIndex..<fileName.endIndex, in: fileName)
+                    if regex.firstMatch(in: fileName, options: [], range: range) != nil {
+                        observer.recordRuleApplication(destinationPath: destPath, ruleId: rule.id)
+                        break
+                    }
+                }
+            }
+        }
     }
     
     /// Regenerate preview with a specific provider
@@ -1412,6 +1498,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
                 )
                 history.addEntry(skippedEntry)
+            }
+
+            // Record to learnings
+            if let directory = currentDirectory {
+                let summary = currentPlan.suggestions.map { "\($0.folderName) (\($0.files.count) files)" }.joined(separator: ", ")
+                learningsManager?.recordRegeneratedOrganization(
+                    folderPath: directory.path,
+                    previousPlanSummary: summary,
+                    guidingInstruction: customInstructions, // FolderOrganizer uses customInstructions for the prompt
+                    regenerationCount: currentPlan.version
+                )
+                
+                // Also record as a guiding instruction for pattern analysis
+                learningsManager?.recordGuidingInstruction(
+                    customInstructions,
+                    for: directory.path,
+                    fileCount: allFiles.count
+                )
             }
 
             // Generate new plan

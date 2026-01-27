@@ -70,6 +70,9 @@ struct SortyApp: App {
                     Task {
                         try? await organizer.configure(with: settingsViewModel.config)
                         learningsManager.configure(with: settingsViewModel.config)
+                        
+                        // Check for updates on launch (once per 24 hours)
+                        await appState.updateManager.checkOnLaunchIfNeeded()
                     }
                     
                     // Testability Hook for UI Tests to trigger deeplinks reliably

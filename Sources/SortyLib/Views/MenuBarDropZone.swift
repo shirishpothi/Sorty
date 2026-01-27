@@ -550,6 +550,8 @@ struct FileIconView: View {
         case "mp4", "mov", "avi", "mkv": return "film.fill"
         case "mp3", "wav", "aac", "m4a": return "music.note"
         case "zip", "rar", "7z", "tar", "gz": return "archivebox.fill"
+        case "dmg", "iso": return "externaldrive.fill"
+        case "pkg", "app": return "shippingbox.fill"
         case "swift", "py", "js", "ts", "java", "c", "cpp": return "chevron.left.forwardslash.chevron.right"
         case "html": return "globe"
         case "css": return "paintbrush.fill"
@@ -569,6 +571,8 @@ struct FileIconView: View {
         case "mp4", "mov", "avi", "mkv": return .pink
         case "mp3", "wav", "aac", "m4a": return .red
         case "zip", "rar", "7z", "tar", "gz": return .brown
+        case "dmg", "iso": return .gray
+        case "pkg", "app": return .purple
         case "swift": return .orange
         case "py": return .blue
         case "js", "ts": return .yellow
