@@ -10,6 +10,14 @@ public actor AudioWaveformGenerator {
     
     /// Generates a waveform image for the given audio file
     public func generateWaveform(for url: URL, size: CGSize) async -> NSImage? {
+        guard let amplitudes = await loadAmplitudes(for: url) else { return nil }
+        return await MainActor.run {
+            drawWaveform(amplitudes: amplitudes, size: size)
+        }
+    }
+    
+    /// Loads audio amplitudes from the file
+    private func loadAmplitudes(for url: URL) async -> [Float]? {
         let asset = AVAsset(url: url)
         
         guard let reader = try? AVAssetReader(asset: asset),
@@ -62,9 +70,10 @@ public actor AudioWaveformGenerator {
             }
         }
         
-        return drawWaveform(amplitudes: amplitudes, size: size)
+        return amplitudes
     }
     
+    @MainActor
     private func drawWaveform(amplitudes: [Float], size: CGSize) -> NSImage {
         let image = NSImage(size: size)
         image.lockFocus()

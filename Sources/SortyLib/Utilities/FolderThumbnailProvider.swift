@@ -19,10 +19,10 @@ public class FolderThumbnailProvider: ObservableObject {
     
     // MARK: - Properties
     
-    private let cache = NSCache<NSURL, NSImage>()
+    private let cache = NSCache<NSURL, AnyObject>()
     
     /// Pending thumbnail generation tasks to avoid duplicates
-    private var pendingTasks: [URL: Task<NSImage, Never>] = [:]
+    private var pendingTasks: [URL: Task<AnyObject, Never>] = [:]
     
     // MARK: - Initialization
     
@@ -35,25 +35,25 @@ public class FolderThumbnailProvider: ObservableObject {
     /// Get a thumbnail for a folder at the given URL
     public func thumbnail(for url: URL, size: CGSize = CGSize(width: 40, height: 40)) async -> NSImage {
         // Check cache first
-        if let cached = cache.object(forKey: url as NSURL) {
+        if let cached = cache.object(forKey: url as NSURL) as? NSImage {
             return cached
         }
         
         // Check if we're already generating this thumbnail
         if let existingTask = pendingTasks[url] {
-            return await existingTask.value
+            return await existingTask.value as? NSImage ?? NSWorkspace.shared.icon(forFile: url.path)
         }
         
         // Create generation task
-        let task = Task<NSImage, Never> { @MainActor in
+        let task = Task<AnyObject, Never> { @MainActor in
             let image = await self.generateThumbnail(for: url, size: size)
             self.cache.setObject(image, forKey: url as NSURL)
             self.pendingTasks.removeValue(forKey: url)
-            return image
+            return image as AnyObject
         }
         
         pendingTasks[url] = task
-        return await task.value
+        return await task.value as? NSImage ?? NSWorkspace.shared.icon(forFile: url.path)
     }
     
     /// Clear the thumbnail cache
@@ -171,12 +171,13 @@ public class FolderThumbnailProvider: ObservableObject {
     
     /// Compose thumbnails into a folder-style preview
     private func composeFolder(with thumbnails: [NSImage], size: CGSize) async -> NSImage {
+        let folderIcon = await MainActor.run { NSWorkspace.shared.icon(forFile: "/tmp") }
+        
         return await MainActor.run {
             let image = NSImage(size: size)
             image.lockFocus()
             
             // Draw base folder icon (slightly smaller)
-            let folderIcon = NSWorkspace.shared.icon(forFile: "/tmp")
             let folderRect = NSRect(x: 0, y: 0, width: size.width, height: size.height)
             folderIcon.draw(in: folderRect, from: .zero, operation: .sourceOver, fraction: 0.3)
             

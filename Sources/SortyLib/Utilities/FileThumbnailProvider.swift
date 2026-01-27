@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 public class FileThumbnailProvider: ObservableObject {
     public static let shared = FileThumbnailProvider()
     
-    private let cache = NSCache<NSURL, NSImage>()
+    private let cache = NSCache<NSURL, AnyObject>()
     
     private init() {
         cache.countLimit = 500 // Cache up to 500 thumbnails
@@ -16,13 +16,13 @@ public class FileThumbnailProvider: ObservableObject {
     /// Get a thumbnail for a file at the given URL
     public func thumbnail(for url: URL, size: CGSize = CGSize(width: 40, height: 40)) async -> NSImage {
         // Check cache first
-        if let cached = cache.object(forKey: url as NSURL) {
+        if let cached = cache.object(forKey: url as NSURL) as? NSImage {
             return cached
         }
         
         // Generate thumbnail
         let image = await generateThumbnail(for: url, size: size)
-        cache.setObject(image, forKey: url as NSURL)
+        cache.setObject(image as AnyObject, forKey: url as NSURL)
         return image
     }
     
