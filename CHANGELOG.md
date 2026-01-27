@@ -5,38 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-01-14
+## [1.0.0] - 2026-01-27
 
-### Added
-- **Initial public release**
-- Pre-release update system verification (Phase 12) to validate UpdateManager before releases
-- `update` and `version` commands to `fileorg` CLI with `-v`/`--version` flags
-- Comprehensive test suite with 150+ unit tests covering:
-  - AppState and menu bar controls
-  - PersonaGenerator for custom persona creation
-  - UpdateManager for version checking
-  - SecurityManager for biometric authentication
-  - LearningsHoningEngine for user profiling
-  - ContentAnalyzer for file content extraction
-  - DeeplinkHandler for URL scheme navigation
-  - WorkspaceHealth for clutter monitoring
-  - DuplicateDetector for finding duplicate files
-  - ExclusionRules for file filtering
-- Full menu bar support with keyboard shortcuts:
-  - File menu: New Session, Open Directory, Export Results
-  - View menu: Navigation commands, Sidebar toggle
-  - Organize menu: Start, Regenerate, Apply, Preview, Cancel
-  - Learnings menu: Dashboard, Honing, Stats, Export/Import
-  - Help menu: Documentation, Updates, About
-- Updated documentation in HELP.md and README.md
+### Highlights
 
-### Changed
-- Enhanced keyboard shortcuts coverage
+**Sorty** is a native macOS app that uses AI to organize your files intelligently. Point it at a messy folder, and it will analyze the contents and suggest a clean folder structure based on what's actually in your files—not just their names or extensions.
 
-### Fixed
-- Fixed "Path already exists" error that prevented organizing files into existing directories. The validator now correctly allows organizing into existing directories while still preventing conflicts when a file (not a directory) exists with the same name as a suggested folder.
-- Replaced unreliable DispatchSource file monitoring with robust FSEvents implementation
-- Added proper App Sandbox entitlement handling with security-scoped bookmark restoration
-- Added access status indicators for watched folders (valid, stale, lost access)
-- Added validation to prevent auto-organization when no AI provider is configured
-- Added user notifications for background organization failures
+### Features
+
+- **AI-Powered Organization** — Works with OpenAI, Anthropic, Groq, Ollama, GitHub Copilot, or Apple's on-device Foundation Models. Understands file content, not just filenames.
+
+- **Learnings Profile** — Sorty watches how you organize files and learns your preferences. Over time, its suggestions get smarter.
+
+- **Custom Personas** — Create specialized AI profiles for different workflows. A "Developer" persona organizes differently than a "Photographer" persona.
+
+- **Vision Support** — For AI providers that support it (GPT-4o, Claude 3, Gemini), Sorty can analyze image content when deciding where files belong.
+
+- **Finder Extension** — Right-click any folder in Finder to start organizing.
+
+- **Workspace Health** — Monitor folder health with clutter detection, duplicate scanning, and actionable cleanup suggestions.
+
+- **Interactive Preview** — Review every suggested move before anything happens. Tweak, approve, or reject individual changes.
+
+- **Full Undo** — Every organization is tracked in history. Roll back any operation completely.
+
+- **Watched Folders** — Monitor folders for changes and organize automatically in the background.
+
+- **CLI Tools** — Two command-line utilities: `learnings` for managing your learning profile, and `fileorg` for scripting and automation.
+
+- **Deeplinks** — Control Sorty via `sorty://` URLs for Shortcuts, automation, and external integrations.
+
+- **Menu Bar & Keyboard Shortcuts** — Full keyboard navigation with standard macOS shortcuts.
+
+### Requirements
+
+- macOS 15.1 or later
+- For AI features: API key for your preferred provider, or Apple Intelligence enabled for on-device processing

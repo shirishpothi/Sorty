@@ -43,31 +43,37 @@ start_step_timer "dmg"
 DMG_NAME="${PROJECT_NAME}.dmg"
 DMG_PATH="${RELEASE_DIR}/${DMG_NAME}"
 
-# Check if create-dmg is installed
-if ! command -v create-dmg &> /dev/null; then
-    log_failure "create-dmg is not installed. Skipping DMG creation."
-    log_item "Install with: brew install create-dmg"
+# Prefer create-dmg.sh if it exists as it has the custom layout
+if [ -f "${SCRIPT_DIR}/create-dmg.sh" ]; then
+    log_item "Using custom create-dmg.sh script..."
+    "${SCRIPT_DIR}/create-dmg.sh"
 else
-    # Remove existing DMG
-    rm -f "${DMG_PATH}"
-
-    create-dmg \
-      --volname "${PROJECT_NAME} Installer" \
-      --volicon "${PROJECT_DIR}/Sorty app icon.png" \
-      --window-pos 200 120 \
-      --window-size 800 400 \
-      --icon-size 100 \
-      --icon "${PROJECT_NAME}.app" 200 190 \
-      --hide-extension "${PROJECT_NAME}.app" \
-      --app-drop-link 600 185 \
-      "${DMG_PATH}" \
-      "${APP_PATH}" 2>/dev/null >/dev/null || true
-
-    if [ -f "${DMG_PATH}" ]; then
-        log_success "Created $DMG_NAME ($(get_file_size "$DMG_PATH"))"
+    # Fallback to generic create-dmg if installed
+    if ! command -v create-dmg &> /dev/null; then
+        log_failure "create-dmg is not installed and create-dmg.sh missing. Skipping DMG creation."
+        log_item "Install with: brew install create-dmg"
     else
-        log_failure "DMG creation failed or was skipped."
+        # Remove existing DMG
+        rm -f "${DMG_PATH}"
+
+        create-dmg \
+          --volname "${PROJECT_NAME}" \
+          --volicon "${PROJECT_DIR}/Assets/AppIcon.icns" \
+          --window-pos 200 120 \
+          --window-size 1100 600 \
+          --icon-size 128 \
+          --icon "${PROJECT_NAME}.app" 175 250 \
+          --hide-extension "${PROJECT_NAME}.app" \
+          --app-drop-link 525 250 \
+          "${DMG_PATH}" \
+          "${APP_PATH}" 2>/dev/null >/dev/null || true
     fi
+fi
+
+if [ -f "${DMG_PATH}" ]; then
+    log_success "Created $DMG_NAME ($(get_file_size "$DMG_PATH"))"
+else
+    log_failure "DMG creation failed or was skipped."
 fi
 
 # 3. Create PKG

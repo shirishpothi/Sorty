@@ -3,6 +3,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
 [![macOS](https://img.shields.io/badge/macOS-15.1+-blue.svg)](https://www.apple.com/macos)
+[![Security Checks](https://github.com/shirishpothi/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/shirishpothi/Sorty/actions/workflows/swift.yml)
 
 A native macOS SwiftUI application that uses AI to intelligently organize directory contents into relevant, semantically-named folders.
 
@@ -15,30 +16,30 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 </div>
 
 
-## ✨ Features
+## Features
 
-- 🤖 **Intelligent Organization**: Uses AI to understand file content and context for accurate categorization.
-- 🧠 **The Learnings Profile**: A passive learning system that trains from your existing folder structures, manual corrections, and even cancelled organizations to continuously improve future suggestions.
-- 🎭 **Custom Personas**: Create and edit specialized AI profiles for different workflows (e.g., Developer, Photographer, Student).
-- 🔌 **Multiple AI Providers**: 
+- **Intelligent Organization**: Uses AI to understand file content and context for accurate categorization.
+- **The Learnings Profile**: A passive learning system that trains from your existing folder structures, manual corrections, and even cancelled organizations to continuously improve future suggestions.
+- **Custom Personas**: Create and edit specialized AI profiles for different workflows (e.g., Developer, Photographer, Student).
+- **Multiple AI Providers**: 
   - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, Groq, Ollama, etc.)
   - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
-- 👁️ **AI Vision Support**: Multimodal analysis for providers that support it (GPT-4o, Claude 3, Gemini) to understand image content when organizing.
-- 🖱️ **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
-- 📊 **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
-- 🔗 **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
-- ⌨️ **CLI Tooling**: Two companion command-line tools: `learnings` for managing learning profiles and `fileorg` for controlling the app via terminal.
-- 🎛️ **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
-- 👁️ **Interactive Preview**: Review and tweak suggested organization before any files are moved.
-- 🗂️ **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
-- 🔄 **Automatic Updates**: Background update checking on app launch (once per 24 hours) with manual check available via menu.
-- 📍 **Storage Locations**: Define custom storage destinations for organized files.
-- 🔔 **HUD & Toast Notifications**: Non-intrusive visual feedback for operations and status updates.
-- 🧹 **Cleanup Preview**: Preview and confirm cleanup actions before execution.
-- 🛡️ **Safe by Design**: Includes dry-run modes, comprehensive validation, duplicate protection settings, and exclusion rules.
+- **AI Vision Support**: Multimodal analysis for providers that support it (GPT-4o, Claude 3, Gemini) to understand image content when organizing.
+- **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
+- **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
+- **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
+- **CLI Tooling**: Two companion command-line tools: `learnings` for managing learning profiles and `fileorg` for controlling the app via terminal.
+- **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
+- **Interactive Preview**: Review and tweak suggested organization before any files are moved.
+- **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
+- **Automatic Updates**: Background update checking on app launch (once per 24 hours) with manual check available via menu.
+- **Storage Locations**: Define custom storage destinations for organized files.
+- **HUD & Toast Notifications**: Non-intrusive visual feedback for operations and status updates.
+- **Cleanup Preview**: Preview and confirm cleanup actions before execution.
+- **Safe by Design**: Includes dry-run modes, comprehensive validation, duplicate protection settings, and exclusion rules.
 
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - macOS 15.1 or later
@@ -75,7 +76,7 @@ make run
 2. Select the `FileOrganiser` scheme and your Mac as the destination.
 3. Press `⌘R` to build and run.
 
-## ⚙️ Configuration
+## Configuration
 
 ### 1. AI Provider Setup
 - Navigate to the **Settings** tab in the app.
@@ -97,7 +98,7 @@ To enable the "Organize with AI..." context menu in Finder:
 - Add folders to the "Watched" list in the sidebar to enable automatic background monitoring.
 - **Note**: The "Auto-Organize" feature will remain disabled until a valid AI provider is configured in Settings.
 
-## ❓ Troubleshooting
+## Troubleshooting
 
 ### "Watched Folders" Access Lost
 If you see an error indicating that access to a watched folder has been lost (e.g., "Permission Denied" or missing bookmarks):
@@ -120,7 +121,7 @@ If you see an error indicating that access to a watched folder has been lost (e.
 2. If the app shows "Up to date", you have the latest version.
 3. Alternatively, compare the version in **About** with the [latest release](https://github.com/shirishpothi/Sorty/releases/latest).
 
-## 🛠 Project Structure
+## Project Structure
 
 - `Sources/SortyLib/`: Core implementation including AI, FileSystem, Models, and Views.
 - `Sources/SortyApp/`: Main macOS application entry and navigation.
@@ -130,11 +131,11 @@ If you see an error indicating that access to a watched folder has been lost (e.
 - `Assets/`: App icons and screenshots.
 - `scripts/`: Build and automation scripts.
 
-## 📜 License
+## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
-## 🧪 Testing
+## Testing
 
 ### Running Tests
 
@@ -163,7 +164,7 @@ Key test files include:
 - `DeeplinkTests.swift` - URL scheme handling
 - `UpdateManagerTests.swift` - Update checking functionality
 
-## ⌨️ CLI Commands
+## CLI Commands
 
 ### `learnings` CLI
 Manage your learning profile from the terminal:
@@ -191,7 +192,7 @@ fileorg learnings                                    # Open Learnings dashboard
 fileorg history                                      # Open History
 ```
 
-## 🔗 Deeplinks Reference
+## Deeplinks Reference
 
 Sorty supports the `sorty://` URL scheme for automation and external control:
 
