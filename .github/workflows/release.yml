@@ -105,23 +105,13 @@ jobs:
           chmod +x ./scripts/build.sh
           ./scripts/build.sh
       # ===========================================
-      # 7. Package (ZIP + DMG)
+      # 7. Package (ZIP)
       # ===========================================
-      - name: Install create-dmg
-        run: brew install create-dmg
-
       - name: Package
         run: |
           chmod +x ./scripts/package.sh
           ./scripts/package.sh
 
-      - name: Verify Notarization Stapling
-        run: |
-          if xcrun stapler validate "releases/${{ env.PROJECT_NAME }}.dmg"; then
-            echo "Stapling verified successfully"
-          else
-            echo "Warning: Stapling validation failed or was skipped (ad-hoc signing)"
-          fi
 
       # ===========================================
       # 8. Generate Appcast with Sparkle signing
@@ -152,7 +142,6 @@ jobs:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: ${{ env.PROJECT_NAME }} ${{ steps.version.outputs.VERSION }}
           files: |
-            releases/*.dmg
             releases/*.zip
             releases/appcast.xml
           generate_release_notes: true
@@ -160,7 +149,7 @@ jobs:
           body: |
             
             ## Installation
-            Download `Sorty-${{ steps.version.outputs.VERSION }}.dmg` or `Sorty-${{ steps.version.outputs.VERSION }}.zip` below.
+            Download `Sorty.zip` below.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > xattr -cr /Applications/Sorty.app

@@ -11,7 +11,7 @@ print_header "Packaging Application" 50
 mkdir -p "${RELEASE_DIR}"
 
 # 1. Create ZIP
-print_step 1 2 "Creating ZIP Archive"
+print_step 1 4 "Creating ZIP Archive"
 start_step_timer "zip"
 
 ZIP_NAME="${PROJECT_NAME}.zip"
@@ -36,48 +36,8 @@ else
     exit 1
 fi
 
-# 2. Create DMG
-print_step 2 5 "Creating DMG Image"
-start_step_timer "dmg"
-
-DMG_NAME="${PROJECT_NAME}.dmg"
-DMG_PATH="${RELEASE_DIR}/${DMG_NAME}"
-
-# Prefer create-dmg.sh if it exists as it has the custom layout
-if [ -f "${SCRIPT_DIR}/create-dmg.sh" ]; then
-    log_item "Using custom create-dmg.sh script..."
-    "${SCRIPT_DIR}/create-dmg.sh"
-else
-    # Fallback to generic create-dmg if installed
-    if ! command -v create-dmg &> /dev/null; then
-        log_failure "create-dmg is not installed and create-dmg.sh missing. Skipping DMG creation."
-        log_item "Install with: brew install create-dmg"
-    else
-        # Remove existing DMG
-        rm -f "${DMG_PATH}"
-
-        create-dmg \
-          --volname "${PROJECT_NAME}" \
-          --volicon "${PROJECT_DIR}/Assets/AppIcon.icns" \
-          --window-pos 200 120 \
-          --window-size 1100 600 \
-          --icon-size 128 \
-          --icon "${PROJECT_NAME}.app" 175 250 \
-          --hide-extension "${PROJECT_NAME}.app" \
-          --app-drop-link 525 250 \
-          "${DMG_PATH}" \
-          "${APP_PATH}" 2>/dev/null >/dev/null || true
-    fi
-fi
-
-if [ -f "${DMG_PATH}" ]; then
-    log_success "Created $DMG_NAME ($(get_file_size "$DMG_PATH"))"
-else
-    log_failure "DMG creation failed or was skipped."
-fi
-
-# 3. Create PKG
-print_step 3 5 "Creating Installer Package (PKG)"
+# 2. Create PKG
+print_step 2 4 "Creating Installer Package (PKG)"
 start_step_timer "pkg"
 PKG_NAME="${PROJECT_NAME}.pkg"
 PKG_PATH="${RELEASE_DIR}/${PKG_NAME}"
@@ -99,8 +59,8 @@ else
     log_failure "PKG creation failed"
 fi
 
-# 4. Create Source ZIP
-print_step 4 5 "Creating Source Code Archive"
+# 3. Create Source ZIP
+print_step 3 4 "Creating Source Code Archive"
 SRC_NAME="${PROJECT_NAME}-Source.zip"
 SRC_PATH="${RELEASE_DIR}/${SRC_NAME}"
 
@@ -112,8 +72,8 @@ else
     log_failure "Source archival failed"
 fi
 
-# 5. Create CLI Tools ZIP
-print_step 5 5 "Creating CLI Tools Archive"
+# 4. Create CLI Tools ZIP
+print_step 4 4 "Creating CLI Tools Archive"
 CLI_NAME="${PROJECT_NAME}-CLI.zip"
 CLI_PATH="${RELEASE_DIR}/${CLI_NAME}"
 
@@ -138,7 +98,6 @@ fi
 
 print_summary "Package Complete" \
     "ZIP" "$ZIP_PATH" \
-    "DMG" "$DMG_PATH" \
     "PKG" "$PKG_PATH" \
     "Src" "$SRC_PATH" \
     "CLI" "$CLI_PATH"
