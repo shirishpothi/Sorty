@@ -1290,6 +1290,11 @@ public class WorkspaceHealthManager: ObservableObject {
             if let prompt = insight.actionPrompt {
                 content.subtitle = prompt
             }
+            
+            // Attach app icon to ensure it displays in the notification
+            if let iconAttachment = NotificationManager.createAppIconAttachment() {
+                content.attachments = [iconAttachment]
+            }
 
             let request = UNNotificationRequest(
                 identifier: insight.id.uuidString,

@@ -788,6 +788,11 @@ public class NotificationManager: ObservableObject {
             content.sound = .default
         }
         
+        // Attach app icon to ensure it displays in the notification
+        if let iconAttachment = NotificationManager.createAppIconAttachment() {
+            content.attachments = [iconAttachment]
+        }
+        
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
             content: content,
@@ -819,6 +824,36 @@ public class NotificationManager: ObservableObject {
             glassSound.play()
         } else {
             NSSound.beep()
+        }
+    }
+    
+    /// Creates a notification attachment for the app icon to ensure it displays in notifications
+    /// - Returns: A UNNotificationAttachment for the app icon, or nil if unavailable
+    public static func createAppIconAttachment() -> UNNotificationAttachment? {
+        guard let iconImage = NSImage(named: "AppIcon") ?? NSApp.applicationIconImage else {
+            return nil
+        }
+        
+        let tempDir = FileManager.default.temporaryDirectory
+        let iconURL = tempDir.appendingPathComponent("SortyNotificationIcon-\(UUID().uuidString).png")
+        
+        guard let tiffData = iconImage.tiffRepresentation,
+              let bitmapRep = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+        
+        do {
+            try pngData.write(to: iconURL)
+            let attachment = try UNNotificationAttachment(
+                identifier: "appIcon",
+                url: iconURL,
+                options: [UNNotificationAttachmentOptionsTypeHintKey: "public.png"]
+            )
+            return attachment
+        } catch {
+            try? FileManager.default.removeItem(at: iconURL)
+            return nil
         }
     }
     

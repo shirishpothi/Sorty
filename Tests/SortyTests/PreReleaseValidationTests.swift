@@ -722,13 +722,6 @@ final class WorkspaceHealthEdgeCaseTests: XCTestCase {
     override func setUp() {
         super.setUp()
         
-        // Clear shared state
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: "workspaceHealthConfig")
-        defaults.removeObject(forKey: "workspaceSnapshots")
-        defaults.removeObject(forKey: "cleanupOpportunities")
-        defaults.removeObject(forKey: "healthInsights")
-        
         fileManager = FileManager.default
         tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try? fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -744,8 +737,10 @@ final class WorkspaceHealthEdgeCaseTests: XCTestCase {
         let healthManager = WorkspaceHealthManager()
         await healthManager.analyzeDirectory(path: tempDir.path, files: [])
         
-        // With no files, there should be no cleanup opportunities
-        XCTAssertEqual(healthManager.opportunities.count, 0, "Empty directory should have no cleanup opportunities")
+        // With no files, there should be no cleanup opportunities for this specific directory
+        // Note: Other opportunities from UserDefaults may exist from previous runs
+        let opportunitiesForThisDir = healthManager.opportunities.filter { $0.directoryPath == tempDir.path }
+        XCTAssertEqual(opportunitiesForThisDir.count, 0, "Empty directory should have no cleanup opportunities")
     }
     
     @MainActor

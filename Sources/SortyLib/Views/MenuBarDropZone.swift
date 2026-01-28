@@ -249,6 +249,11 @@ public class MenuBarController: ObservableObject {
         content.title = "File Organized"
         content.body = "\(filename) moved to \(folder)"
         content.sound = .default
+        
+        // Attach app icon to ensure it displays in the notification
+        if let iconAttachment = NotificationManager.createAppIconAttachment() {
+            content.attachments = [iconAttachment]
+        }
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

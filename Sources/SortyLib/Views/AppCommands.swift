@@ -269,7 +269,24 @@ public class AppState: ObservableObject {
     }
 
     public init() {
-        self.hasCompletedOnboarding = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        // Detect fresh install vs in-app update
+        // Fresh install: no previous version stored AND onboarding not completed
+        // In-app update: previous version exists, so skip onboarding even if flag was reset
+        let previousVersion = UserDefaults.standard.string(forKey: "lastLaunchedVersion")
+        let onboardingCompleted = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        let currentVersion = BuildInfo.version
+        
+        if previousVersion == nil {
+            // First ever launch - show onboarding if not completed
+            self.hasCompletedOnboarding = onboardingCompleted
+        } else {
+            // Returning user (update or re-launch) - skip onboarding
+            // Even if hasCompletedOnboarding was somehow reset, don't show it
+            self.hasCompletedOnboarding = true
+        }
+        
+        // Always store current version for future launches
+        UserDefaults.standard.set(currentVersion, forKey: "lastLaunchedVersion")
     }
 
     public var hasResults: Bool {

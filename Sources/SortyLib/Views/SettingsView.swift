@@ -1547,8 +1547,9 @@ struct SettingsView: View {
             try? fileManager.removeItem(at: sortyCaches)
         }
         
-        // Reset onboarding state to trigger fresh start
+        // Reset onboarding state AND version tracking to trigger fresh start
         defaults.set(false, forKey: "hasCompletedOnboarding")
+        defaults.removeObject(forKey: "lastLaunchedVersion")
         defaults.synchronize()
         
         HapticFeedbackManager.shared.success()

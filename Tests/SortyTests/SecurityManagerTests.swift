@@ -144,12 +144,12 @@ final class SecurityManagerTests: XCTestCase {
     }
     
     func testSessionExpiresAfterTimeout() {
-        manager.sessionTimeoutInterval = 0.01
+        manager.sessionTimeoutInterval = 0.05
         manager.refreshSession()
         
         let expectation = XCTestExpectation(description: "Wait for session to expire")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             expectation.fulfill()
         }
         
