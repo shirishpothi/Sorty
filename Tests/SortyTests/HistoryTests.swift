@@ -51,6 +51,9 @@ class HistoryTests: XCTestCase {
         let entry = OrganizationHistoryEntry(directoryPath: "/persist", filesOrganized: 1, foldersCreated: 1)
         history.addEntry(entry)
         
+        // Force UserDefaults synchronization before creating new instance
+        UserDefaults.standard.synchronize()
+        
         // Create a new instance to simulate app reload
         let newHistory = OrganizationHistory()
         XCTAssertTrue(newHistory.entries.contains(where: { $0.directoryPath == "/persist" }))

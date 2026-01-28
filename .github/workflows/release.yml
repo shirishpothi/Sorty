@@ -88,15 +88,15 @@ jobs:
       # ===========================================
       - name: Update CHANGELOG
         run: |
-          chmod +x ./scripts/update-changelog.sh
-          ./scripts/update-changelog.sh "${{ steps.version.outputs.VERSION }}"
+          chmod +x ./scripts/update_changelog.sh
+          ./scripts/update_changelog.sh "${{ steps.version.outputs.VERSION }}"
       # ===========================================
       # 5. Bump version in Xcode project
       # ===========================================
       - name: Bump version
         run: |
-          chmod +x ./scripts/bump-version.sh
-          ./scripts/bump-version.sh "${{ steps.version.outputs.VERSION }}"
+          chmod +x ./scripts/bump_version.sh
+          ./scripts/bump_version.sh "${{ steps.version.outputs.VERSION }}"
       # ===========================================
       # 6. Build
       # ===========================================
@@ -120,8 +120,8 @@ jobs:
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          chmod +x ./scripts/generate-appcast-ci.sh
-          ./scripts/generate-appcast-ci.sh
+          chmod +x ./scripts/generate_appcast_ci.sh
+          ./scripts/generate_appcast_ci.sh
       # ===========================================
       # 9. Create tag (for workflow_dispatch)
       # ===========================================

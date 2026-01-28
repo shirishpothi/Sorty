@@ -87,6 +87,15 @@ if [ -d "${PROJECT_DIR}/Resources" ]; then
     cp -R "${PROJECT_DIR}/Resources/" "${RESOURCES_DIR}/"
 fi
 
+# Copy SPM resource bundle (required for Bundle.module to work)
+SPM_BUNDLE_PATH="${BIN_PATH}/Sorty_SortyLib.bundle"
+if [ -d "${SPM_BUNDLE_PATH}" ]; then
+    cp -R "${SPM_BUNDLE_PATH}" "${RESOURCES_DIR}/"
+    log_item "Copied SPM resource bundle"
+else
+    log_item "Warning: SPM resource bundle not found at ${SPM_BUNDLE_PATH}"
+fi
+
 log_success "App bundle assembled ($(get_step_duration "assemble"))"
 
 print_step 4 $TOTAL_STEPS "Ad-hoc Signing"

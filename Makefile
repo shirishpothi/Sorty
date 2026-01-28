@@ -1,6 +1,6 @@
 # Sorty Makefile
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now release prerelease prerelease-full
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now release release-patch release-minor release-major prerelease prerelease-full
 
 # Default target
 all: build
@@ -74,7 +74,7 @@ install-cli: cli
 	@sudo cp .build/debug/learnings /usr/local/bin/learnings
 	@echo "✅ Installed! Run with: learnings --help"
 
-# Create a release zip for GitHub
+# Create a release zip for GitHub (manual)
 release: build
 	@echo "📦 Creating release package..."
 	@cd releases && zip -r Sorty-macOS.zip Sorty.app
@@ -84,6 +84,22 @@ release: build
 	@echo "   1. Create a new release on GitHub"
 	@echo "   2. Upload releases/Sorty-macOS.zip"
 	@echo "   3. Remind users to run: xattr -cr /Applications/Sorty.app"
+
+# Automated releases with version bumping
+release-patch:
+	@echo "🚀 Creating patch release..."
+	@chmod +x scripts/auto-release.sh
+	@./scripts/auto-release.sh patch
+
+release-minor:
+	@echo "🚀 Creating minor release..."
+	@chmod +x scripts/auto-release.sh
+	@./scripts/auto-release.sh minor
+
+release-major:
+	@echo "🚀 Creating major release..."
+	@chmod +x scripts/auto-release.sh
+	@./scripts/auto-release.sh major
 
 # Pre-release validation - comprehensive checks before release
 prerelease:
@@ -113,9 +129,12 @@ help:
 	@echo "  make test-full   - Run unit and UI tests"
 	@echo ""
 	@echo "Release:"
+	@echo "  make release-patch   - Auto-release with patch version bump (1.0.0 -> 1.0.1)"
+	@echo "  make release-minor   - Auto-release with minor version bump (1.0.0 -> 1.1.0)"
+	@echo "  make release-major   - Auto-release with major version bump (1.0.0 -> 2.0.0)"
+	@echo "  make release         - Create release zip (no version bump)"
 	@echo "  make prerelease      - Run comprehensive pre-release validation"
 	@echo "  make prerelease-full - Pre-release validation with UI tests"
-	@echo "  make release         - Create a release zip for GitHub"
 	@echo ""
 	@echo "Utility:"
 	@echo "  make clean       - Remove all build artifacts and releases"
