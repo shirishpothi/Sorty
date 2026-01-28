@@ -5,12 +5,25 @@ import XCTest
 class HistoryTests: XCTestCase {
     
     var history: OrganizationHistory!
+    private var testSuiteName: String!
+    private var testDefaults: UserDefaults!
     
     @MainActor
     override func setUp() async throws {
         try await super.setUp()
-        history = OrganizationHistory()
+        testSuiteName = "com.sorty.tests.history.\(name)"
+        testDefaults = UserDefaults(suiteName: testSuiteName)!
+        testDefaults.removePersistentDomain(forName: testSuiteName)
+        history = OrganizationHistory(userDefaults: testDefaults)
         history.clearHistory() // Start with clean slate
+    }
+    
+    @MainActor
+    override func tearDown() async throws {
+        testDefaults?.removePersistentDomain(forName: testSuiteName)
+        testDefaults = nil
+        history = nil
+        try await super.tearDown()
     }
     
     @MainActor
@@ -50,13 +63,11 @@ class HistoryTests: XCTestCase {
     func testPersistence() async {
         let entry = OrganizationHistoryEntry(directoryPath: "/persist", filesOrganized: 1, foldersCreated: 1)
         history.addEntry(entry)
-        
-        // Force UserDefaults synchronization and allow time for write
-        UserDefaults.standard.synchronize()
-        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-        
-        // Create a new instance to simulate app reload
-        let newHistory = OrganizationHistory()
+
+        // Create a new instance using the same isolated UserDefaults suite
+        // This is deterministic and doesn't rely on flaky synchronize() calls
+        let newHistory = OrganizationHistory(userDefaults: testDefaults)
+
         XCTAssertTrue(newHistory.entries.contains(where: { $0.directoryPath == "/persist" }))
     }
 }

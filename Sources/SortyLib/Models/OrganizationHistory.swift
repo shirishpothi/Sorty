@@ -190,7 +190,7 @@ public class OrganizationHistory: ObservableObject {
     public var totalRecoveredSpace: Int64 {
         entries.compactMap { $0.recoveredSpace }.reduce(0, +)
     }
-    
+
     private func loadHistory() {
         if let data = userDefaults.data(forKey: historyKey),
            let decoded = try? JSONDecoder().decode([OrganizationHistoryEntry].self, from: data) {
