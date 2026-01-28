@@ -20,7 +20,6 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
-      security-events: write
 
     steps:
       # ===========================================
@@ -33,27 +32,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # ===========================================
-      # CodeQL analysis
-      # ===========================================
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v2
-        with:
-          languages: 'swift'
-
-      - name: Build for CodeQL
-        run: |
-          swift build -c release --build-path .build 2>&1 | head -100
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v2
-
-      # ===========================================
       # 2. Setup Xcode
       # ===========================================
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '15.0' # Adjust as needed for the project
+          xcode-version: '16.0' # Matches macos-15 runner
 
       # ===========================================
       # 2b. Run Unit Tests

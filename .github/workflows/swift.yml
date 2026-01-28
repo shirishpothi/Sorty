@@ -83,30 +83,30 @@ jobs:
           swift test --parallel 2>&1 | tee unit_test_output.log
           echo "✅ Unit tests completed"
 
-      - name: Verify CLI Script (fileorg)
+      - name: Verify CLI Script (sorty)
         run: |
-          chmod +x CLI/fileorg
+          chmod +x CLI/sorty
           
           # Verify scheme is updated to sorty
           echo "Checking scheme..."
-          grep -q 'APP_SCHEME="sorty"' CLI/fileorg
+          grep -q 'APP_SCHEME="sorty"' CLI/sorty
           echo "✅ Scheme is set to 'sorty'"
           
           # Basic syntax check
           echo "Running syntax check..."
-          bash -n CLI/fileorg
+          bash -n CLI/sorty
           echo "✅ Syntax is valid"
           
           # Verify help command works
           echo "Testing help output..."
-          ./CLI/fileorg help 2>&1 | grep -q "Sorty CLI"
+          ./CLI/sorty help 2>&1 | grep -q "Sorty CLI"
           echo "✅ Help command works"
           
           # Verify key commands are documented
           echo "Verifying documented commands..."
-          ./CLI/fileorg help 2>&1 | grep -q "organize"
-          ./CLI/fileorg help 2>&1 | grep -q "duplicates"
-          ./CLI/fileorg help 2>&1 | grep -q "settings"
+          ./CLI/sorty help 2>&1 | grep -q "organize"
+          ./CLI/sorty help 2>&1 | grep -q "duplicates"
+          ./CLI/sorty help 2>&1 | grep -q "settings"
           echo "✅ All key commands documented"
           
           echo "✅ CLI script verification successful"
