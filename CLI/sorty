@@ -1,12 +1,12 @@
-# Sorty CLI (fileorg)
+# Sorty CLI
 # Controls the Sorty app via URL schemes
 
 APP_SCHEME="sorty"
 
 function show_help {
-    echo "Sorty CLI (fileorg)"
+    echo "Sorty CLI"
     echo ""
-    echo "Usage: fileorg <command> [options]"
+    echo "Usage: sorty <command> [options]"
     echo ""
     echo "Commands:"
     echo "  organize <path> [options]    Start organizing a directory"

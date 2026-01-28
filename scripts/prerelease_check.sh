@@ -229,12 +229,12 @@ phase_build_test() {
     # UI tests (optional)
     if [ "$RUN_UI_TESTS" = true ]; then
         echo -e "  ${BLUE}...${NC} Running UI tests..."
-        if [ -f "${PROJECT_DIR}/FileOrganiser.xcodeproj/project.pbxproj" ]; then
+        if [ -f "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj" ]; then
             if xcodebuild test \
-                -project "${PROJECT_DIR}/FileOrganiser.xcodeproj" \
-                -scheme "FileOrganiser" \
+                -project "${PROJECT_DIR}/Sorty.xcodeproj" \
+                -scheme "Sorty" \
                 -destination 'platform=macOS' \
-                -only-testing:FileOrganiserUITests \
+                -only-testing:SortyUITests \
                 CODE_SIGNING_ALLOWED=NO 2>&1 | tail -20; then
                 check_pass "UI tests pass"
             else
@@ -281,27 +281,27 @@ phase_cli() {
         check_warn "learnings CLI info" "Info command returned unexpected output"
     fi
     
-    # Check fileorg script exists
-    FILEORG_PATH="${PROJECT_DIR}/CLI/fileorg"
-    if [ -f "$FILEORG_PATH" ]; then
-        check_pass "fileorg script exists"
+    # Check sorty script exists
+    SORTY_CLI_PATH="${PROJECT_DIR}/CLI/sorty"
+    if [ -f "$SORTY_CLI_PATH" ]; then
+        check_pass "sorty script exists"
     else
-        check_fail "fileorg script" "Not found at CLI/fileorg"
+        check_fail "sorty script" "Not found at CLI/sorty"
         return 1
     fi
     
-    # Check fileorg is executable
-    if [ -x "$FILEORG_PATH" ]; then
-        check_pass "fileorg script is executable"
+    # Check sorty is executable
+    if [ -x "$SORTY_CLI_PATH" ]; then
+        check_pass "sorty script is executable"
     else
-        check_warn "fileorg permissions" "Script not executable (chmod +x needed)"
+        check_warn "sorty permissions" "Script not executable (chmod +x needed)"
     fi
     
     # Syntax check
-    if bash -n "$FILEORG_PATH" 2>&1; then
-        check_pass "fileorg syntax valid"
+    if bash -n "$SORTY_CLI_PATH" 2>&1; then
+        check_pass "sorty syntax valid"
     else
-        check_fail "fileorg syntax" "Bash syntax errors detected"
+        check_fail "sorty syntax" "Bash syntax errors detected"
         return 1
     fi
     
@@ -646,9 +646,9 @@ phase_deeplinks() {
     done
     
     if [ ${#MISSING_COMMANDS[@]} -eq 0 ]; then
-        check_pass "All key deeplink commands documented in fileorg"
+        check_pass "All key deeplink commands documented in sorty"
     else
-        check_warn "fileorg commands" "Missing documentation for: ${MISSING_COMMANDS[*]}"
+        check_warn "sorty commands" "Missing documentation for: ${MISSING_COMMANDS[*]}"
     fi
     
     return 0
@@ -699,7 +699,7 @@ phase_permissions() {
         "scripts/release.sh"
         "scripts/package.sh"
         "scripts/run_tests.sh"
-        "CLI/fileorg"
+        "CLI/sorty"
     )
     
     for script in "${SCRIPTS[@]}"; do

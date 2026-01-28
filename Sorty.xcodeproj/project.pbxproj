@@ -103,14 +103,14 @@
 			containerPortal = 33A1285A2F01230000A86470 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 33A128612F01230000A86470;
-			remoteInfo = FileOrganiser;
+			remoteInfo = Sorty;
 		};
 		33A1287A2F01230200A86470 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 33A1285A2F01230000A86470 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 33A128612F01230000A86470;
-			remoteInfo = FileOrganiser;
+			remoteInfo = Sorty;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -197,7 +197,7 @@
 		3353FCC12F0124320097CD23 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		3353FCC22F0124320097CD23 /* WatchedFoldersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedFoldersView.swift; sourceTree = "<group>"; };
 		3353FCC32F0124320097CD23 /* WorkspaceHealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHealthView.swift; sourceTree = "<group>"; };
-		33A128622F01230000A86470 /* FileOrganiser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FileOrganiser.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		33A128622F01230000A86470 /* Sorty.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sorty.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A1286F2F01230200A86470 /* FileOrganiserTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileOrganiserTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A128792F01230200A86470 /* FileOrganiserUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileOrganiserUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A128912F01230200A86470 /* AppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUITests.swift; sourceTree = "<group>"; };

@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Watched Folders** — Monitor folders for changes and organize automatically in the background.
 
-- **CLI Tools** — Two command-line utilities: `learnings` for managing your learning profile, and `fileorg` for scripting and automation.
+- **CLI Tools** — Two command-line utilities: `learnings` for managing your learning profile, and `sorty` for scripting and automation.
 
 - **Deeplinks** — Control Sorty via `sorty://` URLs for Shortcuts, automation, and external integrations.
 

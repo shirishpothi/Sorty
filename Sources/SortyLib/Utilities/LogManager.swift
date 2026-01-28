@@ -24,7 +24,7 @@ public final class LogManager: @unchecked Sendable {
         guard let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             return nil
         }
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.sorty.FileOrganizer"
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.sorty.app"
         let logsDir = appSupport.appendingPathComponent(bundleID).appendingPathComponent("Logs")
         
         if !fileManager.fileExists(atPath: logsDir.path) {

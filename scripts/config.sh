@@ -3,7 +3,7 @@
 # Project Settings
 PROJECT_NAME="Sorty"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCHEME="FileOrganiser"
+SCHEME="Sorty"
 
 # Build Paths
 BUILD_DIR="${PROJECT_DIR}/.build"

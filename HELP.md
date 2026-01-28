@@ -198,7 +198,7 @@ learnings-cli --status
 learnings-cli --clear
 
 # Open Learnings dashboard
-fileorg learnings
+sorty learnings
 ```
 
 ### Deeplinks
@@ -342,70 +342,70 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 
 ## CLI Tooling
 
-Sorty includes a comprehensive CLI tool called `fileorg` that allows you to control the application from your terminal.
+Sorty includes a comprehensive CLI tool called `sorty` that allows you to control the application from your terminal.
 
 ### Installation
-Run `make install` (or ensure `CLI/fileorg` is in your path).
+Run `make install` (or ensure `CLI/sorty` is in your path).
 
 ### Usage
-`fileorg <command> [options]`
+`sorty <command> [options]`
 
 ### Commands
 
 #### Organization
 ```bash
 # Organize current folder
-fileorg organize .
+sorty organize .
 
 # Organize specific folder with specific persona
-fileorg organize /Users/me/Downloads --persona developer
+sorty organize /Users/me/Downloads --persona developer
 
 # Auto-start organization
-fileorg organize . --auto
+sorty organize . --auto
 ```
 
 #### Maintenance
 ```bash
 # Scan for duplicates
-fileorg duplicates /path/to/scan --auto
+sorty duplicates /path/to/scan --auto
 
 # Add watched folder
-fileorg watched add /path/to/watch
+sorty watched add /path/to/watch
 
 # Add exclusion rule
-fileorg rules add "*.log"
+sorty rules add "*.log"
 ```
 
 #### Generative AI
 ```bash
 # Generate a new persona from description
-fileorg persona generate "I want to organize my sci-fi ebook collection by author"
+sorty persona generate "I want to organize my sci-fi ebook collection by author"
 ```
 
 #### Navigation
 ```bash
-fileorg settings
-fileorg history
-fileorg learnings
-fileorg health
-fileorg help
+sorty settings
+sorty history
+sorty learnings
+sorty health
+sorty help
 ```
 
 ### Command Reference
 
 | Command | Description |
 |---------|-------------|
-| `fileorg status` | Show current app status and selected folder |
-| `fileorg health` | Open Workspace Health view |
-| `fileorg settings` | Open Settings |
-| `fileorg persona [generate "description"]` | Manage or generate personas |
-| `fileorg watched [add <path>]` | Manage watched folders |
-| `fileorg rules [add "<pattern>"]` | Manage exclusion rules |
-| `fileorg organize <path> [--persona <id>] [--auto]` | Organize a folder |
-| `fileorg duplicates <path> [--auto]` | Scan for duplicates |
-| `fileorg learnings` | Open The Learnings dashboard |
-| `fileorg history` | Open organization history |
-| `fileorg help` | Open help (or `sorty://help?section=updates` for updates) |
+| `sorty status` | Show current app status and selected folder |
+| `sorty health` | Open Workspace Health view |
+| `sorty settings` | Open Settings |
+| `sorty persona [generate "description"]` | Manage or generate personas |
+| `sorty watched [add <path>]` | Manage watched folders |
+| `sorty rules [add "<pattern>"]` | Manage exclusion rules |
+| `sorty organize <path> [--persona <id>] [--auto]` | Organize a folder |
+| `sorty duplicates <path> [--auto]` | Scan for duplicates |
+| `sorty learnings` | Open The Learnings dashboard |
+| `sorty history` | Open organization history |
+| `sorty help` | Open help (or `sorty://help?section=updates` for updates) |
 
 ---
 

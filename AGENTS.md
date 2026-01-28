@@ -17,7 +17,7 @@ Native macOS SwiftUI app (macOS 15.1+, Swift 6) using MVVM with service layers. 
 - **SortyLib** (`Sources/SortyLib/`): Core library with AI clients, Models, Views, Organizer, Learnings, Utilities
 - **SortyApp** (`Sources/SortyApp/`): App entry, AppCoordinator
 - **LearningsCLI** (`Sources/LearningsCLI/`): `learnings` CLI tool
-- **Tests** (`Tests/SortyTests/`): Unit tests; `Tests/FileOrganizerUITests/`: UI tests
+- **Tests** (`Tests/SortyTests/`): Unit tests; `Tests/SortyUITests/`: UI tests
 
 Key flow: `View → ViewModel/Manager → FolderOrganizer → AIClient → OrganizationPlan → Preview → Apply`
 

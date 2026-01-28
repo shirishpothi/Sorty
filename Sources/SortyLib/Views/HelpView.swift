@@ -1049,7 +1049,7 @@ private struct CLIDeepLinksContent: View {
                 Text("Command Line Interface (CLI)")
                     .font(.headline)
                 
-                Text("The 'fileorg' tool allows you to control the app from your terminal.")
+                Text("The 'sorty' tool allows you to control the app from your terminal.")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                 
@@ -1057,18 +1057,18 @@ private struct CLIDeepLinksContent: View {
                     Text("Organization")
                         .font(.caption)
                         .fontWeight(.bold)
-                    CLICodeBlock(cmd: "fileorg organize . --auto", desc: "Organize current folder")
-                    CLICodeBlock(cmd: "fileorg organize ~/Downloads --persona developer", desc: "Organize with specific persona")
+                    CLICodeBlock(cmd: "sorty organize . --auto", desc: "Organize current folder")
+                    CLICodeBlock(cmd: "sorty organize ~/Downloads --persona developer", desc: "Organize with specific persona")
                     
                     Text("Maintenance")
                         .font(.caption)
                         .fontWeight(.bold)
-                    CLICodeBlock(cmd: "fileorg rules add \"*.tmp\"", desc: "Add exclusion rule")
-                    CLICodeBlock(cmd: "fileorg persona generate \"Organize by date\"", desc: "Generate new persona")
+                    CLICodeBlock(cmd: "sorty rules add \"*.tmp\"", desc: "Add exclusion rule")
+                    CLICodeBlock(cmd: "sorty persona generate \"Organize by date\"", desc: "Generate new persona")
                 }
             }
             
-            tipCard(icon: "terminal.fill", title: "Installation", message: "Run 'make install' to add 'fileorg' to your path, or find it in the CLI/ directory.")
+            tipCard(icon: "terminal.fill", title: "Installation", message: "Run 'make install' to add 'sorty' to your path, or find it in the CLI/ directory.")
         }
     }
 }

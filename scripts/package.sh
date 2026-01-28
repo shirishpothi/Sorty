@@ -80,13 +80,13 @@ CLI_PATH="${RELEASE_DIR}/${CLI_NAME}"
 # Gather CLI assets
 CLI_TEMP="${RELEASE_DIR}/cli_temp"
 mkdir -p "${CLI_TEMP}"
-if [ -f "${PROJECT_DIR}/CLI/fileorg" ]; then
-    cp "${PROJECT_DIR}/CLI/fileorg" "${CLI_TEMP}/"
+if [ -f "${PROJECT_DIR}/CLI/sorty" ]; then
+    cp "${PROJECT_DIR}/CLI/sorty" "${CLI_TEMP}/"
 fi
 # Assuming we might want the swift tool binary if built?
 # Since build.sh builds the app, we might need to explicitly build the tool or find it
-# Let's try to grab it from .build if available, or just fileorg
-# For now, just fileorg is key
+# Let's try to grab it from .build if available, or just sorty
+# For now, just sorty is key
 pushd "${RELEASE_DIR}" >/dev/null
 zip -r -y "${CLI_NAME}" "cli_temp" >/dev/null
 popd >/dev/null

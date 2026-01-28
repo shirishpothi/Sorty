@@ -2,7 +2,7 @@
 //  CLITests.swift
 //  SortyTests
 //
-//  Tests for CLI tools: fileorg script and learnings CLI
+//  Tests for CLI tools: sorty script and learnings CLI
 //  These tests verify deeplink handling that maps to CLI commands
 //
 
@@ -11,7 +11,7 @@ import XCTest
 
 final class CLITests: XCTestCase {
     
-    // MARK: - fileorg Script Tests
+    // MARK: - sorty Script Tests
     // Note: Script existence and syntax are verified in GitHub Actions CI
     
     // MARK: - Deeplink Handler CLI Command Mapping Tests

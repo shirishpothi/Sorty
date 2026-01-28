@@ -87,18 +87,18 @@ if [ "$INCLUDE_UI" == "true" ]; then
     # xcodebuild is picky. If we have a filter, we might just grep the output or use specific schemes?
     # Actually, simpler: swift test doesn't do UI tests. xcodebuild does.
     
-    CMD="xcodebuild test -project FileOrganiser.xcodeproj -scheme ${SCHEME} -destination 'platform=macOS'"
+    CMD="xcodebuild test -project Sorty.xcodeproj -scheme ${SCHEME} -destination 'platform=macOS'"
     
     if [ -n "$TEST_FILTER" ]; then
         # Heuristic mapping
         if [[ "$TEST_FILTER" == "Settings" ]]; then
-             CMD="$CMD -only-testing:FileOrganiserUITests/AppUITests/testSettingsWorkflow"
+             CMD="$CMD -only-testing:SortyUITests/AppUITests/testSettingsWorkflow"
         elif [[ "$TEST_FILTER" == "Exclusion" ]]; then
-             CMD="$CMD -only-testing:FileOrganiserUITests/AppUITests/testExclusionRulesWorkflow"
+             CMD="$CMD -only-testing:SortyUITests/AppUITests/testExclusionRulesWorkflow"
         # Add more mappings as needed
         fi
     else
-        CMD="$CMD -only-testing:FileOrganiserUITests"
+        CMD="$CMD -only-testing:SortyUITests"
     fi
      
     echo "Executing: $CMD"

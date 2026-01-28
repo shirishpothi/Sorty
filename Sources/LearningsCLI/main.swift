@@ -80,7 +80,7 @@ struct LearningsCLI {
         \u{001B}[1mNOTES:\u{001B}[0m
           - Full profile access requires biometric authentication in the main app
           - Some commands show limited info when accessed via CLI
-          - Use 'fileorg learnings' to open the Learnings dashboard
+          - Use 'sorty learnings' to open the Learnings dashboard
         """)
     }
     

@@ -28,7 +28,7 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
 - **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
 - **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
-- **CLI Tooling**: Two companion command-line tools: `learnings` for managing learning profiles and `fileorg` for controlling the app via terminal.
+- **CLI Tooling**: Two companion command-line tools: `learnings` for managing learning profiles and `sorty` for controlling the app via terminal.
 - **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
 - **Interactive Preview**: Review and tweak suggested organization before any files are moved.
 - **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
@@ -67,13 +67,13 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 **Using Make (Recommended):**
 ```bash
 git clone https://github.com/shirishpothi/Sorty.git
-cd FileOrganizer
+cd Sorty
 make run
 ```
 
 **Using Xcode:**
-1. Open `FileOrganiser.xcodeproj` in Xcode.
-2. Select the `FileOrganiser` scheme and your Mac as the destination.
+1. Open `Sorty.xcodeproj` in Xcode.
+2. Select the `Sorty` scheme and your Mac as the destination.
 3. Press `⌘R` to build and run.
 
 ## Configuration
@@ -126,7 +126,7 @@ If you see an error indicating that access to a watched folder has been lost (e.
 - `Sources/SortyLib/`: Core implementation including AI, FileSystem, Models, and Views.
 - `Sources/SortyApp/`: Main macOS application entry and navigation.
 - `Sources/LearningsCLI/`: Implementation of the `learnings` command-line tool.
-- `CLI/fileorg`: Shell-based CLI for controlling the app via deeplinks.
+- `CLI/sorty`: Shell-based CLI for controlling the app via deeplinks.
 - `Tests/`: Unit and UI test suites organized by component.
 - `Assets/`: App icons and screenshots.
 - `scripts/`: Build and automation scripts.
@@ -157,7 +157,7 @@ Tests are located in `Tests/SortyTests/` and cover the following areas:
 - **Component Tests**: Individual modules such as personas, learnings manager, deeplinks, security, and the CLI tooling.
 
 Key test files include:
-- `FileOrganizerTests.swift` - Core organization logic
+- `SortyTests.swift` - Core organization logic
 - `WorkspaceHealthTests.swift` - Health monitoring features
 - `LearningsManagerTests.swift` - Passive learning system
 - `CustomPersonaTests.swift` - Persona management
@@ -177,19 +177,19 @@ learnings withdraw    # Pause learning
 learnings info        # Show system information
 ```
 
-### `fileorg` CLI
+### `sorty` CLI
 Control the app via deeplinks:
 ```bash
-fileorg organize <path> [--persona <id>] [--auto]   # Organize a directory
-fileorg duplicates <path> [--auto]                   # Scan for duplicates
-fileorg status                                       # View Workspace Health
-fileorg settings [section]                           # Open settings
-fileorg persona create                               # Create a persona
-fileorg persona generate <prompt>                    # Generate persona from description
-fileorg watched add <path>                           # Add a watched folder
-fileorg rules add <pattern>                          # Add exclusion rule
-fileorg learnings                                    # Open Learnings dashboard
-fileorg history                                      # Open History
+sorty organize <path> [--persona <id>] [--auto]   # Organize a directory
+sorty duplicates <path> [--auto]                   # Scan for duplicates
+sorty status                                       # View Workspace Health
+sorty settings [section]                           # Open settings
+sorty persona create                               # Create a persona
+sorty persona generate <prompt>                    # Generate persona from description
+sorty watched add <path>                           # Add a watched folder
+sorty rules add <pattern>                          # Add exclusion rule
+sorty learnings                                    # Open Learnings dashboard
+sorty history                                      # Open History
 ```
 
 ## Deeplinks Reference

@@ -150,7 +150,7 @@ print_step 6 6 "Committing and tagging release"
 
 # Stage version files
 git add "${PROJECT_DIR}/Info.plist" 2>/dev/null || true
-git add "${PROJECT_DIR}/FileOrganiser.xcodeproj/project.pbxproj" 2>/dev/null || true
+git add "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj" 2>/dev/null || true
 git add "${PROJECT_DIR}/CHANGELOG.md" 2>/dev/null || true
 
 # Commit if there are staged changes
