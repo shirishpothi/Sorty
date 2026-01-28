@@ -47,12 +47,13 @@ class HistoryTests: XCTestCase {
     }
     
     @MainActor
-    func testPersistence() {
+    func testPersistence() async {
         let entry = OrganizationHistoryEntry(directoryPath: "/persist", filesOrganized: 1, foldersCreated: 1)
         history.addEntry(entry)
         
-        // Force UserDefaults synchronization before creating new instance
+        // Force UserDefaults synchronization and allow time for write
         UserDefaults.standard.synchronize()
+        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
         
         // Create a new instance to simulate app reload
         let newHistory = OrganizationHistory()

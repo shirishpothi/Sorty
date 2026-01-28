@@ -125,11 +125,12 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
 @MainActor
 public class OrganizationHistory: ObservableObject {
     @Published public private(set) var entries: [OrganizationHistoryEntry] = []
-    private let userDefaults = UserDefaults.standard
+    private let userDefaults: UserDefaults
     private let historyKey = "organizationHistory"
     private let maxEntries = 100
     
-    public init() {
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
         loadHistory()
     }
     
