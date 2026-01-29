@@ -96,6 +96,13 @@ else
     log_item "Warning: SPM resource bundle not found at ${SPM_BUNDLE_PATH}"
 fi
 
+# Copy Images folder directly for Bundle.main fallback (ensures icons work in distributed builds)
+IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
+if [ -d "${IMAGES_SRC}" ]; then
+    cp -R "${IMAGES_SRC}" "${RESOURCES_DIR}/"
+    log_item "Copied Images folder to Resources"
+fi
+
 log_success "App bundle assembled ($(get_step_duration "assemble"))"
 
 print_step 4 $TOTAL_STEPS "Ad-hoc Signing"
