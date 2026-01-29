@@ -1,3 +1,5 @@
+## [1.0.4] - 2026-01-29
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
