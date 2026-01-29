@@ -132,6 +132,10 @@ public struct ContentView: View {
                 extensionListener.incomingURL = nil
             }
         }
+        .sheet(isPresented: $appState.showUpdateSheet) {
+            UpdateDialogView()
+                .environmentObject(appState)
+        }
     }
 
     @ViewBuilder

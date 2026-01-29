@@ -25,9 +25,7 @@ public struct SortyCommands: Commands {
             }
             
             Button("Check for Updates...") {
-                Task {
-                    await appState.updateManager.checkForUpdates()
-                }
+                appState.checkForUpdatesInteractive()
             }
         }
 
@@ -219,9 +217,7 @@ public struct SortyCommands: Commands {
             }
             
             Button("Check for Updates...") {
-                Task {
-                    await appState.updateManager.checkForUpdates()
-                }
+                appState.checkForUpdatesInteractive()
             }
         }
     }
@@ -240,6 +236,12 @@ public class AppState: ObservableObject {
     @Published public var duplicateManager = DuplicateDetectionManager()
     @Published public var duplicateSettings = DuplicateSettingsManager()
     @Published public var debugMode: Bool = false
+    @Published public var showUpdateSheet: Bool = false
+    
+    /// Trigger update check with visible UI feedback
+    public func checkForUpdatesInteractive() {
+        showUpdateSheet = true
+    }
     
     @Published public var hasCompletedOnboarding: Bool {
         didSet {

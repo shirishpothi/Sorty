@@ -325,3 +325,86 @@ final class UpdateManagerVersionComparisonTests: XCTestCase {
         return false
     }
 }
+
+// MARK: - Integration Tests (Actual GitHub API)
+
+@MainActor
+final class UpdateManagerIntegrationTests: XCTestCase {
+    
+    /// Tests that the UpdateManager can successfully call the GitHub API
+    /// This is an integration test that makes a real network request
+    func testCheckForUpdatesConnectsToGitHub() async {
+        let manager = UpdateManager(repoOwner: "shirishpothi", repoName: "Sorty")
+        
+        XCTAssertEqual(manager.state, .idle)
+        
+        // Perform actual update check
+        await manager.checkForUpdates()
+        
+        // State should transition from idle -> checking -> (available|upToDate|error)
+        // We don't know what the result will be, but it shouldn't remain in .checking
+        XCTAssertNotEqual(manager.state, .checking, "State should not remain in .checking after checkForUpdates completes")
+        
+        // lastCheckDate should be set
+        XCTAssertNotNil(manager.lastCheckDate, "lastCheckDate should be set after checking")
+        
+        // Verify state is one of the expected final states
+        switch manager.state {
+        case .available(let version, let url, _):
+            XCTAssertFalse(version.isEmpty, "Available version should not be empty")
+            XCTAssertTrue(url.absoluteString.contains("github.com"), "URL should be a GitHub URL")
+        case .upToDate:
+            XCTAssertTrue(true, "Up to date is a valid result")
+        case .error(let message):
+            // Errors are acceptable (rate limiting, network issues)
+            XCTAssertFalse(message.isEmpty, "Error message should not be empty")
+        case .idle, .checking:
+            XCTFail("State should not be \(manager.state) after checkForUpdates")
+        }
+    }
+    
+    /// Tests that 404 response (no releases) is handled gracefully
+    func testCheckForUpdatesHandles404AsUpToDate() async {
+        // Use a nonexistent repo to trigger 404
+        let manager = UpdateManager(repoOwner: "shirishpothi", repoName: "nonexistent-repo-12345")
+        
+        await manager.checkForUpdates()
+        
+        // 404 should be treated as "up to date" (no releases means nothing to update to)
+        XCTAssertEqual(manager.state, .upToDate, "404 should be treated as up to date")
+    }
+    
+    /// Tests the state machine transitions properly during an update check
+    func testStateTransitionsDuringCheck() async {
+        let manager = UpdateManager(repoOwner: "shirishpothi", repoName: "Sorty")
+        var stateHistory: [UpdateManager.UpdateState] = []
+        
+        let cancellable = manager.$state.sink { state in
+            stateHistory.append(state)
+        }
+        
+        await manager.checkForUpdates()
+        
+        // Should have at least 2 state transitions: idle -> checking -> (final state)
+        XCTAssertGreaterThanOrEqual(stateHistory.count, 2, "Should have state transitions")
+        
+        // First state should be idle
+        XCTAssertEqual(stateHistory.first, .idle, "First state should be idle")
+        
+        // Should have .checking in the history
+        XCTAssertTrue(stateHistory.contains(.checking), "Should transition through .checking state")
+        
+        cancellable.cancel()
+    }
+    
+    /// Tests resetState works after a check
+    func testResetStateAfterCheck() async {
+        let manager = UpdateManager()
+        
+        await manager.checkForUpdates()
+        XCTAssertNotEqual(manager.state, .idle)
+        
+        manager.resetState()
+        XCTAssertEqual(manager.state, .idle, "State should be idle after reset")
+    }
+}

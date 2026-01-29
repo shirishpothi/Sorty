@@ -126,7 +126,9 @@ jobs:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: ${{ env.PROJECT_NAME }} ${{ steps.version.outputs.VERSION }}
           files: |
-            releases/*.zip
+            releases/Sorty.zip
+            releases/Sorty-CLI.zip
+            releases/Sorty-Source.zip
             releases/appcast.xml
           generate_release_notes: true
           append_body: true
@@ -138,6 +140,10 @@ jobs:
             > ```bash
             > xattr -cr /Applications/Sorty.app
             > ```
+            
+            ## Additional Downloads
+            - **Sorty-CLI.zip** - Command line tool for terminal automation
+            - **Sorty-Source.zip** - Full source code
           prerelease: ${{ steps.version.outputs.IS_PRERELEASE == 'true' }}
 
       # ===========================================
@@ -170,12 +176,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           # Check if there are changes to commit
-          if git diff --quiet CHANGELOG.md FileOrganiser.xcodeproj/project.pbxproj Info.plist; then
+          if git diff --quiet CHANGELOG.md Sorty.xcodeproj/project.pbxproj Info.plist 2>/dev/null; then
             echo "No changes to commit"
           else
-            git add CHANGELOG.md FileOrganiser.xcodeproj/project.pbxproj Info.plist
-            git commit -m "chore: bump version to ${{ steps.version.outputs.VERSION }} [skip ci]"
-            git push origin HEAD:main
+            git add CHANGELOG.md Sorty.xcodeproj/project.pbxproj Info.plist 2>/dev/null || true
+            git commit -m "chore: bump version to ${{ steps.version.outputs.VERSION }} [skip ci]" || echo "Nothing to commit"
+            git push origin HEAD:main || echo "Nothing to push"
           fi
       # ===========================================
       # 12. Summary

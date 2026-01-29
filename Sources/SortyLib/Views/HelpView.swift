@@ -64,6 +64,7 @@ public enum HelpSection: String, CaseIterable {
     case cliAndDeeplinks
     case shortcuts
     case updates
+    case downloads
     case troubleshooting
     case privacy
     case about
@@ -82,6 +83,7 @@ public enum HelpSection: String, CaseIterable {
         case .shortcuts: return "Keyboard Shortcuts"
         case .cliAndDeeplinks: return "CLI & Deeplinks"
         case .updates: return "Version & Updates"
+        case .downloads: return "Downloads"
         case .troubleshooting: return "Troubleshooting"
         case .privacy: return "Privacy & Data"
         case .about: return "About"
@@ -102,6 +104,7 @@ public enum HelpSection: String, CaseIterable {
         case .shortcuts: return "keyboard.fill"
         case .cliAndDeeplinks: return "terminal.fill"
         case .updates: return "arrow.down.circle.fill"
+        case .downloads: return "square.and.arrow.down.fill"
         case .troubleshooting: return "wrench.and.screwdriver.fill"
         case .privacy: return "lock.shield.fill"
         case .about: return "info.circle.fill"
@@ -135,6 +138,8 @@ public enum HelpSection: String, CaseIterable {
             ShortcutsContent()
         case .updates:
             UpdatesHelpContent()
+        case .downloads:
+            DownloadsContent()
         case .troubleshooting:
             TroubleshootingContent()
         case .privacy:
@@ -1159,4 +1164,218 @@ private func tipCard(icon: String, title: String, message: String) -> some View 
     .padding()
     .background(Color.blue.opacity(0.1))
     .cornerRadius(8)
+}
+
+// MARK: - Downloads Content
+
+private enum DownloadState {
+    case idle
+    case downloading
+    case completed(URL)
+    case failed(String)
+}
+
+private struct DownloadsContent: View {
+    @State private var cliDownloadState: DownloadState = .idle
+    @State private var sourceDownloadState: DownloadState = .idle
+    
+    private let repoOwner = "shirishpothi"
+    private let repoName = "Sorty"
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Download additional Sorty resources directly from GitHub Releases.")
+                .font(.body)
+            
+            // CLI Tool Download Card
+            DownloadCard(
+                icon: "terminal.fill",
+                title: "Command Line Tool",
+                description: "Control Sorty from your terminal. Install to /usr/local/bin for easy access.",
+                fileName: "Sorty-CLI.zip",
+                downloadState: cliDownloadState,
+                onDownload: { await downloadAsset(name: "Sorty-CLI.zip", state: $cliDownloadState) }
+            )
+            
+            // Source Code Download Card
+            DownloadCard(
+                icon: "doc.text.fill",
+                title: "Source Code",
+                description: "Full source code of the Sorty app. Build from source or contribute to development.",
+                fileName: "Sorty-Source.zip",
+                downloadState: sourceDownloadState,
+                onDownload: { await downloadAsset(name: "Sorty-Source.zip", state: $sourceDownloadState) }
+            )
+            
+            Divider()
+            
+            // Manual Download Option
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Manual Download")
+                    .font(.headline)
+                
+                Text("You can also download these files directly from the GitHub Releases page:")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                
+                Link(destination: URL(string: "https://github.com/\(repoOwner)/\(repoName)/releases/latest")!) {
+                    HStack {
+                        Image(systemName: "safari")
+                        Text("Open GitHub Releases")
+                    }
+                }
+                .buttonStyle(.link)
+            }
+            
+            Divider()
+            
+            // CLI Installation Instructions
+            VStack(alignment: .leading, spacing: 12) {
+                Text("CLI Installation")
+                    .font(.headline)
+                
+                Text("After downloading, install the CLI tool:")
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    CLICodeBlock(cmd: "unzip Sorty-CLI.zip", desc: "Extract the archive")
+                    CLICodeBlock(cmd: "chmod +x sorty", desc: "Make it executable")
+                    CLICodeBlock(cmd: "sudo mv sorty /usr/local/bin/", desc: "Install to PATH")
+                    CLICodeBlock(cmd: "sorty --version", desc: "Verify installation")
+                }
+            }
+        }
+    }
+    
+    private func downloadAsset(name: String, state: Binding<DownloadState>) async {
+        state.wrappedValue = .downloading
+        
+        // Get latest release info from GitHub
+        let apiURL = URL(string: "https://api.github.com/repos/\(repoOwner)/\(repoName)/releases/latest")!
+        
+        do {
+            var request = URLRequest(url: apiURL)
+            request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+            request.setValue("Sorty/\(BuildInfo.version)", forHTTPHeaderField: "User-Agent")
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                state.wrappedValue = .failed("Failed to fetch release info")
+                return
+            }
+            
+            // Parse JSON to find the asset URL
+            guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let assets = json["assets"] as? [[String: Any]] else {
+                state.wrappedValue = .failed("Invalid release data")
+                return
+            }
+            
+            // Find the matching asset
+            guard let asset = assets.first(where: { ($0["name"] as? String) == name }),
+                  let downloadURLString = asset["browser_download_url"] as? String,
+                  let downloadURL = URL(string: downloadURLString) else {
+                state.wrappedValue = .failed("Asset '\(name)' not found in latest release")
+                return
+            }
+            
+            // Download the file
+            let (fileURL, _) = try await URLSession.shared.download(from: downloadURL)
+            
+            // Move to Downloads folder
+            let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+            let destinationURL = downloadsURL.appendingPathComponent(name)
+            
+            // Remove existing file if present
+            try? FileManager.default.removeItem(at: destinationURL)
+            try FileManager.default.moveItem(at: fileURL, to: destinationURL)
+            
+            state.wrappedValue = .completed(destinationURL)
+            
+            // Open in Finder
+            NSWorkspace.shared.selectFile(destinationURL.path, inFileViewerRootedAtPath: downloadsURL.path)
+            
+        } catch {
+            state.wrappedValue = .failed(error.localizedDescription)
+        }
+    }
+}
+
+private struct DownloadCard: View {
+    let icon: String
+    let title: String
+    let description: String
+    let fileName: String
+    let downloadState: DownloadState
+    let onDownload: () async -> Void
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: icon)
+                .font(.title)
+                .foregroundColor(.accentColor)
+                .frame(width: 40)
+            
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                
+                Text(description)
+                    .font(.callout)
+                    .foregroundColor(.secondary)
+                
+                HStack {
+                    switch downloadState {
+                    case .idle:
+                        Button(action: {
+                            Task { await onDownload() }
+                        }) {
+                            Label("Download \(fileName)", systemImage: "arrow.down.circle.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        
+                    case .downloading:
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Downloading...")
+                                .foregroundColor(.secondary)
+                        }
+                        
+                    case .completed(let url):
+                        HStack(spacing: 8) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("Downloaded to \(url.lastPathComponent)")
+                                .foregroundColor(.secondary)
+                            
+                            Button("Show in Finder") {
+                                NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+                            }
+                            .buttonStyle(.link)
+                        }
+                        
+                    case .failed(let error):
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                            Text(error)
+                                .foregroundColor(.secondary)
+                                .font(.caption)
+                            
+                            Button("Retry") {
+                                Task { await onDownload() }
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.1))
+        .cornerRadius(12)
+    }
 }
