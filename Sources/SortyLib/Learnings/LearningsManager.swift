@@ -145,6 +145,23 @@ public class LearningsManager: ObservableObject {
         isLoading = false
     }
     
+    /// Load profile synchronously for background collection (without authentication)
+    /// This allows data collection to work even when the UI is locked
+    private func loadProfileIfNeededForCollection() {
+        guard currentProfile == nil else { return }
+        
+        do {
+            if let profile = try LearningsFileManager.load() {
+                currentProfile = profile
+            } else {
+                currentProfile = LearningsProfile()
+            }
+        } catch {
+            self.error = "Failed to load profile: \(error.localizedDescription)"
+            currentProfile = LearningsProfile()
+        }
+    }
+    
     private func saveProfile() async {
         guard let profile = currentProfile else { return }
         do {
@@ -158,7 +175,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record additional instructions provided by user
     public func recordAdditionalInstruction(_ instruction: String, for folderPath: String, fileCount: Int? = nil) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let userInstruction = UserInstruction(
             instruction: instruction,
@@ -174,7 +193,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record guiding instructions for next attempt
     public func recordGuidingInstruction(_ instruction: String, for folderPath: String? = nil, fileCount: Int? = nil) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let userInstruction = UserInstruction(
             instruction: instruction,
@@ -202,7 +223,9 @@ public class LearningsManager: ObservableObject {
         regenerationInstructions: [String]? = nil,
         aiModel: String? = nil
     ) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let cancelled = CancelledOrganization(
             folderPath: folderPath,
@@ -224,7 +247,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record a regenerated organization session
     public func recordRegeneratedOrganization(folderPath: String, previousPlanSummary: String? = nil, guidingInstruction: String? = nil, regenerationCount: Int) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let regenerated = RegeneratedOrganization(
             folderPath: folderPath,
@@ -239,7 +264,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record a steering prompt (post-organization feedback)
     public func recordSteeringPrompt(_ prompt: String, folderPath: String?, sessionId: String?) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let steeringPrompt = SteeringPrompt(
             prompt: prompt,
@@ -253,7 +280,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record a directory change made after AI organization
     public func recordDirectoryChange(from original: String, to new: String, wasAIOrganized: Bool, sessionId: String? = nil) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let change = DirectoryChange(
             originalPath: original,
@@ -268,7 +297,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record a history revert event
     public func recordHistoryRevert(entryId: String, operationCount: Int, folderPath: String? = nil, revertReason: String? = nil) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let event = RevertEvent(
             entryId: entryId,
@@ -349,7 +380,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record a manual correction (File moved manually after AI organization)
     public func recordCorrection(originalPath: String, newPath: String) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let example = LabeledExample(
             srcPath: originalPath,
@@ -366,7 +399,9 @@ public class LearningsManager: ObservableObject {
     
     /// Record a rejection (File reverted or explicitly rejected)
     public func recordRejection(originalPath: String) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let example = LabeledExample(
             srcPath: originalPath,
@@ -396,7 +431,9 @@ public class LearningsManager: ObservableObject {
     
     /// Internal helper to add a labeled example
     public func addLabeledExample(srcPath: String, dstPath: String, action: ExampleAction) {
-        guard consentManager.canCollectData, var profile = currentProfile else { return }
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
         
         let example = LabeledExample(
             srcPath: srcPath,
@@ -994,6 +1031,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a rule success (applied and no correction followed)
     public func recordRuleSuccess(ruleId: String) {
+        guard consentManager.canCollectData else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
@@ -1006,6 +1044,7 @@ public class LearningsManager: ObservableObject {
     
     /// Record a rule failure (applied but user corrected)
     public func recordRuleFailure(ruleId: String) {
+        guard consentManager.canCollectData else { return }
         guard var profile = currentProfile else { return }
         
         if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {

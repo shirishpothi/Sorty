@@ -37,7 +37,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16.0' # Matches macos-15 runner
+          xcode-version: 'latest-stable' # Use latest stable Xcode for SDK compatibility
 
       # ===========================================
       # 2b. Run Unit Tests
@@ -87,7 +87,8 @@ jobs:
       - name: Build
         run: |
           chmod +x ./scripts/build.sh
-          ./scripts/build.sh
+          # Use xcodebuild for CI releases - ensures proper SDK targeting
+          BUILD_METHOD=xcodebuild SKIP_TESTS=true ./scripts/build.sh
       # ===========================================
       # 7. Package (ZIP)
       # ===========================================
@@ -128,7 +129,6 @@ jobs:
           files: |
             releases/Sorty.zip
             releases/Sorty-CLI.zip
-            releases/Sorty-Source.zip
             releases/appcast.xml
           generate_release_notes: true
           append_body: true

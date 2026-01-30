@@ -32,6 +32,7 @@ public enum AIClientError: LocalizedError, Sendable {
     case invalidResponseFormat
     case apiError(statusCode: Int, message: String)
     case networkError(any Error & Sendable)
+    case jsonDecodingError(context: String)
     
     public var errorDescription: String? {
         switch self {
@@ -49,6 +50,8 @@ public enum AIClientError: LocalizedError, Sendable {
             return "API Error (\(statusCode)): \(getStatusExplanation(statusCode))"
         case .networkError(let error):
             return "Connection Failed: \(error.localizedDescription)"
+        case .jsonDecodingError:
+            return "Invalid Response: The server returned data in an unexpected format"
         }
     }
     
@@ -70,6 +73,8 @@ public enum AIClientError: LocalizedError, Sendable {
             return "Please enter an API key in the settings or disable 'Requires API Key' for local models."
         case .invalidURL:
             return "The URL format is incorrect. Ensure it starts with http:// or https://."
+        case .jsonDecodingError(let context):
+            return "The API returned an unexpected response format. This may indicate:\n• Wrong API endpoint URL\n• API version mismatch\n• Server configuration issue\n\nDetails: \(context)"
         default:
             return nil
         }

@@ -387,11 +387,15 @@ struct AnalysisView: View {
         InlineNotice(
             icon: "clock",
             title: "This is taking longer than usual",
-            message: "Large folders or complex content may take 1-3 minutes. You can try a faster model or disable Deep Scan.",
+            message: "Large folders may take 1-3 minutes. You can switch windows—we'll notify you when ready.",
             severity: .warning,
             actions: [
-                InlineNoticeAction(title: "Open Settings", systemImage: "gear") {
+                InlineNoticeAction(title: "Try Faster Model", systemImage: "bolt") {
+                    appState.selectedSettingsSection = .provider
                     appState.currentView = .settings
+                },
+                InlineNoticeAction(title: "Cancel", systemImage: "xmark") {
+                    organizer.reset()
                 }
             ]
         )
@@ -795,6 +799,12 @@ struct InsightPill: View {
         HStack(spacing: 6) {
             if let filePath = insight.filePath {
                 FileThumbnailView(url: URL(fileURLWithPath: filePath), size: CGSize(width: 14, height: 14))
+            } else if insight.category == .folder {
+                // Use actual macOS folder icon for folder insights
+                Image(nsImage: NSWorkspace.shared.icon(for: .folder))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
             } else {
                 Image(systemName: insight.category.icon)
                     .font(.caption2)

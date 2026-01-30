@@ -1576,6 +1576,28 @@ struct SettingsView: View {
                         testConnectionDetails = nil
                     }
                 }
+            } catch let decodingError as DecodingError {
+                // Provide clearer message for JSON decoding errors
+                HapticFeedbackManager.shared.error()
+                let context: String
+                switch decodingError {
+                case .dataCorrupted(let ctx):
+                    context = ctx.debugDescription
+                case .keyNotFound(let key, _):
+                    context = "Missing key: \(key.stringValue)"
+                case .typeMismatch(let type, _):
+                    context = "Type mismatch for: \(type)"
+                case .valueNotFound(let type, _):
+                    context = "Missing value for: \(type)"
+                @unknown default:
+                    context = decodingError.localizedDescription
+                }
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                        testConnectionStatus = "Error: Invalid response format"
+                        testConnectionDetails = "The API endpoint may be incorrect or the service returned unexpected data.\n\nDetails: \(context)"
+                    }
+                }
             } catch {
                 HapticFeedbackManager.shared.error()
                 await MainActor.run {

@@ -212,7 +212,7 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Track a steering prompt (post-organization instruction)
     public func trackSteeringPrompt(_ prompt: String, forFolder folderPath: String? = nil) {
-        guard canCollect, !learningsManager.isLocked, !prompt.isEmpty else { return }
+        guard canCollect, !prompt.isEmpty else { return }
         
         // Add to current session if active
         if var session = currentSession {
@@ -262,7 +262,7 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Called by FolderWatcher delegate or FileSystemManager when a move occurs
     public func handleFileMove(from src: String, to dst: String) {
-        guard canCollect, !learningsManager.isLocked else { return }
+        guard canCollect else { return }
         
         // 1. Check if this file was recently organized by AI
         // Look back 24 hours (or configurable window)
@@ -347,7 +347,7 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Track when user provides additional instructions for organization
     public func trackAdditionalInstruction(_ instruction: String, forFolder folderPath: String) {
-        guard canCollect, !learningsManager.isLocked else { return }
+        guard canCollect else { return }
         
         learningsManager.recordAdditionalInstruction(instruction, for: folderPath)
         LogManager.shared.log("Recorded additional instruction for \(folderPath)", category: "LearningObserver")
@@ -355,7 +355,7 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Track when user provides guiding instructions for next attempt
     public func trackGuidingInstruction(_ instruction: String) {
-        guard canCollect, !learningsManager.isLocked else { return }
+        guard canCollect else { return }
         
         learningsManager.recordGuidingInstruction(instruction)
         LogManager.shared.log("Recorded guiding instruction", category: "LearningObserver")
@@ -364,7 +364,7 @@ public class ContinuousLearningObserver: ObservableObject {
     // MARK: - History Revert Tracking
     
     private func handleRevertNotification(_ notification: Notification) {
-        guard canCollect, !learningsManager.isLocked,
+        guard canCollect,
               let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
               let operations = entry.operations else { return }
         

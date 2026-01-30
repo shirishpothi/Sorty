@@ -1173,11 +1173,13 @@ private enum DownloadState {
     case downloading
     case completed(URL)
     case failed(String)
+    case installing
+    case installed
+    case installFailed(String)
 }
 
 private struct DownloadsContent: View {
     @State private var cliDownloadState: DownloadState = .idle
-    @State private var sourceDownloadState: DownloadState = .idle
     
     private let repoOwner = "shirishpothi"
     private let repoName = "Sorty"
@@ -1194,18 +1196,37 @@ private struct DownloadsContent: View {
                 description: "Control Sorty from your terminal. Install to /usr/local/bin for easy access.",
                 fileName: "Sorty-CLI.zip",
                 downloadState: cliDownloadState,
-                onDownload: { await downloadAsset(name: "Sorty-CLI.zip", state: $cliDownloadState) }
+                onDownload: { await downloadAsset(name: "Sorty-CLI.zip", state: $cliDownloadState) },
+                onInstall: { url in await installCLI(from: url) },
+                isCLI: true
             )
             
-            // Source Code Download Card
-            DownloadCard(
-                icon: "doc.text.fill",
-                title: "Source Code",
-                description: "Full source code of the Sorty app. Build from source or contribute to development.",
-                fileName: "Sorty-Source.zip",
-                downloadState: sourceDownloadState,
-                onDownload: { await downloadAsset(name: "Sorty-Source.zip", state: $sourceDownloadState) }
-            )
+            // Source Code Link
+            HStack(spacing: 12) {
+                Image(systemName: "doc.text.fill")
+                    .font(.title2)
+                    .foregroundColor(.accentColor)
+                    .frame(width: 32)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Source Code")
+                        .font(.headline)
+                    Text("Available as auto-generated archives on the GitHub Releases page.")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Link(destination: URL(string: "https://github.com/\(repoOwner)/\(repoName)/releases")!) {
+                    Label("View Releases", systemImage: "arrow.up.right")
+                        .font(.callout)
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding()
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(8)
             
             Divider()
             
@@ -1301,6 +1322,69 @@ private struct DownloadsContent: View {
             state.wrappedValue = .failed(error.localizedDescription)
         }
     }
+    
+    private func installCLI(from zipURL: URL) async {
+        cliDownloadState = .installing
+        
+        let fileManager = FileManager.default
+        let tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        
+        do {
+            try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            
+            let unzipProcess = Process()
+            unzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+            unzipProcess.arguments = ["-o", zipURL.path, "-d", tempDir.path]
+            unzipProcess.standardOutput = FileHandle.nullDevice
+            unzipProcess.standardError = FileHandle.nullDevice
+            try unzipProcess.run()
+            unzipProcess.waitUntilExit()
+            
+            guard unzipProcess.terminationStatus == 0 else {
+                cliDownloadState = .installFailed("Failed to extract archive")
+                return
+            }
+            
+            let extractedBinary = tempDir.appendingPathComponent("sorty")
+            guard fileManager.fileExists(atPath: extractedBinary.path) else {
+                cliDownloadState = .installFailed("Binary 'sorty' not found in archive")
+                return
+            }
+            
+            let installPath = "/usr/local/bin/sorty"
+            let script = """
+                do shell script "mkdir -p /usr/local/bin && mv '\(extractedBinary.path)' '\(installPath)' && chmod +x '\(installPath)'" with administrator privileges
+            """
+            
+            var error: NSDictionary?
+            guard let appleScript = NSAppleScript(source: script) else {
+                cliDownloadState = .installFailed("Failed to create installation script")
+                return
+            }
+            
+            appleScript.executeAndReturnError(&error)
+            
+            if let error = error {
+                let errorMessage = error[NSAppleScript.errorMessage] as? String ?? "Installation cancelled or failed"
+                cliDownloadState = .installFailed(errorMessage)
+                return
+            }
+            
+            guard fileManager.fileExists(atPath: installPath),
+                  fileManager.isExecutableFile(atPath: installPath) else {
+                cliDownloadState = .installFailed("Installation verification failed")
+                return
+            }
+            
+            try? fileManager.removeItem(at: tempDir)
+            
+            cliDownloadState = .installed
+            
+        } catch {
+            try? fileManager.removeItem(at: tempDir)
+            cliDownloadState = .installFailed(error.localizedDescription)
+        }
+    }
 }
 
 private struct DownloadCard: View {
@@ -1310,6 +1394,8 @@ private struct DownloadCard: View {
     let fileName: String
     let downloadState: DownloadState
     let onDownload: () async -> Void
+    var onInstall: ((URL) async -> Void)?
+    var isCLI: Bool = false
     
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -1345,16 +1431,58 @@ private struct DownloadCard: View {
                         }
                         
                     case .completed(let url):
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("Downloaded to \(url.lastPathComponent)")
+                                    .foregroundColor(.secondary)
+                                
+                                Button("Show in Finder") {
+                                    NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+                                }
+                                .buttonStyle(.link)
+                            }
+                            
+                            if isCLI, let onInstall = onInstall {
+                                Button(action: {
+                                    Task { await onInstall(url) }
+                                }) {
+                                    Label("Install Now", systemImage: "arrow.right.circle.fill")
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                        
+                    case .installing:
+                        HStack(spacing: 8) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Installing to /usr/local/bin...")
+                                .foregroundColor(.secondary)
+                        }
+                        
+                    case .installed:
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(.green)
-                            Text("Downloaded to \(url.lastPathComponent)")
+                            Text("Installed successfully! Run 'sorty --version' to verify.")
                                 .foregroundColor(.secondary)
-                            
-                            Button("Show in Finder") {
-                                NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+                        }
+                        
+                    case .installFailed(let error):
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                Text(error)
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
                             }
-                            .buttonStyle(.link)
+                            
+                            Text("You can still install manually using the instructions below.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                         
                     case .failed(let error):

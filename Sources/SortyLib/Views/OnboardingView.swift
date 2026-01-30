@@ -20,6 +20,7 @@ public struct OnboardingView: View {
     
     @State private var currentStep: OnboardingStep = .welcome
     @State private var isAnimating = false
+    @State private var hasFilesAndFoldersPermission = false
     
     public init(hasCompletedOnboarding: Binding<Bool>) {
         self._hasCompletedOnboarding = hasCompletedOnboarding
@@ -62,7 +63,7 @@ public struct OnboardingView: View {
             ProviderSelectionStep()
                 .transition(TransitionStyles.slideFromRight)
         case .permissions:
-            PermissionsStep()
+            PermissionsStep(hasRequiredPermissions: $hasFilesAndFoldersPermission)
                 .transition(TransitionStyles.slideFromRight)
         case .workflow:
             WorkflowSelectionStep()
@@ -142,6 +143,9 @@ public struct OnboardingView: View {
                     .buttonStyle(.onboardingPill)
                     .keyboardShortcut(.defaultAction)
                 } else {
+                    // Determine if Continue should be disabled on permissions step
+                    let canProceed = currentStep != .permissions || hasFilesAndFoldersPermission
+                    
                     Button {
                         HapticFeedbackManager.shared.selection()
                         withAnimation(.pageTransition) {
@@ -156,6 +160,8 @@ public struct OnboardingView: View {
                     }
                     .buttonStyle(.onboardingPill)
                     .keyboardShortcut(.rightArrow, modifiers: [])
+                    .disabled(!canProceed)
+                    .opacity(canProceed ? 1.0 : 0.5)
                 }
             }
         }
@@ -979,6 +985,28 @@ struct ProviderSelectionStep: View {
                     }
                     HapticFeedbackManager.shared.success()
                 }
+            } catch let decodingError as DecodingError {
+                // Provide a clearer message for JSON decoding errors
+                let context: String
+                switch decodingError {
+                case .dataCorrupted(let ctx):
+                    context = ctx.debugDescription
+                case .keyNotFound(let key, _):
+                    context = "Missing key: \(key.stringValue)"
+                case .typeMismatch(let type, _):
+                    context = "Type mismatch for: \(type)"
+                case .valueNotFound(let type, _):
+                    context = "Missing value for: \(type)"
+                @unknown default:
+                    context = decodingError.localizedDescription
+                }
+                await MainActor.run {
+                    withAnimation {
+                        connectionStatus = .failed
+                        connectionError = "Invalid response format from server. The API endpoint may be incorrect or the service returned unexpected data. (\(context))"
+                    }
+                    HapticFeedbackManager.shared.error()
+                }
             } catch {
                 await MainActor.run {
                     withAnimation {
@@ -1109,6 +1137,7 @@ struct OnboardingProviderRow: View {
 // MARK: - Step 2: Permissions
 
 struct PermissionsStep: View {
+    @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
     
@@ -1135,7 +1164,7 @@ struct PermissionsStep: View {
                         Text("Why these permissions?")
                             .font(.subheadline.bold())
                         
-                        Text("• **Files & Folders**: To read and move your files\n• **Automation**: For Finder integration\n• **Notifications**: To alert you when organization completes")
+                        Text("• **Files & Folders** *(Required)*: To read and move your files\n• **Automation** *(Optional)*: For Finder integration\n• **Notifications** *(Optional)*: To alert you when organization completes")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1181,8 +1210,26 @@ struct PermissionsStep: View {
                 }
                 .frame(maxWidth: 400)
                 
-                Text("You can skip this step and grant permissions later")
+                if permissionStates[.filesAndFolders] == .granted {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text("Files & Folders permission granted. You can continue.")
+                    }
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Files & Folders permission is required to continue")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                
+                Text("Automation and Notifications are optional")
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity)
@@ -1213,8 +1260,24 @@ struct PermissionsStep: View {
             }
         }
         
-        // Files and Automation permissions are implicit - just show as requestable
-        permissionStates[.filesAndFolders] = .unknown
+        // Check Files & Folders permission by testing access to user's home directory
+        // If we can list the contents of Documents, we likely have access
+        let documentsPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents")
+        if FileManager.default.isReadableFile(atPath: documentsPath.path) {
+            // Try to actually list contents to confirm access
+            if let _ = try? FileManager.default.contentsOfDirectory(atPath: documentsPath.path) {
+                permissionStates[.filesAndFolders] = .granted
+                hasRequiredPermissions = true
+            } else {
+                permissionStates[.filesAndFolders] = .unknown
+                hasRequiredPermissions = false
+            }
+        } else {
+            permissionStates[.filesAndFolders] = .unknown
+            hasRequiredPermissions = false
+        }
+        
+        // Automation permission is optional and can't be easily detected
         permissionStates[.automation] = .unknown
     }
     
@@ -1223,11 +1286,26 @@ struct PermissionsStep: View {
         
         switch type {
         case .filesAndFolders:
-            // Open System Preferences to Security & Privacy
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
-                NSWorkspace.shared.open(url)
+            // Use NSOpenPanel to trigger the Files & Folders permission dialog
+            // This is the proper way to request file access permissions
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.message = "Select any folder to grant Sorty access to your files"
+            panel.prompt = "Grant Access"
+            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+            
+            if panel.runModal() == .OK, let _ = panel.url {
+                // User granted access - the permission is now active
+                permissionStates[.filesAndFolders] = .granted
+                hasRequiredPermissions = true
+                HapticFeedbackManager.shared.success()
+            } else {
+                // User cancelled - still unknown/not granted
+                permissionStates[.filesAndFolders] = .unknown
+                hasRequiredPermissions = false
             }
-            permissionStates[.filesAndFolders] = .pending
             
         case .automation:
             // Open System Preferences to Automation

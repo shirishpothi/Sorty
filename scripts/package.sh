@@ -59,21 +59,8 @@ else
     log_failure "PKG creation failed"
 fi
 
-# 3. Create Source ZIP
-print_step 3 4 "Creating Source Code Archive"
-SRC_NAME="${PROJECT_NAME}-Source.zip"
-SRC_PATH="${RELEASE_DIR}/${SRC_NAME}"
-
-# Archive current HEAD
-git archive -o "${SRC_PATH}" HEAD 2>/dev/null || true
-if [ -f "$SRC_PATH" ]; then
-    log_success "Created $SRC_NAME ($(get_file_size "$SRC_PATH"))"
-else
-    log_failure "Source archival failed"
-fi
-
-# 4. Create CLI Tools ZIP
-print_step 4 4 "Creating CLI Tools Archive"
+# 3. Create CLI Tools ZIP
+print_step 3 3 "Creating CLI Tools Archive"
 CLI_NAME="${PROJECT_NAME}-CLI.zip"
 CLI_PATH="${RELEASE_DIR}/${CLI_NAME}"
 

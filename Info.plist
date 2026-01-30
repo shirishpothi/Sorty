@@ -52,6 +52,8 @@
 	<string>3b38a86</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Sorty uses biometrics to protect your Learnings data.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>
