@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 enum GitHubAuthError: Error {
     case invalidURL

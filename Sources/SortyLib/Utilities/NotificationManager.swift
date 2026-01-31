@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 import SwiftUI
 import UserNotifications
 import AppKit

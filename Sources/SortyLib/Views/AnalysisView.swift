@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AnalysisView: View {
     @EnvironmentObject var organizer: FolderOrganizer

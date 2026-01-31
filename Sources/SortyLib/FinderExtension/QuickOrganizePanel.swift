@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 import AppKit
 
 // MARK: - Quick Organize Window Controller

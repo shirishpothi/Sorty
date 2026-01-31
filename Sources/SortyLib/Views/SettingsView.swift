@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 // MARK: - Settings Category
 
@@ -1905,8 +1906,6 @@ struct NotificationPermissionCard: View {
             return ("xmark.circle.fill", .red, "Denied", "Open System Settings to enable notifications")
         case .provisional:
             return ("bell.badge.circle.fill", .orange, "Provisional", "Notifications delivered quietly")
-        case .ephemeral:
-            return ("clock.circle.fill", .blue, "Temporary", "App Clip temporary permission")
         case .notDetermined:
             return ("questionmark.circle.fill", .secondary, "Not Set", "Request permission to enable system notifications")
         @unknown default:

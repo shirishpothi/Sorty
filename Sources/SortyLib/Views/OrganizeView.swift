@@ -8,6 +8,7 @@
 
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct OrganizeView: View {
     @EnvironmentObject var organizer: FolderOrganizer

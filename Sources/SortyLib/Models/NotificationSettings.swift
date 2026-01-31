@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 /// Notification backend to use for system notifications
 public enum NotificationBackend: String, Codable, CaseIterable, Sendable {

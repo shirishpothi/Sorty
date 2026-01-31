@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 
 /// Represents a violation where an excluded file was included in the plan
 public struct ExclusionViolation: Identifiable, Sendable {

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import Combine
 
 /// Manages shared URLSession instances for AI providers
 @MainActor

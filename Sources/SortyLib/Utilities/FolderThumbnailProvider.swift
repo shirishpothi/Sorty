@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import Combine
 import QuickLookThumbnailing
 
 /// Provides cached thumbnails for folders using QuickLook
