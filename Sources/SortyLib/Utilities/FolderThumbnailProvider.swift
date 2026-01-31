@@ -22,14 +22,11 @@ public class FolderThumbnailProvider: ObservableObject {
     
     private let cache = NSCache<NSURL, AnyObject>()
     
-    /// Wrapper for thumbnail generation tasks to avoid Sendable issues
-    private final class ThumbnailTask: @unchecked Sendable {
-        let task: Task<NSImage, Never>
-        init(_ task: Task<NSImage, Never>) { self.task = task }
-    }
+    /// Track URLs currently being processed to avoid duplicate generation
+    private var processingURLs: Set<URL> = []
     
-    /// Pending thumbnail generation tasks to avoid duplicates
-    private var pendingTasks: [URL: ThumbnailTask] = [:]
+    /// Continuations for URLs being processed (to resume awaiting callers)
+    private var continuations: [URL: [CheckedContinuation<NSImage, Never>]] = [:]
     
     // MARK: - Initialization
     
@@ -47,29 +44,44 @@ public class FolderThumbnailProvider: ObservableObject {
         }
         
         // Check if we're already generating this thumbnail
-        if let existingTask = pendingTasks[url] {
-            return await existingTask.task.value
+        if processingURLs.contains(url) {
+            // Wait for existing generation to complete
+            return await withCheckedContinuation { continuation in
+                continuations[url, default: []].append(continuation)
+            }
         }
         
-        // Create generation task
-        let task = Task<NSImage, Never> { @MainActor in
-            let image = await self.generateThumbnail(for: url, size: size)
-            self.cache.setObject(image, forKey: url as NSURL)
-            self.pendingTasks.removeValue(forKey: url)
-            return image
+        // Mark as processing
+        processingURLs.insert(url)
+        
+        // Generate thumbnail
+        let image = await generateThumbnail(for: url, size: size)
+        cache.setObject(image, forKey: url as NSURL)
+        
+        // Resume any waiting continuations
+        if let waitingContinuations = continuations.removeValue(forKey: url) {
+            for cont in waitingContinuations {
+                cont.resume(returning: image)
+            }
         }
         
-        pendingTasks[url] = ThumbnailTask(task)
-        return await task.value
+        // Remove from processing set
+        processingURLs.remove(url)
+        
+        return image
     }
     
     /// Clear the thumbnail cache
     public func clearCache() {
         cache.removeAllObjects()
-        for wrapper in pendingTasks.values {
-            wrapper.task.cancel()
+        processingURLs.removeAll()
+        // Resume any waiting continuations with empty images (they'll get regenerated)
+        for (_, waitingContinuations) in continuations {
+            for cont in waitingContinuations {
+                cont.resume(returning: NSImage(size: NSSize(width: 1, height: 1)))
+            }
         }
-        pendingTasks.removeAll()
+        continuations.removeAll()
     }
     
     // MARK: - Thumbnail Generation

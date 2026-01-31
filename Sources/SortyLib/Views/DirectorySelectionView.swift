@@ -413,7 +413,9 @@ struct OrganizeSelectionButton: View {
         ) { notification in
             if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                app.bundleIdentifier == "com.apple.finder" {
-                checkSelectionThrottled()
+                Task { @MainActor in
+                    checkSelectionThrottled()
+                }
             }
         }
         
@@ -423,7 +425,9 @@ struct OrganizeSelectionButton: View {
             object: nil,
             queue: .main
         ) { _ in
-            checkSelectionThrottled()
+            Task { @MainActor in
+                checkSelectionThrottled()
+            }
         }
     }
     
