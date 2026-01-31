@@ -22,8 +22,14 @@ public class FolderThumbnailProvider: ObservableObject {
     
     private let cache = NSCache<NSURL, AnyObject>()
     
+    /// Wrapper for thumbnail generation tasks to avoid Sendable issues
+    private final class ThumbnailTask: @unchecked Sendable {
+        let task: Task<NSImage, Never>
+        init(_ task: Task<NSImage, Never>) { self.task = task }
+    }
+    
     /// Pending thumbnail generation tasks to avoid duplicates
-    nonisolated(unsafe) private var pendingTasks: [URL: Task<NSImage, Never>] = [:]
+    private var pendingTasks: [URL: ThumbnailTask] = [:]
     
     // MARK: - Initialization
     
@@ -42,7 +48,7 @@ public class FolderThumbnailProvider: ObservableObject {
         
         // Check if we're already generating this thumbnail
         if let existingTask = pendingTasks[url] {
-            return await existingTask.value
+            return await existingTask.task.value
         }
         
         // Create generation task
@@ -53,15 +59,15 @@ public class FolderThumbnailProvider: ObservableObject {
             return image
         }
         
-        pendingTasks[url] = task
+        pendingTasks[url] = ThumbnailTask(task)
         return await task.value
     }
     
     /// Clear the thumbnail cache
     public func clearCache() {
         cache.removeAllObjects()
-        for task in pendingTasks.values {
-            task.cancel()
+        for wrapper in pendingTasks.values {
+            wrapper.task.cancel()
         }
         pendingTasks.removeAll()
     }

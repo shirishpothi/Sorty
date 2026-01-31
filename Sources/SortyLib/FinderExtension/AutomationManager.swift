@@ -80,10 +80,6 @@ public final class AutomationManager: ObservableObject {
         )
     }
     
-    nonisolated deinit {
-        // Timer will be cleaned up automatically when the app exits
-    }
-    
     // MARK: - Permission Management
     
     /// Check Automation permission status
