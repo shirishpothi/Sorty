@@ -9,8 +9,8 @@
 import Foundation
 import Combine
 import SwiftUI
-import UserNotifications
-import AppKit
+@preconcurrency import UserNotifications
+@preconcurrency import AppKit
 
 // MARK: - Notification Names for Actions
 

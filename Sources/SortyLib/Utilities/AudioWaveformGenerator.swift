@@ -1,6 +1,6 @@
 import Foundation
-import AVFoundation
-import AppKit
+@preconcurrency import AVFoundation
+@preconcurrency import AppKit
 
 /// Generates a simple bar-style waveform image from an audio file
 public actor AudioWaveformGenerator {

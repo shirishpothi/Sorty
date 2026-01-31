@@ -436,8 +436,10 @@ public struct LoadingDotsView: View {
 
     private func startAnimation() {
         Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { timer in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                animatingDot = (animatingDot + 1) % dotCount
+            MainActor.assumeIsolated {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                    animatingDot = (animatingDot + 1) % dotCount
+                }
             }
         }
     }

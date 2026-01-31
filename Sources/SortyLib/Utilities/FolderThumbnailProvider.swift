@@ -8,7 +8,7 @@
 
 import SwiftUI
 import Combine
-import QuickLookThumbnailing
+@preconcurrency import QuickLookThumbnailing
 
 /// Provides cached thumbnails for folders using QuickLook
 @MainActor
@@ -23,7 +23,7 @@ public class FolderThumbnailProvider: ObservableObject {
     private let cache = NSCache<NSURL, AnyObject>()
     
     /// Pending thumbnail generation tasks to avoid duplicates
-    private var pendingTasks: [URL: Task<NSImage, Never>] = [:]
+    nonisolated(unsafe) private var pendingTasks: [URL: Task<NSImage, Never>] = [:]
     
     // MARK: - Initialization
     

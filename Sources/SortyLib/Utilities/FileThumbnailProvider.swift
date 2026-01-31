@@ -1,6 +1,6 @@
 import SwiftUI
 import Combine
-import QuickLookThumbnailing
+@preconcurrency import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
 /// Provides cached thumbnails for files using QuickLook and NSWorkspace
