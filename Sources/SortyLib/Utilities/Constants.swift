@@ -28,7 +28,9 @@ import AppKit
 // MARK: - Haptic Feedback Manager
 
 /// Manages haptic feedback for user interactions on macOS
+@MainActor
 public class HapticFeedbackManager {
+    @MainActor
     public static let shared = HapticFeedbackManager()
 
     private init() {}
@@ -372,7 +374,9 @@ extension View {
 // MARK: - Transition Helpers
 
 /// Namespace for commonly used transitions - subtle versions
+@MainActor
 public enum TransitionStyles {
+    @MainActor
     public static let slideFromRight = AnyTransition.asymmetric(
         insertion: .opacity.combined(with: .offset(x: 20)),
         removal: .opacity.combined(with: .offset(x: -20))

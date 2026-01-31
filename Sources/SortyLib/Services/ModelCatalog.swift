@@ -48,8 +48,15 @@ public final class ModelCatalog: ObservableObject {
     
     public init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        // Optimized timeouts for fast connection establishment
+        // Model list fetches should be quick; slow providers will use fallback models
+        config.timeoutIntervalForRequest = 10
+        config.timeoutIntervalForResource = 15
+        config.httpMaximumConnectionsPerHost = 6
+        config.httpAdditionalHeaders = [
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive"
+        ]
         self.session = URLSession(configuration: config)
         loadCacheFromDisk()
     }
@@ -193,6 +200,7 @@ public final class ModelCatalog: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 8
         request.setValue("Bearer \(openAIAPIKey)", forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await session.data(for: request)
@@ -231,6 +239,7 @@ public final class ModelCatalog: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 8
         request.setValue("Bearer \(groqAPIKey)", forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await session.data(for: request)
@@ -265,6 +274,7 @@ public final class ModelCatalog: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 10
         
         if let apiKey = KeychainManager.get(key: AIProvider.openRouter.keychainKey), !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -302,6 +312,7 @@ public final class ModelCatalog: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 5
         
         let (data, response) = try await session.data(for: request)
         
@@ -343,6 +354,7 @@ public final class ModelCatalog: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 8
         request.setValue(anthropicAPIKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         
@@ -416,6 +428,7 @@ public final class ModelCatalog: ObservableObject {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
+        request.timeoutInterval = 8
         if let key = apiKey, !key.isEmpty {
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         }

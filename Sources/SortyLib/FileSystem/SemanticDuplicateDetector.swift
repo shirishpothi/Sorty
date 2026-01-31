@@ -98,7 +98,7 @@ public actor SemanticDuplicateDetector {
     /// Find all semantic duplicates in a list of files
     public func findSemanticDuplicates(
         in files: [FileItem],
-        progressHandler: ((Int, Int, String) -> Void)? = nil
+        progressHandler: (@Sendable (Int, Int, String) -> Void)? = nil
     ) async -> [SemanticDuplicateGroup] {
         var groups: [SemanticDuplicateGroup] = []
 

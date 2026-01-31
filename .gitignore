@@ -48,3 +48,6 @@ Package.resolved
 *~
 TestResults.xcresult/
 Logs/
+
+# Sparkle signing keys (private key - NEVER commit)
+sparkle_keys/

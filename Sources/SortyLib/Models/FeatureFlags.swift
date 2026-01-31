@@ -7,6 +7,7 @@
 
 import Foundation
 
+@MainActor
 public enum FeatureFlags {
     public static var finderSyncEnabled: Bool = true
 }

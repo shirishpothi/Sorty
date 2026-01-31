@@ -1,10 +1,10 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "Sorty",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v15)
     ],
     products: [
         .library(
@@ -17,30 +17,67 @@ let package = Package(
             name: "learnings",
             targets: ["LearningsCLI"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
+    ],
     targets: [
         .target(
             name: "SortyLib",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/SortyLib",
             resources: [
-                .process("Resources/Assets.xcassets"),
+                // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
+                // SPM only handles the Images directory as PNG fallbacks
                 .copy("Resources/Images")
+            ],
+            swiftSettings: [
+                // Debug: Fast build, no optimization
+                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
+                // Release: Full optimization with whole-module
+                .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
+                // Common settings for both
+                .unsafeFlags(["-suppress-warnings"]),
+            ],
+            linkerSettings: [
+                // Dead code stripping for release
+                .unsafeFlags(["-dead_strip"], .when(configuration: .release)),
             ]
         ),
         .executableTarget(
             name: "SortyApp",
             dependencies: ["SortyLib"],
-            path: "Sources/SortyApp"
+            path: "Sources/SortyApp",
+            swiftSettings: [
+                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
+                .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
+            ],
+            linkerSettings: [
+                .unsafeFlags(["-dead_strip"], .when(configuration: .release)),
+            ]
         ),
         .testTarget(
             name: "SortyTests",
             dependencies: ["SortyLib"],
-            path: "Tests/SortyTests"
+            path: "Tests/SortyTests",
+            swiftSettings: [
+                // Tests: Fast build with debug info
+                .unsafeFlags(["-Onone", "-enable-batch-mode"]),
+                .unsafeFlags(["-g"]), // Debug symbols for test debugging
+            ]
         ),
         .executableTarget(
             name: "LearningsCLI",
             dependencies: ["SortyLib"],
-            path: "Sources/LearningsCLI"
+            path: "Sources/LearningsCLI",
+            swiftSettings: [
+                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
+                .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
+            ],
+            linkerSettings: [
+                .unsafeFlags(["-dead_strip"], .when(configuration: .release)),
+            ]
         )
     ]
 )

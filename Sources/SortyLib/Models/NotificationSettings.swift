@@ -29,7 +29,7 @@ public enum NotificationBackend: String, Codable, CaseIterable, Sendable {
 }
 
 /// Notification settings model for user preferences
-public struct NotificationSettings: Codable, Equatable {
+public struct NotificationSettings: Codable, Equatable, Sendable {
     // MARK: - Delivery Method
     
     /// Show notifications as subtle bottom-left overlays
@@ -88,6 +88,7 @@ public struct NotificationSettings: Codable, Equatable {
     
     public init() {}
     
+    @MainActor
     public static let `default` = NotificationSettings()
 }
 

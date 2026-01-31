@@ -23,7 +23,7 @@ public class FolderThumbnailProvider: ObservableObject {
     private let cache = NSCache<NSURL, AnyObject>()
     
     /// Pending thumbnail generation tasks to avoid duplicates
-    private var pendingTasks: [URL: Task<AnyObject, Never>] = [:]
+    private var pendingTasks: [URL: Task<NSImage, Never>] = [:]
     
     // MARK: - Initialization
     
@@ -42,19 +42,19 @@ public class FolderThumbnailProvider: ObservableObject {
         
         // Check if we're already generating this thumbnail
         if let existingTask = pendingTasks[url] {
-            return await existingTask.value as? NSImage ?? NSWorkspace.shared.icon(forFile: url.path)
+            return await existingTask.value
         }
         
         // Create generation task
-        let task = Task<AnyObject, Never> { @MainActor in
+        let task = Task<NSImage, Never> { @MainActor in
             let image = await self.generateThumbnail(for: url, size: size)
             self.cache.setObject(image, forKey: url as NSURL)
             self.pendingTasks.removeValue(forKey: url)
-            return image as AnyObject
+            return image
         }
         
         pendingTasks[url] = task
-        return await task.value as? NSImage ?? NSWorkspace.shared.icon(forFile: url.path)
+        return await task.value
     }
     
     /// Clear the thumbnail cache

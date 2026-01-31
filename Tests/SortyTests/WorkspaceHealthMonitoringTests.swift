@@ -2,11 +2,11 @@
 import XCTest
 @testable import SortyLib
 
+@MainActor
 class WorkspaceHealthMonitoringTests: XCTestCase {
     var healthManager: WorkspaceHealthManager!
     var tempDirectory: URL!
     
-    @MainActor
     override func setUp() async throws {
         try await super.setUp()
         healthManager = WorkspaceHealthManager()
@@ -16,15 +16,14 @@ class WorkspaceHealthMonitoringTests: XCTestCase {
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
     }
     
-    override func tearDown() {
+    override func tearDown() async throws {
         if let tempDirectory = tempDirectory {
             try? FileManager.default.removeItem(at: tempDirectory)
         }
         healthManager = nil
-        super.tearDown()
+        try await super.tearDown()
     }
     
-    @MainActor
     func testFileMonitoringDetectsChanges() async throws {
         // 1. Start monitoring
         healthManager.startMonitoring(path: tempDirectory.path)

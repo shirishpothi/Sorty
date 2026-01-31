@@ -297,7 +297,7 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
 
 // MARK: - Rule Presets
 
-public struct ExclusionRulePreset: Identifiable {
+public struct ExclusionRulePreset: Identifiable, Sendable {
     public let id: UUID
     public let name: String
     public let description: String
@@ -318,6 +318,7 @@ public struct ExclusionRulePreset: Identifiable {
         self.rules = rules
     }
 
+    @MainActor
     public static let presets: [ExclusionRulePreset] = [
         // Development Preset
         ExclusionRulePreset(

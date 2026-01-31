@@ -306,7 +306,7 @@ struct OptimizedPreviewTree: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4, pinnedViews: []) {
+                LazyVStack(alignment: .leading, spacing: 2, pinnedViews: []) {
                     ForEach(store.flattenedRows) { row in
                         FlattenedRowView(
                             row: row,
@@ -315,30 +315,11 @@ struct OptimizedPreviewTree: View {
                             onPlanChanged: onPlanChanged
                         )
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: rowHeight(for: row))
-                        .fixedSize(horizontal: false, vertical: true)
                         .id(row.id)
                     }
                 }
                 .padding()
             }
-        }
-    }
-    
-    private func rowHeight(for row: FlattenedRow) -> CGFloat {
-        switch row.type {
-        case .folder:
-            return 28
-        case .file(let file, _):
-            // Use pre-computed mapping for height check
-            if let mapping = store.renameMappings[file.id], mapping.hasRename {
-                return 52 // Taller for rename info
-            }
-            return 24
-        case .unorganizedFile:
-            return 24
-        case .unorganizedHeader:
-            return 40
         }
     }
 
@@ -425,7 +406,8 @@ struct FlatFolderRowView: View {
                 CompactFolderThumbnail(
                     url: nil,  // New folders don't exist yet
                     folderName: suggestion.folderName,
-                    size: 16
+                    size: 16,
+                    fileCount: suggestion.totalFileCount
                 )
                 .opacity(isDropTarget ? 0.7 : 1.0)
                 

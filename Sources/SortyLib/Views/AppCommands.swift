@@ -231,7 +231,7 @@ public class AppState: ObservableObject {
     @Published public var showingSidebar: Bool = true
     @Published public var showDirectoryPicker: Bool = false
     @Published public var selectedDirectory: URL?
-    @Published public var updateManager = UpdateManager()
+    @Published public var updateManager = SparkleUpdateManager()
     @Published public var selectedSettingsSection: SettingsCategory?
     @Published public var duplicateManager = DuplicateDetectionManager()
     @Published public var duplicateSettings = DuplicateSettingsManager()

@@ -2,7 +2,7 @@
 //  UpdateDialogView.swift
 //  Sorty
 //
-//  A dedicated dialog for checking and displaying software updates
+//  A dedicated dialog for checking and displaying software updates via Sparkle
 //
 
 import SwiftUI
@@ -24,7 +24,7 @@ public struct UpdateDialogView: View {
             
             Divider()
             
-            switch appState.updateManager.state {
+            switch appState.updateManager.updateState {
             case .idle:
                 HStack {
                     ProgressView().controlSize(.small)
@@ -32,9 +32,9 @@ public struct UpdateDialogView: View {
                         .foregroundColor(.secondary)
                 }
                 .onAppear {
-                    Task {
-                        await appState.updateManager.checkForUpdates()
-                    }
+                    // Sparkle handles the UI automatically when updates are found
+                    // But we trigger the check here
+                    appState.updateManager.checkForUpdates()
                 }
                 
             case .checking:
@@ -44,7 +44,7 @@ public struct UpdateDialogView: View {
                         .foregroundColor(.secondary)
                 }
                 
-            case let .available(version, url, notes):
+            case let .available(version, releaseNotes):
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Image(systemName: "gift.fill")
@@ -57,7 +57,7 @@ public struct UpdateDialogView: View {
                     Text("Version \(version) is now available. You have version \(BuildInfo.version).")
                         .foregroundColor(.secondary)
                     
-                    if let notes = notes, !notes.isEmpty {
+                    if let notes = releaseNotes, !notes.isEmpty {
                         GroupBox("Release Notes") {
                             ScrollView {
                                 Text(notes)
@@ -68,10 +68,16 @@ public struct UpdateDialogView: View {
                         }
                     }
                     
+                    Text("Click the button below to download and install the update automatically.")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                    
+                    // Sparkle handles the actual download/install UI automatically
+                    // This button just triggers Sparkle's standard UI
                     Button {
-                        NSWorkspace.shared.open(url)
+                        appState.updateManager.checkForUpdates()
                     } label: {
-                        Label("Download Update", systemImage: "arrow.down.circle.fill")
+                        Label("Download & Install Update", systemImage: "arrow.down.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
                 }
@@ -91,6 +97,20 @@ public struct UpdateDialogView: View {
                     }
                 }
                 
+            case .downloading:
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("Downloading update...")
+                        .foregroundColor(.secondary)
+                }
+                
+            case .installing:
+                HStack {
+                    ProgressView().controlSize(.small)
+                    Text("Installing update...")
+                        .foregroundColor(.secondary)
+                }
+                
             case let .error(message):
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -101,17 +121,30 @@ public struct UpdateDialogView: View {
                             .font(.title3)
                             .fontWeight(.medium)
                     }
-                    
+
                     Text(message)
                         .font(.callout)
                         .foregroundColor(.secondary)
-                    
+
                     Button("Try Again") {
-                        Task {
-                            await appState.updateManager.checkForUpdates()
-                        }
+                        appState.updateManager.checkForUpdates()
                     }
                     .buttonStyle(.bordered)
+                }
+
+            case .disabled:
+                HStack {
+                    Image(systemName: "gear.badge.xmark")
+                        .foregroundColor(.secondary)
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Update checking is disabled")
+                            .font(.title3)
+                            .fontWeight(.medium)
+                        Text("This build doesn't support automatic updates.")
+                            .foregroundColor(.secondary)
+                            .font(.callout)
+                    }
                 }
             }
             

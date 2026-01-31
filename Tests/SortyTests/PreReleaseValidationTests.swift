@@ -438,13 +438,13 @@ final class AIClientFactoryTests: XCTestCase {
 
 // MARK: - Undo/Redo Safety Tests
 
+@MainActor
 final class UndoRedoSafetyTests: XCTestCase {
     
     var tempDir: URL!
     var fileManager: FileManager!
     var fsManager: FileSystemManager!
     
-    @MainActor
     override func setUp() {
         super.setUp()
         fileManager = FileManager.default
@@ -453,7 +453,6 @@ final class UndoRedoSafetyTests: XCTestCase {
         fsManager = FileSystemManager()
     }
     
-    @MainActor
     override func tearDown() {
         try? fileManager.removeItem(at: tempDir)
         super.tearDown()

@@ -23,7 +23,8 @@ struct SortyApp: App {
     @StateObject private var extensionListener = ExtensionListener()
     @StateObject private var deeplinkHandler = DeeplinkHandler.shared
     @StateObject private var learningsManager = LearningsManager() // Promoted to App State
-    
+    @StateObject private var automationManager = AutomationManager()
+
     @State private var coordinator: AppCoordinator?
     
     var body: some Scene {
@@ -40,6 +41,7 @@ struct SortyApp: App {
                 .environmentObject(deeplinkHandler)
                 .environmentObject(learningsManager) // Inject
                 .environmentObject(storageLocationsManager)
+                .environmentObject(automationManager)
                 .onAppear {
                     // Restore sandbox access for watched folders
                     watchedFoldersManager.restoreSecurityScopedAccess()
@@ -60,8 +62,9 @@ struct SortyApp: App {
                     organizer.customPersonaStore = customPersonaStore
                     organizer.storageLocationsManager = storageLocationsManager
                     organizer.learningsManager = learningsManager
+                    organizer.automationManager = automationManager
                     appState.organizer = organizer
-                    
+
                     appState.calibrateAction = { folder in
                         coordinator?.calibrateFolder(folder)
                     }
@@ -72,7 +75,7 @@ struct SortyApp: App {
                         learningsManager.configure(with: settingsViewModel.config)
                         
                         // Check for updates on launch (once per 24 hours)
-                        await appState.updateManager.checkOnLaunchIfNeeded()
+                        appState.updateManager.checkOnLaunchIfNeeded()
                     }
                     
                     // Testability Hook for UI Tests to trigger deeplinks reliably

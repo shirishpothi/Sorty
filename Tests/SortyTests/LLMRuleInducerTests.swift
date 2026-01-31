@@ -13,23 +13,23 @@ final class LLMRuleInducerTests: XCTestCase {
     
     // Mock Client
     final class MockAIClient: AIClientProtocol, @unchecked Sendable {
-        var config: AIConfig = AIConfig()
-        var generateTextResponse: String = ""
-        var streamingDelegate: StreamingDelegate?
+        nonisolated(unsafe) var config: AIConfig = AIConfig()
+        nonisolated(unsafe) var generateTextResponse: String = ""
+        nonisolated(unsafe) var streamingDelegate: StreamingDelegate?
         
-        func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
+        nonisolated func analyze(files: [FileItem], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
             fatalError("Not implemented for this test")
         }
         
-        func generateText(prompt: String, systemPrompt: String?) async throws -> String {
+        nonisolated func generateText(prompt: String, systemPrompt: String?) async throws -> String {
             return generateTextResponse
         }
         
-        func checkHealth() async throws {
+        nonisolated func checkHealth() async throws {
             // Success by default
         }
 
-        func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
+        nonisolated func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String?, personaPrompt: String?, temperature: Double?) async throws -> OrganizationPlan {
             fatalError("Not implemented for this test")
         }
     }

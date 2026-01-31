@@ -1248,8 +1248,9 @@ struct PermissionsStep: View {
     private func checkPermissions() {
         // Check notification permission
         UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let status = settings.authorizationStatus
             DispatchQueue.main.async {
-                switch settings.authorizationStatus {
+                switch status {
                 case .authorized:
                     permissionStates[.notifications] = .granted
                 case .denied:
@@ -1277,8 +1278,16 @@ struct PermissionsStep: View {
             hasRequiredPermissions = false
         }
         
-        // Automation permission is optional and can't be easily detected
-        permissionStates[.automation] = .unknown
+        // Check Automation permission using FinderAutomation service
+        let automationStatus = FinderAutomation.checkAutomationPermission()
+        switch automationStatus {
+        case .granted:
+            permissionStates[.automation] = .granted
+        case .denied:
+            permissionStates[.automation] = .denied
+        case .unknown:
+            permissionStates[.automation] = .unknown
+        }
     }
     
     private func requestPermission(_ type: PermissionType) {

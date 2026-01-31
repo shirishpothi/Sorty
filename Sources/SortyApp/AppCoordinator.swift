@@ -52,6 +52,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 self?.continuousLearningObserver.handleFileMove(from: move.fromPath, to: move.toPath)
             }
         }
+        
+        // Prewarm connections for all configured AI providers on startup
+        Task {
+            await AISessionManager.shared.prewarmAllConfigured()
+        }
     }
     
     deinit {
@@ -87,43 +92,45 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         // Listen for organization completion
         NotificationCenter.default.addObserver(forName: .organizationDidFinish, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
+            guard let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry else { return }
             
             Task { @MainActor in
-                if let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry {
-                    let stats = self.extractBatchStats(from: entry)
-                    self.notificationManager.showBatchSummary(stats: stats)
-                    
-                    // Start FSMonitor for learning from user corrections
-                    let folderURL = URL(fileURLWithPath: entry.directoryPath)
-                    self.learningsFSMonitor.startMonitoring(directory: folderURL)
-                }
+                let stats = self.extractBatchStats(from: entry)
+                self.notificationManager.showBatchSummary(stats: stats)
+                
+                // Start FSMonitor for learning from user corrections
+                let folderURL = URL(fileURLWithPath: entry.directoryPath)
+                self.learningsFSMonitor.startMonitoring(directory: folderURL)
             }
         }
         
         // Handle "Undo" action from notification
         NotificationCenter.default.addObserver(forName: .undoLastOrganization, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
+            let folderPath = notification.userInfo?["folderPath"] as? String
             
             Task { @MainActor in
-                await self.handleUndoAction(userInfo: notification.userInfo)
+                await self.handleUndoAction(folderPath: folderPath)
             }
         }
         
         // Handle "Open Folder" action from notification
         NotificationCenter.default.addObserver(forName: .openOrganizedFolder, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
+            let folderPath = notification.userInfo?["folderPath"] as? String
             
             Task { @MainActor in
-                self.handleOpenFolderAction(userInfo: notification.userInfo)
+                self.handleOpenFolderAction(folderPath: folderPath)
             }
         }
         
         // Handle "Retry" action from notification
         NotificationCenter.default.addObserver(forName: .retryLastOrganization, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
+            let folderPath = notification.userInfo?["folderPath"] as? String
             
             Task { @MainActor in
-                await self.handleRetryAction(userInfo: notification.userInfo)
+                await self.handleRetryAction(folderPath: folderPath)
             }
         }
         
@@ -140,9 +147,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     // MARK: - Notification Action Handlers
     
     /// Handle undo action from notification
-    private func handleUndoAction(userInfo: [AnyHashable: Any]?) async {
-        // Get the folder path from userInfo, or use the last history entry
-        let folderPath = userInfo?["folderPath"] as? String
+    private func handleUndoAction(folderPath: String?) async {
         
         // Find the entry to undo
         guard let entryToUndo = findEntryToUndo(folderPath: folderPath) else {
@@ -194,18 +199,18 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     /// Handle open folder action from notification
-    private func handleOpenFolderAction(userInfo: [AnyHashable: Any]?) {
-        // Get folder path from userInfo or last history entry
-        let folderPath: String?
-        if let path = userInfo?["folderPath"] as? String {
-            folderPath = path
+    private func handleOpenFolderAction(folderPath: String?) {
+        // Get folder path from parameter or last history entry
+        let path: String?
+        if let fp = folderPath {
+            path = fp
         } else if let lastEntry = organizer.history.entries.first {
-            folderPath = lastEntry.directoryPath
+            path = lastEntry.directoryPath
         } else {
-            folderPath = nil
+            path = nil
         }
         
-        guard let path = folderPath else {
+        guard let path = path else {
             print("Coordinator: No folder path to open")
             return
         }
@@ -216,18 +221,18 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     /// Handle retry action from notification
-    private func handleRetryAction(userInfo: [AnyHashable: Any]?) async {
-        // Get folder path from userInfo or last failed entry
-        let folderPath: String?
-        if let path = userInfo?["folderPath"] as? String {
-            folderPath = path
+    private func handleRetryAction(folderPath: String?) async {
+        // Get folder path from parameter or last failed entry
+        let path: String?
+        if let fp = folderPath {
+            path = fp
         } else if let lastFailedEntry = organizer.history.entries.first(where: { $0.status == .failed }) {
-            folderPath = lastFailedEntry.directoryPath
+            path = lastFailedEntry.directoryPath
         } else {
-            folderPath = nil
+            path = nil
         }
         
-        guard let path = folderPath else {
+        guard let path = path else {
             print("Coordinator: No folder path to retry")
             notificationManager.showError(message: "No failed operation to retry", isCritical: false)
             return

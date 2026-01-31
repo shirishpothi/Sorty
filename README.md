@@ -98,6 +98,27 @@ To enable the "Organize with AI..." context menu in Finder:
 - Add folders to the "Watched" list in the sidebar to enable automatic background monitoring.
 - **Note**: The "Auto-Organize" feature will remain disabled until a valid AI provider is configured in Settings.
 
+## Security Considerations
+
+Sorty is designed with security and privacy in mind:
+
+**Data Handling:**
+- File analysis happens via your chosen AI provider (OpenAI, Anthropic, Ollama, Apple Intelligence)
+- File contents are NOT uploaded unless you explicitly enable Deep Scan
+- API keys are stored in the macOS Keychain
+- The Learnings profile is encrypted with AES-256 and protected by Touch ID/Face ID
+
+**Release Signing:**
+Pre-built releases are NOT code-signed. You will need to remove macOS quarantine flags after installation (see Installation section). Build from source if you prefer complete control.
+
+**Best Practices:**
+- Use Ollama or Apple Foundation Models for on-device processing
+- Review which files are being sent to cloud AI providers
+- Enable Safe Deletion for duplicate management
+- Regularly backup important directories
+
+For detailed security information, see [SECURITY.md](SECURITY.md).
+
 ## Troubleshooting
 
 ### "Watched Folders" Access Lost
@@ -131,9 +152,15 @@ If you see an error indicating that access to a watched folder has been lost (e.
 - `Assets/`: App icons and screenshots.
 - `scripts/`: Build and automation scripts.
 
-## License
+## Contributing
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+- Detailed development environment setup
+- Architecture overview and code style guidelines
+- How to add new AI providers
+- Testing requirements and PR process
+
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ## Testing
 
@@ -208,3 +235,15 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 | `sorty://watched?action=add&path=<path>` | Add watched folder |
 | `sorty://rules?action=add&pattern=<pattern>` | Add exclusion rule |
 | `sorty://help?section=<topic>` | Open help section |
+
+## License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Documentation**: See [HELP.md](HELP.md) for detailed usage guides
+- **Bug Reports**: Use the [Bug Report template](../../issues/new?template=bug_report.md)
+- **Feature Requests**: Use the [Feature Request template](../../issues/new?template=feature_request.md)
+- **Security Issues**: Email security@sorty.app (do not open public issues)
+- **Questions**: Open a [GitHub Discussion](../../discussions)

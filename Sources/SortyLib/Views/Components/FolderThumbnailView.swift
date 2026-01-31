@@ -56,13 +56,15 @@ public struct CompactFolderThumbnail: View {
     let url: URL?
     let folderName: String
     let size: CGFloat
+    let fileCount: Int
     
     @State private var thumbnail: NSImage?
     
-    public init(url: URL?, folderName: String, size: CGFloat = 20) {
+    public init(url: URL?, folderName: String, size: CGFloat = 20, fileCount: Int = 0) {
         self.url = url
         self.folderName = folderName
         self.size = size
+        self.fileCount = fileCount
     }
     
     public var body: some View {
@@ -72,6 +74,8 @@ public struct CompactFolderThumbnail: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: size, height: size)
+            } else if url == nil {
+                ActualFolderIcon(size: size)
             } else {
                 Image(systemName: "folder.fill")
                     .font(.system(size: size * 0.8))
@@ -86,6 +90,22 @@ public struct CompactFolderThumbnail: View {
                 size: CGSize(width: size, height: size)
             )
         }
+    }
+}
+
+/// Actual macOS folder icon for new folders (using cached system icon)
+private struct ActualFolderIcon: View {
+    let size: CGFloat
+    
+    private static let folderIcon: NSImage = {
+        NSWorkspace.shared.icon(forFile: "/tmp")
+    }()
+    
+    var body: some View {
+        Image(nsImage: Self.folderIcon)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
     }
 }
 

@@ -38,6 +38,7 @@ public enum OrganizationState: Equatable, Sendable {
 
 public enum OrganizationError: LocalizedError, Equatable {
     case clientNotConfigured
+    case automationNotConfigured
     case noCurrentPlan
     case fileMoveFailed(String)
     case cancelled
@@ -46,6 +47,8 @@ public enum OrganizationError: LocalizedError, Equatable {
         switch self {
         case .clientNotConfigured:
             return "AI Client not configured. Please check your settings."
+        case .automationNotConfigured:
+            return "Automation permission not granted. Please enable it in System Settings > Privacy & Security > Automation."
         case .noCurrentPlan:
             return "No organization plan available to apply."
         case .fileMoveFailed(let details):
@@ -217,10 +220,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var customPersonaStore: CustomPersonaStore?
     public var learningsManager: LearningsManager?
     public var storageLocationsManager: StorageLocationsManager?
-    
+    public var automationManager: AutomationManager?
+
     /// Exclusion enforcer for post-AI validation (lazily initialized)
     private var exclusionEnforcer: ExclusionEnforcer?
-    
+
     /// Learning observer reference for rule tracking
     public var learningsObserver: ContinuousLearningObserver?
     
@@ -1136,6 +1140,174 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
+    // MARK: - Organize Selected Files from Finder
+
+    /// Organize only the files currently selected in Finder
+    /// This uses Automation permission to get the selection from Finder
+    /// - Parameters:
+    ///   - customPrompt: Optional custom instructions for the AI
+    ///   - temperature: Optional temperature override for AI generation
+    /// - Returns: The number of files organized, or nil if no selection available
+    @discardableResult
+    public func organizeSelectedFiles(customPrompt: String? = nil, temperature: Double? = nil) async throws -> Int {
+        guard let automationManager = automationManager else {
+            throw OrganizationError.automationNotConfigured
+        }
+
+        // Check if we have automation permission
+        guard automationManager.automationStatus == .granted else {
+            throw NSError(domain: "Sorty", code: -1, userInfo: [
+                NSLocalizedDescriptionKey: "Automation permission not granted. Please enable it in System Settings to organize selected files."
+            ])
+        }
+
+        // Get the selected files from Finder
+        guard let selectedFiles = FinderAutomation.getSelectedFiles(), !selectedFiles.isEmpty else {
+            await MainActor.run {
+                state = .idle
+                organizationStage = "No files selected in Finder"
+            }
+            return 0
+        }
+
+        // Get the directory of the first selected file (assume all are in same folder)
+        let firstFile = selectedFiles[0]
+        let directory = firstFile.deletingLastPathComponent()
+
+        // Convert URLs to FileItems
+        var files: [FileItem] = []
+        for url in selectedFiles {
+            if let item = try? await scanner.scanFile(at: url) {
+                files.append(item)
+            }
+        }
+
+        guard !files.isEmpty else {
+            await MainActor.run {
+                state = .idle
+                organizationStage = "Could not scan selected files"
+            }
+            return 0
+        }
+
+        // Filter with exclusion rules
+        if let exclusionRules = exclusionRules {
+            files = exclusionRules.filterFiles(files)
+        }
+
+        guard !files.isEmpty else {
+            await MainActor.run {
+                state = .idle
+                organizationStage = "Selected files filtered by exclusion rules"
+            }
+            return 0
+        }
+
+        // Set the current directory
+        currentDirectory = directory
+
+        // Start the organization process
+        guard !isOperationInProgress() else {
+            DebugLogger.log("Selected files organization blocked: Already in progress")
+            return 0
+        }
+
+        cancelInternal()
+        isCancellationRequested = false
+        userInitiatedAction = true
+
+        currentTask = Task {
+            try await performOrganizationOfSelectedFiles(
+                directory: directory,
+                files: files,
+                customPrompt: customPrompt,
+                temperature: temperature
+            )
+        }
+
+        do {
+            try await currentTask?.value
+            return files.count
+        } catch is CancellationError {
+            resetToIdle()
+            return 0
+        }
+    }
+
+    private func performOrganizationOfSelectedFiles(
+        directory: URL,
+        files: [FileItem],
+        customPrompt: String?,
+        temperature: Double?
+    ) async throws {
+        guard let client = aiClient else {
+            throw OrganizationError.clientNotConfigured
+        }
+
+        updateState(.organizing, stage: "Organizing \(files.count) selected files...", progress: 0.3)
+        await MainActor.run {
+            isStreaming = true
+        }
+
+        startTimeoutTimer()
+
+        do {
+            try checkCancellation()
+
+            // Get existing folders to use as context
+            let contents = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])
+            let existingFolders = contents.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false }
+                .map { $0.lastPathComponent }
+                .filter { !$0.hasPrefix(".") }
+
+            let contextPrompt = """
+            SELECTED FILES ONLY: You are organizing only the files currently selected in Finder.
+
+            Existing folders in this directory: \(existingFolders.joined(separator: ", ")).
+
+            RULES for Selected File Organization:
+            1. Prioritize placing files into existing folders if relevant.
+            2. Only create new folders if the files don't fit existing structure.
+            3. Files that don't fit anywhere can remain in the root.
+            4. Focus only on the selected files - do not touch other files in the folder.
+            """
+
+            let prompt = (customPrompt ?? customInstructions) + "\n\n" + contextPrompt
+
+            // Add Learnings context
+            var finalPrompt = prompt
+            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+                finalPrompt += "\n\n" + learnedContext
+            }
+
+            // Add Storage Locations context
+            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+                finalPrompt += "\n\n" + storageContext
+            }
+
+            let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
+
+            let plan = try await client.analyze(files: files, customInstructions: finalPrompt, personaPrompt: personaPrompt, temperature: temperature)
+
+            stopTimeoutTimer()
+
+            try checkCancellation()
+
+            await MainActor.run {
+                isStreaming = false
+                currentPlan = plan
+            }
+
+            // Apply the organization
+            try await apply(at: directory, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
+
+        } catch {
+            stopTimeoutTimer()
+            handleOrganizationError(error, directory: directory)
+            throw error
+        }
+    }
+
     // MARK: - Apply Organization
 
     public func apply(at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true) async throws {
@@ -1207,10 +1379,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let learningsObserver = learningsObserver {
                 learningsObserver.endSession()
             }
-            
-            // Refresh Finder for the organized folder asynchronously to avoid UI lag
-            Task.detached(priority: .background) {
-                self.refreshFinder(at: baseURL)
+
+            // Use AutomationManager for Finder integration if available
+            if let automationManager = automationManager {
+                // Refresh Finder windows
+                automationManager.refreshFinder(at: baseURL)
+
+                // Select organized folders in Finder
+                let folderURLs = plan.suggestions.map { baseURL.appendingPathComponent($0.folderName) }
+                automationManager.selectOrganizedFolders(folderURLs: folderURLs)
+            } else {
+                // Fallback to legacy refresh method
+                Task.detached(priority: .background) {
+                    self.refreshFinder(at: baseURL)
+                }
             }
 
         } catch {

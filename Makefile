@@ -1,13 +1,22 @@
 # Sorty Makefile
+# Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now release release-patch release-minor release-major prerelease prerelease-full
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full
 
 # Default target
 all: build
 
+# Auto-detect CPU cores for parallel builds
+CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
+PARALLEL_FLAGS := -j $(CORES)
+
+# Swift build flags for optimization
+SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode
+SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization
+
 build:
 	@chmod +x scripts/build.sh
-	@./scripts/build.sh
+	@BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
 
 run: build
 	@echo "🚀 Launching Sorty..."
@@ -15,19 +24,29 @@ run: build
 
 # builds with debug symbols and verbose logging
 debug:
-	@echo "🛠️  Building in DEBUG mode..."
-	@BUILD_CONFIG=debug ./scripts/build.sh
+	@echo "🛠️  Building in DEBUG mode with $(CORES) parallel jobs..."
+	@BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@echo "🚀 Launching Debug Build..."
 	@open releases/Sorty.app
 
-# runs the complete test suite with coverage reports
+# Fastest development build - parallel, no tests, debug mode
+dev:
+	@echo "⚡ Fast development build ($(CORES) parallel jobs)..."
+	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+
+# runs the complete test suite with parallel execution
 test:
-	@echo "🧪 Running unit tests..."
-	@swift test
+	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
+	@swift test $(PARALLEL_FLAGS)
+
+# Quick test run - excludes slow UI/integration tests
+test-fast:
+	@echo "🧪 Running fast unit tests only..."
+	@swift test $(PARALLEL_FLAGS) --filter SortyTests
 
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
-	@swift test --enable-code-coverage
+	@swift test --enable-code-coverage $(PARALLEL_FLAGS)
 	@echo "🖥️  Running UI tests..."
 	@chmod +x scripts/run_tests.sh
 	@./scripts/run_tests.sh --ui
@@ -38,15 +57,22 @@ test-ui:
 	@chmod +x scripts/run_tests.sh
 	@./scripts/run_tests.sh --ui
 
+# Profile build times to identify slow-compiling files
+build-profile:
+	@echo "🔍 Profiling build times..."
+	@echo "Building with diagnostics to identify slow type-checking..."
+	@swift build $(PARALLEL_FLAGS) -Xswiftc -Xfrontend -Xswiftc -warn-long-function-bodies=100 -Xswiftc -Xfrontend -Xswiftc -warn-long-expression-type-checking=100 2>&1 | grep -E "(warning:|error:)" || true
+	@echo "✅ Profile complete. Look for 'warning: expression took too long to type-check' messages above."
+
 # runs basic syntax checks and builds (skips tests)
 quick:
-	@echo "⚡ Quick build (skipping tests)..."
-	@SKIP_TESTS=true ./scripts/build.sh
+	@echo "⚡ Quick build (skipping tests, $(CORES) parallel jobs)..."
+	@SKIP_TESTS=true BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
 
 # skips all checks and builds/runs immediately
 now:
-	@echo "🏎️  Immediate build and run (DEBUG mode)..."
-	@SKIP_TESTS=true BUILD_CONFIG=debug ./scripts/build.sh
+	@echo "🏎️  Immediate build and run (DEBUG mode, $(CORES) parallel jobs)..."
+	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
 
 clean:
@@ -58,8 +84,8 @@ clean:
 
 # Build the learnings CLI tool
 cli:
-	@echo "🔨 Building learnings CLI..."
-	@swift build --product learnings
+	@echo "🔨 Building learnings CLI with $(CORES) parallel jobs..."
+	@swift build --product learnings $(PARALLEL_FLAGS)
 	@echo "✅ CLI built at .build/debug/learnings"
 
 # Install app to /Applications
@@ -114,19 +140,24 @@ prerelease-full:
 	@./scripts/prerelease_check.sh --ui-tests
 
 help:
-	@echo "Sorty Build System"
-	@echo "=================="
+	@echo "Sorty Build System (Optimized)"
+	@echo "=============================="
 	@echo "Available commands:"
 	@echo "  make build       - Compile and update the .app bundle (runs unit tests)"
 	@echo "  make run         - Build and launch the app"
 	@echo "  make debug       - Build in DEBUG mode and launch"
-	@echo "  make quick       - Compile immediately (skips tests)"
-	@echo "  make now         - Build fast and launch immediately (skips tests)"
+	@echo "  make dev         - Fastest development build (debug + parallel + no tests)"
+	@echo "  make quick       - Compile immediately (skips tests, parallel)"
+	@echo "  make now         - Build fast and launch immediately (skips tests, parallel)"
+	@echo ""
+	@echo "Build Profiling:"
+	@echo "  make build-profile - Identify slow-compiling files and functions"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test        - Run unit tests"
+	@echo "  make test        - Run unit tests in parallel"
+	@echo "  make test-fast   - Run only fast unit tests (excludes slow UI tests)"
 	@echo "  make test-ui     - Run UI tests (macOS)"
-	@echo "  make test-full   - Run unit and UI tests"
+	@echo "  make test-full   - Run unit and UI tests with coverage"
 	@echo ""
 	@echo "Release:"
 	@echo "  make release-patch   - Auto-release with patch version bump (1.0.0 -> 1.0.1)"
@@ -142,3 +173,11 @@ help:
 	@echo "  make cli         - Build the 'learnings' CLI tool"
 	@echo "  make install-cli - Install 'learnings' CLI to /usr/local/bin"
 	@echo "  make help        - Show this help message"
+	@echo ""
+	@echo "Parallel Jobs: $(CORES) cores detected"
+	@echo ""
+	@echo "Optimization Notes:"
+	@echo "  - All builds now use parallel compilation ($(CORES) jobs)"
+	@echo "  - Debug builds use -Onone with batch mode for speed"
+	@echo "  - Release builds use -O with whole-module optimization"
+	@echo "  - Tests run in parallel for faster execution"

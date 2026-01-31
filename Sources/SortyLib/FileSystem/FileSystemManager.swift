@@ -137,61 +137,60 @@ public actor FileSystemManager {
     func createFolders(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
 
-        func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
-            // Check if the folder name is an absolute path (storage location)
-            let folderURL: URL
-            if suggestion.folderName.hasPrefix("/") {
-                // Absolute path - use directly (likely a storage location)
-                folderURL = URL(fileURLWithPath: suggestion.folderName)
-                _ = startAccessing(folderURL)
-            } else {
-                // Relative path - append to parent
-                folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        for suggestion in plan.suggestions {
+            let ops = try await createFolderRecursive(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            operations.append(contentsOf: ops)
+        }
+
+        return operations
+    }
+    
+    private func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
+        var operations: [FileOperation] = []
+        
+        // Check if the folder name is an absolute path (storage location)
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            // Absolute path - use directly (likely a storage location)
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+            _ = startAccessing(folderURL)
+        } else {
+            // Relative path - append to parent
+            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        }
+
+        // Check exclusions
+        if let manager = exclusionManager {
+            let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
+            if await manager.shouldExclude(item) {
+                DebugLogger.log("Skipping excluded folder creation: \(folderURL.path)")
+                return operations
             }
+        }
 
-            // Check exclusions
-            if let manager = exclusionManager {
-                let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
-                if await manager.shouldExclude(item) {
-                    DebugLogger.log("Skipping excluded folder creation: \(folderURL.path)")
-                    return
-                }
-            }
-
-            if !dryRun {
-                var isDirectory: ObjCBool = false
-                if fileManager.fileExists(atPath: folderURL.path, isDirectory: &isDirectory) {
-                    if isDirectory.boolValue {
-                        // Folder already exists, continue with subfolders
-                    } else {
-                        // Conflict: File exists where folder should be
-                        let backupURL = folderURL.deletingLastPathComponent()
-                            .appendingPathComponent("\(suggestion.folderName)_file_backup_\(UUID().uuidString.prefix(8))")
-                        try fileManager.moveItem(at: folderURL, to: backupURL)
-
-                        // Record this move for undo
-                        operations.append(FileOperation(
-                            id: UUID(),
-                            type: .moveFile,
-                            sourcePath: folderURL.path,
-                            destinationPath: backupURL.path,
-                            timestamp: Date(),
-                            metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
-                        ))
-
-                        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-
-                        operations.append(FileOperation(
-                            id: UUID(),
-                            type: .createFolder,
-                            sourcePath: folderURL.path,
-                            destinationPath: nil,
-                            timestamp: Date(),
-                            metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
-                        ))
-                    }
+        if !dryRun {
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: folderURL.path, isDirectory: &isDirectory) {
+                if isDirectory.boolValue {
+                    // Folder already exists, continue with subfolders
                 } else {
+                    // Conflict: File exists where folder should be
+                    let backupURL = folderURL.deletingLastPathComponent()
+                        .appendingPathComponent("\(suggestion.folderName)_file_backup_\(UUID().uuidString.prefix(8))")
+                    try fileManager.moveItem(at: folderURL, to: backupURL)
+
+                    // Record this move for undo
+                    operations.append(FileOperation(
+                        id: UUID(),
+                        type: .moveFile,
+                        sourcePath: folderURL.path,
+                        destinationPath: backupURL.path,
+                        timestamp: Date(),
+                        metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
+                    ))
+
                     try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+
                     operations.append(FileOperation(
                         id: UUID(),
                         type: .createFolder,
@@ -201,18 +200,25 @@ public actor FileSystemManager {
                         metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
                     ))
                 }
-            }
-
-            // Create subfolders
-            for subfolder in suggestion.subfolders {
-                try await createFolderRecursive(subfolder, parentURL: folderURL)
+            } else {
+                try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                operations.append(FileOperation(
+                    id: UUID(),
+                    type: .createFolder,
+                    sourcePath: folderURL.path,
+                    destinationPath: nil,
+                    timestamp: Date(),
+                    metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
+                ))
             }
         }
 
-        for suggestion in plan.suggestions {
-            try await createFolderRecursive(suggestion, parentURL: baseURL)
+        // Create subfolders
+        for subfolder in suggestion.subfolders {
+            let subOps = try await createFolderRecursive(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            operations.append(contentsOf: subOps)
         }
-
+        
         return operations
     }
 
@@ -221,96 +227,102 @@ public actor FileSystemManager {
     func moveFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
 
-        func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
-            // Check if the folder name is an absolute path (storage location)
-            let folderURL: URL
-            if suggestion.folderName.hasPrefix("/") {
-                // Absolute path - use directly (likely a storage location)
-                folderURL = URL(fileURLWithPath: suggestion.folderName)
-                _ = startAccessing(folderURL)
-            } else {
-                // Relative path - append to parent
-                folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        for suggestion in plan.suggestions {
+            let ops = try await moveFilesInSuggestion(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            operations.append(contentsOf: ops)
+        }
+
+        return operations
+    }
+    
+    private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
+        var operations: [FileOperation] = []
+        
+        // Check if the folder name is an absolute path (storage location)
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            // Absolute path - use directly (likely a storage location)
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+            _ = startAccessing(folderURL)
+        } else {
+            // Relative path - append to parent
+            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        }
+
+        // Process files with potential renaming
+        for file in suggestion.files {
+            guard let sourceURL = file.url else { continue }
+
+            // Check exclusions
+            if let manager = exclusionManager {
+                if await manager.shouldExclude(file) {
+                    DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
+                    continue
+                }
             }
 
-            // Process files with potential renaming
-            for file in suggestion.files {
-                guard let sourceURL = file.url else { continue }
+            // Check for rename mapping
+            let finalFilename: String
+            var renameMetadata: FileOperation.OperationMetadata? = nil
 
-                // Check exclusions
-                if let manager = exclusionManager {
-                    if await manager.shouldExclude(file) {
-                        DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
-                        continue
-                    }
+            if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
+                finalFilename = newName
+                renameMetadata = FileOperation.OperationMetadata(
+                    originalFilename: sourceURL.lastPathComponent,
+                    newFilename: newName,
+                    wasCreatedDuringOrganization: false,
+                    parentFolderPath: folderURL.path
+                )
+            } else {
+                finalFilename = sourceURL.lastPathComponent
+            }
+
+            var destinationURL = folderURL.appendingPathComponent(finalFilename)
+
+            // Skip if source and destination are identical
+            if sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path {
+                continue
+            }
+
+            if !dryRun {
+                // Create destination directory if needed
+                if !fileManager.fileExists(atPath: folderURL.path) {
+                    try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
                 }
 
-                // Check for rename mapping
-                let finalFilename: String
-                var renameMetadata: FileOperation.OperationMetadata? = nil
-
-                if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
-                    finalFilename = newName
-                    renameMetadata = FileOperation.OperationMetadata(
-                        originalFilename: sourceURL.lastPathComponent,
-                        newFilename: newName,
-                        wasCreatedDuringOrganization: false,
-                        parentFolderPath: folderURL.path
-                    )
-                } else {
-                    finalFilename = sourceURL.lastPathComponent
+                // Handle conflicts
+                if fileManager.fileExists(atPath: destinationURL.path) {
+                    destinationURL = generateUniqueURL(for: destinationURL)
                 }
 
-                var destinationURL = folderURL.appendingPathComponent(finalFilename)
-
-                // Skip if source and destination are identical
-                if sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path {
+                // Verify source exists
+                guard fileManager.fileExists(atPath: sourceURL.path) else {
                     continue
                 }
 
-                if !dryRun {
-                    // Create destination directory if needed
-                    if !fileManager.fileExists(atPath: folderURL.path) {
-                        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                    }
-
-                    // Handle conflicts
-                    if fileManager.fileExists(atPath: destinationURL.path) {
-                        destinationURL = generateUniqueURL(for: destinationURL)
-                    }
-
-                    // Verify source exists
-                    guard fileManager.fileExists(atPath: sourceURL.path) else {
-                        continue
-                    }
-
-                    // Move file
-                    try fileManager.moveItem(at: sourceURL, to: destinationURL)
-                }
-
-                // Record the operation
-                let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
-
-                operations.append(FileOperation(
-                    id: UUID(),
-                    type: operationType,
-                    sourcePath: sourceURL.path,
-                    destinationPath: destinationURL.path,
-                    timestamp: Date(),
-                    metadata: renameMetadata
-                ))
+                // Move file
+                try fileManager.moveItem(at: sourceURL, to: destinationURL)
             }
 
-            // Process subfolders
-            for subfolder in suggestion.subfolders {
-                try await moveFilesInSuggestion(subfolder, parentURL: folderURL)
-            }
+            // Record the operation
+            let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
+
+            operations.append(FileOperation(
+                id: UUID(),
+                type: operationType,
+                sourcePath: sourceURL.path,
+                destinationPath: destinationURL.path,
+                timestamp: Date(),
+                metadata: renameMetadata
+            ))
         }
 
-        for suggestion in plan.suggestions {
-            try await moveFilesInSuggestion(suggestion, parentURL: baseURL)
+        // Process subfolders
+        for subfolder in suggestion.subfolders {
+            let subOps = try await moveFilesInSuggestion(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            operations.append(contentsOf: subOps)
         }
-
+        
         return operations
     }
 
@@ -320,90 +332,96 @@ public actor FileSystemManager {
         // Tagging is now gated by the caller using this method
         var operations: [FileOperation] = []
 
-        func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
-            // Check if the folder name is an absolute path (storage location)
-            let folderURL: URL
-            if suggestion.folderName.hasPrefix("/") {
-                // Absolute path - use directly (likely a storage location)
-                folderURL = URL(fileURLWithPath: suggestion.folderName)
-                _ = startAccessing(folderURL)
-            } else {
-                // Relative path - append to parent
-                folderURL = parentURL.appendingPathComponent(suggestion.folderName)
-            }
-
-            // Look for tag mappings in this suggestion
-            for mapping in suggestion.fileTagMappings {
-                // Check exclusions
-                if let manager = exclusionManager {
-                    if await manager.shouldExclude(mapping.originalFile) {
-                        continue
-                    }
-                }
-
-                // Find the file name (use the new name if it was renamed)
-                let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
-                
-                let fileURL = folderURL.appendingPathComponent(finalFilename)
-                
-                // Only proceed if we have tags to apply
-                guard !mapping.tags.isEmpty else { continue }
-                
-                if !dryRun {
-                    // Check if file exists at the expected location
-                    guard fileManager.fileExists(atPath: fileURL.path) else {
-                        continue
-                    }
-                    
-                    // Get current tags for undo
-                    let resourceValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey])
-                    let originalTags = resourceValues?.tagNames ?? []
-                    
-                    var newTagsSet = Set(originalTags)
-                    for tag in mapping.tags {
-                        newTagsSet.insert(tag)
-                    }
-                    let finalTags = Array(newTagsSet)
-                    
-                    // Apply using NSURL to avoid version check error
-                    let nsURL = fileURL as NSURL
-                    try? nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
-                    
-                    operations.append(FileOperation(
-                        id: UUID(),
-                        type: .tagFile,
-                        sourcePath: fileURL.path,
-                        destinationPath: nil,
-                        timestamp: Date(),
-                        metadata: FileOperation.OperationMetadata(
-                            originalTags: originalTags,
-                            newTags: finalTags
-                        )
-                    ))
-                } else {
-                     operations.append(FileOperation(
-                        id: UUID(),
-                        type: .tagFile,
-                        sourcePath: fileURL.path,
-                        destinationPath: nil,
-                        timestamp: Date(),
-                        metadata: FileOperation.OperationMetadata(
-                            newTags: mapping.tags
-                        )
-                    ))
-                }
-            }
-
-            // Recurse
-            for subfolder in suggestion.subfolders {
-                try await tagFilesInSuggestion(subfolder, parentURL: folderURL)
-            }
-        }
-
         for suggestion in plan.suggestions {
-            try await tagFilesInSuggestion(suggestion, parentURL: baseURL)
+            let ops = try await tagFilesInSuggestion(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            operations.append(contentsOf: ops)
         }
 
+        return operations
+    }
+    
+    private func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
+        var operations: [FileOperation] = []
+        
+        // Check if the folder name is an absolute path (storage location)
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            // Absolute path - use directly (likely a storage location)
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+            _ = startAccessing(folderURL)
+        } else {
+            // Relative path - append to parent
+            folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+        }
+
+        // Look for tag mappings in this suggestion
+        for mapping in suggestion.fileTagMappings {
+            // Check exclusions
+            if let manager = exclusionManager {
+                if await manager.shouldExclude(mapping.originalFile) {
+                    continue
+                }
+            }
+
+            // Find the file name (use the new name if it was renamed)
+            let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
+            
+            let fileURL = folderURL.appendingPathComponent(finalFilename)
+            
+            // Only proceed if we have tags to apply
+            guard !mapping.tags.isEmpty else { continue }
+            
+            if !dryRun {
+                // Check if file exists at the expected location
+                guard fileManager.fileExists(atPath: fileURL.path) else {
+                    continue
+                }
+                
+                // Get current tags for undo
+                let resourceValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey])
+                let originalTags = resourceValues?.tagNames ?? []
+                
+                var newTagsSet = Set(originalTags)
+                for tag in mapping.tags {
+                    newTagsSet.insert(tag)
+                }
+                let finalTags = Array(newTagsSet)
+                
+                // Apply using NSURL to avoid version check error
+                let nsURL = fileURL as NSURL
+                try? nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                
+                operations.append(FileOperation(
+                    id: UUID(),
+                    type: .tagFile,
+                    sourcePath: fileURL.path,
+                    destinationPath: nil,
+                    timestamp: Date(),
+                    metadata: FileOperation.OperationMetadata(
+                        originalTags: originalTags,
+                        newTags: finalTags
+                    )
+                ))
+            } else {
+                 operations.append(FileOperation(
+                    id: UUID(),
+                    type: .tagFile,
+                    sourcePath: fileURL.path,
+                    destinationPath: nil,
+                    timestamp: Date(),
+                    metadata: FileOperation.OperationMetadata(
+                        newTags: mapping.tags
+                    )
+                ))
+            }
+        }
+
+        // Recurse
+        for subfolder in suggestion.subfolders {
+            let subOps = try await tagFilesInSuggestion(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager)
+            operations.append(contentsOf: subOps)
+        }
+        
         return operations
     }
 
@@ -432,6 +450,12 @@ public actor FileSystemManager {
         }
         
         return true
+    }
+
+    // Helper type to return operations and count for progress tracking
+    private struct OperationResult {
+        let operations: [FileOperation]
+        let processedCount: Int
     }
 
     func applyOrganization(
@@ -464,152 +488,36 @@ public actor FileSystemManager {
         // 1. Create folders
         progress?(0.05, "Creating folder structure...")
         
-        func createFoldersWithProgress(_ suggestions: [FolderSuggestion], currentURL: URL) async throws {
-            for suggestion in suggestions {
-                try Task.checkCancellation()
-                
-                let folderURL: URL
-                if suggestion.folderName.hasPrefix("/") {
-                    folderURL = URL(fileURLWithPath: suggestion.folderName)
-                    _ = startAccessing(folderURL)
-                } else {
-                    folderURL = currentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-                }
-                
-                if !dryRun {
-                    if !fileManager.fileExists(atPath: folderURL.path) {
-                        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                        allOperations.append(FileOperation(
-                            type: .createFolder,
-                            sourcePath: folderURL.path,
-                            destinationPath: nil,
-                            metadata: .init(wasCreatedDuringOrganization: true)
-                        ))
-                    }
-                }
-                updateProgress("Creating folder \(suggestion.folderName)...")
-                
-                try await createFoldersWithProgress(suggestion.subfolders, currentURL: folderURL)
+        for suggestion in plan.suggestions {
+            let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun) { message in
+                updateProgress(message)
             }
+            allOperations.append(contentsOf: result.operations)
+            completedOps += result.processedCount
         }
-        
-        try await createFoldersWithProgress(plan.suggestions, currentURL: baseURL)
 
         // 2. Move files
         progress?(0.1, "Moving files...")
         
-        func moveFilesInSuggestionWithProgress(_ suggestion: FolderSuggestion, parentURL: URL) async throws {
-            let folderURL: URL
-            if suggestion.folderName.hasPrefix("/") {
-                folderURL = URL(fileURLWithPath: suggestion.folderName)
-                _ = startAccessing(folderURL)
-            } else {
-                folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-            }
-
-            for file in suggestion.files {
-                try Task.checkCancellation()
-                guard let sourceURL = file.url else { continue }
-                
-                let finalFilename: String
-                var renameMetadata: FileOperation.OperationMetadata? = nil
-
-                if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
-                    finalFilename = newName
-                    renameMetadata = FileOperation.OperationMetadata(
-                        originalFilename: sourceURL.lastPathComponent,
-                        newFilename: newName,
-                        wasCreatedDuringOrganization: false,
-                        parentFolderPath: folderURL.path
-                    )
-                } else {
-                    finalFilename = sourceURL.lastPathComponent
-                }
-
-                var destinationURL = folderURL.appendingPathComponent(finalFilename)
-                
-                if sourceURL.standardizedFileURL.path != destinationURL.standardizedFileURL.path {
-                    if !dryRun {
-                        if !fileManager.fileExists(atPath: folderURL.path) {
-                            try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-                        }
-                        if fileManager.fileExists(atPath: destinationURL.path) {
-                            destinationURL = generateUniqueURL(for: destinationURL)
-                        }
-                        if fileManager.fileExists(atPath: sourceURL.path) {
-                            try fileManager.moveItem(at: sourceURL, to: destinationURL)
-                        }
-                    }
-
-                    let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
-                    allOperations.append(FileOperation(
-                        id: UUID(),
-                        type: operationType,
-                        sourcePath: sourceURL.path,
-                        destinationPath: destinationURL.path,
-                        timestamp: Date(),
-                        metadata: renameMetadata
-                    ))
-                }
-                
-                updateProgress("Moving \(finalFilename)...")
-            }
-
-            for subfolder in suggestion.subfolders {
-                try await moveFilesInSuggestionWithProgress(subfolder, parentURL: folderURL)
-            }
-        }
-
         for suggestion in plan.suggestions {
-            try await moveFilesInSuggestionWithProgress(suggestion, parentURL: baseURL)
+            let result = try await moveFilesInSuggestionWithProgress(suggestion, parentURL: baseURL, dryRun: dryRun) { message in
+                updateProgress(message)
+            }
+            allOperations.append(contentsOf: result.operations)
+            completedOps += result.processedCount
         }
 
         // 3. Apply tags
         if enableTagging {
             progress?(0.8, "Applying tags...")
             
-            func tagFilesWithProgress(_ suggestions: [FolderSuggestion], currentURL: URL) async throws {
-                for suggestion in suggestions {
-                    try Task.checkCancellation()
-                    
-                    let folderURL: URL
-                    if suggestion.folderName.hasPrefix("/") {
-                        folderURL = URL(fileURLWithPath: suggestion.folderName)
-                        _ = startAccessing(folderURL)
-                    } else {
-                        folderURL = currentURL.appendingPathComponent(suggestion.folderName)
-                    }
-                    
-                    for mapping in suggestion.fileTagMappings {
-                        try Task.checkCancellation()
-                        let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
-                        let fileURL = folderURL.appendingPathComponent(finalFilename)
-                        
-                        if !dryRun && fileManager.fileExists(atPath: fileURL.path) {
-                            let resourceValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey])
-                            let originalTags = resourceValues?.tagNames ?? []
-                            
-                            var newTagsSet = Set(originalTags)
-                            for tag in mapping.tags { newTagsSet.insert(tag) }
-                            let finalTags = Array(newTagsSet)
-                            
-                            let nsURL = fileURL as NSURL
-                            try? nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
-                            
-                            allOperations.append(FileOperation(
-                                type: .tagFile,
-                                sourcePath: fileURL.path,
-                                destinationPath: nil,
-                                metadata: .init(originalTags: originalTags, newTags: finalTags)
-                            ))
-                        }
-                        updateProgress("Tagging \(finalFilename)...")
-                    }
-                    try await tagFilesWithProgress(suggestion.subfolders, currentURL: folderURL)
+            for suggestion in plan.suggestions {
+                let result = try await tagFilesWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun) { message in
+                    updateProgress(message)
                 }
+                allOperations.append(contentsOf: result.operations)
+                completedOps += result.processedCount
             }
-            
-            try await tagFilesWithProgress(plan.suggestions, currentURL: baseURL)
         }
 
         if !dryRun {
@@ -628,21 +536,183 @@ public actor FileSystemManager {
             }
             
             var newlyCreatedFolders = Set<String>()
-            func collectFolderPaths(_ suggestion: FolderSuggestion, parentURL: URL) {
-                let folderURL = parentURL.appendingPathComponent(suggestion.folderName)
-                newlyCreatedFolders.insert(folderURL.path)
-                for subfolder in suggestion.subfolders {
-                    collectFolderPaths(subfolder, parentURL: folderURL)
-                }
-            }
             for suggestion in plan.suggestions {
-                collectFolderPaths(suggestion, parentURL: baseURL)
+                let paths = collectFolderPaths(suggestion, parentURL: baseURL)
+                newlyCreatedFolders.formUnion(paths)
             }
             try? cleanupEmptySubdirectories(at: baseURL, excluding: newlyCreatedFolders)
         }
         
         progress?(1.0, "Organization complete!")
         return allOperations
+    }
+    
+    private func createFoldersWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, onProgress: (String) -> Void) async throws -> OperationResult {
+        var operations: [FileOperation] = []
+        var processedCount = 0
+        
+        try Task.checkCancellation()
+        
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+            _ = startAccessing(folderURL)
+        } else {
+            folderURL = currentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        }
+        
+        if !dryRun {
+            if !fileManager.fileExists(atPath: folderURL.path) {
+                try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                operations.append(FileOperation(
+                    type: .createFolder,
+                    sourcePath: folderURL.path,
+                    destinationPath: nil,
+                    metadata: .init(wasCreatedDuringOrganization: true)
+                ))
+            }
+        }
+        onProgress("Creating folder \(suggestion.folderName)...")
+        processedCount += 1
+        
+        for subfolder in suggestion.subfolders {
+            let subResult = try await createFoldersWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, onProgress: onProgress)
+            operations.append(contentsOf: subResult.operations)
+            processedCount += subResult.processedCount
+        }
+        
+        return OperationResult(operations: operations, processedCount: processedCount)
+    }
+    
+    private func moveFilesInSuggestionWithProgress(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, onProgress: (String) -> Void) async throws -> OperationResult {
+        var operations: [FileOperation] = []
+        var processedCount = 0
+        
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+            _ = startAccessing(folderURL)
+        } else {
+            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        }
+
+        for file in suggestion.files {
+            try Task.checkCancellation()
+            guard let sourceURL = file.url else { continue }
+            
+            let finalFilename: String
+            var renameMetadata: FileOperation.OperationMetadata? = nil
+
+            if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
+                finalFilename = newName
+                renameMetadata = FileOperation.OperationMetadata(
+                    originalFilename: sourceURL.lastPathComponent,
+                    newFilename: newName,
+                    wasCreatedDuringOrganization: false,
+                    parentFolderPath: folderURL.path
+                )
+            } else {
+                finalFilename = sourceURL.lastPathComponent
+            }
+
+            var destinationURL = folderURL.appendingPathComponent(finalFilename)
+            
+            if sourceURL.standardizedFileURL.path != destinationURL.standardizedFileURL.path {
+                if !dryRun {
+                    if !fileManager.fileExists(atPath: folderURL.path) {
+                        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                    }
+                    if fileManager.fileExists(atPath: destinationURL.path) {
+                        destinationURL = generateUniqueURL(for: destinationURL)
+                    }
+                    if fileManager.fileExists(atPath: sourceURL.path) {
+                        try fileManager.moveItem(at: sourceURL, to: destinationURL)
+                    }
+                }
+
+                let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
+                operations.append(FileOperation(
+                    id: UUID(),
+                    type: operationType,
+                    sourcePath: sourceURL.path,
+                    destinationPath: destinationURL.path,
+                    timestamp: Date(),
+                    metadata: renameMetadata
+                ))
+            }
+            
+            onProgress("Moving \(finalFilename)...")
+            processedCount += 1
+        }
+
+        for subfolder in suggestion.subfolders {
+            let subResult = try await moveFilesInSuggestionWithProgress(subfolder, parentURL: folderURL, dryRun: dryRun, onProgress: onProgress)
+            operations.append(contentsOf: subResult.operations)
+            processedCount += subResult.processedCount
+        }
+        
+        return OperationResult(operations: operations, processedCount: processedCount)
+    }
+    
+    private func tagFilesWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, onProgress: (String) -> Void) async throws -> OperationResult {
+        var operations: [FileOperation] = []
+        var processedCount = 0
+        
+        try Task.checkCancellation()
+        
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+            _ = startAccessing(folderURL)
+        } else {
+            folderURL = currentURL.appendingPathComponent(suggestion.folderName)
+        }
+        
+        for mapping in suggestion.fileTagMappings {
+            try Task.checkCancellation()
+            let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
+            let fileURL = folderURL.appendingPathComponent(finalFilename)
+            
+            if !dryRun && fileManager.fileExists(atPath: fileURL.path) {
+                let resourceValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey])
+                let originalTags = resourceValues?.tagNames ?? []
+                
+                var newTagsSet = Set(originalTags)
+                for tag in mapping.tags { newTagsSet.insert(tag) }
+                let finalTags = Array(newTagsSet)
+                
+                let nsURL = fileURL as NSURL
+                try? nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                
+                operations.append(FileOperation(
+                    type: .tagFile,
+                    sourcePath: fileURL.path,
+                    destinationPath: nil,
+                    metadata: .init(originalTags: originalTags, newTags: finalTags)
+                ))
+            }
+            onProgress("Tagging \(finalFilename)...")
+            processedCount += 1
+        }
+        
+        for subfolder in suggestion.subfolders {
+            let subResult = try await tagFilesWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, onProgress: onProgress)
+            operations.append(contentsOf: subResult.operations)
+            processedCount += subResult.processedCount
+        }
+        
+        return OperationResult(operations: operations, processedCount: processedCount)
+    }
+    
+    private func collectFolderPaths(_ suggestion: FolderSuggestion, parentURL: URL) -> Set<String> {
+        var paths = Set<String>()
+        let folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+        paths.insert(folderURL.path)
+        for subfolder in suggestion.subfolders {
+            let subPaths = collectFolderPaths(subfolder, parentURL: folderURL)
+            paths.formUnion(subPaths)
+        }
+        return paths
     }
     
     private func countFiles(in folder: FolderSuggestion) -> Int {

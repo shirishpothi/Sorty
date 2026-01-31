@@ -12,7 +12,9 @@ import AppKit
 
 // MARK: - Quick Organize Window Controller
 
+@MainActor
 public class QuickOrganizePanelController: NSObject, ObservableObject {
+    @MainActor
     public static let shared = QuickOrganizePanelController()
     
     private var panelWindow: NSPanel?
@@ -573,10 +575,12 @@ public class FinderToolbarHelper {
 
 // MARK: - Menu Bar Helper
 
+@MainActor
 public class MenuBarHelper: NSObject {
     private var statusItem: NSStatusItem?
     private var menu: NSMenu?
     
+    @MainActor
     public static let shared = MenuBarHelper()
     
     private override init() {

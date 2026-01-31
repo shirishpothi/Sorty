@@ -58,6 +58,11 @@ struct DirectorySelectionView: View {
                 .offset(y: hasAppeared ? 0 : 10)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
                 .accessibilityIdentifier("BrowseForFolderButton")
+
+                OrganizeSelectionButton()
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 10)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.32), value: hasAppeared)
                 
                 if settingsViewModel.config.enableSmartRename {
                     VStack(spacing: 16) {
@@ -310,5 +315,119 @@ struct OrganizationModeCard: View {
 extension UTType {
     static var fileURL: UTType {
         UTType(exportedAs: "public.file-url")
+    }
+}
+
+// MARK: - Organize Selection Button
+
+struct OrganizeSelectionButton: View {
+    @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var automationManager: AutomationManager
+    @State private var isHovering = false
+    @State private var selectionCount: Int = 0
+    @State private var isCheckingSelection = false
+    @State private var lastCheckTime: Date = .distantPast
+    
+    // Throttle checks to prevent excessive Apple Events
+    private let minimumCheckInterval: TimeInterval = 1.0
+    
+    var body: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            Task {
+                try? await organizer.organizeSelectedFiles()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 14, weight: .medium))
+                if selectionCount > 0 {
+                    Text("Organize \(selectionCount) Selected")
+                } else {
+                    Text("Organize Finder Selection")
+                }
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.accentColor)
+        .disabled(automationManager.automationStatus != .granted || selectionCount == 0)
+        .opacity(isEnabled ? 1.0 : 0.6)
+        .onHover { hovering in
+            isHovering = hovering
+        }
+        .help(helpText)
+        .onAppear {
+            setupNotificationMonitoring()
+            checkSelectionThrottled()
+        }
+        .onDisappear {
+            removeNotificationMonitoring()
+        }
+    }
+    
+    private var isEnabled: Bool {
+        automationManager.automationStatus == .granted && selectionCount > 0
+    }
+    
+    private var helpText: String {
+        if automationManager.automationStatus != .granted {
+            return "Automation permission required. Enable in System Settings > Privacy & Security > Automation."
+        } else if selectionCount == 0 {
+            return "Select files in Finder to organize them"
+        } else {
+            return "Click to organize \(selectionCount) selected files"
+        }
+    }
+    
+    private func checkSelectionThrottled() {
+        guard automationManager.automationStatus == .granted else {
+            selectionCount = 0
+            return
+        }
+        
+        // Throttle to avoid excessive Apple Events
+        let now = Date()
+        guard now.timeIntervalSince(lastCheckTime) >= minimumCheckInterval else {
+            return
+        }
+        lastCheckTime = now
+        
+        isCheckingSelection = true
+        if let selection = FinderAutomation.getSelectedFiles() {
+            selectionCount = selection.count
+        } else {
+            selectionCount = 0
+        }
+        isCheckingSelection = false
+    }
+    
+    private func setupNotificationMonitoring() {
+        // Monitor when Finder becomes active to check selection
+        NotificationCenter.default.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+               app.bundleIdentifier == "com.apple.finder" {
+                checkSelectionThrottled()
+            }
+        }
+        
+        // Also check when this window becomes key (user returns to Sorty)
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            checkSelectionThrottled()
+        }
+    }
+    
+    private func removeNotificationMonitoring() {
+        NotificationCenter.default.removeObserver(self)
     }
 }

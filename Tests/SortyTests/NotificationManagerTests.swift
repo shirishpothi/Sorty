@@ -10,6 +10,7 @@ import XCTest
 
 // MARK: - NotificationSettings Tests
 
+@MainActor
 final class NotificationSettingsTests: XCTestCase {
     
     func testDefaultSettings() {

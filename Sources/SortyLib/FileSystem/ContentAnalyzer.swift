@@ -131,7 +131,7 @@ public actor ContentAnalyzer {
     public func analyzeFiles(
         _ urls: [URL],
         enableOCR: Bool = true,
-        progressHandler: ((Int, Int) -> Void)? = nil
+        progressHandler: (@Sendable (Int, Int) -> Void)? = nil
     ) async -> [URL: ContentMetadata] {
         var results: [URL: ContentMetadata] = [:]
 

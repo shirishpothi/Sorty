@@ -27,6 +27,13 @@ public class SettingsViewModel: ObservableObject {
             // Force refresh models if provider changed or API key was updated
             if oldProvider != newProvider || (oldKey != newKey && newKey != nil) {
                 updateAvailableModels(force: true)
+                
+                // Prewarm connection when API key is configured
+                if newKey != nil {
+                    Task {
+                        await AISessionManager.shared.prewarm(provider: newProvider, config: config)
+                    }
+                }
             }
         }
     }
