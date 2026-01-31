@@ -40,10 +40,7 @@ let package = Package(
                 // Common settings for both
                 .unsafeFlags(["-suppress-warnings"]),
             ],
-            linkerSettings: [
-                // Dead code stripping for release
-                .unsafeFlags(["-dead_strip"], .when(configuration: .release)),
-            ]
+            linkerSettings: []
         ),
         .executableTarget(
             name: "SortyApp",
@@ -53,9 +50,7 @@ let package = Package(
                 .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
-            linkerSettings: [
-                .unsafeFlags(["-dead_strip"], .when(configuration: .release)),
-            ]
+            linkerSettings: []
         ),
         .testTarget(
             name: "SortyTests",
@@ -75,10 +70,7 @@ let package = Package(
                 .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
-            linkerSettings: [
-                .unsafeFlags(["-dead_strip"], .when(configuration: .release)),
-            ]
+            linkerSettings: []
         )
     ]
 )
-
