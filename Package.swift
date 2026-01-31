@@ -39,6 +39,9 @@ let package = Package(
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
                 // Common settings for both
                 .unsafeFlags(["-suppress-warnings"]),
+                // Swift 6 strict concurrency - use minimal checking to suppress Sendable warnings
+                .enableExperimentalFeature("StrictConcurrency", .when(configuration: .debug)),
+                .unsafeFlags(["-strict-concurrency=minimal"]),
             ],
             linkerSettings: []
         ),
