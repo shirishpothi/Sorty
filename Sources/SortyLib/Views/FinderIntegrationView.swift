@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 public struct FinderIntegrationView: View {
     @State private var integrationStatus = ExtensionCommunication.getIntegrationStatus()
@@ -112,97 +113,19 @@ public struct FinderIntegrationView: View {
     }
     
     private var integrationOptions: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Integration Options")
-                .font(.headline)
-            
-            // Toolbar Button
-            IntegrationRow(
-                title: "Finder Toolbar Button",
-                subtitle: "Click to organize the current folder",
-                icon: "rectangle.topthird.inset.filled",
-                isInstalled: integrationStatus.toolbarAppInstalled,
-                action: installToolbarButton,
-                secondaryAction: integrationStatus.toolbarAppInstalled ? revealToolbarApp : nil,
-                secondaryLabel: "Show in Finder"
-            )
-            
-            // Quick Action
-            IntegrationRow(
-                title: "Right-Click Menu",
-                subtitle: "Organize with Sorty in context menu",
-                icon: "contextualmenu.and.cursorarrow",
-                isInstalled: integrationStatus.quickActionInstalled,
-                action: installQuickAction,
-                secondaryAction: nil,
-                secondaryLabel: nil
-            )
-            
-            // Menu Bar
-            IntegrationRow(
-                title: "Menu Bar Icon",
-                subtitle: "Quick access from menu bar",
-                icon: "menubar.rectangle",
-                isInstalled: showMenuBarIcon,
-                action: toggleMenuBar,
-                secondaryAction: nil,
-                secondaryLabel: nil
-            )
-            
-            // Quick Panel
-            IntegrationRow(
-                title: "Quick Organize Panel",
-                subtitle: "Floating panel for fast organization",
-                icon: "uiwindow.split.2x1",
-                isInstalled: true, // Always available
-                action: showQuickPanel,
-                secondaryAction: nil,
-                secondaryLabel: nil,
-                actionLabel: "Open Panel"
-            )
-            
-            // Finder Sync Extension (Experimental/Hidden)
-            if UserDefaults.standard.bool(forKey: "showExperimentalFeatures") {
-                IntegrationRow(
-                    title: "Finder Sync Extension",
-                    subtitle: "Icon overlays and sidebar icons",
-                    icon: "externaldrive.fill.badge.checkmark",
-                    isInstalled: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension"),
-                    action: toggleFinderSync,
-                    secondaryAction: nil,
-                    secondaryLabel: nil,
-                    actionLabel: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension") ? "Disable" : "Enable"
-                )
-            }
-            
-            // Install All Button
-            HStack {
-                Spacer()
-                
-                Button(action: installAll) {
-                    HStack {
-                        if isInstalling {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "square.and.arrow.down.fill")
-                        }
-                        Text("Install All Integrations")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isInstalling)
-                
-                Button(action: { showingInstructions.toggle() }) {
-                    Text(showingInstructions ? "Hide Instructions" : "Show Instructions")
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(.top, 8)
-        }
-        .padding()
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(12)
+        IntegrationOptionsView(
+            integrationStatus: integrationStatus,
+            isInstalling: isInstalling,
+            showMenuBarIcon: showMenuBarIcon,
+            showingInstructions: $showingInstructions,
+            installToolbarButton: installToolbarButton,
+            revealToolbarApp: revealToolbarApp,
+            installQuickAction: installQuickAction,
+            toggleMenuBar: toggleMenuBar,
+            showQuickPanel: showQuickPanel,
+            toggleFinderSync: toggleFinderSync,
+            installAll: installAll
+        )
     }
     
     private var instructionsSection: some View {
@@ -418,6 +341,106 @@ struct IntegrationRow: View {
             }
         }
         .padding(.vertical, 8)
+    }
+}
+
+private struct IntegrationOptionsView: View {
+    let integrationStatus: ExtensionCommunication.FinderIntegrationStatus
+    let isInstalling: Bool
+    let showMenuBarIcon: Bool
+    @Binding var showingInstructions: Bool
+    let installToolbarButton: () -> Void
+    let revealToolbarApp: () -> Void
+    let installQuickAction: () -> Void
+    let toggleMenuBar: () -> Void
+    let showQuickPanel: () -> Void
+    let toggleFinderSync: () -> Void
+    let installAll: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Integration Options")
+                .font(.headline)
+
+            IntegrationRow(
+                title: "Finder Toolbar Button",
+                subtitle: "Click to organize the current folder",
+                icon: "rectangle.topthird.inset.filled",
+                isInstalled: integrationStatus.toolbarAppInstalled,
+                action: installToolbarButton,
+                secondaryAction: integrationStatus.toolbarAppInstalled ? revealToolbarApp : nil,
+                secondaryLabel: "Show in Finder"
+            )
+
+            IntegrationRow(
+                title: "Right-Click Menu",
+                subtitle: "Organize with Sorty in context menu",
+                icon: "contextualmenu.and.cursorarrow",
+                isInstalled: integrationStatus.quickActionInstalled,
+                action: installQuickAction,
+                secondaryAction: nil,
+                secondaryLabel: nil
+            )
+
+            IntegrationRow(
+                title: "Menu Bar Icon",
+                subtitle: "Quick access from menu bar",
+                icon: "menubar.rectangle",
+                isInstalled: showMenuBarIcon,
+                action: toggleMenuBar,
+                secondaryAction: nil,
+                secondaryLabel: nil
+            )
+
+            IntegrationRow(
+                title: "Quick Organize Panel",
+                subtitle: "Floating panel for fast organization",
+                icon: "uiwindow.split.2x1",
+                isInstalled: true,
+                action: showQuickPanel,
+                secondaryAction: nil,
+                secondaryLabel: nil,
+                actionLabel: "Open Panel"
+            )
+
+            if UserDefaults.standard.bool(forKey: "showExperimentalFeatures") {
+                IntegrationRow(
+                    title: "Finder Sync Extension",
+                    subtitle: "Icon overlays and sidebar icons",
+                    icon: "externaldrive.fill.badge.checkmark",
+                    isInstalled: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension"),
+                    action: toggleFinderSync,
+                    secondaryAction: nil,
+                    secondaryLabel: nil,
+                    actionLabel: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension") ? "Disable" : "Enable"
+                )
+            }
+
+            HStack {
+                Spacer()
+
+                Button(action: installAll) {
+                    HStack {
+                        if isInstalling {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: "square.and.arrow.down.fill")
+                        }
+                        Text("Install All Integrations")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isInstalling)
+
+                Button(action: { showingInstructions.toggle() }) {
+                    Text(showingInstructions ? "Hide Instructions" : "Show Instructions")
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.top, 8)
+        }
+        .padding()
     }
 }
 

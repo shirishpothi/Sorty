@@ -90,6 +90,46 @@
 		3353FCD72F0124320097CD23 /* WorkspaceHealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FCC32F0124320097CD23 /* WorkspaceHealthView.swift */; };
 		33A128922F01230200A86470 /* AppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33A128912F01230200A86470 /* AppUITests.swift */; };
 		AABBCC220002000000000001 /* UpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000001 /* UpdateManager.swift */; };
+		AABBCC220002000000000006 /* LogManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000006 /* LogManager.swift */; };
+		AABBCC220002000000000007 /* CleanupPreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000007 /* CleanupPreviewSheet.swift */; };
+		AABBCC22000200000000000A /* ImageVisionAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000000A /* ImageVisionAnalyzer.swift */; };
+		AABBCC22000200000000000B /* StorageLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000000B /* StorageLocation.swift */; };
+		AABBCC22000200000000000C /* NotificationSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000000C /* NotificationSettings.swift */; };
+		AABBCC22000200000000000D /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000000D /* FeatureFlags.swift */; };
+		AABBCC22000200000000000E /* ExclusionEnforcer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000000E /* ExclusionEnforcer.swift */; };
+		AABBCC22000200000000000F /* SortyResources.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000000F /* SortyResources.swift */; };
+		AABBCC220002000000000010 /* NotifiCLIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000010 /* NotifiCLIService.swift */; };
+		AABBCC220002000000000011 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000011 /* NotificationManager.swift */; };
+		AABBCC220002000000000012 /* FolderThumbnailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000012 /* FolderThumbnailProvider.swift */; };
+		AABBCC220002000000000013 /* ButtonStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000013 /* ButtonStyles.swift */; };
+		AABBCC220002000000000014 /* AudioWaveformGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000014 /* AudioWaveformGenerator.swift */; };
+		AABBCC220002000000000015 /* FileThumbnailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000015 /* FileThumbnailProvider.swift */; };
+		AABBCC220002000000000016 /* HashUtility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000016 /* HashUtility.swift */; };
+		AABBCC220002000000000017 /* LearningsFSMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000017 /* LearningsFSMonitor.swift */; };
+		AABBCC220002000000000018 /* LocalRuleInferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */; };
+		AABBCC220002000000000019 /* AnthropicClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000019 /* AnthropicClient.swift */; };
+		AABBCC22000200000000001A /* AISessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001A /* AISessionManager.swift */; };
+		AABBCC22000200000000001B /* GitHubCopilotClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001B /* GitHubCopilotClient.swift */; };
+		AABBCC22000200000000001C /* GitHubCopilotAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */; };
+		AABBCC22000200000000001D /* AppleVisionIntelligenceAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001D /* AppleVisionIntelligenceAnalyzer.swift */; };
+		AABBCC22000200000000001E /* QuickOrganizePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001E /* QuickOrganizePanel.swift */; };
+		AABBCC22000200000000001F /* AIProviderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000001F /* AIProviderSettingsView.swift */; };
+		AABBCC220002000000000020 /* ModelSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000020 /* ModelSelector.swift */; };
+		AABBCC220002000000000021 /* HUDNotificationOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000021 /* HUDNotificationOverlay.swift */; };
+		AABBCC220002000000000022 /* StorageLocationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000022 /* StorageLocationsView.swift */; };
+		AABBCC220002000000000023 /* WorkflowContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000023 /* WorkflowContainer.swift */; };
+		AABBCC220002000000000024 /* ProviderLogoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000024 /* ProviderLogoView.swift */; };
+		AABBCC220002000000000025 /* FileThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000025 /* FileThumbnailView.swift */; };
+		AABBCC220002000000000026 /* FolderThumbnailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000026 /* FolderThumbnailView.swift */; };
+		AABBCC220002000000000027 /* VisionRecommendationBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000027 /* VisionRecommendationBanner.swift */; };
+		AABBCC220002000000000028 /* UpdateDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000028 /* UpdateDialogView.swift */; };
+		AABBCC220002000000000029 /* ToastOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000029 /* ToastOverlay.swift */; };
+		AABBCC22000200000000002A /* FinderIntegrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002A /* FinderIntegrationView.swift */; };
+		AABBCC22000200000000002B /* OptimizedPreviewTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002B /* OptimizedPreviewTree.swift */; };
+		AABBCC22000200000000002C /* OrganizationCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002C /* OrganizationCompleteView.swift */; };
+		AABBCC22000200000000002D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002D /* OnboardingView.swift */; };
+		AABBCC22000200000000002E /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002E /* ModelCatalog.swift */; };
+
 		AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000002 /* AppAccessibilityTests.swift */; };
 		AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */; };
 		AABBCC220002000000000004 /* FeatureSpecificUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000004 /* FeatureSpecificUITests.swift */; };
@@ -206,6 +246,46 @@
 		AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationWorkflowTests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000004 /* FeatureSpecificUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureSpecificUITests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000005 /* DeeplinkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeeplinkUITests.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000006 /* LogManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000007 /* CleanupPreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CleanupPreviewSheet.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000000A /* ImageVisionAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageVisionAnalyzer.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000000B /* StorageLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocation.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000000C /* NotificationSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettings.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000000D /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000000E /* ExclusionEnforcer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionEnforcer.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000000F /* SortyResources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyResources.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000010 /* NotifiCLIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifiCLIService.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000011 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000012 /* FolderThumbnailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderThumbnailProvider.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000013 /* ButtonStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonStyles.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000014 /* AudioWaveformGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioWaveformGenerator.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000015 /* FileThumbnailProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileThumbnailProvider.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000016 /* HashUtility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HashUtility.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000017 /* LearningsFSMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsFSMonitor.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalRuleInferenceEngine.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000019 /* AnthropicClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnthropicClient.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000001A /* AISessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISessionManager.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000001B /* GitHubCopilotClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubCopilotClient.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubCopilotAuthManager.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000001D /* AppleVisionIntelligenceAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleVisionIntelligenceAnalyzer.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000001E /* QuickOrganizePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOrganizePanel.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000001F /* AIProviderSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000020 /* ModelSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSelector.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000021 /* HUDNotificationOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDNotificationOverlay.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000022 /* StorageLocationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000023 /* WorkflowContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowContainer.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000024 /* ProviderLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderLogoView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000025 /* FileThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileThumbnailView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000026 /* FolderThumbnailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderThumbnailView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000027 /* VisionRecommendationBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionRecommendationBanner.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000028 /* UpdateDialogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateDialogView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000029 /* ToastOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastOverlay.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000002A /* FinderIntegrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderIntegrationView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000002B /* OptimizedPreviewTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimizedPreviewTree.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000002C /* OrganizationCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationCompleteView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000002D /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000002E /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
+
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -248,6 +328,8 @@
 				048494702C94478CA4F45671 /* PatternMatcher.swift */,
 				DDFD17C04F03490991995D66 /* LearningsFileManager.swift */,
 				C42902EEA5C445E4AE788CC8 /* LearningsAnalyzer.swift */,
+				AABBCC110001000000000017 /* LearningsFSMonitor.swift */,
+				AABBCC110001000000000018 /* LocalRuleInferenceEngine.swift */,
 			);
 			path = Sources/SortyLib/Learnings;
 			sourceTree = "<group>";
@@ -264,6 +346,11 @@
 				3353FC1F2F0124320097CD23 /* PromptBuilder.swift */,
 				3353FC202F0124320097CD23 /* ResponseParser.swift */,
 				3353FC212F0124320097CD23 /* SystemPrompt.swift */,
+				AABBCC110001000000000019 /* AnthropicClient.swift */,
+				AABBCC11000100000000001A /* AISessionManager.swift */,
+				AABBCC11000100000000001B /* GitHubCopilotClient.swift */,
+				AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */,
+				AABBCC11000100000000001D /* AppleVisionIntelligenceAnalyzer.swift */,
 			);
 			path = Sources/SortyLib/AI;
 			sourceTree = "<group>";
@@ -278,6 +365,7 @@
 				3353FCB32F0124320097CD23 /* FolderWatcher.swift */,
 				3353FCB42F0124320097CD23 /* SemanticDuplicateDetector.swift */,
 				3353FCB52F0124320097CD23 /* VisionAnalyzer.swift */,
+				AABBCC11000100000000000A /* ImageVisionAnalyzer.swift */,
 			);
 			path = Sources/SortyLib/FileSystem;
 			sourceTree = "<group>";
@@ -287,6 +375,7 @@
 			children = (
 				3353FC262F0124320097CD23 /* ExtensionCommunication.swift */,
 				3353FC272F0124320097CD23 /* FileOrganizerActionExtension.swift */,
+				AABBCC11000100000000001E /* QuickOrganizePanel.swift */,
 			);
 			path = Sources/SortyLib/FinderExtension;
 			sourceTree = "<group>";
@@ -305,6 +394,10 @@
 				3353FCB72F0124320097CD23 /* WatchedFolder.swift */,
 				3353FCB82F0124320097CD23 /* WorkspaceHealth.swift */,
 				33007BB82F09093D000207CB /* CustomPersona.swift */,
+				AABBCC11000100000000000B /* StorageLocation.swift */,
+				AABBCC11000100000000000C /* NotificationSettings.swift */,
+				AABBCC11000100000000000D /* FeatureFlags.swift */,
+				AABBCC11000100000000000E /* ExclusionEnforcer.swift */,
 			);
 			path = Sources/SortyLib/Models;
 			sourceTree = "<group>";
@@ -330,7 +423,16 @@
 				3353FCB92F0124320097CD23 /* ExtensionListener.swift */,
 				3353FC362F0124320097CD23 /* Extensions.swift */,
 				3353FC372F0124320097CD23 /* KeychainManager.swift */,
+				AABBCC110001000000000006 /* LogManager.swift */,
 				AABBCC110001000000000001 /* UpdateManager.swift */,
+				AABBCC11000100000000000F /* SortyResources.swift */,
+				AABBCC110001000000000010 /* NotifiCLIService.swift */,
+				AABBCC110001000000000011 /* NotificationManager.swift */,
+				AABBCC110001000000000012 /* FolderThumbnailProvider.swift */,
+				AABBCC110001000000000013 /* ButtonStyles.swift */,
+				AABBCC110001000000000014 /* AudioWaveformGenerator.swift */,
+				AABBCC110001000000000015 /* FileThumbnailProvider.swift */,
+				AABBCC110001000000000016 /* HashUtility.swift */,
 			);
 			path = Sources/SortyLib/Utilities;
 			sourceTree = "<group>";
@@ -346,6 +448,7 @@
 		3353FC442F0124320097CD23 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				AABBCC550000000000000001 /* Components */,
 				0C803137980F429E8E946D30 /* LearningsHoningView.swift */,
 				A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */,
 				9AD0E58548934B6E962C2293 /* HelpView.swift */,
@@ -357,6 +460,7 @@
 				3353FC3B2F0124320097CD23 /* AnalysisView.swift */,
 				3353FCBA2F0124320097CD23 /* AppCommands.swift */,
 				3353FCBB2F0124320097CD23 /* CanvasPreviewView.swift */,
+				AABBCC110001000000000007 /* CleanupPreviewSheet.swift */,
 				3353FC3C2F0124320097CD23 /* ContentView.swift */,
 				3353FC3D2F0124320097CD23 /* DirectorySelectionView.swift */,
 				3353FCBC2F0124320097CD23 /* DuplicatesView.swift */,
@@ -373,8 +477,38 @@
 				3353FCC12F0124320097CD23 /* TimelineView.swift */,
 				3353FCC22F0124320097CD23 /* WatchedFoldersView.swift */,
 				3353FCC32F0124320097CD23 /* WorkspaceHealthView.swift */,
+				AABBCC11000100000000001F /* AIProviderSettingsView.swift */,
+				AABBCC110001000000000020 /* ModelSelector.swift */,
+				AABBCC110001000000000021 /* HUDNotificationOverlay.swift */,
+				AABBCC110001000000000022 /* StorageLocationsView.swift */,
+				AABBCC110001000000000029 /* ToastOverlay.swift */,
+				AABBCC11000100000000002A /* FinderIntegrationView.swift */,
+				AABBCC11000100000000002B /* OptimizedPreviewTree.swift */,
+				AABBCC11000100000000002C /* OrganizationCompleteView.swift */,
+				AABBCC11000100000000002D /* OnboardingView.swift */,
 			);
 			path = Sources/SortyLib/Views;
+			sourceTree = "<group>";
+		};
+		AABBCC550000000000000001 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCC110001000000000023 /* WorkflowContainer.swift */,
+				AABBCC110001000000000024 /* ProviderLogoView.swift */,
+				AABBCC110001000000000025 /* FileThumbnailView.swift */,
+				AABBCC110001000000000026 /* FolderThumbnailView.swift */,
+				AABBCC110001000000000027 /* VisionRecommendationBanner.swift */,
+				AABBCC110001000000000028 /* UpdateDialogView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		AABBCC440000000000000001 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCC11000100000000002E /* ModelCatalog.swift */,
+			);
+			path = Sources/SortyLib/Services;
 			sourceTree = "<group>";
 		};
 		3353FC462F0124320097CD23 = {
@@ -390,6 +524,7 @@
 				3353FC382F0124320097CD23 /* Utilities */,
 				3353FC3A2F0124320097CD23 /* ViewModels */,
 				3353FC442F0124320097CD23 /* Views */,
+				AABBCC440000000000000001 /* Services */,
 				3353FCB02F0124320097CD23 /* AppCoordinator.swift */,
 				3353FC452F0124320097CD23 /* FileOrganizerApp.swift */,
 			);
@@ -643,6 +778,45 @@
 				3353FCD62F0124320097CD23 /* WatchedFoldersView.swift in Sources */,
 				3353FCD72F0124320097CD23 /* WorkspaceHealthView.swift in Sources */,
 				AABBCC220002000000000001 /* UpdateManager.swift in Sources */,
+				AABBCC220002000000000006 /* LogManager.swift in Sources */,
+				AABBCC220002000000000007 /* CleanupPreviewSheet.swift in Sources */,
+				AABBCC22000200000000000A /* ImageVisionAnalyzer.swift in Sources */,
+				AABBCC22000200000000000B /* StorageLocation.swift in Sources */,
+				AABBCC22000200000000000C /* NotificationSettings.swift in Sources */,
+				AABBCC22000200000000000D /* FeatureFlags.swift in Sources */,
+				AABBCC22000200000000000E /* ExclusionEnforcer.swift in Sources */,
+				AABBCC22000200000000000F /* SortyResources.swift in Sources */,
+				AABBCC220002000000000010 /* NotifiCLIService.swift in Sources */,
+				AABBCC220002000000000011 /* NotificationManager.swift in Sources */,
+				AABBCC220002000000000012 /* FolderThumbnailProvider.swift in Sources */,
+				AABBCC220002000000000013 /* ButtonStyles.swift in Sources */,
+				AABBCC220002000000000014 /* AudioWaveformGenerator.swift in Sources */,
+				AABBCC220002000000000015 /* FileThumbnailProvider.swift in Sources */,
+				AABBCC220002000000000016 /* HashUtility.swift in Sources */,
+				AABBCC220002000000000017 /* LearningsFSMonitor.swift in Sources */,
+				AABBCC220002000000000018 /* LocalRuleInferenceEngine.swift in Sources */,
+				AABBCC220002000000000019 /* AnthropicClient.swift in Sources */,
+				AABBCC22000200000000001A /* AISessionManager.swift in Sources */,
+				AABBCC22000200000000001B /* GitHubCopilotClient.swift in Sources */,
+				AABBCC22000200000000001C /* GitHubCopilotAuthManager.swift in Sources */,
+				AABBCC22000200000000001D /* AppleVisionIntelligenceAnalyzer.swift in Sources */,
+				AABBCC22000200000000001E /* QuickOrganizePanel.swift in Sources */,
+				AABBCC22000200000000001F /* AIProviderSettingsView.swift in Sources */,
+				AABBCC220002000000000020 /* ModelSelector.swift in Sources */,
+				AABBCC220002000000000021 /* HUDNotificationOverlay.swift in Sources */,
+				AABBCC220002000000000022 /* StorageLocationsView.swift in Sources */,
+				AABBCC220002000000000023 /* WorkflowContainer.swift in Sources */,
+				AABBCC220002000000000024 /* ProviderLogoView.swift in Sources */,
+				AABBCC220002000000000025 /* FileThumbnailView.swift in Sources */,
+				AABBCC220002000000000026 /* FolderThumbnailView.swift in Sources */,
+				AABBCC220002000000000027 /* VisionRecommendationBanner.swift in Sources */,
+				AABBCC220002000000000028 /* UpdateDialogView.swift in Sources */,
+				AABBCC220002000000000029 /* ToastOverlay.swift in Sources */,
+				AABBCC22000200000000002A /* FinderIntegrationView.swift in Sources */,
+				AABBCC22000200000000002B /* OptimizedPreviewTree.swift in Sources */,
+				AABBCC22000200000000002C /* OrganizationCompleteView.swift in Sources */,
+				AABBCC22000200000000002D /* OnboardingView.swift in Sources */,
+				AABBCC22000200000000002E /* ModelCatalog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
