@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 public struct ModelInfo: Codable, Identifiable, Sendable, Equatable {
     public let id: String
