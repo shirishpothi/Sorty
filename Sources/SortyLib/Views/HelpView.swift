@@ -66,6 +66,7 @@ public enum HelpSection: String, CaseIterable {
     case updates
     case downloads
     case troubleshooting
+    case diagnostics
     case privacy
     case about
     
@@ -85,6 +86,7 @@ public enum HelpSection: String, CaseIterable {
         case .updates: return "Version & Updates"
         case .downloads: return "Downloads"
         case .troubleshooting: return "Troubleshooting"
+        case .diagnostics: return "Diagnostics & Logs"
         case .privacy: return "Privacy & Data"
         case .about: return "About"
         }
@@ -106,6 +108,7 @@ public enum HelpSection: String, CaseIterable {
         case .updates: return "arrow.down.circle.fill"
         case .downloads: return "square.and.arrow.down.fill"
         case .troubleshooting: return "wrench.and.screwdriver.fill"
+        case .diagnostics: return "stethoscope"
         case .privacy: return "lock.shield.fill"
         case .about: return "info.circle.fill"
         }
@@ -142,6 +145,8 @@ public enum HelpSection: String, CaseIterable {
             DownloadsContent()
         case .troubleshooting:
             TroubleshootingContent()
+        case .diagnostics:
+            DiagnosticsContent()
         case .privacy:
             PrivacyContent()
         case .about:
@@ -458,101 +463,404 @@ private struct ShortcutsContent: View {
 private struct TroubleshootingContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Quick solutions for common issues. Click any section to expand.")
+            Text("Step-by-step guides for fixing common issues. Each section provides detailed diagnostic steps and solutions.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             
-            LazyVStack(alignment: .leading, spacing: 12) {
-                TroubleshootSection(
+            VStack(alignment: .leading, spacing: 12) {
+                // AI Provider Issues
+                DetailedTroubleshootSection(
                     icon: "wifi.exclamationmark",
                     iconColor: .red,
-                    problem: "AI Not Responding",
-                    solutions: [
-                        ("checkmark.circle", "Test Connection in Settings"),
-                        ("key", "Verify API key is valid and has credits"),
-                        ("link", "Check API URL format"),
-                        ("clock", "Increase timeout to 120s"),
-                        ("shield", "Check firewall/proxy settings")
+                    problem: "AI Provider Not Responding",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Test Connection in Settings",
+                            details: "Open Settings → AI Provider and click 'Test Connection'. If it fails, check the error message displayed."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Verify API Key",
+                            details: "Log into your AI provider dashboard (OpenAI, Anthropic, etc.) and confirm: 1) The key is active, 2) You have available credits, 3) The key hasn't expired. Generate a new key if needed."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Check API URL Format",
+                            details: "Ensure the URL matches your provider's requirements. OpenAI: https://api.openai.com/v1, Ollama: http://localhost:11434, Anthropic: https://api.anthropic.com/v1. Do not include trailing slashes."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Adjust Timeout Settings",
+                            details: "Go to Settings → Advanced. Increase the timeout from 60s to 120s for slower connections. If using Ollama locally on an older Mac, consider 180s."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Check Network and Firewall",
+                            details: "Verify your internet connection. Check if you're behind a corporate firewall or VPN that blocks AI provider APIs. Try accessing the provider's website in a browser. Temporarily disable VPN to test."
+                        )
                     ]
                 )
                 
-                TroubleshootSection(
+                // Ollama Specific Issues
+                DetailedTroubleshootSection(
                     icon: "server.rack",
                     iconColor: .purple,
-                    problem: "Ollama Issues",
-                    solutions: [
-                        ("terminal", "Run 'ollama serve' in Terminal"),
-                        ("network", "URL: http://localhost:11434"),
-                        ("arrow.down.circle", "Run 'ollama pull llama3'"),
-                        ("cpu", "Use ARM-native version on Apple Silicon")
+                    problem: "Ollama Local AI Issues",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Start Ollama Server",
+                            details: "Open Terminal and run 'ollama serve' to start the server. You should see a message indicating it's listening on port 11434. Keep this Terminal window open while using Sorty."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Verify URL Configuration",
+                            details: "In Sorty Settings → AI Provider, ensure the URL is exactly 'http://localhost:11434' (no trailing slash). If Ollama is on another machine, use its IP address instead of localhost."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Download Required Model",
+                            details: "Run 'ollama pull llama4' (or your preferred model) in Terminal. The model must be fully downloaded before use. You can check available models with 'ollama list'."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Check Architecture Compatibility",
+                            details: "On Apple Silicon Macs, ensure you're using the ARM-native version of Ollama, not the Intel version running under Rosetta. Check Activity Monitor - Ollama should show 'Apple' architecture, not 'Intel'."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Verify Port Availability",
+                            details: "Run 'lsof -i :11434' in Terminal to check if Ollama is using the port. If another service is using this port, either stop that service or configure Ollama to use a different port."
+                        )
                     ]
                 )
                 
-                TroubleshootSection(
+                // File Operations Issues
+                DetailedTroubleshootSection(
                     icon: "folder.badge.questionmark",
                     iconColor: .orange,
-                    problem: "Files Not Moving",
-                    solutions: [
-                        ("checklist", "Check Exclusion Rules"),
-                        ("lock.open", "Verify read/write permissions"),
-                        ("xmark.app", "Close apps using the files"),
-                        ("internaldrive", "Check disk space")
+                    problem: "Files Not Moving or Organizing",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Check Exclusion Rules",
+                            details: "Open the Exclusions tab and review active rules. Common culprits: '*.tmp' patterns, folder exclusions, or size limits. Temporarily disable exclusions to test if they're blocking your files."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Verify File Permissions",
+                            details: "In Finder, right-click the folder and select 'Get Info' (⌘I). Check the 'Sharing & Permissions' section. Ensure your user account has 'Read & Write' access. If not, click the lock icon and change permissions."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Close Applications Using Files",
+                            details: "Files cannot be moved if they're open in another app. Close Preview, TextEdit, or any other applications that might have files open. For stubborn locks, restart your Mac."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Check Available Disk Space",
+                            details: "Open System Settings → General → Storage. Ensure you have at least 10% free space on the drive. Organization requires temporary space for file operations."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Verify Sandbox Permissions",
+                            details: "The app runs in macOS Sandbox. If permissions were revoked, remove the folder from Sorty and re-add it to refresh the security bookmark. This forces macOS to re-prompt for permission."
+                        )
                     ]
                 )
                 
-                TroubleshootSection(
-                    icon: "exclamationmark.triangle",
-                    iconColor: .yellow,
-                    problem: "App Issues",
-                    solutions: [
-                        ("arrow.uturn.backward", "Use History to revert changes"),
-                        ("arrow.clockwise", "Force quit and restart"),
-                        ("trash", "Clear cache: Help → Delete All Usage Data"),
-                        ("doc.text", "Check Console.app for logs")
+                // Watched Folders Issues
+                DetailedTroubleshootSection(
+                    icon: "eye.slash",
+                    iconColor: .cyan,
+                    problem: "Watched Folders Not Working",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Confirm App Location",
+                            details: "The app MUST be in /Applications for Watched Folders to work reliably. If it's in Downloads or Desktop, move it: 1) Quit Sorty, 2) Drag to /Applications, 3) Re-launch. Remove and re-add watched folders after moving."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Refresh Security Bookmarks",
+                            details: "Bookmarks can become stale if folders move. Remove all watched folders in Settings, then add them back one by one. This refreshes the macOS security bookmarks that allow file access."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Check AI Provider Configuration",
+                            details: "Watched Folders require a working AI provider. In Settings → AI Provider, confirm: Test Connection passes, timeout is reasonable (60s+), and you have API credits. Auto-organize won't work without valid AI configuration."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Verify Smart Drop Settings",
+                            details: "If using Smart Drop mode, ensure the folder has been calibrated first. Click 'Calibrate' to perform an initial organization. Smart Drop only organizes NEW files dropped after calibration, not existing files."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Check Console for Errors",
+                            details: "Open Console.app (from Applications → Utilities), search for 'Sorty', and look for error messages related to bookmarks or file monitoring. These logs help identify the root cause."
+                        )
                     ]
                 )
                 
-                TroubleshootSection(
+                // Performance Issues
+                DetailedTroubleshootSection(
                     icon: "speedometer",
                     iconColor: .blue,
-                    problem: "Performance",
-                    solutions: [
-                        ("hare", "Disable Deep Scan"),
-                        ("minus.circle", "Add exclusions for node_modules, .git"),
-                        ("waveform", "Enable Streaming mode"),
-                        ("house", "Use local Ollama model")
+                    problem: "Slow Performance or High Resource Usage",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Disable Deep Scan",
+                            details: "Go to Settings → Advanced and turn OFF 'Deep Scan'. Deep Scan reads file contents (PDF text, image EXIF) which significantly slows analysis, especially for large media files."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Add Exclusions for Large Directories",
+                            details: "Exclude directories like node_modules, .git, build/, DerivedData/, or virtual environments. These contain thousands of small files that slow scanning. Go to Exclusions tab and add patterns like '*/node_modules/*'."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Enable Streaming Mode",
+                            details: "In Settings → Advanced, enable 'Stream AI Responses'. This shows results progressively instead of waiting for the complete response, improving perceived performance."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Use Local AI for Large Batches",
+                            details: "For organizing thousands of files, consider using Ollama (local) instead of cloud providers. Local models have no rate limits and can process large batches more efficiently."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Reduce Folder Size",
+                            details: "If organizing 1000+ files, split into smaller batches (200-300 files). Sorty analyzes all files together, so smaller batches reduce memory usage and improve response times."
+                        )
                     ]
                 )
                 
-                TroubleshootSection(
-                    icon: "tag",
+                // App Crashes or Freezes
+                DetailedTroubleshootSection(
+                    icon: "exclamationmark.triangle",
+                    iconColor: .yellow,
+                    problem: "App Crashes, Freezes, or Unexpected Behavior",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Check for Updates",
+                            details: "Go to Help → Check for Updates. Many stability issues are fixed in newer versions. Install the latest release before troubleshooting further."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Clear App Data",
+                            details: "Go to Help → Delete All Usage Data in the menu bar. This clears caches, temporary files, and resets some settings without affecting your files. Restart the app after clearing."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Reinstall the App",
+                            details: "Delete Sorty.app from /Applications, empty trash, then reinstall the latest version. This ensures no corrupted files persist. Your settings are stored separately and will be preserved."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Check Console Logs",
+                            details: "Open Console.app, filter by 'Sorty', and look for crash reports or error messages around the time the issue occurred. Look for 'Exception', 'Crash', or 'Error' keywords."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Reset NVRAM/PRAM (Advanced)",
+                            details: "If issues persist, reset NVRAM: Restart your Mac and immediately hold Option-Command-P-R for 20 seconds. This clears low-level system settings that might affect app stability."
+                        )
+                    ]
+                )
+                
+                // Finder Extension Issues
+                DetailedTroubleshootSection(
+                    icon: "puzzlepiece.extension",
                     iconColor: .green,
-                    problem: "Tags Not Working",
-                    solutions: [
-                        ("switch.2", "Enable File Tagging in Settings"),
-                        ("checkmark.square", "Click 'Apply Changes' first"),
-                        ("arrow.clockwise", "Refresh Finder window"),
-                        ("info.circle", "Check File Info (⌘I)")
+                    problem: "Finder Extension Not Appearing",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Enable in System Settings",
+                            details: "Go to System Settings → Privacy & Security → Extensions → Finder Extensions. Ensure 'SortyExtension' is checked. If it's not listed, rebuild the extension target in Xcode."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Restart Finder",
+                            details: "Option-click the Finder icon in the Dock and select 'Relaunch'. Or run 'killall Finder' in Terminal. The extension requires a Finder restart to activate after enabling."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Check App Group Configuration",
+                            details: "The extension requires App Groups to communicate with the main app. In Xcode, ensure both Sorty and SortyExtension targets have the same App Group entitlement: 'group.com.sorty.app'."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Build Extension Target",
+                            details: "In Xcode, select the 'SortyExtension' scheme and build it (⌘B). The extension is a separate target that must be built alongside the main app. Run the extension target at least once."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Grant Full Disk Access (If Needed)",
+                            details: "Some directories require Full Disk Access. Go to System Settings → Privacy & Security → Full Disk Access. Add Sorty if it's not already there. This allows the extension to work in protected folders."
+                        )
+                    ]
+                )
+                
+                // Update Issues
+                DetailedTroubleshootSection(
+                    icon: "arrow.down.circle.dotted",
+                    iconColor: .pink,
+                    problem: "Update Check or Download Fails",
+                    steps: [
+                        DiagnosticStep(
+                            number: 1,
+                            title: "Check Internet Connection",
+                            details: "Verify you can access https://github.com/shirishpothi/Sorty in a web browser. The update system fetches data from GitHub's API and requires internet access."
+                        ),
+                        DiagnosticStep(
+                            number: 2,
+                            title: "Wait for Rate Limit Reset",
+                            details: "GitHub API has rate limits (60 requests/hour for unauthenticated users). If you see 'Rate limited' errors, wait 60 minutes and try again."
+                        ),
+                        DiagnosticStep(
+                            number: 3,
+                            title: "Check Firewall Settings",
+                            details: "Ensure your firewall or security software allows connections to api.github.com and github.com. Corporate networks may block these. Try with a different network if possible."
+                        ),
+                        DiagnosticStep(
+                            number: 4,
+                            title: "Manually Check for Updates",
+                            details: "Compare your version (in About menu) with the latest release at https://github.com/shirishpothi/Sorty/releases. Download and install manually if automatic check fails."
+                        ),
+                        DiagnosticStep(
+                            number: 5,
+                            title: "Check Console for Errors",
+                            details: "Open Console.app and search for 'Sorty' during an update check. Look for network errors, SSL issues, or JSON parsing failures that might indicate the problem."
+                        )
                     ]
                 )
             }
             
-            // Quick Reference: Error Codes
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Error Code Reference")
+            // Error Code Reference
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Common Error Codes")
                     .font(.headline)
-                    .padding(.top, 8)
+                    .padding(.top, 16)
                 
-                HStack(spacing: 16) {
+                Text("HTTP error codes from AI providers and what they mean:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 12) {
                     ErrorBadge(code: "401", meaning: "Invalid API key", color: .red)
-                    ErrorBadge(code: "429", meaning: "Rate limited", color: .orange)
+                    ErrorBadge(code: "403", meaning: "Forbidden/Rate limited", color: .orange)
                     ErrorBadge(code: "404", meaning: "Model not found", color: .yellow)
-                    ErrorBadge(code: "503", meaning: "Service down", color: .gray)
+                    ErrorBadge(code: "429", meaning: "Too many requests", color: .orange)
+                    ErrorBadge(code: "500", meaning: "Server error", color: .gray)
+                    ErrorBadge(code: "503", meaning: "Service unavailable", color: .gray)
                 }
             }
             .padding()
             .background(.ultraThinMaterial)
             .cornerRadius(12)
+            
+            // Getting More Help
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Still Need Help?")
+                    .font(.headline)
+                
+                Text("If these steps don't resolve your issue:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    HelpFeatureView(icon: "doc.text", title: "Check the Logs", description: "Open Console.app, search for 'Sorty', and review error messages. See the Diagnostics section for detailed log collection steps.")
+                    
+                    HelpFeatureView(icon: "ladybug.fill", title: "Report an Issue", description: "Go to Help → Report an Issue to open GitHub with a pre-filled bug report template. Include your Console logs.")
+                    
+                    HelpFeatureView(icon: "book.fill", title: "Read Documentation", description: "Visit the GitHub repository for detailed guides: https://github.com/shirishpothi/Sorty")
+                }
+            }
+            .padding(.top, 16)
+        }
+    }
+}
+
+private struct DiagnosticStep: Identifiable {
+    let id = UUID()
+    let number: Int
+    let title: String
+    let details: String
+}
+
+private struct DetailedTroubleshootSection: View {
+    let icon: String
+    let iconColor: Color
+    let problem: String
+    let steps: [DiagnosticStep]
+    
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundColor(iconColor)
+                        .frame(width: 32)
+                    
+                    Text(problem)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(iconColor.opacity(0.08))
+                .cornerRadius(10)
+            }
+            .buttonStyle(.plain)
+            
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(steps) { step in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 10) {
+                                Text("\(step.number)")
+                                    .font(.caption.bold())
+                                    .foregroundColor(.white)
+                                    .frame(width: 24, height: 24)
+                                    .background(iconColor)
+                                    .clipShape(Circle())
+                                
+                                Text(step.title)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.primary)
+                            }
+                            
+                            Text(step.details)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.leading, 34)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .padding(.leading, 32)
+            }
         }
     }
 }
@@ -731,7 +1039,7 @@ private struct AboutContent: View {
             
             // Update Status Area
             VStack(spacing: 8) {
-                switch appState.updateManager.state {
+                switch appState.updateManager.updateState {
                 case .idle:
                     EmptyView()
                 case .checking:
@@ -741,15 +1049,20 @@ private struct AboutContent: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                case .available(let version, let url, _):
+                case .available(let version, let releaseNotes):
                     VStack(spacing: 4) {
                         Text("New version available: \(version)")
                             .font(.headline)
                             .foregroundColor(.green)
-                        Button("Download Update") {
-                            NSWorkspace.shared.open(url)
+                        Text("Use Check for Updates to install")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        if let notes = releaseNotes, !notes.isEmpty {
+                            Text(notes.prefix(100) + (notes.count > 100 ? "..." : ""))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
                         }
-                        .buttonStyle(.borderedProminent)
                     }
                     .padding(12)
                     .background(Color.green.opacity(0.1))
@@ -772,6 +1085,22 @@ private struct AboutContent: View {
                     .padding(8)
                     .background(Color.red.opacity(0.05))
                     .cornerRadius(6)
+                case .downloading:
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Downloading update...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                case .installing:
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Installing update...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                case .disabled:
+                    EmptyView()
                 }
             }
             .frame(minHeight: 40, maxHeight: 100)
@@ -789,7 +1118,7 @@ private struct AboutContent: View {
                     Label("Check for Updates", systemImage: "arrow.clockwise.circle")
                 }
                 .buttonStyle(.bordered)
-                .disabled(appState.updateManager.state == .checking)
+                .disabled(appState.updateManager.updateState == .checking)
 
                 Button(action: {
                     if let url = URL(string: "https://github.com/shirishpothi/Sorty#readme") {
@@ -819,6 +1148,269 @@ private struct AboutContent: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+    }
+}
+
+// MARK: - Diagnostics Content
+
+private struct DiagnosticsContent: View {
+    @EnvironmentObject var appState: AppState
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("Collect and review diagnostic information to troubleshoot issues or report bugs.")
+                .font(.body)
+            
+            // Log Collection
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Collecting Logs")
+                    .font(.headline)
+                
+                Text("Console.app is the primary tool for reviewing Sorty logs on macOS.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    HelpStepView(
+                        number: 1,
+                        title: "Open Console.app",
+                        description: "Press ⌘Space, type 'Console', and press Enter. Or find it in Applications → Utilities."
+                    )
+                    
+                    HelpStepView(
+                        number: 2,
+                        title: "Filter for Sorty Logs",
+                        description: "In the search bar, type 'Sorty' and press Enter. This shows all log messages from the app."
+                    )
+                    
+                    HelpStepView(
+                        number: 3,
+                        title: "Set Time Range",
+                        description: "Click 'Now' button to see real-time logs, or adjust the time range to when the issue occurred."
+                    )
+                    
+                    HelpStepView(
+                        number: 4,
+                        title: "Export Logs",
+                        description: "Select relevant log entries, right-click, and choose 'Export Selected Items'. Save as a text file to include in bug reports."
+                    )
+                }
+                
+                Divider()
+                
+                Text("Important Log Categories")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
+                            .font(.caption)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Error messages")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("Look for red error badges in Console. These indicate failures.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "network")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Network requests")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("Search for your AI provider name (OpenAI, Anthropic) to see API calls.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "folder.badge.gear")
+                            .foregroundColor(.orange)
+                            .font(.caption)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("File operations")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("Look for 'Bookmark' or 'Permission' messages when folders won't organize.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // System Information
+            VStack(alignment: .leading, spacing: 12) {
+                Text("System Information")
+                    .font(.headline)
+                
+                Text("When reporting issues, include this information:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    SystemInfoRow(label: "Sorty Version", value: BuildInfo.version)
+                    SystemInfoRow(label: "Build Number", value: BuildInfo.build)
+                    SystemInfoRow(label: "macOS Version", value: ProcessInfo.processInfo.operatingSystemVersionString)
+                }
+                .padding()
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(8)
+                
+                Button(action: {
+                    copySystemInfo()
+                }) {
+                    Label("Copy System Info to Clipboard", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+            }
+            
+            Divider()
+            
+            // AI Provider Diagnostics
+            VStack(alignment: .leading, spacing: 12) {
+                Text("AI Provider Diagnostics")
+                    .font(.headline)
+                
+                Text("Test your AI provider connection and view detailed diagnostics.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    HelpFeatureView(
+                        icon: "gear",
+                        title: "Connection Test",
+                        description: "Go to Settings → AI Provider and click 'Test Connection'. This verifies your API key, URL format, and network connectivity."
+                    )
+                    
+                    HelpFeatureView(
+                        icon: "clock",
+                        title: "Response Times",
+                        description: "Note the response time shown during organization. Cloud providers typically respond in 5-30 seconds. Local Ollama may take longer depending on your Mac's performance."
+                    )
+                    
+                    HelpFeatureView(
+                        icon: "dollarsign.circle",
+                        title: "API Usage",
+                        description: "Check your AI provider dashboard for usage statistics. High token usage may indicate Deep Scan is enabled unnecessarily."
+                    )
+                }
+            }
+            
+            Divider()
+            
+            // Safe Data Review
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Safe Data Review")
+                    .font(.headline)
+                
+                Text("What data is safe to include in bug reports:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("SAFE to share:")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Error messages", systemImage: "checkmark.circle.fill")
+                            Label("Sorty version", systemImage: "checkmark.circle.fill")
+                            Label("macOS version", systemImage: "checkmark.circle.fill")
+                            Label("General settings", systemImage: "checkmark.circle.fill")
+                            Label("Persona names (not prompts)", systemImage: "checkmark.circle.fill")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("DO NOT share:")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("API keys or tokens", systemImage: "xmark.circle.fill")
+                            Label("File contents", systemImage: "xmark.circle.fill")
+                            Label("Personal file paths", systemImage: "xmark.circle.fill")
+                            Label("Learnings data", systemImage: "xmark.circle.fill")
+                            Label("System passwords", systemImage: "xmark.circle.fill")
+                        }
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                }
+                .padding()
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(8)
+            }
+            
+            Divider()
+            
+            // Report Issue Button
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Report an Issue")
+                    .font(.headline)
+                
+                Text("Once you have collected diagnostic information:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Button(action: {
+                    if let url = URL(string: "https://github.com/shirishpothi/Sorty/issues/new?template=bug_report.md") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }) {
+                    Label("Open GitHub Issue", systemImage: "ladybug.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        }
+    }
+    
+    private func copySystemInfo() {
+        let info = """
+        Sorty Version: \(BuildInfo.version)
+        Build: \(BuildInfo.build)
+        Commit: \(BuildInfo.commit)
+        macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
+        """
+        
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(info, forType: .string)
+    }
+}
+
+private struct SystemInfoRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(value)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.primary)
+        }
     }
 }
 
@@ -1002,9 +1594,7 @@ private struct UpdatesHelpContent: View {
             Divider()
             
             Button(action: {
-                Task {
-                    await appState.updateManager.checkForUpdates()
-                }
+                appState.updateManager.checkForUpdates()
             }) {
                 Label("Check for Updates Now", systemImage: "arrow.down.circle")
             }
