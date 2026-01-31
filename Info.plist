@@ -47,9 +47,9 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>6</string>
 	<key>GitCommitHash</key>
-	<string>3b38a86</string>
+	<string>9b6b322</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSFaceIDUsageDescription</key>
