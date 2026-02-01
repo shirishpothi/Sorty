@@ -10,6 +10,12 @@ import SwiftUI
 import Combine
 @preconcurrency import QuickLookThumbnailing
 
+/// A wrapper to make NSImage sendable for use with continuations
+/// This is safe because NSImage is thread-safe for reading once created
+private struct SendableImage: @unchecked Sendable {
+    let image: NSImage
+}
+
 /// Provides cached thumbnails for folders using QuickLook
 @MainActor
 public class FolderThumbnailProvider: ObservableObject {
@@ -26,14 +32,8 @@ public class FolderThumbnailProvider: ObservableObject {
     private var processingURLs: Set<URL> = []
 
     /// Continuations for URLs being processed (to resume awaiting callers)
-    private var continuations: [URL: [CheckedContinuation<NSImage, Never>]] = [:]
-
-    /// Nonisolated helper to resume continuations safely
-    private nonisolated func resumeContinuations(_ continuationsList: [CheckedContinuation<NSImage, Never>], with image: NSImage) {
-        for cont in continuationsList {
-            cont.resume(returning: image)
-        }
-    }
+    /// Using SendableImage wrapper to satisfy Swift 6 Sendable requirements
+    private var continuations: [URL: [CheckedContinuation<SendableImage, Never>]] = [:]
     
     // MARK: - Initialization
     
@@ -53,9 +53,10 @@ public class FolderThumbnailProvider: ObservableObject {
         // Check if we're already generating this thumbnail
         if processingURLs.contains(url) {
             // Wait for existing generation to complete
-            return await withCheckedContinuation { continuation in
+            let sendableImage = await withCheckedContinuation { continuation in
                 continuations[url, default: []].append(continuation)
             }
+            return sendableImage.image
         }
         
         // Mark as processing
@@ -65,9 +66,12 @@ public class FolderThumbnailProvider: ObservableObject {
         let image = await generateThumbnail(for: url, size: size)
         cache.setObject(image, forKey: url as NSURL)
         
-        // Resume any waiting continuations using nonisolated helper to satisfy Swift 6 concurrency
+        // Resume any waiting continuations with SendableImage wrapper
         if let waitingContinuations = continuations.removeValue(forKey: url) {
-            resumeContinuations(waitingContinuations, with: image)
+            let sendableImage = SendableImage(image: image)
+            for cont in waitingContinuations {
+                cont.resume(returning: sendableImage)
+            }
         }
         
         // Remove from processing set
@@ -81,9 +85,10 @@ public class FolderThumbnailProvider: ObservableObject {
         cache.removeAllObjects()
         processingURLs.removeAll()
         // Resume any waiting continuations with empty images (they'll get regenerated)
+        let emptyImage = SendableImage(image: NSImage(size: NSSize(width: 1, height: 1)))
         for (_, waitingContinuations) in continuations {
             for cont in waitingContinuations {
-                cont.resume(returning: NSImage(size: NSSize(width: 1, height: 1)))
+                cont.resume(returning: emptyImage)
             }
         }
         continuations.removeAll()
