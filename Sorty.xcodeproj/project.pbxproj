@@ -129,6 +129,9 @@
 		AABBCC22000200000000002C /* OrganizationCompleteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002C /* OrganizationCompleteView.swift */; };
 		AABBCC22000200000000002D /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002D /* OnboardingView.swift */; };
 		AABBCC22000200000000002E /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002E /* ModelCatalog.swift */; };
+		AABBCC22000200000000002F /* SparkleUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002F /* SparkleUpdateManager.swift */; };
+		AABBCC220002000000000030 /* FinderAutomation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000030 /* FinderAutomation.swift */; };
+		AABBCC220002000000000031 /* AutomationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000031 /* AutomationManager.swift */; };
 
 		AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000002 /* AppAccessibilityTests.swift */; };
 		AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */; };
@@ -286,6 +289,9 @@
 		AABBCC11000100000000002C /* OrganizationCompleteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationCompleteView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002D /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000002E /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000002F /* SparkleUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000030 /* FinderAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderAutomation.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000031 /* AutomationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationManager.swift; sourceTree = "<group>"; };
 		99999999AAAA000000000001 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = AppIcon.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 
 /* End PBXFileReference section */
@@ -378,6 +384,8 @@
 				3353FC262F0124320097CD23 /* ExtensionCommunication.swift */,
 				3353FC272F0124320097CD23 /* FileOrganizerActionExtension.swift */,
 				AABBCC11000100000000001E /* QuickOrganizePanel.swift */,
+				AABBCC110001000000000030 /* FinderAutomation.swift */,
+				AABBCC110001000000000031 /* AutomationManager.swift */,
 			);
 			path = Sources/SortyLib/FinderExtension;
 			sourceTree = "<group>";
@@ -427,6 +435,7 @@
 				3353FC372F0124320097CD23 /* KeychainManager.swift */,
 				AABBCC110001000000000006 /* LogManager.swift */,
 				AABBCC110001000000000001 /* UpdateManager.swift */,
+				AABBCC11000100000000002F /* SparkleUpdateManager.swift */,
 				AABBCC11000100000000000F /* SortyResources.swift */,
 				AABBCC110001000000000010 /* NotifiCLIService.swift */,
 				AABBCC110001000000000011 /* NotificationManager.swift */,
@@ -829,6 +838,9 @@
 				AABBCC22000200000000002C /* OrganizationCompleteView.swift in Sources */,
 				AABBCC22000200000000002D /* OnboardingView.swift in Sources */,
 				AABBCC22000200000000002E /* ModelCatalog.swift in Sources */,
+				AABBCC22000200000000002F /* SparkleUpdateManager.swift in Sources */,
+				AABBCC220002000000000030 /* FinderAutomation.swift in Sources */,
+				AABBCC220002000000000031 /* AutomationManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
