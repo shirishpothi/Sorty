@@ -13,20 +13,27 @@ import Combine
 /// Provides cached thumbnails for folders using QuickLook
 @MainActor
 public class FolderThumbnailProvider: ObservableObject {
-    
+
     // MARK: - Singleton
-    
+
     public static let shared = FolderThumbnailProvider()
-    
+
     // MARK: - Properties
-    
+
     private let cache = NSCache<NSURL, AnyObject>()
-    
+
     /// Track URLs currently being processed to avoid duplicate generation
     private var processingURLs: Set<URL> = []
-    
+
     /// Continuations for URLs being processed (to resume awaiting callers)
     private var continuations: [URL: [CheckedContinuation<NSImage, Never>]] = [:]
+
+    /// Nonisolated helper to resume continuations safely
+    private nonisolated func resumeContinuations(_ continuationsList: [CheckedContinuation<NSImage, Never>], with image: NSImage) {
+        for cont in continuationsList {
+            cont.resume(returning: image)
+        }
+    }
     
     // MARK: - Initialization
     
@@ -58,11 +65,9 @@ public class FolderThumbnailProvider: ObservableObject {
         let image = await generateThumbnail(for: url, size: size)
         cache.setObject(image, forKey: url as NSURL)
         
-        // Resume any waiting continuations
+        // Resume any waiting continuations using nonisolated helper to satisfy Swift 6 concurrency
         if let waitingContinuations = continuations.removeValue(forKey: url) {
-            for cont in waitingContinuations {
-                cont.resume(returning: image)
-            }
+            resumeContinuations(waitingContinuations, with: image)
         }
         
         // Remove from processing set

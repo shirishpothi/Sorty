@@ -245,22 +245,17 @@ public class MenuBarController: ObservableObject {
     private func showSuccessNotification(filename: String, folder: String) async {
         let center = UNUserNotificationCenter.current()
 
+        // Create notification content on main actor, then send
         let content = UNMutableNotificationContent()
         content.title = "File Organized"
         content.body = "\(filename) moved to \(folder)"
         content.sound = .default
-        
-        // Attach app icon to ensure it displays in the notification
-        if let iconAttachment = NotificationManager.createAppIconAttachment() {
-            content.attachments = [iconAttachment]
-        }
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
             content: content,
             trigger: nil
         )
-
         try? await center.add(request)
     }
 

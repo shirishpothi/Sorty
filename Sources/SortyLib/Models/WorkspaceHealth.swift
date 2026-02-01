@@ -1282,6 +1282,7 @@ public class WorkspaceHealthManager: ObservableObject {
             let granted = try await center.requestAuthorization(options: [.alert, .sound, .badge])
             guard granted else { return }
 
+            // Create all notification content on MainActor, then send
             let content = UNMutableNotificationContent()
             content.title = "Sorty"
             content.body = insight.message
@@ -1290,7 +1291,7 @@ public class WorkspaceHealthManager: ObservableObject {
             if let prompt = insight.actionPrompt {
                 content.subtitle = prompt
             }
-            
+
             // Attach app icon to ensure it displays in the notification
             if let iconAttachment = NotificationManager.createAppIconAttachment() {
                 content.attachments = [iconAttachment]
@@ -1302,7 +1303,12 @@ public class WorkspaceHealthManager: ObservableObject {
                 trigger: nil // Deliver immediately
             )
 
-            try await center.add(request)
+            // Send the notification request - explicitly on MainActor to satisfy Swift 6 concurrency
+            await MainActor.run {
+                Task {
+                    try? await center.add(request)
+                }
+            }
         } catch {
             DebugLogger.log("Failed to send notification: \(error.localizedDescription)")
         }
