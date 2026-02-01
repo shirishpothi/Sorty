@@ -129,7 +129,7 @@ public class FolderThumbnailProvider: ObservableObject {
         guard !miniThumbnails.isEmpty else { return nil }
         
         // Compose into folder icon
-        return await composeFolder(with: miniThumbnails, size: size)
+        return composeFolder(with: miniThumbnails, size: size)
     }
     
     /// Get previewable files from a folder
@@ -188,53 +188,51 @@ public class FolderThumbnailProvider: ObservableObject {
         }.value
     }
     
-    /// Compose thumbnails into a folder-style preview
-    private func composeFolder(with thumbnails: [NSImage], size: CGSize) async -> NSImage {
-        let folderIcon = await MainActor.run { NSWorkspace.shared.icon(forFile: "/tmp") }
+    /// Compose thumbnails into a folder-style preview - runs synchronously on MainActor
+    private func composeFolder(with thumbnails: [NSImage], size: CGSize) -> NSImage {
+        let folderIcon = NSWorkspace.shared.icon(forFile: "/tmp")
         
-        return await MainActor.run {
-            let image = NSImage(size: size)
-            image.lockFocus()
+        let image = NSImage(size: size)
+        image.lockFocus()
+        
+        // Draw base folder icon (slightly smaller)
+        let folderRect = NSRect(x: 0, y: 0, width: size.width, height: size.height)
+        folderIcon.draw(in: folderRect, from: .zero, operation: .sourceOver, fraction: 0.3)
+        
+        // Calculate grid positions for mini thumbnails
+        let gridSize = thumbnails.count <= 1 ? 1 : 2
+        let cellWidth = size.width * 0.35
+        let cellHeight = size.height * 0.35
+        let startX = (size.width - cellWidth * CGFloat(min(gridSize, thumbnails.count))) / 2
+        let startY = (size.height - cellHeight * CGFloat(gridSize)) / 2 + size.height * 0.05
+        
+        for (index, thumbnail) in thumbnails.prefix(4).enumerated() {
+            let row = index / gridSize
+            let col = index % gridSize
             
-            // Draw base folder icon (slightly smaller)
-            let folderRect = NSRect(x: 0, y: 0, width: size.width, height: size.height)
-            folderIcon.draw(in: folderRect, from: .zero, operation: .sourceOver, fraction: 0.3)
+            let x = startX + CGFloat(col) * cellWidth + cellWidth * 0.1
+            let y = startY + CGFloat(1 - row) * cellHeight + cellHeight * 0.1
             
-            // Calculate grid positions for mini thumbnails
-            let gridSize = thumbnails.count <= 1 ? 1 : 2
-            let cellWidth = size.width * 0.35
-            let cellHeight = size.height * 0.35
-            let startX = (size.width - cellWidth * CGFloat(min(gridSize, thumbnails.count))) / 2
-            let startY = (size.height - cellHeight * CGFloat(gridSize)) / 2 + size.height * 0.05
+            let drawRect = NSRect(x: x, y: y, width: cellWidth * 0.8, height: cellHeight * 0.8)
             
-            for (index, thumbnail) in thumbnails.prefix(4).enumerated() {
-                let row = index / gridSize
-                let col = index % gridSize
-                
-                let x = startX + CGFloat(col) * cellWidth + cellWidth * 0.1
-                let y = startY + CGFloat(1 - row) * cellHeight + cellHeight * 0.1
-                
-                let drawRect = NSRect(x: x, y: y, width: cellWidth * 0.8, height: cellHeight * 0.8)
-                
-                // Draw with rounded corners and shadow
-                let path = NSBezierPath(roundedRect: drawRect, xRadius: 2, yRadius: 2)
-                
-                // Shadow
-                NSShadow().set()
-                let shadow = NSShadow()
-                shadow.shadowOffset = NSSize(width: 0, height: -1)
-                shadow.shadowBlurRadius = 2
-                shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
-                shadow.set()
-                
-                path.addClip()
-                thumbnail.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-                
-                NSGraphicsContext.restoreGraphicsState()
-            }
+            // Draw with rounded corners and shadow
+            let path = NSBezierPath(roundedRect: drawRect, xRadius: 2, yRadius: 2)
             
-            image.unlockFocus()
-            return image
+            // Shadow
+            NSShadow().set()
+            let shadow = NSShadow()
+            shadow.shadowOffset = NSSize(width: 0, height: -1)
+            shadow.shadowBlurRadius = 2
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
+            shadow.set()
+            
+            path.addClip()
+            thumbnail.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+            
+            NSGraphicsContext.restoreGraphicsState()
         }
+        
+        image.unlockFocus()
+        return image
     }
 }

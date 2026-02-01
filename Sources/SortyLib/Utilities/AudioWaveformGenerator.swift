@@ -3,7 +3,8 @@ import Foundation
 @preconcurrency import AppKit
 
 /// Generates a simple bar-style waveform image from an audio file
-public actor AudioWaveformGenerator {
+@MainActor
+public final class AudioWaveformGenerator {
     public static let shared = AudioWaveformGenerator()
     
     private init() {}
@@ -11,12 +12,12 @@ public actor AudioWaveformGenerator {
     /// Generates a waveform image for the given audio file
     public func generateWaveform(for url: URL, size: CGSize) async -> NSImage? {
         guard let amplitudes = await loadAmplitudes(for: url) else { return nil }
-        return await MainActor.run {
-            drawWaveform(amplitudes: amplitudes, size: size)
-        }
+        // drawWaveform is @MainActor, and we're already on MainActor
+        return drawWaveform(amplitudes: amplitudes, size: size)
     }
     
-    /// Loads audio amplitudes from the file
+    /// Loads audio amplitudes from the file - runs off main thread
+    nonisolated
     private func loadAmplitudes(for url: URL) async -> [Float]? {
         let asset = AVAsset(url: url)
         
