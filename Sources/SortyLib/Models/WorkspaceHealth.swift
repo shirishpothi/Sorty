@@ -990,14 +990,17 @@ public class WorkspaceHealthManager: ObservableObject {
             )
             
             source.setEventHandler { [weak self] in
-                self?.handleFileEvent()
+                // Dispatch to MainActor since handleFileEvent accesses @MainActor isolated state
+                Task { @MainActor [weak self] in
+                    self?.handleFileEvent()
+                }
             }
             
-            source.setCancelHandler { [weak self] in
-                if let fd = self?.monitorFileDescriptor, fd >= 0 {
+            // Capture fd directly to avoid accessing @MainActor isolated property from background queue
+            source.setCancelHandler {
+                if fd >= 0 {
                     close(fd)
                 }
-                self?.monitorFileDescriptor = -1
             }
             
             monitorSource = source
@@ -1056,7 +1059,7 @@ public class WorkspaceHealthManager: ObservableObject {
     }
     
     private func handleFileEvent() {
-        // Debounce logic
+        // Debounce logic - cancel any pending work item
         monitorDebounceTimer?.cancel()
         
         let workItem = DispatchWorkItem { [weak self] in

@@ -645,6 +645,14 @@ class WorkspaceHealthIntegrationTests: XCTestCase {
 
     @MainActor
     func testAnalyzeDirectoryForOpportunities() async {
+        // Set up a known config to ensure consistent test behavior
+        let testConfig = WorkspaceHealthConfig(
+            largeFileSizeThreshold: 100_000_000,  // 100MB
+            minUnorganizedCount: 10,
+            enabledChecks: Set(CleanupOpportunity.OpportunityType.allCases)
+        )
+        healthManager.updateConfig(testConfig)
+        
         let testPath = "/test/downloads"
 
         // Create files that should trigger various opportunities
