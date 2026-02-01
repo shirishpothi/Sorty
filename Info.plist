@@ -32,7 +32,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.5</string>
+	<string>1.0.6</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -47,9 +47,9 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>6</string>
+	<string>7</string>
 	<key>GitCommitHash</key>
-	<string>9b6b322</string>
+	<string>065cb4f</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSFaceIDUsageDescription</key>
