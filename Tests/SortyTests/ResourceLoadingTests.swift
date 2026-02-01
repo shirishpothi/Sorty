@@ -9,6 +9,7 @@
 import XCTest
 @testable import SortyLib
 
+@MainActor
 final class ResourceLoadingTests: XCTestCase {
 
     // MARK: - SortyResources Bundle Tests
