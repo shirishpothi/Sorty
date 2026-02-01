@@ -51,6 +51,7 @@ struct HelpView: View {
 
 // MARK: - Help Sections
 
+@MainActor
 public enum HelpSection: String, CaseIterable {
     case gettingStarted
     case onboarding

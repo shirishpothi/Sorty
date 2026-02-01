@@ -272,74 +272,114 @@ struct HistoryHeader: View {
 struct HistorySummaryCard: View {
     let history: OrganizationHistory
 
+    private var successRateValue: String {
+        history.totalSessions > 0
+            ? "\(Int(Double(history.successCount) / Double(history.totalSessions) * 100))%"
+            : "—"
+    }
+
+    private var successRateLabel: String {
+        history.totalSessions > 0
+            ? "\(Int(Double(history.successCount) / Double(history.totalSessions) * 100)) percent"
+            : "not available"
+    }
+
+    private var spaceSavedValue: String {
+        ByteCountFormatter.string(fromByteCount: history.totalRecoveredSpace, countStyle: .file)
+    }
+
+    private var gridColumns: [GridItem] {
+        [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+    }
+
     var body: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible()),
-            GridItem(.flexible()),
-            GridItem(.flexible())
-        ], spacing: 20) {
-            HistoryStatItem(
-                title: "Total Sessions",
-                value: "\(history.totalSessions)",
-                icon: "list.bullet.rectangle.fill",
-                color: .gray
+        gridContent
+            .padding(24)
+            .frame(maxWidth: .infinity)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
             )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Total sessions: \(history.totalSessions)")
+    }
 
-            HistoryStatItem(
-                title: "Files Organized",
-                value: "\(history.totalFilesOrganized)",
-                icon: "doc.on.doc.fill",
-                color: .blue
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Files organized: \(history.totalFilesOrganized)")
-
-            HistoryStatItem(
-                title: "Folders Created",
-                value: "\(history.totalFoldersCreated)",
-                icon: "folder.fill.badge.plus",
-                color: .purple
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Folders created: \(history.totalFoldersCreated)")
-
-            HistoryStatItem(
-                title: "Reverted",
-                value: "\(history.revertedCount)",
-                icon: "arrow.uturn.backward.circle.fill",
-                color: .orange
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Reverted: \(history.revertedCount)")
-
-            HistoryStatItem(
-                title: "Space Saved",
-                value: ByteCountFormatter.string(fromByteCount: history.totalRecoveredSpace, countStyle: .file),
-                icon: "externaldrive.fill.badge.checkmark",
-                color: .green
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Space saved: \(ByteCountFormatter.string(fromByteCount: history.totalRecoveredSpace, countStyle: .file))")
-
-            HistoryStatItem(
-                title: "Success Rate",
-                value: history.totalSessions > 0 ? "\(Int(Double(history.successCount) / Double(history.totalSessions) * 100))%" : "—",
-                icon: "chart.line.uptrend.xyaxis.circle.fill",
-                color: .teal
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Success rate: \(history.totalSessions > 0 ? "\(Int(Double(history.successCount) / Double(history.totalSessions) * 100)) percent" : "not available")")
+    @ViewBuilder
+    private var gridContent: some View {
+        LazyVGrid(columns: gridColumns, spacing: 20) {
+            totalSessionsItem
+            filesOrganizedItem
+            foldersCreatedItem
+            revertedItem
+            spaceSavedItem
+            successRateItem
         }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+    }
+
+    private var totalSessionsItem: some View {
+        HistoryStatItem(
+            title: "Total Sessions",
+            value: "\(history.totalSessions)",
+            icon: "list.bullet.rectangle.fill",
+            color: .gray
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Total sessions: \(history.totalSessions)")
+    }
+
+    private var filesOrganizedItem: some View {
+        HistoryStatItem(
+            title: "Files Organized",
+            value: "\(history.totalFilesOrganized)",
+            icon: "doc.on.doc.fill",
+            color: .blue
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Files organized: \(history.totalFilesOrganized)")
+    }
+
+    private var foldersCreatedItem: some View {
+        HistoryStatItem(
+            title: "Folders Created",
+            value: "\(history.totalFoldersCreated)",
+            icon: "folder.fill.badge.plus",
+            color: .purple
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Folders created: \(history.totalFoldersCreated)")
+    }
+
+    private var revertedItem: some View {
+        HistoryStatItem(
+            title: "Reverted",
+            value: "\(history.revertedCount)",
+            icon: "arrow.uturn.backward.circle.fill",
+            color: .orange
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Reverted: \(history.revertedCount)")
+    }
+
+    private var spaceSavedItem: some View {
+        HistoryStatItem(
+            title: "Space Saved",
+            value: spaceSavedValue,
+            icon: "externaldrive.fill.badge.checkmark",
+            color: .green
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Space saved: \(spaceSavedValue)")
+    }
+
+    private var successRateItem: some View {
+        HistoryStatItem(
+            title: "Success Rate",
+            value: successRateValue,
+            icon: "chart.line.uptrend.xyaxis.circle.fill",
+            color: .teal
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Success rate: \(successRateLabel)")
     }
 }
 
