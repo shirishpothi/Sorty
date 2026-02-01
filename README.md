@@ -245,5 +245,5 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 - **Documentation**: See [HELP.md](HELP.md) for detailed usage guides
 - **Bug Reports**: Use the [Bug Report template](../../issues/new?template=bug_report.md)
 - **Feature Requests**: Use the [Feature Request template](../../issues/new?template=feature_request.md)
-- **Security Issues**: Email security@sorty.app (do not open public issues)
+- **Security Issues**: Email shirish.pothi.27@gmail.com (do not open public issues)
 - **Questions**: Open a [GitHub Discussion](../../discussions)

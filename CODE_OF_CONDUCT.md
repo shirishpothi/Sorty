@@ -41,7 +41,7 @@ This Code of Conduct applies within all project spaces including:
 
 If you experience or witness unacceptable behavior:
 
-1. Contact the project maintainers directly at conduct@sorty.app
+1. Contact the project maintainers directly at shirish.pothi.27@gmail.com
 2. Include as much detail as possible about the incident
 3. All reports will be handled with discretion and confidentiality
 
@@ -66,4 +66,4 @@ This Code of Conduct is adapted from the [Contributor Covenant](https://www.cont
 
 ## Questions
 
-If you have questions about this Code of Conduct, please contact the project maintainers at conduct@sorty.app.
+If you have questions about this Code of Conduct, please contact the project maintainers at shirish.pothi.27@gmail.com.

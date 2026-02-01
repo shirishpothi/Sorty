@@ -116,6 +116,10 @@ log_failure() {
     echo -e "  ${RED}${SYM_CROSS} $1${NC}"
 }
 
+log_warning() {
+    echo -e "  ${YELLOW}${SYM_WARN} $1${NC}"
+}
+
 log_item() {
     echo -e "  • $1"
 }

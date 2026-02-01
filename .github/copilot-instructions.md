@@ -116,3 +116,5 @@ User preference learning stored in `LearningsProfile`. Key components:
 **Add a new view**: Create in `Views/`, add case to `AppState.AppView`, add navigation in `ContentView`.
 
 **Test deeplinks in UI tests**: Set `XCUITEST_DEEPLINK` environment variable before launch.
+
+Don't be too verbose. Focus on making good changes instead. Unnecessary explanations should be avoided, as it costs time and resources.
