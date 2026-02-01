@@ -8,7 +8,7 @@ class DirectoryScannerTests: XCTestCase {
     var tempDirectory: URL!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         scanner = DirectoryScanner()
         tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
@@ -17,7 +17,7 @@ class DirectoryScannerTests: XCTestCase {
     override func tearDown() async throws {
         try? FileManager.default.removeItem(at: tempDirectory)
         scanner = nil
-        try await super.tearDown()
+        
     }
     
     func testBasicScanning() async throws {

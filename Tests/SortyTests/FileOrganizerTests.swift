@@ -43,7 +43,7 @@ class SortyTests: XCTestCase {
 
     @MainActor
     override func setUp() async throws {
-        try await super.setUp()
+        
         folderOrganizer = FolderOrganizer()
         let config = AIConfig(apiKey: "test-key", model: "test-model")
         mockClient = MockAIClient(config: config)
@@ -60,7 +60,7 @@ class SortyTests: XCTestCase {
         }
         folderOrganizer = nil
         mockClient = nil
-        try await super.tearDown()
+        
     }
 
     @MainActor

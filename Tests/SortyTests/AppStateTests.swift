@@ -17,7 +17,7 @@ class AppStateTests: XCTestCase {
     var organizer: FolderOrganizer!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         appState = AppState()
         organizer = FolderOrganizer()
         appState.organizer = organizer
@@ -26,7 +26,7 @@ class AppStateTests: XCTestCase {
     override func tearDown() async throws {
         appState = nil
         organizer = nil
-        try await super.tearDown()
+        
     }
     
     // MARK: - Initialization Tests
@@ -419,7 +419,7 @@ class SortyCommandsTests: XCTestCase {
     var organizer: FolderOrganizer!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         appState = AppState()
         organizer = FolderOrganizer()
         appState.organizer = organizer
@@ -428,7 +428,7 @@ class SortyCommandsTests: XCTestCase {
     override func tearDown() async throws {
         appState = nil
         organizer = nil
-        try await super.tearDown()
+        
     }
     
     func testSortyCommandsInitialization() {

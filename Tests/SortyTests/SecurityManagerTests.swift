@@ -16,13 +16,13 @@ final class SecurityManagerTests: XCTestCase {
     var manager: SecurityManager!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         manager = SecurityManager()
     }
     
     override func tearDown() async throws {
         manager = nil
-        try await super.tearDown()
+        
     }
     
     // MARK: - Initialization Tests

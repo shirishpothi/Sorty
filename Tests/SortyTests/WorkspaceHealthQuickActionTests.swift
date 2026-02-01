@@ -7,7 +7,7 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
     
     @MainActor
     override func setUp() async throws {
-        try await super.setUp()
+        
         healthManager = WorkspaceHealthManager()
         
         // Create a temp directory for testing
@@ -18,7 +18,7 @@ class WorkspaceHealthQuickActionTests: XCTestCase {
     
     override func tearDown() async throws {
         try? FileManager.default.removeItem(at: tempDirectory)
-        try await super.tearDown()
+        
     }
     
     @MainActor

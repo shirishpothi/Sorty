@@ -10,7 +10,7 @@ class HistoryTests: XCTestCase {
     
     @MainActor
     override func setUp() async throws {
-        try await super.setUp()
+        
         testSuiteName = "com.sorty.tests.history.\(name)"
         testDefaults = UserDefaults(suiteName: testSuiteName)!
         testDefaults.removePersistentDomain(forName: testSuiteName)
@@ -23,7 +23,7 @@ class HistoryTests: XCTestCase {
         testDefaults?.removePersistentDomain(forName: testSuiteName)
         testDefaults = nil
         history = nil
-        try await super.tearDown()
+        
     }
     
     @MainActor

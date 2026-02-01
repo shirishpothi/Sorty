@@ -253,7 +253,7 @@ final class ContentAnalyzerTests: XCTestCase {
     var tempDirectory: URL!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
     }
@@ -262,7 +262,7 @@ final class ContentAnalyzerTests: XCTestCase {
         if let tempDirectory = tempDirectory {
             try? FileManager.default.removeItem(at: tempDirectory)
         }
-        try await super.tearDown()
+        
     }
     
     // MARK: - Initialization Tests

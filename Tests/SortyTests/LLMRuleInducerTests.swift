@@ -38,7 +38,7 @@ final class LLMRuleInducerTests: XCTestCase {
     var mockClient: MockAIClient!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         mockClient = MockAIClient()
         inducer = LLMRuleInducer(aiClient: mockClient)
     }
@@ -46,7 +46,7 @@ final class LLMRuleInducerTests: XCTestCase {
     override func tearDown() async throws {
         inducer = nil
         mockClient = nil
-        try await super.tearDown()
+        
     }
     
     func testInduceRulesFromExamples() async {

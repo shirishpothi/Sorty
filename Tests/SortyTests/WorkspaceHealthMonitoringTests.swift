@@ -12,7 +12,7 @@ class WorkspaceHealthMonitoringTests: XCTestCase {
     var tempDirectory: URL!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         healthManager = WorkspaceHealthManager()
         
         // Create a temporary directory for testing
@@ -25,7 +25,7 @@ class WorkspaceHealthMonitoringTests: XCTestCase {
             try? FileManager.default.removeItem(at: tempDirectory)
         }
         healthManager = nil
-        try await super.tearDown()
+        
     }
     
     /// Test that fileChangeDetected can be set and read

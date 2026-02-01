@@ -161,14 +161,14 @@ final class LearningsHoningEngineTests: XCTestCase {
     var engine: LearningsHoningEngine!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         let config = AIConfig(apiKey: "test-key", model: "test-model")
         engine = LearningsHoningEngine(config: config)
     }
     
     override func tearDown() async throws {
         engine = nil
-        try await super.tearDown()
+        
     }
     
     func testInitialState() {

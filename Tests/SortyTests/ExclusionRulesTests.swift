@@ -8,7 +8,7 @@ class ExclusionRulesTests: XCTestCase {
     
     @MainActor
     override func setUp() async throws {
-        try await super.setUp()
+        
         manager = ExclusionRulesManager()
         // Clear existing rules to start fresh
         for rule in manager.rules {

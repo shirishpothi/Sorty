@@ -369,14 +369,14 @@ class CanvasViewModelTests: XCTestCase {
 
     @MainActor
     override func setUp() async throws {
-        try await super.setUp()
+        
         viewModel = CanvasViewModel()
     }
 
     @MainActor
     override func tearDown() async throws {
         viewModel = nil
-        try await super.tearDown()
+        
     }
 
     @MainActor
@@ -603,14 +603,14 @@ class WorkspaceHealthIntegrationTests: XCTestCase {
 
     @MainActor
     override func setUp() async throws {
-        try await super.setUp()
+        
         healthManager = WorkspaceHealthManager()
     }
 
     @MainActor
     override func tearDown() async throws {
         healthManager = nil
-        try await super.tearDown()
+        
     }
 
     @MainActor

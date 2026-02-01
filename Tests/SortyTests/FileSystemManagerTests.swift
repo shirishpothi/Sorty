@@ -9,7 +9,7 @@ class FileSystemManagerTests: XCTestCase {
     
     @MainActor
     override func setUp() async throws {
-        try await super.setUp()
+        
         fileSystemManager = FileSystemManager()
         tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
@@ -19,7 +19,7 @@ class FileSystemManagerTests: XCTestCase {
     override func tearDown() async throws {
         try? FileManager.default.removeItem(at: tempDirectory)
         fileSystemManager = nil
-        try await super.tearDown()
+        
     }
     
     @MainActor

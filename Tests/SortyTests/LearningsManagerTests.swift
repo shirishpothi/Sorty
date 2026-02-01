@@ -14,7 +14,7 @@ final class LearningsManagerTests: XCTestCase {
     var manager: LearningsManager!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         manager = LearningsManager()
         // Reset to empty profile for tests
         manager.currentProfile = LearningsProfile()
@@ -24,7 +24,7 @@ final class LearningsManagerTests: XCTestCase {
     
     override func tearDown() async throws {
         manager = nil
-        try await super.tearDown()
+        
     }
 
     // MARK: - Labeled Example Tests
@@ -158,13 +158,13 @@ final class LearningsAnalyzerTests: XCTestCase {
     var analyzer: LearningsAnalyzer!
     
     override func setUp() async throws {
-        try await super.setUp()
+        
         analyzer = LearningsAnalyzer()
     }
     
     override func tearDown() async throws {
         analyzer = nil
-        try await super.tearDown()
+        
     }
     
     func testProposeMappingWithMatchingRule() async {
