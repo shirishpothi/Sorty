@@ -398,6 +398,10 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var namingStyle: NamingStyle // Preferred naming convention
     public var customNamingInstructions: String? // Custom naming preferences
     public var visionBatchSize: Int // Number of images to process in one AI call
+    
+    // Automation-specific settings (for background/watched folder operations)
+    public var automationProvider: AIProvider?  // nil = use main provider
+    public var automationModel: String?         // nil = use main model
 
     public init(
         provider: AIProvider = .openAICompatible,
@@ -424,7 +428,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableVision: Bool = false,
         namingStyle: NamingStyle = .descriptive,
         customNamingInstructions: String? = nil,
-        visionBatchSize: Int = 5
+        visionBatchSize: Int = 5,
+        automationProvider: AIProvider? = nil,
+        automationModel: String? = nil
     ) {
         self.provider = provider
         self.apiURL = apiURL
@@ -451,6 +457,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.namingStyle = namingStyle
         self.customNamingInstructions = customNamingInstructions
         self.visionBatchSize = visionBatchSize
+        self.automationProvider = automationProvider
+        self.automationModel = automationModel
     }
     
     public static let `default` = AIConfig(
@@ -477,7 +485,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableVision: false,
         namingStyle: .descriptive,
         customNamingInstructions: nil,
-        visionBatchSize: 5
+        visionBatchSize: 5,
+        automationProvider: nil,
+        automationModel: nil
     )
 }
 

@@ -12,21 +12,21 @@ source "${SCRIPT_DIR}/utils.sh"
 print_header "Generating Signed Appcast" 50
 
 APPCAST_FILE="${RELEASE_DIR}/appcast.xml"
-ZIP_NAME="${PROJECT_NAME}.zip"
-ZIP_PATH="${RELEASE_DIR}/${ZIP_NAME}"
+PKG_NAME="${PROJECT_NAME}.pkg"
+PKG_PATH="${RELEASE_DIR}/${PKG_NAME}"
 
-if [ ! -f "$ZIP_PATH" ]; then
-    log_failure "ZIP file not found at $ZIP_PATH"
+if [ ! -f "$PKG_PATH" ]; then
+    log_failure "PKG file not found at $PKG_PATH"
     exit 1
 fi
 
 VERSION=$(get_version)
 BUILD_NUM=$(get_build_number)
 DATE=$(date -R)
-SIZE=$(stat -f%z "$ZIP_PATH")
+SIZE=$(stat -f%z "$PKG_PATH")
 
 # Get download URL from GitHub releases
-RELEASE_URL="https://github.com/shirishpothi/${PROJECT_NAME}/releases/download/v${VERSION}/${ZIP_NAME}"
+RELEASE_URL="https://github.com/shirishpothi/${PROJECT_NAME}/releases/download/v${VERSION}/${PKG_NAME}"
 RELEASE_NOTES_URL="https://github.com/shirishpothi/${PROJECT_NAME}/releases/tag/v${VERSION}"
 
 # Generate Ed25519 signature
@@ -44,11 +44,11 @@ if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
     SIGNATURE_FILE="${RELEASE_DIR}/signature.tmp"
     
     # Create signature using the private key
-    openssl dgst -sha256 -sign "$PRIVATE_KEY_FILE" -out "$SIGNATURE_FILE" "$ZIP_PATH" 2>/dev/null || {
+    openssl dgst -sha256 -sign "$PRIVATE_KEY_FILE" -out "$SIGNATURE_FILE" "$PKG_PATH" 2>/dev/null || {
         # Fallback: use Ed25519 signing if available
         if command -v openssl >/dev/null 2>&1; then
             # Generate signature with raw Ed25519
-            openssl pkeyutl -sign -in "$ZIP_PATH" -inkey "$PRIVATE_KEY_FILE" -out "$SIGNATURE_FILE" -rawin 2>/dev/null || {
+            openssl pkeyutl -sign -in "$PKG_PATH" -inkey "$PRIVATE_KEY_FILE" -out "$SIGNATURE_FILE" -rawin 2>/dev/null || {
                 log_warning "OpenSSL Ed25519 signing failed, trying alternative method..."
             }
         fi

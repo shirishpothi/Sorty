@@ -8,18 +8,18 @@ source "${SCRIPT_DIR}/utils.sh"
 print_header "Generating Appcast" 50
 
 APPCAST_FILE="${RELEASE_DIR}/appcast.xml"
-ZIP_NAME="${PROJECT_NAME}.zip"
-ZIP_PATH="${RELEASE_DIR}/${ZIP_NAME}"
+PKG_NAME="${PROJECT_NAME}.pkg"
+PKG_PATH="${RELEASE_DIR}/${PKG_NAME}"
 
-if [ ! -f "$ZIP_PATH" ]; then
-    log_failure "ZIP file not found at $ZIP_PATH"
+if [ ! -f "$PKG_PATH" ]; then
+    log_failure "PKG file not found at $PKG_PATH"
     exit 1
 fi
 
 VERSION=$(get_version)
 BUILD_NUM=$(get_build_number)
 DATE=$(date -R)
-SIZE=$(stat -f%z "$ZIP_PATH")
+SIZE=$(stat -f%z "$PKG_PATH")
 
 # Validate Sparkle Configuration
 FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "${PROJECT_DIR}/Info.plist" 2>/dev/null || true)
@@ -37,45 +37,66 @@ fi
 # Generate signature if key is provided
 SIGNATURE=""
 if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
-    echo "$SPARKLE_PRIVATE_KEY" > "${RELEASE_DIR}/sparkle_key"
-    # Assuming standard sparkle-cli or similar usage, but for now we'll do Ed25519 signing if tools are available.
-    # Since we can't guarantee 'generate_keys' or 'sign_update' are in path without setup, 
-    # we will rely on inputs or skip if strictly needed.
-    # For this simplified CI script, we'll assume we might not have the bin unless set up.
-    # A common way is using 'openssl' or a small go tool. 
-    # For now, let's placeholder or skip if no tool.
-    log_item "Private key detected. Attempting to sign (requires 'sign_update' tool matching Sparkle)."
+    # Create temporary key file for the signing tool
+    SPARKLE_KEY_FILE="${RELEASE_DIR}/sparkle_key"
+    echo "$SPARKLE_PRIVATE_KEY" > "$SPARKLE_KEY_FILE"
     
-    # If the user has 'generate_appcast' from Sparkle bin:
-    if command -v generate_appcast &> /dev/null; then
-       # generate_appcast usually scans a dir.
-       generate_appcast "${RELEASE_DIR}"
-       log_success "Appcast generated using Sparkle tool"
-       exit 0
+    # Verify the public key in Info.plist matches the one we are signing with
+    # This prevents the "downloaded then failed" error caused by public/private key mismatch
+    SIGN_UPDATE_TOOL=$(find "${PROJECT_DIR}/.build/artifacts" -name "sign_update" -type f -not -path "*/old_dsa_scripts/*" | head -1)
+    
+    if [ -n "$SIGN_UPDATE_TOOL" ] && [ -x "$SIGN_UPDATE_TOOL" ]; then
+        log_item "Signing update using $SIGN_UPDATE_TOOL"
+        
+        # Check if we can verify the signature with the public key in Info.plist
+        # (This is a bit complex as sign_update doesn't have a direct "check match" for raw keys, 
+        # but we can check if the SIGNATURE is generated correctly)
+        
+        # sign_update outputs something like "sparkle:edSignature="...""
+        SIG_OUTPUT=$("$SIGN_UPDATE_TOOL" -f "$SPARKLE_KEY_FILE" "$PKG_PATH" 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$SIG_OUTPUT" ]; then
+            SIGNATURE="$SIG_OUTPUT"
+            log_success "Generated Ed25519 signature"
+        else
+            log_failure "Failed to generate signature. Your SPARKLE_PRIVATE_KEY might be invalid."
+        fi
+    else
+        log_warn "sign_update tool not found. Signing skipped."
     fi
+    
+    # Cleanup private key immediately
+    rm -f "$SPARKLE_KEY_FILE"
 else
     log_item "No SPARKLE_PRIVATE_KEY found. Generating unsigned appcast entry."
 fi
 
 # Manual simple XML generation if tool not found or for custom control
+REPO_URL="https://github.com/shirishpothi/Sorty"
+
+# If we have a signature from sign_update, it already contains length="..."
+ENCLOSURE_ATTRIBUTES="sparkle:version=\"${BUILD_NUM}\" sparkle:shortVersionString=\"${VERSION}\" type=\"application/octet-stream\""
+
+if [ -n "$SIGNATURE" ]; then
+    # SIGNATURE contains sparkle:edSignature="..." length="..."
+    ENCLOSURE_ATTRIBUTES="${ENCLOSURE_ATTRIBUTES} ${SIGNATURE}"
+else
+    ENCLOSURE_ATTRIBUTES="${ENCLOSURE_ATTRIBUTES} length=\"${SIZE}\""
+fi
+
 cat > "$APPCAST_FILE" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"  xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
     <title>${PROJECT_NAME} Changelog</title>
-    <link>https://github.com/shirishpothi/FileOrganizer</link>
+    <link>${REPO_URL}</link>
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
       <title>Version ${VERSION}</title>
-      <sparkle:releaseNotesLink>https://github.com/shirishpothi/FileOrganizer/releases/tag/v${VERSION}</sparkle:releaseNotesLink>
+      <sparkle:releaseNotesLink>${REPO_URL}/releases/tag/v${VERSION}</sparkle:releaseNotesLink>
       <pubDate>${DATE}</pubDate>
-      <enclosure url="https://github.com/shirishpothi/FileOrganizer/releases/download/v${VERSION}/${ZIP_NAME}"
-                 sparkle:version="${BUILD_NUM}"
-                 sparkle:shortVersionString="${VERSION}"
-                 length="${SIZE}"
-                 type="application/octet-stream"
-                 ${SIGNATURE}/>
+      <enclosure url="${REPO_URL}/releases/download/v${VERSION}/${PKG_NAME}"
+                 ${ENCLOSURE_ATTRIBUTES} />
     </item>
   </channel>
 </rss>

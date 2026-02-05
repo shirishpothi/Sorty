@@ -144,10 +144,10 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild test \
-            -project "FileOrganiser.xcodeproj" \
-            -scheme "FileOrganiser" \
+            -project "Sorty.xcodeproj" \
+            -scheme "Sorty" \
             -destination 'platform=macOS' \
-            -only-testing:FileOrganiserUITests \
+            -only-testing:SortyUITests \
             -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee ui_test_output.log

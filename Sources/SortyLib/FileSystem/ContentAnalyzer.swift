@@ -104,6 +104,12 @@ public actor ContentAnalyzer {
     public var enableDeepDocumentScan: Bool = true
 
     public init() {}
+    
+    /// Clear any cached data to free memory
+    public func clearCache() {
+        // Currently no internal cache, but reserved for future use
+        // VisionAnalyzer caches would be cleared here if implemented
+    }
 
     /// Analyze a file and extract relevant metadata
     public func analyze(fileURL: URL, enableOCR: Bool = true) async -> ContentMetadata? {

@@ -60,8 +60,8 @@
 		3353FC5F2F0124320097CD23 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC362F0124320097CD23 /* Extensions.swift */; };
 		3353FC602F0124320097CD23 /* ExclusionRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC2A2F0124320097CD23 /* ExclusionRule.swift */; };
 		3353FC612F0124320097CD23 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC3F2F0124320097CD23 /* HistoryView.swift */; };
-		3353FC622F0124320097CD23 /* FileOrganizerActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC272F0124320097CD23 /* FileOrganizerActionExtension.swift */; };
-		3353FC632F0124320097CD23 /* FileOrganizerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC452F0124320097CD23 /* FileOrganizerApp.swift */; };
+		3353FC622F0124320097CD23 /* SortyActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC272F0124320097CD23 /* SortyActionExtension.swift */; };
+		3353FC632F0124320097CD23 /* SortyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC452F0124320097CD23 /* SortyApp.swift */; };
 		3353FC642F0124320097CD23 /* SystemPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC212F0124320097CD23 /* SystemPrompt.swift */; };
 		3353FC652F0124320097CD23 /* PreviewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC322F0124320097CD23 /* PreviewManager.swift */; };
 		3353FC662F0124320097CD23 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC3C2F0124320097CD23 /* ContentView.swift */; };
@@ -196,7 +196,7 @@
 		3353FC232F0124320097CD23 /* DirectoryScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryScanner.swift; sourceTree = "<group>"; };
 		3353FC242F0124320097CD23 /* FileSystemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSystemManager.swift; sourceTree = "<group>"; };
 		3353FC262F0124320097CD23 /* ExtensionCommunication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionCommunication.swift; sourceTree = "<group>"; };
-		3353FC272F0124320097CD23 /* FileOrganizerActionExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileOrganizerActionExtension.swift; sourceTree = "<group>"; };
+		3353FC272F0124320097CD23 /* SortyActionExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyActionExtension.swift; sourceTree = "<group>"; };
 		3353FC292F0124320097CD23 /* AIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConfig.swift; sourceTree = "<group>"; };
 		3353FC2A2F0124320097CD23 /* ExclusionRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExclusionRule.swift; sourceTree = "<group>"; };
 		3353FC2B2F0124320097CD23 /* FileItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileItem.swift; sourceTree = "<group>"; };
@@ -220,7 +220,7 @@
 		3353FC412F0124320097CD23 /* OrganizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizeView.swift; sourceTree = "<group>"; };
 		3353FC422F0124320097CD23 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
 		3353FC432F0124320097CD23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		3353FC452F0124320097CD23 /* FileOrganizerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/FileOrganizerApp.swift; sourceTree = "<group>"; };
+		3353FC452F0124320097CD23 /* SortyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/SortyApp.swift; sourceTree = "<group>"; };
 		3353FCB02F0124320097CD23 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/AppCoordinator.swift; sourceTree = "<group>"; };
 		3353FCB12F0124320097CD23 /* ContentAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentAnalyzer.swift; sourceTree = "<group>"; };
 		3353FCB22F0124320097CD23 /* DuplicateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateDetector.swift; sourceTree = "<group>"; };
@@ -242,8 +242,8 @@
 		3353FCC22F0124320097CD23 /* WatchedFoldersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchedFoldersView.swift; sourceTree = "<group>"; };
 		3353FCC32F0124320097CD23 /* WorkspaceHealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHealthView.swift; sourceTree = "<group>"; };
 		33A128622F01230000A86470 /* Sorty.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sorty.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		33A1286F2F01230200A86470 /* FileOrganiserTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileOrganiserTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		33A128792F01230200A86470 /* FileOrganiserUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileOrganiserUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		33A1286F2F01230200A86470 /* SortyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SortyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		33A128792F01230200A86470 /* SortyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SortyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A128912F01230200A86470 /* AppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUITests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000001 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000002 /* AppAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccessibilityTests.swift; sourceTree = "<group>"; };
@@ -382,7 +382,7 @@
 			isa = PBXGroup;
 			children = (
 				3353FC262F0124320097CD23 /* ExtensionCommunication.swift */,
-				3353FC272F0124320097CD23 /* FileOrganizerActionExtension.swift */,
+				3353FC272F0124320097CD23 /* SortyActionExtension.swift */,
 				AABBCC11000100000000001E /* QuickOrganizePanel.swift */,
 				AABBCC110001000000000030 /* FinderAutomation.swift */,
 				AABBCC110001000000000031 /* AutomationManager.swift */,
@@ -537,7 +537,7 @@
 				3353FC442F0124320097CD23 /* Views */,
 				AABBCC440000000000000001 /* Services */,
 				3353FCB02F0124320097CD23 /* AppCoordinator.swift */,
-				3353FC452F0124320097CD23 /* FileOrganizerApp.swift */,
+				3353FC452F0124320097CD23 /* SortyApp.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -554,7 +554,7 @@
 			children = (
 				99999999AAAA000000000003 /* Resources */,
 				3353FC462F0124320097CD23,
-				33A128902F01230200A86470 /* FileOrganiserUITests */,
+				33A128902F01230200A86470 /* SortyUITests */,
 				33A128632F01230000A86470 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -562,14 +562,14 @@
 		33A128632F01230000A86470 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				33A128622F01230000A86470 /* FileOrganiser.app */,
-				33A1286F2F01230200A86470 /* FileOrganiserTests.xctest */,
-				33A128792F01230200A86470 /* FileOrganiserUITests.xctest */,
+				33A128622F01230000A86470 /* Sorty.app */,
+				33A1286F2F01230200A86470 /* SortyTests.xctest */,
+				33A128792F01230200A86470 /* SortyUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		33A128902F01230200A86470 /* FileOrganiserUITests */ = {
+		33A128902F01230200A86470 /* SortyUITests */ = {
 			isa = PBXGroup;
 			children = (
 				33A128912F01230200A86470 /* AppUITests.swift */,
@@ -578,15 +578,15 @@
 				AABBCC110001000000000004 /* FeatureSpecificUITests.swift */,
 				AABBCC110001000000000005 /* DeeplinkUITests.swift */,
 			);
-			path = Tests/FileOrganizerUITests;
+			path = Tests/SortyUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		33A128612F01230000A86470 /* FileOrganiser */ = {
+		33A128612F01230000A86470 /* Sorty */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 33A128832F01230200A86470 /* Build configuration list for PBXNativeTarget "FileOrganiser" */;
+			buildConfigurationList = 33A128832F01230200A86470 /* Build configuration list for PBXNativeTarget "Sorty" */;
 			buildPhases = (
 				33A1285E2F01230000A86470 /* Sources */,
 				33A1285F2F01230000A86470 /* Frameworks */,
@@ -596,16 +596,16 @@
 			);
 			dependencies = (
 			);
-			name = FileOrganiser;
+			name = Sorty;
 			packageProductDependencies = (
 			);
-			productName = FileOrganiser;
-			productReference = 33A128622F01230000A86470 /* FileOrganiser.app */;
+			productName = Sorty;
+			productReference = 33A128622F01230000A86470 /* Sorty.app */;
 			productType = "com.apple.product-type.application";
 		};
-		33A1286E2F01230200A86470 /* FileOrganiserTests */ = {
+		33A1286E2F01230200A86470 /* SortyTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 33A128862F01230200A86470 /* Build configuration list for PBXNativeTarget "FileOrganiserTests" */;
+			buildConfigurationList = 33A128862F01230200A86470 /* Build configuration list for PBXNativeTarget "SortyTests" */;
 			buildPhases = (
 				33A1286B2F01230200A86470 /* Sources */,
 				33A1286C2F01230200A86470 /* Frameworks */,
@@ -616,16 +616,16 @@
 			dependencies = (
 				33A128712F01230200A86470 /* PBXTargetDependency */,
 			);
-			name = FileOrganiserTests;
+			name = SortyTests;
 			packageProductDependencies = (
 			);
-			productName = FileOrganiserTests;
-			productReference = 33A1286F2F01230200A86470 /* FileOrganiserTests.xctest */;
+			productName = SortyTests;
+			productReference = 33A1286F2F01230200A86470 /* SortyTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		33A128782F01230200A86470 /* FileOrganiserUITests */ = {
+		33A128782F01230200A86470 /* SortyUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 33A128892F01230200A86470 /* Build configuration list for PBXNativeTarget "FileOrganiserUITests" */;
+			buildConfigurationList = 33A128892F01230200A86470 /* Build configuration list for PBXNativeTarget "SortyUITests" */;
 			buildPhases = (
 				33A128752F01230200A86470 /* Sources */,
 				33A128762F01230200A86470 /* Frameworks */,
@@ -636,11 +636,11 @@
 			dependencies = (
 				33A1287B2F01230200A86470 /* PBXTargetDependency */,
 			);
-			name = FileOrganiserUITests;
+			name = SortyUITests;
 			packageProductDependencies = (
 			);
-			productName = FileOrganiserUITests;
-			productReference = 33A128792F01230200A86470 /* FileOrganiserUITests.xctest */;
+			productName = SortyUITests;
+			productReference = 33A128792F01230200A86470 /* SortyUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -666,7 +666,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 33A1285D2F01230000A86470 /* Build configuration list for PBXProject "FileOrganiser" */;
+			buildConfigurationList = 33A1285D2F01230000A86470 /* Build configuration list for PBXProject "Sorty" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -680,9 +680,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				33A128612F01230000A86470 /* FileOrganiser */,
-				33A1286E2F01230200A86470 /* FileOrganiserTests */,
-				33A128782F01230200A86470 /* FileOrganiserUITests */,
+				33A128612F01230000A86470 /* Sorty */,
+				33A1286E2F01230200A86470 /* SortyTests */,
+				33A128782F01230200A86470 /* SortyUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -769,8 +769,8 @@
 				3353FC5F2F0124320097CD23 /* Extensions.swift in Sources */,
 				3353FC602F0124320097CD23 /* ExclusionRule.swift in Sources */,
 				3353FC612F0124320097CD23 /* HistoryView.swift in Sources */,
-				3353FC622F0124320097CD23 /* FileOrganizerActionExtension.swift in Sources */,
-				3353FC632F0124320097CD23 /* FileOrganizerApp.swift in Sources */,
+				3353FC622F0124320097CD23 /* SortyActionExtension.swift in Sources */,
+				3353FC632F0124320097CD23 /* SortyApp.swift in Sources */,
 				3353FC642F0124320097CD23 /* SystemPrompt.swift in Sources */,
 				3353FC652F0124320097CD23 /* PreviewManager.swift in Sources */,
 				3353FC662F0124320097CD23 /* ContentView.swift in Sources */,
@@ -868,12 +868,12 @@
 /* Begin PBXTargetDependency section */
 		33A128712F01230200A86470 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 33A128612F01230000A86470 /* FileOrganiser */;
+			target = 33A128612F01230000A86470 /* Sorty */;
 			targetProxy = 33A128702F01230200A86470 /* PBXContainerItemProxy */;
 		};
 		33A1287B2F01230200A86470 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 33A128612F01230000A86470 /* FileOrganiser */;
+			target = 33A128612F01230000A86470 /* Sorty */;
 			targetProxy = 33A1287A2F01230200A86470 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -1026,7 +1026,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.FileOrganiser;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.Sorty;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -1069,7 +1069,7 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.FileOrganiser;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.Sorty;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -1095,7 +1095,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.FileOrganiserTests;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -1105,7 +1105,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FileOrganiser.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FileOrganiser";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sorty.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Sorty";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Debug;
@@ -1120,7 +1120,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.FileOrganiserTests;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -1130,7 +1130,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FileOrganiser.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FileOrganiser";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Sorty.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Sorty";
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Release;
@@ -1144,7 +1144,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.FileOrganiserUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -1154,7 +1154,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = FileOrganiser;
+				TEST_TARGET_NAME = Sorty;
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Debug;
@@ -1168,7 +1168,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.FileOrganiserUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -1178,7 +1178,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,7";
-				TEST_TARGET_NAME = FileOrganiser;
+				TEST_TARGET_NAME = Sorty;
 				XROS_DEPLOYMENT_TARGET = 1.0;
 			};
 			name = Release;
@@ -1186,7 +1186,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		33A1285D2F01230000A86470 /* Build configuration list for PBXProject "FileOrganiser" */ = {
+		33A1285D2F01230000A86470 /* Build configuration list for PBXProject "Sorty" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				33A128812F01230200A86470 /* Debug */,
@@ -1195,7 +1195,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		33A128832F01230200A86470 /* Build configuration list for PBXNativeTarget "FileOrganiser" */ = {
+		33A128832F01230200A86470 /* Build configuration list for PBXNativeTarget "Sorty" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				33A128842F01230200A86470 /* Debug */,
@@ -1204,7 +1204,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		33A128862F01230200A86470 /* Build configuration list for PBXNativeTarget "FileOrganiserTests" */ = {
+		33A128862F01230200A86470 /* Build configuration list for PBXNativeTarget "SortyTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				33A128872F01230200A86470 /* Debug */,
@@ -1213,7 +1213,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		33A128892F01230200A86470 /* Build configuration list for PBXNativeTarget "FileOrganiserUITests" */ = {
+		33A128892F01230200A86470 /* Build configuration list for PBXNativeTarget "SortyUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				33A1288A2F01230200A86470 /* Debug */,

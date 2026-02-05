@@ -82,6 +82,8 @@ public class SparkleUpdateManager: ObservableObject {
         guard Bundle.main.infoDictionary?["SUFeedURL"] != nil else {
             throw SparkleError.noFeedURLConfigured
         }
+        
+        LogManager.shared.log("Initializing Sparkle updater controller...", category: "SparkleUpdateManager")
 
         // Initialize the updater controller
         self.updaterController = SPUStandardUpdaterController(
@@ -95,6 +97,8 @@ public class SparkleUpdateManager: ObservableObject {
         }
 
         self.updater = controller.updater
+
+
 
         // Bind canCheckForUpdates to the updater's publisher
         controller.updater.publisher(for: \.canCheckForUpdates)
@@ -206,6 +210,15 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
 
     nonisolated func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
         let message = error.localizedDescription
+        
+        // Log detailed error information for debugging
+        let nsError = error as NSError
+        let userInfo = nsError.userInfo
+        let underlyingError = userInfo[NSUnderlyingErrorKey] as? Error
+        let underlyingMessage = underlyingError?.localizedDescription ?? "None"
+        
+        LogManager.shared.log("Sparkle update failed: \(message). Underlying: \(underlyingMessage). Code: \(nsError.code)", level: .error, category: "SparkleUpdateManager")
+        
         Task { @MainActor in
             self.stateCallback?(.error(message))
         }

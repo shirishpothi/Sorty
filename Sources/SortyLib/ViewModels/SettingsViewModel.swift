@@ -17,7 +17,8 @@ public class SettingsViewModel: ObservableObject {
             let oldProvider = oldValue.provider
             let newProvider = config.provider
             
-            saveConfig()
+            // Debounce the save operation
+            debouncedSave()
             
             // If smart rename is disabled, ensure mode is set to .organize
             if !config.enableSmartRename && config.mode != .organize {
@@ -45,6 +46,7 @@ public class SettingsViewModel: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let configKey = "aiConfig"
+    private var saveTask: Task<Void, Never>?
     
     public init() {
         loadConfig()
@@ -74,7 +76,32 @@ public class SettingsViewModel: ObservableObject {
         }
     }
     
-    private func saveConfig() {
+    /// Debounced save that batches rapid changes
+    private func debouncedSave() {
+        // Cancel any existing save task
+        saveTask?.cancel()
+        
+        // Create new delayed save task
+        saveTask = Task { @MainActor in
+            // Wait 0.5 seconds before saving
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            
+            // Only save if task wasn't cancelled
+            guard !Task.isCancelled else { return }
+            
+            await performSave()
+        }
+    }
+    
+    /// Immediate save for when app terminates or explicit save is needed
+    public func forceSave() {
+        saveTask?.cancel()
+        Task { @MainActor in
+            await performSave()
+        }
+    }
+    
+    private func performSave() async {
         // Capture values for thread-safe access
         let apiKey = config.apiKey
         let provider = config.provider
@@ -82,7 +109,7 @@ public class SettingsViewModel: ObservableObject {
         configToSave.apiKey = nil // Don't store in UserDefaults
         let configData = try? JSONEncoder().encode(configToSave)
         
-        DebugLogger.log(hypothesisId: "B", location: "SettingsViewModel", message: "Saving config", data: [
+        DebugLogger.log(hypothesisId: "B", location: "SettingsViewModel", message: "Saving config (debounced)", data: [
             "hasAPIKey": apiKey != nil,
             "provider": provider.rawValue
         ])

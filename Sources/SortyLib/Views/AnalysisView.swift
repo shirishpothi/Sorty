@@ -6,44 +6,23 @@
 //
 
 import SwiftUI
-import UniformTypeIdentifiers
 
-struct AnalysisView: View {
-    @EnvironmentObject var organizer: FolderOrganizer
-    @EnvironmentObject var appState: AppState
-    @State private var hasAppeared = false
-    @State private var currentFunnyMessage: String = ""
-    @State private var currentFileDisplay: String = ""
-    @State private var funnyMessageOpacity: Double = 0
-    @State private var fileDisplayOpacity: Double = 0
-    @State private var funnyMessageTimer: Timer?
-    @State private var fileDisplayTimer: Timer?
-    @State private var elapsedSeconds: Int = 0
+// MARK: - Unified Refresh Manager
+
+/// Consolidates multiple timers into a single refresh manager to reduce memory overhead
+/// and potential retain cycles. Uses the shared RefreshManager for centralized control.
+@MainActor
+final class AnalysisRefreshManager: ObservableObject {
+    @Published var currentFunnyMessage: String = ""
+    @Published var currentFileDisplay: String = ""
+    @Published var funnyMessageOpacity: Double = 0
+    @Published var fileDisplayOpacity: Double = 0
     
-    private enum MessageTier {
-        case none
-        case backgroundTip
-        case takingLonger
-    }
+    private var refreshManager: RefreshManager?
+    private var fileNames: [String] = []
+    private weak var organizer: FolderOrganizer?
+    private var timerGroup: CoordinatedRefreshGroup?
     
-    private var currentMessageTier: MessageTier {
-        if elapsedSeconds >= 60 || organizer.showTimeoutMessage {
-            return .takingLonger
-        } else if elapsedSeconds >= 30 {
-            return .backgroundTip
-        }
-        return .none
-    }
-    
-    private let calmerMessages = [
-        "Still working...",
-        "Almost there...",
-        "Processing your files...",
-        "Organizing in progress...",
-        "Just a moment longer..."
-    ]
-    
-    // Funny messages that cycle during organization
     private let funnyMessages = [
         "Teaching folders to play nice together...",
         "Convincing files they belong somewhere...",
@@ -66,6 +45,183 @@ struct AnalysisView: View {
         "Making Marie Kondo proud...",
         "Alphabetizing... just kidding, we're smarter than that..."
     ]
+    
+    private let calmerMessages = [
+        "Still working...",
+        "Almost there...",
+        "Processing your files...",
+        "Organizing in progress...",
+        "Just a moment longer..."
+    ]
+    
+    func start(organizer: FolderOrganizer) {
+        self.organizer = organizer
+        collectFileNames()
+        
+        // Set initial values
+        currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+        if !fileNames.isEmpty {
+            currentFileDisplay = fileNames.randomElement() ?? ""
+        }
+        
+        withAnimation(.easeIn(duration: 0.5)) {
+            funnyMessageOpacity = 1
+        }
+        withAnimation(.easeIn(duration: 0.3)) {
+            fileDisplayOpacity = 1
+        }
+        
+        // Use the centralized RefreshManager with coordinated group
+        refreshManager = RefreshManager()
+        timerGroup = refreshManager?.createCoordinatedGroup()
+        
+        startRefreshLoop()
+    }
+    
+    func stop() {
+        // Cancel all timers in the coordinated group
+        timerGroup?.cancelAll()
+        timerGroup = nil
+        refreshManager?.cancelAll()
+        refreshManager = nil
+        organizer = nil
+        fileNames = []
+    }
+    
+    func pause() {
+        timerGroup?.pause()
+    }
+    
+    func resume() {
+        timerGroup?.resume()
+    }
+    
+    private func collectFileNames() {
+        guard let plan = organizer?.currentPlan else {
+            fileNames = []
+            return
+        }
+        
+        func collect(from suggestions: [FolderSuggestion]) -> [String] {
+            var names: [String] = []
+            for suggestion in suggestions {
+                names.append(contentsOf: suggestion.files.map { $0.displayName })
+                names.append(contentsOf: collect(from: suggestion.subfolders))
+            }
+            return names
+        }
+        
+        fileNames = collect(from: plan.suggestions) + plan.unorganizedFiles.map { $0.displayName }
+    }
+    
+    private func startRefreshLoop() {
+        // Use async tasks with weak self to prevent retain cycles
+        // File display cycle: every 1.5s
+        timerGroup?.addTimer(interval: 1.5) { [weak self] in
+            Task { [weak self] in
+                await self?.cycleFileDisplay()
+            }
+        }
+        
+        // Funny message cycle: every 4s
+        timerGroup?.addTimer(interval: 4.0) { [weak self] in
+            Task { [weak self] in
+                await self?.cycleFunnyMessage()
+            }
+        }
+    }
+    
+    private func cycleFunnyMessage() async {
+        withAnimation(.easeOut(duration: 0.4)) {
+            funnyMessageOpacity = 0
+        }
+        
+        try? await Task.sleep(nanoseconds: 450_000_000)
+        guard organizer != nil else { return } // Check if still valid
+        
+        let elapsedSeconds = Int(organizer?.elapsedTime ?? 0)
+        if elapsedSeconds > 30 {
+            currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages[0]
+        } else {
+            currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+        }
+        
+        withAnimation(.easeIn(duration: 0.4)) {
+            funnyMessageOpacity = 1
+        }
+    }
+    
+    private func cycleFileDisplay() async {
+        // Try to get file name from plan or streaming content
+        var nextFileName: String?
+        
+        if !fileNames.isEmpty {
+            nextFileName = fileNames.randomElement()
+        } else if let content = organizer?.displayStreamingContent {
+            nextFileName = extractFileNameFromContent(content)
+        }
+        
+        guard let fileName = nextFileName, !fileName.isEmpty else { return }
+        
+        withAnimation(.easeOut(duration: 0.25)) {
+            fileDisplayOpacity = 0
+        }
+        
+        try? await Task.sleep(nanoseconds: 300_000_000)
+        guard organizer != nil else { return } // Check if still valid
+        
+        currentFileDisplay = fileName
+        
+        withAnimation(.easeIn(duration: 0.25)) {
+            fileDisplayOpacity = 1
+        }
+    }
+    
+    private func extractFileNameFromContent(_ content: String) -> String? {
+        let patterns = [
+            "\"name\":\\s*\"([^\"]+)\"",
+            "\"file\":\\s*\"([^\"]+)\"",
+            "([\\w\\-\\.]+\\.(pdf|doc|docx|jpg|png|txt|md|swift|js|py|zip|mp3|mp4))"
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(content.startIndex..., in: content)
+                let matches = regex.matches(in: content, options: [], range: range)
+                if let match = matches.last, let range = Range(match.range(at: 1), in: content) {
+                    return String(content[range])
+                }
+            }
+        }
+        return nil
+    }
+}
+
+struct AnalysisView: View {
+    @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var learningsManager: LearningsManager
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @StateObject private var refreshManager = AnalysisRefreshManager()
+    @State private var hasAppeared = false
+    @State private var elapsedSeconds: Int = 0
+    @State private var isCancelHovered = false
+    @State private var showCancelConfirmation = false
+    
+    private enum MessageTier {
+        case none
+        case backgroundTip
+        case takingLonger
+    }
+    
+    private var currentMessageTier: MessageTier {
+        if elapsedSeconds >= 90 || organizer.showTimeoutMessage {
+            return .takingLonger
+        } else if elapsedSeconds >= 30 {
+            return .backgroundTip
+        }
+        return .none
+    }
 
     var body: some View {
         WorkflowContainer(currentStep: .analyze) {
@@ -92,27 +248,52 @@ struct AnalysisView: View {
 
                 Button {
                     HapticFeedbackManager.shared.tap()
-                    organizer.reset()
+                    showCancelConfirmation = true
                 } label: {
-                    Text("Cancel")
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Cancel Generation")
+                    }
+                    .padding(.horizontal, 4)
                 }
                 .buttonStyle(.bordered)
-                .foregroundStyle(.secondary)
+                .tint(.red)
+                .foregroundStyle(.red)
+                .scaleEffect(isCancelHovered ? 1.03 : 1.0)
+                .animation(.easeInOut(duration: 0.15), value: isCancelHovered)
+                .onHover { hovering in
+                    isCancelHovered = hovering
+                }
                 .keyboardShortcut(.escape, modifiers: [])
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
                 .accessibilityIdentifier("AnalysisCancelButton")
+                .confirmationDialog(
+                    "Cancel Organization?",
+                    isPresented: $showCancelConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Cancel Generation", role: .destructive) {
+                        recordCancelledAnalysis()
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            organizer.reset()
+                        }
+                    }
+                    Button("Continue", role: .cancel) { }
+                } message: {
+                    Text("This will stop the AI analysis and return to folder selection. Your progress will not be saved.")
+                }
             }
         }
         .onAppear {
             withAnimation {
                 hasAppeared = true
             }
-            startFunnyMessageCycle()
-            startFileDisplayCycle()
+            refreshManager.start(organizer: organizer)
         }
         .onDisappear {
-            stopTimers()
+            refreshManager.stop()
         }
         .onChange(of: organizer.elapsedTime) { _, newTime in
             elapsedSeconds = Int(newTime)
@@ -139,136 +320,6 @@ struct AnalysisView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Warning: Organization is taking longer than usual")
         }
-    }
-    
-    private func startFunnyMessageCycle() {
-        // Initial message
-        currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
-        withAnimation(.easeIn(duration: 0.5)) {
-            funnyMessageOpacity = 1
-        }
-        
-        // Cycle messages every 4 seconds
-        funnyMessageTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { _ in
-            Task { @MainActor in
-                // Fade out
-                withAnimation(.easeOut(duration: 0.4)) {
-                    funnyMessageOpacity = 0
-                }
-                
-                // Wait for fade out, then change message and fade in
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                
-                // After 30 seconds, use calmer messages instead
-                if elapsedSeconds > 30 {
-                    currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages[0]
-                } else {
-                    currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
-                }
-                
-                withAnimation(.easeIn(duration: 0.4)) {
-                    funnyMessageOpacity = 1
-                }
-            }
-        }
-    }
-    
-    private func startFileDisplayCycle() {
-        // Only show file names if we have scanned files
-        guard let plan = organizer.currentPlan else {
-            updateFileDisplayFromStream()
-            return
-        }
-        
-        // Collect all file names from the plan
-        func collectFileNames(from suggestions: [FolderSuggestion]) -> [String] {
-            var names: [String] = []
-            for suggestion in suggestions {
-                names.append(contentsOf: suggestion.files.map { $0.displayName })
-                names.append(contentsOf: collectFileNames(from: suggestion.subfolders))
-            }
-            return names
-        }
-        
-        let fileNames = collectFileNames(from: plan.suggestions) + plan.unorganizedFiles.map { $0.displayName }
-        guard !fileNames.isEmpty else {
-            updateFileDisplayFromStream()
-            return
-        }
-        
-        // Initial file
-        currentFileDisplay = fileNames.randomElement() ?? ""
-        withAnimation(.easeIn(duration: 0.3)) {
-            fileDisplayOpacity = 1
-        }
-        
-        // Cycle file names every 1.5 seconds
-        fileDisplayTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
-            Task { @MainActor in
-                withAnimation(.easeOut(duration: 0.25)) {
-                    fileDisplayOpacity = 0
-                }
-                
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                
-                currentFileDisplay = fileNames.randomElement() ?? ""
-                
-                withAnimation(.easeIn(duration: 0.25)) {
-                    fileDisplayOpacity = 1
-                }
-            }
-        }
-    }
-    
-    private func updateFileDisplayFromStream() {
-        // If no plan yet, try to extract file references from streaming content
-        fileDisplayTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
-            Task { @MainActor in
-                let content = organizer.displayStreamingContent
-                
-                // Try to extract a filename from the streaming content
-                if let fileName = extractFileNameFromContent(content) {
-                    withAnimation(.easeOut(duration: 0.25)) {
-                        fileDisplayOpacity = 0
-                    }
-                    
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    
-                    currentFileDisplay = fileName
-                    
-                    withAnimation(.easeIn(duration: 0.25)) {
-                        fileDisplayOpacity = 1
-                    }
-                }
-            }
-        }
-    }
-    
-    private func extractFileNameFromContent(_ content: String) -> String? {
-        // Look for patterns that might indicate file names
-        let patterns = [
-            "\"name\":\\s*\"([^\"]+)\"",
-            "\"file\":\\s*\"([^\"]+)\"",
-            "([\\w\\-\\.]+\\.(pdf|doc|docx|jpg|png|txt|md|swift|js|py|zip|mp3|mp4))"
-        ]
-        
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                let range = NSRange(content.startIndex..., in: content)
-                let matches = regex.matches(in: content, options: [], range: range)
-                if let match = matches.last, let range = Range(match.range(at: 1), in: content) {
-                    return String(content[range])
-                }
-            }
-        }
-        return nil
-    }
-    
-    private func stopTimers() {
-        funnyMessageTimer?.invalidate()
-        funnyMessageTimer = nil
-        fileDisplayTimer?.invalidate()
-        fileDisplayTimer = nil
     }
     
     private var progressSection: some View {
@@ -328,26 +379,26 @@ struct AnalysisView: View {
             } else if organizer.isStreaming {
                 VStack(spacing: 8) {
                     // Funny message with fade animation
-                    Text(currentFunnyMessage)
+                    Text(refreshManager.currentFunnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .opacity(funnyMessageOpacity)
+                        .opacity(refreshManager.funnyMessageOpacity)
                         .frame(height: 20)
                     
                     // File being analyzed with fade animation
-                    if !currentFileDisplay.isEmpty {
+                    if !refreshManager.currentFileDisplay.isEmpty {
                         HStack(spacing: 4) {
                             Text("Analyzing")
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
-                            Text(currentFileDisplay)
+                            Text(refreshManager.currentFileDisplay)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fontWeight(.medium)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
-                        .opacity(fileDisplayOpacity)
+                        .opacity(refreshManager.fileDisplayOpacity)
                         .frame(maxWidth: 300)
                     }
                 }
@@ -377,26 +428,27 @@ struct AnalysisView: View {
                     .foregroundStyle(.orange)
                     .symbolEffect(.variableColor.iterative, options: .repeating)
             } else {
-                Image(systemName: "brain.head.profile")
-                    .foregroundStyle(.purple)
-                    .symbolEffect(.pulse.byLayer, options: .repeating)
+                OrganizingMascotView()
             }
         }
     }
     
     private var timeoutMessage: some View {
         InlineNotice(
-            icon: "clock",
-            title: "This is taking longer than usual",
-            message: "Large folders may take 1-3 minutes. You can switch windows—we'll notify you when ready.",
-            severity: .warning,
+            icon: "folder.badge.gearshape",
+            title: "Complex folder detected",
+            message: "Large folders with many files may take 1-3 minutes to analyze. Feel free to switch windows—we'll notify you when ready.",
+            severity: .info,
             actions: [
-                InlineNoticeAction(title: "Try Faster Model", systemImage: "bolt") {
+                InlineNoticeAction(title: "Cancel", systemImage: "xmark.circle") {
+                    recordCancelledAnalysis()
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        organizer.reset()
+                    }
+                },
+                InlineNoticeAction(title: "Try Faster Model", systemImage: "bolt.circle") {
                     appState.selectedSettingsSection = .provider
                     appState.currentView = .settings
-                },
-                InlineNoticeAction(title: "Cancel", systemImage: "xmark") {
-                    organizer.reset()
                 }
             ]
         )
@@ -418,22 +470,46 @@ struct AnalysisView: View {
     
     // MARK: - AI Insights View
     
+    /// Computed property to access cached insights for better performance
+    private var cachedInsights: (current: String, history: [AIInsight]) {
+        // Use the FolderOrganizer's cache to avoid re-parsing during render
+        organizer.getCachedInsights()
+    }
+    
     private var aiInsightsView: some View {
         VStack(spacing: 16) {
-            // Header
+            // Header with improved animation
             HStack(spacing: 8) {
                 if organizer.isStreaming {
-                    LoadingDotsView(dotCount: 3, dotSize: 4, color: .purple.opacity(0.6))
+                    // Animated brain icon with glow effect
+                    ZStack {
+                        Image(systemName: "brain.head.profile")
+                            .font(.caption)
+                            .foregroundStyle(Color.accentColor.opacity(0.3))
+                            .blur(radius: 4)
+                            .scaleEffect(1.2)
+                        
+                        Image(systemName: "brain.head.profile")
+                            .font(.caption)
+                            .foregroundStyle(Color.accentColor)
+                            .symbolEffect(.pulse.byLayer, options: .repeating)
+                    }
                 } else {
-                    Image(systemName: "brain")
+                    Image(systemName: "checkmark.circle.fill")
                         .font(.caption)
-                        .foregroundStyle(.purple.opacity(0.8))
+                        .foregroundStyle(.green)
                 }
                 
                 Text(organizer.isStreaming ? "AI is reasoning..." : "Analysis complete")
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundStyle(.secondary)
+                    .contentTransition(.interpolate)
+                
+                if organizer.isStreaming {
+                    // Animated bouncing dots
+                    BouncingDotsView()
+                }
                 
                 Spacer()
                 
@@ -445,7 +521,7 @@ struct AnalysisView: View {
                     } label: {
                         Image(systemName: showDebugStream ? "terminal.fill" : "terminal")
                             .font(.caption)
-                            .foregroundStyle(showDebugStream ? .purple : .secondary)
+                            .foregroundStyle(showDebugStream ? Color.accentColor : .secondary)
                     }
                     .buttonStyle(.plain)
                     .help("Toggle raw AI stream")
@@ -453,14 +529,19 @@ struct AnalysisView: View {
             }
             .padding(.horizontal, 4)
             
-            // Current insight (Integrated Pill style)
-            if !organizer.currentInsight.isEmpty {
-                currentInsightPill
+            // Current insight or receiving indicator
+            let insights = cachedInsights
+            let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
+            if !insights.current.isEmpty {
+                currentInsightPill(insight: insights.current, detail: currentInsightItem)
+            } else if organizer.isStreaming {
+                // Show "Receiving AI response..." when streaming but no insights yet
+                receivingResponseView
             }
             
-            // Recent insights history (wrapped pills)
-            if organizer.insightHistory.count > 1 {
-                insightHistoryWrap
+            // Recent insights history (wrapped pills) - uses cached insights
+            if insights.history.count > 1 {
+                insightHistoryWrap(history: insights.history)
             }
             
             // Raw stream (Debug only)
@@ -473,35 +554,30 @@ struct AnalysisView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.primary.opacity(0.02))
+                .fill(Color(NSColor.controlBackgroundColor))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                        .stroke(Color(NSColor.separatorColor).opacity(0.8), lineWidth: 1)
                 )
         )
     }
     
-    private var currentInsightPill: some View {
+    private var receivingResponseView: some View {
         HStack(spacing: 12) {
-            // Pulsing indicator
-            ZStack {
-                Circle()
-                    .fill(Color.purple.opacity(0.2))
-                    .frame(width: 20, height: 20)
-                    .scaleEffect(organizer.isStreaming ? 1.4 : 1.0)
-                
-                Image(systemName: "sparkles")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.purple)
-            }
-            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: organizer.isStreaming)
+            // Typing indicator animation using BouncingDotsView
+            BouncingDotsView()
+                .foregroundStyle(Color.accentColor.opacity(0.8))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.1))
+                )
             
-            Text(organizer.currentInsight)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+            Text("Receiving AI response...")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .italic()
             
             Spacer()
         }
@@ -509,19 +585,157 @@ struct AnalysisView: View {
         .padding(.vertical, 10)
         .background(
             Capsule()
-                .fill(Color.purple.opacity(0.1))
+                .fill(Color.accentColor.opacity(0.05))
                 .overlay(
                     Capsule()
-                        .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
                 )
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: organizer.currentInsight)
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
     
-    private var insightHistoryWrap: some View {
+    private func currentInsightPill(insight: String, detail: AIInsight?) -> some View {
+        HStack(spacing: 12) {
+            // Icon based on insight content - Finder-style icons
+            insightIcon(for: detail, fallbackText: insight)
+                .frame(width: 24, height: 24)
+            
+            Text(insight)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            
+            Spacer()
+            
+            if organizer.isStreaming {
+                // Small pulsing indicator
+                Circle()
+                    .fill(Color.accentColor.opacity(0.4))
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(organizer.isStreaming ? 1.3 : 1.0)
+                    .animation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: organizer.isStreaming)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color.accentColor.opacity(0.08))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                )
+        )
+        .animation(.easeInOut(duration: 0.2), value: insight)
+    }
+    
+    @ViewBuilder
+    private func insightIcon(for insight: AIInsight?, fallbackText: String) -> some View {
+        if let filePath = insight?.filePath {
+            let url = URL(fileURLWithPath: filePath)
+            if url.hasDirectoryPath {
+                return AnyView(FolderThumbnailView(url: url, size: CGSize(width: 20, height: 20)))
+            }
+            return AnyView(FileThumbnailView(url: url, size: CGSize(width: 20, height: 20)))
+        }
+        
+        let lowercased = fallbackText.lowercased()
+        
+        if lowercased.contains("folder") || lowercased.contains("directory") || lowercased.contains("organizing") {
+            return AnyView(
+                Image(nsImage: NSWorkspace.shared.icon(for: .folder))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 20, height: 20)
+            )
+        } else if lowercased.contains("image") || lowercased.contains("photo") || lowercased.contains("picture") || lowercased.contains("screenshot") {
+            return AnyView(
+                ZStack {
+                    Circle()
+                        .fill(Color.pink.opacity(0.15))
+                        .frame(width: 24, height: 24)
+                    Image(nsImage: NSWorkspace.shared.icon(for: .image))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
+            )
+        } else if lowercased.contains("document") || lowercased.contains("pdf") || lowercased.contains("file") {
+            return AnyView(
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.15))
+                        .frame(width: 24, height: 24)
+                    Image(nsImage: NSWorkspace.shared.icon(for: .pdf))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
+            )
+        } else if lowercased.contains("video") || lowercased.contains("movie") {
+            return AnyView(
+                ZStack {
+                    Circle()
+                        .fill(Color.orange.opacity(0.15))
+                        .frame(width: 24, height: 24)
+                    Image(nsImage: NSWorkspace.shared.icon(for: .movie))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
+            )
+        } else if lowercased.contains("audio") || lowercased.contains("music") || lowercased.contains("sound") {
+            return AnyView(
+                ZStack {
+                    Circle()
+                        .fill(Color.red.opacity(0.15))
+                        .frame(width: 24, height: 24)
+                    Image(nsImage: NSWorkspace.shared.icon(for: .audio))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
+            )
+        } else if lowercased.contains("code") || lowercased.contains("script") || lowercased.contains("programming") {
+            return AnyView(
+                ZStack {
+                    Circle()
+                        .fill(Color.cyan.opacity(0.15))
+                        .frame(width: 24, height: 24)
+                    Image(nsImage: NSWorkspace.shared.icon(for: .sourceCode))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
+            )
+        } else if lowercased.contains("archive") || lowercased.contains("zip") || lowercased.contains("compress") {
+            return AnyView(
+                ZStack {
+                    Circle()
+                        .fill(Color.brown.opacity(0.15))
+                        .frame(width: 24, height: 24)
+                    Image(nsImage: NSWorkspace.shared.icon(for: .archive))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
+            )
+        }
+        
+        return AnyView(
+            Image(nsImage: NSWorkspace.shared.icon(for: .data))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 20, height: 20)
+        )
+    }
+    
+    private func insightHistoryWrap(history: [AIInsight]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             FlowLayout(spacing: 8) {
-                ForEach(Array(organizer.insightHistory.dropLast().reversed().prefix(4))) { insight in
+                ForEach(Array(history.dropLast().reversed().prefix(4))) { insight in
                     InsightPill(insight: insight)
                         .opacity(isHoveringHistory ? 1.0 : 0.4)
                         .blur(radius: isHoveringHistory ? 0 : 0.5)
@@ -594,6 +808,29 @@ struct AnalysisView: View {
             return "\(minutes)m \(seconds)s"
         }
         return "\(seconds)s"
+    }
+
+    private func recordCancelledAnalysis() {
+        guard let directory = appState.selectedDirectory ?? organizer.currentDirectory else { return }
+
+        let plan = organizer.currentPlan
+        let fileCount = max(plan?.totalFiles ?? 0, organizer.scannedFileCount)
+        let proposedFolderCount = plan?.totalFolders ?? 0
+        let folderNames = plan?.suggestions.map { $0.folderName }
+
+        learningsManager.recordCancelledOrganization(
+            folderPath: directory.path,
+            fileCount: fileCount,
+            proposedFolderCount: proposedFolderCount,
+            instructions: organizer.customInstructions.isEmpty ? nil : organizer.customInstructions,
+            stage: organizer.organizationStage.isEmpty ? "analysis" : organizer.organizationStage,
+            proposedFolderNames: (folderNames?.isEmpty == false) ? folderNames : nil,
+            proposedStructureSummary: nil,
+            fileExtensionCounts: nil,
+            regenerationCount: plan?.version ?? 0,
+            regenerationInstructions: nil,
+            aiModel: settingsViewModel.config.model
+        )
     }
 }
 
@@ -796,20 +1033,47 @@ struct InsightPill: View {
         }
     }
     
+    private var fileIcon: NSImage {
+        if let filePath = insight.filePath {
+            if FileManager.default.fileExists(atPath: filePath) {
+                return NSWorkspace.shared.icon(forFile: filePath)
+            }
+            let ext = URL(fileURLWithPath: filePath).pathExtension
+            if !ext.isEmpty {
+                return NSWorkspace.shared.icon(forFileType: ext)
+            }
+        }
+        
+        let text = insight.text
+        if let dotIndex = text.lastIndex(of: ".") {
+            let ext = String(text[text.index(after: dotIndex)...])
+                .trimmingCharacters(in: .whitespaces)
+                .components(separatedBy: .whitespaces).first ?? ""
+            if !ext.isEmpty {
+                return NSWorkspace.shared.icon(forFileType: ext)
+            }
+        }
+        
+        return NSWorkspace.shared.icon(for: .data)
+    }
+    
     var body: some View {
         HStack(spacing: 6) {
-            if let filePath = insight.filePath {
-                FileThumbnailView(url: URL(fileURLWithPath: filePath), size: CGSize(width: 14, height: 14))
-            } else if insight.category == .folder {
-                // Use actual macOS folder icon for folder insights
+            if insight.category == .folder {
                 Image(nsImage: NSWorkspace.shared.icon(for: .folder))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 14, height: 14)
+            } else if insight.category == .file || insight.filePath != nil {
+                Image(nsImage: fileIcon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
             } else {
-                Image(systemName: insight.category.icon)
-                    .font(.caption2)
-                    .foregroundStyle(iconColor)
+                Image(nsImage: NSWorkspace.shared.icon(for: .data))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
             }
             
             Text(insight.text)
@@ -867,8 +1131,62 @@ public struct FlowLayout: Layout {
     }
 }
 
-#Preview {
+#Preview("Analysis View - Scanning") {
     AnalysisView()
-        .environmentObject(FolderOrganizer())
-        .frame(width: 600, height: 400)
+        .environmentObject({
+            let organizer = FolderOrganizer()
+            organizer.state = .scanning
+            organizer.progress = 0.45
+            organizer.organizationStage = "Scanning files..."
+            organizer.elapsedTime = 3.5
+            return organizer
+        }())
+        .environmentObject(AppState.preview)
+        .frame(width: 700, height: 500)
+}
+
+#Preview("Analysis View - Organizing") {
+    AnalysisView()
+        .environmentObject({
+            let organizer = FolderOrganizer()
+            organizer.state = .organizing
+            organizer.progress = 0.75
+            organizer.organizationStage = "Analyzing with AI..."
+            organizer.elapsedTime = 8.2
+            organizer.isStreaming = true
+            organizer.currentInsight = "Creating project folders based on file types"
+            return organizer
+        }())
+        .environmentObject(AppState.preview)
+        .frame(width: 700, height: 550)
+}
+
+#Preview("Analysis View - Applying") {
+    AnalysisView()
+        .environmentObject({
+            let organizer = FolderOrganizer()
+            organizer.state = .applying
+            organizer.progress = 0.85
+            organizer.organizationStage = "Moving files..."
+            organizer.elapsedTime = 12.5
+            return organizer
+        }())
+        .environmentObject(AppState.preview)
+        .frame(width: 700, height: 500)
+}
+
+#Preview("Analysis View - Long Running") {
+    AnalysisView()
+        .environmentObject({
+            let organizer = FolderOrganizer()
+            organizer.state = .organizing
+            organizer.progress = 0.65
+            organizer.organizationStage = "Processing large folder..."
+            organizer.elapsedTime = 65.0
+            organizer.showTimeoutMessage = true
+            organizer.isStreaming = true
+            return organizer
+        }())
+        .environmentObject(AppState.preview)
+        .frame(width: 700, height: 550)
 }

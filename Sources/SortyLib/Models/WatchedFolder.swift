@@ -31,6 +31,8 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
     public var temperature: Double?
     public var bookmarkData: Data?
     public var accessStatus: FolderAccessStatus = .unknown
+    public var modelOverride: String?           // nil = use global automation model
+    public var providerOverride: AIProvider?    // nil = use global automation provider
     
     public init(
         id: UUID = UUID(),
@@ -42,7 +44,9 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         triggerDelay: TimeInterval = 5.0,
         customPrompt: String? = nil,
         temperature: Double? = nil,
-        bookmarkData: Data? = nil
+        bookmarkData: Data? = nil,
+        modelOverride: String? = nil,
+        providerOverride: AIProvider? = nil
     ) {
         self.id = id
         self.path = path
@@ -54,6 +58,8 @@ public struct WatchedFolder: Codable, Identifiable, Hashable, Sendable {
         self.customPrompt = customPrompt
         self.temperature = temperature
         self.bookmarkData = bookmarkData
+        self.modelOverride = modelOverride
+        self.providerOverride = providerOverride
     }
     
     public var url: URL {

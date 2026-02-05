@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct WatchedFoldersView: View {
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var contentOpacity: Double = 0
@@ -94,7 +95,17 @@ struct WatchedFoldersView: View {
     
     private var headerView: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                if appState.navigatedFromSettings {
+                    GlassyBackButton {
+                        HapticFeedbackManager.shared.tap()
+                        appState.navigatedFromSettings = false
+                        appState.currentView = .settings
+                        appState.selectedSettingsSection = .rules
+                    }
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
                 Text("Watched Folders")
                     .font(.title2)
                     .fontWeight(.semibold)
@@ -114,6 +125,7 @@ struct WatchedFoldersView: View {
                     }
                 }
                 .font(.caption)
+                }
             }
             .animatedAppearance(delay: 0.05)
 
@@ -329,6 +341,17 @@ struct WatchedFolderCard: View {
                         .foregroundStyle(.green)
                     }
                     
+                    if let modelOverride = folder.modelOverride {
+                        HStack(spacing: 4) {
+                            Image(systemName: "cpu")
+                                .font(.caption2)
+                            Text(modelOverride)
+                                .font(.caption2)
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(.purple)
+                    }
+                    
                     if !folder.exists {
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -487,6 +510,9 @@ struct WatchedFolderConfigView: View {
     @State private var customPrompt: String
     @State private var temperature: Double
     @State private var autoOrganize: Bool
+    @State private var useCustomModel: Bool
+    @State private var selectedProvider: AIProvider
+    @State private var selectedModel: String
     
     // Check if AI is available
     private var isAIConfigured: Bool {
@@ -498,6 +524,9 @@ struct WatchedFolderConfigView: View {
         _customPrompt = State(initialValue: folder.customPrompt ?? "")
         _temperature = State(initialValue: folder.temperature ?? 0.7)
         _autoOrganize = State(initialValue: folder.autoOrganize)
+        _useCustomModel = State(initialValue: folder.modelOverride != nil)
+        _selectedProvider = State(initialValue: folder.providerOverride ?? .openAI)
+        _selectedModel = State(initialValue: folder.modelOverride ?? AIProvider.openAI.defaultModel)
     }
 
     var body: some View {
@@ -666,6 +695,50 @@ struct WatchedFolderConfigView: View {
                         }
                     }
                     
+                    // AI Model Section
+                    ConfigSection(title: "AI Model", icon: "cpu", color: .purple) {
+                        VStack(spacing: 12) {
+                            Toggle(isOn: $useCustomModel) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Use Custom Model")
+                                        .font(.subheadline)
+                                    Text("Override the global automation model for this folder")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(.switch)
+                            
+                            if useCustomModel {
+                                Picker("Provider", selection: $selectedProvider) {
+                                    ForEach(AIProvider.allCases.filter { $0.isAvailable }, id: \.self) { provider in
+                                        Text(provider.displayName).tag(provider)
+                                    }
+                                }
+                                .onChange(of: selectedProvider) { _, newProvider in
+                                    selectedModel = newProvider.recommendedModels.first ?? newProvider.defaultModel
+                                }
+                                
+                                Picker("Model", selection: $selectedModel) {
+                                    ForEach(selectedProvider.recommendedModels, id: \.self) { model in
+                                        Text(model).tag(model)
+                                    }
+                                }
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "info.circle")
+                                    Text("Tip: Use cheaper models like gpt-4o-mini, claude-3-haiku, or local Ollama for cost-effective background automation.")
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(.secondary)
+                                .padding(10)
+                                .background(Color.purple.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.2), value: useCustomModel)
+                    }
+                    
                     // Folder Info
                     if let lastTriggered = folder.lastTriggered {
                         ConfigSection(title: "Statistics", icon: "chart.bar", color: .gray) {
@@ -686,7 +759,7 @@ struct WatchedFolderConfigView: View {
                 .padding(20)
             }
         }
-        .frame(width: 450, height: 550)
+        .frame(width: 450, height: 650)
         .background(Color(NSColor.windowBackgroundColor))
     }
     
@@ -707,6 +780,14 @@ struct WatchedFolderConfigView: View {
         updated.customPrompt = customPrompt.isEmpty ? nil : customPrompt
         updated.temperature = temperature
         updated.autoOrganize = autoOrganize
+        
+        if useCustomModel {
+            updated.providerOverride = selectedProvider
+            updated.modelOverride = selectedModel
+        } else {
+            updated.providerOverride = nil
+            updated.modelOverride = nil
+        }
         
         withAnimation {
             watchedFoldersManager.updateFolder(updated)

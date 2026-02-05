@@ -44,13 +44,13 @@ struct ToastOverlay: View {
             }
             
             // Auto dismiss after 4 seconds if no action is taken
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 4_000_000_000) // 4s
                 withAnimation(.easeOut(duration: 0.3)) {
                     opacity = 0
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    onDismiss()
-                }
+                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+                onDismiss()
             }
         }
     }

@@ -88,12 +88,14 @@ public class ContinuousLearningObserver: ObservableObject {
     
     public func startObserving() {
         NotificationCenter.default.publisher(for: .organizationDidRevert)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 self?.handleRevertNotification(notification)
             }
             .store(in: &cancellables)
             
         NotificationCenter.default.publisher(for: .organizationDidFinish)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 self?.handleFinishNotification(notification)
             }
@@ -101,6 +103,7 @@ public class ContinuousLearningObserver: ObservableObject {
         
         // Listen for steering prompts
         NotificationCenter.default.publisher(for: .steeringPromptProvided)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
                 self?.handleSteeringPrompt(notification)
             }
@@ -111,13 +114,23 @@ public class ContinuousLearningObserver: ObservableObject {
     }
     
     /// Start a new organization session (called when organization is applied)
-    public func startSession(folderPath: String, historyEntryId: String?) {
+    public func startSession(folderPath: String, historyEntryId: String?, operations: [FileSystemManager.FileOperation]? = nil) {
         guard canCollect else { return }
         
-        let session = OrganizationSession(
+        var session = OrganizationSession(
             folderPath: folderPath,
             historyEntryId: historyEntryId
         )
+        
+        // If we have operations, we can pre-populate recently moved files
+        if let ops = operations {
+            for op in ops {
+                if let destPath = op.destinationPath {
+                    recentlyMovedFiles[destPath] = Date()
+                }
+            }
+        }
+        
         currentSession = session
         recentSessions.append(session)
         
@@ -154,8 +167,9 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Evaluate rules after a delay to check for corrections
     private func scheduleRuleSuccessEvaluation(for session: OrganizationSession) {
-        // Wait 5 minutes before evaluating (gives user time to make corrections)
-        let evaluationDelay: TimeInterval = 5 * 60
+        // Wait 30 seconds before evaluating (gives user time to make corrections)
+        // Reduced from 5 minutes to ensure evaluation happens more reliably
+        let evaluationDelay: TimeInterval = 30
         
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(evaluationDelay * 1_000_000_000))
@@ -253,7 +267,7 @@ public class ContinuousLearningObserver: ObservableObject {
         // 2. Have a matching folder path (the file is within the session's folder)
         return recentSessions
             .filter { $0.timestamp > cutoff }
-            .filter { path.hasPrefix($0.folderPath) }
+            .filter { path.isSubpath(of: $0.folderPath) }
             .sorted { $0.timestamp > $1.timestamp }
             .first
     }
@@ -342,6 +356,47 @@ public class ContinuousLearningObserver: ObservableObject {
             }
         }
     }
+
+    /// Called when a file is removed from the monitored scope (moved outside or deleted)
+    public func handleFileRemoval(at path: String) {
+        guard canCollect else { return }
+        
+        let history = historyFn()
+        let recentEntries = history.entries.prefix(50)
+        
+        var matchedSession = findRelevantSession(for: path)
+        var foundMatch = false
+        
+        for entry in recentEntries {
+            guard let operations = entry.operations else { continue }
+            
+            if let aiOp = operations.first(where: { $0.destinationPath == path }) {
+                LogManager.shared.log("Detected removal after AI placement: \(path)", category: "LearningObserver")
+                learningsManager.recordRejection(originalPath: aiOp.sourcePath)
+                
+                // Track in session if within correlation window
+                if var session = matchedSession {
+                    let change = DirectoryChange(
+                        originalPath: path,
+                        newPath: "",
+                        wasAIOrganized: true,
+                        aiSessionId: session.id
+                    )
+                    session.userCorrections.append(change)
+                    if let idx = recentSessions.firstIndex(where: { $0.id == session.id }) {
+                        recentSessions[idx] = session
+                    }
+                }
+                
+                foundMatch = true
+                break
+            }
+        }
+        
+        if !foundMatch {
+            learningsManager.recordRejection(originalPath: path)
+        }
+    }
     
     // MARK: - User Instructions Tracking
     
@@ -397,8 +452,29 @@ public class ContinuousLearningObserver: ObservableObject {
         if let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry,
            let operations = entry.operations {
             
-            // Start a new session
-            startSession(folderPath: entry.directoryPath, historyEntryId: entry.id.uuidString)
+            // If already started in FolderOrganizer, just update the history ID
+            if let session = currentSession, session.folderPath == entry.directoryPath {
+                var updatedSession = session
+                // We use reflection or a copy because OrganizationSession is a struct
+                updatedSession = OrganizationSession(
+                    id: session.id,
+                    timestamp: session.timestamp,
+                    folderPath: session.folderPath,
+                    historyEntryId: entry.id.uuidString,
+                    steeringPrompts: session.steeringPrompts,
+                    userCorrections: session.userCorrections,
+                    wasReverted: session.wasReverted,
+                    appliedRules: session.appliedRules,
+                    usedRuleIds: session.usedRuleIds
+                )
+                currentSession = updatedSession
+                if let idx = recentSessions.firstIndex(where: { $0.id == session.id }) {
+                    recentSessions[idx] = updatedSession
+                }
+            } else {
+                // Fallback: Start a new session if not already started
+                startSession(folderPath: entry.directoryPath, historyEntryId: entry.id.uuidString, operations: operations)
+            }
             
             for op in operations {
                 if let destPath = op.destinationPath {
@@ -409,6 +485,10 @@ public class ContinuousLearningObserver: ObservableObject {
             // Clean up old entries (older than 24 hours)
             let cutoff = Date().addingTimeInterval(-86400)
             recentlyMovedFiles = recentlyMovedFiles.filter { $0.value > cutoff }
+            
+            // Record run in metrics
+            let usedRules = currentSession?.usedRuleIds ?? []
+            learningsManager.recordSuccessfulRun(folderPath: entry.directoryPath, fileCount: operations.count, ruleIdsUsed: usedRules)
         }
     }
 }

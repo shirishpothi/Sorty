@@ -14,7 +14,7 @@ Security updates are provided for the following versions:
 We take security seriously. If you discover a security vulnerability, please follow these steps:
 
 1. **Do not** open a public issue on GitHub
-2. Email security@sorty.app with details
+2. Use [GitHub's private vulnerability reporting](https://github.com/shirishpothi/Sorty/security/advisories/new) to submit details
 3. Include steps to reproduce, if possible
 4. Allow up to 48 hours for acknowledgment
 5. We will provide an estimated timeline for the fix
@@ -111,7 +111,7 @@ If you notice:
 - Unusual API usage patterns
 - Potential data leaks
 
-Contact security@sorty.app immediately with details.
+Report via [GitHub's private vulnerability reporting](https://github.com/shirishpothi/Sorty/security/advisories/new) immediately with details.
 
 ## Incident Response
 
@@ -144,7 +144,7 @@ While releases are not signed, you can verify integrity:
 ```bash
 # Download release
 # Check SHA256 hash (if provided in release notes)
-shasum -a 256 Sorty.zip
+shasum -a 256 Sorty.pkg
 
 # Or build from source
 git clone https://github.com/shirishpothi/Sorty.git
@@ -167,9 +167,8 @@ Review the security policies of your chosen AI provider:
 
 ## Contact
 
-- **Security Issues**: security@sorty.app
+- **Security Issues**: Use [GitHub's private vulnerability reporting](https://github.com/shirishpothi/Sorty/security/advisories/new)
 - **General Questions**: Open a GitHub discussion (not for vulnerabilities)
-- **PGP Key**: Available upon request for sensitive communications
 
 ---
 

@@ -58,6 +58,9 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
     public var semanticTags: [String]
     public var confidenceScore: Double?
 
+    // Learnings & Rule support
+    public var ruleId: String?
+
     public init(
         id: UUID = UUID(),
         folderName: String,
@@ -68,7 +71,8 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         fileRenameMappings: [FileRenameMapping] = [],
         fileTagMappings: [FileTagMapping] = [],
         semanticTags: [String] = [],
-        confidenceScore: Double? = nil
+        confidenceScore: Double? = nil,
+        ruleId: String? = nil
     ) {
         self.id = id
         self.folderName = folderName
@@ -80,6 +84,7 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         self.fileTagMappings = fileTagMappings
         self.semanticTags = semanticTags
         self.confidenceScore = confidenceScore
+        self.ruleId = ruleId
     }
 
     public var totalFileCount: Int {

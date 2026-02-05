@@ -73,6 +73,23 @@ public struct GenerationStats: Codable, Sendable, Hashable {
     public var scanDuration: TimeInterval?
     public var estimatedCost: Decimal?
     
+    /// User productivity metrics
+    public var estimatedTimeSaved: TimeInterval {
+        // Assume 4 seconds saved per file organized (browsing, clicking, dragging, verifying)
+        // This is a conservative estimate for manual organization effort.
+        Double(filesScanned ?? 0) * 4.0
+    }
+    
+    /// Automatically calculated cost based on model and tokens if estimatedCost is nil
+    public var computedCost: Decimal {
+        if let cost = estimatedCost { return cost }
+        return CostCalculator.calculate(
+            model: model,
+            inputTokens: promptTokens ?? 0,
+            outputTokens: totalTokens
+        )
+    }
+    
     public init(
         duration: TimeInterval, 
         tps: Double, 

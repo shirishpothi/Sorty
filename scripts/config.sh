@@ -3,7 +3,7 @@
 # Project Settings
 PROJECT_NAME="Sorty"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCHEME="FileOrganiser"
+SCHEME="Sorty"
 
 # Build Paths
 BUILD_DIR="${PROJECT_DIR}/.build"
@@ -12,7 +12,7 @@ ARCHIVE_PATH="${BUILD_DIR}/${PROJECT_NAME}.xcarchive"
 APP_PATH="${RELEASE_DIR}/${PROJECT_NAME}.app"
 
 # Signing & Notarization
-APP_BUNDLE_ID="com.shirishpothi.Sorty"
+APP_BUNDLE_ID="com.sorty.app"
 TEAM_ID="XXXXXXXXXX" # Replace with actual Team ID
 NOTARIZATION_USERNAME="" # Optional: Set in env or Keychain
 NOTARIZATION_PASSWORD="" # Optional: Set in env or Keychain

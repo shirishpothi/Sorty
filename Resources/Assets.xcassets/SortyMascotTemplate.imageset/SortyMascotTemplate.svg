@@ -1,0 +1,25 @@
+<svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Robot head - pill shaped -->
+  <rect x="3" y="6" width="16" height="12" rx="5" fill="black"/>
+  
+  <!-- Antenna base -->
+  <rect x="10" y="2" width="2" height="4" fill="black"/>
+  
+  <!-- Antenna ball -->
+  <circle cx="11" cy="2" r="1.5" fill="black"/>
+  
+  <!-- Left ear -->
+  <circle cx="2" cy="12" r="2" fill="black"/>
+  
+  <!-- Right ear -->
+  <circle cx="20" cy="12" r="2" fill="black"/>
+  
+  <!-- Left eye -->
+  <circle cx="8" cy="11" r="2" fill="white"/>
+  
+  <!-- Right eye -->
+  <circle cx="14" cy="11" r="2" fill="white"/>
+  
+  <!-- Mouth (w-shape / cat mouth) -->
+  <path d="M8 15 L10 14 L11 15 L12 14 L14 15" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

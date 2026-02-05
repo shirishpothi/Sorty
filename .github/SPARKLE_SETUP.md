@@ -48,7 +48,7 @@ For signed updates to work, you must set up the following GitHub Secret:
 
 1. Developer pushes a version tag (e.g., `v1.0.6`)
 2. GitHub Actions workflow triggers automatically
-3. Workflow builds the app and creates `Sorty.zip`
+3. Workflow builds the app and creates `Sorty.pkg`
 4. `generate_appcast_ci.sh` signs the ZIP with Ed25519
 5. Signed `appcast.xml` is generated and attached to the release
 6. Appcast is published to GitHub Releases

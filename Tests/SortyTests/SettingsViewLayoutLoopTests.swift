@@ -18,6 +18,7 @@ final class SettingsViewLayoutLoopTests: XCTestCase {
             .environmentObject(settingsViewModel)
             .environmentObject(personaManager)
             .environmentObject(appState)
+            .environmentObject(CustomPersonaStore())
 
         // Two sizes that historically trigger AppKit/SwiftUI constraint churn.
         let sizes: [CGSize] = [

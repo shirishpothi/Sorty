@@ -9,7 +9,7 @@ import SwiftUI
 
 public struct WorkspaceHealthView: View {
     @EnvironmentObject var appState: AppState
-    @StateObject private var healthManager = WorkspaceHealthManager()
+    @EnvironmentObject var healthManager: WorkspaceHealthManager
     
     @State private var selectedDirectory: URL?
     @State private var isAnalyzing = false
@@ -17,6 +17,10 @@ public struct WorkspaceHealthView: View {
     @State private var selectedOpportunity: CleanupOpportunity?
     @State private var toastMessage: String?
     @State private var showToast = false
+    @State private var analysisStage: String?
+    @State private var analysisError: String?
+    @State private var analysisStartedAt: Date?
+    @State private var autoRefreshTask: Task<Void, Never>?
     
     public init() {}
     
@@ -29,6 +33,8 @@ public struct WorkspaceHealthView: View {
                     
                     // Directory Selector
                     directorySelector
+
+                    analysisStatusSection
                     
                     if selectedDirectory != nil {
                         // Stats Overview
@@ -38,6 +44,8 @@ public struct WorkspaceHealthView: View {
                         if let growth = healthManager.getGrowth(for: selectedDirectory?.path ?? "") {
                             growthSection(growth)
                         }
+
+                        topActionsSection
                         
                         // Cleanup Opportunities
                         opportunitiesSection
@@ -113,7 +121,11 @@ public struct WorkspaceHealthView: View {
         }
         .onChange(of: healthManager.fileChangeDetected) { _, _ in
             // Auto-refresh on file changes
-            Task { await refreshAnalysis() }
+            autoRefreshTask?.cancel()
+            autoRefreshTask = Task {
+                try? await Task.sleep(nanoseconds: 700_000_000)
+                await refreshAnalysis()
+            }
         }
     }
     
@@ -139,7 +151,7 @@ public struct WorkspaceHealthView: View {
     }
     
     private func healthScoreBadge(snapshot: DirectorySnapshot) -> some View {
-        let score = calculateHealthScore(snapshot: snapshot)
+        let score = healthManager.healthScore(for: snapshot.directoryPath)
         let color = scoreColor(score)
         let healthDescription = scoreDescription(score)
         
@@ -167,10 +179,18 @@ public struct WorkspaceHealthView: View {
             .accessibilityValue("\(score) out of 100, \(healthDescription)")
             .accessibilityAddTraits(.updatesFrequently)
             
-            Text("Health Score")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
+            VStack(spacing: 4) {
+                Text("Health Score")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+
+                Text("Based on opportunities, growth, and file age")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .accessibilityHidden(true)
+            }
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -192,9 +212,18 @@ public struct WorkspaceHealthView: View {
     
     private var directorySelector: some View {
         HStack {
-            Image(systemName: "folder.fill")
-                .foregroundStyle(.blue)
-                .font(.title2)
+            if let dir = selectedDirectory {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: dir.path))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: "/tmp"))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 28, height: 28)
+                    .opacity(0.6)
+            }
             
             if let dir = selectedDirectory {
                 Text(dir.lastPathComponent)
@@ -214,10 +243,63 @@ public struct WorkspaceHealthView: View {
             Button("Choose...") {
                 selectDirectory()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            .accessibilityIdentifier("WorkspaceHealthChooseDirectory")
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Analysis Status
+
+    private var analysisStatusSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if isAnalyzing {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(analysisStage ?? "Analyzing workspace…")
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    if let startedAt = analysisStartedAt {
+                        Text("Started \(startedAt, style: .relative)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(12)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Analyzing workspace")
+            } else if let lastAnalysis = healthManager.lastAnalysisDate {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Last analyzed \(lastAnalysis, style: .relative)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+
+            if let analysisError {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text(analysisError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                    Spacer()
+                }
+                .padding(12)
+                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Analysis error: \(analysisError)")
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isAnalyzing)
     }
     
     // MARK: - Stats Overview
@@ -317,36 +399,21 @@ public struct WorkspaceHealthView: View {
     
     // MARK: - Opportunities Section
     
-    private var opportunitiesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Cleanup Opportunities")
+    private var topActionsSection: some View {
+        let topActions = healthManager.topActionableOpportunities(for: selectedDirectory?.path)
+
+        if topActions.isEmpty {
+            return AnyView(EmptyView())
+        }
+
+        return AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Top Actions")
                     .font(.headline)
-                
-                Spacer()
-                
-                if !healthManager.opportunities.isEmpty {
-                    Text("\(healthManager.opportunities.filter { !$0.isDismissed }.count) found")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            let visibleOpportunities = healthManager.opportunities.filter { !$0.isDismissed }
-            
-            if visibleOpportunities.isEmpty {
-                HStack {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    Text("No cleanup opportunities found. Your workspace is healthy!")
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-            } else {
-                ForEach(visibleOpportunities) { opportunity in
-                    OpportunityCard(
-                        opportunity: opportunity,
-                        onAction: {
+
+                LazyVStack(spacing: 8) {
+                    ForEach(topActions) { opportunity in
+                        TopActionRow(opportunity: opportunity) {
                             if let action = opportunity.action,
                                UserDefaults.standard.bool(forKey: "skipPreview_\(action.rawValue.replacingOccurrences(of: " ", with: "_"))") {
                                 Task {
@@ -360,11 +427,79 @@ public struct WorkspaceHealthView: View {
                             } else {
                                 selectedOpportunity = opportunity
                             }
-                        },
-                        onDismiss: {
-                            healthManager.dismissOpportunity(opportunity)
                         }
-                    )
+                    }
+                }
+            }
+            .padding()
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        )
+    }
+
+    private var opportunitiesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Cleanup Opportunities")
+                    .font(.headline)
+                
+                Spacer()
+                
+                if !healthManager.activeOpportunities.isEmpty {
+                    Text("\(healthManager.activeOpportunities.count) found")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            let visibleOpportunities = healthManager.sortedActiveOpportunities(for: selectedDirectory?.path)
+            let grouped = Dictionary(grouping: visibleOpportunities, by: { $0.priority })
+            let orderedPriorities: [CleanupOpportunity.Priority] = [.critical, .high, .medium, .low]
+
+            if visibleOpportunities.isEmpty {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("No cleanup opportunities found. Your workspace looks healthy.")
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+            } else {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    ForEach(orderedPriorities, id: \.self) { priority in
+                        if let items = grouped[priority], !items.isEmpty {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(priority.displayName)
+                                    .font(.caption.bold())
+                                    .foregroundStyle(priority.color)
+
+                                LazyVStack(spacing: 8) {
+                                    ForEach(items) { opportunity in
+                                        OpportunityCard(
+                                            opportunity: opportunity,
+                                            onAction: {
+                                                if let action = opportunity.action,
+                                                   UserDefaults.standard.bool(forKey: "skipPreview_\(action.rawValue.replacingOccurrences(of: " ", with: "_"))") {
+                                                    Task {
+                                                        try? await healthManager.performAction(action, for: opportunity)
+                                                        await refreshAnalysis()
+                                                        await MainActor.run {
+                                                            toastMessage = "Action completed"
+                                                            showToast = true
+                                                        }
+                                                    }
+                                                } else {
+                                                    selectedOpportunity = opportunity
+                                                }
+                                            },
+                                            onDismiss: {
+                                                healthManager.dismissOpportunity(opportunity)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -420,9 +555,11 @@ public struct WorkspaceHealthView: View {
                     .foregroundStyle(.secondary)
                     .padding()
             } else {
-                ForEach(healthManager.insights.prefix(5)) { insight in
-                    InsightRow(insight: insight) {
-                        healthManager.markInsightAsRead(insight)
+                LazyVStack(spacing: 8) {
+                    ForEach(healthManager.insights.prefix(5)) { insight in
+                        InsightRow(insight: insight) {
+                            healthManager.markInsightAsRead(insight)
+                        }
                     }
                 }
             }
@@ -434,26 +571,32 @@ public struct WorkspaceHealthView: View {
     // MARK: - Empty State
     
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             Image(systemName: "heart.text.square")
-                .font(.system(size: 64))
-                .foregroundStyle(.tertiary)
-            
-            Text("Select a Directory")
-                .font(.title2.bold())
-            
-            Text("Choose a directory to analyze its health and discover cleanup opportunities")
+                .font(.system(size: 48))
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 400)
+                .opacity(0.7)
+            
+            VStack(spacing: 8) {
+                Text("Select a Directory")
+                    .font(.title2.bold())
+                
+                Text("Choose a directory to analyze its health and discover cleanup opportunities")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 350)
+            }
             
             Button("Choose Directory") {
                 selectDirectory()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.onboardingPill)
+            .controlSize(.large)
+            .accessibilityIdentifier("WorkspaceHealthEmptyChooseDirectory")
         }
-        .frame(maxWidth: .infinity)
-        .padding(64)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.windowBackgroundColor))
     }
     
     // MARK: - Helpers
@@ -474,72 +617,48 @@ public struct WorkspaceHealthView: View {
     
     private func refreshAnalysis() async {
         guard let dir = selectedDirectory else { return }
-        
+
         isAnalyzing = true
-        defer { isAnalyzing = false }
-        
-        // Scan files
-        let files = scanFiles(at: dir)
-        
-        // Take snapshot and analyze
+        analysisStage = "Scanning files…"
+        analysisError = nil
+        analysisStartedAt = Date()
+
+        defer {
+            isAnalyzing = false
+            analysisStage = nil
+            analysisStartedAt = nil
+        }
+
+        let directoryModDate = healthManager.directoryModDate(for: dir.path)
+        let cachedFiles = healthManager.cachedFilesIfFresh(path: dir.path, directoryModDate: directoryModDate)
+        let ignoredPaths = healthManager.config.ignoredPaths
+
+        let files: [FileItem]
+        do {
+            if let cachedFiles {
+                files = cachedFiles
+            } else {
+                files = try await Task.detached {
+                    try WorkspaceHealthManager.scanFiles(at: dir, ignoredPaths: ignoredPaths)
+                }.value
+                await MainActor.run {
+                    healthManager.updateScanCache(path: dir.path, directoryModDate: directoryModDate, files: files)
+                }
+            }
+        } catch {
+            analysisError = error.localizedDescription
+            return
+        }
+
+        if healthManager.isAnalysisUpToDate(path: dir.path, files: files) {
+            return
+        }
+
+        analysisStage = "Analyzing workspace…"
+
         await healthManager.takeSnapshot(at: dir.path, files: files)
         await healthManager.analyzeDirectory(path: dir.path, files: files)
-    }
-    
-    private func scanFiles(at url: URL) -> [FileItem] {
-        var files: [FileItem] = []
-        let fm = FileManager.default
-        
-        guard let enumerator = fm.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return files
-        }
-        
-        for case let fileURL as URL in enumerator {
-            let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey, .isDirectoryKey])
-            
-            let item = FileItem(
-                path: fileURL.path,
-                name: fileURL.lastPathComponent,
-                extension: fileURL.pathExtension,
-                size: Int64(resourceValues?.fileSize ?? 0),
-                isDirectory: resourceValues?.isDirectory ?? false,
-                creationDate: resourceValues?.creationDate,
-                modificationDate: resourceValues?.contentModificationDate
-            )
-            
-            files.append(item)
-        }
-        
-        return files
-    }
-    
-    private func calculateHealthScore(snapshot: DirectorySnapshot) -> Int {
-        var score = 100
-        
-        // Penalize for unorganized files
-        let unorganizedRatio = Double(snapshot.unorganizedCount) / max(Double(snapshot.totalFiles), 1)
-        score -= Int(unorganizedRatio * 30)
-        
-        // Penalize for high file count
-        if snapshot.totalFiles > 1000 {
-            score -= 10
-        }
-        
-        // Penalize for very old average age
-        let avgDays = snapshot.averageFileAge / 86400
-        if avgDays > 365 {
-            score -= 15
-        }
-        
-        // Consider opportunities
-        let opportunityCount = healthManager.opportunities.filter { !$0.isDismissed }.count
-        score -= min(opportunityCount * 5, 25)
-        
-        return max(0, min(100, score))
+        healthManager.markAnalysisComplete(path: dir.path, files: files)
     }
     
     private func scoreColor(_ score: Int) -> Color {
@@ -568,6 +687,10 @@ private struct StatCard: View {
             
             Text(value)
                 .font(.title2.bold())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(color.opacity(0.1), in: Capsule())
+                .foregroundStyle(color)
             
             Text(title)
                 .font(.caption)
@@ -576,6 +699,8 @@ private struct StatCard: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
 
@@ -592,7 +717,10 @@ private struct GrowthMetric: View {
             
             Text(value)
                 .font(.headline)
-                .foregroundColor(isPositive ? .green : .red)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background((isPositive ? Color.green : Color.red).opacity(0.1), in: Capsule())
+                .foregroundStyle(isPositive ? .green : .red)
         }
     }
 }
@@ -631,6 +759,12 @@ private struct OpportunityCard: View {
                         .font(.caption)
                         .foregroundStyle(.green)
                 }
+
+                if opportunity.confidence < 100 {
+                    Text("Confidence: \(opportunity.confidence)%")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
             
             Spacer()
@@ -642,8 +776,8 @@ private struct OpportunityCard: View {
                     } label: {
                         Image(systemName: "wand.and.stars")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(.onboardingPill(size: .small))
+                    .accessibilityLabel("Run \(opportunity.type.rawValue) action")
                 }
                 
                 Button {
@@ -651,12 +785,14 @@ private struct OpportunityCard: View {
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                .accessibilityLabel("Dismiss \(opportunity.type.rawValue)")
             }
         }
         .padding()
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(opportunity.type.rawValue), priority \(opportunity.priority.displayName)")
     }
 }
 
@@ -687,8 +823,42 @@ private struct InsightRow: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityLabel("Mark insight as read")
             }
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct TopActionRow: View {
+    let opportunity: CleanupOpportunity
+    let onAction: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: opportunity.type.icon)
+                .foregroundStyle(opportunity.type.color)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(opportunity.type.rawValue)
+                    .font(.subheadline.bold())
+                Text(opportunity.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button("Fix") {
+                onAction()
+            }
+            .buttonStyle(.onboardingPill(size: .small))
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Top action: \(opportunity.type.rawValue)")
     }
 }

@@ -20,6 +20,8 @@ public struct ProviderLogoView: View {
         // 2. Images subdirectory (SPM .copy() resources - swift build)
         // 3. Direct bundle resource lookup
         if let nsImage = SortyResources.image(named: provider.logoImageName) {
+            // Ensure logo assets render in full color even if the image is marked as template.
+            nsImage.isTemplate = false
             return Image(nsImage: nsImage)
         }
 
@@ -29,8 +31,10 @@ public struct ProviderLogoView: View {
 
     public var body: some View {
         providerImage
+            .renderingMode(provider.usesSystemImage ? .template : .original)
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)
+            .foregroundStyle(provider.usesSystemImage ? provider.brandColor : .primary)
     }
 }

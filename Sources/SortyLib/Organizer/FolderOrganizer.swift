@@ -34,6 +34,106 @@ public enum OrganizationState: Equatable, Sendable {
             return false
         }
     }
+    
+    /// Returns true if a transition from `from` state to `to` state is valid
+    public static func canTransition(from: OrganizationState, to: OrganizationState) -> Bool {
+        // Same state is always valid (no-op)
+        if from == to {
+            return true
+        }
+        
+        // From idle: can go to scanning or error
+        if from == .idle {
+            switch to {
+            case .idle, .scanning, .error:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        // From scanning: can go to organizing, idle (cancel), or error
+        if from == .scanning {
+            switch to {
+            case .scanning, .organizing, .idle, .error:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        // From organizing: can go to ready, idle (cancel), or error
+        if from == .organizing {
+            switch to {
+            case .organizing, .ready, .idle, .error:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        // From ready: can go to applying, idle (cancel), organizing (regenerate), or error
+        if from == .ready {
+            switch to {
+            case .ready, .applying, .idle, .organizing, .error:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        // From applying: can go to completed, idle (cancel), or error
+        if from == .applying {
+            switch to {
+            case .applying, .completed, .idle, .error:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        // From completed: can only go to idle (reset)
+        if from == .completed {
+            switch to {
+            case .completed, .idle:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        // From error: can go to idle (retry/reset), or retry the previous operation
+        if case .error = from {
+            switch to {
+            case .error, .idle, .scanning, .organizing:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        return false
+    }
+    
+    /// Human-readable description of the state
+    public var description: String {
+        switch self {
+        case .idle:
+            return "Idle"
+        case .scanning:
+            return "Scanning"
+        case .organizing:
+            return "Organizing"
+        case .ready:
+            return "Ready"
+        case .applying:
+            return "Applying"
+        case .completed:
+            return "Completed"
+        case .error(let error):
+            return "Error: \(error.localizedDescription)"
+        }
+    }
 }
 
 public enum OrganizationError: LocalizedError, Equatable {
@@ -186,12 +286,87 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var insightHistory: [AIInsight] = []
     private var lastInsightExtraction: Date = .distantPast
     private let insightExtractionInterval: TimeInterval = 0.8 // Throttle to avoid too frequent updates
+    
+    // MARK: - AI Insights Cache
+    
+    /// Cache for pre-computed AI insights to avoid re-parsing during UI rendering
+    private var insightsCache: InsightsCache?
+    
+    /// Structure to hold cached insights data
+    private struct InsightsCache {
+        let streamingContentHash: Int
+        let insights: [AIInsight]
+        let currentInsight: String
+        let timestamp: Date
+        
+        var isValid: Bool {
+            Date().timeIntervalSince(timestamp) < 2.0 // Cache valid for 2 seconds
+        }
+    }
 
     // Timeout messaging
     @Published public var elapsedTime: TimeInterval = 0
     @Published public var showTimeoutMessage: Bool = false
     private var startTime: Date?
     private var timeoutTask: Task<Void, Never>?
+    
+    // MARK: - Batch Update Mechanism
+    
+    /// Batches multiple @Published property updates into a single objectWillChange.send()
+    /// This prevents multiple UI refresh cycles when updating related properties
+    @MainActor
+    public func withBatchUpdates(_ updates: () -> Void) {
+        objectWillChange.send()
+        updates()
+    }
+    
+    /// Perform batch updates asynchronously
+    @MainActor
+    public func withBatchUpdatesAsync(_ updates: () async -> Void) async {
+        objectWillChange.send()
+        await updates()
+    }
+    
+    // MARK: - State Transition Validation
+    
+    /// Validates and performs a state transition
+    /// - Parameters:
+    ///   - newState: The target state to transition to
+    ///   - force: If true, bypasses validation (use with caution)
+    /// - Returns: True if the transition was successful
+    @MainActor
+    @discardableResult
+    public func transition(to newState: OrganizationState, force: Bool = false) -> Bool {
+        let currentState = state
+        
+        // Always allow same state (no-op)
+        if currentState == newState {
+            state = newState
+            return true
+        }
+        
+        // Validate transition
+        let isValid = force || OrganizationState.canTransition(from: currentState, to: newState)
+        
+        if isValid {
+            state = newState
+            return true
+        } else {
+            // Log invalid transition attempt
+            LogManager.shared.log(
+                "Invalid state transition attempted: \(currentState.description) -> \(newState.description)",
+                level: .warning,
+                category: "FolderOrganizer"
+            )
+            return false
+        }
+    }
+    
+    /// Convenience method to reset to idle state
+    @MainActor
+    public func resetToIdleState() {
+        _ = transition(to: .idle)
+    }
 
     // Track current directory for status checks
     @Published public var currentDirectory: URL?
@@ -201,6 +376,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     // Track file count for better progress estimation
     public var scannedFileCount: Int = 0
+    @Published public var scannedFiles: [FileItem] = []
+    private var scannedFilePathLookup: [String: [String]] = [:]
 
     // CRITICAL: Cancellation token - must be checked frequently
     private var currentTask: Task<Void, Error>?
@@ -276,10 +453,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             self.lastChunkTime = Date()
 
             if isFirstChunk {
-                self.isStreaming = true
-                self.organizationStage = "Receiving AI response..."
-                self.progress = 0.30
-                self.displayStreamingContent = self.streamingContent
+                // Batch all initial state updates together
+                self.withBatchUpdates {
+                    self.isStreaming = true
+                    self.organizationStage = "Receiving AI response..."
+                    self.progress = 0.30
+                    self.displayStreamingContent = self.streamingContent
+                }
                 
                 // Start steady progress task for smooth animation
                 self.startSteadyProgressTask()
@@ -302,7 +482,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.progress = contentProgress
             }
             
-            // Extract insights from streaming content (throttled)
+            // Extract insights from streaming content (throttled and cached)
             self.extractInsightsIfNeeded()
         }
     }
@@ -336,7 +516,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     
     /// Extract meaningful insights from the streaming AI response
-    /// This is throttled to avoid performance impact
+    /// This is throttled and uses caching to avoid performance impact
     private func extractInsightsIfNeeded() {
         let now = Date()
         guard now.timeIntervalSince(lastInsightExtraction) >= insightExtractionInterval else { return }
@@ -346,17 +526,55 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let content = streamingContent
         guard content.count > 50 else { return }
         
+        // Check cache first
+        let contentHash = content.hashValue
+        if let cache = insightsCache, 
+           cache.streamingContentHash == contentHash,
+           cache.isValid {
+            // Use cached insights
+            withBatchUpdates {
+                self.currentInsight = cache.currentInsight
+                self.insightHistory = cache.insights
+            }
+            return
+        }
+        
         // Look for meaningful patterns in the content
         let insight = extractInsight(from: content)
         if let insight = insight, insight.text != currentInsight {
-            currentInsight = insight.text
-            
-            // Keep history limited to last 5 insights
-            if insightHistory.count >= 5 {
-                insightHistory.removeFirst()
+            // Batch update all insight-related properties at once
+            withBatchUpdates {
+                self.currentInsight = insight.text
+                
+                // Keep history limited to last 5 insights
+                if self.insightHistory.count >= 5 {
+                    self.insightHistory.removeFirst()
+                }
+                self.insightHistory.append(insight)
             }
-            insightHistory.append(insight)
+            
+            // Update cache
+            insightsCache = InsightsCache(
+                streamingContentHash: contentHash,
+                insights: insightHistory,
+                currentInsight: insight.text,
+                timestamp: Date()
+            )
         }
+    }
+    
+    /// Get cached insights if available, otherwise returns current insights
+    /// Use this from UI to avoid re-parsing during render
+    public func getCachedInsights() -> (current: String, history: [AIInsight]) {
+        if let cache = insightsCache, cache.isValid {
+            return (cache.currentInsight, cache.insights)
+        }
+        return (currentInsight, insightHistory)
+    }
+    
+    /// Invalidate the insights cache (call when streaming content significantly changes)
+    public func invalidateInsightsCache() {
+        insightsCache = nil
     }
     
     /// Parse streaming content to find meaningful insights
@@ -412,13 +630,31 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     private func findScannedFilePath(for fileName: String) -> String? {
-        // Search through scanned files to find a matching path
-        // We can only do this if we have the current plan or scanned files list
         guard currentDirectory != nil else { return nil }
-        
-        // This is a simplified search - in a real app we might want to cache these
-        // or have a more efficient lookup in the DirectoryScanner
-        return nil // Placeholder for now - will enhance if we have access to file list
+        let sanitized = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "'", with: "")
+        let lastComponent = sanitized.contains("/")
+            ? URL(fileURLWithPath: sanitized).lastPathComponent
+            : sanitized
+        let key = lastComponent.lowercased()
+        if let matches = scannedFilePathLookup[key], !matches.isEmpty {
+            if matches.count == 1 {
+                return matches[0]
+            }
+            if let basePath = currentDirectory?.path,
+               let preferred = matches.first(where: { $0.hasPrefix(basePath + "/") }) {
+                return preferred
+            }
+            return matches[0]
+        }
+        return nil
+    }
+    
+    private func setScannedFiles(_ files: [FileItem]) {
+        scannedFiles = files
+        scannedFilePathLookup = Dictionary(grouping: files, by: { $0.displayName.lowercased() })
+            .mapValues { $0.map { $0.path } }
     }
     
     private func extractFolderInsight(from text: String) -> AIInsight? {
@@ -610,6 +846,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true)
             )
             scannedFileCount = filesFound.count
+            setScannedFiles(filesFound)
 
             updateProgress(0.15, stage: "Found \(filesFound.count) files")
 
@@ -737,22 +974,43 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             // In rename-only mode, we don't need to validate folder depth limits strictly
             // but we still validate the overall JSON structure.
-            try validator.validate(
-                plan, 
-                at: directory, 
-                allowedStorageLocations: storageLocationsManager?.enabledLocations ?? [],
-                maxTopLevelFolders: aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
-            )
+            let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
+            let allowedLocations = storageLocationsManager?.enabledLocations ?? []
+            
+            var validatedPlanFromRetry: OrganizationPlan? = nil
+            do {
+                try validator.validate(plan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: maxFolders)
+            } catch let validationError as ValidationError {
+                // Attempt one retry for recoverable validation errors
+                if let retryPlan = await retryWithValidationEnhancement(
+                    files: files,
+                    client: client,
+                    validationError: validationError,
+                    directory: directory,
+                    instructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature,
+                    imagePayload: imagePayload,
+                    maxTopLevelFolders: maxFolders,
+                    allowedStorageLocations: allowedLocations
+                ) {
+                    validatedPlanFromRetry = retryPlan
+                } else {
+                    throw validationError
+                }
+            }
+            
+            let planAfterValidation = validatedPlanFromRetry ?? plan
 
             try checkCancellation()
             
             // Post-AI exclusion validation
-            var validatedPlan = plan
+            var validatedPlan = planAfterValidation
             if let exclusionRules = exclusionRules {
                 let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
                 self.exclusionEnforcer = enforcer
                 
-                let validationResult = enforcer.validate(plan)
+                let validationResult = enforcer.validate(planAfterValidation)
                 
                 if validationResult.hasViolations {
                     LogManager.shared.log("Exclusion violations detected: \(validationResult.violationCount) files", category: "FolderOrganizer")
@@ -778,7 +1036,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         }
                     } else {
                         // Retry failed, use cleaned plan
-                        validatedPlan = validationResult.cleanedPlan ?? plan
+                        validatedPlan = validationResult.cleanedPlan ?? planAfterValidation
                     }
                 }
             }
@@ -989,28 +1247,108 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
     
+    private func retryWithValidationEnhancement(
+        files: [FileItem],
+        client: AIClientProtocol,
+        validationError: ValidationError,
+        directory: URL,
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?,
+        imagePayload: [String: Data],
+        maxTopLevelFolders: Int,
+        allowedStorageLocations: [StorageLocation]
+    ) async -> OrganizationPlan? {
+        let enhancement: String
+        switch validationError {
+        case .tooManyFolders(let count, let max):
+            LogManager.shared.log("Retrying: too many folders (\(count) > \(max))", category: "FolderOrganizer")
+            updateProgress(0.87, stage: "Too many folders, retrying...")
+            enhancement = """
+            
+            CRITICAL CORRECTION REQUIRED:
+            Your previous response created \(count) top-level folders, but the maximum allowed is \(max).
+            You MUST consolidate categories to produce at most \(max) top-level folders.
+            Merge related categories together. For example, combine "Work Documents" and "Reports" into "Work", or group smaller categories into a single "Misc" folder.
+            """
+        case .pathExists(let path):
+            let fileName = URL(fileURLWithPath: path).lastPathComponent
+            LogManager.shared.log("Retrying: path exists conflict (\(fileName))", category: "FolderOrganizer")
+            updateProgress(0.87, stage: "Folder name conflict, retrying...")
+            enhancement = """
+            
+            CRITICAL CORRECTION REQUIRED:
+            You suggested a folder named "\(fileName)", but a FILE with that exact name already exists in the directory.
+            You MUST NOT use "\(fileName)" as a folder name.
+            Choose a different folder name that does not conflict with existing files. For example, add a suffix like "\(fileName) Files" or use a different category name.
+            """
+        default:
+            return nil
+        }
+        
+        let enhancedPrompt = instructions + enhancement
+        
+        do {
+            let retryPlan: OrganizationPlan
+            if !imagePayload.isEmpty {
+                retryPlan = try await client.analyzeWithImages(
+                    files: files,
+                    imageData: imagePayload,
+                    customInstructions: enhancedPrompt,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            } else {
+                retryPlan = try await client.analyze(
+                    files: files,
+                    customInstructions: enhancedPrompt,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature
+                )
+            }
+            
+            // Validate the retry plan
+            try validator.validate(retryPlan, at: directory, allowedStorageLocations: allowedStorageLocations, maxTopLevelFolders: maxTopLevelFolders)
+            LogManager.shared.log("Validation retry succeeded", category: "FolderOrganizer")
+            return retryPlan
+        } catch {
+            LogManager.shared.log("Validation retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
+            return nil
+        }
+    }
+    
     // MARK: - State Updates with Progress
 
     @MainActor
     private func updateState(_ newState: OrganizationState, stage: String, progress: Double) {
         guard !isCancellationRequested else { return }
-        self.state = newState
-        self.organizationStage = stage
+        
+        // Validate state transition
+        let didTransition = transition(to: newState)
+        guard didTransition else { return }
+        
+        // Update other properties
+        organizationStage = stage
         self.progress = progress
     }
 
     @MainActor
     private func updateProgress(_ progress: Double, stage: String? = nil) {
         guard !isCancellationRequested else { return }
-        self.progress = progress
         if let stage = stage {
-            self.organizationStage = stage
+            // Batch when updating both progress and stage
+            withBatchUpdates {
+                self.progress = progress
+                self.organizationStage = stage
+            }
+        } else {
+            self.progress = progress
         }
     }
 
     // MARK: - Incremental Organization (for watched folders)
 
-    public func organizeIncremental(directory: URL, specificFiles: [String]? = nil, customPrompt: String? = nil, temperature: Double? = nil) async throws {
+    public func organizeIncremental(directory: URL, specificFiles: [String]? = nil, customPrompt: String? = nil, temperature: Double? = nil, providerOverride: AIProvider? = nil, modelOverride: String? = nil) async throws {
         guard !isOperationInProgress() else {
             DebugLogger.log("Incremental organization blocked: Already in progress")
             return
@@ -1020,7 +1358,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         isCancellationRequested = false
 
         currentTask = Task {
-            try await performIncrementalOrganization(directory: directory, specificFiles: specificFiles, customPrompt: customPrompt, temperature: temperature)
+            try await performIncrementalOrganization(directory: directory, specificFiles: specificFiles, customPrompt: customPrompt, temperature: temperature, providerOverride: providerOverride, modelOverride: modelOverride)
         }
 
         do {
@@ -1030,9 +1368,23 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    private func performIncrementalOrganization(directory: URL, specificFiles: [String]?, customPrompt: String?, temperature: Double?) async throws {
-        guard let client = aiClient else {
-            throw OrganizationError.clientNotConfigured
+    private func performIncrementalOrganization(directory: URL, specificFiles: [String]?, customPrompt: String?, temperature: Double?, providerOverride: AIProvider? = nil, modelOverride: String? = nil) async throws {
+        // Use override client if specified, otherwise use default
+        let client: AIClientProtocol
+        if let providerOverride = providerOverride, let modelOverride = modelOverride {
+            var overrideConfig = self.aiConfig ?? AIConfig.default
+            overrideConfig.provider = providerOverride
+            overrideConfig.model = modelOverride
+            if let apiKey = KeychainManager.get(key: providerOverride.keychainKey) {
+                overrideConfig.apiKey = apiKey
+            }
+            overrideConfig.apiURL = providerOverride.defaultAPIURL
+            client = try AIClientFactory.createClient(config: overrideConfig)
+        } else {
+            guard let defaultClient = aiClient else {
+                throw OrganizationError.clientNotConfigured
+            }
+            client = defaultClient
         }
 
         currentDirectory = directory
@@ -1052,6 +1404,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     files.append(item)
                 }
             }
+            setScannedFiles(files)
         } else {
             // Fallback to scanning root
             updateState(.scanning, stage: "Scanning for new files...", progress: 0.1)
@@ -1064,6 +1417,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 let relativePath = $0.path.replacingOccurrences(of: directory.path + "/", with: "")
                 return !relativePath.contains("/") // Only files in root
             }
+            setScannedFiles(files)
         }
 
         if let exclusionRules = exclusionRules {
@@ -1181,6 +1535,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 files.append(item)
             }
         }
+        setScannedFiles(files)
 
         guard !files.isEmpty else {
             await MainActor.run {
@@ -1344,6 +1699,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             
             // Track rule applications for learning feedback
             if let learningsObserver = learningsObserver, !dryRun {
+                // Pre-start the session so rule applications can be recorded
+                learningsObserver.startSession(folderPath: baseURL.path, historyEntryId: nil, operations: operations)
                 recordRuleApplications(for: plan, operations: operations, observer: learningsObserver)
             }
 
@@ -1507,10 +1864,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Record which files were moved by which inferred rules (for learning feedback)
     private func recordRuleApplications(for plan: OrganizationPlan, operations: [FileSystemManager.FileOperation], observer: ContinuousLearningObserver) {
+        learningsManager?.loadProfileIfNeededForCollection()
         guard let profile = learningsManager?.currentProfile else { return }
         
         let activeRules = profile.inferredRules.filter { $0.isEnabled }
         guard !activeRules.isEmpty else { return }
+        
+        // Build a map of filename to ruleId from the plan suggestions
+        var fileToRuleMap: [String: String] = [:]
+        
+        func traverseSuggestions(_ suggestions: [FolderSuggestion]) {
+            for suggestion in suggestions {
+                for file in suggestion.files {
+                    if let ruleId = suggestion.ruleId {
+                        fileToRuleMap[file.displayName] = ruleId
+                    }
+                }
+                traverseSuggestions(suggestion.subfolders)
+            }
+        }
+        
+        traverseSuggestions(plan.suggestions)
         
         for operation in operations {
             guard operation.type == .moveFile || operation.type == .renameFile else { continue }
@@ -1518,7 +1892,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             
             let fileName = URL(fileURLWithPath: operation.sourcePath).lastPathComponent
             
-            // Find matching rule by pattern (heuristic: check if rule's regex pattern matches the filename)
+            // Priority 1: Use specific rule mapping from the AI plan if available
+            if let ruleId = fileToRuleMap[fileName] {
+                observer.recordRuleApplication(destinationPath: destPath, ruleId: ruleId)
+                continue
+            }
+            
+            // Priority 2: Try to match the rule's regex pattern against the filename (heuristic backup)
             for rule in activeRules {
                 // Try to match the rule's regex pattern against the filename
                 if let regex = try? NSRegularExpression(pattern: rule.pattern, options: .caseInsensitive) {
@@ -1843,30 +2223,34 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public func reset() {
         cancelInternal()
 
-        state = .idle
-        progress = 0.0
-        currentPlan = nil
-        errorMessage = nil
-        streamingContent = ""
-        displayStreamingContent = ""
-        organizationStage = ""
-        isStreaming = false
-        showTimeoutMessage = false
-        elapsedTime = 0
-        currentDirectory = nil
-        scannedFileCount = 0
-        isCancellationRequested = false
-        userInitiatedAction = false
-        lastDisplayUpdate = .distantPast
-        lastChunkTime = .distantPast
+        // Batch all reset operations into a single UI update cycle
+        withBatchUpdates {
+            state = .idle
+            progress = 0.0
+            currentPlan = nil
+            errorMessage = nil
+            streamingContent = ""
+            displayStreamingContent = ""
+            organizationStage = ""
+            isStreaming = false
+            showTimeoutMessage = false
+            elapsedTime = 0
+            currentDirectory = nil
+            scannedFileCount = 0
+            isCancellationRequested = false
+            userInitiatedAction = false
+            lastDisplayUpdate = .distantPast
+            lastChunkTime = .distantPast
+            
+            // Clear AI insights and cache
+            currentInsight = ""
+            insightHistory = []
+            lastInsightExtraction = .distantPast
+            insightsCache = nil
+        }
         
-        // Stop background tasks
+        // Stop background tasks (outside batch as it's not a @Published property)
         stopSteadyProgressTask()
-        
-        // Clear AI insights
-        currentInsight = ""
-        insightHistory = []
-        lastInsightExtraction = .distantPast
     }
     private func recordPlanRules(_ plan: OrganizationPlan, observer: ContinuousLearningObserver) {
         // Recursively record rules

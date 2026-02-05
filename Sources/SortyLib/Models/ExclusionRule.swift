@@ -542,10 +542,8 @@ public class ExclusionRulesManager: ObservableObject {
             // Fallback basic rules
             rules = [
                 ExclusionRule(type: .folderName, pattern: ".git", description: "Git repositories", isBuiltIn: true),
-                ExclusionRule(type: .folderName, pattern: ".svn", description: "SVN repositories", isBuiltIn: true),
                 ExclusionRule(type: .folderName, pattern: "node_modules", description: "Node modules", isBuiltIn: true),
-                ExclusionRule(type: .fileExtension, pattern: "app", description: "Application bundles", isBuiltIn: true),
-                ExclusionRule(type: .hiddenFiles, pattern: "", description: "Hidden files", isBuiltIn: true),
+                ExclusionRule(type: .folderName, pattern: "Library", description: "macOS Library folder", isBuiltIn: true),
             ]
         }
         saveRules()

@@ -11,8 +11,8 @@ CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS := -j $(CORES)
 
 # Swift build flags for optimization
-SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode
-SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization
+SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode -Xswiftc -incremental --disable-sandbox
+SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
 
 build:
 	@chmod +x scripts/build.sh
@@ -37,16 +37,16 @@ dev:
 # runs the complete test suite with parallel execution
 test:
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
-	@swift test $(PARALLEL_FLAGS)
+	@swift test $(PARALLEL_FLAGS) --disable-sandbox
 
 # Quick test run - excludes slow UI/integration tests
 test-fast:
 	@echo "🧪 Running fast unit tests only..."
-	@swift test $(PARALLEL_FLAGS) --filter SortyTests
+	@swift test $(PARALLEL_FLAGS) --disable-sandbox --filter SortyTests
 
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
-	@swift test --enable-code-coverage $(PARALLEL_FLAGS)
+	@swift test --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
 	@echo "🖥️  Running UI tests..."
 	@chmod +x scripts/run_tests.sh
 	@./scripts/run_tests.sh --ui
@@ -85,7 +85,7 @@ clean:
 # Build the learnings CLI tool
 cli:
 	@echo "🔨 Building learnings CLI with $(CORES) parallel jobs..."
-	@swift build --product learnings $(PARALLEL_FLAGS)
+	@swift build --product learnings $(PARALLEL_FLAGS) --disable-sandbox
 	@echo "✅ CLI built at .build/debug/learnings"
 
 # Install app to /Applications

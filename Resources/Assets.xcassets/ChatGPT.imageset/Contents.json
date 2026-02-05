@@ -1,23 +1,15 @@
 {
   "images" : [
     {
-      "filename" : "ChatGPT.png",
-      "idiom" : "universal",
-      "scale" : "1x"
-    },
-    {
-      "filename" : "ChatGPT@2x.png",
-      "idiom" : "universal",
-      "scale" : "2x"
-    },
-    {
-      "filename" : "ChatGPT@3x.png",
-      "idiom" : "universal",
-      "scale" : "3x"
+      "filename" : "ChatGPT.svg",
+      "idiom" : "universal"
     }
   ],
   "info" : {
     "author" : "xcode",
     "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : true
   }
 }

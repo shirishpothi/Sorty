@@ -29,15 +29,11 @@ public struct FolderThumbnailView: View {
                     .aspectRatio(contentMode: .fit)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             } else if isLoading {
-                // Show folder icon while loading
-                Image(systemName: "folder.fill")
-                    .font(.system(size: size.width * 0.6))
-                    .foregroundStyle(.blue)
+                // Show Sorty folder icon while loading
+                SortyFolderIcon(size: size.width)
             } else {
                 // Fallback folder icon
-                Image(systemName: "folder.fill")
-                    .font(.system(size: size.width * 0.6))
-                    .foregroundStyle(.blue)
+                SortyFolderIcon(size: size.width)
             }
         }
         .frame(width: size.width, height: size.height)
@@ -75,12 +71,9 @@ public struct CompactFolderThumbnail: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: size, height: size)
             } else if url == nil {
-                ActualFolderIcon(size: size)
+                SortyFolderIcon(size: size)
             } else {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: size * 0.8))
-                    .foregroundStyle(.blue)
-                    .frame(width: size, height: size)
+                SortyFolderIcon(size: size)
             }
         }
         .task(id: url) {
@@ -94,18 +87,22 @@ public struct CompactFolderThumbnail: View {
 }
 
 /// Actual macOS folder icon for new folders (using cached system icon)
-private struct ActualFolderIcon: View {
+private struct SortyFolderIcon: View {
     let size: CGFloat
-    
-    private static let folderIcon: NSImage = {
-        NSWorkspace.shared.icon(forFile: "/tmp")
-    }()
-    
+
     var body: some View {
-        Image(nsImage: Self.folderIcon)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: size, height: size)
+        if let nsImage = SortyResources.image(named: "SortyFolder") {
+            Image(nsImage: nsImage)
+                .renderingMode(.original)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: "folder.fill")
+                .font(.system(size: size * 0.8))
+                .foregroundStyle(.blue)
+                .frame(width: size, height: size)
+        }
     }
 }
 

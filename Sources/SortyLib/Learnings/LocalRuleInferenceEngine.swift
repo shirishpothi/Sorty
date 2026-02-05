@@ -550,10 +550,10 @@ extension LearningsManager {
         
         // Run inference if:
         // 1. More than 24 hours since last inference, OR
-        // 2. We have 5+ new corrections since last inference
+        // 2. We have 2+ new corrections since last inference (Eager learning)
         let recentCorrections = profile.postOrganizationChanges.filter { $0.timestamp > lastInferenceDate }
         
-        if hoursSinceLastInference > 24 || recentCorrections.count >= 5 {
+        if hoursSinceLastInference > 24 || recentCorrections.count >= 2 {
             await runLocalRuleInference()
             UserDefaults.standard.set(Date(), forKey: "lastLocalRuleInference")
         }

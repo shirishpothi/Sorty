@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Sorty. This document provides com
 
 ## Code of Conduct
 
-This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold these standards. Report violations to conduct@sorty.app.
+This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold these standards. Report violations via [GitHub Discussions](https://github.com/shirishpothi/Sorty/discussions).
 
 ## Development Environment
 
@@ -322,8 +322,8 @@ When adding features that affect users:
 
 - **General questions**: Open a GitHub Discussion
 - **Bug reports**: Use the bug report template
-- **Security issues**: Email security@sorty.app (do not open public issues)
-- **Code of Conduct violations**: Email conduct@sorty.app
+- **Security issues**: Use [GitHub's private vulnerability reporting](https://github.com/shirishpothi/Sorty/security/advisories/new) (do not open public issues)
+- **Code of Conduct violations**: Report via [GitHub Discussions](https://github.com/shirishpothi/Sorty/discussions)
 
 ## License
 

@@ -7,11 +7,40 @@
 
 import Foundation
 import CryptoKit
+import os.log
 
 actor DirectoryScanner {
     private var isScanning = false
     private var scannedCount = 0
+    private var isPaused = false
+    private var memoryPressureState: MemoryPressureState = .normal
+    private var pressureSource: DispatchSourceMemoryPressure?
+    private var pauseTimeoutTask: Task<Void, Never>?
+    private var isMonitoringSetup = false
     private let contentAnalyzer = ContentAnalyzer()
+    private let logger = Logger(subsystem: "com.sorty.app", category: "DirectoryScanner")
+    
+    // Configuration
+    private var normalBatchSize = 50
+    private var pressureBatchSize = 10
+    private let pauseTimeout: Duration = .seconds(30)
+    
+    deinit {
+        pressureSource?.cancel()
+        pauseTimeoutTask?.cancel()
+    }
+    
+    /// Memory pressure states for graceful degradation
+    enum MemoryPressureState: String {
+        case normal = "normal"
+        case warning = "warning"
+        case critical = "critical"
+    }
+    
+    /// Initialize and set up memory pressure monitoring
+    init() {
+        // Setup happens lazily on first scan to avoid actor isolation issues
+    }
     
     /// Scan directory with optional deep content analysis and hash computation
     func scanDirectory(
@@ -26,7 +55,18 @@ actor DirectoryScanner {
         
         isScanning = true
         scannedCount = 0
-        defer { isScanning = false }
+        isPaused = false
+        
+        // Lazy initialization of memory pressure monitoring
+        if !isMonitoringSetup {
+            setupMemoryPressureMonitoring()
+            isMonitoringSetup = true
+        }
+        
+        defer { 
+            isScanning = false
+            pauseTimeoutTask?.cancel()
+        }
         
         var files: [FileItem] = []
         let fileManager = FileManager.default
@@ -39,6 +79,9 @@ actor DirectoryScanner {
             throw ScannerError.pathNotFound
         }
         
+        // Check initial memory pressure
+        await checkMemoryPressure()
+        
         try await scanDirectoryRecursive(
             at: url,
             fileManager: fileManager,
@@ -47,6 +90,8 @@ actor DirectoryScanner {
             computeHashes: computeHashes,
             files: &files
         )
+        
+        logger.info("Scan completed: \(self.scannedCount) files, memory pressure: \(self.memoryPressureState.rawValue)")
         
         return files
     }
@@ -124,7 +169,24 @@ actor DirectoryScanner {
             throw ScannerError.enumerationFailed
         }
         
+        // Graceful degradation: skip non-essential work under memory pressure
+        let effectiveDeepScan = deepScan && !shouldSkipNonEssentialWork()
+        let effectiveComputeHashes = computeHashes && !shouldSkipNonEssentialWork()
+        
+        if deepScan && !effectiveDeepScan {
+            logger.info("Deep scan disabled due to memory pressure")
+        }
+        if computeHashes && !effectiveComputeHashes {
+            logger.info("Hash computation disabled due to memory pressure")
+        }
+        
+        let batchSize = getCurrentBatchSize()
+        var lastBatchTime = Date()
+        
         while let fileURL = enumerator.nextObject() as? URL {
+            // Check and wait if paused due to memory pressure
+            await waitIfPaused()
+            
             // Skip hidden files if not including them
             if !includeHidden {
                 let resourceValues = try? fileURL.resourceValues(forKeys: [.isHiddenKey])
@@ -147,15 +209,15 @@ actor DirectoryScanner {
             let pathExtension = fileURL.pathExtension
             let fileName = fileURL.deletingPathExtension().lastPathComponent
             
-            // Deep scan: extract content metadata
+            // Deep scan: extract content metadata (skipped under memory pressure)
             var contentMetadata: ContentMetadata?
-            if deepScan {
+            if effectiveDeepScan {
                 contentMetadata = await contentAnalyzer.analyze(fileURL: fileURL)
             }
             
-            // Hash computation for duplicate detection
+            // Hash computation for duplicate detection (skipped under memory pressure)
             var sha256Hash: String?
-            if computeHashes {
+            if effectiveComputeHashes {
                 sha256Hash = HashUtility.computeSHA256(for: fileURL)
             }
             
@@ -173,15 +235,153 @@ actor DirectoryScanner {
             files.append(fileItem)
             scannedCount += 1
             
-            // Yield to allow UI updates
-            if scannedCount % 50 == 0 {
+            // Periodic memory pressure check and yield
+            if scannedCount % batchSize == 0 {
                 await Task.yield()
+                await checkMemoryPressure()
+                
+                // Log progress periodically under memory pressure
+                if memoryPressureState != .normal && scannedCount % (batchSize * 10) == 0 {
+                    logger.info("Scan progress: \(self.scannedCount) files, pressure: \(self.memoryPressureState.rawValue)")
+                }
             }
+        }
+        
+        // Final memory state logging
+        if memoryPressureState != .normal {
+            logger.info("Scan completed under memory pressure: \(self.scannedCount) files total")
         }
     }
     
     func getProgress() -> Int {
         scannedCount
+    }
+    
+    func getMemoryPressureState() -> MemoryPressureState {
+        memoryPressureState
+    }
+    
+    // MARK: - Memory Pressure Handling
+    
+    private func setupMemoryPressureMonitoring() {
+        let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: DispatchQueue.global())
+        
+        source.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            Task { await self.handleMemoryPressureEvent() }
+        }
+        
+        pressureSource = source
+        source.resume()
+        logger.debug("Memory pressure monitoring initialized")
+    }
+    
+    private func handleMemoryPressureEvent() async {
+        let eventMask = pressureSource?.data ?? []
+        
+        if eventMask.contains(.critical) {
+            await setMemoryPressureState(.critical)
+        } else if eventMask.contains(.warning) {
+            await setMemoryPressureState(.warning)
+        }
+    }
+    
+    private func setMemoryPressureState(_ state: MemoryPressureState) async {
+        let previousState = memoryPressureState
+        memoryPressureState = state
+        
+        if state != previousState {
+            logger.warning("Memory pressure changed: \(previousState.rawValue) -> \(state.rawValue)")
+            
+            switch state {
+            case .warning:
+                isPaused = true
+                startPauseTimeout()
+                logger.info("Scan paused due to memory warning")
+            case .critical:
+                isPaused = true
+                // Clear caches immediately
+                await contentAnalyzer.clearCache()
+                logger.warning("Scan paused, caches cleared due to critical memory pressure")
+            case .normal:
+                isPaused = false
+                pauseTimeoutTask?.cancel()
+                logger.info("Scan resumed, memory pressure normal")
+            }
+        }
+    }
+    
+    private func checkMemoryPressure() async {
+        // Check physical memory availability
+        let physicalMemory = ProcessInfo.processInfo.physicalMemory
+        let usedMemory = getCurrentMemoryUsage()
+        let memoryPressure = Double(usedMemory) / Double(physicalMemory)
+        
+        if memoryPressure > 0.85 {
+            await setMemoryPressureState(.critical)
+        } else if memoryPressure > 0.70 {
+            await setMemoryPressureState(.warning)
+        } else {
+            await setMemoryPressureState(.normal)
+        }
+    }
+    
+    private func getCurrentMemoryUsage() -> UInt64 {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+        
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                task_info(mach_task_self_,
+                         task_flavor_t(MACH_TASK_BASIC_INFO),
+                         $0,
+                         &count)
+            }
+        }
+        
+        guard kerr == KERN_SUCCESS else {
+            return 0
+        }
+        
+        return info.resident_size
+    }
+    
+    private func startPauseTimeout() {
+        pauseTimeoutTask?.cancel()
+        pauseTimeoutTask = Task {
+            try? await Task.sleep(for: pauseTimeout)
+            
+            guard !Task.isCancelled else { return }
+            
+            // Force resume after timeout
+            if isPaused && isScanning {
+                logger.warning("Pause timeout reached, forcing resume")
+                isPaused = false
+                memoryPressureState = .normal
+            }
+        }
+    }
+    
+    private func shouldSkipNonEssentialWork() -> Bool {
+        memoryPressureState == .warning || memoryPressureState == .critical
+    }
+    
+    private func getCurrentBatchSize() -> Int {
+        switch memoryPressureState {
+        case .normal:
+            return normalBatchSize
+        case .warning, .critical:
+            return pressureBatchSize
+        }
+    }
+    
+    private func waitIfPaused() async {
+        while isPaused && isScanning {
+            await Task.yield()
+            // Check if pressure has decreased
+            await checkMemoryPressure()
+            try? await Task.sleep(for: .milliseconds(100))
+        }
     }
 }
 
@@ -190,6 +390,7 @@ enum ScannerError: LocalizedError {
     case invalidURL
     case pathNotFound
     case enumerationFailed
+    case memoryPressureTimeout
     
     var errorDescription: String? {
         switch self {
@@ -201,6 +402,8 @@ enum ScannerError: LocalizedError {
             return "The specified path does not exist"
         case .enumerationFailed:
             return "Failed to enumerate directory contents"
+        case .memoryPressureTimeout:
+            return "Scan timed out waiting for memory pressure to decrease"
         }
     }
 }

@@ -53,6 +53,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             }
         }
         
+        self.learningsFSMonitor.onFileRemoved = { [weak self] path in
+            Task { @MainActor in
+                self?.continuousLearningObserver.handleFileRemoval(at: path)
+            }
+        }
+        
         // Prewarm connections for all configured AI providers on startup
         Task {
             await AISessionManager.shared.prewarmAllConfigured()
@@ -377,7 +383,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                     directory: resolvedURL, 
                     specificFiles: Array(newFiles),
                     customPrompt: folder.customPrompt,
-                    temperature: folder.temperature
+                    temperature: folder.temperature,
+                    providerOverride: folder.providerOverride,
+                    modelOverride: folder.modelOverride
                 )
                 
                 // Snapshot is updated inside resume() automatically

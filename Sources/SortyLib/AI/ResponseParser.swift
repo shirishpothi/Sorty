@@ -30,6 +30,7 @@ struct ResponseParser {
         let files: [FileEntry]
         let semanticTags: [String]?
         let confidence: Double?
+        let ruleId: String?
 
         // Support both array of strings and array of FileEntry objects
         init(from decoder: Decoder) throws {
@@ -40,6 +41,7 @@ struct ResponseParser {
             subfolders = try container.decodeIfPresent([FolderResponse].self, forKey: .subfolders)
             semanticTags = try container.decodeIfPresent([String].self, forKey: .semanticTags)
             confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
+            ruleId = try container.decodeIfPresent(String.self, forKey: .ruleId)
 
             // Try to decode files as FileEntry array first
             if let fileEntries = try? container.decode([FileEntry].self, forKey: .files) {
@@ -56,6 +58,7 @@ struct ResponseParser {
             case name, description, reasoning, subfolders, files
             case semanticTags = "semantic_tags"
             case confidence
+            case ruleId = "rule_id"
         }
     }
 
@@ -263,7 +266,8 @@ struct ResponseParser {
             fileRenameMappings: renameMappings,
             fileTagMappings: tagMappings,
             semanticTags: folder.semanticTags ?? [],
-            confidenceScore: folder.confidence
+            confidenceScore: folder.confidence,
+            ruleId: folder.ruleId
         )
     }
 

@@ -68,29 +68,16 @@ jobs:
           
           echo "Releasing version: ${VERSION}"
       # ===========================================
-      # 4. Update CHANGELOG if needed
-      # ===========================================
-      - name: Update CHANGELOG
-        run: |
-          chmod +x ./scripts/update_changelog.sh
-          ./scripts/update_changelog.sh "${{ steps.version.outputs.VERSION }}"
-      # ===========================================
-      # 5. Bump version in Xcode project
-      # ===========================================
-      - name: Bump version
-        run: |
-          chmod +x ./scripts/bump_version.sh
-          ./scripts/bump_version.sh "${{ steps.version.outputs.VERSION }}"
-      # ===========================================
-      # 6. Build
+      # 4. Build
       # ===========================================
       - name: Build
         run: |
           chmod +x ./scripts/build.sh
           # Use xcodebuild for CI releases - ensures proper SDK targeting
+          # Versioning is handled automatically via git tags in build.sh
           BUILD_METHOD=xcodebuild SKIP_TESTS=true ./scripts/build.sh
       # ===========================================
-      # 7. Package (ZIP)
+      # 5. Package (ZIP)
       # ===========================================
       - name: Package
         run: |
@@ -107,6 +94,96 @@ jobs:
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
           ./scripts/generate_appcast_ci.sh
+
+      # ===========================================
+      # 8b. Validate Sparkle Update System
+      # ===========================================
+      - name: Validate Sparkle Update System
+        run: |
+          echo "Validating Sparkle update system..."
+          ERRORS=0
+          
+          # 1. Check appcast.xml exists and is valid XML
+          APPCAST="releases/appcast.xml"
+          if [ ! -f "$APPCAST" ]; then
+            echo "::error::appcast.xml not found in releases/"
+            ERRORS=$((ERRORS + 1))
+          else
+            # Validate XML structure
+            if ! xmllint --noout "$APPCAST" 2>/dev/null; then
+              echo "::error::appcast.xml is not valid XML"
+              ERRORS=$((ERRORS + 1))
+            fi
+            
+            # Check required Sparkle elements
+            if ! grep -q 'sparkle:version=' "$APPCAST"; then
+              echo "::error::appcast.xml missing sparkle:version attribute"
+              ERRORS=$((ERRORS + 1))
+            fi
+            if ! grep -q 'sparkle:shortVersionString=' "$APPCAST"; then
+              echo "::error::appcast.xml missing sparkle:shortVersionString attribute"
+              ERRORS=$((ERRORS + 1))
+            fi
+            if ! grep -q '<enclosure' "$APPCAST"; then
+              echo "::error::appcast.xml missing enclosure element"
+              ERRORS=$((ERRORS + 1))
+            fi
+            
+            # Verify Ed25519 signature is present in the appcast
+            # (signature should have been generated if SPARKLE_PRIVATE_KEY was set during appcast generation)
+            if grep -q 'sparkle:edSignature=' "$APPCAST"; then
+              echo "✓ Appcast is signed with Ed25519"
+            else
+              echo "::warning::Appcast has no Ed25519 signature - ensure SPARKLE_PRIVATE_KEY secret is configured"
+            fi
+          fi
+          
+          # 2. Validate Info.plist Sparkle configuration (without logging sensitive values)
+          PLIST="Info.plist"
+          FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$PLIST" 2>/dev/null || echo "")
+          PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$PLIST" 2>/dev/null || echo "")
+          
+          if [ -z "$FEED_URL" ]; then
+            echo "::error::SUFeedURL not set in Info.plist"
+            ERRORS=$((ERRORS + 1))
+          elif [[ ! "$FEED_URL" == *"appcast.xml"* ]]; then
+            echo "::error::SUFeedURL does not point to an appcast.xml file"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "✓ SUFeedURL configured correctly"
+          fi
+          
+          if [ -z "$PUBLIC_KEY" ]; then
+            echo "::error::SUPublicEDKey not set in Info.plist"
+            ERRORS=$((ERRORS + 1))
+          elif [ ${#PUBLIC_KEY} -lt 40 ]; then
+            echo "::error::SUPublicEDKey appears invalid (key too short)"
+            ERRORS=$((ERRORS + 1))
+          else
+            echo "✓ SUPublicEDKey configured"
+          fi
+          
+          # 3. Verify download URL in appcast matches expected pattern
+          if [ -f "$APPCAST" ]; then
+            DOWNLOAD_URL=$(grep -o 'url="[^"]*"' "$APPCAST" | head -1 | sed 's/url="//;s/"$//')
+            if [[ ! "$DOWNLOAD_URL" == *"github.com"*"releases"*"Sorty.pkg"* ]]; then
+              echo "::error::Download URL in appcast doesn't match expected GitHub releases pattern: $DOWNLOAD_URL"
+              ERRORS=$((ERRORS + 1))
+            else
+              echo "✓ Download URL valid: $DOWNLOAD_URL"
+            fi
+          fi
+          
+          # Summary
+          if [ $ERRORS -gt 0 ]; then
+            echo ""
+            echo "::error::Sparkle update system validation failed with $ERRORS error(s)"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ Sparkle update system validated successfully"
+
       # ===========================================
       # 9. Create tag (for workflow_dispatch)
       # ===========================================
@@ -127,22 +204,23 @@ jobs:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: ${{ env.PROJECT_NAME }} ${{ steps.version.outputs.VERSION }}
           files: |
-            releases/Sorty.zip
-            releases/Sorty-CLI.zip
+            releases/Sorty.pkg
             releases/appcast.xml
           generate_release_notes: true
           append_body: true
           body: |
             
             ## Installation
-            Download `Sorty.zip` below.
+            Download `Sorty.pkg` below.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > xattr -cr /Applications/Sorty.app
             > ```
+
+            ## CLI Tools
+            Sorty bundles CLI tools inside the app. Install them from **Settings → Finder Integration → Command Line Tools**.
             
             ## Additional Downloads
-            - **Sorty-CLI.zip** - Command line tool for terminal automation
             - **Sorty-Source.zip** - Full source code
           prerelease: ${{ steps.version.outputs.IS_PRERELEASE == 'true' }}
 
@@ -169,19 +247,6 @@ jobs:
             echo "Updated appcast.xml on $LATEST_STABLE with merged entries"
           else
             echo "No stable release found to update"
-          fi
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Check if there are changes to commit
-          if git diff --quiet CHANGELOG.md Sorty.xcodeproj/project.pbxproj Info.plist 2>/dev/null; then
-            echo "No changes to commit"
-          else
-            git add CHANGELOG.md Sorty.xcodeproj/project.pbxproj Info.plist 2>/dev/null || true
-            git commit -m "chore: bump version to ${{ steps.version.outputs.VERSION }} [skip ci]" || echo "Nothing to commit"
-            git push origin HEAD:main || echo "Nothing to push"
           fi
       # ===========================================
       # 12. Summary

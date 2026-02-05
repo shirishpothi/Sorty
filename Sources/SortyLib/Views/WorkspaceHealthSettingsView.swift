@@ -20,7 +20,23 @@ struct WorkspaceHealthSettingsView: View {
     }
     
     var body: some View {
-        Form {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                GlassyBackButton {
+                    dismiss()
+                }
+                
+                Text("Workspace Health Rules")
+                    .font(.headline)
+                
+                Spacer()
+            }
+            .padding()
+            .background(Color(NSColor.controlBackgroundColor))
+            
+            Divider()
+            
+            Form {
             Section("Thresholds") {
                 VStack(alignment: .leading) {
                     Text("Large File Threshold: \(ByteCountFormatter.string(fromByteCount: config.largeFileSizeThreshold, countStyle: .file))")
@@ -178,26 +194,27 @@ struct WorkspaceHealthSettingsView: View {
                 .foregroundColor(.red)
             }
              */
-        }
-        .padding()
-        .frame(minWidth: 500, minHeight: 600)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    healthManager.updateConfig(config)
-                    dismiss()
-                }
             }
-            
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
+            .padding()
+            .frame(minWidth: 500, minHeight: 600)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        healthManager.updateConfig(config)
+                        dismiss()
+                    }
                 }
-            }
-            
-            ToolbarItem(placement: .destructiveAction) {
-                Button("Reset Defaults") {
-                    config = WorkspaceHealthConfig()
+                
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .destructiveAction) {
+                    Button("Reset Defaults") {
+                        config = WorkspaceHealthConfig()
+                    }
                 }
             }
         }

@@ -18,13 +18,16 @@ struct LiquidGlassModifier: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
     
     func body(content: Content) -> some View {
-        content
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
+        let style = SortyDesignSystem.CardStyles.CardStyle(
+            backgroundColor: Color(NSColor.controlBackgroundColor),
+            cornerRadius: cornerRadius,
+            strokeColor: SortyDesignSystem.Colors.glassBorder,
+            strokeWidth: 1,
+            padding: 0,
+            useUltraThinMaterial: true
+        )
+        
+        return content.sortyCardStyle(style)
     }
 }
 
@@ -616,6 +619,20 @@ struct LearningsView: View {
                     }
                 }
                 
+                if !profile.rejections.isEmpty {
+                    AccessibleActivityGroup(
+                        title: "Rejected Placements",
+                        subtitle: "Files you removed or corrected after AI organization",
+                        icon: "xmark.circle.fill",
+                        color: .red,
+                        count: profile.rejections.count
+                    ) {
+                        ForEach(profile.rejections.suffix(10).reversed()) { rejection in
+                            AccessibleRejectionRow(rejection: rejection)
+                        }
+                    }
+                }
+                
                 if !profile.additionalInstructionsHistory.isEmpty {
                     AccessibleActivityGroup(
                         title: "Instructions Given",
@@ -630,7 +647,7 @@ struct LearningsView: View {
                     }
                 }
                 
-                if profile.postOrganizationChanges.isEmpty && profile.historyReverts.isEmpty && profile.additionalInstructionsHistory.isEmpty {
+                if profile.postOrganizationChanges.isEmpty && profile.historyReverts.isEmpty && profile.rejections.isEmpty && profile.additionalInstructionsHistory.isEmpty {
                     VStack(spacing: 20) {
                         Spacer(minLength: 20)
                         ContentUnavailableView(
@@ -1484,6 +1501,45 @@ struct AccessibleActivityRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(fileName) moved from \(srcFolder) to \(dstFolder)")
         .accessibilityHint(change.wasAIOrganized ? "This was a correction of AI organization" : "This was a manual move")
+    }
+}
+
+struct AccessibleRejectionRow: View {
+    let rejection: LabeledExample
+    
+    private var fileName: String {
+        URL(fileURLWithPath: rejection.srcPath).lastPathComponent
+    }
+    
+    private var folderName: String {
+        URL(fileURLWithPath: rejection.srcPath).deletingLastPathComponent().lastPathComponent
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.body.bold())
+                .foregroundColor(.red)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(fileName)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(folderName.isEmpty ? "Removed from original location" : "From \(folderName)")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.secondary)
+            }
+            
+            Spacer()
+            
+            Text(rejection.timestamp, style: .relative)
+                .font(.caption2.bold())
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(fileName) rejected after organization")
     }
 }
 

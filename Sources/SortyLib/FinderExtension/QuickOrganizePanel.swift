@@ -40,7 +40,7 @@ public class QuickOrganizePanelController: NSObject, ObservableObject {
     
     @objc private func handleQuickOrganizeRequest(_ notification: Notification) {
         if let path = notification.userInfo?["path"] as? String {
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.selectedDirectory = URL(fileURLWithPath: path)
                 self.showPanel()
             }

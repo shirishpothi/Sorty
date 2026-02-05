@@ -140,7 +140,7 @@ public struct SortyCommands: Commands {
             Button("Apply Changes") {
                 appState.applyChanges()
             }
-            .keyboardShortcut(.return, modifiers: .command)
+            .keyboardShortcut("a", modifiers: [.command, .shift])
             .disabled(!appState.canApply)
 
             Button("Preview Changes") {
@@ -237,6 +237,8 @@ public class AppState: ObservableObject {
     @Published public var duplicateSettings = DuplicateSettingsManager()
     @Published public var debugMode: Bool = false
     @Published public var showUpdateSheet: Bool = false
+    @Published public var lastOrganizedDirectory: URL?
+    @Published public var navigatedFromSettings: Bool = false
     
     /// Trigger update check with visible UI feedback
     public func checkForUpdatesInteractive() {
@@ -256,7 +258,6 @@ public class AppState: ObservableObject {
     // Window controllers - retained to prevent use-after-free crashes
     // These MUST be retained to keep windows alive during animations
     private var aboutWindowController: NSWindowController?
-    private var helpWindowController: NSWindowController?
 
     public enum AppView: Equatable, Sendable {
         case settings
@@ -583,33 +584,13 @@ public class AppState: ObservableObject {
         organizer?.reset()
     }
 
-    public func showHelp(initialSection: HelpSection = .gettingStarted) {
-        // Reuse existing window if still open
-        if let existingController = helpWindowController,
-           let existingWindow = existingController.window,
-           existingWindow.isVisible {
-            existingWindow.makeKeyAndOrderFront(nil)
-            return
-        }
+    public func showHelp() {
+        // Redirect to Settings -> Help & Support instead of opening a new window
+        currentView = .settings
+        selectedSettingsSection = .help
         
-        // Create new window with proper lifecycle management
-        let helpView = HelpView(initialSection: initialSection)
-            .environmentObject(self)
-        let hostingController = NSHostingController(rootView: helpView)
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 900, height: 650),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.contentViewController = hostingController
-        window.title = "Sorty Help"
-        window.center()
-        
-        // Create and retain the window controller to prevent deallocation during animations
-        let controller = NSWindowController(window: window)
-        helpWindowController = controller
-        controller.showWindow(nil)
+        // Haptic feedback for the transition
+        HapticFeedbackManager.shared.selection()
     }
     
     // MARK: - Learnings Actions
@@ -650,8 +631,32 @@ public class AppState: ObservableObject {
     }
     
     public func showAbout() {
-        // Open Help window with About section selected
-        showHelp(initialSection: .about)
+        // If window already exists and is visible, just bring it to front
+        if let existingWindow = aboutWindowController?.window, existingWindow.isVisible {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
+        // Create a new About window
+        let aboutView = AboutView()
+        let hostingView = NSHostingView(rootView: aboutView)
+        
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 380),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hostingView
+        window.title = "About Sorty"
+        window.isReleasedWhenClosed = false
+        window.center()
+        
+        // Retain the window controller to prevent deallocation
+        aboutWindowController = NSWindowController(window: window)
+        aboutWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
     
     private func csvEscape(_ field: String) -> String {

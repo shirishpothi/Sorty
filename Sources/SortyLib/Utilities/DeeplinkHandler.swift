@@ -22,6 +22,8 @@ public enum DeeplinkDestination: Equatable {
     case persona(action: String?, prompt: String?, generate: Bool)
     case watched(action: String?, path: String?)
     case rules(action: String?, type: String?, pattern: String?)
+    case exclusions(action: String?, pattern: String?)
+    case storage(action: String?, path: String?)
     
     /// Actions specific to Learnings feature
     public enum LearningsAction: String, Equatable {
@@ -29,6 +31,7 @@ public enum DeeplinkDestination: Equatable {
         case stats        // Show detailed statistics
         case withdraw     // Withdraw consent (pause learning)
         case export       // Export profile data
+        case importProfile = "import"
         case clear        // Clear all data
     }
 }
@@ -107,6 +110,16 @@ public class DeeplinkHandler: ObservableObject {
             let type = queryValue(for: "type")
             let pattern = queryValue(for: "pattern")
             pendingDestination = .rules(action: action, type: type, pattern: pattern)
+            
+        case "exclusions":
+            let action = queryValue(for: "action")
+            let pattern = queryValue(for: "pattern")
+            pendingDestination = .exclusions(action: action, pattern: pattern)
+            
+        case "storage":
+            let action = queryValue(for: "action")
+            let path = queryValue(for: "path")
+            pendingDestination = .storage(action: action, path: path)
             
         default:
             DebugLogger.log("Unknown deeplink: \(url)")
@@ -214,6 +227,28 @@ public class DeeplinkHandler: ObservableObject {
             }
             if let pattern = pattern {
                 items.append(URLQueryItem(name: "pattern", value: pattern))
+            }
+            if !items.isEmpty { components.queryItems = items }
+            
+        case .exclusions(let action, let pattern):
+            components.host = "exclusions"
+            var items: [URLQueryItem] = []
+            if let action = action {
+                items.append(URLQueryItem(name: "action", value: action))
+            }
+            if let pattern = pattern {
+                items.append(URLQueryItem(name: "pattern", value: pattern))
+            }
+            if !items.isEmpty { components.queryItems = items }
+            
+        case .storage(let action, let path):
+            components.host = "storage"
+            var items: [URLQueryItem] = []
+            if let action = action {
+                items.append(URLQueryItem(name: "action", value: action))
+            }
+            if let path = path {
+                items.append(URLQueryItem(name: "path", value: path))
             }
             if !items.isEmpty { components.queryItems = items }
         }

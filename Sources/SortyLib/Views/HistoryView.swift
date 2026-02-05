@@ -18,14 +18,34 @@ struct HistoryView: View {
     @State private var selectedFilter: HistoryFilter = .all
     @State private var contentOpacity: Double = 0
     @State private var showingDetail = false
+    
+    // Lazy loading state
+    @State private var displayedEntryCount: Int = 50
+    @State private var isLoadingMore: Bool = false
+    private let pageSize: Int = 50
+    private let loadMoreThreshold: Int = 10 // Load more when within 10 items of end
 
     private var filteredEntries: [OrganizationHistoryEntry] {
+        let allEntries: [OrganizationHistoryEntry]
         switch selectedFilter {
-        case .all: return organizer.history.entries
-        case .success: return organizer.history.entries.filter { $0.status == .completed }
-        case .failed: return organizer.history.entries.filter { $0.status == .failed }
-        case .skipped: return organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }
+        case .all: allEntries = organizer.history.entries
+        case .success: allEntries = organizer.history.entries.filter { $0.status == .completed }
+        case .failed: allEntries = organizer.history.entries.filter { $0.status == .failed }
+        case .skipped: allEntries = organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }
         }
+        // Return only the entries up to the current display limit
+        return Array(allEntries.prefix(displayedEntryCount))
+    }
+    
+    private var hasMoreEntries: Bool {
+        let totalCount: Int
+        switch selectedFilter {
+        case .all: totalCount = organizer.history.entries.count
+        case .success: totalCount = organizer.history.entries.filter { $0.status == .completed }.count
+        case .failed: totalCount = organizer.history.entries.filter { $0.status == .failed }.count
+        case .skipped: totalCount = organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }.count
+        }
+        return displayedEntryCount < totalCount
     }
 
     enum HistoryFilter: String, CaseIterable, Identifiable {
@@ -80,6 +100,20 @@ struct HistoryView: View {
                                     }
                                 )
                                 .animatedAppearance(delay: Double(index) * 0.03)
+                                .onAppear {
+                                    // Load more when approaching the end of the list
+                                    if index >= filteredEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                                        loadMoreEntries()
+                                    }
+                                }
+                            }
+                            
+                            // Load More Button
+                            if hasMoreEntries {
+                                LoadMoreButton(isLoading: isLoadingMore) {
+                                    loadMoreEntries()
+                                }
+                                .padding(.vertical, 16)
                             }
                         }
                         .padding(.horizontal, 24)
@@ -133,11 +167,30 @@ struct HistoryView: View {
                 contentOpacity = 1.0
             }
         }
+        .onChange(of: selectedFilter) { _, _ in
+            // Reset pagination when filter changes
+            displayedEntryCount = pageSize
+        }
     }
 
     private func clearHistory() {
         HapticFeedbackManager.shared.tap()
         organizer.history.clearHistory()
+        displayedEntryCount = pageSize // Reset pagination
+    }
+    
+    private func loadMoreEntries() {
+        guard !isLoadingMore && hasMoreEntries else { return }
+        
+        isLoadingMore = true
+        
+        // Simulate a small delay for better UX (shows loading state)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
+            
+            displayedEntryCount += pageSize
+            isLoadingMore = false
+        }
     }
 
     private func handleUndo(_ entry: OrganizationHistoryEntry) {
@@ -288,13 +341,28 @@ struct HistorySummaryCard: View {
         ByteCountFormatter.string(fromByteCount: history.totalRecoveredSpace, countStyle: .file)
     }
 
+    private var timeSavedValue: String {
+        let totalSeconds = history.totalTimeSaved
+        if totalSeconds >= 3600 {
+            return String(format: "%.1f hr", totalSeconds / 3600.0)
+        } else if totalSeconds >= 60 {
+            return String(format: "%.1f min", totalSeconds / 60.0)
+        } else {
+            return String(format: "%.0f sec", totalSeconds)
+        }
+    }
+
+    private var totalCostValue: String {
+        "$\(history.totalEstimatedCost)"
+    }
+
     private var gridColumns: [GridItem] {
-        [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
     }
 
     var body: some View {
         gridContent
-            .padding(24)
+            .padding(20)
             .frame(maxWidth: .infinity)
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 20))
@@ -306,12 +374,14 @@ struct HistorySummaryCard: View {
 
     @ViewBuilder
     private var gridContent: some View {
-        LazyVGrid(columns: gridColumns, spacing: 20) {
+        LazyVGrid(columns: gridColumns, spacing: 16) {
             totalSessionsItem
             filesOrganizedItem
             foldersCreatedItem
             revertedItem
             spaceSavedItem
+            timeSavedItem
+            totalCostItem
             successRateItem
         }
     }
@@ -369,6 +439,28 @@ struct HistorySummaryCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Space saved: \(spaceSavedValue)")
+    }
+
+    private var timeSavedItem: some View {
+        HistoryStatItem(
+            title: "Time Saved",
+            value: timeSavedValue,
+            icon: "hourglass.badge.plus",
+            color: .blue
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Time saved: \(timeSavedValue)")
+    }
+
+    private var totalCostItem: some View {
+        HistoryStatItem(
+            title: "Total Cost",
+            value: totalCostValue,
+            icon: "dollarsign.circle.fill",
+            color: .green
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Total cost: \(totalCostValue)")
     }
 
     private var successRateItem: some View {
@@ -933,16 +1025,18 @@ struct HistoryDetailSheet: View {
                                         .font(.subheadline.bold())
                                         .foregroundColor(.orange)
 
-                                    ForEach(plan.unorganizedFiles) { fileItem in
-                                        HStack {
-                                            Image(systemName: "doc")
-                                                .foregroundStyle(.secondary)
-                                            Text(fileItem.displayName)
-                                            Spacer()
+                                    LazyVStack(alignment: .leading, spacing: 6) {
+                                        ForEach(plan.unorganizedFiles) { fileItem in
+                                            HStack {
+                                                Image(systemName: "doc")
+                                                    .foregroundStyle(.secondary)
+                                                Text(fileItem.displayName)
+                                                Spacer()
+                                            }
+                                            .font(.caption)
+                                            .accessibilityElement(children: .combine)
+                                            .accessibilityLabel("Unorganized file: \(fileItem.displayName)")
                                         }
-                                        .font(.caption)
-                                        .accessibilityElement(children: .combine)
-                                        .accessibilityLabel("Unorganized file: \(fileItem.displayName)")
                                     }
                                 }
                                 .padding()
@@ -1267,6 +1361,8 @@ struct FolderHistoryDetailRow: View {
     let suggestion: FolderSuggestion
     @State private var isExpanded = false
     @State private var isHovered = false
+    @State private var visibleFileCount: Int = 60
+    private let filePageSize: Int = 60
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1314,14 +1410,20 @@ struct FolderHistoryDetailRow: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if !suggestion.reasoning.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("AI REASONING")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.purple)
+                            HStack(spacing: 4) {
+                                Image(nsImage: NSWorkspace.shared.icon(for: .data))
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 10, height: 10)
+                                Text("AI REASONING")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.secondary)
+                            }
                             Text(suggestion.reasoning)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .padding(8)
-                                .background(Color.purple.opacity(0.05))
+                                .background(Color(NSColor.controlBackgroundColor))
                                 .cornerRadius(6)
                         }
                         .transition(.opacity.combined(with: .move(edge: .top)))
@@ -1329,8 +1431,9 @@ struct FolderHistoryDetailRow: View {
                         .accessibilityLabel("AI reasoning: \(suggestion.reasoning)")
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(Array(suggestion.files.enumerated()), id: \.element.id) { index, fileItem in
+                    let shouldAnimate = suggestion.files.count <= 40
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(suggestion.files.prefix(visibleFileCount).enumerated()), id: \.element.id) { index, fileItem in
                             HStack(spacing: 8) {
                                 FileThumbnailView(url: URL(fileURLWithPath: fileItem.path), size: CGSize(width: 20, height: 20))
                                 Text(fileItem.displayName)
@@ -1343,12 +1446,27 @@ struct FolderHistoryDetailRow: View {
                             .opacity(isExpanded ? 1 : 0)
                             .offset(y: isExpanded ? 0 : -5)
                             .animation(
-                                .spring(response: 0.3, dampingFraction: 0.7)
-                                    .delay(Double(index) * 0.02),
+                                shouldAnimate
+                                    ? .spring(response: 0.3, dampingFraction: 0.7).delay(Double(index) * 0.02)
+                                    : .none,
                                 value: isExpanded
                             )
                             .accessibilityElement(children: .combine)
                             .accessibilityLabel("\(fileItem.displayName), \(fileItem.formattedSize)")
+                        }
+                        
+                        if suggestion.files.count > visibleFileCount {
+                            Button {
+                                HapticFeedbackManager.shared.tap()
+                                visibleFileCount = min(visibleFileCount + filePageSize, suggestion.files.count)
+                            } label: {
+                                Label("Show more files", systemImage: "chevron.down")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.leading, 12)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
 
@@ -1368,6 +1486,47 @@ struct FolderHistoryDetailRow: View {
         .padding(12)
         .background(Color.secondary.opacity(0.03))
         .cornerRadius(8)
+    }
+}
+
+// MARK: - Load More Button
+
+struct LoadMoreButton: View {
+    let isLoading: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: "chevron.down.circle.fill")
+                        .font(.system(size: 16))
+                }
+                
+                Text(isLoading ? "Loading..." : "Load More History")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundColor(.accentColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.accentColor.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading)
+        .accessibilityLabel(isLoading ? "Loading more history entries" : "Load more history entries")
+        .accessibilityIdentifier("LoadMoreHistoryButton")
     }
 }
 

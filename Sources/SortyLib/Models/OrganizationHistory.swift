@@ -191,6 +191,17 @@ public class OrganizationHistory: ObservableObject {
         entries.compactMap { $0.recoveredSpace }.reduce(0, +)
     }
 
+    public var totalTimeSaved: TimeInterval {
+        entries.filter { $0.status == .completed }
+            .compactMap { $0.plan?.generationStats?.estimatedTimeSaved }
+            .reduce(0, +)
+    }
+
+    public var totalEstimatedCost: Decimal {
+        entries.compactMap { $0.plan?.generationStats?.computedCost }
+            .reduce(0, +)
+    }
+
     private func loadHistory() {
         if let data = userDefaults.data(forKey: historyKey),
            let decoded = try? JSONDecoder().decode([OrganizationHistoryEntry].self, from: data) {

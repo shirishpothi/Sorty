@@ -10,6 +10,9 @@ import Combine
 
 /// Settings for duplicate detection behavior
 public struct DuplicateSettings: Codable, Sendable {
+    /// Method used to determine if files are duplicates
+    public var comparisonMethod: ComparisonMethod
+
     /// Minimum file size to include in scan (bytes)
     public var minFileSize: Int64
     
@@ -38,6 +41,7 @@ public struct DuplicateSettings: Codable, Sendable {
     public var semanticSimilarityThreshold: Double
     
     public init(
+        comparisonMethod: ComparisonMethod = .exact,
         minFileSize: Int64 = 0,
         maxScanDepth: Int = -1,
         includeExtensions: [String] = [],
@@ -48,6 +52,7 @@ public struct DuplicateSettings: Codable, Sendable {
         includeSemanticDuplicates: Bool = false,
         semanticSimilarityThreshold: Double = 0.9
     ) {
+        self.comparisonMethod = comparisonMethod
         self.minFileSize = minFileSize
         self.maxScanDepth = maxScanDepth
         self.includeExtensions = includeExtensions
@@ -57,6 +62,28 @@ public struct DuplicateSettings: Codable, Sendable {
         self.autoStartScan = autoStartScan
         self.includeSemanticDuplicates = includeSemanticDuplicates
         self.semanticSimilarityThreshold = semanticSimilarityThreshold
+    }
+}
+
+public enum ComparisonMethod: String, Codable, CaseIterable, Sendable {
+    case exact = "exact"       // Content hash (SHA-256)
+    case fast = "fast"         // Name + Size
+    case metadata = "metadata" // Name + Size + Modified Date
+    
+    public var displayName: String {
+        switch self {
+        case .exact: return "Content Match"
+        case .fast: return "Fast Match"
+        case .metadata: return "Metadata Match"
+        }
+    }
+    
+    public var description: String {
+        switch self {
+        case .exact: return "Identifies files with identical content using SHA-256 hashing. Very reliable but slower."
+        case .fast: return "Matches files with the same name and size. Much faster for large directories."
+        case .metadata: return "Matches name, size, and modification date. Good balance of speed and reliability."
+        }
     }
 }
 

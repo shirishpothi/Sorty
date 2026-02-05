@@ -27,6 +27,10 @@ swift test --filter SortyTests.TestClassName   # Run single test class
 swift test --filter SortyTests.TestClassName/testMethodName  # Run single test
 ```
 
+### CLI Tools
+CLI tools (`sorty` and `learnings`) are now bundled inside the app at `Sorty.app/Contents/Resources/CLI/`.
+Users can install them from **Settings → Finder Integration → Command Line Tools** (installs to `/usr/local/bin`).
+
 ### Build Profiling & Optimization
 ```bash
 make build-profile  # Identify slow-compiling files and functions
@@ -60,4 +64,4 @@ Key flow: `View → ViewModel/Manager → FolderOrganizer → AIClient → Organ
 - Finder extension uses App Groups (`group.com.sorty.app`)
 
  Release
-- **Always push a `v*` tag** (e.g., `git push origin v1.0.5`) to trigger the GitHub Actions workflow that builds Sorty.zip; **never** use `gh release create` manually as it skips the build process and only creates source code archives.
+- **Always push a `v*` tag** (e.g., `git push origin v1.0.5`) to trigger the GitHub Actions workflow that builds Sorty.pkg; **never** use `gh release create` manually as it skips the build process and only creates source code archives.

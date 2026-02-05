@@ -289,14 +289,26 @@ struct ReadyToOrganizeView: View {
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
-            .keyboardShortcut("r", modifiers: .command)
+            .keyboardShortcut(.return, modifiers: [])
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
             .accessibilityIdentifier("StartOrganizationButton")
             .accessibilityLabel("Start organization")
-            .accessibilityHint("Begins analyzing the selected folder")
+            .accessibilityHint("Press Enter to start")
             .accessibilityAddTraits(.isButton)
+            
+            // Keyboard shortcut hint
+            HStack(spacing: 4) {
+                Text("⏎")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                Text("Start")
+                    .font(.caption2)
+            }
+            .foregroundStyle(.quaternary)
+            .opacity(hasAppeared ? 1 : 0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.45), value: hasAppeared)
             
             // Connection status indicator
             connectionStatusView
@@ -677,4 +689,80 @@ struct SubmittableTextEditor: NSViewRepresentable {
             return false
         }
     }
+}
+
+// MARK: - Previews
+
+@MainActor
+private enum OrganizePreviewObjects {
+    static var idleOrganizer: FolderOrganizer {
+        let organizer = FolderOrganizer()
+        organizer.state = .idle
+        return organizer
+    }
+    
+    static var scanningOrganizer: FolderOrganizer {
+        let organizer = FolderOrganizer()
+        organizer.state = .scanning
+        organizer.progress = 0.35
+        organizer.organizationStage = "Scanning files..."
+        return organizer
+    }
+    
+    static var readyOrganizer: FolderOrganizer {
+        let organizer = FolderOrganizer()
+        organizer.state = .ready
+        organizer.currentPlan = PreviewMocks.makeOrganizationPlan()
+        return organizer
+    }
+    
+    static var errorOrganizer: FolderOrganizer {
+        let organizer = FolderOrganizer()
+        organizer.state = .error(NSError(domain: "Preview", code: 1, userInfo: [NSLocalizedDescriptionKey: "Connection failed. Please check your API key."]))
+        return organizer
+    }
+    
+    static var readyAppState: AppState {
+        let state = AppState()
+        state.hasCompletedOnboarding = true
+        state.selectedDirectory = URL(fileURLWithPath: "/Users/user/Downloads")
+        return state
+    }
+}
+
+#Preview("Organize View - Idle") {
+    OrganizeView()
+        .environmentObject(OrganizePreviewObjects.idleOrganizer)
+        .environmentObject(SettingsViewModel.preview)
+        .environmentObject(AppState.preview)
+        .environmentObject(CustomPersonaStore.preview)
+        .frame(width: 900, height: 600)
+}
+
+#Preview("Organize View - Scanning") {
+    OrganizeView()
+        .environmentObject(OrganizePreviewObjects.scanningOrganizer)
+        .environmentObject(SettingsViewModel.preview)
+        .environmentObject(AppState.preview)
+        .environmentObject(CustomPersonaStore.preview)
+        .frame(width: 900, height: 600)
+}
+
+#Preview("Organize View - Ready") {
+    OrganizeView()
+        .environmentObject(OrganizePreviewObjects.readyOrganizer)
+        .environmentObject(SettingsViewModel.preview)
+        .environmentObject(OrganizePreviewObjects.readyAppState)
+        .environmentObject(CustomPersonaStore.preview)
+        .environmentObject(LearningsManager.preview)
+        .frame(width: 900, height: 700)
+}
+
+#Preview("Organize View - Error") {
+    OrganizeView()
+        .environmentObject(OrganizePreviewObjects.errorOrganizer)
+        .environmentObject(SettingsViewModel.preview)
+        .environmentObject(AppState.preview)
+        .environmentObject(CustomPersonaStore.preview)
+        .frame(width: 900, height: 600)
 }

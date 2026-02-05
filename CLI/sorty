@@ -16,10 +16,13 @@ function show_help {
     echo "  duplicates <path> [options]  Scan for duplicates"
     echo "    --auto                     Automatically start scanning"
     echo ""
-    echo "  status                       View Workspace Health"
+    echo "  status, health               View Workspace Health"
     echo "  list                         View Watched Folders"
+    echo "  exclusions [add <pattern>]   View or add exclusion rules"
+    echo "  storage [add <path>]         View or add storage locations"
     echo "  settings [section]           Open settings"
-    echo "    sections: general, ai, advanced, watched, exclusions"
+    echo "    sections: rules, provider, strategy, tuning, automation, finder,"
+    echo "              notifications, advanced, troubleshooting, help"
     echo ""
     echo "  persona <action>             Manage personas"
     echo "    create                     Open persona creator"
@@ -156,6 +159,31 @@ case "$COMMAND" in
         fi
         ;;
         
+    "exclusions")
+        if [ "$1" == "add" ]; then
+            shift
+            PATTERN=$1
+            ENCODED_PATTERN=$(echo -n "$PATTERN" | urlencode)
+            URL="${APP_SCHEME}://exclusions?action=add&pattern=${ENCODED_PATTERN}"
+            open_url "$URL"
+        else
+            open_url "${APP_SCHEME}://exclusions"
+        fi
+        ;;
+        
+    "storage")
+        if [ "$1" == "add" ]; then
+            shift
+            PATH_ARG=$1
+            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
+            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
+            URL="${APP_SCHEME}://storage?action=add&path=${ENCODED_PATH}"
+            open_url "$URL"
+        else
+            open_url "${APP_SCHEME}://storage"
+        fi
+        ;;
+        
     "settings")
         SECTION=$1
         URL="${APP_SCHEME}://settings"
@@ -184,7 +212,7 @@ case "$COMMAND" in
         if [ "$ACTION" == "add" ]; then
             PATTERN=$1
             ENCODED_PATTERN=$(echo -n "$PATTERN" | urlencode)
-            URL="${APP_SCHEME}://rules?action=add&pattern=${ENCODED_PATTERN}"
+            URL="${APP_SCHEME}://exclusions?action=add&pattern=${ENCODED_PATTERN}"
             open_url "$URL"
         else
              echo "Unknown action. Usage: rules add <pattern>"

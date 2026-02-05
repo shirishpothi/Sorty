@@ -42,20 +42,102 @@ class PreviewStore: ObservableObject {
     /// Pre-computed rename mappings to avoid expensive lookups during rendering
     @Published private(set) var renameMappings: [UUID: FileRenameMapping] = [:]
     
+    /// Cached folder counts to avoid recalculation during scrolling
+    private var folderCountCache: [UUID: Int] = [:]
+    private var folderCountCacheValid = false
+    
+    /// Throttled file count display to prevent excessive UI updates
+    @Published private(set) var throttledTotalFileCount: Int = 0
+    
     private var folderIDToPath: [UUID: String] = [:]
+    private var knownFolderIDs: Set<String> = []
+    
+    /// Plan version tracking for cache invalidation
+    private var cachedPlanVersion: Int = -1
+    
+    /// Throttling support
+    private var throttleWorkItem: DispatchWorkItem?
+    private let throttleInterval: TimeInterval = 0.2 // 200ms
+    
+    /// Weak reference to drag drop manager for cache coordination
+    weak var dragDropManager: DragDropManager?
     
     init(plan: OrganizationPlan) {
         self.plan = plan
         expandAllFolders()
         rebuildFlattenedRows()
+        throttledTotalFileCount = plan.totalFiles
     }
     
     func updatePlan(_ newPlan: OrganizationPlan) {
+        // Only invalidate caches if plan actually changed (by version or content)
+        let planChanged = newPlan.version != cachedPlanVersion || newPlan.id != plan.id
         self.plan = newPlan
+        
+        if planChanged {
+            refreshExpandedFolders(for: newPlan)
+            // Clear caches when plan changes
+            folderCountCache.removeAll()
+            folderCountCacheValid = false
+            // Update throttled count with debounce
+            updateThrottledFileCount()
+            // Clear drag drop manager cache
+            dragDropManager?.clearDropTargetCache()
+        }
+        
         rebuildFlattenedRows()
+        cachedPlanVersion = newPlan.version
+    }
+    
+    /// Get cached file count for a folder (avoids recalculation during scrolling)
+    func getCachedFileCount(for folderID: UUID, compute: () -> Int) -> Int {
+        if folderCountCacheValid, let cached = folderCountCache[folderID] {
+            return cached
+        }
+        let count = compute()
+        folderCountCache[folderID] = count
+        folderCountCacheValid = true
+        return count
+    }
+    
+    /// Update file count with throttling to prevent excessive UI updates
+    private func updateThrottledFileCount() {
+        // Cancel any pending update
+        throttleWorkItem?.cancel()
+        
+        // Create new work item
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.throttledTotalFileCount = self.plan.totalFiles
+        }
+        
+        throttleWorkItem = workItem
+        
+        // Schedule update after throttle interval
+        DispatchQueue.main.asyncAfter(deadline: .now() + throttleInterval, execute: workItem)
+        
+        // Immediately update for the first change or if significant
+        if throttledTotalFileCount == 0 || abs(plan.totalFiles - throttledTotalFileCount) > 100 {
+            throttledTotalFileCount = plan.totalFiles
+            workItem.cancel()
+        }
     }
     
     private func expandAllFolders() {
+        let ids = collectFolderIDs(from: plan)
+        expandedFolders = ids
+        knownFolderIDs = ids
+    }
+
+    private func refreshExpandedFolders(for plan: OrganizationPlan) {
+        let currentIDs = collectFolderIDs(from: plan)
+        let newIDs = currentIDs.subtracting(knownFolderIDs)
+        expandedFolders = expandedFolders.intersection(currentIDs)
+        expandedFolders.formUnion(newIDs)
+        knownFolderIDs = currentIDs
+    }
+
+    private func collectFolderIDs(from plan: OrganizationPlan) -> Set<String> {
         var ids = Set<String>()
         func traverse(_ folder: FolderSuggestion) {
             ids.insert(folder.id.uuidString)
@@ -66,12 +148,15 @@ class PreviewStore: ObservableObject {
         for suggestion in plan.suggestions {
             traverse(suggestion)
         }
-        expandedFolders = ids
+        return ids
     }
     
     private func rebuildFlattenedRows() {
         var rows: [FlattenedRow] = []
-        var mappings: [UUID: FileRenameMapping] = [:]
+        
+        // Only recalculate rename mappings if plan version changed
+        let planVersionChanged = cachedPlanVersion != plan.version
+        var mappings: [UUID: FileRenameMapping] = planVersionChanged ? [:] : renameMappings
         
         func processFolder(_ folder: FolderSuggestion, depth: Int) {
             let id = folder.id.uuidString
@@ -93,15 +178,17 @@ class PreviewStore: ObservableObject {
                 // Add files
                 for file in folder.files {
                     rows.append(FlattenedRow(
-                        id: file.id.uuidString,
+                        id: "\(folder.id.uuidString)-\(file.id.uuidString)",
                         depth: depth + 1,
                         type: .file(file, parentFolderID: folder.id),
                         isExpanded: false
                     ))
                     
-                    // Pre-compute mappings
-                    if let mapping = folder.renameMapping(for: file) {
-                        mappings[file.id] = mapping
+                    // Pre-compute mappings only if plan changed
+                    if planVersionChanged {
+                        if let mapping = folder.renameMapping(for: file) {
+                            mappings[file.id] = mapping
+                        }
                     }
                 }
             }
@@ -129,7 +216,9 @@ class PreviewStore: ObservableObject {
             }
         }
         
-        self.renameMappings = mappings
+        if planVersionChanged {
+            self.renameMappings = mappings
+        }
         self.flattenedRows = rows
     }
     
@@ -227,7 +316,12 @@ class PreviewStore: ObservableObject {
             generationStats: updatedPlan.generationStats
         )
         plan = finalPlan
+        folderCountCache.removeAll()
+        folderCountCacheValid = false
+        updateThrottledFileCount()
+        dragDropManager?.clearDropTargetCache()
         rebuildFlattenedRows()
+        cachedPlanVersion = finalPlan.version
     }
     
     func moveFile(fileID: UUID, toFolderID: UUID) {
@@ -306,7 +400,7 @@ struct OptimizedPreviewTree: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2, pinnedViews: []) {
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                     ForEach(store.flattenedRows) { row in
                         FlattenedRowView(
                             row: row,
@@ -314,11 +408,13 @@ struct OptimizedPreviewTree: View {
                             dragDropManager: dragDropManager,
                             onPlanChanged: onPlanChanged
                         )
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                        .padding(.vertical, 2)
                         .id(row.id)
                     }
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
         }
     }
@@ -407,14 +503,14 @@ struct FlatFolderRowView: View {
                     url: nil,  // New folders don't exist yet
                     folderName: suggestion.folderName,
                     size: 16,
-                    fileCount: suggestion.totalFileCount
+                    fileCount: store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }
                 )
                 .opacity(isDropTarget ? 0.7 : 1.0)
                 
                 Text(suggestion.folderName)
                     .fontWeight(.medium)
                 
-                Text("(\(suggestion.totalFileCount) files)")
+                Text("(\(store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }) files)")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -675,7 +771,7 @@ struct FlatUnorganizedHeaderView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
-        .padding(.top, 16)
+        .padding(.top, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isDropTarget ? Color.orange.opacity(0.1) : Color.clear)
@@ -700,8 +796,7 @@ struct FlatUnorganizedFileRowView: View {
     
     var body: some View {
         HStack {
-            Image(systemName: fileIcon(for: file))
-                .foregroundColor(.secondary)
+            FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 20, height: 20))
             Text(file.displayName)
             Spacer()
             Text(file.formattedSize)
@@ -738,20 +833,6 @@ struct FlatUnorganizedFileRowView: View {
             isDragging = true
             dragDropManager.startDrag(file)
             return NSItemProvider(object: file.id.uuidString as NSString)
-        }
-    }
-    
-    private func fileIcon(for file: FileItem) -> String {
-        switch file.extension.lowercased() {
-        case "pdf": return "doc.richtext"
-        case "jpg", "jpeg", "png", "heic": return "photo"
-        case "mp4", "mov": return "video"
-        case "mp3", "wav", "aac", "m4a", "flac", "ogg": return "waveform"
-        case "zip", "gz", "rar": return "archivebox"
-        case "dmg", "iso": return "externaldrive"
-        case "pkg", "app": return "shippingbox"
-        case "swift", "js", "py", "ts": return "doc.text.fill"
-        default: return "doc"
         }
     }
 }

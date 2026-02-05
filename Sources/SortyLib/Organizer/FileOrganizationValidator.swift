@@ -151,7 +151,7 @@ enum ValidationError: LocalizedError {
         case .pathConflict(let path):
             return "Path conflict: \(path)"
         case .pathExists(let path):
-            return "Path already exists: \(path)"
+            return "Cannot create folder: A file already exists at '\(path)'. The AI suggested a folder name that conflicts with an existing file."
         case .fileNotFound(let path):
             return "File not found: \(path)"
         case .largeOperation(let count):

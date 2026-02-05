@@ -273,9 +273,11 @@ public class AISessionManager: ObservableObject {
             "Connection": "keep-alive"
         ]
         
-        // Connection establishment timeout (fast for initial connection)
-        config.timeoutIntervalForRequest = 10  // 10 seconds for connection establishment
-        config.timeoutIntervalForResource = 180  // 3 minutes for streaming responses
+        // Use user's configured timeout values from AIConfig
+        // requestTimeout: time to establish connection and receive response headers
+        // resourceTimeout: total time allowed for streaming/large responses
+        config.timeoutIntervalForRequest = aiConfig.requestTimeout  // User's setting (default 120s)
+        config.timeoutIntervalForResource = aiConfig.resourceTimeout  // User's setting (default 600s)
         
         // Enable connection reuse - critical for performance
         config.httpMaximumConnectionsPerHost = 6

@@ -253,7 +253,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
+        request.timeoutInterval = 30
         
         if config.requiresAPIKey, let apiKey = config.apiKey, !apiKey.isEmpty {
             request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -457,6 +457,5 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
     }
 }
-
 
 

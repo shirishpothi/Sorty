@@ -21,17 +21,16 @@ public struct FileThumbnailView: View {
                     .aspectRatio(contentMode: .fit)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             } else if isLoading {
-                // Subtle loading state
-                Color.secondary.opacity(0.1)
-                    .frame(width: size.width, height: size.height)
-                    .overlay(
-                        ProgressView()
-                            .scaleEffect(0.5)
-                    )
+                // Subtle loading state - use system icon as placeholder instead of progress view
+                Image(nsImage: placeholderIcon())
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .opacity(0.6)
             } else {
-                // Fallback icon
-                Image(systemName: "doc.fill")
-                    .foregroundColor(.secondary)
+                // Fallback icon - use actual system icon
+                Image(nsImage: placeholderIcon())
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
             }
         }
         .frame(width: size.width, height: size.height)
@@ -43,5 +42,16 @@ public struct FileThumbnailView: View {
                 isLoading = false
             }
         }
+    }
+    
+    private func placeholderIcon() -> NSImage {
+        if FileManager.default.fileExists(atPath: url.path) {
+            return NSWorkspace.shared.icon(forFile: url.path)
+        }
+        let ext = url.pathExtension
+        if !ext.isEmpty {
+            return NSWorkspace.shared.icon(forFileType: ext)
+        }
+        return NSWorkspace.shared.icon(for: .data)
     }
 }

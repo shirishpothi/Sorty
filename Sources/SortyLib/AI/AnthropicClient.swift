@@ -214,7 +214,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         let url = URL(string: "https://api.anthropic.com/v1/models")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
+        request.timeoutInterval = 30
         request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         

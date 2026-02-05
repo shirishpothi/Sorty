@@ -35,6 +35,10 @@ public final class FolderWatcher: @unchecked Sendable {
     // Heartbeat for keeping streams alive
     private var heartbeatTimer: DispatchSourceTimer?
     
+    // Stream health monitoring
+    private var lastEventTime: [UUID: Date] = [:]
+    private let stuckStreamThreshold: TimeInterval = 300 // 5 minutes
+    
     public init() {
         startHeartbeat()
     }
@@ -246,6 +250,8 @@ public final class FolderWatcher: @unchecked Sendable {
             resolvedURLs.removeValue(forKey: id)
             DebugLogger.log("Stopped accessing security scoped resource for folder ID: \(id)")
         }
+        
+        lastEventTime.removeValue(forKey: id)
     }
     
     private func updateSnapshot(for folder: WatchedFolder) {
@@ -258,6 +264,7 @@ public final class FolderWatcher: @unchecked Sendable {
     }
     
     fileprivate func handleEvents(for folderId: UUID) {
+        lastEventTime[folderId] = Date()
         guard let folder = watchedFolders[folderId] else { return }
         guard folder.autoOrganize else { return }
         guard !pausedFolders.contains(folderId) else {
@@ -298,14 +305,55 @@ public final class FolderWatcher: @unchecked Sendable {
         heartbeatTimer?.schedule(deadline: .now() + 60, repeating: 60)
         heartbeatTimer?.setEventHandler { [weak self] in
             guard let self = self else { return }
-            // Verify streams are still valid (basic check)
-            for _ in self.streams {
-                // If needed, we could check stream status here
-                // For now just logging to confirm watcher is alive
-                // DebugLogger.log("Heartbeat: Monitoring \(self.watchedFolders[id]?.name ?? "unknown")")
+            
+            // Check for stuck streams and restart them
+            for (id, lastTime) in self.lastEventTime {
+                if Date().timeIntervalSince(lastTime) > self.stuckStreamThreshold {
+                    if let folder = self.watchedFolders[id], !self.pausedFolders.contains(id) {
+                        DebugLogger.log("Restarting potentially stuck stream for: \(folder.name)")
+                        self.stopWatchingSync(id: id)
+                        self.startWatchingSync(folder)
+                    }
+                }
             }
         }
         heartbeatTimer?.resume()
+    }
+    
+    // MARK: - Public Health & Recovery Methods
+    
+    /// Re-acquire security-scoped access if lost (e.g., volume disconnect)
+    public func reacquireAccessIfNeeded(for folder: WatchedFolder) -> Bool {
+        guard let bookmarkData = folder.bookmarkData else { return false }
+        
+        var isStale = false
+        guard let url = try? URL(resolvingBookmarkData: bookmarkData,
+                                  options: .withSecurityScope,
+                                  relativeTo: nil,
+                                  bookmarkDataIsStale: &isStale) else {
+            DebugLogger.log("Failed to resolve bookmark for reacquire: \(folder.name)")
+            return false
+        }
+        
+        if url.startAccessingSecurityScopedResource() {
+            queue.async { [weak self] in
+                self?.resolvedURLs[folder.id] = url
+            }
+            DebugLogger.log("Reacquired access for: \(folder.name)")
+            return true
+        }
+        DebugLogger.log("Failed to reacquire access for: \(folder.name)")
+        return false
+    }
+    
+    /// Check if a folder is healthy and accessible
+    public func isFolderHealthy(_ folder: WatchedFolder) -> Bool {
+        var resolvedURL: URL?
+        queue.sync {
+            resolvedURL = resolvedURLs[folder.id]
+        }
+        guard let url = resolvedURL else { return false }
+        return fileManager.isReadableFile(atPath: url.path)
     }
 }
 

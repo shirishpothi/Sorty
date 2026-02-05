@@ -94,6 +94,7 @@ public class LearningsManager: ObservableObject {
     public func grantConsent() async {
         consentManager.grantConsent()
         
+        loadProfileIfNeededForCollection()
         if var profile = currentProfile {
             profile.consentGranted = true
             profile.consentDate = Date()
@@ -147,7 +148,7 @@ public class LearningsManager: ObservableObject {
     
     /// Load profile synchronously for background collection (without authentication)
     /// This allows data collection to work even when the UI is locked
-    private func loadProfileIfNeededForCollection() {
+    public func loadProfileIfNeededForCollection() {
         guard currentProfile == nil else { return }
         
         do {
@@ -164,8 +165,12 @@ public class LearningsManager: ObservableObject {
     
     private func saveProfile() async {
         guard let profile = currentProfile else { return }
+        
+        // Prune before saving to keep file size manageable
+        pruneOldData()
+        
         do {
-            try LearningsFileManager.save(profile: profile)
+            try LearningsFileManager.save(profile: currentProfile ?? profile)
         } catch {
             self.error = "Failed to save profile: \(error.localizedDescription)"
         }
@@ -293,6 +298,9 @@ public class LearningsManager: ObservableObject {
         profile.postOrganizationChanges.append(change)
         currentProfile = profile
         debouncedSave()
+        
+        // Trigger auto-inference check after recording change
+        Task { await checkAndTriggerAutoInference() }
     }
     
     /// Record a history revert event
@@ -308,6 +316,26 @@ public class LearningsManager: ObservableObject {
             reason: revertReason
         )
         profile.historyReverts.append(event)
+        currentProfile = profile
+        debouncedSave()
+    }
+    
+    /// Record a successfully completed organization run
+    public func recordSuccessfulRun(folderPath: String, fileCount: Int, ruleIdsUsed: Set<String>) {
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
+        
+        // Use the actual file count if 0 was passed
+        let count = fileCount > 0 ? fileCount : 0
+        
+        let job = JobManifest(
+            projectName: "Automated Run",
+            entries: Array(repeating: JobManifestEntry(originalPath: "", destinationPath: "", status: .success), count: count),
+            status: .completed
+        )
+        profile.jobHistory.append(job)
+        
         currentProfile = profile
         debouncedSave()
     }
@@ -738,213 +766,394 @@ public class LearningsManager: ObservableObject {
     /// Generates a prompt context string based on the current profile
     /// This is the bridge between learned data and the AI organization engine
     /// Uses weighted priorities: Explicit preferences > High-confidence rules > Recent feedback > General patterns
-    public func generatePromptContext() -> String {
-        guard let profile = currentProfile, profile.consentGranted else {
+    /// Returns XML-structured output for better AI parsing
+    public func generatePromptContext(forFolder folderPath: String? = nil) -> String {
+        loadProfileIfNeededForCollection()
+        
+        guard let profile = currentProfile, (profile.consentGranted || consentManager.hasConsented) else {
             return ""
         }
         
-        var context = "Based on the user's past behavior and explicit preferences, follow these rules (sorted by priority):\n"
-        var hasContent = false
-        
-        // Priority 1 (Weight: CRITICAL) - Honing Answers (Explicit user preferences)
-        if !profile.honingAnswers.isEmpty {
-            context += "\n## CRITICAL PREFERENCES (User-confirmed, always follow):\n"
-            for answer in profile.honingAnswers {
-                context += "- ✓ \(answer.selectedOption)\n"
-            }
-            hasContent = true
+        if !profile.consentGranted && !consentManager.hasConsented {
+            return ""
         }
         
-        // Priority 1.5 (Weight: HIGH) - Behavior Preferences (Structural preferences from honing)
-        extractBehaviorPreferences()
-        if let prefs = behaviorPreferences {
-            var prefsContent: [String] = []
-            prefsContent.append("- Deletion policy: \(prefs.deletionVsArchive.displayName)")
-            prefsContent.append("- Folder structure: \(prefs.folderDepthPreference.displayName)")
-            prefsContent.append("- Primary organization: \(prefs.dateVsContentPreference.displayName)")
-            prefsContent.append("- Duplicate handling: \(prefs.duplicateKeeperStrategy.displayName)")
-            
-            // Only add if we have meaningful (non-default) preferences
-            if prefs != BehaviorPreferences() {
-                context += "\n## STRUCTURAL PREFERENCES (User's organization philosophy):\n"
-                for pref in prefsContent {
-                    context += "\(pref)\n"
-                }
-                hasContent = true
-            }
-        }
+        var sections: [LearningsSection] = []
+        let now = Date()
         
-        // Priority 2 (Weight: HIGH) - High-confidence inferred rules
-        let highConfidenceRules = getActiveRules().filter { 
-            $0.confidenceLevel == .high && $0.successRate > 0.7 
-        }
-        if !highConfidenceRules.isEmpty {
-            context += "\n## HIGH-CONFIDENCE RULES (Proven patterns, strongly follow):\n"
-            for rule in highConfidenceRules.prefix(5) {
-                let successPct = Int(rule.successRate * 100)
-                context += "- [\(successPct)% success] \(rule.explanation)\n"
-            }
-            hasContent = true
-        }
-        
-        // Priority 3 (Weight: MEDIUM-HIGH) - Recent steering prompts (post-org feedback)
-        let recentSteering = profile.steeringPrompts.suffix(5)
-        if !recentSteering.isEmpty {
-            context += "\n## RECENT FEEDBACK (Apply these adjustments):\n"
-            for prompt in recentSteering {
-                context += "- \(prompt.prompt)\n"
-            }
-            hasContent = true
-        }
-        
-        // Priority 4 (Weight: MEDIUM) - Additional Instructions (Explicit user commands)
-        let uniqueInstructions = profile.additionalInstructionsHistory
-            .map { $0.instruction }
-            .orderedDeduplicated()
-            .suffix(3)
-        if !uniqueInstructions.isEmpty {
-            context += "\n## USER INSTRUCTIONS:\n"
-            for instruction in uniqueInstructions {
-                context += "- \(instruction)\n"
-            }
-            hasContent = true
-        }
-        
-        // Priority 5 (Weight: MEDIUM) - Guiding Instructions (Pre-organization feedback)
-        let uniqueGuidingInstructions = profile.guidingInstructionsHistory
-            .map { $0.instruction }
-            .orderedDeduplicated()
-            .suffix(3)
-        if !uniqueGuidingInstructions.isEmpty {
-            context += "\n## GUIDING INSTRUCTIONS:\n"
-            for instruction in uniqueGuidingInstructions {
-                context += "- \(instruction)\n"
-            }
-            hasContent = true
-        }
-        
-        // Priority 5.5 (Weight: MEDIUM) - Patterns from Regenerations
-        let recentRegenerations = profile.regeneratedOrganizations.suffix(5)
-        if !recentRegenerations.isEmpty {
-            context += "\n## REGENERATION PATTERNS (User requested changes previously):\n"
-            for regen in recentRegenerations {
-                if let guide = regen.guidingInstruction, !guide.isEmpty {
-                    context += "- When seeing '\(regen.previousPlanSummary ?? "previous structure")', user preferred: \(guide)\n"
-                }
-            }
-            hasContent = true
-        }
-
-        // Priority 5.6 (Weight: MEDIUM) - Patterns from Cancellations
-        let recentCancellations = profile.cancelledOrganizations.suffix(5)
-        if !recentCancellations.isEmpty {
-            context += "\n## AVOID THESE STRUCTURES (User cancelled these types of plans):\n"
-            var cancelledSummaries: [String] = []
-            for cancel in recentCancellations {
-                if let instr = cancel.instructions, !instr.isEmpty {
-                    cancelledSummaries.append("Plan with instructions '\(instr)' at stage \(cancel.cancelledAtStage)")
-                }
-            }
-            for summary in Set(cancelledSummaries).prefix(3) {
-                context += "- AVOID: \(summary)\n"
-            }
-            hasContent = true
-        }
-        
-        // Priority 6 (Weight: LOW-MEDIUM) - Medium-confidence rules
-        let mediumConfidenceRules = getActiveRules().filter { 
-            $0.confidenceLevel == .medium || ($0.confidenceLevel == .high && $0.successRate <= 0.7)
-        }
-        if !mediumConfidenceRules.isEmpty {
-            context += "\n## LEARNED PATTERNS (Consider these tendencies):\n"
-            for rule in mediumConfidenceRules.prefix(5) {
-                let confidence = rule.confidenceLevel.rawValue.capitalized
-                context += "- [\(confidence)] \(rule.explanation)\n"
-            }
-            hasContent = true
-        }
-        
-        // Priority 6.5 (Weight: MEDIUM) - Positive Examples (What user explicitly likes)
-        let recentPositives = profile.positiveExamples.suffix(15)
-        if !recentPositives.isEmpty {
-            context += "\n## POSITIVE PATTERNS (User explicitly approves these placements):\n"
-            // Group by destination folder for cleaner output
-            var positivePatterns: [String: [(file: String, ext: String)]] = [:]
-            for example in recentPositives {
-                let srcFile = URL(fileURLWithPath: example.srcPath).lastPathComponent
-                let dstFolder = URL(fileURLWithPath: example.dstPath).deletingLastPathComponent().lastPathComponent
-                let ext = URL(fileURLWithPath: example.srcPath).pathExtension.lowercased()
-                positivePatterns[dstFolder, default: []].append((file: srcFile, ext: ext))
-            }
-            
-            for (folder, files) in positivePatterns.prefix(5) {
-                // Group by extension within folder
-                let extCounts = Dictionary(grouping: files) { $0.ext }.mapValues { $0.count }
-                let topExtensions = extCounts.sorted { $0.value > $1.value }.prefix(2)
-                let extList = topExtensions.map { ".\($0.key)" }.joined(separator: ", ")
-                if !extList.isEmpty {
-                    context += "- '\(folder)/' is good for: \(extList) files (\(files.count) examples)\n"
-                } else {
-                    context += "- '\(folder)/' is an approved destination (\(files.count) examples)\n"
-                }
-            }
-            hasContent = true
-        }
-        
-        // Priority 7 (Weight: HIGH for corrections) - Recent corrections (MUST avoid repeating)
-        let recentCorrections = profile.postOrganizationChanges
-            .filter { $0.wasAIOrganized }
-            .suffix(10)
-        if !recentCorrections.isEmpty {
-            context += "\n## CORRECTIONS (IMPORTANT - Avoid repeating these mistakes):\n"
-            // Group corrections by pattern for clearer guidance
-            var correctionPatterns: [String: [(from: String, to: String)]] = [:]
-            for change in recentCorrections {
-                let srcFolder = URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent
-                let dstFolder = URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent
-                let ext = URL(fileURLWithPath: change.originalPath).pathExtension.lowercased()
-                let key = ext.isEmpty ? "misc" : ext
-                correctionPatterns[key, default: []].append((from: srcFolder, to: dstFolder))
-            }
-            
-            for (fileType, moves) in correctionPatterns.prefix(5) {
-                let uniqueMoves = Dictionary(grouping: moves) { "\($0.from)->\($0.to)" }
-                for (_, group) in uniqueMoves.prefix(2) {
-                    if let move = group.first {
-                        context += "- .\(fileType) files: User prefers '\(move.to)/' over '\(move.from)/'\n"
-                    }
-                }
-            }
-            hasContent = true
-        }
-        
-        // Priority 7.5 (Weight: HIGH) - Rejection Patterns (AVOID these placements)
-        let recentRejections = profile.rejections.suffix(10)
+        // SECTION 1: REJECTION PATTERNS - Most important, show first
+        let recentRejections = profile.rejections
+            .sorted(by: { $0.timestamp > $1.timestamp })
+            .prefix(15)
         if !recentRejections.isEmpty {
-            context += "\n## REJECTION PATTERNS (AVOID these - user explicitly rejected):\n"
-            var rejectionPatterns: [String: Int] = [:]
+            var items: [LearningsItem] = []
+            var rejectionPatterns: [String: (count: Int, lastSeen: Date)] = [:]
             for rejection in recentRejections {
                 let ext = URL(fileURLWithPath: rejection.srcPath).pathExtension.lowercased()
                 let folder = URL(fileURLWithPath: rejection.dstPath).deletingLastPathComponent().lastPathComponent
                 if !folder.isEmpty {
                     let pattern = ext.isEmpty ? "files → \(folder)" : ".\(ext) → \(folder)"
-                    rejectionPatterns[pattern, default: 0] += 1
+                    let existing = rejectionPatterns[pattern]
+                    rejectionPatterns[pattern] = (
+                        count: (existing?.count ?? 0) + 1,
+                        lastSeen: max(existing?.lastSeen ?? .distantPast, rejection.timestamp)
+                    )
                 }
             }
-            for (pattern, count) in rejectionPatterns.sorted(by: { $0.value > $1.value }).prefix(5) {
-                context += "- DO NOT place \(pattern) (rejected \(count)x)\n"
+            for (pattern, data) in rejectionPatterns.sorted(by: { $0.value.count > $1.value.count }).prefix(8) {
+                let recency = recencyWeight(from: data.lastSeen, to: now)
+                let weight = min(100, 70 + data.count * 10 + Int(recency * 20))
+                items.append(LearningsItem(
+                    content: "DO NOT place \(pattern)",
+                    weight: weight,
+                    occurrences: data.count,
+                    recency: recencyLabel(data.lastSeen, now: now)
+                ))
             }
-            hasContent = true
+            if !items.isEmpty {
+                sections.append(LearningsSection(
+                    id: "rejections",
+                    title: "REJECTION PATTERNS",
+                    priority: "CRITICAL",
+                    instruction: "NEVER use these placements - user explicitly rejected them",
+                    items: items
+                ))
+            }
         }
         
-        // Priority 8 (Weight: ADVISORY) - Revert patterns
+        // SECTION 2: CRITICAL PREFERENCES - Honing Answers
+        if !profile.honingAnswers.isEmpty {
+            let answerDate = profile.consentDate ?? profile.createdAt
+            let items = profile.honingAnswers.prefix(10).map { answer in
+                let recency = recencyWeight(from: answerDate, to: now)
+                return LearningsItem(
+                    content: answer.selectedOption,
+                    weight: 95 + Int(recency * 5),
+                    recency: recencyLabel(answerDate, now: now)
+                )
+            }
+            sections.append(LearningsSection(
+                id: "preferences",
+                title: "USER PREFERENCES",
+                priority: "CRITICAL",
+                instruction: "These are explicit user preferences - always follow them",
+                items: Array(items)
+            ))
+        }
+        
+        // SECTION 3: BEHAVIOR PREFERENCES
+        extractBehaviorPreferences()
+        if let prefs = behaviorPreferences, prefs != BehaviorPreferences() {
+            var items: [LearningsItem] = []
+            items.append(LearningsItem(content: "Deletion policy: \(prefs.deletionVsArchive.displayName)", weight: 90))
+            items.append(LearningsItem(content: "Folder structure: \(prefs.folderDepthPreference.displayName)", weight: 90))
+            items.append(LearningsItem(content: "Primary organization: \(prefs.dateVsContentPreference.displayName)", weight: 90))
+            items.append(LearningsItem(content: "Duplicate handling: \(prefs.duplicateKeeperStrategy.displayName)", weight: 90))
+            sections.append(LearningsSection(
+                id: "structure",
+                title: "STRUCTURAL PREFERENCES",
+                priority: "HIGH",
+                instruction: "User's organization philosophy - use these to guide folder structure decisions",
+                items: items
+            ))
+        }
+
+        // SECTION 3B: USER INSTRUCTIONS
+        let recentInstructions = profile.additionalInstructionsHistory
+            .sorted(by: { $0.timestamp > $1.timestamp })
+            .prefix(8)
+        if !recentInstructions.isEmpty {
+            let items = recentInstructions.map { instruction in
+                let recency = recencyWeight(from: instruction.timestamp, to: now)
+                return LearningsItem(
+                    content: instruction.instruction,
+                    weight: 80 + Int(recency * 15),
+                    recency: recencyLabel(instruction.timestamp, now: now)
+                )
+            }
+            sections.append(LearningsSection(
+                id: "instructions",
+                title: "USER INSTRUCTIONS",
+                priority: "HIGH",
+                instruction: "Direct user instructions that must be followed",
+                items: Array(items)
+            ))
+        }
+        
+        // SECTION 4: CORRECTIONS - Avoid repeating mistakes
+        let recentCorrections = profile.postOrganizationChanges
+            .filter { $0.wasAIOrganized }
+            .sorted(by: { $0.timestamp > $1.timestamp })
+            .prefix(15)
+        if !recentCorrections.isEmpty {
+            var items: [LearningsItem] = []
+            var correctionPatterns: [String: (from: String, to: String, count: Int, lastSeen: Date)] = [:]
+            for change in recentCorrections {
+                let originalURL = URL(fileURLWithPath: change.originalPath)
+                let newURL = URL(fileURLWithPath: change.newPath)
+                let srcFolder = originalURL.deletingLastPathComponent().lastPathComponent
+                let dstFolder = newURL.deletingLastPathComponent().lastPathComponent
+                let srcDisplay = (srcFolder.isEmpty || srcFolder == "/") ? "root" : srcFolder
+                let dstDisplay = (dstFolder.isEmpty || dstFolder == "/") ? "root" : dstFolder
+                let ext = originalURL.pathExtension.lowercased()
+                let key = "\(ext.isEmpty ? "misc" : ext):\(srcDisplay)->\(dstDisplay)"
+                let existing = correctionPatterns[key]
+                correctionPatterns[key] = (
+                    from: srcDisplay,
+                    to: dstDisplay,
+                    count: (existing?.count ?? 0) + 1,
+                    lastSeen: max(existing?.lastSeen ?? .distantPast, change.timestamp)
+                )
+            }
+            for (key, data) in correctionPatterns.sorted(by: { $0.value.count > $1.value.count }).prefix(8) {
+                let ext = key.components(separatedBy: ":").first ?? "files"
+                let recency = recencyWeight(from: data.lastSeen, to: now)
+                let weight = min(95, 60 + data.count * 15 + Int(recency * 20))
+                items.append(LearningsItem(
+                    content: ".\(ext) files: prefer '\(data.to)/' over '\(data.from)/'",
+                    weight: weight,
+                    occurrences: data.count,
+                    recency: recencyLabel(data.lastSeen, now: now)
+                ))
+            }
+            if !items.isEmpty {
+                sections.append(LearningsSection(
+                    id: "corrections",
+                    title: "PAST CORRECTIONS",
+                    priority: "HIGH",
+                    instruction: "User corrected these placements - avoid repeating the same mistakes",
+                    items: items
+                ))
+            }
+        }
+        
+        // SECTION 5: HIGH-CONFIDENCE RULES
+        let highConfidenceRules = getActiveRules()
+            .filter { $0.confidenceLevel == .high && $0.successRate > 0.7 }
+            .sorted(by: { ($0.lastAppliedAt ?? .distantPast) > ($1.lastAppliedAt ?? .distantPast) })
+        if !highConfidenceRules.isEmpty {
+            let items = highConfidenceRules.prefix(8).map { rule in
+                let recency = recencyWeight(from: rule.lastAppliedAt ?? profile.createdAt, to: now)
+                let successPct = Int(rule.successRate * 100)
+                return LearningsItem(
+                    content: rule.explanation,
+                    weight: min(90, 70 + successPct / 5 + Int(recency * 10)),
+                    confidence: successPct,
+                    recency: recencyLabel(rule.lastAppliedAt ?? profile.createdAt, now: now)
+                )
+            }
+            sections.append(LearningsSection(
+                id: "high_confidence_rules",
+                title: "PROVEN PATTERNS",
+                priority: "HIGH",
+                instruction: "These patterns have high success rates - follow them unless user instructions conflict",
+                items: Array(items)
+            ))
+        }
+        
+        // SECTION 6: RECENT FEEDBACK (Steering prompts)
+        let recentSteering = profile.steeringPrompts.sorted(by: { $0.timestamp > $1.timestamp }).prefix(8)
+        if !recentSteering.isEmpty {
+            let items = recentSteering.map { prompt in
+                let recency = recencyWeight(from: prompt.timestamp, to: now)
+                return LearningsItem(
+                    content: prompt.prompt,
+                    weight: 60 + Int(recency * 30),
+                    recency: recencyLabel(prompt.timestamp, now: now)
+                )
+            }
+            sections.append(LearningsSection(
+                id: "feedback",
+                title: "RECENT FEEDBACK",
+                priority: "MEDIUM-HIGH",
+                instruction: "Apply these adjustments from recent user feedback",
+                items: Array(items)
+            ))
+        }
+        
+        // SECTION 7: CANCELLED ORGANIZATIONS - What NOT to do
+        let recentCancellations = profile.cancelledOrganizations.sorted(by: { $0.timestamp > $1.timestamp }).prefix(5)
+        if !recentCancellations.isEmpty {
+            var items: [LearningsItem] = []
+            for cancel in recentCancellations {
+                if let instr = cancel.instructions, !instr.isEmpty {
+                    let recency = recencyWeight(from: cancel.timestamp, to: now)
+                    items.append(LearningsItem(
+                        content: "Avoid plan style: '\(instr)' (cancelled at \(cancel.cancelledAtStage))",
+                        weight: 50 + Int(recency * 30),
+                        recency: recencyLabel(cancel.timestamp, now: now)
+                    ))
+                }
+            }
+            if !items.isEmpty {
+                sections.append(LearningsSection(
+                    id: "cancellations",
+                    title: "CANCELLED PATTERNS",
+                    priority: "MEDIUM",
+                    instruction: "User cancelled these organization approaches - avoid similar structures",
+                    items: items
+                ))
+            }
+        }
+        
+        // SECTION 8: POSITIVE EXAMPLES
+        let recentPositives = profile.positiveExamples.sorted(by: { $0.timestamp > $1.timestamp }).prefix(20)
+        if !recentPositives.isEmpty {
+            var positivePatterns: [String: (files: [(file: String, ext: String)], lastSeen: Date)] = [:]
+            for example in recentPositives {
+                let srcFile = URL(fileURLWithPath: example.srcPath).lastPathComponent
+                let dstFolder = URL(fileURLWithPath: example.dstPath).deletingLastPathComponent().lastPathComponent
+                let ext = URL(fileURLWithPath: example.srcPath).pathExtension.lowercased()
+                let existing = positivePatterns[dstFolder]
+                positivePatterns[dstFolder] = (
+                    files: (existing?.files ?? []) + [(file: srcFile, ext: ext)],
+                    lastSeen: max(existing?.lastSeen ?? .distantPast, example.timestamp)
+                )
+            }
+            var items: [LearningsItem] = []
+            for (folder, data) in positivePatterns.sorted(by: { $0.value.files.count > $1.value.files.count }).prefix(6) {
+                let extCounts = Dictionary(grouping: data.files) { $0.ext }.mapValues { $0.count }
+                let topExtensions = extCounts.sorted(by: { $0.value > $1.value }).prefix(3)
+                let extList = topExtensions.map { ".\($0.key)" }.joined(separator: ", ")
+                let recency = recencyWeight(from: data.lastSeen, to: now)
+                let weight = 40 + data.files.count * 5 + Int(recency * 20)
+                if !extList.isEmpty {
+                    items.append(LearningsItem(
+                        content: "'\(folder)/' is good for: \(extList) files",
+                        weight: min(80, weight),
+                        occurrences: data.files.count,
+                        recency: recencyLabel(data.lastSeen, now: now)
+                    ))
+                }
+            }
+            if !items.isEmpty {
+                sections.append(LearningsSection(
+                    id: "positive_patterns",
+                    title: "APPROVED DESTINATIONS",
+                    priority: "MEDIUM",
+                    instruction: "User explicitly approved these folder placements",
+                    items: items
+                ))
+            }
+        }
+        
+        // SECTION 9: MEDIUM-CONFIDENCE RULES
+        let mediumConfidenceRules = getActiveRules()
+            .filter { $0.confidenceLevel == .medium || ($0.confidenceLevel == .high && $0.successRate <= 0.7) }
+            .sorted(by: { ($0.lastAppliedAt ?? .distantPast) > ($1.lastAppliedAt ?? .distantPast) })
+        if !mediumConfidenceRules.isEmpty {
+            let items = mediumConfidenceRules.prefix(5).map { rule in
+                let confidence = Int(rule.successRate * 100)
+                return LearningsItem(
+                    content: rule.explanation,
+                    weight: 40 + confidence / 3,
+                    confidence: confidence
+                )
+            }
+            sections.append(LearningsSection(
+                id: "learned_patterns",
+                title: "LEARNED PATTERNS",
+                priority: "LOW",
+                instruction: "Consider these tendencies but they may be overridden by explicit preferences",
+                items: Array(items)
+            ))
+        }
+        
+        // SECTION 10: REVERT WARNING
         let recentReverts = profile.historyReverts.suffix(5)
         if recentReverts.count >= 2 {
-            context += "\n## CAUTION: User has reverted \(recentReverts.count) recent organizations. Be more conservative.\n"
-            hasContent = true
+            sections.append(LearningsSection(
+                id: "caution",
+                title: "CAUTION",
+                priority: "ADVISORY",
+                instruction: "User has reverted \(recentReverts.count) recent organizations - be more conservative with changes",
+                items: []
+            ))
         }
         
-        return hasContent ? context : ""
+        guard !sections.isEmpty else { return "" }
+        
+        return formatAsXML(sections: sections, folderPath: folderPath)
+    }
+    
+    // MARK: - Prompt Context Helpers
+    
+    private struct LearningsSection {
+        let id: String
+        let title: String
+        let priority: String
+        let instruction: String
+        let items: [LearningsItem]
+    }
+    
+    private struct LearningsItem {
+        let content: String
+        var weight: Int = 50
+        var confidence: Int? = nil
+        var occurrences: Int? = nil
+        var recency: String? = nil
+    }
+    
+    private func recencyWeight(from date: Date, to now: Date) -> Double {
+        let daysSince = now.timeIntervalSince(date) / 86400
+        if daysSince < 1 { return 1.0 }
+        if daysSince < 7 { return 0.8 }
+        if daysSince < 30 { return 0.5 }
+        if daysSince < 90 { return 0.3 }
+        return 0.1
+    }
+    
+    private func recencyLabel(_ date: Date, now: Date) -> String {
+        let daysSince = Int(now.timeIntervalSince(date) / 86400)
+        if daysSince == 0 { return "today" }
+        if daysSince == 1 { return "yesterday" }
+        if daysSince < 7 { return "\(daysSince) days ago" }
+        if daysSince < 30 { return "\(daysSince / 7) weeks ago" }
+        if daysSince < 365 { return "\(daysSince / 30) months ago" }
+        return "over a year ago"
+    }
+    
+    private func formatAsXML(sections: [LearningsSection], folderPath: String?) -> String {
+        var xml = "<learnings_context>\n"
+        xml += "  <preamble>\n"
+        xml += "    <instruction>IMPORTANT: The following learnings represent this user's organization preferences, corrections, and patterns. "
+        xml += "Pay close attention to rejection patterns and corrections - these indicate what NOT to do. "
+        xml += "Items with higher weights (closer to 100) are more important. Recent items should be prioritized.</instruction>\n"
+        if let folder = folderPath {
+            let folderName = URL(fileURLWithPath: folder).lastPathComponent
+            xml += "    <context folder=\"\(escapeXML(folderName))\">\(escapeXML(folder))</context>\n"
+        }
+        xml += "  </preamble>\n\n"
+        
+        for section in sections {
+            xml += "  <section id=\"\(section.id)\" priority=\"\(section.priority)\">\n"
+            xml += "    <title>\(escapeXML(section.title))</title>\n"
+            xml += "    <instruction>\(escapeXML(section.instruction))</instruction>\n"
+            if !section.items.isEmpty {
+                xml += "    <items>\n"
+                for item in section.items {
+                    var attrs = "weight=\"\(item.weight)\""
+                    if let conf = item.confidence { attrs += " confidence=\"\(conf)%\"" }
+                    if let occ = item.occurrences { attrs += " occurrences=\"\(occ)\"" }
+                    if let rec = item.recency { attrs += " recency=\"\(rec)\"" }
+                    xml += "      <item \(attrs)>\(escapeXML(item.content))</item>\n"
+                }
+                xml += "    </items>\n"
+            }
+            xml += "  </section>\n\n"
+        }
+        
+        xml += "</learnings_context>"
+        return xml
+    }
+    
+    private func escapeXML(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
     }
     
     /// Generate contextual honing questions based on recent learnings

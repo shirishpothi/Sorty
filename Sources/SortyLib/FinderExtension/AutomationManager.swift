@@ -63,14 +63,6 @@ public final class AutomationManager: ObservableObject {
             UserDefaults.standard.set(true, forKey: "automation.settingsInitialized")
         }
         
-        // Check permissions
-        checkPermissions()
-        
-        // Setup monitoring if enabled
-        if enableSelectionMonitoring {
-            startSelectionMonitoring()
-        }
-        
         // Listen for app activation to refresh status
         NotificationCenter.default.addObserver(
             self,
@@ -78,6 +70,19 @@ public final class AutomationManager: ObservableObject {
             name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
+    }
+    
+    // MARK: - Lifecycle
+    
+    /// Called after app launch when UI is ready to perform dangerous automation checks
+    public func startUp() {
+        // Check permissions
+        checkPermissions()
+        
+        // Setup monitoring if enabled
+        if enableSelectionMonitoring {
+            startSelectionMonitoring()
+        }
     }
     
     // MARK: - Permission Management

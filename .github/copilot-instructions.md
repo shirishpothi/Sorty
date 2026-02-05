@@ -62,7 +62,7 @@ public protocol AIClientProtocol: Sendable {
 ```
 
 ### Testing Patterns
-- **Unit tests**: Use mock AI clients (see `MockAIClient` in [FileOrganizerTests.swift](Tests/SortyTests/FileOrganizerTests.swift))
+- **Unit tests**: Use mock AI clients (see `MockAIClient` in [SortyLibTests.swift](Tests/SortyTests/SortyLibTests.swift))
 - **UI tests**: Navigate via sidebar identifiers (e.g., `"OrganizeSidebarItem"`, `"SettingsSidebarItem"`)
 - **Temporary directories**: Always create in `setUp()` and clean in `tearDown()`
 ```swift

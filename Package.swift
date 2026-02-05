@@ -33,8 +33,8 @@ let package = Package(
                 .copy("Resources/Images")
             ],
             swiftSettings: [
-                // Debug: Fast build, no optimization
-                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
+                // Debug: Fast incremental build
+                .unsafeFlags(["-Onone", "-enable-batch-mode", "-incremental"], .when(configuration: .debug)),
                 // Release: Full optimization with whole-module
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
                 // Common settings for both
@@ -42,6 +42,8 @@ let package = Package(
                 // Swift 6 strict concurrency - use minimal checking to suppress Sendable warnings
                 .enableExperimentalFeature("StrictConcurrency", .when(configuration: .debug)),
                 .unsafeFlags(["-strict-concurrency=minimal"]),
+                // Warn about slow-compiling expressions (helps identify bottlenecks)
+                .unsafeFlags(["-Xfrontend", "-warn-long-function-bodies=100", "-Xfrontend", "-warn-long-expression-type-checking=100"], .when(configuration: .debug)),
             ],
             linkerSettings: []
         ),
@@ -50,7 +52,7 @@ let package = Package(
             dependencies: ["SortyLib"],
             path: "Sources/SortyApp",
             swiftSettings: [
-                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
+                .unsafeFlags(["-Onone", "-enable-batch-mode", "-incremental"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
             linkerSettings: []
@@ -70,7 +72,7 @@ let package = Package(
             dependencies: ["SortyLib"],
             path: "Sources/LearningsCLI",
             swiftSettings: [
-                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
+                .unsafeFlags(["-Onone", "-enable-batch-mode", "-incremental"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
             linkerSettings: []

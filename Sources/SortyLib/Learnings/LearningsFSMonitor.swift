@@ -40,6 +40,89 @@ public struct DetectedFileMove: Sendable {
     public let timestamp: Date
 }
 
+/// Thread-safe helper class for managing FSEventStream
+/// This class is NOT MainActor-isolated and can be safely used from the event queue
+private final class FSEventStreamManager: @unchecked Sendable {
+    private var eventStream: FSEventStreamRef?
+    private let eventQueue: DispatchQueue
+    private weak var monitor: LearningsFSMonitor?
+    
+    init(eventQueue: DispatchQueue) {
+        self.eventQueue = eventQueue
+    }
+    
+    func setMonitor(_ monitor: LearningsFSMonitor) {
+        self.monitor = monitor
+    }
+    
+    func startStream(paths: [String]) {
+        eventQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.stopStreamSync()
+            
+            guard !paths.isEmpty else { return }
+            
+            let pathsToWatch = paths as CFArray
+            
+            var context = FSEventStreamContext(
+                version: 0,
+                info: Unmanaged.passUnretained(self).toOpaque(),
+                retain: nil,
+                release: nil,
+                copyDescription: nil
+            )
+            
+            let callback: FSEventStreamCallback = { _, info, numEvents, eventPaths, eventFlags, _ in
+                guard let info = info else { return }
+                let manager = Unmanaged<FSEventStreamManager>.fromOpaque(info).takeUnretainedValue()
+                
+                guard let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] else { return }
+                
+                // Copy flags synchronously BEFORE escaping the callback to avoid dangling pointer
+                let flagsCopy = Array(UnsafeBufferPointer(start: eventFlags, count: numEvents))
+                
+                // Dispatch to main actor
+                DispatchQueue.main.async {
+                    Task { @MainActor in
+                        manager.monitor?.handleFSEvents(paths: paths, flags: flagsCopy)
+                    }
+                }
+            }
+            
+            let stream = FSEventStreamCreate(
+                kCFAllocatorDefault,
+                callback,
+                &context,
+                pathsToWatch,
+                FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+                1.0,  // Latency in seconds
+                FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
+            )
+            
+            if let stream = stream {
+                self.eventStream = stream
+                FSEventStreamSetDispatchQueue(stream, self.eventQueue)
+                FSEventStreamStart(stream)
+            }
+        }
+    }
+    
+    func stopStream() {
+        eventQueue.sync { [weak self] in
+            self?.stopStreamSync()
+        }
+    }
+    
+    private func stopStreamSync() {
+        if let stream = eventStream {
+            FSEventStreamStop(stream)
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            eventStream = nil
+        }
+    }
+}
+
 /// FSEvents-based monitor for detecting file moves in recently organized directories
 @MainActor
 public class LearningsFSMonitor: ObservableObject {
@@ -52,14 +135,17 @@ public class LearningsFSMonitor: ObservableObject {
     /// Cleanup timers for auto-removing monitoring after correlation window
     private var cleanupTasks: [URL: Task<Void, Never>] = [:]
     
-    /// The FSEventStream reference
-    private var eventStream: FSEventStreamRef?
+    /// Stream manager (not MainActor isolated)
+    private let streamManager: FSEventStreamManager
     
     /// Paths currently being watched
     private var watchedPaths: [String] = []
     
     /// Callback for detected file moves
     public var onFileMoveDetected: ((DetectedFileMove) -> Void)?
+    
+    /// Callback for files removed from monitored scope (moved outside or deleted)
+    public var onFileRemoved: ((String) -> Void)?
     
     /// Correlation window in seconds (default 30 minutes)
     public var correlationWindowSeconds: TimeInterval = 30 * 60
@@ -73,17 +159,13 @@ public class LearningsFSMonitor: ObservableObject {
     
     // MARK: - Initialization
     
-    public init() {}
+    public init() {
+        self.streamManager = FSEventStreamManager(eventQueue: eventQueue)
+        self.streamManager.setMonitor(self)
+    }
     
     deinit {
-        // Can't safely call stopAllMonitoring() here because it's MainActor isolated
-        // and we can't spin up a MainActor task in deinit.
-        // The event stream is a C pointer (FSEventStreamRef) which needs manual cleanup.
-        // However, standard practice with @MainActor classes is to ensure cleanup 
-        // is called before the object is released.
-        // To be safe against leaks if manual cleanup isn't done, we'd need to extract
-        // the stream management to a non-isolated helper class.
-        // For now, removing the unsafe call.
+        // Stream cleanup is handled by FSEventStreamManager
     }
     
     // MARK: - Public API
@@ -105,7 +187,8 @@ public class LearningsFSMonitor: ObservableObject {
         scheduleCleanup(for: directory)
         
         // Restart FSEvents stream with new path
-        restartEventStream()
+        watchedPaths = monitoredDirectories.keys.map { $0.path }
+        streamManager.startStream(paths: watchedPaths)
     }
     
     /// Stop monitoring a specific directory
@@ -122,15 +205,18 @@ public class LearningsFSMonitor: ObservableObject {
         
         // Restart FSEvents stream without this path
         if monitoredDirectories.isEmpty {
-            stopEventStream()
+            streamManager.stopStream()
+            watchedPaths = []
         } else {
-            restartEventStream()
+            watchedPaths = monitoredDirectories.keys.map { $0.path }
+            streamManager.startStream(paths: watchedPaths)
         }
     }
     
     /// Stop all monitoring
     public func stopAllMonitoring() {
-        stopEventStream()
+        streamManager.stopStream()
+        watchedPaths = []
         for task in cleanupTasks.values {
             task.cancel()
         }
@@ -147,77 +233,13 @@ public class LearningsFSMonitor: ObservableObject {
         Array(monitoredDirectories.keys)
     }
     
-    // MARK: - FSEvents Management
-    
-    private func restartEventStream() {
-        stopEventStream()
-        
-        guard !monitoredDirectories.isEmpty else { return }
-        
-        watchedPaths = monitoredDirectories.keys.map { $0.path }
-        
-        // Use weak self in the callback context
-        let pathsToWatch = watchedPaths as CFArray
-        
-        var context = FSEventStreamContext(
-            version: 0,
-            info: Unmanaged.passRetained(self).toOpaque(),
-            retain: nil,
-            release: { info in
-                guard let info = info else { return }
-                Unmanaged<LearningsFSMonitor>.fromOpaque(info).release()
-            },
-            copyDescription: nil
-        )
-        
-        let callback: FSEventStreamCallback = { _, info, numEvents, eventPaths, eventFlags, _ in
-            guard let info = info else { return }
-            let monitor = Unmanaged<LearningsFSMonitor>.fromOpaque(info).takeUnretainedValue()
-            
-            guard let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] else { return }
-            
-            // Copy flags synchronously BEFORE escaping the callback to avoid dangling pointer
-            let flagsCopy = Array(UnsafeBufferPointer(start: eventFlags, count: numEvents))
-            
-            // Post to main actor
-            Task { @MainActor in
-                monitor.handleFSEvents(paths: paths, flags: flagsCopy)
-            }
-        }
-        
-        eventStream = FSEventStreamCreate(
-            kCFAllocatorDefault,
-            callback,
-            &context,
-            pathsToWatch,
-            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
-            1.0,  // Latency in seconds
-            FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagUseCFTypes)
-        )
-        
-        if let stream = eventStream {
-            FSEventStreamSetDispatchQueue(stream, eventQueue)
-            FSEventStreamStart(stream)
-        }
-    }
-    
-    private func stopEventStream() {
-        if let stream = eventStream {
-            FSEventStreamStop(stream)
-            FSEventStreamInvalidate(stream)
-            FSEventStreamRelease(stream)
-            eventStream = nil
-        }
-        watchedPaths = []
-    }
-    
     // MARK: - Event Handling
     
-    private func handleFSEvents(paths: [String], flags: [FSEventStreamEventFlags]) {
+    fileprivate func handleFSEvents(paths: [String], flags: [FSEventStreamEventFlags]) {
         // Debounce: schedule snapshot update for affected directories
         for path in paths {
             for (dirURL, _) in monitoredDirectories {
-                if path.hasPrefix(dirURL.path) {
+                if path.isSubpath(of: dirURL.path) {
                     scheduleSnapshotUpdate(for: dirURL)
                     break
                 }
@@ -247,15 +269,21 @@ public class LearningsFSMonitor: ObservableObject {
         }.value
         
         // Detect moves by comparing snapshots
-        let moves = detectFileMoves(from: oldSnapshot, to: newSnapshot, in: directory)
+        let detection = detectFileMoves(from: oldSnapshot, to: newSnapshot, in: directory)
         
         // Update stored snapshot
         monitoredDirectories[directory] = newSnapshot
         
         // Notify about detected moves
-        for move in moves {
+        for move in detection.moves {
             LogManager.shared.log("Detected move: \(URL(fileURLWithPath: move.fromPath).lastPathComponent) → \(URL(fileURLWithPath: move.toPath).deletingLastPathComponent().lastPathComponent)/", category: "LearningsFSMonitor")
             onFileMoveDetected?(move)
+        }
+        
+        // Notify about removed files (moved outside monitored scope or deleted)
+        for removedPath in detection.removed {
+            LogManager.shared.log("Detected removal: \(URL(fileURLWithPath: removedPath).lastPathComponent)", category: "LearningsFSMonitor")
+            onFileRemoved?(removedPath)
         }
     }
     
@@ -263,8 +291,10 @@ public class LearningsFSMonitor: ObservableObject {
     
     /// Detect file moves by comparing snapshots
     /// Uses filename matching as a heuristic (could be enhanced with file hashes)
-    private func detectFileMoves(from oldSnapshot: FSSnapshot, to newSnapshot: FSSnapshot, in directory: URL) -> [DetectedFileMove] {
+    private func detectFileMoves(from oldSnapshot: FSSnapshot, to newSnapshot: FSSnapshot, in directory: URL) -> (moves: [DetectedFileMove], removed: [String]) {
         var moves: [DetectedFileMove] = []
+        var matchedRemoved: Set<String> = []
+        var matchedAdded: Set<String> = []
         
         let removedFiles = oldSnapshot.files.subtracting(newSnapshot.files)
         let addedFiles = newSnapshot.files.subtracting(oldSnapshot.files)
@@ -276,6 +306,7 @@ public class LearningsFSMonitor: ObservableObject {
             
             // Look for the same filename in added files
             for addedPath in addedFiles {
+                if matchedAdded.contains(addedPath) { continue }
                 let addedURL = URL(fileURLWithPath: addedPath)
                 if addedURL.lastPathComponent == fileName {
                     // Found a probable move
@@ -284,12 +315,15 @@ public class LearningsFSMonitor: ObservableObject {
                         toPath: addedPath,
                         timestamp: Date()
                     ))
+                    matchedRemoved.insert(removedPath)
+                    matchedAdded.insert(addedPath)
                     break
                 }
             }
         }
         
-        return moves
+        let unmatchedRemoved = removedFiles.subtracting(matchedRemoved)
+        return (moves, Array(unmatchedRemoved))
     }
     
     // MARK: - Cleanup

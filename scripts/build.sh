@@ -193,7 +193,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         -derivedDataPath "${BUILD_DIR}/DerivedData" \
         INFOPLIST_FILE="${PROJECT_DIR}/Info.plist" \
         PRODUCT_BUNDLE_IDENTIFIER="${APP_BUNDLE_ID}" \
-        PRODUCT_NAME="${PROJECT_NAME}" \
+        PRODUCT_NAME="${BINARY_NAME}" \
         CODE_SIGN_IDENTITY="-" \
         CODE_SIGNING_REQUIRED=NO \
         clean build 2>&1 | tail -50; then
@@ -211,6 +211,12 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     # Copy to release directory
     rm -rf "${APP_PATH}"
     cp -R "$BUILT_APP" "${APP_PATH}"
+    
+    # Ensure binary has correct RPATH for embedded frameworks
+    MACOS_BIN="${APP_PATH}/Contents/MacOS/${BINARY_NAME}"
+    if [ -f "${MACOS_BIN}" ]; then
+        install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_BIN}" 2>/dev/null || true
+    fi
 
     # Copy Resources with integrity checks and conflict detection
     RESOURCES_DIR="${APP_PATH}/Contents/Resources"
@@ -227,7 +233,65 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         log_item "Copied entitlements"
     fi
 
+    # Bundle CLI tools for xcodebuild
+    CLI_DIR="${RESOURCES_DIR}/CLI"
+    mkdir -p "${CLI_DIR}"
+    
+    # Build and bundle the learnings CLI
+    log_item "Building learnings CLI..."
+    if swift build -c release --product learnings 2>/dev/null; then
+        LEARNINGS_BIN=$(swift build -c release --show-bin-path)/learnings
+        if [ -f "${LEARNINGS_BIN}" ]; then
+            cp "${LEARNINGS_BIN}" "${CLI_DIR}/learnings"
+            chmod 755 "${CLI_DIR}/learnings"
+            log_item "Bundled learnings CLI"
+        fi
+    else
+        log_item "Note: learnings CLI build skipped"
+    fi
+    
+    # Bundle the sorty shell script
+    SORTY_SCRIPT="${PROJECT_DIR}/CLI/sorty"
+    if [ -f "${SORTY_SCRIPT}" ]; then
+        cp "${SORTY_SCRIPT}" "${CLI_DIR}/sorty"
+        chmod 755 "${CLI_DIR}/sorty"
+        log_item "Bundled sorty CLI script"
+    fi
+
     log_success "xcodebuild succeeded ($(get_step_duration "build"))"
+
+    # Embed Sparkle framework for xcodebuild (if not already embedded)
+    FRAMEWORKS_DIR="${APP_PATH}/Contents/Frameworks"
+    if [ ! -d "${FRAMEWORKS_DIR}/Sparkle.framework" ]; then
+        mkdir -p "${FRAMEWORKS_DIR}"
+        # Search in DerivedData (xcodebuild) or .build/artifacts (SPM fallback)
+        SPARKLE_FRAMEWORK=$(find "${BUILD_DIR}/DerivedData" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
+        if [ -z "${SPARKLE_FRAMEWORK}" ]; then
+            SPARKLE_FRAMEWORK=$(find "${PROJECT_DIR}/.build/artifacts" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
+        fi
+        
+        if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
+            cp -R "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/"
+            
+            # Deep sign the framework and its internal helpers for Sandbox compatibility
+            log_item "Deep signing Sparkle.framework for Sandbox compatibility"
+            codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
+            
+            # Specifically sign helpers if they exist (Sparkle 2)
+            for helper in "Autoupdate.app" "Updater.app"; do
+                HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
+                if [ -d "${HELPER_PATH}" ]; then
+                    codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
+                fi
+            done
+            
+            log_item "Embedded and signed Sparkle.framework"
+        else
+            log_item "Warning: Sparkle.framework not found, skipping embed"
+        fi
+    else
+        log_item "Sparkle.framework already embedded"
+    fi
 
     # Verify app bundle structure
     print_step 3 $TOTAL_STEPS "Verifying App Bundle"
@@ -237,6 +301,15 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         log_failure "App bundle not found at ${APP_PATH}"
         exit 1
     fi
+    
+    # Verify Sparkle.framework is embedded
+    if [ -d "${APP_PATH}/Contents/Frameworks/Sparkle.framework" ]; then
+        log_success "Sparkle.framework verified"
+    else
+        log_failure "Required Sparkle.framework missing from app bundle!"
+        exit 1
+    fi
+    
     log_success "App bundle verified ($(get_step_duration "assemble"))"
 else
     # Use swift build (SPM) for local development
@@ -264,6 +337,8 @@ else
     # Copy binary
     if [ -f "${BIN_PATH}/${BINARY_NAME}" ]; then
         cp "${BIN_PATH}/${BINARY_NAME}" "${MACOS_DIR}/"
+        # Ensure binary has correct RPATH for embedded frameworks
+        install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${BINARY_NAME}" 2>/dev/null || true
     else
         log_failure "Binary not found at ${BIN_PATH}/${BINARY_NAME}"
         exit 1
@@ -271,7 +346,18 @@ else
 
     # Copy Info.plist
     if [ -f "${PROJECT_DIR}/Info.plist" ]; then
-        cp "${PROJECT_DIR}/Info.plist" "${APP_PATH}/Contents/"
+        cp "${PROJECT_DIR}/Info.plist" "${APP_PATH}/Contents/Info.plist"
+        
+        # Inject dynamic version and build number into the bundle's Info.plist
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_PATH}/Contents/Info.plist"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUM}" "${APP_PATH}/Contents/Info.plist"
+        
+        # Inject current git hash
+        COMMIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        /usr/libexec/PlistBuddy -c "Delete :GitCommitHash" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Add :GitCommitHash string ${COMMIT_HASH}" "${APP_PATH}/Contents/Info.plist"
+        
+        log_item "Injected Version ${VERSION} (Build ${BUILD_NUM}) into bundle Info.plist"
     fi
 
     # Copy Resources with integrity checks and conflict detection
@@ -284,6 +370,70 @@ else
     if [ -f "${PROJECT_DIR}/Sorty.entitlements" ]; then
         cp "${PROJECT_DIR}/Sorty.entitlements" "${APP_PATH}/Contents/"
         log_item "Copied entitlements"
+    fi
+
+    # Embed Sparkle framework for SPM builds
+    FRAMEWORKS_DIR="${APP_PATH}/Contents/Frameworks"
+    mkdir -p "${FRAMEWORKS_DIR}"
+    
+    # Find Sparkle.framework in SPM build artifacts
+    SPARKLE_FRAMEWORK=""
+    if [ -d "${BIN_PATH}/Sparkle.framework" ]; then
+        SPARKLE_FRAMEWORK="${BIN_PATH}/Sparkle.framework"
+    else
+        # Search in .build/artifacts for any architecture-specific Sparkle.framework
+        SPARKLE_FRAMEWORK=$(find "${PROJECT_DIR}/.build/artifacts" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
+    fi
+    
+    if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
+        cp -R "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/"
+        # Deep sign the framework and its internal helpers for Sandbox compatibility
+        log_item "Deep signing Sparkle.framework for Sandbox compatibility"
+        codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
+        
+        # Specifically sign helpers if they exist (Sparkle 2)
+        for helper in "Autoupdate.app" "Updater.app"; do
+            HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
+            if [ -d "${HELPER_PATH}" ]; then
+                codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
+            fi
+        done
+        
+        log_item "Embedded and signed Sparkle.framework"
+    else
+        log_failure "Required Sparkle.framework not found!"
+        exit 1
+    fi
+
+    # Final check for Sparkle.framework in bundle
+    if [ ! -d "${APP_PATH}/Contents/Frameworks/Sparkle.framework" ]; then
+        log_failure "Sparkle.framework missing after assembly!"
+        exit 1
+    fi
+
+    # Bundle CLI tools
+    CLI_DIR="${RESOURCES_DIR}/CLI"
+    mkdir -p "${CLI_DIR}"
+    
+    # Build and bundle the learnings CLI
+    log_item "Building learnings CLI..."
+    if swift build -c "${BUILD_CONFIG}" --product learnings $BUILD_FLAGS_EXTRA 2>/dev/null; then
+        LEARNINGS_BIN="${BIN_PATH}/learnings"
+        if [ -f "${LEARNINGS_BIN}" ]; then
+            cp "${LEARNINGS_BIN}" "${CLI_DIR}/learnings"
+            chmod 755 "${CLI_DIR}/learnings"
+            log_item "Bundled learnings CLI"
+        fi
+    else
+        log_item "Note: learnings CLI build skipped"
+    fi
+    
+    # Bundle the sorty shell script
+    SORTY_SCRIPT="${PROJECT_DIR}/CLI/sorty"
+    if [ -f "${SORTY_SCRIPT}" ]; then
+        cp "${SORTY_SCRIPT}" "${CLI_DIR}/sorty"
+        chmod 755 "${CLI_DIR}/sorty"
+        log_item "Bundled sorty CLI script"
     fi
 
     log_success "App bundle assembled ($(get_step_duration "assemble"))"

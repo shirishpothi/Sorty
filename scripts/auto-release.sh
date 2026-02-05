@@ -116,9 +116,21 @@ if ! git diff --quiet HEAD 2>/dev/null; then
     fi
 fi
 
-# Step 1: Bump version
-print_step 1 6 "Bumping version to ${NEW_VERSION}"
-"${SCRIPT_DIR}/bump_version.sh" "$NEW_VERSION"
+# Step 1: Prepare release (No mandatory file edits)
+print_step 1 6 "Preparing release v${NEW_VERSION}"
+
+# Update CHANGELOG if script exists
+if [ -f "${SCRIPT_DIR}/update_changelog.sh" ]; then
+    "${SCRIPT_DIR}/update_changelog.sh" "${NEW_VERSION}"
+    log_success "Updated CHANGELOG.md"
+fi
+
+# Only bump version if user explicitly wants to update source files (optional)
+if [[ "$*" == *"--update-source"* ]]; then
+    "${SCRIPT_DIR}/bump_version.sh" "$NEW_VERSION"
+else
+    log_item "Source files will keep their current placeholders (bundle will be tagged dynamically)"
+fi
 
 # Step 2: Run tests
 print_step 2 6 "Running tests"
@@ -145,29 +157,25 @@ else
     log_item "No appcast script found, skipping"
 fi
 
-# Step 6: Commit and tag
-print_step 6 6 "Committing and tagging release"
+# Step 6: Tagging release
+print_step 6 6 "Tagging release"
 
-# Stage version files
-git add "${PROJECT_DIR}/Info.plist" 2>/dev/null || true
-git add "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj" 2>/dev/null || true
-git add "${PROJECT_DIR}/CHANGELOG.md" 2>/dev/null || true
-
-# Commit if there are staged changes
-if ! git diff --cached --quiet; then
-    git commit -m "chore: release v${NEW_VERSION}"
-    log_success "Committed version bump"
-else
-    log_item "No version files to commit"
-fi
-
-# Create tag
+# Create tag first so build can pick it up if we were to rebuild, 
+# although we usually build BEFORE tagging in this script.
+# However, for the NEXT build, the tag will be the source of truth.
 TAG_NAME="v${NEW_VERSION}"
 if git tag -l | grep -q "^${TAG_NAME}$"; then
-    log_warn "Tag ${TAG_NAME} already exists, skipping tag creation"
+    log_warn "Tag ${TAG_NAME} already exists"
 else
     git tag -a "${TAG_NAME}" -m "Release ${NEW_VERSION}"
     log_success "Created tag ${TAG_NAME}"
+fi
+
+# Commit any other changes (like CHANGELOG) if they exist
+git add "${PROJECT_DIR}/CHANGELOG.md" 2>/dev/null || true
+if ! git diff --cached --quiet; then
+    git commit -m "chore: release notes for v${NEW_VERSION}"
+    log_success "Committed release notes"
 fi
 
 echo ""
@@ -177,7 +185,7 @@ echo ""
 print_summary "Release Complete ✨" \
     "Version" "$NEW_VERSION" \
     "Tag" "$TAG_NAME" \
-    "ZIP" "${RELEASE_DIR}/Sorty.zip"
+    "PKG" "${RELEASE_DIR}/Sorty.pkg"
 
 echo ""
 echo "Next steps:"

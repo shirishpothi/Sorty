@@ -1,23 +1,15 @@
 {
   "images" : [
     {
-      "filename" : "GitHubCopilot.png",
-      "idiom" : "universal",
-      "scale" : "1x"
-    },
-    {
-      "filename" : "GitHubCopilot@2x.png",
-      "idiom" : "universal",
-      "scale" : "2x"
-    },
-    {
-      "filename" : "GitHubCopilot@3x.png",
-      "idiom" : "universal",
-      "scale" : "3x"
+      "filename" : "GitHubCopilot.svg",
+      "idiom" : "universal"
     }
   ],
   "info" : {
     "author" : "xcode",
     "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : true
   }
 }

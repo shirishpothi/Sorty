@@ -44,6 +44,9 @@ public struct FinderIntegrationView: View {
                     // Integration Options
                     integrationOptions
                     
+                    // CLI Tools
+                    CLIToolsSection()
+                    
                     // Instructions
                     if showingInstructions {
                         instructionsSection
@@ -248,10 +251,10 @@ public struct FinderIntegrationView: View {
     private func installAll() {
         isInstalling = true
         
-        DispatchQueue.global(qos: .userInitiated).async {
+        Task {
             let results = ExtensionCommunication.installAllIntegrations()
             
-            DispatchQueue.main.async {
+            await MainActor.run {
                 self.installationResults = results
                 self.isInstalling = false
                 self.refreshStatus()
@@ -441,6 +444,227 @@ private struct IntegrationOptionsView: View {
             .padding(.top, 8)
         }
         .padding()
+    }
+}
+
+// MARK: - CLI Tools Section
+
+struct CLIToolsSection: View {
+    @StateObject private var installer = CLIInstaller.shared
+    @State private var installResults: [(name: String, success: Bool, message: String)] = []
+    @State private var showingPathHint = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "terminal.fill")
+                    .font(.title2)
+                    .foregroundStyle(.linearGradient(
+                        colors: [.green, .mint],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Command Line Tools")
+                        .font(.headline)
+                    Text("Use Sorty from Terminal with powerful CLI commands")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                if installer.hasBundledCLIs {
+                    Button(action: installAllCLIs) {
+                        HStack(spacing: 6) {
+                            if installer.isInstalling {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                            } else {
+                                Image(systemName: "arrow.down.circle.fill")
+                            }
+                            Text("Install All")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(installer.isInstalling)
+                }
+            }
+            
+            Divider()
+            
+            if installer.hasBundledCLIs {
+                // sorty CLI
+                CLIToolRow(
+                    name: "sorty",
+                    description: "Organize files, manage watched folders, open settings",
+                    isInstalled: installer.sortyCLIInstalled,
+                    isInstalling: installer.isInstalling,
+                    examples: ["sorty organize ~/Downloads", "sorty status", "sorty help"]
+                ) {
+                    Task {
+                        let result = await installer.installSortyCLI()
+                        installResults = [("sorty CLI", result.success, result.message)]
+                    }
+                }
+                
+                // learnings CLI
+                CLIToolRow(
+                    name: "learnings",
+                    description: "Manage your learning profile, view stats, export data",
+                    isInstalled: installer.learningsCLIInstalled,
+                    isInstalling: installer.isInstalling,
+                    examples: ["learnings status", "learnings stats", "learnings export"]
+                ) {
+                    Task {
+                        let result = await installer.installLearningsCLI()
+                        installResults = [("learnings CLI", result.success, result.message)]
+                    }
+                }
+                
+                // Installation results
+                if !installResults.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(installResults.indices, id: \.self) { index in
+                            let result = installResults[index]
+                            HStack(spacing: 8) {
+                                Image(systemName: result.success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                    .foregroundColor(result.success ? .green : .red)
+                                Text(result.message)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Button("Dismiss") {
+                            installResults = []
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding()
+                    .background(Color.green.opacity(0.05))
+                    .cornerRadius(8)
+                }
+                
+                // Uninstall option
+                if installer.sortyCLIInstalled || installer.learningsCLIInstalled {
+                    HStack {
+                        Spacer()
+                        Button(action: uninstallCLIs) {
+                            Label("Uninstall CLI Tools", systemImage: "trash")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .foregroundColor(.red)
+                    }
+                }
+            } else {
+                // CLI tools not bundled
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.blue)
+                        Text("CLI tools are bundled with release builds")
+                            .font(.subheadline)
+                    }
+                    Text("Build the app with Xcode or run `make build` to include CLI tools in the app bundle.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color.blue.opacity(0.05))
+                .cornerRadius(8)
+            }
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.03))
+        .cornerRadius(12)
+        .onAppear {
+            installer.refreshStatus()
+        }
+    }
+    
+    private func installAllCLIs() {
+        Task {
+            installResults = await installer.installAllCLIs()
+        }
+    }
+    
+    private func uninstallCLIs() {
+        Task {
+            let result = await installer.uninstallCLIs()
+            installResults = [("Uninstall", result.success, result.message)]
+        }
+    }
+}
+
+struct CLIToolRow: View {
+    let name: String
+    let description: String
+    let isInstalled: Bool
+    let isInstalling: Bool
+    let examples: [String]
+    let installAction: () -> Void
+    
+    @State private var showExamples = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text(name)
+                            .font(.subheadline.monospaced())
+                            .fontWeight(.semibold)
+                        
+                        if isInstalled {
+                            Label("Installed", systemImage: "checkmark.circle.fill")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                        }
+                    }
+                    
+                    Text(description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Button(action: { showExamples.toggle() }) {
+                    Image(systemName: "questionmark.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Show usage examples")
+                
+                Button(isInstalled ? "Reinstall" : "Install") {
+                    installAction()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isInstalling)
+            }
+            
+            if showExamples {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Examples:")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    
+                    ForEach(examples, id: \.self) { example in
+                        Text("$ \(example)")
+                            .font(.caption.monospaced())
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(8)
+                .background(Color.black.opacity(0.05))
+                .cornerRadius(6)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

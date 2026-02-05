@@ -1,23 +1,15 @@
 {
   "images" : [
     {
-      "filename" : "Ollama.png",
-      "idiom" : "universal",
-      "scale" : "1x"
-    },
-    {
-      "filename" : "Ollama@2x.png",
-      "idiom" : "universal",
-      "scale" : "2x"
-    },
-    {
-      "filename" : "Ollama@3x.png",
-      "idiom" : "universal",
-      "scale" : "3x"
+      "filename" : "Ollama.svg",
+      "idiom" : "universal"
     }
   ],
   "info" : {
     "author" : "xcode",
     "version" : 1
+  },
+  "properties" : {
+    "preserves-vector-representation" : true
   }
 }

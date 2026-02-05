@@ -51,6 +51,9 @@ public struct ContentView: View {
 
                         // Haptic feedback on navigation
                         HapticFeedbackManager.shared.selection()
+                        
+                        // Clear navigatedFromSettings when using sidebar
+                        appState.navigatedFromSettings = false
 
                         withAnimation(.pageTransition) {
                             appState.currentView = newValue
@@ -206,4 +209,43 @@ public struct ContentView: View {
 enum NavigationDirection {
     case forward
     case backward
+}
+
+// MARK: - Preview
+
+#Preview("Content View - Main") {
+    ContentView()
+        .environmentObject(PreviewObjects.mainAppState)
+        .environmentObject(SettingsViewModel.preview)
+        .environmentObject(FolderOrganizer.preview)
+        .environmentObject(ExclusionRulesManager.preview)
+        .environmentObject(ExtensionListener.preview)
+        .frame(width: 1200, height: 800)
+}
+
+#Preview("Content View - Onboarding") {
+    ContentView()
+        .environmentObject(PreviewObjects.onboardingAppState)
+        .environmentObject(SettingsViewModel.preview)
+        .environmentObject(FolderOrganizer.preview)
+        .environmentObject(ExclusionRulesManager.preview)
+        .environmentObject(ExtensionListener.preview)
+        .frame(width: 1000, height: 720)
+}
+
+// MARK: - Preview Helpers
+
+@MainActor
+enum PreviewObjects {
+    static var mainAppState: AppState {
+        let state = AppState()
+        state.hasCompletedOnboarding = true
+        return state
+    }
+    
+    static var onboardingAppState: AppState {
+        let state = AppState()
+        state.hasCompletedOnboarding = false
+        return state
+    }
 }

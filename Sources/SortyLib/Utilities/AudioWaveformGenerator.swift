@@ -62,9 +62,15 @@ public final class AudioWaveformGenerator {
             for i in 0..<barCount {
                 var maxAmplitude: Int16 = 0
                 for j in 0..<samplesPerBar {
-                    let sample = abs(int16Ptr[i * samplesPerBar + j])
-                    if sample > maxAmplitude {
-                        maxAmplitude = sample
+                    let sample = int16Ptr[i * samplesPerBar + j]
+                    let magnitude: Int16
+                    if sample == Int16.min {
+                        magnitude = Int16.max
+                    } else {
+                        magnitude = abs(sample)
+                    }
+                    if magnitude > maxAmplitude {
+                        maxAmplitude = magnitude
                     }
                 }
                 amplitudes.append(Float(maxAmplitude) / Float(Int16.max))

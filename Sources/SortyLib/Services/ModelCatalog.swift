@@ -292,6 +292,8 @@ public final class ModelCatalog: ObservableObject {
         struct OpenRouterModel: Decodable {
             let id: String
             let name: String?
+            let modalities: [String]?
+            let capabilities: [String]?
         }
         
         let decoded = try JSONDecoder().decode(OpenRouterModelsResponse.self, from: data)
@@ -300,6 +302,7 @@ public final class ModelCatalog: ObservableObject {
                 id: model.id,
                 displayName: model.name ?? model.id,
                 provider: .openRouter,
+                capabilities: model.modalities ?? model.capabilities,
                 updatedAt: Date()
             )
         }
@@ -640,64 +643,109 @@ public final class ModelCatalog: ObservableObject {
 
     /// Known models that support vision (multimodal)
     private static let knownVisionModels: Set<String> = [
-        // OpenAI
-        "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview",
-        // Anthropic
+        // OpenAI - GPT models
+        "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+        // OpenAI - Reasoning models with vision
+        "o1", "o1-mini", "o1-preview", "o3", "o3-mini", "o4-mini",
+        // Anthropic - Legacy naming
         "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest", "claude-3-5-haiku-20241022",
         "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
+        // Anthropic - New naming (claude-sonnet-4, claude-opus-4, etc.)
+        "claude-sonnet-4", "claude-opus-4", "claude-sonnet-4-20250514", "claude-opus-4-20250514",
         // Gemini
         "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-exp",
+        "gemini-2.0-flash", "gemini-2.0-pro", "gemini-2.5-pro", "gemini-2.5-flash",
+        "gemini-exp-1206", "gemini-exp-1121",
         // Groq
         "llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"
     ]
     
     /// Known model prefixes that support vision (for partial matching)
     private static let visionModelPrefixes: [String] = [
-        "gpt-4o", "gpt-4-turbo", "gpt-4-vision",
-        "claude-3-5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5",
-        "gemini-1.5", "gemini-2.0", "gemini-pro-vision",
-        "llama-3.2-11b-vision", "llama-3.2-90b-vision"
+        // OpenAI GPT models
+        "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
+        // OpenAI reasoning models with vision
+        "o1", "o3", "o4",
+        // Anthropic - Legacy naming
+        "claude-3-5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5", "claude-3.7",
+        // Anthropic - New naming
+        "claude-sonnet-4", "claude-opus-4", "claude-sonnet", "claude-opus",
+        // Gemini
+        "gemini-1.5", "gemini-2.0", "gemini-2.5", "gemini-2", "gemini-exp", "gemini-pro-vision",
+        // Other
+        "llama-3.2-11b-vision", "llama-3.2-90b-vision", "llava", "phi-3-vision"
     ]
+    
+    /// General vision keywords used across providers
+    private static let visionKeywords: [String] = [
+        "vision", "image", "multimodal", "omni", "vl", "mm"
+    ]
+    
+    /// Known vision-capable model families for GitHub Copilot
+    private static let copilotVisionFamilies: [String] = [
+        // OpenAI GPT models
+        "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
+        // OpenAI reasoning models
+        "o1", "o3", "o4",
+        // Anthropic models (both old and new naming)
+        "claude-3", "claude-sonnet", "claude-opus",
+        // Google models
+        "gemini"
+    ]
+    
+    /// Try to determine vision support from model metadata capabilities
+    private func checkModelMetadataForVision(modelId: String, provider: AIProvider) -> Bool? {
+        guard let models = modelsByProvider[provider],
+              let model = models.first(where: { $0.id.caseInsensitiveCompare(modelId) == .orderedSame }),
+              let caps = model.capabilities else {
+            return nil
+        }
+        return caps.contains(where: { $0.lowercased().contains("vision") || $0.lowercased().contains("image") })
+    }
 
     /// Check if a specific model supports vision capabilities
     public func supportsVision(modelId: String, provider: AIProvider) -> Bool {
-        // First check explicitly known models
+        // First check cached model capabilities metadata if available
+        if let hasVision = checkModelMetadataForVision(modelId: modelId, provider: provider), hasVision {
+            return true
+        }
+        
+        // Check explicitly known models
         if Self.knownVisionModels.contains(modelId) {
             return true
         }
         
         let lowercaseId = modelId.lowercased()
+        
+        // Check against known prefixes
+        for prefix in Self.visionModelPrefixes {
+            if lowercaseId.hasPrefix(prefix.lowercased()) || lowercaseId.contains(prefix.lowercased()) {
+                return true
+            }
+        }
 
         // Provider-specific heuristics
         switch provider {
         case .githubCopilot:
-            // GitHub Copilot exposes OpenAI and Anthropic models that support vision
-            // Check against known vision-capable model prefixes
-            for prefix in Self.visionModelPrefixes {
-                if lowercaseId.contains(prefix.lowercased()) {
+            // GitHub Copilot exposes models from multiple providers (OpenAI, Anthropic, Google)
+            // Check against known vision-capable model families
+            for family in Self.copilotVisionFamilies {
+                if lowercaseId.contains(family.lowercased()) {
                     return true
                 }
             }
-            // Additional check for common vision model patterns
-            return lowercaseId.contains("gpt-4o") ||
-                   lowercaseId.contains("gpt-4-turbo") ||
-                   lowercaseId.contains("claude-3") ||
-                   lowercaseId.contains("gemini")
+            // Check for vision keywords in model name
+            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         case .ollama:
             // Ollama often uses models like 'llava', 'bakllava' for vision
-            let visionKeywords = ["llava", "vision", "moondream", "minicpm"]
-            return visionKeywords.contains { lowercaseId.contains($0) }
+            let ollamaVisionKeywords = ["llava", "vision", "moondream", "minicpm", "bakllava", "phi-3-vision", "glm-4v"]
+            return ollamaVisionKeywords.contains { lowercaseId.contains($0) }
         case .openRouter:
             // OpenRouter often includes vision in the name or we can check the ID
-            return lowercaseId.contains("vision") || lowercaseId.contains("vl")
+            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         default:
-            // Check against known prefixes for other providers
-            for prefix in Self.visionModelPrefixes {
-                if lowercaseId.contains(prefix.lowercased()) {
-                    return true
-                }
-            }
-            return lowercaseId.contains("vision") || lowercaseId.contains("flash")
+            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) }) ||
+                   lowercaseId.contains("flash")
         }
     }
 }

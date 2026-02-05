@@ -87,17 +87,19 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
 public struct OnboardingPillButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     var isSecondary: Bool = false
+    var size: ControlSize = .regular
     
-    public init(isSecondary: Bool = false) {
+    public init(isSecondary: Bool = false, size: ControlSize = .regular) {
         self.isSecondary = isSecondary
+        self.size = size
     }
     
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
             .foregroundColor(.white)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 14)
+            .padding(.horizontal, size == .small ? 16 : 28)
+            .padding(.vertical, size == .small ? 8 : 14)
             .background(
                 ZStack {
                     if isSecondary {
@@ -259,6 +261,14 @@ public struct HapticBounceButtonStyle: ButtonStyle {
 extension ButtonStyle where Self == OnboardingPillButtonStyle {
     public static var onboardingPill: OnboardingPillButtonStyle { OnboardingPillButtonStyle() }
     public static var onboardingPillSecondary: OnboardingPillButtonStyle { OnboardingPillButtonStyle(isSecondary: true) }
+    
+    public static func onboardingPill(size: ControlSize) -> OnboardingPillButtonStyle {
+        OnboardingPillButtonStyle(size: size)
+    }
+    
+    public static func onboardingPill(isSecondary: Bool, size: ControlSize = .regular) -> OnboardingPillButtonStyle {
+        OnboardingPillButtonStyle(isSecondary: isSecondary, size: size)
+    }
 }
 
 extension ButtonStyle where Self == SortyPrimaryButtonStyle {

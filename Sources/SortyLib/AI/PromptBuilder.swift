@@ -257,7 +257,8 @@ struct PromptBuilder {
         prompt += """
         Rules:
         - Max 3 levels deep
-        - Max \(maxTopLevelFolders) top-level folders
+        - HARD LIMIT: You MUST output ≤ \(maxTopLevelFolders) top-level folders. Merge categories if needed.
+        - Never name a folder the same as an existing file in the input.
         - Use clear folder names
         - Group by type: Documents, Media, Code, Archives
         \(mode == .renameOnly || enableSmartRename ? "- Suggest better filenames where appropriate" : "")

@@ -68,11 +68,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         // Check if model supports vision - if not, fall back to text-only
-        let modelId = config.model.lowercased()
-        let supportsVision = modelId.contains("gpt-4o") ||
-                             modelId.contains("gpt-4-turbo") ||
-                             modelId.contains("claude-3") ||
-                             modelId.contains("gemini")
+        let supportsVision = await ModelCatalog.shared.supportsVision(modelId: config.model, provider: config.provider)
         
         guard supportsVision, !imageData.isEmpty else {
             return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
@@ -170,7 +166,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         let url = URL(string: "https://api.githubcopilot.com/models")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 10
+        request.timeoutInterval = 30
         
         let headers = try await getHeaders()
         for (key, value) in headers {
@@ -288,7 +284,9 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 tps: tps,
                 ttft: duration, // approximate
                 totalTokens: estimatedTokens,
-                model: config.model
+                model: config.model,
+                filesScanned: files.count,
+                totalFileSize: files.reduce(0) { $0 + $1.size }
             )
             
             var plan = try ResponseParser.parseResponse(content, originalFiles: files)
@@ -380,7 +378,9 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 tps: tps,
                 ttft: ttft,
                 totalTokens: estimatedTokens,
-                model: config.model
+                model: config.model,
+                filesScanned: files.count,
+                totalFileSize: files.reduce(0) { $0 + $1.size }
             )
             
             // Capture buffer for closure

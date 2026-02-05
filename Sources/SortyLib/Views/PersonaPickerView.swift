@@ -9,7 +9,7 @@ import SwiftUI
 
 struct PersonaPickerView: View {
     @EnvironmentObject var personaManager: PersonaManager
-    @StateObject private var customStore = CustomPersonaStore()
+    @EnvironmentObject var customStore: CustomPersonaStore
     @State private var hoveringPersona: PersonaType?
     @State private var hoveringCustom: String?
     @State private var showingGenerator: Bool = false
@@ -172,9 +172,11 @@ struct PersonaPickerView: View {
         }
         .sheet(isPresented: $showingEditor, onDismiss: { editingPersona = nil }) {
             PersonaEditorView(store: customStore, editing: editingPersona)
+                .environmentObject(customStore)
         }
         .sheet(isPresented: $showingGenerator) {
             PersonaGeneratorView(store: customStore, selectedPersonaId: $personaManager.selectedCustomPersonaId)
+                .environmentObject(customStore)
         }
         .onAppear {
             updateLocalPrompt()
@@ -320,7 +322,7 @@ struct PersonaButton: View {
 /// Compact inline picker for the ready-to-organize screen
 struct CompactPersonaPicker: View {
     @EnvironmentObject var personaManager: PersonaManager
-    @StateObject private var customStore = CustomPersonaStore()
+    @EnvironmentObject var customStore: CustomPersonaStore
     
     var body: some View {
         Menu {

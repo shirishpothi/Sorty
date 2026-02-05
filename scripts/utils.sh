@@ -58,13 +58,27 @@ get_total_duration() {
 
 # Info extraction
 get_version() {
-    # Extract version from Info.plist
-    /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "${PROJECT_DIR}/Info.plist"
+    # 1. Try Git Tag (Latest)
+    local git_tag=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+    if [ -n "$git_tag" ]; then
+        echo "$git_tag"
+        return
+    fi
+
+    # 2. Fallback to Info.plist (Source of Truth for Dev/No Tag)
+    /usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "${PROJECT_DIR}/Info.plist" 2>/dev/null || echo "1.0.0"
 }
 
 get_build_number() {
-    # Extract build number from Info.plist
-    /usr/libexec/PlistBuddy -c "Print CFBundleVersion" "${PROJECT_DIR}/Info.plist"
+    # 1. Use Git Commit Count (Reliable for automation)
+    local commit_count=$(git rev-list --count HEAD 2>/dev/null)
+    if [ -n "$commit_count" ] && [ "$commit_count" -gt 0 ]; then
+        echo "$commit_count"
+        return
+    fi
+
+    # 2. Fallback to Info.plist
+    /usr/libexec/PlistBuddy -c "Print CFBundleVersion" "${PROJECT_DIR}/Info.plist" 2>/dev/null || echo "1"
 }
 
 get_file_size() {

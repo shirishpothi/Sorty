@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 
 struct StorageLocationsView: View {
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+    @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var selectedLocationForEdit: StorageLocation?
     @State private var contentOpacity: Double = 0
@@ -90,7 +91,17 @@ struct StorageLocationsView: View {
     
     private var headerView: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                if appState.navigatedFromSettings {
+                    GlassyBackButton {
+                        HapticFeedbackManager.shared.tap()
+                        appState.navigatedFromSettings = false
+                        appState.currentView = .settings
+                        appState.selectedSettingsSection = .rules
+                    }
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
                 Text("Storage Locations")
                     .font(.title2)
                     .fontWeight(.semibold)
@@ -110,6 +121,7 @@ struct StorageLocationsView: View {
                     }
                 }
                 .font(.caption)
+                }
             }
             .animatedAppearance(delay: 0.05)
 

@@ -455,6 +455,17 @@ public struct CleanupHistoryItem: Codable, Identifiable, Sendable {
     }
 }
 
+public enum WorkspaceHealthScanError: LocalizedError, Sendable {
+    case unreadableDirectory(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unreadableDirectory(let path):
+            return "Unable to scan \(path). Check permissions and try again."
+        }
+    }
+}
+
 // MARK: - Workspace Health Manager
 
 @MainActor
@@ -483,6 +494,23 @@ public class WorkspaceHealthManager: ObservableObject {
     private var pollingTimer: Timer?
     private var lastModDate: Date?
     private var currentMonitoredPath: String?
+
+    private struct ScanSignature: Equatable, Sendable {
+        let fileCount: Int
+        let totalSize: Int64
+        let latestModified: Date?
+    }
+
+    private struct ScanCache: Sendable {
+        let signature: ScanSignature
+        let directoryModDate: Date?
+        let files: [FileItem]
+        let timestamp: Date
+    }
+
+    private var scanCache: [String: ScanCache] = [:]
+    private var lastAnalysisSignature: [String: ScanSignature] = [:]
+    private let scanCacheTTL: TimeInterval = 30
     
     @Published public var fileChangeDetected: Date?
 
@@ -544,6 +572,55 @@ public class WorkspaceHealthManager: ObservableObject {
         await generateInsights(for: path)
     }
 
+    /// Retrieve the directory modification date for quick change detection
+    public func directoryModDate(for path: String) -> Date? {
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+           let date = attrs[.modificationDate] as? Date {
+            return date
+        }
+        return nil
+    }
+
+    /// Return cached files if the directory has not changed recently
+    public func cachedFilesIfFresh(path: String, directoryModDate: Date?) -> [FileItem]? {
+        guard let cache = scanCache[path] else { return nil }
+
+        if let directoryModDate,
+           let cachedModDate = cache.directoryModDate,
+           directoryModDate > cachedModDate {
+            return nil
+        }
+
+        if Date().timeIntervalSince(cache.timestamp) > scanCacheTTL {
+            return nil
+        }
+
+        return cache.files
+    }
+
+    /// Update scan cache with the latest files and signature
+    public func updateScanCache(path: String, directoryModDate: Date?, files: [FileItem]) {
+        let signature = scanSignature(for: files)
+        scanCache[path] = ScanCache(
+            signature: signature,
+            directoryModDate: directoryModDate,
+            files: files,
+            timestamp: Date()
+        )
+    }
+
+    /// Determine if analysis is already up to date for the current signature
+    public func isAnalysisUpToDate(path: String, files: [FileItem]) -> Bool {
+        let signature = scanSignature(for: files)
+        return lastAnalysisSignature[path] == signature
+    }
+
+    /// Mark analysis as complete for the given files
+    public func markAnalysisComplete(path: String, files: [FileItem]) {
+        lastAnalysisSignature[path] = scanSignature(for: files)
+        lastAnalysisDate = Date()
+    }
+
     /// Get growth analysis for a directory
     public func getGrowth(for path: String, period: TimePeriod = .week) -> DirectoryGrowth? {
         guard let directorySnapshots = snapshots[path],
@@ -571,11 +648,18 @@ public class WorkspaceHealthManager: ObservableObject {
         isAnalyzing = true
         defer {
             isAnalyzing = false
-            lastAnalysisDate = Date()
         }
 
         // Remove old opportunities for this path
         opportunities.removeAll { $0.directoryPath == path }
+
+        let ignoredPrefixes = Set(config.ignoredPaths.map {
+            URL(fileURLWithPath: $0).standardizedFileURL.path
+        })
+
+        let filesToAnalyze = files.filter { file in
+            !ignoredPrefixes.contains { file.path.hasPrefix($0) }
+        }
 
         // --- Smart Detection Helpers ---
         var projectDirCache: [String: Bool] = [:]
@@ -642,7 +726,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 1. Screenshot Clutter
         if config.enabledChecks.contains(.screenshotClutter) {
-            let screenshots = files.filter { isScreenshot($0) }
+            let screenshots = filesToAnalyze.filter { !isFileInProject($0) && isScreenshot($0) }
             if screenshots.count >= config.minScreenshotCount {
                 let affected = screenshots.map { file -> CleanupOpportunity.AffectedFile in
                     let dateStr = file.creationDate.map { dateFormatter.string(from: $0) } ?? "Unknown date"
@@ -672,7 +756,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 2. Download Clutter (Smart)
         if config.enabledChecks.contains(.downloadClutter) {
-            let oldDownloads = files.filter { file in
+            let oldDownloads = filesToAnalyze.filter { file in
                 guard !isFileInProject(file) else { return false }
                 
                 // Use last access if available, otherwise creation
@@ -716,7 +800,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 3. Large Files (Smart)
         if config.enabledChecks.contains(.largeFiles) {
-            let largeFiles = files.filter { file in
+            let largeFiles = filesToAnalyze.filter { file in
                 // Smart check: Skip project files
                 if isFileInProject(file) { return false }
                 return file.size > config.largeFileSizeThreshold
@@ -753,7 +837,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 4. Unorganized Files (Root)
         if config.enabledChecks.contains(.unorganizedFiles) {
-            let rootFiles = files.filter { file in
+            let rootFiles = filesToAnalyze.filter { file in
                 let relativePath = file.path.replacingOccurrences(of: path + "/", with: "")
                 return !relativePath.contains("/") && !file.isDirectory && !file.name.hasPrefix(".")
             }
@@ -784,7 +868,7 @@ public class WorkspaceHealthManager: ObservableObject {
         }
 
         // 5. Installers
-        let installers = files.filter { ["dmg", "pkg", "iso"].contains($0.extension.lowercased()) }
+        let installers = filesToAnalyze.filter { ["dmg", "pkg", "iso"].contains($0.extension.lowercased()) }
         if !installers.isEmpty {
             let totalSize = installers.reduce(0) { $0 + $1.size }
             let affected = installers.map { file -> CleanupOpportunity.AffectedFile in
@@ -813,7 +897,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 6. Temp/Cache
         if config.enabledChecks.contains(.temporaryFiles) || config.enabledChecks.contains(.cacheFiles) {
-            let tempFiles = files.filter { isTempOrCacheFile($0) }
+            let tempFiles = filesToAnalyze.filter { isTempOrCacheFile($0) }
             if !tempFiles.isEmpty {
                 let totalSize = tempFiles.reduce(0) { $0 + $1.size }
                 let affected = tempFiles.map { file -> CleanupOpportunity.AffectedFile in
@@ -842,7 +926,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 7. Old Files
         if config.enabledChecks.contains(.veryOldFiles) || config.enabledChecks.contains(.oldFiles) {
-            let veryOldFiles = files.filter { file in
+            let veryOldFiles = filesToAnalyze.filter { file in
                 if isFileInProject(file) { return false } // Smart check
                 guard let accessDate = file.lastAccessDate ?? file.modificationDate else { return false }
                 let age = now.timeIntervalSince(accessDate)
@@ -936,6 +1020,7 @@ public class WorkspaceHealthManager: ObservableObject {
             }
         }
 
+        lastAnalysisDate = Date()
         saveData()
     }
 
@@ -1186,6 +1271,28 @@ public class WorkspaceHealthManager: ObservableObject {
         opportunities.filter { !$0.isDismissed }.sorted { $0.priority > $1.priority }
     }
 
+    public func sortedActiveOpportunities(for path: String?) -> [CleanupOpportunity] {
+        let filtered = activeOpportunities.filter { opportunity in
+            guard let path else { return true }
+            return opportunity.directoryPath == path
+        }
+
+        return filtered.sorted {
+            if $0.priority != $1.priority { return $0.priority > $1.priority }
+            if $0.confidence != $1.confidence { return $0.confidence > $1.confidence }
+            if $0.estimatedSavings != $1.estimatedSavings { return $0.estimatedSavings > $1.estimatedSavings }
+            if $0.fileCount != $1.fileCount { return $0.fileCount > $1.fileCount }
+            return $0.createdAt > $1.createdAt
+        }
+    }
+
+    public func topActionableOpportunities(for path: String?, limit: Int = 3) -> [CleanupOpportunity] {
+        sortedActiveOpportunities(for: path)
+            .filter { $0.action != nil }
+            .prefix(limit)
+            .map { $0 }
+    }
+
     public var unreadInsights: [HealthInsight] {
         insights.filter { !$0.isRead }.sorted { $0.createdAt > $1.createdAt }
     }
@@ -1202,25 +1309,52 @@ public class WorkspaceHealthManager: ObservableObject {
     /// 100 = Perfect
     public var healthScore: Double {
         var score = 100.0
-        
-        // Deduct for active opportunities based on priority
-        for opportunity in activeOpportunities {
-            switch opportunity.priority {
-            case .critical: score -= 10.0
-            case .high: score -= 5.0
-            case .medium: score -= 2.0
-            case .low: score -= 0.5
-            }
-        }
-        
-        // Deduct for rapid growth in any tracked directory
+
+        let totalImpact = activeOpportunities.reduce(0.0) { $0 + opportunityImpact($1) }
+        score -= min(totalImpact, 45)
+
         for (path, _) in snapshots {
-            if let growth = getGrowth(for: path, period: .week), growth.growthRate == .rapid {
-                score -= 5.0
+            if let growth = getGrowth(for: path, period: .week) {
+                switch growth.growthRate {
+                case .rapid: score -= 6.0
+                case .moderate: score -= 3.0
+                case .slow, .stable: break
+                }
             }
         }
-        
+
         return max(0, min(100, score))
+    }
+
+    public func healthScore(for path: String) -> Int {
+        var score = 100.0
+
+        if let snapshot = snapshots[path]?.last {
+            let unorganizedRatio = Double(snapshot.unorganizedCount) / max(Double(snapshot.totalFiles), 1)
+            score -= unorganizedRatio * 20
+
+            if snapshot.totalFiles > 2500 {
+                score -= 8
+            }
+
+            let avgDays = snapshot.averageFileAge / 86400
+            if avgDays > 365 { score -= 10 }
+            if avgDays > 730 { score -= 6 }
+        }
+
+        let pathOpportunities = activeOpportunities.filter { $0.directoryPath == path }
+        let impact = pathOpportunities.reduce(0.0) { $0 + opportunityImpact($1) }
+        score -= min(impact, 40)
+
+        if let growth = getGrowth(for: path, period: .week) {
+            switch growth.growthRate {
+            case .rapid: score -= 6
+            case .moderate: score -= 3
+            case .slow, .stable: break
+            }
+        }
+
+        return Int(max(0, min(100, score)))
     }
     
     public var healthStatus: (title: String, color: Color) {
@@ -1275,6 +1409,25 @@ public class WorkspaceHealthManager: ObservableObject {
                 }
             }
         }
+    }
+
+    private func scanSignature(for files: [FileItem]) -> ScanSignature {
+        let totalSize = files.reduce(0) { $0 + $1.size }
+        let latestModified = files.compactMap { $0.modificationDate ?? $0.lastAccessDate }.max()
+        return ScanSignature(fileCount: files.count, totalSize: totalSize, latestModified: latestModified)
+    }
+
+    private func opportunityImpact(_ opportunity: CleanupOpportunity) -> Double {
+        let base: Double
+        switch opportunity.priority {
+        case .critical: base = 7
+        case .high: base = 4.5
+        case .medium: base = 2.5
+        case .low: base = 1
+        }
+
+        let confidenceMultiplier = Double(max(40, opportunity.confidence)) / 100
+        return base * confidenceMultiplier
     }
 
     private func sendNotification(_ insight: HealthInsight) async {
@@ -1957,5 +2110,55 @@ class CleanupHistoryStore {
             DebugLogger.log("Failed to load cleanup history: \(error.localizedDescription)")
             return []
         }
+    }
+}
+
+public extension WorkspaceHealthManager {
+    nonisolated static func scanFiles(at url: URL, ignoredPaths: [String]) throws -> [FileItem] {
+        var files: [FileItem] = []
+        let fileManager = FileManager.default
+
+        let ignoredPrefixes = Set(ignoredPaths.map {
+            URL(fileURLWithPath: $0).standardizedFileURL.path
+        })
+
+        guard let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey, .contentAccessDateKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            throw WorkspaceHealthScanError.unreadableDirectory(url.path)
+        }
+
+        for case let fileURL as URL in enumerator {
+            let standardizedPath = fileURL.standardizedFileURL.path
+            if ignoredPrefixes.contains(where: { standardizedPath.hasPrefix($0) }) {
+                enumerator.skipDescendants()
+                continue
+            }
+
+            autoreleasepool {
+                let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .contentModificationDateKey, .contentAccessDateKey, .isDirectoryKey])
+                if resourceValues?.isDirectory == true {
+                    return
+                }
+
+                let name = fileURL.deletingPathExtension().lastPathComponent
+                let item = FileItem(
+                    path: fileURL.path,
+                    name: name,
+                    extension: fileURL.pathExtension,
+                    size: Int64(resourceValues?.fileSize ?? 0),
+                    isDirectory: false,
+                    creationDate: resourceValues?.creationDate,
+                    modificationDate: resourceValues?.contentModificationDate,
+                    lastAccessDate: resourceValues?.contentAccessDate
+                )
+
+                files.append(item)
+            }
+        }
+
+        return files
     }
 }

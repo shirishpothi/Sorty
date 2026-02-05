@@ -37,6 +37,14 @@ public enum SortyResources {
 
     /// Detects the appropriate resource bundle using multiple strategies
     private static func detectResourceBundle() -> Bundle {
+        // Strategy 0: SwiftPM module bundle (most reliable for SPM resources)
+        #if SWIFT_PACKAGE
+        if hasResources(in: Bundle.module) {
+            logger.debug("Using Bundle.module for SPM resources")
+            return Bundle.module
+        }
+        #endif
+
         // Strategy 1: Class-based bundle lookup (most reliable for frameworks)
         // This finds the bundle containing the SortyResources type itself
         let classBundle = Bundle(for: BundleLocator.self)
@@ -126,19 +134,59 @@ public enum SortyResources {
                 return nsImage
             }
         }
+        
+        // Try 2: Direct bundle resource lookup (works for Xcode builds with asset catalog)
+        if let nsImage = bundle.image(forResource: name) {
+            logger.debug("Loaded image '\(name)' from bundle resource")
+            return nsImage
+        }
 
-        // Try 2: Images subdirectory (SPM .copy() resources)
+        // Try 3: Main bundle fallback (covers app-level asset catalogs)
+        if bundle != Bundle.main, let nsImage = Bundle.main.image(forResource: name) {
+            logger.debug("Loaded image '\(name)' from main bundle")
+            return nsImage
+        }
+
+        // Try 4: Images subdirectory (SPM .copy() resources)
         if let imageURL = bundle.url(forResource: name, withExtension: ext, subdirectory: "Images"),
            let nsImage = NSImage(contentsOf: imageURL) {
             logger.debug("Loaded image '\(name)' from Images subdirectory")
             return nsImage
         }
 
-        // Try 3: Direct bundle resource
+        // Try 5: Direct bundle resource with extension
         if let imageURL = bundle.url(forResource: name, withExtension: ext),
            let nsImage = NSImage(contentsOf: imageURL) {
             logger.debug("Loaded image '\(name)' from bundle root")
             return nsImage
+        }
+
+        // Try 6: Bundle image resource helper (covers non-asset bundled images)
+        if let imageURL = bundle.urlForImageResource(name),
+           let nsImage = NSImage(contentsOf: imageURL) {
+            logger.debug("Loaded image '\(name)' via urlForImageResource")
+            return nsImage
+        }
+        
+        // Try 7: Look in Resources/Assets.xcassets imageset directories (development fallback)
+        // This handles the case where Xcode hasn't compiled the asset catalog yet
+        let extensions = ["png", "svg", "pdf"]
+        let basePaths = [
+            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("Resources/Assets.xcassets/\(name).imageset"),
+            Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources/Assets.xcassets/\(name).imageset"),
+            // Also try from source root during development
+            URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Resources/Assets.xcassets/\(name).imageset")
+        ]
+        
+        for basePath in basePaths {
+            for fileExt in extensions {
+                let path = basePath.appendingPathComponent("\(name).\(fileExt)")
+                if FileManager.default.fileExists(atPath: path.path),
+                   let nsImage = NSImage(contentsOf: path) {
+                    logger.debug("Loaded image '\(name)' from Assets.xcassets imageset at \(path.path)")
+                    return nsImage
+                }
+            }
         }
 
         logger.warning("Failed to load image '\(name)' from any source")

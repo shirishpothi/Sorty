@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ExclusionRulesView: View {
     @EnvironmentObject var rulesManager: ExclusionRulesManager
+    @EnvironmentObject var appState: AppState
     @State private var showingAddRule = false
     @State private var searchText = ""
     @State private var contentOpacity: Double = 0
@@ -104,7 +105,17 @@ struct ExclusionRulesView: View {
     
     private var headerView: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                if appState.navigatedFromSettings {
+                    GlassyBackButton {
+                        HapticFeedbackManager.shared.tap()
+                        appState.navigatedFromSettings = false
+                        appState.currentView = .settings
+                        appState.selectedSettingsSection = .rules
+                    }
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
                 Text("Exclusion Rules")
                     .font(.title2)
                     .fontWeight(.semibold)
@@ -119,10 +130,24 @@ struct ExclusionRulesView: View {
                 }
                 .font(.caption)
                 .contentTransition(.numericText())
+                }
             }
             .animatedAppearance(delay: 0.05)
 
             Spacer()
+            
+            if !rulesManager.rules.isEmpty {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        rulesManager.clearAllRules()
+                    }
+                } label: {
+                    Label("Clear All", systemImage: "trash")
+                }
+                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                .accessibilityIdentifier("ClearAllExclusionsButton")
+            }
 
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -184,16 +209,9 @@ struct EmptyExclusionRulesView: View {
                     .frame(maxWidth: 320)
             }
             
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Common use cases:")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                
-                HStack(spacing: 6) {
-                    RuleExamplePill(icon: "doc.badge.gearshape", text: ".DS_Store")
-                    RuleExamplePill(icon: "folder", text: "node_modules")
-                    RuleExamplePill(icon: "scalemass", text: "> 100MB")
-                }
+            HStack(spacing: 6) {
+                RuleExamplePill(icon: "doc.badge.gearshape", text: ".DS_Store")
+                RuleExamplePill(icon: "folder", text: "node_modules", useSystemFolderIcon: true)
             }
 
             Button {
@@ -210,11 +228,23 @@ struct EmptyExclusionRulesView: View {
 struct RuleExamplePill: View {
     let icon: String
     let text: String
+    var useSystemFolderIcon: Bool = false
+    
+    private static let folderIcon: NSImage = {
+        NSWorkspace.shared.icon(forFile: "/tmp")
+    }()
     
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption2)
+            if useSystemFolderIcon {
+                Image(nsImage: Self.folderIcon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 12, height: 12)
+            } else {
+                Image(systemName: icon)
+                    .font(.caption2)
+            }
             Text(text)
                 .font(.caption)
         }
@@ -300,13 +330,15 @@ struct ExclusionRuleRow: View {
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
     @State private var isHovered = false
+    
+    private static let systemFolderIcon: NSImage = {
+        NSWorkspace.shared.icon(forFile: "/tmp")
+    }()
 
     var body: some View {
         HStack(spacing: 12) {
-            // Type icon
-            Image(systemName: iconForType(rule.type))
-                .font(.system(size: 14))
-                .foregroundStyle(rule.isEnabled ? colorForType(rule.type) : .secondary)
+            // Type icon - use system folder icon for folder rules
+            ruleIcon
                 .frame(width: 28, height: 28)
                 .background((rule.isEnabled ? colorForType(rule.type) : .secondary).opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -397,6 +429,21 @@ struct ExclusionRuleRow: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 rulesManager.removeRule(rule)
             }
+        }
+    }
+    
+    @ViewBuilder
+    private var ruleIcon: some View {
+        if rule.type == .folderName {
+            Image(nsImage: Self.systemFolderIcon)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 16, height: 16)
+                .opacity(rule.isEnabled ? 1.0 : 0.5)
+        } else {
+            Image(systemName: iconForType(rule.type))
+                .font(.system(size: 14))
+                .foregroundStyle(rule.isEnabled ? colorForType(rule.type) : .secondary)
         }
     }
 

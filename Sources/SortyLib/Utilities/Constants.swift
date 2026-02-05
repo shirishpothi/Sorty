@@ -408,39 +408,33 @@ public enum TransitionStyles {
 
 /// Animated loading dots view
 public struct LoadingDotsView: View {
-    @State private var animatingDot = 0
     let dotCount: Int
     let dotSize: CGFloat
     let color: Color
+    let speed: Double
 
-    public init(dotCount: Int = 3, dotSize: CGFloat = 8, color: Color = .accentColor) {
+    public init(dotCount: Int = 3, dotSize: CGFloat = 8, color: Color = .accentColor, speed: Double = 2.4) {
         self.dotCount = dotCount
         self.dotSize = dotSize
         self.color = color
+        self.speed = speed
     }
 
     public var body: some View {
-        HStack(spacing: dotSize * 0.75) {
-            ForEach(0..<dotCount, id: \.self) { index in
-                Circle()
-                    .fill(color)
-                    .frame(width: dotSize, height: dotSize)
-                    .scaleEffect(animatingDot == index ? 1.3 : 0.8)
-                    .opacity(animatingDot == index ? 1.0 : 0.5)
-            }
-        }
-        .onAppear {
-            startAnimation()
-        }
-    }
-
-    private func startAnimation() {
-        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { timer in
-            MainActor.assumeIsolated {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
-                    animatingDot = (animatingDot + 1) % dotCount
+        SwiftUI.TimelineView(.animation) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            HStack(spacing: dotSize * 0.75) {
+                ForEach(0..<dotCount, id: \.self) { index in
+                    let phase = time * speed + (Double(index) * 0.85)
+                    let wave = (sin(phase) + 1) / 2
+                    Circle()
+                        .fill(color)
+                        .frame(width: dotSize, height: dotSize)
+                        .scaleEffect(0.7 + (0.6 * wave))
+                        .opacity(0.35 + (0.65 * wave))
                 }
             }
+            .accessibilityHidden(true)
         }
     }
 }
@@ -468,6 +462,29 @@ public struct BouncingSpinner: View {
                     isAnimating = true
                 }
             }
+    }
+}
+
+/// Bouncing dots animation for AI reasoning indicator
+public struct BouncingDotsView: View {
+    @State private var animationPhase: Int = 0
+    
+    public init() {}
+    
+    public var body: some View {
+        SwiftUI.TimelineView(.animation(minimumInterval: 0.15)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 2) {
+                ForEach(0..<3, id: \.self) { index in
+                    let phase = time * 5 + Double(index) * 0.8
+                    let offset = sin(phase) * 3
+                    Circle()
+                        .fill(Color.purple.opacity(0.6))
+                        .frame(width: 4, height: 4)
+                        .offset(y: offset)
+                }
+            }
+        }
     }
 }
 
@@ -503,6 +520,5 @@ public struct PulsingRingLoader: View {
         }
     }
 }
-
 
 

@@ -68,6 +68,7 @@ class CanvasViewModel: ObservableObject {
         var currentX: CGFloat = padding
         var currentY: CGFloat = padding
         let maxWidth = max(canvasSize.width - padding * 2, 800)
+        var rowMaxHeight: CGFloat = folderHeight
 
         // Create folder nodes
         for (_, suggestion) in plan.suggestions.enumerated() {
@@ -76,7 +77,8 @@ class CanvasViewModel: ObservableObject {
             // Position folders in a grid
             if currentX + folderWidth > maxWidth {
                 currentX = padding
-                currentY += folderHeight + 100
+                currentY += rowMaxHeight + 80
+                rowMaxHeight = folderHeight
             }
 
             let position = CGPoint(x: currentX + folderWidth / 2, y: currentY + folderHeight / 2)
@@ -111,12 +113,15 @@ class CanvasViewModel: ObservableObject {
                 fileY += fileNodeSize.height + 20
             }
 
+            let folderBlockHeight = folderHeight + 50 + (CGFloat(suggestion.files.count) * (fileNodeSize.height + 20))
+            rowMaxHeight = max(rowMaxHeight, folderBlockHeight)
+
             currentX += folderWidth + 80
         }
 
         // Create unorganized section if needed
         if !plan.unorganizedFiles.isEmpty {
-            currentY += folderHeight + 150
+            currentY += rowMaxHeight + 100
             currentX = padding
 
             let unorganizedId = UUID()
@@ -129,10 +134,15 @@ class CanvasViewModel: ObservableObject {
             nodes.append(unorganizedNode)
 
             var fileX = currentX + folderWidth + 50
+            var fileRowY = currentY
             for file in plan.unorganizedFiles {
+                if fileX + fileNodeSize.width > maxWidth {
+                    fileX = currentX + folderWidth + 50
+                    fileRowY += fileNodeSize.height + 30
+                }
                 let fileNode = CanvasNode(
                     id: file.id,
-                    position: CGPoint(x: fileX, y: currentY),
+                    position: CGPoint(x: fileX, y: fileRowY),
                     size: fileNodeSize,
                     type: .file(file, parentFolderId: nil)
                 )
@@ -343,10 +353,20 @@ struct CanvasPreviewView: View {
                     viewModel.selectedNodeId = nil
                 }
                 .onAppear {
-                    // Guard against re-layout: only set once when zero
                     if canvasSize == .zero {
                         canvasSize = geometry.size
-                        viewModel.loadPlan(plan, canvasSize: geometry.size)
+                    }
+                    viewModel.loadPlan(plan, canvasSize: geometry.size)
+                }
+                .onChange(of: geometry.size) { _, newSize in
+                    if newSize != .zero, newSize != canvasSize {
+                        canvasSize = newSize
+                        viewModel.loadPlan(plan, canvasSize: newSize)
+                    }
+                }
+                .onChange(of: plan.version) { _, _ in
+                    if canvasSize != .zero {
+                        viewModel.loadPlan(plan, canvasSize: canvasSize)
                     }
                 }
             }

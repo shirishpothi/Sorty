@@ -15,6 +15,7 @@ struct OrganizationCompleteView: View {
     
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     
     @State private var appeared = false
     @State private var showStats = false
@@ -47,6 +48,28 @@ struct OrganizationCompleteView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                    
+                    // Show time saved - use filesScanned from stats, fallback to totalFiles
+                    let effectiveTimeSaved: TimeInterval = {
+                        if let stats = stats, stats.estimatedTimeSaved > 0 {
+                            return stats.estimatedTimeSaved
+                        }
+                        // Fallback: 4 seconds per file organized
+                        return Double(totalFiles) * 4.0
+                    }()
+                    
+                    if effectiveTimeSaved > 0 {
+                        HStack(spacing: 6) {
+                            Image(systemName: "hourglass.badge.plus")
+                                .foregroundStyle(.blue)
+                            Text("You saved approximately **\(timeSavedString(effectiveTimeSaved))** of manual work!")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.top, 4)
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 10)
+                    }
                 }
             }
             
@@ -125,26 +148,11 @@ struct OrganizationCompleteView: View {
             .opacity(appeared ? 1 : 0)
             .offset(y: appeared ? 0 : 20)
             
-            // Stats Toggle
-            if let stats = stats {
-                Button {
-                    withAnimation(.spring()) {
-                        showStats.toggle()
-                    }
-                } label: {
-                    HStack {
-                        Text(showStats ? "Hide Metrics" : "Show Performance Metrics")
-                        Image(systemName: showStats ? "chevron.up" : "chevron.down")
-                    }
-                    .font(.caption.bold())
-                    .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
-                
-                if showStats {
-                    OrganizationResultView(stats: stats)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+            // Stats Area
+            if let stats = stats, settingsViewModel.config.showStatsForNerds {
+                OrganizationResultView(stats: stats)
+                    .padding(.horizontal, 40)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             
             Spacer()
@@ -169,6 +177,18 @@ struct OrganizationCompleteView: View {
             } catch {
                 print("Failed to undo organization: \(error)")
             }
+        }
+    }
+    
+    private func timeSavedString(_ seconds: TimeInterval) -> String {
+        if seconds >= 3600 {
+            let hours = seconds / 3600
+            return String(format: "%.1f hours", hours)
+        } else if seconds >= 60 {
+            let minutes = seconds / 60
+            return String(format: "%.0f minutes", minutes)
+        } else {
+            return String(format: "%.0f seconds", seconds)
         }
     }
 }

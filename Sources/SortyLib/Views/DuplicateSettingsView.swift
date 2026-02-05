@@ -24,152 +24,175 @@ struct DuplicateSettingsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Duplicate Detection Settings")
-                    .font(.title2)
-                    .fontWeight(.bold)
+            // New Header
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Duplicate Detection Settings")
+                        .font(.title3.bold())
+                    Text("Configure how Sorty identifies and handles identical files.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
                 
                 Spacer()
                 
-                Button("Reset to Defaults") {
+                Button(action: {
                     settingsManager.reset()
                     syncFromSettings()
+                }) {
+                    Image(systemName: "arrow.counterclockwise")
+                        .help("Reset to Defaults")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                 
                 Button("Done") {
                     saveAndDismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.onboardingPill(size: .small))
                 .keyboardShortcut(.return)
             }
-            .padding()
+            .padding(24)
+            .background(.bar)
             
             Divider()
             
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // Scan Options
-                    GroupBox("Scan Options") {
+                VStack(alignment: .leading, spacing: 24) {
+                    
+                    // Comparison Strategy
+                    SettingsSection(title: "Matching Strategy", icon: "doc.text.magnifyingglass") {
                         VStack(alignment: .leading, spacing: 16) {
-                            // Min file size
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text("Minimum File Size:")
-                                    Spacer()
-                                    Text(minSizeMB == 0 ? "No minimum" : String(format: "%.1f MB", minSizeMB))
-                                        .foregroundColor(.secondary)
+                            Picker("Comparison Method:", selection: $settingsManager.settings.comparisonMethod) {
+                                ForEach(ComparisonMethod.allCases, id: \.self) { method in
+                                    VStack(alignment: .leading) {
+                                        Text(method.displayName)
+                                        Text(method.description)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .tag(method)
                                 }
-                                Slider(value: $minSizeMB, in: 0...100, step: 0.5)
                             }
+                            .pickerStyle(.radioGroup)
                             
-                            // Scan depth
-                            Picker("Scan Depth:", selection: $settingsManager.settings.maxScanDepth) {
-                                Text("Unlimited").tag(-1)
-                                Text("1 Level").tag(1)
-                                Text("2 Levels").tag(2)
-                                Text("3 Levels").tag(3)
-                                Text("5 Levels").tag(5)
-                                Text("10 Levels").tag(10)
-                            }
+                            Divider()
                             
                             // Auto start
                             Toggle("Auto-start scan when opening Duplicates view", isOn: $settingsManager.settings.autoStartScan)
+                                .font(.subheadline)
                         }
-                        .padding(.vertical, 8)
                     }
-                    
-                    // File Type Filters
-                    GroupBox("File Type Filters") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Include Extensions (empty = all):")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                TextField("e.g., jpg, png, pdf", text: $includeExtensionsText)
-                                    .textFieldStyle(.roundedBorder)
+
+                    // Scan Filters
+                    SettingsSection(title: "Scan Filters", icon: "line.3.horizontal.decrease.circle") {
+                        VStack(alignment: .leading, spacing: 20) {
+                            // Min file size
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Minimum File Size")
+                                        .font(.subheadline.weight(.medium))
+                                    Spacer()
+                                    Text(minSizeMB == 0 ? "No minimum" : String(format: "%.1f MB", minSizeMB))
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundColor(.secondary)
+                                }
+                                Slider(value: $minSizeMB, in: 0...500, step: 0.5)
                             }
                             
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Exclude Extensions:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                TextField("e.g., .DS_Store, .localized", text: $excludeExtensionsText)
-                                    .textFieldStyle(.roundedBorder)
+                            HStack(spacing: 20) {
+                                // Scan depth
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Scan Depth")
+                                        .font(.subheadline.weight(.medium))
+                                    Picker("", selection: $settingsManager.settings.maxScanDepth) {
+                                        Text("Unlimited").tag(-1)
+                                        Text("1 Level").tag(1)
+                                        Text("3 Levels").tag(3)
+                                        Text("5 Levels").tag(5)
+                                    }
+                                    .labelsHidden()
+                                    .frame(maxWidth: 150)
+                                }
+                                
+                                Spacer()
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                SettingsInput(label: "Include Extensions", text: $includeExtensionsText, placeholder: "jpg, png, pdf (leave empty for all)")
+                                SettingsInput(label: "Exclude Extensions", text: $excludeExtensionsText, placeholder: ".DS_Store, .localized, .lnk")
                             }
                         }
-                        .padding(.vertical, 8)
                     }
                     
-                    // Keep Strategy
-                    GroupBox("Default Keep Strategy") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("When bulk deleting, keep:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                    // Bulk Cleanup
+                    SettingsSection(title: "Bulk Cleanup Rules", icon: "trash.circle") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("When using 'Cleanup All', which file should be kept?")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                             
                             Picker("", selection: $settingsManager.settings.defaultKeepStrategy) {
                                 ForEach(KeepStrategy.allCases, id: \.self) { strategy in
                                     HStack {
                                         Text(strategy.displayName)
-                                        Text("- \(strategy.description)")
+                                        Spacer()
+                                        Text(strategy.description)
+                                            .font(.caption2)
                                             .foregroundColor(.secondary)
                                     }
                                     .tag(strategy)
                                 }
                             }
                             .pickerStyle(.radioGroup)
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    // Deletion Options
-                    GroupBox("Deletion Options") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Toggle("Enable Safe Deletion (move to trash with restore option)", isOn: $settingsManager.settings.enableSafeDeletion)
                             
-                            if settingsManager.settings.enableSafeDeletion {
-                                Text("Files can be restored from History after deletion")
+                            Divider()
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Toggle("Enable Safe Deletion", isOn: $settingsManager.settings.enableSafeDeletion)
+                                    .font(.subheadline.weight(.medium))
+                                
+                                Text(settingsManager.settings.enableSafeDeletion ? "Files are moved to a temporary recovery zone and can be restored from History." : "⚠️ Warning: Files will be permanently removed from disk immediately.")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text("⚠️ Files will be permanently deleted")
-                                    .font(.caption)
-                                    .foregroundColor(.orange)
+                                    .foregroundColor(settingsManager.settings.enableSafeDeletion ? .secondary : .orange)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        .padding(.vertical, 8)
                     }
                     
-                    // Semantic Duplicates
-                    GroupBox("Semantic Duplicates") {
+                    // Semantic Detection
+                    SettingsSection(title: "AI-Powered Matching", icon: "sparkles") {
                         VStack(alignment: .leading, spacing: 12) {
-                            Toggle("Include similar files (not just exact matches)", isOn: $settingsManager.settings.includeSemanticDuplicates)
+                            Toggle("Enable Semantic Matching", isOn: $settingsManager.settings.includeSemanticDuplicates)
+                                .font(.subheadline.weight(.medium))
                             
                             if settingsManager.settings.includeSemanticDuplicates {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 8) {
                                     HStack {
-                                        Text("Similarity Threshold:")
+                                        Text("Similarity Threshold")
                                         Spacer()
                                         Text(String(format: "%.0f%%", settingsManager.settings.semanticSimilarityThreshold * 100))
+                                            .font(.caption.monospacedDigit())
                                             .foregroundColor(.secondary)
                                     }
                                     Slider(value: $settingsManager.settings.semanticSimilarityThreshold, in: 0.7...1.0, step: 0.05)
+                                    
+                                    Text("Used to find visually or contextually similar files even if binary data differs (e.g., resized images).")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
-                                
-                                Text("Higher threshold = stricter matching")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                .padding(.leading, 24)
+                                .transition(.move(edge: .top).combined(with: .opacity))
                             }
                         }
-                        .padding(.vertical, 8)
                     }
                 }
-                .padding()
+                .padding(24)
             }
         }
-        .frame(width: 550, height: 650)
+        .frame(width: 600, height: 750)
+        .background(Color(NSColor.windowBackgroundColor))
+        .animation(.sortySpringStandard, value: settingsManager.settings.includeSemanticDuplicates)
     }
     
     private func syncFromSettings() {
@@ -179,10 +202,8 @@ struct DuplicateSettingsView: View {
     }
     
     private func saveAndDismiss() {
-        // Convert min size from MB to bytes
         settingsManager.settings.minFileSize = Int64(minSizeMB * 1024 * 1024)
         
-        // Parse extension lists
         settingsManager.settings.includeExtensions = includeExtensionsText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -195,6 +216,60 @@ struct DuplicateSettingsView: View {
         
         settingsManager.save()
         dismiss()
+    }
+}
+
+struct SettingsSection<Content: View>: View {
+    let title: String
+    let icon: String
+    let content: Content
+    
+    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.icon = icon
+        self.content = content()
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .foregroundStyle(Color.accentColor)
+                Text(title)
+                    .font(.headline)
+            }
+            
+            content
+                .padding(16)
+                .background(Color.primary.opacity(0.03))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                )
+        }
+    }
+}
+
+struct SettingsInput: View {
+    let label: String
+    @Binding var text: String
+    let placeholder: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label)
+                .font(.subheadline.weight(.medium))
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .padding(8)
+                .background(Color(NSColor.controlBackgroundColor))
+                .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                )
+        }
     }
 }
 

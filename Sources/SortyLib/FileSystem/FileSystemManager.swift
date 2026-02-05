@@ -115,7 +115,7 @@ public actor FileSystemManager {
 
     /// Check if a path is currently being reverted
     public func isPathBeingReverted(_ path: String) -> Bool {
-        return revertingPaths.contains(path) || revertingPaths.contains { path.hasPrefix($0) }
+        return revertingPaths.contains(path) || revertingPaths.contains { path.isSubpath(of: $0) }
     }
 
     /// Mark paths as being reverted to prevent re-organization
@@ -389,7 +389,18 @@ public actor FileSystemManager {
                 
                 // Apply using NSURL to avoid version check error
                 let nsURL = fileURL as NSURL
-                try? nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                do {
+                    try nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                    #if DEBUG
+                    // Verify tags were set correctly
+                    if let verifyValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey]),
+                       let verifyTags = verifyValues.tagNames {
+                        DebugLogger.log("Tags verified for \(fileURL.lastPathComponent): \(verifyTags)")
+                    }
+                    #endif
+                } catch {
+                    DebugLogger.log("Tagging failed for \(fileURL.path): \(error.localizedDescription)")
+                }
                 
                 operations.append(FileOperation(
                     id: UUID(),
@@ -682,7 +693,18 @@ public actor FileSystemManager {
                 let finalTags = Array(newTagsSet)
                 
                 let nsURL = fileURL as NSURL
-                try? nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                do {
+                    try nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                    #if DEBUG
+                    // Verify tags were set correctly
+                    if let verifyValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey]),
+                       let verifyTags = verifyValues.tagNames {
+                        DebugLogger.log("Tags verified for \(fileURL.lastPathComponent): \(verifyTags)")
+                    }
+                    #endif
+                } catch {
+                    DebugLogger.log("Tagging failed for \(fileURL.path): \(error.localizedDescription)")
+                }
                 
                 operations.append(FileOperation(
                     type: .tagFile,

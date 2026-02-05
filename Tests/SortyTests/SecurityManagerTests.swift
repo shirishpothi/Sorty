@@ -149,7 +149,8 @@ final class SecurityManagerTests: XCTestCase {
         
         let expectation = XCTestExpectation(description: "Wait for session to expire")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000) // 0.15s
             expectation.fulfill()
         }
         
