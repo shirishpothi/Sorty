@@ -303,21 +303,20 @@ jobs:
           cp -R artifacts/arm64/Sorty-arm64.app releases/
           cp -R artifacts/x86_64/Sorty-x86_64.app releases/
           cp artifacts/arm64/Sorty-arm64.zip releases/
-          cp artifacts/x86_64/Sorty-x86_64.zip releases/
 
           ./scripts/merge_arch_apps.sh \
             --arm64 "releases/Sorty-arm64.app" \
             --x86_64 "releases/Sorty-x86_64.app" \
             --output "releases/Sorty.app"
 
-          ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/package.sh
+          ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/package.sh
 
       - name: Generate Appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
-          ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/generate_appcast_ci.sh
+          ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/generate_appcast_ci.sh
 
       - name: Validate Sparkle Update System
         run: |
@@ -333,21 +332,42 @@ jobs:
             git push origin "${TAG_NAME}"
           fi
 
+      - name: Extract changelog for release body
+        id: changelog
+        run: |
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          CHANGELOG_CONTENT=$(awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" {in_section=1; next}
+            in_section && $0 ~ "^## \\[" {exit}
+            in_section {print}
+          ' CHANGELOG.md)
+
+          if [ -z "$CHANGELOG_CONTENT" ]; then
+            CHANGELOG_CONTENT="- No changelog entry found for v${VERSION}."
+          fi
+
+          {
+            echo "release_changelog<<EOF"
+            echo "$CHANGELOG_CONTENT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.prepare-release.outputs.version }}
           name: ${{ env.PROJECT_NAME }} ${{ needs.prepare-release.outputs.version }}
           files: |
-            releases/Sorty.zip
+            releases/Sorty-universal.zip
             releases/Sorty-arm64.zip
-            releases/Sorty-x86_64.zip
             releases/appcast.xml
           generate_release_notes: true
           append_body: true
           body: |
             ## Installation
-            Download `Sorty.zip` below and move `Sorty.app` to `/Applications`.
+            Choose one download below and move `Sorty.app` to `/Applications`:
+            - `Sorty-arm64.zip` (Apple Silicon / arm64)
+            - `Sorty-universal.zip` (Apple Silicon + Intel)
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > xattr -cr /Applications/Sorty.app
@@ -358,8 +378,11 @@ jobs:
 
             ## Additional Downloads
             - **Sorty-arm64.zip** - Apple Silicon build
-            - **Sorty-x86_64.zip** - Intel build
+            - **Sorty-universal.zip** - Universal build (Apple Silicon + Intel)
             - **Sorty-Source.zip** - Full source code
+
+            ## Changelog (v${{ needs.prepare-release.outputs.version }})
+            ${{ steps.changelog.outputs.release_changelog }}
           prerelease: ${{ needs.prepare-release.outputs.is_prerelease == 'true' }}
 
       - name: Update latest stable appcast
