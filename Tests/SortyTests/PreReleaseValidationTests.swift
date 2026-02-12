@@ -445,17 +445,15 @@ final class UndoRedoSafetyTests: XCTestCase {
     var fileManager: FileManager!
     var fsManager: FileSystemManager!
     
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
         fileManager = FileManager.default
         tempDir = fileManager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try? fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
         fsManager = FileSystemManager()
     }
     
-    override func tearDown() {
+    override func tearDown() async throws {
         try? fileManager.removeItem(at: tempDir)
-        super.tearDown()
     }
     
     @MainActor
