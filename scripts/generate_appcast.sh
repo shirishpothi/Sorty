@@ -8,18 +8,18 @@ source "${SCRIPT_DIR}/utils.sh"
 print_header "Generating Appcast" 50
 
 APPCAST_FILE="${RELEASE_DIR}/appcast.xml"
-PKG_NAME="${PROJECT_NAME}.pkg"
-PKG_PATH="${RELEASE_DIR}/${PKG_NAME}"
+ZIP_NAME="${ZIP_NAME_OVERRIDE:-${PROJECT_NAME}.zip}"
+ZIP_PATH="${RELEASE_DIR}/${ZIP_NAME}"
 
-if [ ! -f "$PKG_PATH" ]; then
-    log_failure "PKG file not found at $PKG_PATH"
+if [ ! -f "$ZIP_PATH" ]; then
+    log_failure "ZIP file not found at $ZIP_PATH"
     exit 1
 fi
 
 VERSION=$(get_version)
 BUILD_NUM=$(get_build_number)
 DATE=$(date -R)
-SIZE=$(stat -f%z "$PKG_PATH")
+SIZE=$(stat -f%z "$ZIP_PATH")
 
 # Validate Sparkle Configuration
 FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "${PROJECT_DIR}/Info.plist" 2>/dev/null || true)
@@ -53,7 +53,7 @@ if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
         # but we can check if the SIGNATURE is generated correctly)
         
         # sign_update outputs something like "sparkle:edSignature="...""
-        SIG_OUTPUT=$("$SIGN_UPDATE_TOOL" -f "$SPARKLE_KEY_FILE" "$PKG_PATH" 2>/dev/null)
+        SIG_OUTPUT=$("$SIGN_UPDATE_TOOL" -f "$SPARKLE_KEY_FILE" "$ZIP_PATH" 2>/dev/null)
         if [ $? -eq 0 ] && [ -n "$SIG_OUTPUT" ]; then
             SIGNATURE="$SIG_OUTPUT"
             log_success "Generated Ed25519 signature"
@@ -95,7 +95,7 @@ cat > "$APPCAST_FILE" <<EOF
       <title>Version ${VERSION}</title>
       <sparkle:releaseNotesLink>${REPO_URL}/releases/tag/v${VERSION}</sparkle:releaseNotesLink>
       <pubDate>${DATE}</pubDate>
-      <enclosure url="${REPO_URL}/releases/download/v${VERSION}/${PKG_NAME}"
+      <enclosure url="${REPO_URL}/releases/download/v${VERSION}/${ZIP_NAME}"
                  ${ENCLOSURE_ATTRIBUTES} />
     </item>
   </channel>

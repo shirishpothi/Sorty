@@ -144,7 +144,7 @@ While releases are not signed, you can verify integrity:
 ```bash
 # Download release
 # Check SHA256 hash (if provided in release notes)
-shasum -a 256 Sorty.pkg
+shasum -a 256 Sorty.zip
 
 # Or build from source
 git clone https://github.com/shirishpothi/Sorty.git

@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal
 
 # Default target
 all: build
@@ -17,6 +17,24 @@ SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable
 build:
 	@chmod +x scripts/build.sh
 	@BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
+
+build-ci-arm64:
+	@echo "🏗️  CI-style xcodebuild (arm64)..."
+	@chmod +x scripts/build.sh scripts/package.sh
+	@BUILD_METHOD=xcodebuild SKIP_TESTS=true BUILD_ARCHS="arm64" XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" ./scripts/build.sh
+	@ZIP_NAME_OVERRIDE="Sorty-arm64.zip" ./scripts/package.sh
+
+build-ci-x86_64:
+	@echo "🏗️  CI-style xcodebuild (x86_64)..."
+	@chmod +x scripts/build.sh scripts/package.sh
+	@BUILD_METHOD=xcodebuild SKIP_TESTS=true BUILD_ARCHS="x86_64" XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" ./scripts/build.sh
+	@ZIP_NAME_OVERRIDE="Sorty-x86_64.zip" ./scripts/package.sh
+
+build-ci-universal:
+	@echo "🏗️  CI-style xcodebuild (universal)..."
+	@chmod +x scripts/build.sh scripts/package.sh
+	@BUILD_METHOD=xcodebuild SKIP_TESTS=true BUILD_ARCHS="arm64 x86_64" XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" ./scripts/build.sh
+	@ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/package.sh
 
 run: build
 	@echo "🚀 Launching Sorty..."
@@ -150,6 +168,9 @@ help:
 	@echo "  make dev         - Fastest development build (debug + parallel + no tests)"
 	@echo "  make quick       - Compile immediately (skips tests, parallel)"
 	@echo "  make now         - Build fast and launch immediately (skips tests, parallel)"
+	@echo "  make build-ci-arm64   - CI-style arm64 xcodebuild + zip package"
+	@echo "  make build-ci-x86_64  - CI-style x86_64 xcodebuild + zip package"
+	@echo "  make build-ci-universal - CI-style universal xcodebuild + zip package"
 	@echo ""
 	@echo "Build Profiling:"
 	@echo "  make build-profile - Identify slow-compiling files and functions"

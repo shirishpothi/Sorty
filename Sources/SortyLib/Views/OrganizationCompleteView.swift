@@ -28,7 +28,7 @@ struct OrganizationCompleteView: View {
     
     @State private var displayedFiles = 0
     @State private var displayedFolders = 0
-    @State private var countUpTimer: Timer?
+    @State private var countUpTask: Task<Void, Never>?
     
     var body: some View {
         VStack(spacing: 32) {
@@ -216,27 +216,33 @@ struct OrganizationCompleteView: View {
             }
         }
         .onDisappear {
-            countUpTimer?.invalidate()
-            countUpTimer = nil
+            countUpTask?.cancel()
+            countUpTask = nil
         }
     }
     
+    @MainActor
     private func startCountUp() {
         let steps = 20
         let interval = 0.5 / Double(steps)
-        var currentStep = 0
         
-        countUpTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
-            currentStep += 1
-            let progress = Double(currentStep) / Double(steps)
-            let easedProgress = 1 - pow(1 - progress, 3)
+        countUpTask?.cancel()
+        countUpTask = Task {
+            for currentStep in 1...steps {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled else { return }
+                
+                let progress = Double(currentStep) / Double(steps)
+                let easedProgress = 1 - pow(1 - progress, 3)
+                
+                await MainActor.run {
+                    displayedFiles = Int(round(Double(totalFiles) * easedProgress))
+                    displayedFolders = Int(round(Double(totalFolders) * easedProgress))
+                }
+            }
             
-            displayedFiles = Int(round(Double(totalFiles) * easedProgress))
-            displayedFolders = Int(round(Double(totalFolders) * easedProgress))
-            
-            if currentStep >= steps {
-                timer.invalidate()
-                countUpTimer = nil
+            await MainActor.run {
+                countUpTask = nil
                 displayedFiles = totalFiles
                 displayedFolders = totalFolders
                 HapticFeedbackManager.shared.alignment()

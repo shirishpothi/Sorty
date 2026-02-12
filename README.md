@@ -233,6 +233,9 @@ sorty learnings                                    # Open Learnings dashboard
 sorty history                                      # Open History
 ```
 
+`sorty` performs strict input validation and exits with a non-zero status for invalid commands or arguments.
+For automation/tests, set `SORTY_CLI_DRY_RUN=1` to print the deeplink URL instead of opening the app.
+
 ## Deeplinks Reference
 
 Sorty supports the `sorty://` URL scheme for automation and external control:
@@ -243,6 +246,7 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 | `sorty://duplicates?path=<path>&autostart=true` | Scan for duplicates |
 | `sorty://learnings?action=honing` | Open Learnings with specific action |
 | `sorty://settings?section=ai` | Open specific settings section |
+| `sorty://open` | Activate Sorty without forcing a view change |
 | `sorty://health` | Open Workspace Health |
 | `sorty://history` | Open organization history |
 | `sorty://persona?generate=true&prompt=<text>` | Generate a persona |

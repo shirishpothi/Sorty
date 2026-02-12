@@ -31,7 +31,16 @@ struct LearningsCLI {
             await printDetailedStats(manager: manager)
             
         case "--export", "export":
-            let format = args.count > 2 ? args[2] : "json"
+            if args.count > 3 {
+                print("Too many arguments for export. Usage: learnings export <json|summary>")
+                exit(1)
+            }
+            let format = args.count > 2 ? args[2].lowercased() : "json"
+            guard ["json", "summary"].contains(format) else {
+                print("Invalid export format: \(format)")
+                print("Usage: learnings export <json|summary>")
+                exit(1)
+            }
             await exportProfile(manager: manager, format: format)
             
         case "--clear", "clear":
@@ -60,22 +69,22 @@ struct LearningsCLI {
         \u{001B}[1mLearnings CLI\u{001B}[0m - Manage your organization learning profile
         
         \u{001B}[1mUSAGE:\u{001B}[0m
-          learnings-cli <command> [options]
+          learnings <command> [options]
         
         \u{001B}[1mCOMMANDS:\u{001B}[0m
           status      Show current learning status and basic stats
           stats       Show detailed statistics and learned patterns
-          export      Export profile data (json/summary)
+          export      Export profile data (format: json|summary)
           clear       Delete all learning data (requires confirmation)
           withdraw    Pause learning without deleting data
           info        Show system information
           help        Show this help message
         
         \u{001B}[1mEXAMPLES:\u{001B}[0m
-          learnings-cli status
-          learnings-cli stats
-          learnings-cli export json
-          learnings-cli clear
+          learnings status
+          learnings stats
+          learnings export json
+          learnings clear
         
         \u{001B}[1mNOTES:\u{001B}[0m
           - Full profile access requires biometric authentication in the main app
@@ -205,15 +214,20 @@ struct LearningsCLI {
     }
     
     static func printInfo() {
+        let buildInfo = runtimeBuildInfo()
+        let storagePath = LearningsFileManager.storageDirectoryPath
+        let profilePath = "\(storagePath)/\(NSUserName()).learning"
+        
         print("\n\u{001B}[1m═══════════════════════════════════\u{001B}[0m")
         print("\u{001B}[1m     THE LEARNINGS - SYSTEM INFO    \u{001B}[0m")
         print("\u{001B}[1m═══════════════════════════════════\u{001B}[0m\n")
         
-        print("  📦 Version: 1.0.0")
+        print("  📦 Version: \(buildInfo.version) (\(buildInfo.build))")
         print("  🔐 Security: AES-256 + Keychain")
         print("  🔑 Auth: Touch ID / Face ID / Passcode")
         print("  ⏱️  Session Timeout: 5 minutes")
-        print("  💾 Storage: ~/.config/Sorty/Learnings/")
+        print("  💾 Storage: \(storagePath)")
+        print("  📁 Profile Path: \(profilePath)")
         print("  📄 File Format: .learning (encrypted JSON)")
         print("")
         print("  \u{001B}[1mPrivacy:\u{001B}[0m")
@@ -222,5 +236,19 @@ struct LearningsCLI {
         print("    • Only used to improve AI suggestions")
         print("    • Can be deleted at any time")
         print("")
+    }
+    
+    static func runtimeBuildInfo() -> (version: String, build: String) {
+        let info = Bundle.main.infoDictionary
+        
+        let version = (info?["CFBundleShortVersionString"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let build = (info?["CFBundleVersion"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let resolvedVersion = version.flatMap { $0.isEmpty ? nil : $0 } ?? "dev"
+        let resolvedBuild = build.flatMap { $0.isEmpty ? nil : $0 } ?? "dev"
+        
+        return (version: resolvedVersion, build: resolvedBuild)
     }
 }

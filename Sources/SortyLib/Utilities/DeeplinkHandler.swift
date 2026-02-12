@@ -17,6 +17,7 @@ public enum DeeplinkDestination: Equatable {
     case learnings(action: LearningsAction?, project: String?)
     case settings(section: String?)
     case help(section: String?)
+    case open(path: String?)
     case history
     case health
     case persona(action: String?, prompt: String?, generate: Bool)
@@ -55,8 +56,11 @@ public class DeeplinkHandler: ObservableObject {
     ///   sorty://learnings?project=Photos
     ///   sorty://settings
     ///   sorty://help?section=personas
+    ///   sorty://open
+    ///   sorty:///Users/foo/Downloads
     public func handle(url: URL) {
-        guard url.scheme == "sorty" else { return }
+        pendingDestination = nil
+        guard url.scheme?.lowercased() == "sorty" else { return }
         
         let host = url.host ?? ""
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -66,7 +70,17 @@ public class DeeplinkHandler: ObservableObject {
             queryItems.first { $0.name == name }?.value
         }
         
-        switch host {
+        let normalizedHost = host.lowercased()
+        
+        if normalizedHost.isEmpty {
+            let legacyPath = url.path.removingPercentEncoding ?? url.path
+            if !legacyPath.isEmpty && legacyPath != "/" {
+                pendingDestination = .organize(path: legacyPath, persona: nil, autostart: false)
+                return
+            }
+        }
+        
+        switch normalizedHost {
         case "organize":
             let path = queryValue(for: "path")
             let persona = queryValue(for: "persona")
@@ -88,6 +102,9 @@ public class DeeplinkHandler: ObservableObject {
             
         case "help":
             pendingDestination = .help(section: queryValue(for: "section"))
+            
+        case "open":
+            pendingDestination = .open(path: queryValue(for: "path"))
             
         case "history":
             pendingDestination = .history
@@ -188,6 +205,12 @@ public class DeeplinkHandler: ObservableObject {
             components.host = "help"
             if let section = section {
                 components.queryItems = [URLQueryItem(name: "section", value: section)]
+            }
+            
+        case .open(let path):
+            components.host = "open"
+            if let path = path {
+                components.queryItems = [URLQueryItem(name: "path", value: path)]
             }
             
         case .history:

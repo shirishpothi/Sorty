@@ -103,7 +103,7 @@ struct SortyApp: App {
     }
     
     @ViewBuilder
-    private var mainView: some View {
+    private var configuredContentView: some View {
         ContentView()
             .environmentObject(settingsViewModel)
             .environmentObject(appState)
@@ -126,6 +126,10 @@ struct SortyApp: App {
             .environmentObject(batchManager)
             .environmentObject(appState.duplicateManager)
             .environmentObject(appState.duplicateSettings)
+    }
+
+    private func applyLifecycleModifiers<V: View>(to view: V) -> some View {
+        view
             .onAppear {
                 appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
                 
@@ -219,6 +223,10 @@ struct SortyApp: App {
             .onOpenURL { url in
                 processDeepLink(url)
             }
+    }
+
+    private func applyNotificationModifiers<V: View>(to view: V) -> some View {
+        view
             .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { _ in
                 appState.currentView = .learnings
                 // Small delay to ensure view transition happens before showing picker
@@ -251,6 +259,11 @@ struct SortyApp: App {
             } message: {
                 Text("This will permanently delete all organization history, learnings data, and cached sessions. This action cannot be undone.")
             }
+    }
+
+    @ViewBuilder
+    private var mainView: some View {
+        applyNotificationModifiers(to: applyLifecycleModifiers(to: configuredContentView))
     }
 
     @SceneBuilder
@@ -375,6 +388,18 @@ struct SortyApp: App {
                 
             case .help:
                 appState.showHelp()
+                
+            case .open(let path):
+                NSApp.activate(ignoringOtherApps: true)
+                if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
+                    window.makeKeyAndOrderFront(nil)
+                }
+                if let path = path {
+                    var isDirectory = ObjCBool(false)
+                    if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
+                        appState.selectedDirectory = URL(fileURLWithPath: path)
+                    }
+                }
                 
             case .history:
                 appState.currentView = .history

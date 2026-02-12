@@ -185,7 +185,7 @@ echo ""
 print_summary "Release Complete ✨" \
     "Version" "$NEW_VERSION" \
     "Tag" "$TAG_NAME" \
-    "PKG" "${RELEASE_DIR}/Sorty.pkg"
+    "ZIP" "${RELEASE_DIR}/Sorty.zip"
 
 echo ""
 echo "Next steps:"

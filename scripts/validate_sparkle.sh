@@ -33,7 +33,12 @@ if [ -z "$APPCAST_PATH" ]; then
     APPCAST_PATH="${PROJECT_DIR}/releases/appcast.xml"
 fi
 if [ -z "$PLIST_PATH" ]; then
-    PLIST_PATH="${PROJECT_DIR}/Info.plist"
+    BUILT_APP_PLIST="${PROJECT_DIR}/releases/Sorty.app/Contents/Info.plist"
+    if [ -f "$BUILT_APP_PLIST" ]; then
+        PLIST_PATH="$BUILT_APP_PLIST"
+    else
+        PLIST_PATH="${PROJECT_DIR}/Info.plist"
+    fi
 fi
 
 ERRORS=0
@@ -113,8 +118,8 @@ else
         if [[ ! "$ENC_URL" == *"github.com"*"/releases/download/"* ]]; then
             fail "Enclosure url must point to GitHub releases download"
         fi
-        if [[ ! "$ENC_URL" == *.pkg ]]; then
-            fail "Enclosure url must end with .pkg"
+        if [[ ! "$ENC_URL" == *.zip ]]; then
+            fail "Enclosure url must end with .zip"
         fi
     fi
 

@@ -11,44 +11,30 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   PROJECT_NAME: Sorty
   SCHEME: Sorty
 
 jobs:
-  build-and-release:
-    runs-on: macos-15
+  prepare-release:
+    runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      is_prerelease: ${{ steps.version.outputs.IS_PRERELEASE }}
 
     steps:
-      # ===========================================
-      # 1. Checkout
-      # ===========================================
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ===========================================
-      # 2. Setup Xcode
-      # ===========================================
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: 'latest-stable' # Use latest stable Xcode for SDK compatibility
-
-      # ===========================================
-      # 2b. Run Unit Tests
-      # ===========================================
-      - name: Run Unit Tests
-        run: |
-          swift test --parallel 2>&1 | tail -100
-
-      # ===========================================
-      # 3. Extract version from tag or input
-      # ===========================================
       - name: Get version
         id: version
         run: |
@@ -57,45 +43,37 @@ jobs:
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
-          
-          # Check if beta
+          echo "VERSION=${VERSION}" >> "$GITHUB_OUTPUT"
+
           if [[ "$VERSION" == *"-beta"* ]] || [[ "$VERSION" == *"-alpha"* ]] || [[ "$VERSION" == *"-rc"* ]]; then
-            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=true" >> "$GITHUB_OUTPUT"
           else
-            echo "IS_PRERELEASE=false" >> $GITHUB_OUTPUT
+            echo "IS_PRERELEASE=false" >> "$GITHUB_OUTPUT"
           fi
-          
+
           echo "Releasing version: ${VERSION}"
 
-      # ===========================================
-      # 3b. Update Changelog
-      # ===========================================
       - name: Update Changelog
         if: steps.version.outputs.IS_PRERELEASE == 'false'
         env:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
-          # Guard: skip if this version already exists in CHANGELOG.md
           if grep -q "^## \[${VERSION}\]" CHANGELOG.md 2>/dev/null; then
             echo "Version ${VERSION} already exists in CHANGELOG.md, skipping"
             exit 0
           fi
 
-          # Get previous tag reliably (second most recent tag by version sort)
           CURRENT_TAG="v${VERSION}"
-          PREV_TAG=$(git tag --sort=-v:refno | grep '^v' | while read -r t; do
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^v' | while read -r t; do
             if [ "$t" != "$CURRENT_TAG" ]; then
               echo "$t"
               break
             fi
           done)
 
-          # Collect commits since previous tag
           if [ -n "$PREV_TAG" ]; then
             COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
           else
-            # First release — include all commits
             COMMITS=$(git log --pretty=format:"%s" --no-merges)
           fi
 
@@ -105,8 +83,6 @@ jobs:
           fi
 
           DATE=$(date +%Y-%m-%d)
-
-          # Categorize commits by conventional commit prefix
           ADDED=""
           CHANGED=""
           FIXED=""
@@ -114,26 +90,22 @@ jobs:
           OTHER=""
 
           while IFS= read -r msg; do
-            # Strip leading/trailing whitespace
             msg=$(echo "$msg" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
             [ -z "$msg" ] && continue
 
-            # Match conventional commit prefixes (case-insensitive)
             lower=$(echo "$msg" | tr '[:upper:]' '[:lower:]')
-            # Remove the prefix for the bullet point
             body=$(echo "$msg" | sed -E 's/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?:[[:space:]]*//')
 
             case "$lower" in
-              feat*)    ADDED="${ADDED}- ${body}"$'\n' ;;
-              fix*)     FIXED="${FIXED}- ${body}"$'\n' ;;
+              feat*) ADDED="${ADDED}- ${body}"$'\n' ;;
+              fix*) FIXED="${FIXED}- ${body}"$'\n' ;;
               refactor*|perf*|style*) CHANGED="${CHANGED}- ${body}"$'\n' ;;
-              revert*)  REMOVED="${REMOVED}- ${body}"$'\n' ;;
+              revert*) REMOVED="${REMOVED}- ${body}"$'\n' ;;
               docs*|test*|build*|ci*|chore*) OTHER="${OTHER}- ${body}"$'\n' ;;
-              *)        OTHER="${OTHER}- ${msg}"$'\n' ;;
+              *) OTHER="${OTHER}- ${msg}"$'\n' ;;
             esac
           done <<< "$COMMITS"
 
-          # Build the changelog entry using a temp file (safe with special chars)
           ENTRY_FILE=$(mktemp)
           echo "## [${VERSION}] - ${DATE}" >> "$ENTRY_FILE"
           echo "" >> "$ENTRY_FILE"
@@ -159,7 +131,6 @@ jobs:
             echo "$OTHER" >> "$ENTRY_FILE"
           fi
 
-          # If no categorized commits at all, add a generic entry
           if [ -z "$ADDED" ] && [ -z "$CHANGED" ] && [ -z "$FIXED" ] && [ -z "$REMOVED" ] && [ -z "$OTHER" ]; then
             echo "### Changes" >> "$ENTRY_FILE"
             echo "$COMMITS" | while IFS= read -r line; do
@@ -168,18 +139,14 @@ jobs:
             echo "" >> "$ENTRY_FILE"
           fi
 
-          # Insert new entry into CHANGELOG.md
           INSERT_LINE=$(grep -n '^## \[' CHANGELOG.md | head -1 | cut -d: -f1)
-
           if [ -n "$INSERT_LINE" ]; then
-            # Insert before the first version entry
             {
               head -n $((INSERT_LINE - 1)) CHANGELOG.md
               cat "$ENTRY_FILE"
               tail -n +${INSERT_LINE} CHANGELOG.md
             } > CHANGELOG.tmp
           else
-            # No existing entries — append after the whole file
             {
               cat CHANGELOG.md
               echo ""
@@ -189,7 +156,6 @@ jobs:
 
           mv CHANGELOG.tmp CHANGELOG.md
           rm -f "$ENTRY_FILE"
-
           echo "Changelog updated for version ${VERSION}"
 
       - name: Commit Changelog
@@ -207,70 +173,181 @@ jobs:
             git push origin HEAD:main
           fi
 
-      # ===========================================
-      # 4. Build
-      # ===========================================
-      - name: Build
+  unit-tests:
+    runs-on: macos-15
+    needs: prepare-release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-release-tests-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-release-tests-
+            ${{ runner.os }}-spm-
+
+      - name: Run Unit Tests
+        run: |
+          swift test --parallel 2>&1 | tail -100
+
+  build-arch:
+    runs-on: macos-15
+    needs:
+      - prepare-release
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        arch:
+          - arm64
+          - x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-release-${{ matrix.arch }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-release-${{ matrix.arch }}-
+            ${{ runner.os }}-spm-
+
+      - name: Build (${{ matrix.arch }})
         run: |
           chmod +x ./scripts/build.sh
-          # Use xcodebuild for CI releases - ensures proper SDK targeting
-          # Versioning is handled automatically via git tags in build.sh
-          BUILD_METHOD=xcodebuild SKIP_TESTS=true ./scripts/build.sh
-      # ===========================================
-      # 5. Package (ZIP)
-      # ===========================================
-      - name: Package
+          BUILD_METHOD=xcodebuild \
+          SKIP_TESTS=true \
+          BUILD_ARCHS="${{ matrix.arch }}" \
+          XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" \
+          ./scripts/build.sh
+
+      - name: Package (${{ matrix.arch }})
         run: |
           chmod +x ./scripts/package.sh
-          ./scripts/package.sh
+          ZIP_NAME_OVERRIDE="Sorty-${{ matrix.arch }}.zip" ./scripts/package.sh
 
+      - name: Stage build artifacts
+        run: |
+          mkdir -p release-artifacts
+          mv "releases/Sorty.app" "release-artifacts/Sorty-${{ matrix.arch }}.app"
+          cp "releases/Sorty-${{ matrix.arch }}.zip" "release-artifacts/"
+          cp ".build/build_output.log" "release-artifacts/build_output_${{ matrix.arch }}.log" 2>/dev/null || true
 
-      # ===========================================
-      # 8. Generate Appcast with Sparkle signing
-      # ===========================================
+      - name: Upload build artifacts (${{ matrix.arch }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: release-artifacts/
+          retention-days: 7
+
+  merge-and-release:
+    runs-on: macos-15
+    needs:
+      - prepare-release
+      - unit-tests
+      - build-arch
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Download arm64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-arm64
+          path: artifacts/arm64
+
+      - name: Download x86_64 artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-x86_64
+          path: artifacts/x86_64
+
+      - name: Merge arch apps and package universal ZIP
+        run: |
+          chmod +x ./scripts/merge_arch_apps.sh
+          chmod +x ./scripts/package.sh
+
+          mkdir -p releases
+          cp -R artifacts/arm64/Sorty-arm64.app releases/
+          cp -R artifacts/x86_64/Sorty-x86_64.app releases/
+          cp artifacts/arm64/Sorty-arm64.zip releases/
+          cp artifacts/x86_64/Sorty-x86_64.zip releases/
+
+          ./scripts/merge_arch_apps.sh \
+            --arm64 "releases/Sorty-arm64.app" \
+            --x86_64 "releases/Sorty-x86_64.app" \
+            --output "releases/Sorty.app"
+
+          ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/package.sh
+
       - name: Generate Appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
-          ./scripts/generate_appcast_ci.sh
+          ZIP_NAME_OVERRIDE="Sorty.zip" ./scripts/generate_appcast_ci.sh
 
-      # ===========================================
-      # 8b. Validate Sparkle Update System
-      # ===========================================
       - name: Validate Sparkle Update System
         run: |
           chmod +x ./scripts/validate_sparkle.sh
           ./scripts/validate_sparkle.sh
 
-      # ===========================================
-      # 9. Create tag (for workflow_dispatch)
-      # ===========================================
       - name: Create tag
         if: github.event_name == 'workflow_dispatch'
         run: |
-          TAG_NAME="v${{ steps.version.outputs.VERSION }}"
+          TAG_NAME="v${{ needs.prepare-release.outputs.version }}"
           if ! git tag -l | grep -q "^${TAG_NAME}$"; then
-            git tag -a "${TAG_NAME}" -m "Release ${{ steps.version.outputs.VERSION }}"
+            git tag -a "${TAG_NAME}" -m "Release ${{ needs.prepare-release.outputs.version }}"
             git push origin "${TAG_NAME}"
           fi
-      # ===========================================
-      # 10. Create GitHub Release
-      # ===========================================
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          name: ${{ env.PROJECT_NAME }} ${{ steps.version.outputs.VERSION }}
+          tag_name: v${{ needs.prepare-release.outputs.version }}
+          name: ${{ env.PROJECT_NAME }} ${{ needs.prepare-release.outputs.version }}
           files: |
-            releases/Sorty.pkg
+            releases/Sorty.zip
+            releases/Sorty-arm64.zip
+            releases/Sorty-x86_64.zip
             releases/appcast.xml
           generate_release_notes: true
           append_body: true
           body: |
-            
             ## Installation
-            Download `Sorty.pkg` below.
+            Download `Sorty.zip` below and move `Sorty.app` to `/Applications`.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > xattr -cr /Applications/Sorty.app
@@ -278,45 +355,36 @@ jobs:
 
             ## CLI Tools
             Sorty bundles CLI tools inside the app. Install them from **Settings → Finder Integration → Command Line Tools**.
-            
-            ## Additional Downloads
-            - **Sorty-Source.zip** - Full source code
-          prerelease: ${{ steps.version.outputs.IS_PRERELEASE == 'true' }}
 
-      # ===========================================
-      # 11. Update latest stable release with merged appcast
-      # ===========================================
+            ## Additional Downloads
+            - **Sorty-arm64.zip** - Apple Silicon build
+            - **Sorty-x86_64.zip** - Intel build
+            - **Sorty-Source.zip** - Full source code
+          prerelease: ${{ needs.prepare-release.outputs.is_prerelease == 'true' }}
+
       - name: Update latest stable appcast
-        if: steps.version.outputs.IS_PRERELEASE == 'false'
+        if: needs.prepare-release.outputs.is_prerelease == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the latest stable release tag
           LATEST_STABLE=$(gh release list --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
-          
+
           if [ -n "$LATEST_STABLE" ]; then
             echo "Updating appcast on latest stable release: $LATEST_STABLE"
-            
-            # Delete old appcast from stable release
             gh release delete-asset "$LATEST_STABLE" appcast.xml --yes 2>/dev/null || true
-            
-            # Upload merged appcast to stable release
             gh release upload "$LATEST_STABLE" releases/appcast.xml --clobber
-            
             echo "Updated appcast.xml on $LATEST_STABLE with merged entries"
           else
             echo "No stable release found to update"
           fi
-      # ===========================================
-      # 12. Summary
-      # ===========================================
+
       - name: Summary
         run: |
-          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tag**: v${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Pre-release**: ${{ steps.version.outputs.IS_PRERELEASE }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Assets" >> $GITHUB_STEP_SUMMARY
-          ls -la releases/ >> $GITHUB_STEP_SUMMARY
+          echo "## Release Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: ${{ needs.prepare-release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag**: v${{ needs.prepare-release.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Pre-release**: ${{ needs.prepare-release.outputs.is_prerelease }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Assets" >> "$GITHUB_STEP_SUMMARY"
+          ls -la releases/ >> "$GITHUB_STEP_SUMMARY"

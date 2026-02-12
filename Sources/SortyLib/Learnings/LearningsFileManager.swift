@@ -107,6 +107,11 @@ public struct LearningsFileManager {
         FileManager.default.fileExists(atPath: profileURL.path)
     }
     
+    /// Directory containing encrypted .learning profiles
+    public static var storageDirectoryPath: String {
+        learningsDirectory.path
+    }
+    
     // MARK: - Encryption
     
     private static func getOrCreateEncryptionKey() throws -> SymmetricKey {

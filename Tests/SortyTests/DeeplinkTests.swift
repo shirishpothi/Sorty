@@ -159,6 +159,28 @@ final class DeeplinkTests: XCTestCase {
     }
     
     @MainActor
+    func testOpenDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty://open")!
+        handler.handle(url: url)
+        
+        XCTAssertEqual(handler.pendingDestination, .open(path: nil))
+        handler.clearPending()
+    }
+    
+    @MainActor
+    func testOpenDeeplinkWithPath() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty://open?path=/tmp/test")!
+        handler.handle(url: url)
+        
+        XCTAssertEqual(handler.pendingDestination, .open(path: "/tmp/test"))
+        handler.clearPending()
+    }
+    
+    @MainActor
     func testHistoryDeeplink() {
         let handler = DeeplinkHandler.shared
         
@@ -277,9 +299,22 @@ final class DeeplinkTests: XCTestCase {
     }
     
     @MainActor
+    func testUnknownDeeplinkClearsPriorDestination() {
+        let handler = DeeplinkHandler.shared
+        
+        handler.handle(url: URL(string: "sorty://health")!)
+        XCTAssertEqual(handler.pendingDestination, .health)
+        
+        handler.handle(url: URL(string: "sorty://unknown")!)
+        XCTAssertNil(handler.pendingDestination)
+    }
+    
+    @MainActor
     func testWrongScheme() {
         let handler = DeeplinkHandler.shared
-        handler.clearPending()
+        
+        handler.handle(url: URL(string: "sorty://history")!)
+        XCTAssertEqual(handler.pendingDestination, .history)
         
         let url = URL(string: "https://organize")!
         handler.handle(url: url)
@@ -320,6 +355,17 @@ final class DeeplinkTests: XCTestCase {
         handler.clearPending()
     }
     
+    @MainActor
+    func testLegacyPathDeeplink() {
+        let handler = DeeplinkHandler.shared
+        
+        let url = URL(string: "sorty:///Users/test/Downloads")!
+        handler.handle(url: url)
+        
+        XCTAssertEqual(handler.pendingDestination, .organize(path: "/Users/test/Downloads", persona: nil, autostart: false))
+        handler.clearPending()
+    }
+    
     // MARK: - URL Generation Tests
     
     @MainActor
@@ -332,6 +378,15 @@ final class DeeplinkTests: XCTestCase {
     func testGenerateSettingsURL() {
         let url = DeeplinkHandler.url(for: .settings(section: nil))
         XCTAssertEqual(url?.absoluteString, "sorty://settings")
+    }
+    
+    @MainActor
+    func testGenerateOpenURL() {
+        let url = DeeplinkHandler.url(for: .open(path: nil))
+        XCTAssertEqual(url?.absoluteString, "sorty://open")
+        
+        let urlWithPath = DeeplinkHandler.url(for: .open(path: "/tmp/test"))
+        XCTAssertEqual(urlWithPath?.absoluteString, "sorty://open?path=/tmp/test")
     }
     
     @MainActor

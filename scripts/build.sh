@@ -55,6 +55,67 @@ copy_resources_safely() {
     fi
 }
 
+bundle_cli_tools() {
+    local resources_dir="$1"
+    local build_config="$2"
+    local cli_build_flags="$3"
+    local cli_arch="$4"
+
+    if [ "${ENABLE_CLI_BUNDLE}" != "true" ]; then
+        log_item "Skipping CLI bundle (ENABLE_CLI_BUNDLE=${ENABLE_CLI_BUNDLE})"
+        return
+    fi
+
+    local cli_dir="${resources_dir}/CLI"
+    mkdir -p "${cli_dir}"
+
+    local -a cli_build_cmd
+    cli_build_cmd=(swift build -c "${build_config}" --product learnings)
+
+    if [ -n "${cli_arch}" ]; then
+        cli_build_cmd+=(--arch "${cli_arch}")
+    fi
+
+    if [ -n "${cli_build_flags}" ]; then
+        # shellcheck disable=SC2206
+        local extra_flags=( ${cli_build_flags} )
+        cli_build_cmd+=("${extra_flags[@]}")
+    fi
+
+    log_item "Building learnings CLI..."
+    if "${cli_build_cmd[@]}" 2>/dev/null; then
+        local learnings_bin=""
+        if [ -n "${cli_arch}" ]; then
+            learnings_bin="${PROJECT_DIR}/.build/${cli_arch}-apple-macosx/${build_config}/learnings"
+        fi
+
+        if [ -z "${learnings_bin}" ] || [ ! -f "${learnings_bin}" ]; then
+            local bin_path=""
+            bin_path=$(swift build -c "${build_config}" --show-bin-path)
+            learnings_bin="${bin_path}/learnings"
+        fi
+
+        if [ -f "${learnings_bin}" ]; then
+            cp "${learnings_bin}" "${cli_dir}/learnings"
+            strip -x "${cli_dir}/learnings"
+            chmod 755 "${cli_dir}/learnings"
+            log_item "Bundled learnings CLI"
+        else
+            log_item "Note: learnings CLI binary not found after build"
+        fi
+    else
+        log_item "Note: learnings CLI build skipped"
+    fi
+
+    # Bundle the sorty shell script
+    local sorty_script="${PROJECT_DIR}/CLI/sorty"
+    if [ -f "${sorty_script}" ]; then
+        cp "${sorty_script}" "${cli_dir}/sorty"
+        chmod 755 "${cli_dir}/sorty"
+        log_item "Bundled sorty CLI script"
+    fi
+}
+
 print_header "${PROJECT_NAME} Build" 50
 
 VERSION=$(get_version)
@@ -62,13 +123,24 @@ BUILD_NUM=$(get_build_number)
 
 # Build method: "spm" (default for local) or "xcodebuild" (for CI releases)
 BUILD_METHOD="${BUILD_METHOD:-spm}"
+BUILD_ARCHS="${BUILD_ARCHS:-arm64 x86_64}"
+XCODE_EXTRA_FLAGS="${XCODE_EXTRA_FLAGS:-COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO}"
+XCODE_BUILD_JOBS="${XCODE_BUILD_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 8)}"
+ENABLE_CLI_BUNDLE="${ENABLE_CLI_BUNDLE:-true}"
 
 print_summary "Build Configuration" \
     "Version" "${VERSION}" \
     "Build" "${BUILD_NUM}" \
     "Scheme" "${SCHEME}" \
     "Method" "${BUILD_METHOD}" \
+    "Archs" "${BUILD_ARCHS}" \
+    "Xcode Jobs" "${XCODE_BUILD_JOBS}" \
+    "Bundle CLI" "${ENABLE_CLI_BUNDLE}" \
     "Output" "${BUILD_DIR}"
+
+if [ "${BUILD_METHOD}" = "xcodebuild" ]; then
+    log_item "xcodebuild flags: ${XCODE_EXTRA_FLAGS}"
+fi
 
 # Cleanup and setup
 mkdir -p "${BUILD_DIR}"
@@ -113,6 +185,11 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     fi
     
     log_item "Using xcodebuild with configuration: ${XCODE_CONFIG}"
+
+    # shellcheck disable=SC2206
+    BUILD_ARCH_ARRAY=( ${BUILD_ARCHS} )
+    # shellcheck disable=SC2206
+    XCODE_EXTRA_FLAGS_ARRAY=( ${XCODE_EXTRA_FLAGS} )
     
     # Build with xcodebuild using the Xcode project
     # -destination ensures we build for macOS with proper SDK
@@ -121,12 +198,20 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         -configuration "${XCODE_CONFIG}" \
         -destination "generic/platform=macOS" \
         -derivedDataPath "${BUILD_DIR}/DerivedData" \
+        -parallelizeTargets \
+        -jobs "${XCODE_BUILD_JOBS}" \
+        -disableAutomaticPackageResolution \
+        -showBuildTimingSummary \
         INFOPLIST_FILE="${PROJECT_DIR}/Info.plist" \
         PRODUCT_BUNDLE_IDENTIFIER="${APP_BUNDLE_ID}" \
         PRODUCT_NAME="${BINARY_NAME}" \
         CODE_SIGN_IDENTITY="-" \
+        CODE_SIGNING_ALLOWED=NO \
         CODE_SIGNING_REQUIRED=NO \
-        build 2>&1 | tail -50; then
+        CODE_SIGN_ENTITLEMENTS="" \
+        ARCHS="${BUILD_ARCHS}" \
+        "${XCODE_EXTRA_FLAGS_ARRAY[@]}" \
+        build 2>&1 | tee "${BUILD_DIR}/build_output.log" | tail -50; then
         log_failure "xcodebuild failed"
         exit 1
     fi
@@ -171,31 +256,11 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         log_item "Copied LaunchAgent plist"
     fi
 
-    # Bundle CLI tools for xcodebuild
-    CLI_DIR="${RESOURCES_DIR}/CLI"
-    mkdir -p "${CLI_DIR}"
-    
-    # Build and bundle the learnings CLI
-    log_item "Building learnings CLI..."
-    if swift build -c release --product learnings 2>/dev/null; then
-        LEARNINGS_BIN=$(swift build -c release --show-bin-path)/learnings
-        if [ -f "${LEARNINGS_BIN}" ]; then
-            cp "${LEARNINGS_BIN}" "${CLI_DIR}/learnings"
-            strip -x "${CLI_DIR}/learnings"
-            chmod 755 "${CLI_DIR}/learnings"
-            log_item "Bundled learnings CLI"
-        fi
-    else
-        log_item "Note: learnings CLI build skipped"
+    CLI_BUILD_ARCH=""
+    if [ "${#BUILD_ARCH_ARRAY[@]}" -eq 1 ]; then
+        CLI_BUILD_ARCH="${BUILD_ARCH_ARRAY[0]}"
     fi
-    
-    # Bundle the sorty shell script
-    SORTY_SCRIPT="${PROJECT_DIR}/CLI/sorty"
-    if [ -f "${SORTY_SCRIPT}" ]; then
-        cp "${SORTY_SCRIPT}" "${CLI_DIR}/sorty"
-        chmod 755 "${CLI_DIR}/sorty"
-        log_item "Bundled sorty CLI script"
-    fi
+    bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "" "${CLI_BUILD_ARCH}"
 
     log_success "xcodebuild succeeded ($(get_step_duration "build"))"
 
@@ -358,31 +423,7 @@ else
         exit 1
     fi
 
-    # Bundle CLI tools
-    CLI_DIR="${RESOURCES_DIR}/CLI"
-    mkdir -p "${CLI_DIR}"
-    
-    # Build and bundle the learnings CLI
-    log_item "Building learnings CLI..."
-    if swift build -c "${BUILD_CONFIG}" --product learnings $BUILD_FLAGS_EXTRA 2>/dev/null; then
-        LEARNINGS_BIN="${BIN_PATH}/learnings"
-        if [ -f "${LEARNINGS_BIN}" ]; then
-            cp "${LEARNINGS_BIN}" "${CLI_DIR}/learnings"
-            strip -x "${CLI_DIR}/learnings"
-            chmod 755 "${CLI_DIR}/learnings"
-            log_item "Bundled learnings CLI"
-        fi
-    else
-        log_item "Note: learnings CLI build skipped"
-    fi
-    
-    # Bundle the sorty shell script
-    SORTY_SCRIPT="${PROJECT_DIR}/CLI/sorty"
-    if [ -f "${SORTY_SCRIPT}" ]; then
-        cp "${SORTY_SCRIPT}" "${CLI_DIR}/sorty"
-        chmod 755 "${CLI_DIR}/sorty"
-        log_item "Bundled sorty CLI script"
-    fi
+    bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "${BUILD_FLAGS_EXTRA}" ""
 
     log_success "App bundle assembled ($(get_step_duration "assemble"))"
 fi

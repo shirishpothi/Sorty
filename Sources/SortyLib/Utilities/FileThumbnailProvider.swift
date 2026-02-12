@@ -10,7 +10,6 @@ public class FileThumbnailProvider: ObservableObject {
     
     private let cache = NSCache<NSString, NSImage>()
     private var processingKeys: Set<String> = []
-    private var continuations: [String: [CheckedContinuation<NSImage, Never>]] = [:]
     private var waveformCache: [String: NSImage] = [:]
     
     private init() {
@@ -25,22 +24,21 @@ public class FileThumbnailProvider: ObservableObject {
         }
         
         if processingKeys.contains(key) {
-            return await withCheckedContinuation { continuation in
-                continuations[key, default: []].append(continuation)
+            while processingKeys.contains(key) {
+                if let cached = cache.object(forKey: key as NSString) {
+                    return cached
+                }
+                await Task.yield()
+            }
+            if let cached = cache.object(forKey: key as NSString) {
+                return cached
             }
         }
         
         processingKeys.insert(key)
+        defer { processingKeys.remove(key) }
         let image = await generateThumbnail(for: url, size: size)
         cache.setObject(image, forKey: key as NSString)
-        
-        if let waitingContinuations = continuations.removeValue(forKey: key) {
-            for cont in waitingContinuations {
-                let imageCopy = image.copy() as! NSImage
-                cont.resume(returning: imageCopy)
-            }
-        }
-        processingKeys.remove(key)
         return image
     }
     
@@ -113,11 +111,5 @@ public class FileThumbnailProvider: ObservableObject {
         cache.removeAllObjects()
         processingKeys.removeAll()
         waveformCache.removeAll()
-        for (_, waitingContinuations) in continuations {
-            for cont in waitingContinuations {
-                cont.resume(returning: NSImage(size: NSSize(width: 1, height: 1)))
-            }
-        }
-        continuations.removeAll()
     }
 }

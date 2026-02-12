@@ -1,249 +1,365 @@
-# Sorty CLI
-# Controls the Sorty app via URL schemes
+#!/usr/bin/env bash
+set -euo pipefail
 
 APP_SCHEME="sorty"
 
-function show_help {
-    echo "Sorty CLI"
-    echo ""
-    echo "Usage: sorty <command> [options]"
-    echo ""
-    echo "Commands:"
-    echo "  organize <path> [options]    Start organizing a directory"
-    echo "    --persona <id>             Select a persona (e.g. 'general', 'developer')"
-    echo "    --auto                     Automatically start organization"
-    echo ""
-    echo "  duplicates <path> [options]  Scan for duplicates"
-    echo "    --auto                     Automatically start scanning"
-    echo ""
-    echo "  status, health               View Workspace Health"
-    echo "  list                         View Watched Folders"
-    echo "  exclusions [add <pattern>]   View or add exclusion rules"
-    echo "  storage [add <path>]         View or add storage locations"
-    echo "  settings [section]           Open settings"
-    echo "    sections: rules, provider, strategy, tuning, automation, finder,"
-    echo "              notifications, advanced, troubleshooting, help"
-    echo ""
-    echo "  persona <action>             Manage personas"
-    echo "    create                     Open persona creator"
-    echo "    generate <prompt>          Generate a new persona from description"
-    echo ""
-    echo "  watched add <path>           Add a watched folder"
-    echo ""
-    echo "  rules add <pattern>          Add an exclusion rule"
-    echo ""
-    echo "  learnings                    Open Learnings dashboard"
-    echo "  history                      Open History"
-    echo "  help                         Open Help"
-    echo "  update                       Check for updates"
-    echo "  version, -v, --version       Show app version"
-    echo ""
+show_help() {
+    cat <<'EOF'
+Sorty CLI
+
+Usage: sorty <command> [options]
+
+Commands:
+  organize <path> [options]    Start organizing a directory
+    --persona <id>             Select a persona (e.g. 'general', 'developer')
+    --auto                     Automatically start organization
+
+  duplicates <path> [options]  Scan for duplicates
+    --auto                     Automatically start scanning
+
+  status, health               View Workspace Health
+  list                         View Watched Folders
+  watched [add <path>]         View or add watched folders
+  exclusions [add <pattern>]   View or add exclusion rules
+  storage [add <path>]         View or add storage locations
+  settings [section]           Open settings
+    sections: rules, provider, strategy, tuning, automation, finder,
+              notifications, advanced, troubleshooting, help
+
+  persona <action>             Manage personas
+    create                     Open persona creator
+    generate <prompt>          Generate a new persona from description
+
+  rules add <pattern>          Add an exclusion rule
+  learnings                    Open Learnings dashboard
+  history                      Open History
+  help                         Show this help
+  update                       Check for updates
+  version, -v, --version       Show app version
+EOF
 }
 
-function show_version {
-    APP_PATH="/Applications/Sorty.app"
-    if [ -d "$APP_PATH" ]; then
-        VERSION=$(defaults read "$APP_PATH/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null)
-        BUILD=$(defaults read "$APP_PATH/Contents/Info.plist" CFBundleVersion 2>/dev/null)
-        if [ ! -z "$VERSION" ]; then
-            echo "Sorty version $VERSION (build $BUILD)"
+show_version() {
+    local app_path="/Applications/Sorty.app"
+    local version
+    local build
+
+    if [[ -d "${app_path}" ]]; then
+        version="$(defaults read "${app_path}/Contents/Info.plist" CFBundleShortVersionString 2>/dev/null || true)"
+        build="$(defaults read "${app_path}/Contents/Info.plist" CFBundleVersion 2>/dev/null || true)"
+        if [[ -n "${version}" ]]; then
+            echo "Sorty version ${version} (build ${build})"
         else
             echo "Sorty is installed but version could not be determined."
             echo "Check version in-app: Settings > About"
         fi
     else
-        echo "Sorty app not found at $APP_PATH"
+        echo "Sorty app not found at ${app_path}"
         echo "Check version in-app: Settings > About"
     fi
 }
 
-function open_url {
-    open "$1"
+die() {
+    echo "Error: $*" >&2
+    exit 1
 }
 
-function urlencode {
-    # Basic URL encoding for spaces and special characters
-    python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.stdin.read().strip()))"
+require_arg() {
+    local value="${1:-}"
+    local message="$2"
+    if [[ -z "${value}" ]]; then
+        die "${message}"
+    fi
 }
 
-COMMAND=$1
-shift
+urlencode() {
+    local value="${1-}"
+    if ! command -v python3 >/dev/null 2>&1; then
+        die "python3 is required for URL encoding."
+    fi
 
-if [ -z "$COMMAND" ]; then
+    python3 - "$value" <<'PY'
+import sys
+import urllib.parse
+
+print(urllib.parse.quote(sys.argv[1], safe="/"))
+PY
+}
+
+resolve_directory_path() {
+    local input_path="${1-}"
+    require_arg "${input_path}" "Missing required directory path."
+
+    if [[ ! -e "${input_path}" ]]; then
+        die "Directory does not exist: ${input_path}"
+    fi
+    if [[ ! -d "${input_path}" ]]; then
+        die "Expected a directory path, got: ${input_path}"
+    fi
+
+    (
+        cd "${input_path}"
+        pwd -P
+    )
+}
+
+open_url() {
+    local url="$1"
+    if [[ "${SORTY_CLI_DRY_RUN:-0}" == "1" ]]; then
+        echo "${url}"
+        return
+    fi
+    open "${url}"
+}
+
+require_no_extra_args() {
+    local command="$1"
+    shift
+    if [[ $# -gt 0 ]]; then
+        die "Unexpected arguments for ${command}: $*"
+    fi
+}
+
+if [[ $# -eq 0 ]]; then
     show_help
     exit 0
 fi
 
-case "$COMMAND" in
-    "organize")
-        PATH_ARG=""
-        PERSONA=""
-        AUTOSTART="false"
-        
+command="$1"
+shift
+
+case "${command}" in
+    organize)
+        path_arg=""
+        persona=""
+        autostart="false"
+
         while [[ $# -gt 0 ]]; do
-            case $1 in
+            case "$1" in
                 --persona)
-                    PERSONA="$2"
-                    shift
-                    shift
+                    if [[ $# -lt 2 ]]; then
+                        die "Missing value for --persona. Usage: sorty organize <path> [--persona <id>] [--auto]"
+                    fi
+                    persona="$2"
+                    shift 2
                     ;;
                 --auto)
-                    AUTOSTART="true"
+                    autostart="true"
                     shift
                     ;;
+                -*)
+                    die "Unknown option for organize: $1"
+                    ;;
                 *)
-                    if [ -z "$PATH_ARG" ]; then
-                        PATH_ARG="$1"
+                    if [[ -z "${path_arg}" ]]; then
+                        path_arg="$1"
+                        shift
+                    else
+                        die "Unexpected extra argument for organize: $1"
                     fi
-                    shift
                     ;;
             esac
         done
-        
-        URL="${APP_SCHEME}://organize?autostart=${AUTOSTART}"
-        if [ ! -z "$PATH_ARG" ]; then
-            # Convert relative path to absolute
-            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
-            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
-            URL="${URL}&path=${ENCODED_PATH}"
+
+        require_arg "${path_arg}" "Missing required path. Usage: sorty organize <path> [--persona <id>] [--auto]"
+        abs_path="$(resolve_directory_path "${path_arg}")"
+        encoded_path="$(urlencode "${abs_path}")"
+        url="${APP_SCHEME}://organize?autostart=${autostart}&path=${encoded_path}"
+        if [[ -n "${persona}" ]]; then
+            url="${url}&persona=$(urlencode "${persona}")"
         fi
-        if [ ! -z "$PERSONA" ]; then
-            URL="${URL}&persona=${PERSONA}"
-        fi
-        open_url "$URL"
+        open_url "${url}"
         ;;
-        
-    "duplicates")
-        PATH_ARG=""
-        AUTOSTART="false"
-        
+
+    duplicates)
+        path_arg=""
+        autostart="false"
+
         while [[ $# -gt 0 ]]; do
-            case $1 in
+            case "$1" in
                 --auto)
-                    AUTOSTART="true"
+                    autostart="true"
                     shift
                     ;;
+                -*)
+                    die "Unknown option for duplicates: $1"
+                    ;;
                 *)
-                    if [ -z "$PATH_ARG" ]; then
-                        PATH_ARG="$1"
+                    if [[ -z "${path_arg}" ]]; then
+                        path_arg="$1"
+                        shift
+                    else
+                        die "Unexpected extra argument for duplicates: $1"
                     fi
-                    shift
                     ;;
             esac
         done
-        
-        URL="${APP_SCHEME}://duplicates?autostart=${AUTOSTART}"
-        if [ ! -z "$PATH_ARG" ]; then
-            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
-            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
-            URL="${URL}&path=${ENCODED_PATH}"
-        fi
-        open_url "$URL"
+
+        require_arg "${path_arg}" "Missing required path. Usage: sorty duplicates <path> [--auto]"
+        abs_path="$(resolve_directory_path "${path_arg}")"
+        encoded_path="$(urlencode "${abs_path}")"
+        open_url "${APP_SCHEME}://duplicates?autostart=${autostart}&path=${encoded_path}"
         ;;
-        
-    "status"|"health")
+
+    status | health)
+        require_no_extra_args "${command}" "$@"
         open_url "${APP_SCHEME}://health"
         ;;
-        
-    "list"|"watched")
-        if [ "$1" == "add" ]; then
-            shift
-            PATH_ARG=$1
-            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
-            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
-            URL="${APP_SCHEME}://watched?action=add&path=${ENCODED_PATH}"
-            open_url "$URL"
-        else
-            # Open the watched folders list in settings
+
+    list)
+        require_no_extra_args "${command}" "$@"
+        open_url "${APP_SCHEME}://watched"
+        ;;
+
+    watched)
+        if [[ $# -eq 0 ]]; then
             open_url "${APP_SCHEME}://watched"
+            exit 0
         fi
+
+        action="$1"
+        shift
+        case "${action}" in
+            add)
+                require_arg "${1-}" "Missing required path. Usage: sorty watched add <path>"
+                if [[ $# -gt 1 ]]; then
+                    die "Unexpected extra argument for watched add: ${*:2}"
+                fi
+                abs_path="$(resolve_directory_path "$1")"
+                encoded_path="$(urlencode "${abs_path}")"
+                open_url "${APP_SCHEME}://watched?action=add&path=${encoded_path}"
+                ;;
+            *)
+                die "Unknown watched action: ${action}. Usage: sorty watched [add <path>]"
+                ;;
+        esac
         ;;
-        
-    "exclusions")
-        if [ "$1" == "add" ]; then
-            shift
-            PATTERN=$1
-            ENCODED_PATTERN=$(echo -n "$PATTERN" | urlencode)
-            URL="${APP_SCHEME}://exclusions?action=add&pattern=${ENCODED_PATTERN}"
-            open_url "$URL"
-        else
+
+    exclusions)
+        if [[ $# -eq 0 ]]; then
             open_url "${APP_SCHEME}://exclusions"
+            exit 0
         fi
+
+        action="$1"
+        shift
+        case "${action}" in
+            add)
+                if [[ $# -eq 0 ]]; then
+                    die "Missing required pattern. Usage: sorty exclusions add <pattern>"
+                fi
+                pattern="$*"
+                encoded_pattern="$(urlencode "${pattern}")"
+                open_url "${APP_SCHEME}://exclusions?action=add&pattern=${encoded_pattern}"
+                ;;
+            *)
+                die "Unknown exclusions action: ${action}. Usage: sorty exclusions [add <pattern>]"
+                ;;
+        esac
         ;;
-        
-    "storage")
-        if [ "$1" == "add" ]; then
-            shift
-            PATH_ARG=$1
-            ABS_PATH=$(cd "$(dirname "$PATH_ARG")" && pwd)/$(basename "$PATH_ARG")
-            ENCODED_PATH=$(echo -n "$ABS_PATH" | urlencode)
-            URL="${APP_SCHEME}://storage?action=add&path=${ENCODED_PATH}"
-            open_url "$URL"
-        else
+
+    storage)
+        if [[ $# -eq 0 ]]; then
             open_url "${APP_SCHEME}://storage"
+            exit 0
         fi
-        ;;
-        
-    "settings")
-        SECTION=$1
-        URL="${APP_SCHEME}://settings"
-        if [ ! -z "$SECTION" ]; then
-            URL="${URL}?section=${SECTION}"
-        fi
-        open_url "$URL"
-        ;;
-        
-    "persona")
-        ACTION=$1
+
+        action="$1"
         shift
-        URL="${APP_SCHEME}://persona?action=${ACTION}"
-        
-        if [ "$ACTION" == "generate" ]; then
-            PROMPT="$*"
-            ENCODED_PROMPT=$(echo -n "$PROMPT" | urlencode)
-            URL="${URL}&generate=true&prompt=${ENCODED_PROMPT}"
-        fi
-        open_url "$URL"
+        case "${action}" in
+            add)
+                require_arg "${1-}" "Missing required path. Usage: sorty storage add <path>"
+                if [[ $# -gt 1 ]]; then
+                    die "Unexpected extra argument for storage add: ${*:2}"
+                fi
+                abs_path="$(resolve_directory_path "$1")"
+                encoded_path="$(urlencode "${abs_path}")"
+                open_url "${APP_SCHEME}://storage?action=add&path=${encoded_path}"
+                ;;
+            *)
+                die "Unknown storage action: ${action}. Usage: sorty storage [add <path>]"
+                ;;
+        esac
         ;;
-        
-    "rules")
-        ACTION=$1
-        shift
-        if [ "$ACTION" == "add" ]; then
-            PATTERN=$1
-            ENCODED_PATTERN=$(echo -n "$PATTERN" | urlencode)
-            URL="${APP_SCHEME}://exclusions?action=add&pattern=${ENCODED_PATTERN}"
-            open_url "$URL"
+
+    settings)
+        if [[ $# -gt 1 ]]; then
+            die "Usage: sorty settings [section]"
+        fi
+        if [[ $# -eq 1 ]]; then
+            encoded_section="$(urlencode "$1")"
+            open_url "${APP_SCHEME}://settings?section=${encoded_section}"
         else
-             echo "Unknown action. Usage: rules add <pattern>"
+            open_url "${APP_SCHEME}://settings"
         fi
         ;;
-        
-    "learnings")
+
+    persona)
+        action="${1-}"
+        require_arg "${action}" "Missing persona action. Usage: sorty persona <create|generate ...>"
+        shift || true
+        case "${action}" in
+            create)
+                require_no_extra_args "persona create" "$@"
+                open_url "${APP_SCHEME}://persona?action=create"
+                ;;
+            generate)
+                if [[ $# -eq 0 ]]; then
+                    die "Missing prompt. Usage: sorty persona generate <prompt>"
+                fi
+                prompt="$*"
+                encoded_prompt="$(urlencode "${prompt}")"
+                open_url "${APP_SCHEME}://persona?action=generate&generate=true&prompt=${encoded_prompt}"
+                ;;
+            *)
+                die "Unknown persona action: ${action}. Usage: sorty persona <create|generate ...>"
+                ;;
+        esac
+        ;;
+
+    rules)
+        action="${1-}"
+        require_arg "${action}" "Missing rules action. Usage: sorty rules add <pattern>"
+        shift || true
+        if [[ "${action}" != "add" ]]; then
+            die "Unknown rules action: ${action}. Usage: sorty rules add <pattern>"
+        fi
+        if [[ $# -eq 0 ]]; then
+            die "Missing pattern. Usage: sorty rules add <pattern>"
+        fi
+        pattern="$*"
+        encoded_pattern="$(urlencode "${pattern}")"
+        open_url "${APP_SCHEME}://exclusions?action=add&pattern=${encoded_pattern}"
+        ;;
+
+    learnings)
+        require_no_extra_args "${command}" "$@"
         open_url "${APP_SCHEME}://learnings"
         ;;
-        
-    "history")
+
+    history)
+        require_no_extra_args "${command}" "$@"
         open_url "${APP_SCHEME}://history"
         ;;
-        
-    "help")
+
+    help)
+        require_no_extra_args "${command}" "$@"
         show_help
-        # Also try to open app help if in a GUI session
-        if [[ "$OSTYPE" == "darwin"* ]] && [ ! -z "$DISPLAY" ] || [ -z "$CI" ]; then
-            open_url "${APP_SCHEME}://help"
-        fi
         ;;
-        
-    "update")
+
+    update)
+        require_no_extra_args "${command}" "$@"
         open_url "${APP_SCHEME}://help?section=updates"
         ;;
-        
-    "version"|"-v"|"--version")
+
+    version | -v | --version)
+        require_no_extra_args "${command}" "$@"
         show_version
         ;;
-        
+
     *)
-        show_help
+        echo "Error: Unknown command: ${command}" >&2
+        show_help >&2
+        exit 1
         ;;
 esac
