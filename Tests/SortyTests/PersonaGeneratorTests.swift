@@ -13,14 +13,14 @@ final class PersonaGeneratorTests: XCTestCase {
     
     var generator: PersonaGenerator!
     
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         generator = PersonaGenerator()
     }
     
-    override func tearDown() {
+    override func tearDown() async throws {
         generator = nil
-        super.tearDown()
+        try await super.tearDown()
     }
     
     // MARK: - Initialization Tests
