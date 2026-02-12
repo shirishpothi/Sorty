@@ -63,8 +63,10 @@ public final class RefreshManager: ObservableObject {
         weak var weakSelf = self
         
         let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
-            guard let self = self, !self.isPaused else { return }
-            action()
+            MainActor.assumeIsolated {
+                guard let self = self, !self.isPaused else { return }
+                action()
+            }
         }
         
         // Add to RunLoop to ensure it fires
@@ -128,15 +130,17 @@ public final class RefreshManager: ObservableObject {
         let id = UUID()
         
         let timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            guard let strongSelf = self else { return }
-            
-            if strongSelf.isPaused {
-                // Store for later execution if paused
-                strongSelf.pendingResumes[id] = action
-                return
+            MainActor.assumeIsolated {
+                guard let strongSelf = self else { return }
+                
+                if strongSelf.isPaused {
+                    // Store for later execution if paused
+                    strongSelf.pendingResumes[id] = action
+                    return
+                }
+                action()
+                strongSelf.scheduledActions.removeValue(forKey: id)
             }
-            action()
-            strongSelf.scheduledActions.removeValue(forKey: id)
         }
         
         RunLoop.main.add(timer, forMode: .common)
