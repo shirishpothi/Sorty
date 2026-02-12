@@ -68,6 +68,22 @@ verify_universal_binary() {
     fi
 }
 
+restore_macho_permissions() {
+    local app_path="$1"
+    local restored_count=0
+
+    while IFS= read -r -d '' candidate; do
+        local candidate_desc
+        candidate_desc=$(file -b "${candidate}" 2>/dev/null || true)
+        if [[ "${candidate_desc}" == *"Mach-O"* ]]; then
+            chmod 755 "${candidate}"
+            restored_count=$((restored_count + 1))
+        fi
+    done < <(find "${app_path}" -type f -print0)
+
+    echo "Restored executable permissions on ${restored_count} Mach-O files"
+}
+
 echo "Merging app bundles..."
 rm -rf "${OUTPUT_APP}"
 mkdir -p "$(dirname "${OUTPUT_APP}")"
@@ -94,14 +110,16 @@ while IFS= read -r -d '' ARM_FILE; do
         fi
 
         lipo -create "${ARM_FILE}" "${X86_FILE}" -output "${OUT_FILE}"
-        if [ -x "${ARM_FILE}" ]; then
-            chmod 755 "${OUT_FILE}"
-        fi
+        chmod 755 "${OUT_FILE}"
         MERGED_COUNT=$((MERGED_COUNT + 1))
     fi
 done < <(find "${ARM64_APP}" -type f -print0)
 
 echo "Merged ${MERGED_COUNT} Mach-O files"
+
+# Artifact upload/download in GitHub Actions strips executable bits (files become 0644).
+# Ensure all Mach-O files in the merged app are executable before packaging/signing.
+restore_macho_permissions "${OUTPUT_APP}"
 codesign --force --deep --sign - "${OUTPUT_APP}" >/dev/null 2>&1 || true
 
 MAIN_BIN="${OUTPUT_APP}/Contents/MacOS/SortyApp"
