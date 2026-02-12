@@ -68,20 +68,50 @@ verify_universal_binary() {
     fi
 }
 
-restore_macho_permissions() {
+is_shebang_script() {
+    local file_path="$1"
+    if [ ! -s "${file_path}" ]; then
+        return 1
+    fi
+
+    local prefix
+    prefix=$(LC_ALL=C head -c 2 "${file_path}" 2>/dev/null || true)
+    [ "${prefix}" = "#!" ]
+}
+
+restore_executable_permissions() {
     local app_path="$1"
-    local restored_count=0
+    local macho_count=0
+    local script_count=0
 
     while IFS= read -r -d '' candidate; do
         local candidate_desc
         candidate_desc=$(file -b "${candidate}" 2>/dev/null || true)
         if [[ "${candidate_desc}" == *"Mach-O"* ]]; then
             chmod 755 "${candidate}"
-            restored_count=$((restored_count + 1))
+            macho_count=$((macho_count + 1))
+            continue
+        fi
+
+        if is_shebang_script "${candidate}"; then
+            chmod 755 "${candidate}"
+            script_count=$((script_count + 1))
         fi
     done < <(find "${app_path}" -type f -print0)
 
-    echo "Restored executable permissions on ${restored_count} Mach-O files"
+    echo "Restored executable permissions on ${macho_count} Mach-O files and ${script_count} shebang scripts"
+}
+
+verify_executable_file() {
+    local file_path="$1"
+    if [ ! -f "${file_path}" ]; then
+        echo "Expected executable file but it was missing: ${file_path}"
+        exit 1
+    fi
+    if [ ! -x "${file_path}" ]; then
+        echo "Expected executable permissions but found non-executable file: ${file_path}"
+        exit 1
+    fi
 }
 
 echo "Merging app bundles..."
@@ -119,10 +149,13 @@ echo "Merged ${MERGED_COUNT} Mach-O files"
 
 # Artifact upload/download in GitHub Actions strips executable bits (files become 0644).
 # Ensure all Mach-O files in the merged app are executable before packaging/signing.
-restore_macho_permissions "${OUTPUT_APP}"
+restore_executable_permissions "${OUTPUT_APP}"
 codesign --force --deep --sign - "${OUTPUT_APP}" >/dev/null 2>&1 || true
 
 MAIN_BIN="${OUTPUT_APP}/Contents/MacOS/SortyApp"
+verify_executable_file "${MAIN_BIN}"
+verify_executable_file "${OUTPUT_APP}/Contents/Resources/CLI/sorty"
+verify_executable_file "${OUTPUT_APP}/Contents/Resources/CLI/learnings"
 verify_universal_binary "${MAIN_BIN}"
 verify_universal_binary "${OUTPUT_APP}/Contents/Resources/CLI/learnings"
 
