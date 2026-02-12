@@ -31,12 +31,12 @@ public class LearningsManager: ObservableObject {
     // Learning Controls
     @Published public var learningStrength: Double = 0.5 {
         didSet {
-            UserDefaults.standard.set(learningStrength, forKey: "learningStrength")
+            userDefaults.set(learningStrength, forKey: "learningStrength")
         }
     }
     @Published public var useAIForLearnings: Bool = true {
         didSet {
-            UserDefaults.standard.set(useAIForLearnings, forKey: "useAIForLearnings")
+            userDefaults.set(useAIForLearnings, forKey: "useAIForLearnings")
         }
     }
     @Published public var sessionLearningPaused: Bool = false
@@ -54,20 +54,21 @@ public class LearningsManager: ObservableObject {
     
     @Published public var dataRetentionDays: Int = 0 {
         didSet {
-            UserDefaults.standard.set(dataRetentionDays, forKey: "learningDataRetentionDays")
+            userDefaults.set(dataRetentionDays, forKey: "learningDataRetentionDays")
         }
     }
     
     // MARK: - Dependencies
     
+    private let userDefaults: UserDefaults
     public let analyzer = LearningsAnalyzer()
     
-    public init() {
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
-        learningStrength = UserDefaults.standard.double(forKey: "learningStrength")
-        if learningStrength == 0 { learningStrength = 0.5 }
-        dataRetentionDays = UserDefaults.standard.integer(forKey: "learningDataRetentionDays")
-        useAIForLearnings = UserDefaults.standard.object(forKey: "useAIForLearnings") as? Bool ?? true
+        learningStrength = userDefaults.object(forKey: "learningStrength") as? Double ?? 0.5
+        dataRetentionDays = userDefaults.integer(forKey: "learningDataRetentionDays")
+        useAIForLearnings = userDefaults.object(forKey: "useAIForLearnings") as? Bool ?? true
     }
     
     public func configure(with config: AIConfig) {

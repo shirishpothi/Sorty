@@ -13,15 +13,26 @@ import XCTest
 final class LearningsEdgeCaseTests: XCTestCase {
     
     var manager: LearningsManager!
+    var testDefaults: UserDefaults!
+    var defaultsSuiteName: String!
     
     override func setUp() async throws {
-        manager = LearningsManager()
+        defaultsSuiteName = "LearningsEdgeCaseTests.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: defaultsSuiteName)
+        testDefaults.removePersistentDomain(forName: defaultsSuiteName)
+
+        manager = LearningsManager(userDefaults: testDefaults)
         manager.currentProfile = LearningsProfile()
         await manager.grantConsent()
     }
     
     override func tearDown() async throws {
         manager = nil
+        if let suite = defaultsSuiteName {
+            testDefaults?.removePersistentDomain(forName: suite)
+        }
+        testDefaults = nil
+        defaultsSuiteName = nil
     }
     
     // MARK: - Contradictory Rules
@@ -386,22 +397,22 @@ final class LearningsEdgeCaseTests: XCTestCase {
     // MARK: - Data Retention Tests
     
     func testDataRetentionDaysDefault() {
-        let freshManager = LearningsManager()
+        let freshManager = LearningsManager(userDefaults: testDefaults)
         // Default from UserDefaults is 0 (no retention limit)
-        XCTAssertEqual(freshManager.dataRetentionDays, UserDefaults.standard.integer(forKey: "learningDataRetentionDays"))
+        XCTAssertEqual(freshManager.dataRetentionDays, testDefaults.integer(forKey: "learningDataRetentionDays"))
     }
     
     func testDataRetentionDaysPersists() {
         manager.dataRetentionDays = 90
-        XCTAssertEqual(UserDefaults.standard.integer(forKey: "learningDataRetentionDays"), 90)
+        XCTAssertEqual(testDefaults.integer(forKey: "learningDataRetentionDays"), 90)
         
         manager.dataRetentionDays = 0
-        XCTAssertEqual(UserDefaults.standard.integer(forKey: "learningDataRetentionDays"), 0)
+        XCTAssertEqual(testDefaults.integer(forKey: "learningDataRetentionDays"), 0)
     }
     
     func testLearningStrengthPersists() {
         manager.learningStrength = 0.75
-        XCTAssertEqual(UserDefaults.standard.double(forKey: "learningStrength"), 0.75)
+        XCTAssertEqual(testDefaults.double(forKey: "learningStrength"), 0.75)
     }
     
     // MARK: - InferredRule Model Edge Cases
