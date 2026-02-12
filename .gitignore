@@ -51,3 +51,10 @@ Logs/
 
 # Sparkle signing keys (private key - NEVER commit)
 sparkle_keys/
+
+# Build artifacts & temp files
+build_debug.log
+build_output.txt
+build_result.log
+build.pid
+temp_sparkle/

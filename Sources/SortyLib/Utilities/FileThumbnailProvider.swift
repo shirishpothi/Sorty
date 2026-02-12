@@ -36,7 +36,8 @@ public class FileThumbnailProvider: ObservableObject {
         
         if let waitingContinuations = continuations.removeValue(forKey: key) {
             for cont in waitingContinuations {
-                cont.resume(returning: image)
+                let imageCopy = image.copy() as! NSImage
+                cont.resume(returning: imageCopy)
             }
         }
         processingKeys.remove(key)
