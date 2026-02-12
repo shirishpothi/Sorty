@@ -254,6 +254,13 @@ jobs:
           cp "releases/Sorty-${{ matrix.arch }}.zip" "release-artifacts/"
           cp ".build/build_output.log" "release-artifacts/build_output_${{ matrix.arch }}.log" 2>/dev/null || true
 
+          # Preserve Sparkle's sign_update so merge-and-release can sign appcast.xml.
+          if [ -x ".build/artifacts/sparkle/Sparkle/bin/sign_update" ]; then
+            mkdir -p "release-artifacts/sparkle-tools"
+            cp ".build/artifacts/sparkle/Sparkle/bin/sign_update" \
+               "release-artifacts/sparkle-tools/sign_update"
+          fi
+
       - name: Upload build artifacts (${{ matrix.arch }})
         uses: actions/upload-artifact@v4
         with:
@@ -303,6 +310,13 @@ jobs:
           cp -R artifacts/arm64/Sorty-arm64.app releases/
           cp -R artifacts/x86_64/Sorty-x86_64.app releases/
           cp artifacts/arm64/Sorty-arm64.zip releases/
+
+          if [ -f "artifacts/arm64/sparkle-tools/sign_update" ]; then
+            mkdir -p ".build/artifacts/sparkle/Sparkle/bin"
+            cp "artifacts/arm64/sparkle-tools/sign_update" \
+               ".build/artifacts/sparkle/Sparkle/bin/sign_update"
+            chmod +x ".build/artifacts/sparkle/Sparkle/bin/sign_update"
+          fi
 
           ./scripts/merge_arch_apps.sh \
             --arm64 "releases/Sorty-arm64.app" \

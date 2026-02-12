@@ -20,8 +20,17 @@ if [ ! -f "$ZIP_PATH" ]; then
     exit 1
 fi
 
-VERSION=$(get_version)
-BUILD_NUM=$(get_build_number)
+APP_PLIST="${RELEASE_DIR}/${PROJECT_NAME}.app/Contents/Info.plist"
+
+# Prefer the merged release app's version/build so appcast metadata matches
+# what validate_sparkle.sh reads from releases/Sorty.app.
+if [ -f "${APP_PLIST}" ]; then
+    VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "${APP_PLIST}" 2>/dev/null || true)
+    BUILD_NUM=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "${APP_PLIST}" 2>/dev/null || true)
+fi
+
+VERSION="${VERSION:-$(get_version)}"
+BUILD_NUM="${BUILD_NUM:-$(get_build_number)}"
 DATE=$(date -R)
 SIZE=$(stat -f%z "$ZIP_PATH")
 
