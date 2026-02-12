@@ -47,10 +47,16 @@ struct OrganizationCompleteView: View {
                         .frame(width: 100, height: 100)
                         .scaleEffect(ringExpanded ? 2 : 1)
                     
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 60))
-                        .foregroundStyle(.green)
-                        .scaleEffect(iconAppeared ? 1 : 0.3)
+                    ZStack {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 58, height: 58)
+
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                    .scaleEffect(iconAppeared ? 1 : 0.3)
                     
                     if showParticles {
                         ConfettiParticlesView()

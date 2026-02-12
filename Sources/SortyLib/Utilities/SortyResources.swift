@@ -179,13 +179,18 @@ public enum SortyResources {
             logger.debug("Loaded image '\(name)' via urlForImageResource")
             return nsImage
         }
+
+        // Try 7: Raw asset catalog file lookup inside app/framework resources.
+        // Some release artifacts may ship Assets.xcassets uncompiled (no Assets.car).
+        if let nsImage = loadImageFromRawAssetCatalog(named: name) {
+            logger.debug("Loaded image '\(name)' from raw Assets.xcassets in bundle resources")
+            return nsImage
+        }
         
-        // Try 7: Look in Resources/Assets.xcassets imageset directories (development fallback)
+        // Try 8: Look in source tree Assets.xcassets imageset directories (development fallback)
         // This handles the case where Xcode hasn't compiled the asset catalog yet
-        let extensions = ["png", "svg", "pdf"]
+        let extensions = [ext, "png", "svg", "pdf"]
         let basePaths = [
-            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("Resources/Assets.xcassets/\(name).imageset"),
-            Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Resources/Assets.xcassets/\(name).imageset"),
             // Also try from source root during development
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("Resources/Assets.xcassets/\(name).imageset")
         ]
@@ -202,6 +207,29 @@ public enum SortyResources {
         }
 
         logger.warning("Failed to load image '\(name)' from any source")
+        return nil
+    }
+
+    private static func loadImageFromRawAssetCatalog(named name: String) -> NSImage? {
+        let extensions = ["svg", "png", "pdf"]
+        let assetRoots: [URL] = [
+            bundle.resourceURL?.appendingPathComponent("Assets.xcassets"),
+            bundle.resourceURL?.appendingPathComponent("Resources/Assets.xcassets"),
+            Bundle.main.resourceURL?.appendingPathComponent("Assets.xcassets"),
+            Bundle.main.resourceURL?.appendingPathComponent("Resources/Assets.xcassets")
+        ].compactMap { $0 }
+
+        for root in assetRoots {
+            let imagesetURL = root.appendingPathComponent("\(name).imageset")
+            for fileExt in extensions {
+                let candidate = imagesetURL.appendingPathComponent("\(name).\(fileExt)")
+                if FileManager.default.fileExists(atPath: candidate.path),
+                   let nsImage = NSImage(contentsOf: candidate) {
+                    return nsImage
+                }
+            }
+        }
+
         return nil
     }
 
