@@ -28,6 +28,8 @@ struct ResponseParser {
         let reasoning: String?
         let subfolders: [FolderResponse]?
         let files: [FileEntry]
+        let tags: [String]?
+        let comment: String?
         let semanticTags: [String]?
         let confidence: Double?
         let ruleId: String?
@@ -39,6 +41,8 @@ struct ResponseParser {
             description = try container.decodeIfPresent(String.self, forKey: .description)
             reasoning = try container.decodeIfPresent(String.self, forKey: .reasoning)
             subfolders = try container.decodeIfPresent([FolderResponse].self, forKey: .subfolders)
+            tags = try container.decodeIfPresent([String].self, forKey: .tags)
+            comment = try container.decodeIfPresent(String.self, forKey: .comment)
             semanticTags = try container.decodeIfPresent([String].self, forKey: .semanticTags)
             confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
             ruleId = try container.decodeIfPresent(String.self, forKey: .ruleId)
@@ -56,6 +60,7 @@ struct ResponseParser {
 
         enum CodingKeys: String, CodingKey {
             case name, description, reasoning, subfolders, files
+            case tags, comment
             case semanticTags = "semantic_tags"
             case confidence
             case ruleId = "rule_id"
@@ -69,12 +74,14 @@ struct ResponseParser {
         let suggestedName: String?
         let renameReason: String?
         let tags: [String]?
+        let comment: String?
 
-        init(filename: String, suggestedName: String? = nil, renameReason: String? = nil, tags: [String]? = nil) {
+        init(filename: String, suggestedName: String? = nil, renameReason: String? = nil, tags: [String]? = nil, comment: String? = nil) {
             self.filename = filename
             self.suggestedName = suggestedName
             self.renameReason = renameReason
             self.tags = tags
+            self.comment = comment
         }
 
         func encode(to encoder: Encoder) throws {
@@ -83,6 +90,7 @@ struct ResponseParser {
             try container.encodeIfPresent(suggestedName, forKey: .suggestedName)
             try container.encodeIfPresent(renameReason, forKey: .renameReason)
             try container.encodeIfPresent(tags, forKey: .tags)
+            try container.encodeIfPresent(comment, forKey: .comment)
         }
 
         // Support both simple string and object format
@@ -94,6 +102,7 @@ struct ResponseParser {
                 self.suggestedName = nil
                 self.renameReason = nil
                 self.tags = nil
+                self.comment = nil
                 return
             }
 
@@ -103,6 +112,7 @@ struct ResponseParser {
             suggestedName = try container.decodeIfPresent(String.self, forKey: .suggestedName)
             renameReason = try container.decodeIfPresent(String.self, forKey: .renameReason)
             tags = try container.decodeIfPresent([String].self, forKey: .tags)
+            comment = try container.decodeIfPresent(String.self, forKey: .comment)
         }
 
         enum CodingKeys: String, CodingKey {
@@ -110,6 +120,7 @@ struct ResponseParser {
             case suggestedName = "suggested_name"
             case renameReason = "rename_reason"
             case tags
+            case comment
         }
     }
 
@@ -220,9 +231,14 @@ struct ResponseParser {
     private static func convertFolderResponse(_ folder: FolderResponse, originalFiles: [FileItem]) -> FolderSuggestion {
         var files: [FileItem] = []
         var renameMappings: [FileRenameMapping] = []
+        var seenFileIds: Set<UUID> = []
 
         for fileEntry in folder.files {
             if let file = findFile(named: fileEntry.filename, in: originalFiles) {
+                // Deduplicate: Don't add the same physical file twice to the same folder
+                guard !seenFileIds.contains(file.id) else { continue }
+                seenFileIds.insert(file.id)
+
                 files.append(file)
 
                 // Create rename mapping if suggested
@@ -244,12 +260,15 @@ struct ResponseParser {
             }
         }
         
-        // Collect tag mappings
+        // Collect tag and comment mappings
         var tagMappings: [FileTagMapping] = []
         for fileEntry in folder.files {
-           if let file = findFile(named: fileEntry.filename, in: originalFiles),
-              let tags = fileEntry.tags, !tags.isEmpty {
-               tagMappings.append(FileTagMapping(originalFile: file, tags: tags))
+           if let file = findFile(named: fileEntry.filename, in: originalFiles) {
+               let tags = fileEntry.tags ?? []
+               let comment = fileEntry.comment
+               if !tags.isEmpty || (comment != nil && !comment!.isEmpty) {
+                   tagMappings.append(FileTagMapping(originalFile: file, tags: tags, comment: comment))
+               }
            }
         }
 
@@ -265,6 +284,8 @@ struct ResponseParser {
             reasoning: folder.reasoning ?? folder.description ?? "",
             fileRenameMappings: renameMappings,
             fileTagMappings: tagMappings,
+            tags: folder.tags ?? [],
+            comment: folder.comment,
             semanticTags: folder.semanticTags ?? [],
             confidenceScore: folder.confidence,
             ruleId: folder.ruleId
@@ -273,28 +294,41 @@ struct ResponseParser {
 
     /// Find a file by name with fuzzy matching support
     private static func findFile(named filename: String, in files: [FileItem]) -> FileItem? {
+        let trimmedName = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedName.isEmpty { return nil }
+
         // Exact match on displayName
-        if let exact = files.first(where: { $0.displayName == filename }) {
+        if let exact = files.first(where: { $0.displayName == trimmedName }) {
             return exact
         }
 
         // Exact match on name only
-        if let nameMatch = files.first(where: { $0.name == filename }) {
+        if let nameMatch = files.first(where: { $0.name == trimmedName }) {
             return nameMatch
         }
 
         // Case-insensitive match
         if let caseInsensitive = files.first(where: {
-            $0.displayName.lowercased() == filename.lowercased()
+            $0.displayName.lowercased() == trimmedName.lowercased()
         }) {
             return caseInsensitive
         }
 
-        // Partial match (filename contains or is contained)
-        if let partial = files.first(where: {
-            $0.displayName.contains(filename) || filename.contains($0.displayName)
-        }) {
-            return partial
+        // Special case: AI provides extension only (like "sh", "png", "jpg")
+        // Only trigger this if the input is very short (extensions are usually <= 5 chars)
+        if trimmedName.count <= 5 && !trimmedName.contains(".") {
+            if let extMatch = files.first(where: { $0.extension.lowercased() == trimmedName.lowercased() }) {
+                return extMatch
+            }
+        }
+
+        // Partial match (only for names longer than 3 chars to avoid false positives)
+        if trimmedName.count > 3 {
+            if let partial = files.first(where: {
+                $0.displayName.contains(trimmedName) || trimmedName.contains($0.displayName)
+            }) {
+                return partial
+            }
         }
 
         return nil

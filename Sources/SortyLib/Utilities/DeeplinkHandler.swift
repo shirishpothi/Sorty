@@ -23,6 +23,7 @@ public enum DeeplinkDestination: Equatable {
     case watched(action: String?, path: String?)
     case rules(action: String?, type: String?, pattern: String?)
     case exclusions(action: String?, pattern: String?)
+    case scan(path: String?)
     case storage(action: String?, path: String?)
     
     /// Actions specific to Learnings feature
@@ -115,6 +116,10 @@ public class DeeplinkHandler: ObservableObject {
             let action = queryValue(for: "action")
             let pattern = queryValue(for: "pattern")
             pendingDestination = .exclusions(action: action, pattern: pattern)
+            
+        case "scan":
+            let path = queryValue(for: "path")
+            pendingDestination = .scan(path: path)
             
         case "storage":
             let action = queryValue(for: "action")
@@ -240,6 +245,12 @@ public class DeeplinkHandler: ObservableObject {
                 items.append(URLQueryItem(name: "pattern", value: pattern))
             }
             if !items.isEmpty { components.queryItems = items }
+            
+        case .scan(let path):
+            components.host = "scan"
+            if let path = path {
+                components.queryItems = [URLQueryItem(name: "path", value: path)]
+            }
             
         case .storage(let action, let path):
             components.host = "storage"

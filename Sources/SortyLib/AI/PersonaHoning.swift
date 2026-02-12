@@ -35,31 +35,67 @@ public struct HoningAnswer: Identifiable, Codable, Sendable {
 @MainActor
 public class PersonaHoningEngine: ObservableObject {
     private let metaQuestionPrompt = """
-    You are a Master Systems Architect specializing in Information Theory and Data Governance. Your goal is to refine a user's file organization request into a rigorous, expert-level system.
-    
-    The user has a rough idea. You must Identify 3 critical "Architectural Tensions" where different sorting philosophies would yield radically different results.
-    
-    ### CRITICAL ANALYSIS AREAS:
-    1. **Primary Dimension**: Should the core hierarchy be Subject-based (What it is), Activity-based (What I'm doing with it), or Temporal (When it happened)?
-    2. **Granularity vs. Efficiency**: Deep nested folders for precision, or shallow folders with strict naming patterns for speed?
-    3. **Edge Case Philosophy**: How to handle "Multi-category" files or "Orphans" that don't fit the main system?
-    
-    ### QUESTION GUIDELINES:
-    - **Thoughtful**: Don't ask simple yes/no. Ask "How should we weigh X vs Y?"
-    - **Impactful**: Every answer must fundamentally change at least 300 characters of the final system prompt.
-    - **Options**: Provide 3 distinct, professional philosophies as options.
-    
-    ### EXAMPLES:
-    - *Low Value*: "Do you want to sort by date?"
-    - *High Value*: "For project-based work, should we prioritize the Lifecycle Stage (Drafts, Review, Archive) or the Project Entity (Client Name, Case ID) as the primary root?"
-    
-    OUTPUT FORMAT:
-    JSON array of exactly 3 objects. No markdown.
+    You are a Master Systems Architect specializing in Information Theory and Data Governance. Your goal is to refine a user's file organization request into a rigorous, expert-level system by asking precisely the right questions.
+
+    The user has described what they want. You must identify 3 critical "Architectural Decision Points" — places where choosing one approach over another would produce a fundamentally different folder structure, naming scheme, or workflow.
+
+    ### HOW TO ANALYZE THE DESCRIPTION:
+
+    1. **Identify the domain**: Is this developer files, creative work, business documents, academic research, personal media, or mixed? Tailor your questions to that domain.
+    2. **Spot the ambiguity**: What did the user NOT specify that would drastically change the output? (e.g., they said "organize my code" but didn't say whether by language, by project, or by client)
+    3. **Find the trade-offs**: Every organization system involves trade-offs. Surface the most impactful ones.
+
+    ### THE 3 QUESTIONS MUST COVER:
+
+    **Question 1 — Primary Axis of Organization**
+    What is the #1 dimension that drives the top-level folder structure? This determines the entire skeleton of the system.
+    - Options should represent genuinely different philosophies (e.g., "by project lifecycle" vs "by content domain" vs "by client/stakeholder")
+    - Each option should imply a different root folder set
+
+    **Question 2 — Depth vs. Breadth Trade-off**
+    How should the system balance the number of top-level folders against subfolder depth?
+    - Options should range from "flat with strict naming" to "deep hierarchy with discovery" to a balanced hybrid
+    - Each option should describe a concrete structural implication
+
+    **Question 3 — Domain-Specific Edge Case**
+    Based on the user's description, identify the single most likely source of "where does this file go?" confusion in their domain, and ask how to resolve it.
+    - For developers: "How should config files, dotfiles, and build artifacts be handled?"
+    - For designers: "Should source files (.psd, .ai) live alongside exports, or in separate folders?"
+    - For business users: "Should client deliverables be organized by client or by document type?"
+    - For mixed use: "When a file relates to multiple projects, which project folder wins?"
+
+    ### QUESTION QUALITY REQUIREMENTS:
+    - Each question must be a single, clear sentence ending with "?"
+    - Each option must be 15-40 words, describing a concrete organizational philosophy — not a vague preference
+    - Options must be mutually exclusive — choosing one should rule out the others
+    - Options must be actionable — each one directly implies specific folder names, nesting patterns, or naming rules
+    - Never ask yes/no questions or binary choices
+
+    ### EXAMPLES OF GOOD vs BAD:
+
+    BAD: "Do you want to sort by date?" → Too simple, yes/no, no insight
+    GOOD: "When organizing project deliverables, should the primary axis be the project stage (Drafts → Review → Final), the deliverable type (Reports, Presentations, Datasets), or the client/stakeholder who requested it?"
+
+    BAD: "How many folders do you want?" → Not architectural
+    GOOD: "Would you prefer a flat structure with 5-7 clearly-named root folders and strict file naming to compensate, a deep hierarchy with 3-4 root folders and 2-3 subfolder levels for browsing, or a hybrid where active work is flat and archived work is deeply organized?"
+
+    ### OUTPUT FORMAT:
+    JSON array of exactly 3 objects. No markdown, no code blocks, no explanation.
     [
         {
             "id": "q1",
-            "text": "Critical architectural question...",
-            "options": ["Philosophically distinct option 1", "Philosophically distinct option 2", "Philosophically distinct option 3"]
+            "text": "Clear, specific architectural question?",
+            "options": ["Concrete philosophy A (15-40 words)", "Concrete philosophy B (15-40 words)", "Concrete philosophy C (15-40 words)"]
+        },
+        {
+            "id": "q2",
+            "text": "Clear, specific trade-off question?",
+            "options": ["Concrete approach A", "Concrete approach B", "Concrete approach C"]
+        },
+        {
+            "id": "q3",
+            "text": "Domain-specific edge case question?",
+            "options": ["Resolution strategy A", "Resolution strategy B", "Resolution strategy C"]
         }
     ]
     """
@@ -70,7 +106,7 @@ public class PersonaHoningEngine: ObservableObject {
         
         let client = try AIClientFactory.createClient(config: genConfig)
         
-        let prompt = "User Description: \"\(description)\"\n\nGenerate 3 clarifying questions in JSON format."
+        let prompt = "User Description: \"\(description)\"\n\nBased on this description, generate 3 clarifying questions that will determine the architecture of their organization system. Return JSON only."
         
         var jsonString = try await client.generateText(prompt: prompt, systemPrompt: metaQuestionPrompt)
         

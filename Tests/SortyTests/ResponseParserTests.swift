@@ -236,4 +236,37 @@ class ResponseParserTests: XCTestCase {
         let tags = plan.suggestions.first!.tags(for: files[0])
         XCTAssertTrue(tags.isEmpty)
     }
+
+    func testDeduplicationAndFuzzyMatching() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Duplicates",
+              "files": [
+                "CHANGELOG",
+                "CHANGELOG",
+                "sh",
+                "docker-setup"
+              ]
+            }
+          ]
+        }
+        """
+        
+        let files = [
+            FileItem(path: "/path/CHANGELOG.md", name: "CHANGELOG", extension: "md", size: 100, isDirectory: false),
+            FileItem(path: "/path/docker-setup.sh", name: "docker-setup", extension: "sh", size: 200, isDirectory: false)
+        ]
+        
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        
+        XCTAssertEqual(plan.suggestions.count, 1)
+        let suggestion = plan.suggestions.first!
+        
+        // Should have 2 unique files: CHANGELOG.md and docker-setup.sh
+        XCTAssertEqual(suggestion.files.count, 2)
+        XCTAssertTrue(suggestion.files.contains(where: { $0.name == "CHANGELOG" }))
+        XCTAssertTrue(suggestion.files.contains(where: { $0.name == "docker-setup" }))
+    }
 }

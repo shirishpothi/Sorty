@@ -81,7 +81,7 @@ struct TroubleshootingSettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     TroubleshootingRow(
                         title: "AI takes too long?",
-                        description: "Check your internet connection or try a faster model like GPT-4o-mini in AI Provider settings."
+                        description: "Check your internet connection or try a faster model like GPT-5-mini in AI Provider settings."
                     )
                     TroubleshootingRow(
                         title: "Files not moving?",

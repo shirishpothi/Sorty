@@ -63,6 +63,15 @@ public struct LearningsProfile: Codable, Sendable {
     /// History of applied jobs (for rollback)
     public var jobHistory: [JobManifest]
     
+    /// Rejected rule IDs with cooldown timestamps (ruleId -> cooldown end date)
+    public var rejectedRuleCooldowns: [String: Date]
+    
+    /// Paths excluded from learning
+    public var learningExclusionPatterns: [String]
+    
+    /// Whether session-based learning is enabled (don't persist learnings from this session)
+    public var sessionLearningEnabled: Bool
+    
     public init(
         createdAt: Date = Date(),
         consentGranted: Bool = false,
@@ -79,7 +88,10 @@ public struct LearningsProfile: Codable, Sendable {
         corrections: [LabeledExample] = [],
         rejections: [LabeledExample] = [],
         positiveExamples: [LabeledExample] = [],
-        jobHistory: [JobManifest] = []
+        jobHistory: [JobManifest] = [],
+        rejectedRuleCooldowns: [String: Date] = [:],
+        learningExclusionPatterns: [String] = [],
+        sessionLearningEnabled: Bool = true
     ) {
         self.createdAt = createdAt
         self.consentGranted = consentGranted
@@ -97,6 +109,9 @@ public struct LearningsProfile: Codable, Sendable {
         self.rejections = rejections
         self.positiveExamples = positiveExamples
         self.jobHistory = jobHistory
+        self.rejectedRuleCooldowns = rejectedRuleCooldowns
+        self.learningExclusionPatterns = learningExclusionPatterns
+        self.sessionLearningEnabled = sessionLearningEnabled
     }
 }
 

@@ -19,6 +19,16 @@ public enum OrganizationState: Equatable, Sendable {
     case completed
     case error(Error)
 
+    /// Whether the organizer is actively performing work and should not be interrupted
+    public var isOperationInProgress: Bool {
+        switch self {
+        case .scanning, .organizing, .ready, .applying:
+            return true
+        case .idle, .completed, .error:
+            return false
+        }
+    }
+
     public static func == (lhs: OrganizationState, rhs: OrganizationState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle),
@@ -257,9 +267,17 @@ public struct OrganizationProgress: Sendable {
 
 @MainActor
 public class FolderOrganizer: ObservableObject, StreamingDelegate {
-    @Published public var state: OrganizationState = .idle
+    @Published public var state: OrganizationState = .idle {
+        didSet {
+            // Request user attention for any error state
+            if case .error = state {
+                NotificationManager.shared.requestAttention()
+            }
+        }
+    }
     @Published public var progress: Double = 0.0
     @Published public var currentPlan: OrganizationPlan?
+    @Published public var planHistory: [OrganizationPlan] = []
     @Published public var errorMessage: String?
     @Published public var customInstructions: String = ""
     
@@ -267,7 +285,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var isAIConfigured: Bool = false
 
     // Streaming support
-    @Published public var streamingContent: String = ""
+    /// Internal backing storage for streaming content (not @Published to avoid high-frequency redraws)
+    public var streamingContent: String = ""
     @Published public var displayStreamingContent: String = "" // Throttled version for UI to prevent layout loops
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
@@ -275,7 +294,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
     private var lastDisplayUpdate: Date = .distantPast
-    private let displayUpdateInterval: TimeInterval = 0.1 // 100ms throttle
+    private let displayUpdateInterval: TimeInterval = 0.2 // 200ms throttle
     
     // Steady progress animation during streaming
     private var steadyProgressTask: Task<Void, Never>?
@@ -465,21 +484,23 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 self.startSteadyProgressTask()
             }
 
-            // Throttle display updates to prevent layout loops (100ms)
+            // Throttle UI-impacting updates to prevent layout thrashing and main actor congestion
             let now = Date()
             if now.timeIntervalSince(self.lastDisplayUpdate) >= self.displayUpdateInterval {
-                self.displayStreamingContent = self.streamingContent
+                self.withBatchUpdates {
+                    self.displayStreamingContent = self.streamingContent
+                    
+                    // Increment progress based on content received
+                    // Estimate total based on file count (~100 chars per file in JSON output)
+                    let contentLength = self.streamingContent.count
+                    let estimatedTotal = max(3000, self.scannedFileCount * 100)
+                    let contentProgress = min(0.80, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.50)
+
+                    if self.progress < contentProgress {
+                        self.progress = contentProgress
+                    }
+                }
                 self.lastDisplayUpdate = now
-            }
-
-            // Increment progress based on content received
-            // Estimate total based on file count (~100 chars per file in JSON output)
-            let contentLength = self.streamingContent.count
-            let estimatedTotal = max(3000, self.scannedFileCount * 100)
-            let contentProgress = min(0.80, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.50)
-
-            if self.progress < contentProgress {
-                self.progress = contentProgress
             }
             
             // Extract insights from streaming content (throttled and cached)
@@ -490,10 +511,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Starts a background task that ensures progress keeps moving even during pauses
     private func startSteadyProgressTask() {
         steadyProgressTask?.cancel()
-        steadyProgressTask = Task { @MainActor in
-            while !Task.isCancelled && !isCancellationRequested && isStreaming {
+        steadyProgressTask = Task { @MainActor [weak self] in
+            while let self = self, !Task.isCancelled, !self.isCancellationRequested, self.isStreaming {
                 try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
-                guard !Task.isCancelled && !isCancellationRequested && isStreaming else { break }
+                if Task.isCancelled || self.isCancellationRequested || !self.isStreaming { break }
                 
                 // If we haven't reached 0.82 and no recent chunk, nudge progress
                 if self.progress < 0.82 {
@@ -762,6 +783,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             self.errorMessage = error.localizedDescription
             self.stopTimeoutTimer()
             self.stopSteadyProgressTask()
+            
+            // Request user attention for streaming failure
+            NotificationManager.shared.requestAttention()
         }
     }
 
@@ -773,10 +797,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         showTimeoutMessage = false
 
         timeoutTask?.cancel()
-        timeoutTask = Task { @MainActor in
-            while !Task.isCancelled && !isCancellationRequested {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled && !isCancellationRequested else { break }
+        timeoutTask = Task { @MainActor [weak self] in
+            while let self = self, !Task.isCancelled, !self.isCancellationRequested {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if Task.isCancelled || self.isCancellationRequested { break }
 
                 if let start = self.startTime {
                     self.elapsedTime = Date().timeIntervalSince(start)
@@ -815,6 +839,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentTask = Task {
             try await performOrganization(directory: directory, customPrompt: customPrompt, temperature: temperature)
         }
+        defer { currentTask = nil }
 
         do {
             try await currentTask?.value
@@ -833,227 +858,43 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw OrganizationError.clientNotConfigured
         }
 
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiated,
+            reason: "Organizing folder: \(directory.lastPathComponent)"
+        )
+        defer { ProcessInfo.processInfo.endActivity(activity) }
+
         do {
             currentDirectory = directory
 
-            updateState(.scanning, stage: "Scanning directory...", progress: 0.05)
-
-            // Check cancellation frequently
-            try checkCancellation()
-
-            let filesFound = try await scanner.scanDirectory(
-                at: directory,
-                deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true)
+            let files = try await scanPhase(directory: directory)
+            let duplicateContext = try await duplicateDetectionPhase(files: files)
+            let (plan, instructions, personaPrompt, imagePayload) = try await aiAnalysisPhase(
+                files: files,
+                directory: directory,
+                customPrompt: customPrompt,
+                temperature: temperature,
+                duplicateContext: duplicateContext
             )
-            scannedFileCount = filesFound.count
-            setScannedFiles(filesFound)
-
-            updateProgress(0.15, stage: "Found \(filesFound.count) files")
-
-            try checkCancellation()
-
-            var files = filesFound
-            if let exclusionRules = exclusionRules {
-                files = exclusionRules.filterFiles(files)
-                updateProgress(0.20, stage: "Filtered to \(files.count) files")
-            }
-
-            try checkCancellation()
-            
-            // Phase 1.5: Duplicate Detection
-            var duplicateContext: String = ""
-            if aiConfig?.detectDuplicates ?? false {
-                updateProgress(0.21, stage: "Checking for duplicates...")
-                let duplicates = await DuplicateDetector().findDuplicates(in: files)
-                await MainActor.run {
-                    self.detectedDuplicates = duplicates
-                }
-                if !duplicates.isEmpty {
-                    duplicateContext = "\n\nDUPLICATE FILES DETECTED:\n"
-                    for group in duplicates {
-                        duplicateContext += "- The following files are identical (SHA-256 hash: \(group.hash)):\n"
-                        for file in group.files {
-                            duplicateContext += "  • \(file.displayName) (\(file.path))\n"
-                        }
-                    }
-                    duplicateContext += "\nRECOMMENDATION FOR DUPLICATES:\n"
-                    duplicateContext += "1. If you suggest moving duplicates, try to consolidate them or use a 'Duplicates' folder.\n"
-                    duplicateContext += "2. You can suggest better names for them, but keep them in mind for organization.\n"
-                }
-            } else {
-                await MainActor.run {
-                    self.detectedDuplicates = []
-                }
-            }
-
-            updateState(.organizing, stage: "Establishing connection...", progress: 0.22)
-            await MainActor.run {
-                isStreaming = false
-            }
-
-            startTimeoutTimer()
-
-            try checkCancellation()
-
-            let personaPrompt = personaManager?.getEffectivePrompt(customStore: customPersonaStore ?? CustomPersonaStore())
-            
-            // Add exclusion context to prompt
-            var instructions = customPrompt ?? customInstructions
-            if !duplicateContext.isEmpty {
-                instructions += duplicateContext
-            }
-            if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
-                let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
-                instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
-            }
-            
-            // Add Learnings context (User preferences, past corrections, etc.)
-            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
-                instructions += "\n\n" + learnedContext
-                DebugLogger.log("Injected Learnings context into prompt")
-            }
-            
-            // Add Storage Locations context (external destinations for files)
-            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
-                instructions += "\n\n" + storageContext
-                DebugLogger.log("Injected Storage Locations context into prompt")
-            }
-            
-            // Add Existing Folders context (prefer reusing existing structure)
-            if let existingFoldersContext = PromptBuilder.buildExistingFoldersContext(at: directory) {
-                instructions += "\n\n" + existingFoldersContext
-                DebugLogger.log("Injected Existing Folders context into prompt")
-            }
-
-            // Phase 2: Vision Integration
-            var imagePayload: [String: Data] = [:]
-            if aiConfig?.enableVision ?? false,
-               let modelId = aiConfig?.model,
-               let provider = aiConfig?.provider,
-               ModelCatalog.shared.supportsVision(modelId: modelId, provider: provider) {
-                
-                let imageFiles = files.filter { ["jpg", "jpeg", "png", "heic", "webp"].contains($0.extension.lowercased()) }
-                if !imageFiles.isEmpty {
-                    updateProgress(0.25, stage: "Analyzing \(imageFiles.count) images with Vision AI...")
-                    let batch = Array(imageFiles.prefix(aiConfig?.visionBatchSize ?? 5))
-                    let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: batch.compactMap { $0.url })
-                    // Convert URL keys to filename strings
-                    for (url, data) in urlPayload {
-                        imagePayload[url.lastPathComponent] = data
-                    }
-                    DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis")
-                }
-            }
-
-            let plan: OrganizationPlan
-            if !imagePayload.isEmpty {
-                plan = try await client.analyzeWithImages(
-                    files: files,
-                    imageData: imagePayload,
-                    customInstructions: instructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature
-                )
-            } else {
-                plan = try await client.analyze(
-                    files: files, 
-                    customInstructions: instructions, 
-                    personaPrompt: personaPrompt, 
-                    temperature: temperature
-                )
-            }
-
-            try checkCancellation()
-
-            stopTimeoutTimer()
-
-            updateState(.organizing, stage: "Validating plan...", progress: 0.85)
-            await MainActor.run {
-                isStreaming = false
-            }
-
-            // In rename-only mode, we don't need to validate folder depth limits strictly
-            // but we still validate the overall JSON structure.
-            let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
-            let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-            
-            var validatedPlanFromRetry: OrganizationPlan? = nil
-            do {
-                try validator.validate(plan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: maxFolders)
-            } catch let validationError as ValidationError {
-                // Attempt one retry for recoverable validation errors
-                if let retryPlan = await retryWithValidationEnhancement(
-                    files: files,
-                    client: client,
-                    validationError: validationError,
-                    directory: directory,
-                    instructions: instructions,
-                    personaPrompt: personaPrompt,
-                    temperature: temperature,
-                    imagePayload: imagePayload,
-                    maxTopLevelFolders: maxFolders,
-                    allowedStorageLocations: allowedLocations
-                ) {
-                    validatedPlanFromRetry = retryPlan
-                } else {
-                    throw validationError
-                }
-            }
-            
-            let planAfterValidation = validatedPlanFromRetry ?? plan
-
-            try checkCancellation()
-            
-            // Post-AI exclusion validation
-            var validatedPlan = planAfterValidation
-            if let exclusionRules = exclusionRules {
-                let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
-                self.exclusionEnforcer = enforcer
-                
-                let validationResult = enforcer.validate(planAfterValidation)
-                
-                if validationResult.hasViolations {
-                    LogManager.shared.log("Exclusion violations detected: \(validationResult.violationCount) files", category: "FolderOrganizer")
-                    
-                    // Try to retry once with enhanced prompt
-                    if let retryPlan = await retryWithExclusionEnhancement(
-                        files: files,
-                        client: client,
-                        violations: validationResult.violations,
-                        instructions: instructions,
-                        personaPrompt: personaPrompt,
-                        temperature: temperature,
-                        imagePayload: imagePayload
-                    ) {
-                        // Validate retry result
-                        let retryValidation = enforcer.validate(retryPlan)
-                        if retryValidation.hasViolations {
-                            // Still violations, strip them and proceed with warning
-                            LogManager.shared.log("Retry still has \(retryValidation.violationCount) violations, stripping", category: "FolderOrganizer")
-                            validatedPlan = retryValidation.cleanedPlan ?? retryPlan
-                        } else {
-                            validatedPlan = retryPlan
-                        }
-                    } else {
-                        // Retry failed, use cleaned plan
-                        validatedPlan = validationResult.cleanedPlan ?? planAfterValidation
-                    }
-                }
-            }
+            let validatedPlan = try await validationPhase(
+                plan: plan,
+                files: files,
+                directory: directory,
+                instructions: instructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature,
+                imagePayload: imagePayload
+            )
 
             updateState(.ready, stage: "Ready!", progress: 1.0)
             await MainActor.run {
                 currentPlan = validatedPlan
             }
 
-            // Send notification when preview is ready
             NotificationManager.shared.show(.previewReady(folderName: directory.lastPathComponent))
-            
-            // Start learning session for the new plan
+
             if let learningsObserver = learningsObserver {
                 learningsObserver.startSession(folderPath: directory.path, historyEntryId: nil)
-                
-                // Track which rules were applied to each file
                 recordPlanRules(plan, observer: learningsObserver)
             }
 
@@ -1070,6 +911,239 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             handleOrganizationError(error, directory: directory)
             throw error
         }
+    }
+
+    // MARK: - Organization Phases
+
+    private func scanPhase(directory: URL) async throws -> [FileItem] {
+        updateState(.scanning, stage: "Scanning directory...", progress: 0.05)
+
+        try checkCancellation()
+
+        let filesFound = try await scanner.scanDirectory(
+            at: directory,
+            deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true)
+        )
+        scannedFileCount = filesFound.count
+        setScannedFiles(filesFound)
+
+        updateProgress(0.15, stage: "Found \(filesFound.count) files")
+
+        try checkCancellation()
+
+        var files = filesFound
+        if let exclusionRules = exclusionRules {
+            files = exclusionRules.filterFiles(files)
+            updateProgress(0.20, stage: "Filtered to \(files.count) files")
+        }
+
+        try checkCancellation()
+
+        return files
+    }
+
+    private func duplicateDetectionPhase(files: [FileItem]) async throws -> String {
+        var duplicateContext: String = ""
+        if aiConfig?.detectDuplicates ?? false {
+            updateProgress(0.21, stage: "Checking for duplicates...")
+            let duplicates = await DuplicateDetector().findDuplicates(in: files)
+            await MainActor.run {
+                self.detectedDuplicates = duplicates
+            }
+            if !duplicates.isEmpty {
+                duplicateContext = "\n\nDUPLICATE FILES DETECTED:\n"
+                for group in duplicates {
+                    duplicateContext += "- The following files are identical (SHA-256 hash: \(group.hash)):\n"
+                    for file in group.files {
+                        duplicateContext += "  • \(file.displayName) (\(file.path))\n"
+                    }
+                }
+                duplicateContext += "\nRECOMMENDATION FOR DUPLICATES:\n"
+                duplicateContext += "1. If you suggest moving duplicates, try to consolidate them or use a 'Duplicates' folder.\n"
+                duplicateContext += "2. You can suggest better names for them, but keep them in mind for organization.\n"
+            }
+        } else {
+            await MainActor.run {
+                self.detectedDuplicates = []
+            }
+        }
+        return duplicateContext
+    }
+
+    private func aiAnalysisPhase(
+        files: [FileItem],
+        directory: URL,
+        customPrompt: String?,
+        temperature: Double?,
+        duplicateContext: String
+    ) async throws -> (OrganizationPlan, String, String?, [String: Data]) {
+        updateState(.organizing, stage: "Establishing connection...", progress: 0.22)
+        await MainActor.run {
+            isStreaming = false
+        }
+
+        startTimeoutTimer()
+
+        try checkCancellation()
+
+        let personaPrompt = personaManager?.getEffectivePrompt(customStore: customPersonaStore ?? CustomPersonaStore())
+
+        var instructions = customPrompt ?? customInstructions
+        if !duplicateContext.isEmpty {
+            instructions += duplicateContext
+        }
+        if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
+            let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
+            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
+        }
+
+        if let nlExceptions = exclusionRules?.sanitizedExceptionsForPrompt, !nlExceptions.isEmpty {
+            let exceptionsList = nlExceptions.map { "- \($0)" }.joined(separator: "\n")
+            instructions += "\n\nUSER EXCEPTIONS (must be respected):\n\(exceptionsList)"
+        }
+
+        if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+            instructions += "\n\n" + learnedContext
+            DebugLogger.log("Injected Learnings context into prompt")
+        }
+
+        if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+            instructions += "\n\n" + storageContext
+            DebugLogger.log("Injected Storage Locations context into prompt")
+        }
+
+        if let existingFoldersContext = PromptBuilder.buildExistingFoldersContext(at: directory) {
+            instructions += "\n\n" + existingFoldersContext
+            DebugLogger.log("Injected Existing Folders context into prompt")
+        }
+
+        var imagePayload: [String: Data] = [:]
+        if aiConfig?.enableVision ?? false,
+           let modelId = aiConfig?.model,
+           let provider = aiConfig?.provider,
+           ModelCatalog.shared.supportsVision(modelId: modelId, provider: provider) {
+
+            let imageFiles = files.filter { ["jpg", "jpeg", "png", "heic", "webp"].contains($0.extension.lowercased()) }
+            if !imageFiles.isEmpty {
+                updateProgress(0.25, stage: "Analyzing \(imageFiles.count) images with Vision AI...")
+                let batch = Array(imageFiles.prefix(aiConfig?.visionBatchSize ?? 5))
+                let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: batch.compactMap { $0.url })
+                for (url, data) in urlPayload {
+                    imagePayload[url.lastPathComponent] = data
+                }
+                DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis")
+            }
+        }
+
+        guard let client = aiClient else {
+            throw OrganizationError.clientNotConfigured
+        }
+
+        let plan: OrganizationPlan
+        if !imagePayload.isEmpty {
+            plan = try await client.analyzeWithImages(
+                files: files,
+                imageData: imagePayload,
+                customInstructions: instructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+        } else {
+            plan = try await client.analyze(
+                files: files,
+                customInstructions: instructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature
+            )
+        }
+
+        try checkCancellation()
+
+        stopTimeoutTimer()
+
+        return (plan, instructions, personaPrompt, imagePayload)
+    }
+
+    private func validationPhase(
+        plan: OrganizationPlan,
+        files: [FileItem],
+        directory: URL,
+        instructions: String,
+        personaPrompt: String?,
+        temperature: Double?,
+        imagePayload: [String: Data]
+    ) async throws -> OrganizationPlan {
+        updateState(.organizing, stage: "Validating plan...", progress: 0.85)
+        await MainActor.run {
+            isStreaming = false
+        }
+
+        guard let client = aiClient else {
+            throw OrganizationError.clientNotConfigured
+        }
+
+        let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
+        let allowedLocations = storageLocationsManager?.enabledLocations ?? []
+
+        var validatedPlanFromRetry: OrganizationPlan? = nil
+        do {
+            try validator.validate(plan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: maxFolders)
+        } catch let validationError as ValidationError {
+            if let retryPlan = await retryWithValidationEnhancement(
+                files: files,
+                client: client,
+                validationError: validationError,
+                directory: directory,
+                instructions: instructions,
+                personaPrompt: personaPrompt,
+                temperature: temperature,
+                imagePayload: imagePayload,
+                maxTopLevelFolders: maxFolders,
+                allowedStorageLocations: allowedLocations
+            ) {
+                validatedPlanFromRetry = retryPlan
+            } else {
+                throw validationError
+            }
+        }
+
+        let planAfterValidation = validatedPlanFromRetry ?? plan
+
+        try checkCancellation()
+
+        var validatedPlan = planAfterValidation
+        if let exclusionRules = exclusionRules {
+            let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
+            self.exclusionEnforcer = enforcer
+
+            let validationResult = enforcer.validate(planAfterValidation)
+
+            if validationResult.hasViolations {
+                LogManager.shared.log("Exclusion violations detected: \(validationResult.violationCount) files", category: "FolderOrganizer")
+
+                if let retryPlan = await retryWithExclusionEnhancement(
+                    files: files,
+                    client: client,
+                    violations: validationResult.violations,
+                    instructions: instructions,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature,
+                    imagePayload: imagePayload
+                ) {
+                    let retryValidation = enforcer.validate(retryPlan)
+                    if retryValidation.hasViolations {
+                        LogManager.shared.log("Retry still has \(retryValidation.violationCount) violations, stripping", category: "FolderOrganizer")
+                        validatedPlan = retryValidation.cleanedPlan ?? retryPlan
+                    } else {
+                        validatedPlan = retryPlan
+                    }
+                } else {
+                    validatedPlan = validationResult.cleanedPlan ?? planAfterValidation
+                }
+            }
+        }
+
+        return validatedPlan
     }
 
     // MARK: - Cancellation
@@ -1360,6 +1434,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentTask = Task {
             try await performIncrementalOrganization(directory: directory, specificFiles: specificFiles, customPrompt: customPrompt, temperature: temperature, providerOverride: providerOverride, modelOverride: modelOverride)
         }
+        defer { currentTask = nil }
 
         do {
             try await currentTask?.value
@@ -1484,6 +1559,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 currentPlan = plan
             }
 
+            // Validate plan before auto-apply
+            let allowedLocations = storageLocationsManager?.enabledLocations ?? []
+            try validator.validate(plan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: aiConfig?.maxTopLevelFolders ?? 10)
+
+            // Post-AI exclusion validation
+            var validatedPlan = plan
+            if let exclusionRules = exclusionRules {
+                let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
+                let validationResult = enforcer.validate(plan)
+                if validationResult.hasViolations {
+                    LogManager.shared.log("Exclusion violations in incremental plan: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    validatedPlan = validationResult.cleanedPlan ?? plan
+                }
+            }
+
+            await MainActor.run {
+                currentPlan = validatedPlan
+            }
+
             // Auto-apply for incremental
             try await apply(at: directory, dryRun: false, enableTagging: true)
 
@@ -1579,6 +1673,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 temperature: temperature
             )
         }
+        defer { currentTask = nil }
 
         do {
             try await currentTask?.value
@@ -1672,6 +1767,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         try checkCancellation()
 
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiated,
+            reason: "Applying organization to: \(baseURL.lastPathComponent)"
+        )
+        defer { ProcessInfo.processInfo.endActivity(activity) }
+
         updateState(.applying, stage: "Preparing organization...", progress: 0.0)
         
         // Start learning session for rule tracking
@@ -1689,7 +1790,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 exclusionManager: exclusionRules,
                 progress: { [weak self] percent, message in
                     Task { @MainActor in
-                        self?.progress = percent
+                        self?.progress = min(percent, 1.0)
                         self?.organizationStage = message
                     }
                 }
@@ -1738,17 +1839,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Use AutomationManager for Finder integration if available
-            if let automationManager = automationManager {
-                // Refresh Finder windows
+            if let automationManager = automationManager, automationManager.automationStatus == .granted {
                 automationManager.refreshFinder(at: baseURL)
 
-                // Select organized folders in Finder
                 let folderURLs = plan.suggestions.map { baseURL.appendingPathComponent($0.folderName) }
                 automationManager.selectOrganizedFolders(folderURLs: folderURLs)
             } else {
-                // Fallback to legacy refresh method
-                Task.detached(priority: .background) {
-                    self.refreshFinder(at: baseURL)
+                let folderURLs = plan.suggestions.compactMap { suggestion -> URL? in
+                    let url = baseURL.appendingPathComponent(suggestion.folderName)
+                    return FileManager.default.fileExists(atPath: url.path) ? url : nil
+                }
+                if !folderURLs.isEmpty {
+                    NSWorkspace.shared.activateFileViewerSelecting(folderURLs)
                 }
             }
 
@@ -1832,6 +1934,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             instructions += "\n\n" + storageContext
         }
+        if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
+            let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
+            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
+        }
         
         let plan = try await tempClient.analyze(
             files: files,
@@ -1914,13 +2020,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Regenerate preview with a specific provider
     public func regenerateWithProvider(_ provider: AIProvider) async throws {
-        let files = getFilesFromCurrentPlan()
+        var files = getFilesFromCurrentPlan()
         guard !files.isEmpty else {
             throw OrganizationError.noCurrentPlan
         }
         
         guard !isOperationInProgress() else {
             return
+        }
+        
+        if let exclusionRules = exclusionRules {
+            files = exclusionRules.filterFiles(files)
         }
         
         isCancellationRequested = false
@@ -1938,12 +2048,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             var newPlan = try await generatePlanWithProvider(files: files, provider: provider)
             newPlan.version = (currentPlan?.version ?? 0) + 1
             
+            if let exclusionRules = exclusionRules {
+                let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
+                let validationResult = enforcer.validate(newPlan)
+                if validationResult.hasViolations {
+                    LogManager.shared.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    newPlan = validationResult.cleanedPlan ?? newPlan
+                }
+            }
+            
             try checkCancellation()
             
             await MainActor.run {
                 isStreaming = false
                 organizationStage = "Ready!"
                 progress = 1.0
+                if let existingPlan = self.currentPlan {
+                    self.planHistory.append(existingPlan)
+                    if self.planHistory.count > Constants.maxPreviewVersions {
+                        self.planHistory.removeFirst()
+                    }
+                }
                 self.currentPlan = newPlan
                 state = .ready
             }
@@ -1955,16 +2080,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw error
         }
     }
-    
+
     /// Regenerate preview with a specific provider and model
     public func regenerateWithModel(provider: AIProvider, model: String) async throws {
-        let files = getFilesFromCurrentPlan()
+        var files = getFilesFromCurrentPlan()
+        
+        if files.isEmpty, let directory = currentDirectory {
+            files = try await scanPhase(directory: directory)
+        }
+        
         guard !files.isEmpty else {
             throw OrganizationError.noCurrentPlan
         }
         
         guard !isOperationInProgress() else {
             return
+        }
+        
+        if let exclusionRules = exclusionRules {
+            files = exclusionRules.filterFiles(files)
         }
         
         isCancellationRequested = false
@@ -1977,21 +2111,44 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         
         updateState(.organizing, stage: "Regenerating with \(provider.displayName) (\(model))...", progress: 0.3)
+        await MainActor.run {
+            isStreaming = true
+        }
+        
+        startTimeoutTimer()
         
         do {
             var newPlan = try await generatePlanWithProvider(files: files, provider: provider, model: model)
             newPlan.version = (currentPlan?.version ?? 0) + 1
             
+            if let exclusionRules = exclusionRules {
+                let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
+                let validationResult = enforcer.validate(newPlan)
+                if validationResult.hasViolations {
+                    LogManager.shared.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    newPlan = validationResult.cleanedPlan ?? newPlan
+                }
+            }
+            
             try checkCancellation()
+            
+            stopTimeoutTimer()
             
             await MainActor.run {
                 isStreaming = false
                 organizationStage = "Ready!"
                 progress = 1.0
+                if let existingPlan = self.currentPlan {
+                    self.planHistory.append(existingPlan)
+                    if self.planHistory.count > Constants.maxPreviewVersions {
+                        self.planHistory.removeFirst()
+                    }
+                }
                 self.currentPlan = newPlan
                 state = .ready
             }
         } catch {
+            stopTimeoutTimer()
             await MainActor.run {
                 state = .error(error)
                 errorMessage = error.localizedDescription
@@ -2032,6 +2189,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             collectFiles(suggestion)
         }
         allFiles.append(contentsOf: currentPlan.unorganizedFiles)
+        
+        if let exclusionRules = exclusionRules {
+            allFiles = exclusionRules.filterFiles(allFiles)
+        }
 
         updateState(.organizing, stage: "Regenerating organization...", progress: 0.3)
         await MainActor.run {
@@ -2092,9 +2253,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 instructions += "\n\n" + storageContext
             }
+            if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
+                let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
+                instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
+            }
             
             var newPlan = try await client.analyze(files: allFiles, customInstructions: instructions, personaPrompt: personaPrompt, temperature: nil)
             newPlan.version = (currentPlan.version) + 1
+            
+            if let exclusionRules = exclusionRules {
+                let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
+                let validationResult = enforcer.validate(newPlan)
+                if validationResult.hasViolations {
+                    LogManager.shared.log("Exclusion violations in regenerated preview: \(validationResult.violationCount)", category: "FolderOrganizer")
+                    newPlan = validationResult.cleanedPlan ?? newPlan
+                }
+            }
 
             stopTimeoutTimer()
 
@@ -2104,6 +2278,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 isStreaming = false
                 organizationStage = "Ready!"
                 progress = 1.0
+                if let existingPlan = self.currentPlan {
+                    self.planHistory.append(existingPlan)
+                    if self.planHistory.count > Constants.maxPreviewVersions {
+                        self.planHistory.removeFirst()
+                    }
+                }
                 self.currentPlan = newPlan
                 state = .ready
             }
@@ -2133,25 +2313,55 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Multi-State Undo/Redo
 
     /// Undoes a specific historical session
-    /// Returns the RestoreResult with details about any skipped files
+    /// Pre-checks file existence, recovers from per-file errors, and tracks partial success
     @discardableResult
     public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
         guard let operations = entry.operations, !entry.isUndone else { 
             return FileSystemManager.RestoreResult(successfulOperations: 0, missingFiles: [])
         }
 
-        updateState(.applying, stage: "Undoing changes...", progress: 0.3)
+        updateState(.applying, stage: "Verifying files before undo...", progress: 0.1)
+
+        let moveOps = operations.filter { $0.type == .moveFile || $0.type == .renameFile }
+        var preCheckMissing: [String] = []
+        for op in moveOps {
+            if let dest = op.destinationPath {
+                if !FileManager.default.fileExists(atPath: dest) {
+                    let filename = URL(fileURLWithPath: dest).lastPathComponent
+                    preCheckMissing.append(filename)
+                    DebugLogger.log("Pre-check: file missing at \(dest)")
+                }
+            }
+        }
+
+        if !preCheckMissing.isEmpty {
+            let totalMoves = moveOps.count
+            DebugLogger.log("Pre-check: \(preCheckMissing.count)/\(totalMoves) files missing before undo")
+        }
+
+        updateProgress(0.3, stage: "Undoing changes...")
 
         do {
             let result = try await fileSystemManager.reverseOperations(operations)
 
             var updatedEntry = entry
             updatedEntry.isUndone = true
-            updatedEntry.status = .undo
+            updatedEntry.undoRestoredCount = result.successfulOperations
+            updatedEntry.undoFailedFiles = result.missingFiles.isEmpty ? nil : result.missingFiles
+
+            if result.hasIssues {
+                updatedEntry.status = .partiallyUndone
+            } else {
+                updatedEntry.status = .undo
+            }
             history.updateEntry(updatedEntry)
 
             await MainActor.run {
-                organizationStage = result.hasIssues ? "Undo complete (some files skipped)" : "Undo complete"
+                if result.hasIssues {
+                    organizationStage = "Undo complete: \(result.successfulOperations) restored, \(result.missingFiles.count) skipped"
+                } else {
+                    organizationStage = "Undo complete"
+                }
                 progress = 1.0
                 state = .idle
             }
@@ -2161,7 +2371,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 object: nil,
                 userInfo: [
                     "url": URL(fileURLWithPath: entry.directoryPath),
-                    "entry": entry,
+                    "entry": updatedEntry,
                     "restoreResult": result
                 ]
             )
@@ -2218,6 +2428,36 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return combinedResult
     }
 
+    /// Undoes a single file operation within a history entry
+    @discardableResult
+    public func undoSingleOperation(from entry: OrganizationHistoryEntry, operation: FileSystemManager.FileOperation) async throws -> FileSystemManager.RestoreResult {
+        let result = try await fileSystemManager.restoreSingleOperation(operation)
+
+        await MainActor.run {
+            var updatedEntry = entry
+            updatedEntry.operations?.removeAll { $0.id == operation.id }
+
+            let remainingUndoable = updatedEntry.operations?.filter { $0.type == .moveFile || $0.type == .renameFile } ?? []
+            if remainingUndoable.isEmpty {
+                updatedEntry.isUndone = true
+                updatedEntry.status = result.hasIssues ? .partiallyUndone : .undo
+            } else {
+                updatedEntry.status = .partiallyUndone
+            }
+
+            updatedEntry.undoRestoredCount = (updatedEntry.undoRestoredCount ?? 0) + result.successfulOperations
+            if !result.missingFiles.isEmpty {
+                var existing = updatedEntry.undoFailedFiles ?? []
+                existing.append(contentsOf: result.missingFiles)
+                updatedEntry.undoFailedFiles = existing
+            }
+
+            history.updateEntry(updatedEntry)
+        }
+
+        return result
+    }
+
     // MARK: - Reset
 
     public func reset() {
@@ -2228,6 +2468,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             state = .idle
             progress = 0.0
             currentPlan = nil
+            planHistory = []
             errorMessage = nil
             streamingContent = ""
             displayStreamingContent = ""
@@ -2284,25 +2525,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Finder Refresh
     extension FolderOrganizer {
     nonisolated private func refreshFinder(at url: URL) {
-        let scriptSource = """
-        tell application "Finder"
-            try
-                set theFolder to POSIX file "\(url.path)" as alias
-                repeat with theWindow in (every window)
-                    if (target of theWindow as alias) is theFolder then
-                        update theWindow
-                    end if
-                end repeat
-            end try
-        end tell
-        """
-        
-        if let script = NSAppleScript(source: scriptSource) {
-            var error: NSDictionary?
-            script.executeAndReturnError(&error)
-            if let err = error {
-                DebugLogger.log("Finder refresh AppleScript error: \(err)")
-            }
+        DispatchQueue.main.async {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
 }

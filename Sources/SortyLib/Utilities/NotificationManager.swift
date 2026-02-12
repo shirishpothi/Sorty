@@ -93,21 +93,66 @@ public enum NotificationAction: Sendable {
 /// Callback type for handling notification actions
 public typealias NotificationActionHandler = @Sendable (NotificationAction) async -> Void
 
+private enum NativeNotificationCategory {
+    static let processingComplete = "SORTY_PROCESSING_COMPLETE"
+    static let processingError = "SORTY_PROCESSING_ERROR"
+    static let batchSummary = "SORTY_BATCH_SUMMARY"
+    static let previewReady = "SORTY_PREVIEW_READY"
+}
+
+private enum NativeNotificationActionIdentifier {
+    static let undo = "SORTY_UNDO"
+    static let undoAll = "SORTY_UNDO_ALL"
+    static let openFolder = "SORTY_OPEN_FOLDER"
+    static let retry = "SORTY_RETRY"
+    static let showDetails = "SORTY_SHOW_DETAILS"
+    static let review = "SORTY_REVIEW"
+}
+
+private enum NativeNotificationUserInfoKey {
+    static let folderPath = "folderPath"
+}
+
+private final class NativeNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        Task { @MainActor in
+            NotificationManager.shared.handleNativeNotificationResponse(response)
+        }
+        completionHandler()
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        var options: UNNotificationPresentationOptions = [.banner]
+        if notification.request.content.sound != nil {
+            options.insert(.sound)
+        }
+        completionHandler(options)
+    }
+}
+
     /// Types of notifications the app can show
     public enum NotificationType: Sendable {
-        case processingComplete(fileCount: Int, folderName: String, folderPath: String?, canUndo: Bool)
+        case processingComplete(fileCount: Int, folderName: String, folderPath: String?, canUndo: Bool, isAutomated: Bool = false)
         case previewReady(folderName: String)
-        case processingError(message: String, isCritical: Bool, canRetry: Bool)
-        case batchSummary(stats: BatchSummaryStats)
+        case processingError(message: String, isCritical: Bool, canRetry: Bool, isAutomated: Bool = false)
+        case batchSummary(stats: BatchSummaryStats, isAutomated: Bool = false)
         case info(title: String, message: String)
         
         // Legacy initializers for backwards compatibility
         public static func processingComplete(fileCount: Int, folderName: String) -> NotificationType {
-            return .processingComplete(fileCount: fileCount, folderName: folderName, folderPath: nil, canUndo: false)
+            return .processingComplete(fileCount: fileCount, folderName: folderName, folderPath: nil, canUndo: false, isAutomated: false)
         }
         
         public static func processingError(message: String, isCritical: Bool = false) -> NotificationType {
-            return .processingError(message: message, isCritical: isCritical, canRetry: false)
+            return .processingError(message: message, isCritical: isCritical, canRetry: false, isAutomated: false)
         }
         
         public static func batchSummary(processed: Int, errors: Int, duration: TimeInterval) -> NotificationType {
@@ -115,11 +160,11 @@ public typealias NotificationActionHandler = @Sendable (NotificationAction) asyn
                 filesMoved: processed,
                 errorsEncountered: errors,
                 duration: duration
-            ))
+            ), isAutomated: false)
         }
         
         var isCritical: Bool {
-            if case .processingError(_, let critical, _) = self {
+            if case .processingError(_, let critical, _, _) = self {
                 return critical
             }
             return false
@@ -178,8 +223,15 @@ public class NotificationManager: ObservableObject {
     private var settings: NotificationSettingsManager { NotificationSettingsManager.shared }
     private var dismissTask: Task<Void, Never>?
     private var notifiCLISetupTask: Task<Void, Never>?
+    private var permissionCached: Bool = false
+    private let nativeNotificationDelegate = NativeNotificationDelegate()
+    private var pendingNativeActionHandlers: [String: NotificationActionHandler] = [:]
     
     private init() {
+        if isSafeToUseSystemNotifications {
+            UNUserNotificationCenter.current().delegate = nativeNotificationDelegate
+            registerNativeNotificationCategories()
+        }
         // Start setup immediately
         notifiCLISetupTask = Task {
             await setupNotificationSystem()
@@ -281,6 +333,23 @@ public class NotificationManager: ObservableObject {
         
         print("NotificationManager: show() called with type, inAppHUD=\(settingsValue.inAppHUD), systemNotifications=\(settingsValue.systemNotifications)")
         
+        // Handle automated organization filter
+        switch type {
+        case .processingComplete(_, _, _, _, let isAutomated),
+             .batchSummary(_, let isAutomated):
+            if isAutomated && !settingsValue.notifyOnAutoOrganize {
+                print("NotificationManager: Automated organization notification suppressed by settings")
+                return
+            }
+        case .processingError(_, _, _, let isAutomated):
+            if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
+                print("NotificationManager: Automated organization error suppressed by settings")
+                return
+            }
+        default:
+            break
+        }
+        
         // Check if we should show this notification type
         switch type {
         case .processingComplete:
@@ -293,7 +362,7 @@ public class NotificationManager: ObservableObject {
                 print("NotificationManager: previewReady notifications disabled")
                 return
             }
-        case .processingError(_, let isCritical, _):
+        case .processingError(_, let isCritical, _, _):
             if isCritical && settingsValue.alwaysShowCriticalErrors {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
@@ -320,9 +389,17 @@ public class NotificationManager: ObservableObject {
             print("NotificationManager: skipping HUD (inAppHUD=\(settingsValue.inAppHUD), isActive=\(NSApplication.shared.isActive))")
         }
         
-        // Show system notification if enabled AND (app is backgrounded OR it's critical)
+        // Show system notification: always for critical errors, otherwise when enabled + shouldShow
+        let isCriticalError = type.isCritical
+        let isAppBackgrounded = !NSApplication.shared.isActive
         let shouldShowSystem = type.shouldShowSystem
-        if settingsValue.systemNotifications && shouldShowSystem {
+        
+        // Request user attention (dock bounce) for critical errors and key background events
+        if shouldRequestAttention(for: type, isAppBackgrounded: isAppBackgrounded) {
+            requestAttention(isCritical: isCriticalError)
+        }
+        
+        if isCriticalError || (settingsValue.systemNotifications && (shouldShowSystem || isAppBackgrounded)) {
             Task {
                 await showSystemNotification(
                     type: type,
@@ -332,7 +409,7 @@ public class NotificationManager: ObservableObject {
                 )
             }
         } else {
-            print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem))")
+            print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem), critical=\(isCriticalError))")
         }
     }
     
@@ -348,8 +425,15 @@ public class NotificationManager: ObservableObject {
             showHUD(title: title, message: message, icon: icon, iconColor: iconColor, playSound: settingsValue.hudSounds)
         }
         
-        // Show system notification if enabled AND (app is backgrounded OR it's critical)
-        if settingsValue.systemNotifications && type.shouldShowSystem {
+        // Show system notification: always for critical errors, otherwise when enabled + shouldShow or backgrounded
+        let isCriticalError = type.isCritical
+        let isAppBackgrounded = !NSApplication.shared.isActive
+
+        if shouldRequestAttention(for: type, isAppBackgrounded: isAppBackgrounded) {
+            requestAttention(isCritical: isCriticalError)
+        }
+        
+        if isCriticalError || (settingsValue.systemNotifications && (type.shouldShowSystem || isAppBackgrounded)) {
             Task {
                 await showSystemNotification(
                     type: type,
@@ -378,13 +462,15 @@ public class NotificationManager: ObservableObject {
         folderName: String,
         folderPath: String?,
         canUndo: Bool = false,
+        isAutomated: Bool = false,
         onAction: NotificationActionHandler? = nil
     ) {
         let type = NotificationType.processingComplete(
             fileCount: fileCount,
             folderName: folderName,
             folderPath: folderPath,
-            canUndo: canUndo
+            canUndo: canUndo,
+            isAutomated: isAutomated
         )
         if let handler = onAction {
             show(type, actionHandler: handler)
@@ -395,7 +481,7 @@ public class NotificationManager: ObservableObject {
     
     /// Show processing error notification
     public func showError(message: String, isCritical: Bool = false) {
-        show(.processingError(message: message, isCritical: isCritical))
+        show(.processingError(message: message, isCritical: isCritical, canRetry: false, isAutomated: false))
     }
     
     /// Show processing error notification with retry option
@@ -403,12 +489,14 @@ public class NotificationManager: ObservableObject {
         message: String,
         isCritical: Bool = false,
         canRetry: Bool = false,
+        isAutomated: Bool = false,
         onAction: NotificationActionHandler? = nil
     ) {
         let type = NotificationType.processingError(
             message: message,
             isCritical: isCritical,
-            canRetry: canRetry
+            canRetry: canRetry,
+            isAutomated: isAutomated
         )
         if let handler = onAction {
             show(type, actionHandler: handler)
@@ -423,8 +511,15 @@ public class NotificationManager: ObservableObject {
     }
     
     /// Show batch summary notification with detailed stats
-    public func showBatchSummary(stats: BatchSummaryStats) {
-        show(.batchSummary(stats: stats))
+    public func showBatchSummary(stats: BatchSummaryStats, isAutomated: Bool = false) {
+        show(.batchSummary(stats: stats, isAutomated: isAutomated))
+    }
+    
+    /// Request user attention (dock bounce)
+    public func requestAttention(isCritical: Bool = false) {
+        let requestType: NSApplication.RequestUserAttentionType = isCritical ? .criticalRequest : .informationalRequest
+        guard let app = NSApp else { return }
+        app.requestUserAttention(requestType)
     }
     
     /// Dismiss current HUD notification
@@ -440,7 +535,7 @@ public class NotificationManager: ObservableObject {
     
     private func notificationContent(for type: NotificationType) -> (title: String, message: String, icon: String, iconColor: Color) {
         switch type {
-        case .processingComplete(let fileCount, let folderName, _, _):
+        case .processingComplete(let fileCount, let folderName, _, _, _):
             return (
                 "Processing Complete",
                 "Organized \(fileCount) file\(fileCount == 1 ? "" : "s") in \(folderName)",
@@ -454,14 +549,14 @@ public class NotificationManager: ObservableObject {
                 "eye.fill",
                 .blue
             )
-        case .processingError(let message, let isCritical, _):
+        case .processingError(let message, let isCritical, _, _):
             return (
                 isCritical ? "Critical Error" : "Processing Error",
                 message,
                 isCritical ? "xmark.octagon.fill" : "exclamationmark.triangle.fill",
                 isCritical ? .red : .orange
             )
-        case .batchSummary(let stats):
+        case .batchSummary(let stats, _):
             let durationStr = formatDuration(stats.duration)
             
             // Build a detailed message
@@ -511,6 +606,23 @@ public class NotificationManager: ObservableObject {
             return (title, message, "folder.fill.badge.gearshape", iconColor)
         case .info(let title, let message):
             return (title, message, "info.circle.fill", .blue)
+        }
+    }
+
+    private func shouldRequestAttention(for type: NotificationType, isAppBackgrounded: Bool) -> Bool {
+        if type.isCritical {
+            return true
+        }
+
+        guard isAppBackgrounded else {
+            return false
+        }
+
+        switch type {
+        case .processingComplete, .previewReady, .batchSummary:
+            return true
+        case .processingError, .info:
+            return false
         }
     }
     
@@ -592,18 +704,34 @@ public class NotificationManager: ObservableObject {
     ) async {
         let settingsValue = settings.settings
         
-        // Determine which backend to use
         switch settingsValue.notificationBackend {
         case .notifiCLI:
-            await showNotifiCLINotification(
+            if isNotifiCLIAvailable {
+                await showNotifiCLINotification(
+                    type: type,
+                    title: title,
+                    message: message,
+                    playSound: playSound,
+                    actionHandler: actionHandler
+                )
+            } else {
+                print("NotificationManager: NotifiCLI unavailable, falling back to native")
+                await showNativeNotification(
+                    type: type,
+                    title: title,
+                    message: message,
+                    playSound: playSound,
+                    actionHandler: actionHandler
+                )
+            }
+        case .native:
+            await showNativeNotification(
                 type: type,
                 title: title,
                 message: message,
                 playSound: playSound,
                 actionHandler: actionHandler
             )
-        case .native:
-            await showNativeNotification(title: title, message: message, playSound: playSound)
         }
     }
     
@@ -625,7 +753,7 @@ public class NotificationManager: ObservableObject {
         
         if settingsValue.showActionButtons {
             switch type {
-            case .processingComplete(_, _, let path, let undo):
+            case .processingComplete(_, _, let path, let undo, _):
                 folderPath = path
                 canUndo = undo
                 if undo {
@@ -636,7 +764,7 @@ public class NotificationManager: ObservableObject {
                 }
                 actions.append("Dismiss")
                 
-            case .processingError(_, _, let retry):
+            case .processingError(_, _, let retry, _):
                 canRetry = retry
                 if retry {
                     actions.append("Retry")
@@ -644,7 +772,7 @@ public class NotificationManager: ObservableObject {
                 actions.append("Show Details")
                 actions.append("Dismiss")
                 
-            case .batchSummary(let stats):
+            case .batchSummary(let stats, _):
                 folderPath = stats.folderPath
                 canUndo = stats.canUndo
                 if stats.canUndo {
@@ -769,16 +897,43 @@ public class NotificationManager: ObservableObject {
     
     /// Show notification using native macOS UNUserNotificationCenter (fallback)
     private func showNativeNotification(title: String, message: String, playSound: Bool) async {
+        await showNativeNotification(
+            type: .info(title: title, message: message),
+            title: title,
+            message: message,
+            playSound: playSound,
+            actionHandler: nil
+        )
+    }
+
+    /// Show notification using native macOS UNUserNotificationCenter (fallback)
+    private func showNativeNotification(
+        type: NotificationType,
+        title: String,
+        message: String,
+        playSound: Bool,
+        actionHandler: NotificationActionHandler?
+    ) async {
         guard isSafeToUseSystemNotifications else {
             print("NotificationManager: Skipping native notification (CLI/Test environment)")
             return
         }
         
-        // Check permission first
         let notificationSettings = await UNUserNotificationCenter.current().notificationSettings()
+        var status = notificationSettings.authorizationStatus
         
-        guard notificationSettings.authorizationStatus == .authorized else {
-            print("NotificationManager: System notifications not authorized (status: \(notificationSettings.authorizationStatus.rawValue))")
+        if status == .notDetermined {
+            await requestSystemNotificationPermission()
+            let updatedSettings = await UNUserNotificationCenter.current().notificationSettings()
+            status = updatedSettings.authorizationStatus
+        }
+        
+        guard status == .authorized else {
+            print("NotificationManager: System notifications not authorized (status: \(status.rawValue)), trying NotifiCLI fallback")
+            if await NotifiCLIService.shared.checkAvailability() {
+                let config = NotifiCLIConfig(title: title, message: message)
+                _ = await NotifiCLIService.shared.send(config)
+            }
             return
         }
         
@@ -788,31 +943,208 @@ public class NotificationManager: ObservableObject {
         if playSound {
             content.sound = .default
         }
+
+        if let categoryIdentifier = nativeCategoryIdentifier(for: type) {
+            content.categoryIdentifier = categoryIdentifier
+        }
+
+        let userInfo = nativeUserInfo(for: type)
+        if !userInfo.isEmpty {
+            content.userInfo = userInfo
+        }
         
-        // Attach app icon to ensure it displays in the notification
         if let iconAttachment = NotificationManager.createAppIconAttachment() {
             content.attachments = [iconAttachment]
         }
         
+        let requestIdentifier = UUID().uuidString
         let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
+            identifier: requestIdentifier,
             content: content,
             trigger: nil
         )
+
+        if let actionHandler = actionHandler {
+            pendingNativeActionHandlers[requestIdentifier] = actionHandler
+        }
         
         do {
             try await UNUserNotificationCenter.current().add(request)
             print("NotificationManager: Native system notification sent successfully")
         } catch {
-            print("NotificationManager: Failed to send system notification: \(error)")
+            print("NotificationManager: Failed to send system notification: \(error), trying NotifiCLI fallback")
+            if await NotifiCLIService.shared.checkAvailability() {
+                let config = NotifiCLIConfig(title: title, message: message)
+                _ = await NotifiCLIService.shared.send(config)
+            }
+        }
+    }
+
+    private func nativeCategoryIdentifier(for type: NotificationType) -> String? {
+        let settingsValue = settings.settings
+        guard settingsValue.showActionButtons else { return nil }
+
+        switch type {
+        case .processingComplete(_, _, let folderPath, let canUndo, _):
+            guard canUndo || folderPath != nil else { return nil }
+            return NativeNotificationCategory.processingComplete
+        case .processingError(_, _, let canRetry, _):
+            guard canRetry else { return NativeNotificationCategory.processingError }
+            return NativeNotificationCategory.processingError
+        case .batchSummary(let stats, _):
+            guard stats.canUndo || stats.folderPath != nil || stats.hasErrors else { return nil }
+            return NativeNotificationCategory.batchSummary
+        case .previewReady:
+            return NativeNotificationCategory.previewReady
+        case .info:
+            return nil
+        }
+    }
+
+    private func nativeUserInfo(for type: NotificationType) -> [AnyHashable: Any] {
+        switch type {
+        case .processingComplete(_, _, let folderPath, _, _):
+            if let path = folderPath {
+                return [NativeNotificationUserInfoKey.folderPath: path]
+            }
+        case .batchSummary(let stats, _):
+            if let path = stats.folderPath {
+                return [NativeNotificationUserInfoKey.folderPath: path]
+            }
+        default:
+            break
+        }
+        return [:]
+    }
+
+    private func registerNativeNotificationCategories() {
+        let undoAction = UNNotificationAction(
+            identifier: NativeNotificationActionIdentifier.undo,
+            title: "Undo",
+            options: [.foreground]
+        )
+        let undoAllAction = UNNotificationAction(
+            identifier: NativeNotificationActionIdentifier.undoAll,
+            title: "Undo All",
+            options: [.foreground]
+        )
+        let openFolderAction = UNNotificationAction(
+            identifier: NativeNotificationActionIdentifier.openFolder,
+            title: "Open Folder",
+            options: [.foreground]
+        )
+        let retryAction = UNNotificationAction(
+            identifier: NativeNotificationActionIdentifier.retry,
+            title: "Retry",
+            options: [.foreground]
+        )
+        let showDetailsAction = UNNotificationAction(
+            identifier: NativeNotificationActionIdentifier.showDetails,
+            title: "Show Details",
+            options: [.foreground]
+        )
+        let reviewAction = UNNotificationAction(
+            identifier: NativeNotificationActionIdentifier.review,
+            title: "Review",
+            options: [.foreground]
+        )
+
+        let processingComplete = UNNotificationCategory(
+            identifier: NativeNotificationCategory.processingComplete,
+            actions: [undoAction, openFolderAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+        let processingError = UNNotificationCategory(
+            identifier: NativeNotificationCategory.processingError,
+            actions: [retryAction, showDetailsAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+        let batchSummary = UNNotificationCategory(
+            identifier: NativeNotificationCategory.batchSummary,
+            actions: [undoAllAction, openFolderAction, showDetailsAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+        let previewReady = UNNotificationCategory(
+            identifier: NativeNotificationCategory.previewReady,
+            actions: [reviewAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        UNUserNotificationCenter.current().setNotificationCategories([
+            processingComplete,
+            processingError,
+            batchSummary,
+            previewReady
+        ])
+    }
+
+    func handleNativeNotificationResponse(_ response: UNNotificationResponse) {
+        let identifier = response.notification.request.identifier
+        let userInfo = response.notification.request.content.userInfo
+        let folderPath = userInfo[NativeNotificationUserInfoKey.folderPath] as? String
+        let actionHandler = pendingNativeActionHandlers.removeValue(forKey: identifier)
+
+        switch response.actionIdentifier {
+        case UNNotificationDefaultActionIdentifier:
+            if let path = folderPath {
+                NotificationCenter.default.post(
+                    name: .openOrganizedFolder,
+                    object: nil,
+                    userInfo: [NativeNotificationUserInfoKey.folderPath: path]
+                )
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+                Task { await actionHandler?(.openFolder(path: path)) }
+            } else {
+                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+                Task { await actionHandler?(.showDetails) }
+            }
+
+        case UNNotificationDismissActionIdentifier:
+            Task { await actionHandler?(.dismiss) }
+
+        case NativeNotificationActionIdentifier.undo, NativeNotificationActionIdentifier.undoAll:
+            NotificationCenter.default.post(name: .undoLastOrganization, object: nil)
+            Task { await actionHandler?(.undo) }
+
+        case NativeNotificationActionIdentifier.openFolder:
+            if let path = folderPath {
+                NotificationCenter.default.post(
+                    name: .openOrganizedFolder,
+                    object: nil,
+                    userInfo: [NativeNotificationUserInfoKey.folderPath: path]
+                )
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+                Task { await actionHandler?(.openFolder(path: path)) }
+            }
+
+        case NativeNotificationActionIdentifier.retry:
+            NotificationCenter.default.post(name: .retryLastOrganization, object: nil)
+            Task { await actionHandler?(.retry) }
+
+        case NativeNotificationActionIdentifier.showDetails,
+             NativeNotificationActionIdentifier.review:
+            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+            Task { await actionHandler?(.showDetails) }
+
+        default:
+            break
         }
     }
     
     private func requestSystemNotificationPermission() async {
         guard isSafeToUseSystemNotifications else { return }
+        guard !permissionCached else { return }
         
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
+            permissionCached = true
+            await MainActor.run {
+                self.notificationPermissionStatus = granted ? .authorized : .denied
+            }
             print("NotificationManager: Permission \(granted ? "granted" : "denied")")
         } catch {
             print("NotificationManager: Permission request failed: \(error)")

@@ -89,6 +89,8 @@ See `DeeplinkHandler` for full route list.
 ### Finder Extension
 Uses App Groups (`group.com.sorty.app`) for IPC. Extension code in `Sources/SortyLib/FinderExtension/`. Requires separate build target `SortyExtension`.
 
+**Note:** Finder Integration is behind a feature flag. Enable via `defaults write com.sorty.app finderIntegrationEnabled -bool true`. See `FeatureFlags.swift`.
+
 ### Learnings System
 User preference learning stored in `LearningsProfile`. Key components:
 - `LearningsManager` - Main coordinator with consent/security

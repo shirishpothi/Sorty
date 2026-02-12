@@ -33,8 +33,8 @@ public struct OnboardingView: View {
             VStack(spacing: 0) {
                 // Progress indicator
                 OnboardingProgressBar(currentStep: currentStep)
-                    .padding(.top, 20)
-                    .padding(.horizontal, 40)
+                    .padding(.top, 16)
+                    .padding(.horizontal, 60)
                 
                 // Main content
                 stepContent
@@ -43,7 +43,7 @@ public struct OnboardingView: View {
                 // Navigation controls
                 navigationControls
                     .padding(.horizontal, 40)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 16)
             }
         }
         .frame(minWidth: 1000, minHeight: 720)
@@ -221,15 +221,15 @@ struct OnboardingProgressBar: View {
     let currentStep: OnboardingStep
     
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 0) {
-                ForEach(OnboardingStep.allCases, id: \.self) { step in
-                    if step.rawValue > 0 {
-                        Rectangle()
-                            .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.2))
-                            .frame(height: 2)
-                    }
-                    
+        HStack(spacing: 0) {
+            ForEach(OnboardingStep.allCases, id: \.self) { step in
+                if step.rawValue > 0 {
+                    Rectangle()
+                        .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.2))
+                        .frame(height: 2)
+                }
+                
+                VStack(spacing: 6) {
                     ZStack {
                         Circle()
                             .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.2))
@@ -245,16 +245,12 @@ struct OnboardingProgressBar: View {
                                 .foregroundStyle(step.rawValue <= currentStep.rawValue ? .white : .secondary)
                         }
                     }
-                }
-            }
-            
-            HStack {
-                ForEach(OnboardingStep.allCases, id: \.self) { step in
+                    
                     Text(step.title)
                         .font(.caption2)
                         .foregroundStyle(step == currentStep ? .primary : .secondary)
-                        .frame(maxWidth: .infinity)
                 }
+                .frame(width: 80)
             }
         }
     }

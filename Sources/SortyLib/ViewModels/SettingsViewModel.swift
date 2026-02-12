@@ -16,31 +16,79 @@ public class SettingsViewModel: ObservableObject {
             let newKey = config.apiKey
             let oldProvider = oldValue.provider
             let newProvider = config.provider
-            
+
             // Debounce the save operation
             debouncedSave()
-            
+
+            // Invalidate cached URL sessions when timeout or API URL settings change
+            // so the next request creates a fresh session with updated values
+            if oldValue.requestTimeout != config.requestTimeout ||
+               oldValue.resourceTimeout != config.resourceTimeout ||
+               oldValue.apiURL != config.apiURL {
+                AISessionManager.shared.invalidateAll()
+            }
+
             // If smart rename is disabled, ensure mode is set to .organize
             if !config.enableSmartRename && config.mode != .organize {
                 config.mode = .organize
             }
-            
-            // Force refresh models if provider changed or API key was updated
-            if oldProvider != newProvider || (oldKey != newKey && newKey != nil) {
+
+            // Provider switched — swap API keys via Keychain
+            if oldProvider != newProvider {
+                // Save the old provider's API key to its keychain slot
+                // Skip for GitHub Copilot — its token is managed by GitHubCopilotAuthManager
+                if oldProvider != .githubCopilot, let oldKey = oldValue.apiKey, !oldKey.isEmpty {
+                    _ = KeychainManager.save(key: oldProvider.keychainKey, value: oldKey)
+                }
+
+                // Load the new provider's API key from its keychain slot
+                // Skip for GitHub Copilot — auth is handled by GitHubCopilotAuthManager, not apiKey
+                if newProvider == .githubCopilot {
+                    config.apiKey = nil
+                } else {
+                    config.apiKey = KeychainManager.get(key: newProvider.keychainKey)
+                }
+
+                // Update API URL and requiresAPIKey for the new provider
+                config.apiURL = newProvider.defaultAPIURL
+                config.requiresAPIKey = newProvider.typicallyRequiresAPIKey
+
+                // Set default model for the new provider
+                config.model = newProvider.defaultModel
+
+                // Invalidate sessions for new provider URL
+                AISessionManager.shared.invalidateAll()
+
+                // Refresh model list for the new provider
                 updateAvailableModels(force: true)
-                
-                // Prewarm connection when API key is configured
-                if newKey != nil {
-                    Task {
-                        await AISessionManager.shared.prewarm(provider: newProvider, config: config)
+
+                // Auto-check connection after a short delay
+                // For GitHub Copilot, skip apiKey check since auth is token-based
+                Task {
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    if newProvider == .githubCopilot || config.apiKey != nil {
+                        try? await testConnection()
                     }
+                    await AISessionManager.shared.prewarm(provider: newProvider, config: config)
+                }
+            } else if oldKey != newKey, let newKey = newKey, !newKey.isEmpty {
+                // Same provider, API key changed — save immediately to Keychain
+                // so ModelCatalog reads the fresh key (fixes Gemini model list race)
+                _ = KeychainManager.save(key: newProvider.keychainKey, value: newKey)
+
+                // Now refresh models (key is already in Keychain)
+                updateAvailableModels(force: true)
+
+                // Prewarm connection
+                Task {
+                    await AISessionManager.shared.prewarm(provider: newProvider, config: config)
                 }
             }
         }
     }
     
-    @Published public var isAppleIntelligenceAvailable: Bool = false
-    @Published public var appleIntelligenceStatus: String = ""
+    @Published public var isAppleModelAvailable: Bool = false
+    @Published public var appleModelStatus: String = ""
     @Published public var availableModels: [String] = []
     @Published public var isLoadingModels: Bool = false
     
@@ -50,7 +98,7 @@ public class SettingsViewModel: ObservableObject {
     
     public init() {
         loadConfig()
-        checkAppleIntelligenceAvailability()
+        checkAppleModelAvailability()
     }
     
     private func loadConfig() {
@@ -119,8 +167,6 @@ public class SettingsViewModel: ObservableObject {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {
                 _ = KeychainManager.save(key: providerKey, value: apiKey)
-                // Also update the generic "apiKey" for components that still rely on it
-                _ = KeychainManager.save(key: "apiKey", value: apiKey)
             } else {
                 _ = KeychainManager.delete(key: providerKey)
             }
@@ -132,23 +178,23 @@ public class SettingsViewModel: ObservableObject {
         }
     }
     
-    private func checkAppleIntelligenceAvailability() {
+    private func checkAppleModelAvailability() {
         #if canImport(FoundationModels) && os(macOS)
         if #available(macOS 26.0, *) {
-            isAppleIntelligenceAvailable = AppleFoundationModelClient.isAvailable()
-            appleIntelligenceStatus = AppleFoundationModelClient.unavailabilityReason
+            isAppleModelAvailable = AppleFoundationModelClient.isAvailable()
+            appleModelStatus = AppleFoundationModelClient.unavailabilityReason
         } else {
-            isAppleIntelligenceAvailable = false
-            appleIntelligenceStatus = "Apple Intelligence requires macOS 26.0 or later."
+            isAppleModelAvailable = false
+            appleModelStatus = "Apple Intelligence requires macOS 26.0 or later."
         }
         #else
-        isAppleIntelligenceAvailable = false
-        appleIntelligenceStatus = "Apple Intelligence is not supported on this version of macOS."
+        isAppleModelAvailable = false
+        appleModelStatus = "Apple Intelligence is not supported on this version of macOS."
         #endif
     }
     
-    public func refreshAppleIntelligenceStatus() {
-        checkAppleIntelligenceAvailability()
+    public func refreshAppleModelStatus() {
+        checkAppleModelAvailability()
     }
     
     public func testConnection() async throws {

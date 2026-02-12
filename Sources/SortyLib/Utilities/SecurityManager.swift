@@ -28,9 +28,12 @@ public class SecurityManager: ObservableObject {
     
     private var lastAuthenticationTime: Date?
     private var sessionTimer: Timer?
-    
+
     /// Whether the session has timed out
     public var isSessionExpired: Bool {
+        if sessionTimeoutInterval <= 0 {
+            return true
+        }
         guard let lastAuth = lastAuthenticationTime else { return true }
         return Date().timeIntervalSince(lastAuth) > sessionTimeoutInterval
     }

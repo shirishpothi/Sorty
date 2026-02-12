@@ -86,7 +86,7 @@ class SortyActionExtension: FIFinderSync {
             ExtensionCommunication.sendDirectoryToApp(url)
             
             // Try to launch the app
-            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.sorty.app") {
+            if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.shirishpothi.Sorty") {
                 let config = NSWorkspace.OpenConfiguration()
                 config.activates = true
                 NSWorkspace.shared.open([url], withApplicationAt: appURL, configuration: config)

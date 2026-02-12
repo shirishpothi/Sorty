@@ -67,6 +67,146 @@ jobs:
           fi
           
           echo "Releasing version: ${VERSION}"
+
+      # ===========================================
+      # 3b. Update Changelog
+      # ===========================================
+      - name: Update Changelog
+        if: steps.version.outputs.IS_PRERELEASE == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          # Guard: skip if this version already exists in CHANGELOG.md
+          if grep -q "^## \[${VERSION}\]" CHANGELOG.md 2>/dev/null; then
+            echo "Version ${VERSION} already exists in CHANGELOG.md, skipping"
+            exit 0
+          fi
+
+          # Get previous tag reliably (second most recent tag by version sort)
+          CURRENT_TAG="v${VERSION}"
+          PREV_TAG=$(git tag --sort=-v:refno | grep '^v' | while read -r t; do
+            if [ "$t" != "$CURRENT_TAG" ]; then
+              echo "$t"
+              break
+            fi
+          done)
+
+          # Collect commits since previous tag
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS=$(git log "${PREV_TAG}..HEAD" --pretty=format:"%s" --no-merges 2>/dev/null || echo "")
+          else
+            # First release — include all commits
+            COMMITS=$(git log --pretty=format:"%s" --no-merges)
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            echo "No commits found, skipping changelog update"
+            exit 0
+          fi
+
+          DATE=$(date +%Y-%m-%d)
+
+          # Categorize commits by conventional commit prefix
+          ADDED=""
+          CHANGED=""
+          FIXED=""
+          REMOVED=""
+          OTHER=""
+
+          while IFS= read -r msg; do
+            # Strip leading/trailing whitespace
+            msg=$(echo "$msg" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [ -z "$msg" ] && continue
+
+            # Match conventional commit prefixes (case-insensitive)
+            lower=$(echo "$msg" | tr '[:upper:]' '[:lower:]')
+            # Remove the prefix for the bullet point
+            body=$(echo "$msg" | sed -E 's/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?:[[:space:]]*//')
+
+            case "$lower" in
+              feat*)    ADDED="${ADDED}- ${body}"$'\n' ;;
+              fix*)     FIXED="${FIXED}- ${body}"$'\n' ;;
+              refactor*|perf*|style*) CHANGED="${CHANGED}- ${body}"$'\n' ;;
+              revert*)  REMOVED="${REMOVED}- ${body}"$'\n' ;;
+              docs*|test*|build*|ci*|chore*) OTHER="${OTHER}- ${body}"$'\n' ;;
+              *)        OTHER="${OTHER}- ${msg}"$'\n' ;;
+            esac
+          done <<< "$COMMITS"
+
+          # Build the changelog entry using a temp file (safe with special chars)
+          ENTRY_FILE=$(mktemp)
+          echo "## [${VERSION}] - ${DATE}" >> "$ENTRY_FILE"
+          echo "" >> "$ENTRY_FILE"
+
+          if [ -n "$ADDED" ]; then
+            echo "### Added" >> "$ENTRY_FILE"
+            echo "$ADDED" >> "$ENTRY_FILE"
+          fi
+          if [ -n "$CHANGED" ]; then
+            echo "### Changed" >> "$ENTRY_FILE"
+            echo "$CHANGED" >> "$ENTRY_FILE"
+          fi
+          if [ -n "$FIXED" ]; then
+            echo "### Fixed" >> "$ENTRY_FILE"
+            echo "$FIXED" >> "$ENTRY_FILE"
+          fi
+          if [ -n "$REMOVED" ]; then
+            echo "### Removed" >> "$ENTRY_FILE"
+            echo "$REMOVED" >> "$ENTRY_FILE"
+          fi
+          if [ -n "$OTHER" ]; then
+            echo "### Other" >> "$ENTRY_FILE"
+            echo "$OTHER" >> "$ENTRY_FILE"
+          fi
+
+          # If no categorized commits at all, add a generic entry
+          if [ -z "$ADDED" ] && [ -z "$CHANGED" ] && [ -z "$FIXED" ] && [ -z "$REMOVED" ] && [ -z "$OTHER" ]; then
+            echo "### Changes" >> "$ENTRY_FILE"
+            echo "$COMMITS" | while IFS= read -r line; do
+              echo "- ${line}" >> "$ENTRY_FILE"
+            done
+            echo "" >> "$ENTRY_FILE"
+          fi
+
+          # Insert new entry into CHANGELOG.md
+          INSERT_LINE=$(grep -n '^## \[' CHANGELOG.md | head -1 | cut -d: -f1)
+
+          if [ -n "$INSERT_LINE" ]; then
+            # Insert before the first version entry
+            {
+              head -n $((INSERT_LINE - 1)) CHANGELOG.md
+              cat "$ENTRY_FILE"
+              tail -n +${INSERT_LINE} CHANGELOG.md
+            } > CHANGELOG.tmp
+          else
+            # No existing entries — append after the whole file
+            {
+              cat CHANGELOG.md
+              echo ""
+              cat "$ENTRY_FILE"
+            } > CHANGELOG.tmp
+          fi
+
+          mv CHANGELOG.tmp CHANGELOG.md
+          rm -f "$ENTRY_FILE"
+
+          echo "Changelog updated for version ${VERSION}"
+
+      - name: Commit Changelog
+        if: steps.version.outputs.IS_PRERELEASE == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "No changelog changes to commit"
+          else
+            git commit -m "chore: update changelog for v${{ steps.version.outputs.VERSION }}"
+            git push origin HEAD:main
+          fi
+
       # ===========================================
       # 4. Build
       # ===========================================
@@ -100,89 +240,8 @@ jobs:
       # ===========================================
       - name: Validate Sparkle Update System
         run: |
-          echo "Validating Sparkle update system..."
-          ERRORS=0
-          
-          # 1. Check appcast.xml exists and is valid XML
-          APPCAST="releases/appcast.xml"
-          if [ ! -f "$APPCAST" ]; then
-            echo "::error::appcast.xml not found in releases/"
-            ERRORS=$((ERRORS + 1))
-          else
-            # Validate XML structure
-            if ! xmllint --noout "$APPCAST" 2>/dev/null; then
-              echo "::error::appcast.xml is not valid XML"
-              ERRORS=$((ERRORS + 1))
-            fi
-            
-            # Check required Sparkle elements
-            if ! grep -q 'sparkle:version=' "$APPCAST"; then
-              echo "::error::appcast.xml missing sparkle:version attribute"
-              ERRORS=$((ERRORS + 1))
-            fi
-            if ! grep -q 'sparkle:shortVersionString=' "$APPCAST"; then
-              echo "::error::appcast.xml missing sparkle:shortVersionString attribute"
-              ERRORS=$((ERRORS + 1))
-            fi
-            if ! grep -q '<enclosure' "$APPCAST"; then
-              echo "::error::appcast.xml missing enclosure element"
-              ERRORS=$((ERRORS + 1))
-            fi
-            
-            # Verify Ed25519 signature is present in the appcast
-            # (signature should have been generated if SPARKLE_PRIVATE_KEY was set during appcast generation)
-            if grep -q 'sparkle:edSignature=' "$APPCAST"; then
-              echo "✓ Appcast is signed with Ed25519"
-            else
-              echo "::warning::Appcast has no Ed25519 signature - ensure SPARKLE_PRIVATE_KEY secret is configured"
-            fi
-          fi
-          
-          # 2. Validate Info.plist Sparkle configuration (without logging sensitive values)
-          PLIST="Info.plist"
-          FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$PLIST" 2>/dev/null || echo "")
-          PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$PLIST" 2>/dev/null || echo "")
-          
-          if [ -z "$FEED_URL" ]; then
-            echo "::error::SUFeedURL not set in Info.plist"
-            ERRORS=$((ERRORS + 1))
-          elif [[ ! "$FEED_URL" == *"appcast.xml"* ]]; then
-            echo "::error::SUFeedURL does not point to an appcast.xml file"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✓ SUFeedURL configured correctly"
-          fi
-          
-          if [ -z "$PUBLIC_KEY" ]; then
-            echo "::error::SUPublicEDKey not set in Info.plist"
-            ERRORS=$((ERRORS + 1))
-          elif [ ${#PUBLIC_KEY} -lt 40 ]; then
-            echo "::error::SUPublicEDKey appears invalid (key too short)"
-            ERRORS=$((ERRORS + 1))
-          else
-            echo "✓ SUPublicEDKey configured"
-          fi
-          
-          # 3. Verify download URL in appcast matches expected pattern
-          if [ -f "$APPCAST" ]; then
-            DOWNLOAD_URL=$(grep -o 'url="[^"]*"' "$APPCAST" | head -1 | sed 's/url="//;s/"$//')
-            if [[ ! "$DOWNLOAD_URL" == *"github.com"*"releases"*"Sorty.pkg"* ]]; then
-              echo "::error::Download URL in appcast doesn't match expected GitHub releases pattern: $DOWNLOAD_URL"
-              ERRORS=$((ERRORS + 1))
-            else
-              echo "✓ Download URL valid: $DOWNLOAD_URL"
-            fi
-          fi
-          
-          # Summary
-          if [ $ERRORS -gt 0 ]; then
-            echo ""
-            echo "::error::Sparkle update system validation failed with $ERRORS error(s)"
-            exit 1
-          fi
-          
-          echo ""
-          echo "✓ Sparkle update system validated successfully"
+          chmod +x ./scripts/validate_sparkle.sh
+          ./scripts/validate_sparkle.sh
 
       # ===========================================
       # 9. Create tag (for workflow_dispatch)

@@ -54,6 +54,10 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
     // Tagging support
     public var fileTagMappings: [FileTagMapping]
 
+    // Folder metadata
+    public var tags: [String]
+    public var comment: String?
+
     // Semantic analysis metadata
     public var semanticTags: [String]
     public var confidenceScore: Double?
@@ -70,6 +74,8 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         reasoning: String = "",
         fileRenameMappings: [FileRenameMapping] = [],
         fileTagMappings: [FileTagMapping] = [],
+        tags: [String] = [],
+        comment: String? = nil,
         semanticTags: [String] = [],
         confidenceScore: Double? = nil,
         ruleId: String? = nil
@@ -82,6 +88,8 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
         self.reasoning = reasoning
         self.fileRenameMappings = fileRenameMappings
         self.fileTagMappings = fileTagMappings
+        self.tags = tags
+        self.comment = comment
         self.semanticTags = semanticTags
         self.confidenceScore = confidenceScore
         self.ruleId = ruleId
@@ -130,6 +138,19 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
             if !tags.isEmpty { return tags }
         }
         return []
+    }
+
+    /// Get comment for a specific file
+    public func comment(for file: FileItem) -> String? {
+        if let mapping = fileTagMappings.first(where: { $0.originalFile.id == file.id }) {
+            return mapping.comment
+        }
+        for subfolder in subfolders {
+            if let comment = subfolder.comment(for: file) {
+                return comment
+            }
+        }
+        return nil
     }
 
     /// Returns files with their final names (renamed or original)
@@ -183,15 +204,18 @@ public struct FileTagMapping: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var originalFile: FileItem
     public var tags: [String]
+    public var comment: String?
 
     public init(
         id: UUID = UUID(),
         originalFile: FileItem,
-        tags: [String] = []
+        tags: [String] = [],
+        comment: String? = nil
     ) {
         self.id = id
         self.originalFile = originalFile
         self.tags = tags
+        self.comment = comment
     }
 }
 

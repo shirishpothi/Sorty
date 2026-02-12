@@ -14,6 +14,7 @@ public enum OrganizationStatus: String, Codable, Sendable {
     case cancelled
     case skipped // Superseded by "Try Another"
     case undo // Reverted
+    case partiallyUndone // Partially reverted (some files could not be restored)
     case duplicatesCleanup // New: Duplicate removal session
 }
 
@@ -30,6 +31,10 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public let rawAIResponse: String?
     public var operations: [FileSystemManager.FileOperation]?
     public var isUndone: Bool
+    
+    // Undo result tracking
+    public var undoRestoredCount: Int?
+    public var undoFailedFiles: [String]?
     
     // Duplicate Specific Fields
     public var duplicatesDeleted: Int?
@@ -49,6 +54,8 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         rawAIResponse: String? = nil,
         operations: [FileSystemManager.FileOperation]? = nil,
         isUndone: Bool = false,
+        undoRestoredCount: Int? = nil,
+        undoFailedFiles: [String]? = nil,
         duplicatesDeleted: Int? = nil,
         recoveredSpace: Int64? = nil,
         restorableItems: [RestorableDuplicate]? = nil
@@ -78,6 +85,8 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         self.rawAIResponse = rawAIResponse
         self.operations = operations
         self.isUndone = isUndone
+        self.undoRestoredCount = undoRestoredCount
+        self.undoFailedFiles = undoFailedFiles
         self.duplicatesDeleted = duplicatesDeleted
         self.recoveredSpace = recoveredSpace
         self.restorableItems = restorableItems
@@ -101,6 +110,8 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         rawAIResponse = try container.decodeIfPresent(String.self, forKey: .rawAIResponse)
         operations = try container.decodeIfPresent([FileSystemManager.FileOperation].self, forKey: .operations)
         isUndone = try container.decodeIfPresent(Bool.self, forKey: .isUndone) ?? false
+        undoRestoredCount = try container.decodeIfPresent(Int.self, forKey: .undoRestoredCount)
+        undoFailedFiles = try container.decodeIfPresent([String].self, forKey: .undoFailedFiles)
         
         // Decode status if present, otherwise infer
         if let decodedStatus = try container.decodeIfPresent(OrganizationStatus.self, forKey: .status) {
@@ -169,7 +180,7 @@ public class OrganizationHistory: ObservableObject {
     }
 
     public var revertedCount: Int {
-        entries.filter { $0.status == .undo || $0.isUndone }.count
+        entries.filter { $0.status == .undo || $0.status == .partiallyUndone || $0.isUndone }.count
     }
     
     public var successRate: Double {

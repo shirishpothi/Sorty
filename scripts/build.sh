@@ -18,49 +18,11 @@ copy_resources_safely() {
     
     mkdir -p "${dest_dir}"
     
-    # Track what we've copied to detect conflicts (Bash 3.2 compatible - no associative arrays)
-    # Use pipe-delimited string list: "|path1=source1|path2=source2|"
-    local copied_files=""
-    local conflicts=0
-    
-    # Helper function to check if file was already copied
-    _was_copied() {
-        local path="$1"
-        case "${copied_files}" in
-            *"|${path}="*) return 0 ;;
-            *) return 1 ;;
-        esac
-    }
-    
-    # Helper function to get the source of a copied file
-    _get_source() {
-        local path="$1"
-        local match="${copied_files#*|${path}=}"
-        echo "${match%%|*}"
-    }
-    
-    # Helper function to add a copied file
-    _add_copied() {
-        local path="$1"
-        local source="$2"
-        copied_files="${copied_files}|${path}=${source}|"
-    }
-    
     # Priority 1: SPM bundle (if available)
     if [ -n "${spm_bundle}" ] && [ -d "${spm_bundle}" ]; then
-        # Verify bundle is valid (has contents)
         if [ "$(find "${spm_bundle}" -type f | wc -l)" -gt 0 ]; then
-            # Copy SPM bundle contents directly to Resources (flatten structure)
-            if cp -R "${spm_bundle}/"* "${dest_dir}/" 2>/dev/null; then
-                log_item "Copied resources from SPM bundle"
-                # Track what we copied
-                while IFS= read -r file; do
-                    local rel_path="${file#${spm_bundle}/}"
-                    _add_copied "${rel_path}" "SPM bundle"
-                done < <(find "${spm_bundle}" -type f)
-            else
-                log_item "Warning: Failed to copy from SPM bundle"
-            fi
+            log_item "Syncing resources from SPM bundle"
+            rsync -a "${spm_bundle}/" "${dest_dir}/"
         else
             log_item "Warning: SPM bundle is empty"
         fi
@@ -68,44 +30,16 @@ copy_resources_safely() {
     
     # Priority 2: Resources folder (only copy files not already present)
     if [ -d "${resources_dir}" ]; then
-        local resources_copied=0
-        while IFS= read -r file; do
-            local rel_path="${file#${resources_dir}/}"
-            local dest_file="${dest_dir}/${rel_path}"
-            
-            # Check if already copied from higher priority source
-            if _was_copied "${rel_path}"; then
-                # Conflict detected - log it but keep existing (SPM wins)
-                local existing_source=$(_get_source "${rel_path}")
-                log_item "Conflict: '${rel_path}' exists in both ${existing_source} and Resources folder (keeping SPM version)"
-                conflicts=$((conflicts + 1))
-                continue
-            fi
-            
-            # Copy file if not already present
-            if [ ! -e "${dest_file}" ]; then
-                mkdir -p "$(dirname "${dest_file}")"
-                if cp "${file}" "${dest_file}"; then
-                    _add_copied "${rel_path}" "Resources folder"
-                    resources_copied=$((resources_copied + 1))
-                fi
-            fi
-        done < <(find "${resources_dir}" -type f)
-        
-        if [ ${resources_copied} -gt 0 ]; then
-            log_item "Copied ${resources_copied} additional resources from Resources folder"
-        fi
+        log_item "Syncing additional resources from Resources folder"
+        rsync -a --ignore-existing "${resources_dir}/" "${dest_dir}/"
     fi
     
     # Priority 3: Fallback images (only if Images folder doesn't exist yet)
     if [ -d "${fallback_images}" ]; then
         local images_dest="${dest_dir}/Images"
         if [ ! -d "${images_dest}" ]; then
-            if cp -R "${fallback_images}" "${images_dest}"; then
-                log_item "Copied fallback images"
-            else
-                log_item "Warning: Failed to copy fallback images"
-            fi
+            log_item "Syncing fallback images"
+            rsync -a "${fallback_images}/" "${images_dest}/"
         else
             log_item "Images folder already present from higher priority source, skipping fallback"
         fi
@@ -118,9 +52,6 @@ copy_resources_safely() {
         log_item "Warning: No resources copied to app bundle"
     else
         log_item "Total resources in app bundle: ${total_resources}"
-        if [ ${conflicts} -gt 0 ]; then
-            log_item "Note: ${conflicts} conflicts resolved (SPM bundle prioritized)"
-        fi
     fi
 }
 
@@ -140,7 +71,6 @@ print_summary "Build Configuration" \
     "Output" "${BUILD_DIR}"
 
 # Cleanup and setup
-rm -rf "${BUILD_DIR}" || true
 mkdir -p "${BUILD_DIR}"
 mkdir -p "${RELEASE_DIR}"
 
@@ -196,7 +126,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         PRODUCT_NAME="${BINARY_NAME}" \
         CODE_SIGN_IDENTITY="-" \
         CODE_SIGNING_REQUIRED=NO \
-        clean build 2>&1 | tail -50; then
+        build 2>&1 | tail -50; then
         log_failure "xcodebuild failed"
         exit 1
     fi
@@ -209,13 +139,14 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     fi
     
     # Copy to release directory
-    rm -rf "${APP_PATH}"
-    cp -R "$BUILT_APP" "${APP_PATH}"
+    mkdir -p "${APP_PATH}"
+    rsync -a --delete "${BUILT_APP}/" "${APP_PATH}/"
     
     # Ensure binary has correct RPATH for embedded frameworks
     MACOS_BIN="${APP_PATH}/Contents/MacOS/${BINARY_NAME}"
     if [ -f "${MACOS_BIN}" ]; then
         install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_BIN}" 2>/dev/null || true
+        strip -x "${MACOS_BIN}"
     fi
 
     # Copy Resources with integrity checks and conflict detection
@@ -233,6 +164,13 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         log_item "Copied entitlements"
     fi
 
+    # Copy LaunchAgent plist for Background Activity
+    if [ -f "${PROJECT_DIR}/Resources/com.sorty.app.plist" ]; then
+        mkdir -p "${APP_PATH}/Contents/Library/LaunchAgents"
+        cp "${PROJECT_DIR}/Resources/com.sorty.app.plist" "${APP_PATH}/Contents/Library/LaunchAgents/"
+        log_item "Copied LaunchAgent plist"
+    fi
+
     # Bundle CLI tools for xcodebuild
     CLI_DIR="${RESOURCES_DIR}/CLI"
     mkdir -p "${CLI_DIR}"
@@ -243,6 +181,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         LEARNINGS_BIN=$(swift build -c release --show-bin-path)/learnings
         if [ -f "${LEARNINGS_BIN}" ]; then
             cp "${LEARNINGS_BIN}" "${CLI_DIR}/learnings"
+            strip -x "${CLI_DIR}/learnings"
             chmod 755 "${CLI_DIR}/learnings"
             log_item "Bundled learnings CLI"
         fi
@@ -339,6 +278,7 @@ else
         cp "${BIN_PATH}/${BINARY_NAME}" "${MACOS_DIR}/"
         # Ensure binary has correct RPATH for embedded frameworks
         install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${BINARY_NAME}" 2>/dev/null || true
+        strip -x "${MACOS_DIR}/${BINARY_NAME}"
     else
         log_failure "Binary not found at ${BIN_PATH}/${BINARY_NAME}"
         exit 1
@@ -370,6 +310,13 @@ else
     if [ -f "${PROJECT_DIR}/Sorty.entitlements" ]; then
         cp "${PROJECT_DIR}/Sorty.entitlements" "${APP_PATH}/Contents/"
         log_item "Copied entitlements"
+    fi
+
+    # Copy LaunchAgent plist for Background Activity
+    if [ -f "${PROJECT_DIR}/Resources/com.sorty.app.plist" ]; then
+        mkdir -p "${APP_PATH}/Contents/Library/LaunchAgents"
+        cp "${PROJECT_DIR}/Resources/com.sorty.app.plist" "${APP_PATH}/Contents/Library/LaunchAgents/"
+        log_item "Copied LaunchAgent plist"
     fi
 
     # Embed Sparkle framework for SPM builds
@@ -421,6 +368,7 @@ else
         LEARNINGS_BIN="${BIN_PATH}/learnings"
         if [ -f "${LEARNINGS_BIN}" ]; then
             cp "${LEARNINGS_BIN}" "${CLI_DIR}/learnings"
+            strip -x "${CLI_DIR}/learnings"
             chmod 755 "${CLI_DIR}/learnings"
             log_item "Bundled learnings CLI"
         fi

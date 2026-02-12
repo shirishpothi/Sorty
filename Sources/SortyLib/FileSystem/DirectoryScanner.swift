@@ -12,6 +12,7 @@ import os.log
 actor DirectoryScanner {
     private var isScanning = false
     private var scannedCount = 0
+    private var cloudPlaceholdersSkipped = 0
     private var isPaused = false
     private var memoryPressureState: MemoryPressureState = .normal
     private var pressureSource: DispatchSourceMemoryPressure?
@@ -47,7 +48,8 @@ actor DirectoryScanner {
         at url: URL,
         includeHidden: Bool = false,
         deepScan: Bool = false,
-        computeHashes: Bool = false
+        computeHashes: Bool = false,
+        skipCloudPlaceholders: Bool = true
     ) async throws -> [FileItem] {
         guard !isScanning else {
             throw ScannerError.alreadyScanning
@@ -55,6 +57,7 @@ actor DirectoryScanner {
         
         isScanning = true
         scannedCount = 0
+        cloudPlaceholdersSkipped = 0
         isPaused = false
         
         // Lazy initialization of memory pressure monitoring
@@ -88,10 +91,11 @@ actor DirectoryScanner {
             includeHidden: includeHidden,
             deepScan: deepScan,
             computeHashes: computeHashes,
+            skipCloudPlaceholders: skipCloudPlaceholders,
             files: &files
         )
         
-        logger.info("Scan completed: \(self.scannedCount) files, memory pressure: \(self.memoryPressureState.rawValue)")
+        logger.info("Scan completed: \(self.scannedCount) files, cloud placeholders skipped: \(self.cloudPlaceholdersSkipped), memory pressure: \(self.memoryPressureState.rawValue)")
         
         return files
     }
@@ -152,9 +156,14 @@ actor DirectoryScanner {
         includeHidden: Bool,
         deepScan: Bool,
         computeHashes: Bool,
+        skipCloudPlaceholders: Bool,
         files: inout [FileItem]
     ) async throws {
-        let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey]
+        let cloudResourceKeys: [URLResourceKey] = [
+            .ubiquitousItemIsDownloadingKey,
+            .ubiquitousItemDownloadingStatusKey
+        ]
+        let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey] + cloudResourceKeys
         
         var options: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
         if !includeHidden {
@@ -206,8 +215,19 @@ actor DirectoryScanner {
                 continue
             }
             
+            // Cloud placeholder detection
+            if skipCloudPlaceholders && isCloudPlaceholder(at: fileURL) {
+                let provider = cloudProviderName(for: fileURL) ?? "Unknown"
+                logger.debug("Skipping cloud placeholder (\(provider)): \(fileURL.lastPathComponent)")
+                cloudPlaceholdersSkipped += 1
+                continue
+            }
+            
             let pathExtension = fileURL.pathExtension
             let fileName = fileURL.deletingPathExtension().lastPathComponent
+            
+            // Determine cloud status for the file
+            let cloudStatus = detectCloudStatus(at: fileURL)
             
             // Deep scan: extract content metadata (skipped under memory pressure)
             var contentMetadata: ContentMetadata?
@@ -229,7 +249,8 @@ actor DirectoryScanner {
                 isDirectory: false,
                 creationDate: creationDate,
                 contentMetadata: contentMetadata,
-                sha256Hash: sha256Hash
+                sha256Hash: sha256Hash,
+                cloudStatus: cloudStatus
             )
             
             files.append(fileItem)
@@ -259,6 +280,132 @@ actor DirectoryScanner {
     
     func getMemoryPressureState() -> MemoryPressureState {
         memoryPressureState
+    }
+    
+    func getCloudPlaceholderCount() -> Int {
+        cloudPlaceholdersSkipped
+    }
+    
+    // MARK: - Cloud Storage Detection
+    
+    private func isCloudPlaceholder(at url: URL) -> Bool {
+        // iCloud: check ubiquitous item download status
+        if let resourceValues = try? url.resourceValues(forKeys: [
+            .ubiquitousItemDownloadingStatusKey,
+            .ubiquitousItemIsDownloadingKey
+        ]) {
+            if let status = resourceValues.ubiquitousItemDownloadingStatus,
+               status == .notDownloaded {
+                return true
+            }
+        }
+        
+        // iCloud: .icloud wrapper file (e.g., ".Document.icloud")
+        let fileName = url.lastPathComponent
+        if fileName.hasPrefix(".") && url.pathExtension == "icloud" {
+            return true
+        }
+        
+        // Google Drive: stream file placeholders
+        let googleStreamExtensions: Set<String> = ["gdoc", "gsheet", "gslides"]
+        if googleStreamExtensions.contains(url.pathExtension.lowercased()) {
+            return true
+        }
+        
+        // Dropbox: check for extended attribute or zero-size placeholder
+        let path = url.path
+        let xattrLength = getxattr(path, "com.dropbox.attrs", nil, 0, 0, 0)
+        if xattrLength > 0 {
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
+            if size == 0 {
+                return true
+            }
+        }
+        
+        // OneDrive: check for .cloud file or zero-byte placeholder with attributes
+        if url.pathExtension == "cloud" {
+            return true
+        }
+        
+        return false
+    }
+    
+    private func cloudProviderName(for url: URL) -> String? {
+        // iCloud detection
+        if let resourceValues = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]) {
+            if resourceValues.ubiquitousItemDownloadingStatus != nil {
+                return "iCloud"
+            }
+        }
+        let fileName = url.lastPathComponent
+        if fileName.hasPrefix(".") && url.pathExtension == "icloud" {
+            return "iCloud"
+        }
+        
+        // Google Drive stream files
+        let googleStreamExtensions: Set<String> = ["gdoc", "gsheet", "gslides"]
+        if googleStreamExtensions.contains(url.pathExtension.lowercased()) {
+            return "Google Drive"
+        }
+        
+        // Dropbox extended attribute
+        let xattrLength = getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0)
+        if xattrLength > 0 {
+            return "Dropbox"
+        }
+        
+        // OneDrive
+        if url.pathExtension == "cloud" {
+            return "OneDrive"
+        }
+        
+        return nil
+    }
+    
+    private func detectCloudStatus(at url: URL) -> CloudFileStatus? {
+        if let resourceValues = try? url.resourceValues(forKeys: [
+            .ubiquitousItemDownloadingStatusKey,
+            .ubiquitousItemIsDownloadingKey
+        ]) {
+            if let isDownloading = resourceValues.ubiquitousItemIsDownloading, isDownloading {
+                return .downloading
+            }
+            if let status = resourceValues.ubiquitousItemDownloadingStatus {
+                switch status {
+                case .notDownloaded:
+                    return .cloudOnly
+                case .downloaded, .current:
+                    return .synced
+                default:
+                    break
+                }
+            }
+        }
+        
+        let fileName = url.lastPathComponent
+        if fileName.hasPrefix(".") && url.pathExtension == "icloud" {
+            return .cloudOnly
+        }
+        
+        let googleStreamExtensions: Set<String> = ["gdoc", "gsheet", "gslides"]
+        if googleStreamExtensions.contains(url.pathExtension.lowercased()) {
+            return .cloudOnly
+        }
+        
+        let xattrLength = getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0)
+        if xattrLength > 0 {
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? -1
+            if size == 0 {
+                return .cloudOnly
+            }
+            return .synced
+        }
+        
+        if url.pathExtension == "cloud" {
+            return .cloudOnly
+        }
+        
+        return nil
     }
     
     // MARK: - Memory Pressure Handling

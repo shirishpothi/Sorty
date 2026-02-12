@@ -309,6 +309,38 @@ public enum SortyDesignSystem {
     }
 }
 
+// MARK: - Reusable Design System Components
+
+public struct ExamplePill: View {
+    let text: String
+    let action: () -> Void
+    @State private var isHovered = false
+    
+    public init(text: String, action: @escaping () -> Void) {
+        self.text = text
+        self.action = action
+    }
+    
+    public var body: some View {
+        Button(action: action) {
+            Text(text)
+                .font(.system(size: 10, weight: .medium))
+                .baselineOffset(0)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .frame(minHeight: 22)
+                .background(isHovered ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(isHovered ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+    }
+}
+
 // MARK: - View Extensions for Design System
 public extension View {
     /// Apply a card style from the design system

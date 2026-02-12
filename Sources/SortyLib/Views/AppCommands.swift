@@ -191,31 +191,30 @@ public struct SortyCommands: Commands {
             }
         }
 
-        // Help menu additions
         CommandGroup(replacing: .help) {
             Button("Sorty Help") {
                 appState.showHelp()
             }
             .keyboardShortcut("?", modifiers: .command)
             
+            Link("Documentation", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!)
+            
+            Link("Report Issue", destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!)
+            
+            Divider()
+            
             Button("Restart Onboarding...") {
                 appState.showOnboarding()
             }
 
-            Button("Delete All Usage Data") {
-                appState.deleteUsageData()
+            Button("Delete All Usage Data...") {
+                appState.showDeleteUsageDataConfirmation = true
             }
             
             Divider()
             
             Link("GitHub Repository", destination: URL(string: "https://github.com/shirishpothi/Sorty")!)
 
-            Divider()
-
-            Button("About Sorty") {
-                appState.showAbout()
-            }
-            
             Button("Check for Updates...") {
                 appState.checkForUpdatesInteractive()
             }
@@ -239,10 +238,17 @@ public class AppState: ObservableObject {
     @Published public var showUpdateSheet: Bool = false
     @Published public var lastOrganizedDirectory: URL?
     @Published public var navigatedFromSettings: Bool = false
+    @Published public var showDeleteUsageDataConfirmation: Bool = false
     
-    /// Trigger update check with visible UI feedback
+    /// Trigger update check with visible UI feedback.
+    /// Uses Sparkle's native UI by default. The in-app update dialog is only shown
+    /// when `githubUpdateCheckerEnabled` defaults flag is true.
     public func checkForUpdatesInteractive() {
-        showUpdateSheet = true
+        if FeatureFlags.githubUpdateCheckerEnabled {
+            showUpdateSheet = true
+        } else {
+            updateManager.checkForUpdates()
+        }
     }
     
     @Published public var hasCompletedOnboarding: Bool {
@@ -269,6 +275,7 @@ public class AppState: ObservableObject {
         case watchedFolders
         case learnings
         case storageLocations
+        case batchOrganization
     }
 
     public init() {
@@ -626,8 +633,14 @@ public class AppState: ObservableObject {
     
     public func deleteUsageData() {
         DuplicateRestorationManager.shared.clearAllData()
-        // Could also clear history key if desired
-        // UserDefaults.standard.removeObject(forKey: "organizationHistory")
+        
+        UserDefaults.standard.removeObject(forKey: "organizationHistory")
+        
+        NotificationCenter.default.post(name: .clearLearningsData, object: nil)
+        
+        organizer?.reset()
+        
+        HapticFeedbackManager.shared.success()
     }
     
     public func showAbout() {

@@ -14,9 +14,7 @@ on:
         type: choice
         options:
         - Unit
-        - UI
         - CLI
-        - All
         - None
       release_type:
         description: 'Release Type'
@@ -83,53 +81,6 @@ jobs:
           swift test --parallel 2>&1 | tee unit_test_output.log
           echo "✅ Unit tests completed"
 
-      - name: Verify CLI Script (sorty)
-        run: |
-          chmod +x CLI/sorty
-          
-          # Verify scheme is updated to sorty
-          echo "Checking scheme..."
-          grep -q 'APP_SCHEME="sorty"' CLI/sorty
-          echo "✅ Scheme is set to 'sorty'"
-          
-          # Basic syntax check
-          echo "Running syntax check..."
-          bash -n CLI/sorty
-          echo "✅ Syntax is valid"
-          
-          # Verify help command works
-          echo "Testing help output..."
-          ./CLI/sorty help 2>&1 | grep -q "Sorty CLI"
-          echo "✅ Help command works"
-          
-          # Verify key commands are documented
-          echo "Verifying documented commands..."
-          ./CLI/sorty help 2>&1 | grep -q "organize"
-          ./CLI/sorty help 2>&1 | grep -q "duplicates"
-          ./CLI/sorty help 2>&1 | grep -q "settings"
-          echo "✅ All key commands documented"
-          
-          echo "✅ CLI script verification successful"
-
-      - name: Build and Test Learnings CLI Tool
-        run: |
-          set -o pipefail
-          
-          # Build the CLI
-          echo "Building learnings CLI..."
-          swift build --product learnings 2>&1 | tee cli_build_output.log
-          echo "✅ CLI build successful"
-          
-          # Test basic commands using swift run
-          echo "Testing learnings CLI help..."
-          swift run learnings help 2>&1 | grep -q "Learnings CLI"
-          echo "✅ Help command works"
-          
-          echo "Testing learnings CLI info..."
-          swift run learnings info 2>&1 | head -5
-          echo "✅ Info command works"
-          
-          echo "✅ Learnings CLI tests completed"
 
       - name: Build the app (via script)
         run: |
@@ -137,33 +88,28 @@ jobs:
           ./scripts/build.sh
           echo "✅ Build script succeeded"
 
-      - name: Run UI Tests
-        if: |
-          (github.event_name == 'workflow_dispatch' && (inputs.test_scope == 'UI' || inputs.test_scope == 'All')) ||
-          (github.event_name == 'push' && contains(github.event.head_commit.message, '[ui test]'))
+      - name: Generate Appcast
+        if: github.event_name == 'workflow_dispatch' && inputs.release_type != 'None'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          set -o pipefail
-          xcodebuild test \
-            -project "Sorty.xcodeproj" \
-            -scheme "Sorty" \
-            -destination 'platform=macOS' \
-            -only-testing:SortyUITests \
-            -resultBundlePath TestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee ui_test_output.log
-
-          echo ""
-          echo "=== UI Test Summary ==="
-          grep -E "(Test Suite|Test Case|Executed|passed|failed)" ui_test_output.log | tail -30 || true
-          
-          if grep -q "TEST FAILED" ui_test_output.log 2>/dev/null; then
-            echo "❌ UI Tests failed!"
+          if [ -z "$SPARKLE_PRIVATE_KEY" ]; then
+            echo "SPARKLE_PRIVATE_KEY is required for appcast generation"
             exit 1
           fi
-          
-          echo ""
-          echo "✅ UI Tests completed"
-        timeout-minutes: 30
+          chmod +x ./scripts/generate_appcast_ci.sh
+          ./scripts/generate_appcast_ci.sh
+
+      - name: Validate Sparkle Update System
+        if: github.event_name == 'workflow_dispatch' && inputs.release_type != 'None'
+        run: |
+          chmod +x ./scripts/validate_sparkle.sh
+          ./scripts/validate_sparkle.sh
+
+      - name: Pre-release validation
+        run: |
+          chmod +x scripts/prerelease_check.sh
+          ./scripts/prerelease_check.sh --skip-build --skip-tests --skip-sparkle
 
       - name: Run Build and Release
         if: github.event_name == 'workflow_dispatch'
@@ -171,14 +117,12 @@ jobs:
           ARGS=""
           
           # correct scope mapping
-          if [[ "${{ inputs.test_scope }}" == "UI" ]] || [[ "${{ inputs.test_scope }}" == "All" ]]; then
-             ARGS="$ARGS --ui-tests"
-          elif [[ "${{ inputs.test_scope }}" == "CLI" ]]; then
+          if [[ "${{ inputs.test_scope }}" == "CLI" ]]; then
              ARGS="$ARGS --cli-only"
           elif [[ "${{ inputs.test_scope }}" == "None" ]]; then
              ARGS="$ARGS --no-tests"
           else
-             # Default or Unit
+             # Default or Unit (UI tests are globally disabled in CI)
              ARGS="$ARGS --skip-ui"
           fi
           

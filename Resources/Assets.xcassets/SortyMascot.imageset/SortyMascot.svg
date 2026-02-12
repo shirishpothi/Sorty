@@ -1,58 +1,121 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background glow -->
   <defs>
-    <radialGradient id="headGradient" cx="50%" cy="30%" r="70%" fx="50%" fy="30%">
-      <stop offset="0%" stop-color="#A8E6FF"/>
-      <stop offset="100%" stop-color="#4FC3F7"/>
+    <!-- Enhanced head gradient with more depth -->
+    <radialGradient id="headGradient" cx="50%" cy="25%" r="75%" fx="40%" fy="25%">
+      <stop offset="0%" stop-color="#B8ECFF"/>
+      <stop offset="40%" stop-color="#7DD3FC"/>
+      <stop offset="100%" stop-color="#38BDF8"/>
     </radialGradient>
-    <radialGradient id="headHighlight" cx="30%" cy="20%" r="60%" fx="30%" fy="20%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.4"/>
+    
+    <!-- Improved highlight for 3D effect -->
+    <radialGradient id="headHighlight" cx="30%" cy="15%" r="50%" fx="25%" fy="10%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.6"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.2"/>
       <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
     </radialGradient>
+    
+    <!-- Antenna gradient with glow effect -->
     <linearGradient id="antennaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#4FC3F7"/>
-      <stop offset="100%" stop-color="#29B6F6"/>
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.15"/>
+    
+    <!-- Antenna ball glow -->
+    <radialGradient id="antennaBallGlow" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#93C5FD"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </radialGradient>
+    
+    <!-- Eye glow for depth -->
+    <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="70%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </radialGradient>
+    
+    <!-- Cheek blush -->
+    <radialGradient id="blushGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FDA4AF" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#FDA4AF" stop-opacity="0"/>
+    </radialGradient>
+    
+    <!-- Ear gradient -->
+    <radialGradient id="earGradient" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#A5F3FC"/>
+      <stop offset="100%" stop-color="#22D3EE"/>
+    </radialGradient>
+    
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.2"/>
+    </filter>
+    
+    <filter id="innerGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur"/>
+      <feOffset in="blur" dx="0" dy="1" result="offsetBlur"/>
+      <feFlood flood-color="#FFFFFF" flood-opacity="0.3"/>
+      <feComposite in2="offsetBlur" operator="in"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
   
-  <!-- Antenna stem -->
-  <rect x="30" y="6" width="4" height="10" rx="2" fill="url(#antennaGradient)"/>
+  <!-- Ambient glow behind mascot -->
+  <ellipse cx="32" cy="40" rx="20" ry="18" fill="#38BDF8" fill-opacity="0.15" filter="url(#shadow)"/>
   
-  <!-- Antenna ball -->
-  <circle cx="32" cy="6" r="4" fill="#29B6F6"/>
-  <circle cx="31" cy="5" r="1.5" fill="#FFFFFF" fill-opacity="0.6"/>
+  <!-- Antenna stem with subtle curve -->
+  <path d="M30 16 Q30 10 32 6" stroke="url(#antennaGradient)" stroke-width="3.5" stroke-linecap="round" fill="none"/>
   
-  <!-- Left ear -->
-  <circle cx="8" cy="36" r="6" fill="url(#headGradient)" filter="url(#shadow)"/>
-  <circle cx="7" cy="35" r="2" fill="#FFFFFF" fill-opacity="0.3"/>
+  <!-- Antenna ball with glow -->
+  <circle cx="32" cy="5" r="5" fill="url(#antennaBallGlow)"/>
+  <circle cx="30" cy="3.5" r="2" fill="#FFFFFF" fill-opacity="0.7"/>
+  <circle cx="33" cy="6" r="1" fill="#FFFFFF" fill-opacity="0.3"/>
   
-  <!-- Right ear -->
-  <circle cx="56" cy="36" r="6" fill="url(#headGradient)" filter="url(#shadow)"/>
-  <circle cx="55" cy="35" r="2" fill="#FFFFFF" fill-opacity="0.3"/>
+  <!-- Left ear with highlight -->
+  <circle cx="7" cy="36" r="7" fill="url(#earGradient)" filter="url(#shadow)"/>
+  <circle cx="5.5" cy="34" r="2.5" fill="#FFFFFF" fill-opacity="0.4"/>
   
-  <!-- Robot head - rounded rectangle -->
-  <rect x="10" y="18" width="44" height="38" rx="14" fill="url(#headGradient)" filter="url(#shadow)"/>
+  <!-- Right ear with highlight -->
+  <circle cx="57" cy="36" r="7" fill="url(#earGradient)" filter="url(#shadow)"/>
+  <circle cx="55.5" cy="34" r="2.5" fill="#FFFFFF" fill-opacity="0.4"/>
   
-  <!-- Head highlight overlay -->
-  <rect x="10" y="18" width="44" height="38" rx="14" fill="url(#headHighlight)"/>
+  <!-- Robot head - rounded rectangle with depth -->
+  <rect x="9" y="17" width="46" height="40" rx="15" fill="url(#headGradient)" filter="url(#shadow)"/>
   
-  <!-- Left eye socket -->
-  <ellipse cx="23" cy="34" rx="7" ry="8" fill="#1A1A2E"/>
+  <!-- Head highlight overlay for 3D effect -->
+  <rect x="9" y="17" width="46" height="40" rx="15" fill="url(#headHighlight)"/>
   
-  <!-- Right eye socket -->
-  <ellipse cx="41" cy="34" rx="7" ry="8" fill="#1A1A2E"/>
+  <!-- Subtle head rim highlight -->
+  <rect x="10" y="18" width="44" height="38" rx="14" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-opacity="0.2"/>
   
-  <!-- Left eye highlight -->
-  <circle cx="21" cy="32" r="2.5" fill="#FFFFFF"/>
-  <circle cx="25" cy="36" r="1.5" fill="#FFFFFF" fill-opacity="0.5"/>
+  <!-- Left eye socket with depth -->
+  <ellipse cx="23" cy="34" rx="8" ry="9" fill="url(#eyeGlow)"/>
+  <ellipse cx="23" cy="34" rx="7.5" ry="8.5" fill="none" stroke="#475569" stroke-width="0.5"/>
   
-  <!-- Right eye highlight -->
-  <circle cx="39" cy="32" r="2.5" fill="#FFFFFF"/>
-  <circle cx="43" cy="36" r="1.5" fill="#FFFFFF" fill-opacity="0.5"/>
+  <!-- Right eye socket with depth -->
+  <ellipse cx="41" cy="34" rx="8" ry="9" fill="url(#eyeGlow)"/>
+  <ellipse cx="41" cy="34" rx="7.5" ry="8.5" fill="none" stroke="#475569" stroke-width="0.5"/>
   
-  <!-- Mouth - cute smile -->
-  <path d="M25 47 Q32 52 39 47" stroke="#1A1A2E" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <!-- Left eye highlights - more expressive -->
+  <circle cx="20" cy="31" r="3" fill="#FFFFFF"/>
+  <circle cx="25" cy="36" r="1.8" fill="#FFFFFF" fill-opacity="0.6"/>
+  <circle cx="21" cy="34" r="0.8" fill="#FFFFFF" fill-opacity="0.3"/>
+  
+  <!-- Right eye highlights - more expressive -->
+  <circle cx="38" cy="31" r="3" fill="#FFFFFF"/>
+  <circle cx="43" cy="36" r="1.8" fill="#FFFFFF" fill-opacity="0.6"/>
+  <circle cx="39" cy="34" r="0.8" fill="#FFFFFF" fill-opacity="0.3"/>
+  
+  <!-- Cheek blush left -->
+  <ellipse cx="14" cy="42" rx="5" ry="4" fill="url(#blushGradient)"/>
+  
+  <!-- Cheek blush right -->
+  <ellipse cx="50" cy="42" rx="5" ry="4" fill="url(#blushGradient)"/>
+  
+  <!-- Mouth - happy curved smile with more personality -->
+  <path d="M24 48 Q28 52 32 52 Q36 52 40 48" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  
+  <!-- Tiny nose/marking for extra cuteness -->
+  <ellipse cx="32" cy="42" rx="2" ry="1.5" fill="#0EA5E9" fill-opacity="0.3"/>
 </svg>

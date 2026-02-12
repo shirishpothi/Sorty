@@ -16,93 +16,147 @@ struct PreviewHeaderView: View {
     let renameCount: Int
     let isDragging: Bool
     var onBack: (() -> Void)? = nil
-    
-    @State private var isNotesExpanded = false
-    
+    var totalVersions: Int = 1
+    var isViewingHistory: Bool = false
+    var onPreviousVersion: (() -> Void)? = nil
+    var onNextVersion: (() -> Void)? = nil
+
+    @State private var showNotesPopover = false
+
     var body: some View {
         HStack {
             if let onBack = onBack {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    onBack()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("Back")
-                            .font(.subheadline)
-                    }
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .keyboardShortcut(.escape, modifiers: [])
-                .accessibilityIdentifier("PreviewBackButton")
-                .accessibilityLabel("Go back")
-                .accessibilityHint("Press Escape to go back")
+                GlassyBackButton(action: onBack)
+                    .keyboardShortcut(.escape, modifiers: [])
+                    .accessibilityIdentifier("PreviewBackButton")
+                    .accessibilityHint("Press Escape to go back")
             }
-            
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Preview \(version)")
-                        .font(.headline)
-                    
-                    if hasEdits {
-                        Text("(Edited)")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.1))
-                            .cornerRadius(4)
+
+            HStack(spacing: 6) {
+                // Version navigation
+                if totalVersions > 1 {
+                    Button {
+                        HapticFeedbackManager.shared.selection()
+                        onPreviousVersion?()
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
                     }
+                    .buttonStyle(.plain)
+                    .disabled(version <= 1)
                 }
-                
+
+                Text(version == 1 ? "Preview" : "Preview \(version)")
+                    .font(.headline)
+
+                if totalVersions > 1 {
+                    Button {
+                        HapticFeedbackManager.shared.selection()
+                        onNextVersion?()
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isViewingHistory)
+                }
+
+                if isViewingHistory {
+                    Text("(History)")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(4)
+                }
+
+                if hasEdits {
+                    Text("(Edited)")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(4)
+                }
+
                 if !notes.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                isNotesExpanded.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: isNotesExpanded ? "chevron.down" : "chevron.right")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(.purple)
+                    Button {
+                        showNotesPopover.toggle()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(.ultraThinMaterial)
+                                .frame(width: 22, height: 22)
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color.white.opacity(showNotesPopover ? 0.5 : 0.3),
+                                                    Color.white.opacity(0.05)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            ),
+                                            lineWidth: 0.5
+                                        )
+                                )
+                                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+
+                            Image(systemName: "brain")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(showNotesPopover ? Color.purple : Color.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("View AI reasoning")
+                    .accessibilityLabel("AI reasoning")
+                    .accessibilityHint("Show plan reasoning popover")
+                    .popover(isPresented: $showNotesPopover, arrowEdge: .bottom) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(spacing: 8) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.purple.opacity(0.12))
+                                        .frame(width: 28, height: 28)
+
+                                    Image(systemName: "brain")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.purple)
+                                }
+
                                 Text("AI Reasoning")
                                     .font(.caption)
-                                    .fontWeight(.medium)
-                                    .foregroundColor(.purple)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.primary)
+
+                                Spacer()
                             }
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(Color.purple.opacity(0.08))
-                            .cornerRadius(4)
+                            .padding(.bottom, 10)
+
+                            Divider()
+                                .opacity(0.4)
+                                .padding(.bottom, 10)
+
+                            FormattedReasoningText(
+                                text: notes,
+                                font: .callout,
+                                secondaryFont: .caption,
+                                foregroundStyle: .primary
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("AI reasoning")
-                        .accessibilityHint(isNotesExpanded ? "Tap to collapse" : "Tap to expand reasoning")
-                        
-                        if isNotesExpanded {
-                            Text(notes)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.leading)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.secondary.opacity(0.05))
-                                .cornerRadius(6)
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .move(edge: .top)),
-                                    removal: .opacity
-                                ))
-                        }
+                        .padding(14)
+                        .frame(minWidth: 240, maxWidth: 340)
                     }
                 }
             }
-            
+
             Spacer()
-            
+
             // Drag hint
             if isDragging {
                 HStack(spacing: 4) {
@@ -111,17 +165,22 @@ struct PreviewHeaderView: View {
                     Text("Drop on a folder")
                         .font(.caption)
                 }
-                .foregroundColor(.purple)
+                .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.purple.opacity(0.1))
+                .background(.ultraThinMaterial)
                 .cornerRadius(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
             }
-            
+
             Text("\(totalFiles) files • \(totalFolders) folders")
                 .font(.caption)
                 .foregroundColor(.secondary)
-            
+
             if renameCount > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "wand.and.stars")
@@ -129,11 +188,15 @@ struct PreviewHeaderView: View {
                 }
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundColor(.purple)
+                .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(Color.purple.opacity(0.1))
+                .background(.ultraThinMaterial)
                 .cornerRadius(4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                )
             }
         }
         .padding()
@@ -158,7 +221,7 @@ struct PreviewHeaderView: View {
     .frame(width: 800)
 }
 
-#Preview("Preview Header - With Edits") {
+#Preview("Preview Header - With History") {
     PreviewHeaderView(
         version: 3,
         hasEdits: true,
@@ -166,7 +229,9 @@ struct PreviewHeaderView: View {
         totalFiles: 156,
         totalFolders: 12,
         renameCount: 8,
-        isDragging: true
+        isDragging: true,
+        totalVersions: 3,
+        isViewingHistory: false
     )
     .frame(width: 800)
 }

@@ -117,7 +117,7 @@ struct TimelineSliderTrack: View {
                         isHovered: hoverIndex == index,
                         magnitude: magnitude
                     )
-                    .position(x: xPosition, y: geo.size.height / 2)
+                    .contentShape(Rectangle())
                     .onTapGesture {
                         withAnimation(.spring(response: 0.3)) {
                             selectedIndex = index
@@ -126,6 +126,7 @@ struct TimelineSliderTrack: View {
                     .onHover { hovering in
                         hoverIndex = hovering ? index : nil
                     }
+                    .position(x: xPosition, y: geo.size.height / 2)
                 }
             }
         }
@@ -164,6 +165,8 @@ struct TimelineNode: View {
                     .frame(width: nodeSize, height: nodeSize)
             }
         }
+        .frame(width: 32, height: 40) // Consistent hit area for the node
+        .contentShape(Rectangle())
         .scaleEffect(isHovered ? 1.2 : 1.0)
         .animation(.spring(response: 0.3), value: isHovered)
         .animation(.spring(response: 0.3), value: isSelected)

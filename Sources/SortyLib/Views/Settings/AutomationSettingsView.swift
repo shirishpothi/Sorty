@@ -11,6 +11,11 @@ struct AutomationSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var loginItemManager: LoginItemManager
+    @EnvironmentObject var notificationSettings: NotificationSettingsManager
+
+    @AppStorage("keepInBackground") private var keepInBackground = false
+    @AppStorage("launchAtLogin") private var launchAtLogin = false
     
     @State private var useSeparateModel = false
     @State private var selectedProvider: AIProvider = .openAI
@@ -188,33 +193,77 @@ struct AutomationSettingsView: View {
     
     private var backgroundBehaviorSection: some View {
         SettingsCard(title: "Background Behavior", icon: "menubar.rectangle", color: .purple) {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Toggle(isOn: $launchAtLogin) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Launch at Login")
+                                .font(.subheadline)
+                            Text("Automatically start Sorty when you log in to macOS")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+
+                    Toggle(isOn: $keepInBackground) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Keep in Background")
+                                .font(.subheadline)
+                            Text("Continue monitoring folders even when all windows are closed")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+
+                    @AppStorage("hideDockIcon") var hideDockIcon = false
+                    Toggle(isOn: $hideDockIcon) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Hide Dock Icon")
+                                .font(.subheadline)
+                            Text("Run as a menu bar app without showing in the Dock")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+
+                    Toggle(isOn: $notificationSettings.settings.notifyOnAutoOrganize) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Automation Notifications")
+                                .font(.subheadline)
+                            Text("Show a system notification when files are automatically organized")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                }
+
+                Divider()
+
                 HStack(spacing: 8) {
-                    Image(systemName: "menubar.dock.rectangle")
+                    Image(systemName: "info.circle")
                         .foregroundStyle(.purple)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Menu Bar Presence")
+                        Text("App Background Activity")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                        Text("Sorty runs in the menu bar to monitor watched folders and organize files automatically in the background.")
+                        Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                
-                Divider()
-                
-                HStack(spacing: 8) {
-                    Image(systemName: "bolt.fill")
-                        .foregroundStyle(.green)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Trigger Behavior")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("When new files are detected in watched folders, organization runs after a short delay to batch multiple changes together.")
+
+                if launchAtLogin || keepInBackground {
+                    Button {
+                        loginItemManager.openLoginItemsSettings()
+                    } label: {
+                        Label("System Settings > Background Items", systemImage: "arrow.up.forward.app")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
+                    .buttonStyle(.link)
                 }
             }
         }

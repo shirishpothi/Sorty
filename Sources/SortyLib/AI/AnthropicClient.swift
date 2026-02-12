@@ -30,18 +30,18 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.invalidURL
         }
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
-        
+
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
-            files: files, 
+            files: files,
             mode: config.mode,
             namingStyle: config.namingStyle,
-            enableReasoning: config.enableReasoning, 
+            enableReasoning: config.enableReasoning,
             includeContentMetadata: true,
             customInstructions: customInstructions
         )
-        
+
         let requestBody: [String: Any] = [
             "model": config.model,
             "max_tokens": config.maxTokens ?? 4096,
@@ -51,25 +51,25 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
             ],
             "temperature": temperature ?? config.temperature
         ]
-        
+
         if config.enableStreaming {
             return try await analyzeWithStreaming(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
         } else {
             return try await analyzeStandard(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
         }
     }
-    
+
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
             throw AIClientError.missingAPIKey
         }
-        
+
         let urlString = "https://api.anthropic.com/v1/messages"
         guard let url = URL(string: urlString) else {
             throw AIClientError.invalidURL
         }
-        
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders)
+
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
         
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
@@ -214,17 +214,17 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         let url = URL(string: "https://api.anthropic.com/v1/models")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
+        request.timeoutInterval = min(config.requestTimeout, 60)
         request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        
+
         let session = await getSession()
         let (_, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIClientError.invalidResponse
         }
-        
+
         if !(200...299).contains(httpResponse.statusCode) {
              throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
         }

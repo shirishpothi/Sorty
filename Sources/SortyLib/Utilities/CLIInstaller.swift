@@ -8,6 +8,7 @@
 
 import Foundation
 import AppKit
+import Combine
 
 @MainActor
 public final class CLIInstaller: ObservableObject {

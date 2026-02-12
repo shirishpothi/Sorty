@@ -55,6 +55,7 @@ struct AIProviderRow: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(isSelected ? provider.brandColor.opacity(0.05) : (isHovered ? Color.secondary.opacity(0.05) : Color.clear))
             )
+            .contentShape(Rectangle())
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? provider.brandColor.opacity(0.2) : Color.clear, lineWidth: 1)
@@ -93,37 +94,16 @@ extension AIProvider {
         }
     }
     
-    var brandColor: Color {
-        switch self {
-        case .openAI:
-            return Color(red: 0.13, green: 0.71, blue: 0.42)
-        case .anthropic:
-            return Color(red: 0.85, green: 0.55, blue: 0.35)
-        case .groq:
-            return Color(red: 0.95, green: 0.45, blue: 0.25)
-        case .ollama:
-            return Color(red: 0.55, green: 0.35, blue: 0.95)
-        case .githubCopilot:
-            return Color.black
-        case .appleFoundationModel:
-            return Color.gray
-        case .openAICompatible:
-            return Color.blue
-        case .openRouter:
-            return Color.purple
-        case .gemini:
-            return Color.cyan
-        }
-    }
+    // brandColor is now defined canonically in AIProvider (AIConfig.swift)
     
     var description: String {
         switch self {
         case .openAI:
-            return "GPT-4o, GPT-4 Turbo, and more"
+            return "GPT-5.2, GPT-5 mini, and more"
         case .anthropic:
-            return "Claude 3.5 Sonnet, Claude 3 Opus"
+            return "Claude 4.5 Sonnet, Claude 4.6 Opus, and more"
         case .groq:
-            return "Ultra-fast inference with Llama models"
+            return "Ultra-fast inference provider"
         case .ollama:
             return "Local models on your machine"
         case .githubCopilot:
@@ -133,9 +113,9 @@ extension AIProvider {
         case .openAICompatible:
             return "Any OpenAI-compatible API"
         case .openRouter:
-            return "Route to multiple providers"
+            return "Choose from the largest selection of providers"
         case .gemini:
-            return "Google Gemini models"
+            return "Google's Gemini models"
         }
     }
 }

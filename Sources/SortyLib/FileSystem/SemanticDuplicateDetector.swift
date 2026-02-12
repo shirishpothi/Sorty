@@ -9,6 +9,8 @@
 import Foundation
 import CryptoKit
 import Combine
+import Vision
+import AppKit
 
 /// Represents a group of semantically similar files (near-duplicates)
 public struct SemanticDuplicateGroup: Identifiable, Sendable {
@@ -25,6 +27,7 @@ public struct SemanticDuplicateGroup: Identifiable, Sendable {
         case nearIdenticalImages = "Near-Identical Images"
         case similarDocuments = "Similar Documents"
         case exactDuplicates = "Exact Duplicates"
+        case vibeGroup = "Vibe Group"
     }
 
     public enum DuplicateRecommendation: Codable, Sendable, Equatable {
@@ -106,7 +109,7 @@ public actor SemanticDuplicateDetector {
         let imageFiles = files.filter { isImageFile($0) }
         let documentFiles = files.filter { isDocumentFile($0) }
 
-        let totalSteps = 4
+        let totalSteps = 5
         var currentStep = 0
 
         // Step 1: Find burst photos (images taken within seconds of each other)
@@ -131,6 +134,12 @@ public actor SemanticDuplicateDetector {
         progressHandler?(currentStep, totalSteps, "Analyzing documents...")
         let documentGroups = await findSimilarDocuments(in: documentFiles)
         groups.append(contentsOf: documentGroups)
+        currentStep += 1
+
+        // Step 5: Find vibe groups (conceptual/visual similarity)
+        progressHandler?(currentStep, totalSteps, "Finding vibe groups...")
+        let vibeGroups = await findVibeGroups(in: files)
+        groups.append(contentsOf: vibeGroups)
         currentStep += 1
 
         // Remove duplicates between groups and merge overlapping
@@ -399,6 +408,144 @@ public actor SemanticDuplicateDetector {
         }
 
         return groups
+    }
+
+    // MARK: - Vibe Group Detection
+
+    private let vibeFeaturePrintThreshold: Float = 15.0
+    private let vibeTextSimilarityThreshold: Double = 0.6
+
+    private func findVibeGroups(in files: [FileItem]) async -> [SemanticDuplicateGroup] {
+        let imageFiles = files.filter { isImageFile($0) }
+        let documentFiles = files.filter { isDocumentFile($0) }
+
+        var groups: [SemanticDuplicateGroup] = []
+
+        let imageVibeGroups = await findImageVibeGroups(in: imageFiles)
+        groups.append(contentsOf: imageVibeGroups)
+
+        let documentVibeGroups = await findDocumentVibeGroups(in: documentFiles)
+        groups.append(contentsOf: documentVibeGroups)
+
+        return groups
+    }
+
+    private func findImageVibeGroups(in images: [FileItem]) async -> [SemanticDuplicateGroup] {
+        var groups: [SemanticDuplicateGroup] = []
+        var processedIds: Set<UUID> = []
+
+        var featurePrints: [(file: FileItem, featurePrint: VNFeaturePrintObservation)] = []
+
+        for file in images {
+            guard let url = file.url else { continue }
+            if let featurePrint = await generateFeaturePrint(at: url) {
+                featurePrints.append((file, featurePrint))
+            }
+        }
+
+        for i in 0..<featurePrints.count {
+            guard !processedIds.contains(featurePrints[i].file.id) else { continue }
+
+            var similarFiles: [FileItem] = [featurePrints[i].file]
+
+            for j in (i + 1)..<featurePrints.count {
+                guard !processedIds.contains(featurePrints[j].file.id) else { continue }
+
+                var distance: Float = 0
+                do {
+                    try featurePrints[i].featurePrint.computeDistance(&distance, to: featurePrints[j].featurePrint)
+                } catch {
+                    continue
+                }
+
+                if distance < vibeFeaturePrintThreshold {
+                    similarFiles.append(featurePrints[j].file)
+                    processedIds.insert(featurePrints[j].file.id)
+                }
+            }
+
+            if similarFiles.count > 1 {
+                processedIds.insert(featurePrints[i].file.id)
+                let normalizedSimilarity = max(0, 1.0 - Double(vibeFeaturePrintThreshold > 0 ? vibeFeaturePrintThreshold : 1) / 30.0)
+
+                groups.append(SemanticDuplicateGroup(
+                    groupType: .vibeGroup,
+                    files: similarFiles,
+                    similarity: normalizedSimilarity,
+                    recommendation: .manualReview
+                ))
+            }
+        }
+
+        return groups
+    }
+
+    private func findDocumentVibeGroups(in documents: [FileItem]) async -> [SemanticDuplicateGroup] {
+        var groups: [SemanticDuplicateGroup] = []
+        var processedIds: Set<UUID> = []
+
+        let withContent = documents.filter { $0.hasSemanticContent }
+
+        for i in 0..<withContent.count {
+            guard !processedIds.contains(withContent[i].id),
+                  let content1 = withContent[i].semanticTextContent else { continue }
+
+            var similarFiles: [FileItem] = [withContent[i]]
+
+            for j in (i + 1)..<withContent.count {
+                guard !processedIds.contains(withContent[j].id),
+                      let content2 = withContent[j].semanticTextContent else { continue }
+
+                let similarity = calculateTextSimilarity(content1, content2)
+                if similarity >= vibeTextSimilarityThreshold && similarity < similarityThreshold {
+                    similarFiles.append(withContent[j])
+                    processedIds.insert(withContent[j].id)
+                }
+            }
+
+            if similarFiles.count > 1 {
+                processedIds.insert(withContent[i].id)
+
+                groups.append(SemanticDuplicateGroup(
+                    groupType: .vibeGroup,
+                    files: similarFiles,
+                    similarity: vibeTextSimilarityThreshold,
+                    recommendation: .manualReview
+                ))
+            }
+        }
+
+        return groups
+    }
+
+    private func generateFeaturePrint(at url: URL) async -> VNFeaturePrintObservation? {
+        guard let cgImage = loadCGImage(from: url) else { return nil }
+
+        let request = VNGenerateImageFeaturePrintRequest()
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+
+        do {
+            try handler.perform([request])
+        } catch {
+            DebugLogger.log("Failed to generate feature print: \(error.localizedDescription)")
+            return nil
+        }
+
+        guard let result = request.results?.first else {
+            return nil
+        }
+
+        return result
+    }
+
+    private func loadCGImage(from url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+            if let image = NSImage(contentsOf: url) {
+                return image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+            }
+            return nil
+        }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
     }
 
     // MARK: - Text Similarity (Jaccard Index)

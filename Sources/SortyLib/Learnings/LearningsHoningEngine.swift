@@ -190,6 +190,9 @@ public class LearningsHoningEngine: ObservableObject {
     /// Behavior context for generating targeted questions
     public var behaviorContext: BehaviorAnalysisContext?
     
+    /// Real file names for What-If scenarios
+    public var whatIfFiles: [String] = []
+    
     public func startSession(questionCount: Int = 5, contextualTopics: [String] = []) async {
         // Clear previous session state
         self.behaviorContext = nil
@@ -199,7 +202,35 @@ public class LearningsHoningEngine: ObservableObject {
         self.currentSession = session
         isGenerating = true
         
+        // Inject What-If questions if real files are available
+        if !whatIfFiles.isEmpty {
+            for fileName in whatIfFiles.prefix(2) {
+                if let question = generateWhatIfQuestion(
+                    fileName: fileName,
+                    candidateFolders: behaviorContext?.topDestinationFolders ?? ["Documents", "Archive"]
+                ) {
+                    self.currentSession?.questions.append(question)
+                }
+            }
+        }
+        
         await generateNextQuestion()
+    }
+    
+    /// Generate What-If honing questions based on real files the AI previously failed to organize
+    public func generateWhatIfQuestion(fileName: String, candidateFolders: [String]) -> HoningQuestion? {
+        guard candidateFolders.count >= 2 else { return nil }
+        
+        let questionText = "If I see a file named '\(fileName)', should it go into '\(candidateFolders[0])' or '\(candidateFolders[1])'?"
+        var options = candidateFolders.prefix(3).map { "Place in '\($0)'" }
+        options.append("Create a new folder for it")
+        options.append("Leave it where it is")
+        
+        return HoningQuestion(
+            id: UUID().uuidString,
+            text: questionText,
+            options: options
+        )
     }
     
     private let honingCheckPrompt = """
@@ -327,6 +358,13 @@ public class LearningsHoningEngine: ObservableObject {
         
         session.answers.append(answer)
         currentSession = session
+        
+        // Check if this is a What-If question and create high-priority signal
+        if let question = currentSession?.questions.first(where: { $0.id == answer.questionId }),
+           question.text.hasPrefix("If I see a file named") {
+            // Mark the answer with high weight for rule induction
+            // The LearningsManager will pick this up during the next rule induction cycle
+        }
         
         if session.answers.count >= session.targetQuestionCount {
             finishSession()

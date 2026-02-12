@@ -67,6 +67,13 @@ public struct ContentView: View {
                     }
                     .accessibilityIdentifier("OrganizeSidebarItem")
 
+                    if FeatureFlags.batchOrganizationEnabled {
+                        NavigationLink(value: AppState.AppView.batchOrganization) {
+                            Label("Batch Organize", systemImage: "square.stack.3d.up.fill")
+                        }
+                        .accessibilityIdentifier("BatchOrganizeSidebarItem")
+                    }
+
                     NavigationLink(value: AppState.AppView.workspaceHealth) {
                         Label("Workspace Health", systemImage: "heart.text.square")
                     }
@@ -162,6 +169,8 @@ public struct ContentView: View {
             LearningsView()
         case .storageLocations:
             StorageLocationsView()
+        case .batchOrganization:
+            BatchOrganizationView()
         }
     }
 
@@ -176,7 +185,7 @@ public struct ContentView: View {
 
     private func determineDirection(from oldView: AppState.AppView, to newView: AppState.AppView) -> NavigationDirection {
         let viewOrder: [AppState.AppView] = [
-            .organize, .workspaceHealth, .duplicates, .settings, .history, .exclusions, .watchedFolders, .storageLocations, .learnings
+            .organize, .batchOrganization, .workspaceHealth, .duplicates, .settings, .history, .exclusions, .watchedFolders, .storageLocations, .learnings
         ]
 
         guard let oldIndex = viewOrder.firstIndex(of: oldView),

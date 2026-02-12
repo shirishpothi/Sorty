@@ -59,9 +59,27 @@ public struct OrganizationSession: Codable, Identifiable, Sendable {
 public class ContinuousLearningObserver: ObservableObject {
     private var learningsManager: LearningsManager
     private var historyFn: () -> OrganizationHistory // Closure to access history to avoid retain cycles/init order issues
-    
+
     private var cancellables = Set<AnyCancellable>()
     private var recentlyMovedFiles: [String: Date] = [:] // Path -> Time
+
+    /// Known groups of related project files that should stay together
+    static let relatedFileGroups: [[String]] = [
+        ["package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb"],
+        ["Gemfile", "Gemfile.lock"],
+        ["Cargo.toml", "Cargo.lock"],
+        ["go.mod", "go.sum"],
+        ["Pipfile", "Pipfile.lock"],
+        [".gitignore", ".gitattributes"],
+        ["Podfile", "Podfile.lock"],
+        ["composer.json", "composer.lock"],
+        ["pubspec.yaml", "pubspec.lock"],
+        ["CMakeLists.txt", "CMakeCache.txt"],
+        ["Makefile", "Makefile.am"],
+        ["tsconfig.json", "tsconfig.build.json"],
+        [".eslintrc", ".eslintrc.json", ".eslintrc.js"],
+        [".prettierrc", ".prettierrc.json", ".prettierrc.js"],
+    ]
     
     /// Current active session (started when organization is applied)
     @Published public private(set) var currentSession: OrganizationSession?
@@ -74,7 +92,7 @@ public class ContinuousLearningObserver: ObservableObject {
     
     /// Quick access to consent status
     private var canCollect: Bool {
-        learningsManager.consentManager.canCollectData
+        learningsManager.consentManager.canCollectData && !learningsManager.sessionLearningPaused
     }
     
     public init(learningsManager: LearningsManager, historyProvider: @escaping () -> OrganizationHistory) {
@@ -251,6 +269,46 @@ public class ContinuousLearningObserver: ObservableObject {
         let folderPath = notification.userInfo?["folderPath"] as? String
         
         trackSteeringPrompt(prompt, forFolder: folderPath)
+        
+        if let exclusionPattern = parseExclusionFromPrompt(prompt) {
+            Task {
+                await learningsManager.addLearningExclusion(exclusionPattern)
+                LogManager.shared.log("Added learning exclusion from steering prompt: \(exclusionPattern)", category: "LearningObserver")
+            }
+        }
+    }
+    
+    public func parseExclusionFromPrompt(_ prompt: String) -> String? {
+        let lowered = prompt.lowercased()
+        let exclusionPhrases = [
+            "don't learn from",
+            "dont learn from",
+            "skip learning for",
+            "exclude from learning",
+            "ignore for learning",
+            "no learning for",
+            "stop learning from"
+        ]
+        
+        for phrase in exclusionPhrases {
+            if lowered.contains(phrase) {
+                if let range = lowered.range(of: phrase) {
+                    let remainder = String(prompt[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let cleaned = remainder
+                        .replacingOccurrences(of: "moves in ", with: "")
+                        .replacingOccurrences(of: "my ", with: "")
+                        .replacingOccurrences(of: " folder", with: "")
+                        .replacingOccurrences(of: " directory", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                    
+                    if !cleaned.isEmpty {
+                        return cleaned
+                    }
+                }
+            }
+        }
+        return nil
     }
     
     private func cleanupOldSessions() {
@@ -277,6 +335,11 @@ public class ContinuousLearningObserver: ObservableObject {
     /// Called by FolderWatcher delegate or FileSystemManager when a move occurs
     public func handleFileMove(from src: String, to dst: String) {
         guard canCollect else { return }
+        
+        if learningsManager.isPathExcludedFromLearning(src) || learningsManager.isPathExcludedFromLearning(dst) {
+            LogManager.shared.log("Skipping learning for excluded path: \(src)", category: "LearningObserver")
+            return
+        }
         
         // 1. Check if this file was recently organized by AI
         // Look back 24 hours (or configurable window)
@@ -360,6 +423,11 @@ public class ContinuousLearningObserver: ObservableObject {
     /// Called when a file is removed from the monitored scope (moved outside or deleted)
     public func handleFileRemoval(at path: String) {
         guard canCollect else { return }
+        
+        if learningsManager.isPathExcludedFromLearning(path) {
+            LogManager.shared.log("Skipping learning for excluded path: \(path)", category: "LearningObserver")
+            return
+        }
         
         let history = historyFn()
         let recentEntries = history.entries.prefix(50)
@@ -489,6 +557,66 @@ public class ContinuousLearningObserver: ObservableObject {
             // Record run in metrics
             let usedRules = currentSession?.usedRuleIds ?? []
             learningsManager.recordSuccessfulRun(folderPath: entry.directoryPath, fileCount: operations.count, ruleIdsUsed: usedRules)
+
+            // Check for related files that were separated
+            checkRelatedFilesSeparation(operations: operations)
+        }
+    }
+
+    // MARK: - Related Files Detection
+
+    /// After organization, check if related project files (e.g., package.json + pnpm-lock.yaml)
+    /// were moved to different locations or if some were moved while others weren't.
+    private func checkRelatedFilesSeparation(operations: [FileSystemManager.FileOperation]) {
+        guard canCollect else { return }
+
+        let movedFileNames = Set(operations.compactMap { op -> String? in
+            guard op.destinationPath != nil else { return nil }
+            return URL(fileURLWithPath: op.sourcePath).lastPathComponent
+        })
+
+        // Build a map of filename -> destination folder
+        var fileDestinations: [String: String] = [:]
+        for op in operations {
+            guard let dest = op.destinationPath else { continue }
+            let fileName = URL(fileURLWithPath: op.sourcePath).lastPathComponent
+            let destFolder = URL(fileURLWithPath: dest).deletingLastPathComponent().path
+            fileDestinations[fileName] = destFolder
+        }
+
+        for group in Self.relatedFileGroups {
+            let movedFromGroup = group.filter { movedFileNames.contains($0) }
+            guard !movedFromGroup.isEmpty else { continue }
+
+            // Check if files in the group were moved to different destinations
+            let destinations = Set(movedFromGroup.compactMap { fileDestinations[$0] })
+            let notMoved = group.filter { !movedFileNames.contains($0) }
+
+            let shouldSuggest: Bool
+            if destinations.count > 1 {
+                // Files moved to different folders
+                shouldSuggest = true
+            } else if !notMoved.isEmpty && !movedFromGroup.isEmpty {
+                // Some files moved, others left behind
+                shouldSuggest = true
+            } else {
+                shouldSuggest = false
+            }
+
+            if shouldSuggest {
+                let groupName = group.first ?? "project files"
+                let fileList = group.joined(separator: ", ")
+                let message = "\(fileList) are related project files and should stay together. Consider adding them to exceptions."
+                let suggestion = LearningsManager.ExceptionSuggestion(
+                    message: message,
+                    fileNames: group,
+                    groupName: groupName
+                )
+                // Only add if not already suggested for this group
+                if !learningsManager.pendingExceptionSuggestions.contains(where: { $0.groupName == groupName }) {
+                    learningsManager.pendingExceptionSuggestions.append(suggestion)
+                }
+            }
         }
     }
 }
@@ -504,4 +632,5 @@ public extension Notification.Name {
     static let pauseLearning = Notification.Name("pauseLearning")
     static let exportLearningsProfile = Notification.Name("exportLearningsProfile")
     static let importLearningsProfile = Notification.Name("importLearningsProfile")
+    static let clearLearningsData = Notification.Name("clearLearningsData")
 }

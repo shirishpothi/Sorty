@@ -10,9 +10,52 @@ import SwiftUI
 import SortyLib
 #endif
 
+class SortyAppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor static var forceQuit = false
+
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            forName: .forceQuitSorty,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                SortyAppDelegate.forceQuit = true
+            }
+        }
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        return .terminateNow
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
+        let showMenuBarExtra = UserDefaults.standard.bool(forKey: "showMenuBarExtra")
+        
+        // Only terminate if BOTH background and menu bar are disabled
+        return !keepInBackground && !showMenuBarExtra
+    }
+
+    /// Updates the application activation policy to show or hide the Dock icon
+    @MainActor
+    func updateActivationPolicy(hideDockIcon: Bool) {
+        if hideDockIcon {
+            NSApp.setActivationPolicy(.accessory)
+        } else {
+            NSApp.setActivationPolicy(.regular)
+        }
+    }
+}
+
 @main
 struct SortyApp: App {
+    @NSApplicationDelegateAdaptor(SortyAppDelegate.self) private var appDelegate
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage("keepInBackground") private var keepInBackground = false
+    @AppStorage("hideDockIcon") private var hideDockIcon = false
+    @AppStorage("launchAtLogin") private var launchAtLogin = false
     @StateObject private var settingsViewModel = SettingsViewModel()
     @StateObject private var appState = AppState()
     @StateObject private var personaManager = PersonaManager()
@@ -27,6 +70,12 @@ struct SortyApp: App {
     @StateObject private var automationManager = AutomationManager()
     @StateObject private var notificationSettings = NotificationSettingsManager.shared
     @StateObject private var healthManager = WorkspaceHealthManager()
+    @StateObject private var loginItemManager = LoginItemManager.shared
+    @StateObject private var namingPresetManager = NamingPresetManager.shared
+    @StateObject private var globalShortcutManager = GlobalShortcutManager.shared
+    @StateObject private var steeringPromptManager = SteeringPromptManager.shared
+    @StateObject private var menuBarController = MenuBarController()
+    @StateObject private var batchManager = BatchOrganizationManager()
 
     private var activeWatchedFoldersCount: Int {
         watchedFoldersManager.folders.filter { $0.isEnabled && $0.autoOrganize }.count
@@ -38,9 +87,17 @@ struct SortyApp: App {
     private var backgroundActivity: NSObjectProtocol?
     
     init() {
+        UserDefaults.standard.register(defaults: [
+            "showMenuBarExtra": true,
+            "keepInBackground": false,
+            "hideDockIcon": false,
+            "launchAtLogin": false
+        ])
+        
         // Begin background activity to keep FolderWatcher alive when window is closed
+        // Include .userInitiated to prevent App Nap from throttling the process
         backgroundActivity = ProcessInfo.processInfo.beginActivity(
-            options: [.automaticTerminationDisabled, .suddenTerminationDisabled],
+            options: [.userInitiated, .automaticTerminationDisabled, .suddenTerminationDisabled],
             reason: "Monitoring watched folders for automatic organization"
         )
     }
@@ -62,9 +119,23 @@ struct SortyApp: App {
             .environmentObject(automationManager)
             .environmentObject(notificationSettings)
             .environmentObject(healthManager)
+            .environmentObject(loginItemManager)
+            .environmentObject(namingPresetManager)
+            .environmentObject(globalShortcutManager)
+            .environmentObject(steeringPromptManager)
+            .environmentObject(batchManager)
             .environmentObject(appState.duplicateManager)
             .environmentObject(appState.duplicateSettings)
             .onAppear {
+                appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
+                
+                // Sync login item/background status
+                loginItemManager.syncServiceRegistration(
+                    launchAtLogin: launchAtLogin,
+                    keepInBackground: keepInBackground,
+                    showMenuBarExtra: showMenuBarExtra
+                )
+
                 // Restore sandbox access for watched folders
                 watchedFoldersManager.restoreSecurityScopedAccess()
                 // Restore sandbox access for storage locations
@@ -100,9 +171,12 @@ struct SortyApp: App {
                     
                     try? await organizer.configure(with: settingsViewModel.config)
                     learningsManager.configure(with: settingsViewModel.config)
+                    menuBarController.configure(organizer: organizer, settings: settingsViewModel)
                     
                     // Check for updates on launch (once per 24 hours)
                     appState.updateManager.checkOnLaunchIfNeeded()
+
+                    // Global shortcut disabled
                 }
                 
                 // Testability Hook for UI Tests to trigger deeplinks reliably
@@ -112,6 +186,13 @@ struct SortyApp: App {
                     Task { @MainActor in
                         try? await Task.sleep(nanoseconds: 1_000_000_000) // 1.0s
                         processDeepLink(url)
+                    }
+                }
+
+                if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 800_000_000) // 0.8s
+                        NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
                     }
                 }
             }
@@ -132,6 +213,9 @@ struct SortyApp: App {
             .onChange(of: watchedFoldersManager.folders) { oldValue, newValue in
                 coordinator?.syncWatchedFolders()
             }
+            .onChange(of: hideDockIcon) { _, newValue in
+                appDelegate.updateActivationPolicy(hideDockIcon: newValue)
+            }
             .onOpenURL { url in
                 processDeepLink(url)
             }
@@ -144,11 +228,28 @@ struct SortyApp: App {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                // Ensure settings and learnings are saved when app quits
                 Task<Void, Never> { @MainActor in
                     settingsViewModel.forceSave()
                     await learningsManager.forceSave()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .clearLearningsData)) { _ in
+                Task { @MainActor in
+                    await learningsManager.clearAllData()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationDetails)) { _ in
+                withAnimation(.pageTransition) {
+                    appState.currentView = .history
+                }
+            }
+            .alert("Delete All Usage Data?", isPresented: $appState.showDeleteUsageDataConfirmation) {
+                Button("Delete", role: .destructive) {
+                    appState.deleteUsageData()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete all organization history, learnings data, and cached sessions. This action cannot be undone.")
             }
     }
 
@@ -163,14 +264,20 @@ struct SortyApp: App {
             SortyCommands(appState: appState)
         }
         
-        MenuBarExtra(isInserted: $showMenuBarExtra) {
+        MenuBarExtra(isInserted: Binding(
+            get: { showMenuBarExtra || keepInBackground },
+            set: { showMenuBarExtra = $0 }
+        )) {
             MenuBarView()
                 .environmentObject(watchedFoldersManager)
                 .environmentObject(appState)
                 .environmentObject(organizer)
                 .environmentObject(settingsViewModel)
+                .environmentObject(loginItemManager)
+                .environmentObject(notificationSettings)
+                .environmentObject(menuBarController)
         } label: {
-            MenuBarLabel(activeCount: activeWatchedFoldersCount)
+            MenuBarLabel()
         }
         .menuBarExtraStyle(.window)
     }
@@ -323,6 +430,12 @@ struct SortyApp: App {
                     let rule = ExclusionRule(type: .pathContains, pattern: pattern)
                     exclusionRules.addRule(rule)
                 }
+                
+            case .scan(let path):
+                if let path = path {
+                    appState.selectedDirectory = URL(fileURLWithPath: path)
+                }
+                appState.currentView = .workspaceHealth
                 
             case .storage(let action, let path):
                 appState.currentView = .storageLocations

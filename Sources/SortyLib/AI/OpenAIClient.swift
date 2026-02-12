@@ -54,7 +54,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         }
         
         // Use custom system prompt if provided, otherwise use default
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
             mode: config.mode,
@@ -105,7 +105,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.invalidURL
         }
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files, 
             mode: config.mode,
@@ -253,19 +253,19 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
-        
+        request.timeoutInterval = min(config.requestTimeout, 60)
+
         if config.requiresAPIKey, let apiKey = config.apiKey, !apiKey.isEmpty {
             request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
-        
+
         let session = await getSession()
         let (_, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIClientError.invalidResponse
         }
-        
+
         if !(200...299).contains(httpResponse.statusCode) {
              throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
         }

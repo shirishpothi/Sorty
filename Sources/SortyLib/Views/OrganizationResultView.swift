@@ -119,12 +119,17 @@ struct GenerationStatsView: View {
                 }
                 
                 if let size = stats.totalFileSize {
+                    let formatted = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+                    let components = formatted.components(separatedBy: " ")
+                    let value = components.first ?? formatted
+                    let unit = components.count > 1 ? components.last : nil
+                    
                     NerdStatPillExpanded(
                         icon: "sdcard.fill",
                         color: .gray,
                         title: "Total Size",
-                        value: ByteCountFormatter.string(fromByteCount: size, countStyle: .file),
-                        unit: nil
+                        value: value,
+                        unit: unit
                     )
                 }
                 
@@ -280,6 +285,8 @@ struct NerdStatCard: View {
                     Text(value)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                     
                     if let unit = unit {
                         Text(unit)
@@ -292,6 +299,7 @@ struct NerdStatCard: View {
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         .padding(12)

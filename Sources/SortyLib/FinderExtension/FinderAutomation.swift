@@ -10,39 +10,54 @@
 import Foundation
 import AppKit
 import Carbon
+import ApplicationServices
 
 /// Service for automating Finder interactions
 /// Uses AppleScript which requires Automation permission
 @MainActor
 public final class FinderAutomation {
     
+    private static var checksEnabled = false
+    private static var isAppReady = false
+    
+    public static func enableAutomationChecks() {
+        checksEnabled = true
+    }
+    
+    public static func markAppReady() {
+        isAppReady = true
+    }
+    
     // MARK: - Permission Status
     
     /// Check if the app has Automation permission (can control Finder via AppleScript)
-    public static func checkAutomationPermission() -> PermissionStatus {
-        // Try to execute a simple AppleScript against Finder
-        // If it succeeds without error, we have permission
-        let testScript = """
-        tell application "Finder"
-            return name of home as string
-        end tell
-        """
+    public static func checkAutomationPermission(prompt: Bool = false) -> PermissionStatus {
+        guard checksEnabled, isAppReady else { return .unknown }
+        let targetDesc = NSAppleEventDescriptor(bundleIdentifier: "com.apple.finder")
         
-        var errorInfo: NSDictionary?
-        if let script = NSAppleScript(source: testScript) {
-            _ = script.executeAndReturnError(&errorInfo)
-            
-            if let error = errorInfo {
-                let errorNumber = error["NSAppleScriptErrorNumber"] as? Int
-                // -1743 = "Not authorized to send Apple events to Finder"
-                if errorNumber == -1743 {
-                    return .denied
-                }
-                return .unknown
-            }
+        let status = AEDeterminePermissionToAutomateTarget(
+            targetDesc.aeDesc,
+            AEEventClass(kCoreEventClass),
+            AEEventID(kAEOpenApplication),
+            prompt
+        )
+        
+        switch status {
+        case noErr:
             return .granted
+        case -1743:
+            // errAEEventNotPermitted: Not authorized to send Apple events to Finder
+            return .denied
+        case -1744:
+            // Would require user consent (no decision yet)
+            return .unknown
+        case -600:
+            // procNotFound: Finder not running
+            return .unknown
+        default:
+            DebugLogger.log("Unexpected automation permission status: \(status)")
+            return .unknown
         }
-        return .unknown
     }
     
     /// Open System Settings to the Automation permission pane
@@ -64,6 +79,11 @@ public final class FinderAutomation {
     /// Get the currently selected files in the frontmost Finder window
     /// Returns nil if no Finder window is open or no selection
     public static func getSelectedFiles() -> [URL]? {
+        guard checksEnabled else { return nil }
+        guard checkAutomationPermission() == .granted else {
+            return nil
+        }
+        
         let scriptSource = """
         tell application "Finder"
             try
@@ -106,6 +126,11 @@ public final class FinderAutomation {
     /// Get the path of the frontmost Finder window
     /// Returns nil if no Finder window is open
     public static func getFrontmostFinderWindowPath() -> URL? {
+        guard checksEnabled else { return nil }
+        guard checkAutomationPermission() == .granted else {
+            return nil
+        }
+        
         let scriptSource = """
         tell application "Finder"
             try
@@ -136,6 +161,11 @@ public final class FinderAutomation {
         return URL(fileURLWithPath: path)
     }
     
+    /// Get the frontmost Finder window's folder path for organizing
+    public static func organizeCurrentFinderFolder() -> URL? {
+        return getFrontmostFinderWindowPath()
+    }
+    
     /// Check if there's a valid Finder selection we can use for organization
     public static func canOrganizeSelection() -> Bool {
         guard let selection = getSelectedFiles() else { return false }
@@ -149,7 +179,9 @@ public final class FinderAutomation {
     ///   - urls: URLs of items to select
     ///   - reveal: Whether to reveal the items (scroll to them)
     public static func selectInFinder(urls: [URL], reveal: Bool = true) {
+        guard checksEnabled else { return }
         guard !urls.isEmpty else { return }
+        guard checkAutomationPermission() == .granted else { return }
         
         let pathsString = urls.map { $0.path }.joined(separator: "\n")
         
@@ -197,6 +229,9 @@ public final class FinderAutomation {
     
     /// Open a folder in a new Finder window
     public static func openInNewFinderWindow(url: URL) {
+        guard checksEnabled else { return }
+        guard checkAutomationPermission() == .granted else { return }
+        
         let scriptSource = """
         tell application "Finder"
             try
@@ -248,6 +283,11 @@ public final class FinderAutomation {
     
     /// Refresh all Finder windows showing the specified path
     public static func refreshFinder(at url: URL) {
+        guard checksEnabled, checkAutomationPermission() == .granted else {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            return
+        }
+        
         let scriptSource = """
         tell application "Finder"
             try

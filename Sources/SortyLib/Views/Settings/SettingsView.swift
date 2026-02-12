@@ -135,12 +135,24 @@ struct SettingsView: View {
     }
 
     private var finderDisabledView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             Image(systemName: "puzzlepiece.extension")
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
             Text("Finder Integration is currently disabled")
                 .font(.headline)
+            Text("Enable via Terminal:")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("defaults write com.sorty.app finderIntegrationEnabled -bool true")
+                .font(.system(.caption, design: .monospaced))
+                .padding(10)
+                .background(Color.black.opacity(0.05))
+                .cornerRadius(8)
+                .textSelection(.enabled)
+            Text("Then relaunch Sorty.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.top, 40)

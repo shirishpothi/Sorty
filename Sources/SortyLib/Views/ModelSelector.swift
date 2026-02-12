@@ -44,6 +44,7 @@ struct ModelSelectorRow: View {
             .padding(.vertical, 10)
             .background(Color(NSColor.controlBackgroundColor))
             .cornerRadius(8)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -65,6 +66,7 @@ struct ModelSelectionPopover: View {
     @State private var showAllModels: Bool = false
     @State private var customModelText: String = ""
     @State private var showCustomInput: Bool = false
+    @State private var showFreeOnly: Bool = false
     
     private var availableProviders: [AIProvider] {
         AIProvider.allCases.filter { $0.isAvailable }
@@ -81,11 +83,25 @@ struct ModelSelectionPopover: View {
     }
     
     private var modelsForSelectedProvider: [String] {
-        let models = getModelsForProvider(selectedProvider)
-        if searchText.isEmpty {
-            return showAllModels ? models : Array(models.prefix(10))
+        var models = getModelsForProvider(selectedProvider)
+
+        // Filter free models for OpenRouter if toggled
+        if showFreeOnly && selectedProvider == .openRouter {
+            let catalogModels = modelCatalog.cachedModels(for: selectedProvider)
+            let freeIds = Set(catalogModels.filter { $0.isFree }.map { $0.id })
+            models = models.filter { freeIds.contains($0) }
         }
-        return models.filter { $0.localizedCaseInsensitiveContains(searchText) }
+
+        if !searchText.isEmpty {
+            models = models.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        }
+        return showAllModels || !searchText.isEmpty ? models : Array(models.prefix(10))
+    }
+
+    /// Returns whether a model ID is free (for badge display)
+    private func isModelFree(_ modelId: String) -> Bool {
+        let catalogModels = modelCatalog.cachedModels(for: selectedProvider)
+        return catalogModels.first(where: { $0.id == modelId })?.isFree ?? false
     }
     
     var body: some View {
@@ -232,9 +248,23 @@ struct ModelSelectionPopover: View {
                 Text("MODEL")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
+
+                if selectedProvider == .openRouter {
+                    HStack(spacing: 4) {
+                        Text("Free")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Toggle("", isOn: $showFreeOnly)
+                            .toggleStyle(.switch)
+                            .controlSize(.mini)
+                            .labelsHidden()
+                    }
+                    .fixedSize()
+                    .help("Show only free models")
+                }
+
                 Button {
                     Task {
                         await modelCatalog.refresh(provider: selectedProvider, force: true)
@@ -306,15 +336,26 @@ struct ModelSelectionPopover: View {
                     .font(.system(size: 12))
                     .foregroundColor(selectedModel == model ? .white : .primary)
                     .lineLimit(1)
-                
+
+                if selectedProvider == .openRouter && isModelFree(model) {
+                    Text("Free")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(selectedModel == model ? .white : .green)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.green.opacity(0.15))
+                        )
+                }
+
                 Spacer()
-                
+
                 if model == selectedProvider.defaultModel {
                     Text("Default")
                         .font(.system(size: 9))
                         .foregroundColor(selectedModel == model ? .white.opacity(0.8) : .secondary)
                 }
-                
+
                 if model == currentModel && selectedProvider == currentProvider {
                     Text("Current")
                         .font(.system(size: 9))

@@ -25,85 +25,106 @@ struct DuplicateSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // New Header
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: SortyDesignSystem.Spacing.lg) {
+                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxs) {
                     Text("Duplicate Detection Settings")
-                        .font(.title3.bold())
+                        .font(SortyDesignSystem.Typography.title3())
                     Text("Configure how Sorty identifies and handles identical files.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(SortyDesignSystem.Typography.subheadline())
+                        .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                 }
                 
                 Spacer()
                 
-                Button(action: {
-                    settingsManager.reset()
-                    syncFromSettings()
-                }) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .help("Reset to Defaults")
+                HStack(spacing: SortyDesignSystem.Spacing.md) {
+                    Button(action: {
+                        settingsManager.reset()
+                        syncFromSettings()
+                    }) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .help("Reset to Defaults")
+                    }
+                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                    
+                    Button("Done") {
+                        saveAndDismiss()
+                    }
+                    .buttonStyle(.onboardingPill(size: .small))
+                    .keyboardShortcut(.return)
                 }
-                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
-                
-                Button("Done") {
-                    saveAndDismiss()
-                }
-                .buttonStyle(.onboardingPill(size: .small))
-                .keyboardShortcut(.return)
             }
-            .padding(24)
+            .padding(SortyDesignSystem.Spacing.xxl)
             .background(.bar)
             
             Divider()
             
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxxl) {
                     
                     // Comparison Strategy
                     SettingsSection(title: "Matching Strategy", icon: "doc.text.magnifyingglass") {
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
                             Picker("Comparison Method:", selection: $settingsManager.settings.comparisonMethod) {
                                 ForEach(ComparisonMethod.allCases, id: \.self) { method in
-                                    VStack(alignment: .leading) {
+                                    VStack(alignment: .leading, spacing: 2) {
                                         Text(method.displayName)
+                                            .font(SortyDesignSystem.Typography.body(weight: .medium))
                                         Text(method.description)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .font(SortyDesignSystem.Typography.caption())
+                                            .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                                     }
                                     .tag(method)
+                                    .padding(.vertical, 4)
                                 }
                             }
                             .pickerStyle(.radioGroup)
                             
                             Divider()
+                                .opacity(0.5)
                             
                             // Auto start
                             Toggle("Auto-start scan when opening Duplicates view", isOn: $settingsManager.settings.autoStartScan)
-                                .font(.subheadline)
+                                .font(SortyDesignSystem.Typography.subheadline())
                         }
                     }
 
                     // Scan Filters
                     SettingsSection(title: "Scan Filters", icon: "line.3.horizontal.decrease.circle") {
-                        VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xl) {
                             // Min file size
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sm) {
                                 HStack {
                                     Text("Minimum File Size")
-                                        .font(.subheadline.weight(.medium))
+                                        .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
                                     Spacer()
                                     Text(minSizeMB == 0 ? "No minimum" : String(format: "%.1f MB", minSizeMB))
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundColor(.secondary)
+                                        .font(SortyDesignSystem.Typography.mono(size: SortyDesignSystem.Typography.sizeCaption))
+                                        .foregroundStyle(SortyDesignSystem.Colors.primary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 2)
+                                        .background(SortyDesignSystem.Colors.primary.opacity(0.1))
+                                        .clipShape(Capsule())
                                 }
-                                Slider(value: $minSizeMB, in: 0...500, step: 0.5)
+                                
+                                VStack(spacing: SortyDesignSystem.Spacing.xxs) {
+                                    Slider(value: $minSizeMB, in: 0...500, step: 0.5)
+                                        .accentColor(SortyDesignSystem.Colors.primary)
+                                    
+                                    HStack {
+                                        Text("0 MB")
+                                        Spacer()
+                                        Text("500 MB")
+                                    }
+                                    .font(SortyDesignSystem.Typography.caption2())
+                                    .foregroundStyle(SortyDesignSystem.Colors.textTertiary)
+                                }
                             }
                             
-                            HStack(spacing: 20) {
+                            HStack(spacing: SortyDesignSystem.Spacing.xxxl) {
                                 // Scan depth
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xs) {
                                     Text("Scan Depth")
-                                        .font(.subheadline.weight(.medium))
+                                        .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
                                     Picker("", selection: $settingsManager.settings.maxScanDepth) {
                                         Text("Unlimited").tag(-1)
                                         Text("1 Level").tag(1)
@@ -111,13 +132,13 @@ struct DuplicateSettingsView: View {
                                         Text("5 Levels").tag(5)
                                     }
                                     .labelsHidden()
-                                    .frame(maxWidth: 150)
+                                    .frame(width: 120)
                                 }
                                 
                                 Spacer()
                             }
                             
-                            VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
                                 SettingsInput(label: "Include Extensions", text: $includeExtensionsText, placeholder: "jpg, png, pdf (leave empty for all)")
                                 SettingsInput(label: "Exclude Extensions", text: $excludeExtensionsText, placeholder: ".DS_Store, .localized, .lnk")
                             }
@@ -126,72 +147,99 @@ struct DuplicateSettingsView: View {
                     
                     // Bulk Cleanup
                     SettingsSection(title: "Bulk Cleanup Rules", icon: "trash.circle") {
-                        VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
                             Text("When using 'Cleanup All', which file should be kept?")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .font(SortyDesignSystem.Typography.subheadline())
+                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                             
                             Picker("", selection: $settingsManager.settings.defaultKeepStrategy) {
                                 ForEach(KeepStrategy.allCases, id: \.self) { strategy in
                                     HStack {
                                         Text(strategy.displayName)
+                                            .font(SortyDesignSystem.Typography.body(weight: .medium))
                                         Spacer()
                                         Text(strategy.description)
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
+                                            .font(SortyDesignSystem.Typography.caption2())
+                                            .foregroundStyle(SortyDesignSystem.Colors.textTertiary)
                                     }
                                     .tag(strategy)
+                                    .padding(.vertical, 2)
                                 }
                             }
                             .pickerStyle(.radioGroup)
                             
                             Divider()
+                                .opacity(0.5)
                             
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sm) {
                                 Toggle("Enable Safe Deletion", isOn: $settingsManager.settings.enableSafeDeletion)
-                                    .font(.subheadline.weight(.medium))
+                                    .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
                                 
-                                Text(settingsManager.settings.enableSafeDeletion ? "Files are moved to a temporary recovery zone and can be restored from History." : "⚠️ Warning: Files will be permanently removed from disk immediately.")
-                                    .font(.caption)
-                                    .foregroundColor(settingsManager.settings.enableSafeDeletion ? .secondary : .orange)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                HStack(alignment: .top, spacing: SortyDesignSystem.Spacing.xs) {
+                                    Image(systemName: settingsManager.settings.enableSafeDeletion ? "info.circle" : "exclamationmark.triangle")
+                                        .font(.caption)
+                                    
+                                    Text(settingsManager.settings.enableSafeDeletion ? "Files are moved to a temporary recovery zone and can be restored from History." : "Warning: Files will be permanently removed from disk immediately.")
+                                        .font(SortyDesignSystem.Typography.caption())
+                                }
+                                .foregroundStyle(settingsManager.settings.enableSafeDeletion ? SortyDesignSystem.Colors.textSecondary : SortyDesignSystem.Colors.warning)
+                                .padding(SortyDesignSystem.Spacing.sm)
+                                .background(settingsManager.settings.enableSafeDeletion ? SortyDesignSystem.Colors.overlayLight : SortyDesignSystem.Colors.warning.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.small))
                             }
                         }
                     }
                     
                     // Semantic Detection
                     SettingsSection(title: "AI-Powered Matching", icon: "sparkles") {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
                             Toggle("Enable Semantic Matching", isOn: $settingsManager.settings.includeSemanticDuplicates)
-                                .font(.subheadline.weight(.medium))
+                                .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
                             
                             if settingsManager.settings.includeSemanticDuplicates {
-                                VStack(alignment: .leading, spacing: 8) {
+                                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.md) {
                                     HStack {
                                         Text("Similarity Threshold")
+                                            .font(SortyDesignSystem.Typography.subheadline())
                                         Spacer()
                                         Text(String(format: "%.0f%%", settingsManager.settings.semanticSimilarityThreshold * 100))
-                                            .font(.caption.monospacedDigit())
-                                            .foregroundColor(.secondary)
+                                            .font(SortyDesignSystem.Typography.mono(size: SortyDesignSystem.Typography.sizeCaption))
+                                            .foregroundStyle(SortyDesignSystem.Colors.primary)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 2)
+                                            .background(SortyDesignSystem.Colors.primary.opacity(0.1))
+                                            .clipShape(Capsule())
                                     }
-                                    Slider(value: $settingsManager.settings.semanticSimilarityThreshold, in: 0.7...1.0, step: 0.05)
+                                    
+                                    VStack(spacing: SortyDesignSystem.Spacing.xxs) {
+                                        Slider(value: $settingsManager.settings.semanticSimilarityThreshold, in: 0.7...1.0, step: 0.05)
+                                            .accentColor(SortyDesignSystem.Colors.primary)
+                                        
+                                        HStack {
+                                            Text("Looser (70%)")
+                                            Spacer()
+                                            Text("Stricter (100%)")
+                                        }
+                                        .font(SortyDesignSystem.Typography.caption2())
+                                        .foregroundStyle(SortyDesignSystem.Colors.textTertiary)
+                                    }
                                     
                                     Text("Used to find visually or contextually similar files even if binary data differs (e.g., resized images).")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .font(SortyDesignSystem.Typography.caption())
+                                        .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
-                                .padding(.leading, 24)
+                                .padding(.leading, SortyDesignSystem.Spacing.xxl)
                                 .transition(.move(edge: .top).combined(with: .opacity))
                             }
                         }
                     }
                 }
-                .padding(24)
+                .padding(SortyDesignSystem.Spacing.xxl)
             }
         }
         .frame(width: 600, height: 750)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(SortyDesignSystem.Colors.backgroundPrimary)
         .animation(.sortySpringStandard, value: settingsManager.settings.includeSemanticDuplicates)
     }
     
@@ -231,21 +279,26 @@ struct SettingsSection<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
+            HStack(spacing: SortyDesignSystem.Spacing.sm) {
                 Image(systemName: icon)
-                    .foregroundStyle(Color.accentColor)
-                Text(title)
                     .font(.headline)
+                    .foregroundStyle(SortyDesignSystem.Colors.primary)
+                    .frame(width: 24, height: 24)
+                    .background(SortyDesignSystem.Colors.primary.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                
+                Text(title)
+                    .font(SortyDesignSystem.Typography.headline())
             }
             
             content
-                .padding(16)
-                .background(Color.primary.opacity(0.03))
-                .cornerRadius(12)
+                .padding(SortyDesignSystem.Spacing.lg)
+                .background(SortyDesignSystem.Colors.backgroundSecondary.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.large))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.large)
+                        .stroke(SortyDesignSystem.Colors.glassBorder, lineWidth: 1)
                 )
         }
     }
@@ -257,17 +310,19 @@ struct SettingsInput: View {
     let placeholder: String
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xs) {
             Text(label)
-                .font(.subheadline.weight(.medium))
+                .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
+                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+            
             TextField(placeholder, text: $text)
                 .textFieldStyle(.plain)
-                .padding(8)
-                .background(Color(NSColor.controlBackgroundColor))
-                .cornerRadius(6)
+                .padding(SortyDesignSystem.Spacing.sm)
+                .background(SortyDesignSystem.Colors.backgroundTertiary)
+                .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.small))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.small)
+                        .stroke(SortyDesignSystem.Colors.glassBorder, lineWidth: 1)
                 )
         }
     }

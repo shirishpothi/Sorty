@@ -16,6 +16,7 @@ struct AIProviderSettingsView: View {
     @State private var isTestingConnection = false
     @State private var hasCopiedCode = false
     @State private var showModelPicker = false
+    @State private var isHoveringUsername = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -76,6 +77,11 @@ struct AIProviderSettingsView: View {
                             Text(username)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
+                                .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
+                                .animation(.spring(), value: isHoveringUsername)
+                                .onHover { hovering in
+                                    isHoveringUsername = hovering
+                                }
                         }
                     }
                     
@@ -206,9 +212,22 @@ struct AIProviderSettingsView: View {
                     isOptional: !viewModel.config.requiresAPIKey
                 )
                 
-                Text(viewModel.config.provider.apiKeyHelpText)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if let url = viewModel.config.provider.apiKeyURL {
+                    HStack(spacing: 4) {
+                        Text("Get your API key from")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Link(destination: url) {
+                            Text(viewModel.config.provider.apiKeyLinkLabel)
+                                .font(.caption)
+                                .underline()
+                        }
+                    }
+                } else {
+                    Text(viewModel.config.provider.apiKeyHelpText)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Model")

@@ -17,6 +17,7 @@ extension Notification.Name {
     public static let organizationDidStart = Notification.Name("OrganizationDidStart")
     public static let organizationDidFinish = Notification.Name("OrganizationDidFinish")
     public static let organizationDidRevert = Notification.Name("OrganizationDidRevert")
+    public static let forceQuitSorty = Notification.Name("ForceQuitSorty")
 }
 
 
@@ -421,7 +422,7 @@ public struct LoadingDotsView: View {
     }
 
     public var body: some View {
-        SwiftUI.TimelineView(.animation) { timeline in
+        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             HStack(spacing: dotSize * 0.75) {
                 ForEach(0..<dotCount, id: \.self) { index in

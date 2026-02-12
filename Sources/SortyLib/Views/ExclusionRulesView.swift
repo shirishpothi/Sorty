@@ -10,9 +10,12 @@ import SwiftUI
 struct ExclusionRulesView: View {
     @EnvironmentObject var rulesManager: ExclusionRulesManager
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingAddRule = false
     @State private var searchText = ""
     @State private var contentOpacity: Double = 0
+    @State private var newNLException = ""
+    @State private var isImprovingException = false
 
     private var filteredRules: [ExclusionRule] {
         if searchText.isEmpty {
@@ -59,7 +62,7 @@ struct ExclusionRulesView: View {
                             searchBar
                                 .padding(.horizontal, 20)
                                 .padding(.top, 16)
-                            
+
                             // Grouped rules
                             ForEach(Array(groupedRules.enumerated()), id: \.1.0) { index, group in
                                 RuleGroupCard(
@@ -69,7 +72,7 @@ struct ExclusionRulesView: View {
                                 )
                                 .animatedAppearance(delay: Double(index) * 0.05)
                             }
-                            
+
                             if filteredRules.isEmpty && !searchText.isEmpty {
                                 VStack(spacing: 12) {
                                     Image(systemName: "magnifyingglass")
@@ -81,6 +84,9 @@ struct ExclusionRulesView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 40)
                             }
+
+                            // Natural language exceptions
+                            naturalLanguageExceptionsCard
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 20)
@@ -183,6 +189,112 @@ struct ExclusionRulesView: View {
         .padding(10)
         .background(Color.secondary.opacity(0.1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    // MARK: - Natural Language Exceptions
+
+    private var naturalLanguageExceptionsCard: some View {
+        SettingsCard(title: "Natural Language Exceptions", icon: "text.bubble", color: .purple) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Describe files the AI should never touch, in plain English.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 8) {
+                    TextField("e.g. don't touch any npm module files", text: $newNLException)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit {
+                            addException()
+                        }
+
+                    Button {
+                        Task { await improveExceptionWithAI() }
+                    } label: {
+                        if isImprovingException {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "wand.and.stars")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.purple)
+                    .disabled(newNLException.trimmingCharacters(in: .whitespaces).isEmpty || isImprovingException)
+                    .help("Refine with AI")
+
+                    Button("Add") {
+                        addException()
+                    }
+                    .buttonStyle(.onboardingPill(size: .small))
+                    .disabled(newNLException.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+
+                if !rulesManager.naturalLanguageExceptions.isEmpty {
+                    Divider()
+
+                    ForEach(Array(rulesManager.naturalLanguageExceptions.enumerated()), id: \.offset) { index, exception in
+                        HStack(spacing: 10) {
+                            Image(systemName: "text.quote")
+                                .font(.caption)
+                                .foregroundColor(.purple)
+
+                            Text(exception)
+                                .font(.subheadline)
+                                .lineLimit(2)
+
+                            Spacer()
+
+                            Button {
+                                withAnimation {
+                                    rulesManager.removeNaturalLanguageException(at: index)
+                                }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary)
+                                    .font(.system(size: 14))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 4)
+
+                        if index < rulesManager.naturalLanguageExceptions.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func addException() {
+        let trimmed = newNLException.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        withAnimation {
+            rulesManager.addNaturalLanguageException(trimmed)
+        }
+        newNLException = ""
+    }
+
+    private func improveExceptionWithAI() async {
+        let original = newNLException.trimmingCharacters(in: .whitespaces)
+        guard !original.isEmpty else { return }
+        isImprovingException = true
+        defer { isImprovingException = false }
+
+        do {
+            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            let improved = try await client.generateText(
+                prompt: "Improve this file exclusion rule to be more precise and comprehensive: \"\(original)\"\n\nReturn only the improved rule text, nothing else. Keep it concise (under 200 characters).",
+                systemPrompt: "You are a file organization expert. Refine the natural language exclusion rule to be clearer and more specific about which files should be excluded from organization."
+            )
+            let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                newNLException = String(trimmed.prefix(200))
+                HapticFeedbackManager.shared.success()
+            }
+        } catch {
+            HapticFeedbackManager.shared.error()
+        }
     }
 }
 
@@ -293,9 +405,9 @@ struct RuleGroupCard: View {
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
+                .contentShape(Rectangle())
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             
@@ -408,6 +520,7 @@ struct ExclusionRuleRow: View {
             .labelsHidden()
             .accessibilityLabel(rule.isEnabled ? "Disable rule: \(rule.displayDescription)" : "Enable rule: \(rule.displayDescription)")
         }
+        .contentShape(Rectangle())
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)

@@ -43,6 +43,32 @@ public enum ExampleAction: String, Codable, Sendable {
     case addToExamples // User explicitly added to examples
 }
 
+/// Scope for rule applicability
+public enum RuleScope: Codable, Sendable, Equatable, Hashable {
+    case global
+    case folder(String)
+    case activePersona(UUID)
+    
+    public var displayName: String {
+        switch self {
+        case .global: return "Global"
+        case .folder(let path):
+            let name = URL(fileURLWithPath: path).lastPathComponent
+            return "Folder: \(name)"
+        case .activePersona(let id):
+            return "Persona: \(id.uuidString.prefix(8))..."
+        }
+    }
+}
+
+/// Status of an inferred rule in the approval pipeline
+public enum RuleStatus: String, Codable, Sendable {
+    case active
+    case pendingApproval
+    case rejected
+    case cooldown
+}
+
 // MARK: - Inferred Rule
 
 /// A regex + template rule learned from examples
@@ -65,6 +91,18 @@ public struct InferredRule: Codable, Identifiable, Sendable {
     
     // Initial confidence from LLM (used before usage data is available)
     public var initialConfidence: RuleConfidence?
+    
+    // Scope & approval
+    public var scope: RuleScope
+    public var status: RuleStatus
+    
+    // Evidence lineage
+    public var evidenceIds: [String]
+    public var evidenceDescription: String?
+    
+    // Cooling off (for rejected rules)
+    public var rejectedAt: Date?
+    public var cooldownUntil: Date?
     
     /// Calculate failure rate for quality assessment
     public var failureRate: Double {
@@ -114,7 +152,13 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         isEnabled: Bool = true,
         lastAppliedAt: Date? = nil,
         supportCount: Int = 1,
-        initialConfidence: RuleConfidence? = nil
+        initialConfidence: RuleConfidence? = nil,
+        scope: RuleScope = .global,
+        status: RuleStatus = .active,
+        evidenceIds: [String] = [],
+        evidenceDescription: String? = nil,
+        rejectedAt: Date? = nil,
+        cooldownUntil: Date? = nil
     ) {
         self.id = id
         self.pattern = pattern
@@ -129,6 +173,12 @@ public struct InferredRule: Codable, Identifiable, Sendable {
         self.lastAppliedAt = lastAppliedAt
         self.supportCount = supportCount
         self.initialConfidence = initialConfidence
+        self.scope = scope
+        self.status = status
+        self.evidenceIds = evidenceIds
+        self.evidenceDescription = evidenceDescription
+        self.rejectedAt = rejectedAt
+        self.cooldownUntil = cooldownUntil
     }
 }
 
@@ -431,6 +481,10 @@ public struct LearningsImpactSummary: Sendable {
     public let filesRoutedByLearnings: Int
     public let correctionsAfterAI: Int
     public let reverts: Int
+    public let acceptedOrganizations: Int
+    public let rejectedOrganizations: Int
+    public let cancelledOrganizations: Int
+    public let regeneratedOrganizations: Int
     
     public var correctionRate: Double {
         guard filesRoutedByLearnings > 0 else { return 0 }
@@ -451,13 +505,21 @@ public struct LearningsImpactSummary: Sendable {
         totalRuns: Int = 0,
         filesRoutedByLearnings: Int = 0,
         correctionsAfterAI: Int = 0,
-        reverts: Int = 0
+        reverts: Int = 0,
+        acceptedOrganizations: Int = 0,
+        rejectedOrganizations: Int = 0,
+        cancelledOrganizations: Int = 0,
+        regeneratedOrganizations: Int = 0
     ) {
         self.runsWithLearnings = runsWithLearnings
         self.totalRuns = totalRuns
         self.filesRoutedByLearnings = filesRoutedByLearnings
         self.correctionsAfterAI = correctionsAfterAI
         self.reverts = reverts
+        self.acceptedOrganizations = acceptedOrganizations
+        self.rejectedOrganizations = rejectedOrganizations
+        self.cancelledOrganizations = cancelledOrganizations
+        self.regeneratedOrganizations = regeneratedOrganizations
     }
 }
 

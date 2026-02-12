@@ -60,13 +60,22 @@ struct WatchedFoldersView: View {
             case .success(let urls):
                 if let url = urls.first {
                     HapticFeedbackManager.shared.success()
-                    
+
+                    // Start accessing the security-scoped resource before creating the bookmark.
+                    // fileImporter URLs are security-scoped but the resource must be
+                    // explicitly started to ensure bookmark creation captures the scope.
+                    let didStart = url.startAccessingSecurityScopedResource()
+
                     // Create security-scoped bookmark
                     let bookmarkData = try? url.bookmarkData(
                         options: .withSecurityScope,
                         includingResourceValuesForKeys: nil,
                         relativeTo: nil
                     )
+
+                    if didStart {
+                        url.stopAccessingSecurityScopedResource()
+                    }
                     
                     if bookmarkData == nil {
                         DebugLogger.log("Failed to create security-scoped bookmark for \(url.path)")
@@ -218,6 +227,7 @@ struct WatchedFolderCard: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @State private var showingConfig = false
     @State private var isHovered = false
+
     
     private var isOrganizing: Bool {
         guard let currentDir = organizer.currentDirectory else { return false }
@@ -369,6 +379,25 @@ struct WatchedFolderCard: View {
                         }
                         .foregroundStyle(.orange)
                         .help("App Sandbox access to this folder was lost. Try removing and re-adding it.")
+
+                        Button("Grant Access") {
+                            let panel = NSOpenPanel()
+                            panel.canChooseFiles = false
+                            panel.canChooseDirectories = true
+                            panel.allowsMultipleSelection = false
+                            panel.message = "Re-select \"\(folder.name)\" to restore access"
+                            panel.prompt = "Grant Access"
+                            if let parentPath = URL(fileURLWithPath: folder.path).deletingLastPathComponent() as URL? {
+                                panel.directoryURL = parentPath
+                            }
+                            if panel.runModal() == .OK, let url = panel.url {
+                                watchedFoldersManager.reauthorizeFolder(folder, with: url)
+                                HapticFeedbackManager.shared.success()
+                            }
+                        }
+                        .font(.caption2)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
                     }
                 }
             }
@@ -451,6 +480,7 @@ struct WatchedFolderCard: View {
                                 Text(folder.autoOrganize ? "Auto" : "Manual")
                                     .font(.caption2)
                             }
+                            .contentShape(Rectangle())
                             .foregroundColor(folder.autoOrganize ? .green : .secondary)
                             .opacity(isAIConfigured ? 1.0 : 0.5)
                         }
@@ -464,6 +494,7 @@ struct WatchedFolderCard: View {
             .animation(.spring(response: 0.25, dampingFraction: 0.8), value: folder.isEnabled)
         }
         .padding(16)
+        .contentShape(Rectangle())
         .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -473,7 +504,6 @@ struct WatchedFolderCard: View {
         )
         .shadow(color: .black.opacity(0.03), radius: 3, x: 0, y: 1)
         .opacity(folder.exists ? 1.0 : 0.8)
-        .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .contextMenu {
@@ -495,6 +525,7 @@ struct WatchedFolderCard: View {
             WatchedFolderConfigView(folder: folder)
                 .modalBounce()
         }
+
     }
 }
 

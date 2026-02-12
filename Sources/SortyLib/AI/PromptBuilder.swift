@@ -8,12 +8,31 @@
 import Foundation
 
 struct PromptBuilder {
-    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, maxTopLevelFolders: Int = 10) -> String {
-        var prompt = SystemPrompt.buildPrompt(maxTopLevelFolders: maxTopLevelFolders)
+    static func buildSystemPrompt(enableReasoning: Bool = false, personaInfo: String, maxTopLevelFolders: Int = 10, mode: OrganizationMode = .organize, enableTagging: Bool = true) -> String {
+        var prompt = SystemPrompt.buildPrompt(maxTopLevelFolders: maxTopLevelFolders, mode: mode, enableTagging: enableTagging)
         
-        // Add persona-specific instructions
         if !personaInfo.isEmpty {
-            prompt += personaInfo
+            prompt += """
+            
+            
+            # ═══════════════════════════════════════════════════════
+            # ACTIVE PERSONA — HIGHEST PRIORITY INSTRUCTIONS
+            # ═══════════════════════════════════════════════════════
+            #
+            # The following persona rules OVERRIDE all default grouping,
+            # naming, and hierarchy rules above. When this persona's
+            # instructions conflict with the defaults, ALWAYS follow
+            # the persona. The persona defines your identity for this
+            # organization task.
+            # ═══════════════════════════════════════════════════════
+            
+            \(personaInfo)
+            
+            # ═══════════════════════════════════════════════════════
+            # END PERSONA — Resume base rules for anything not
+            # explicitly covered by the persona above.
+            # ═══════════════════════════════════════════════════════
+            """
         }
         
         if enableReasoning {
@@ -67,7 +86,25 @@ struct PromptBuilder {
         }
         
         if let instructions = customInstructions, !instructions.isEmpty {
-            prompt += "USER INSTRUCTIONS: \(instructions)\n\n"
+            prompt += """
+            ╔══════════════════════════════════════════════════════════╗
+            ║  MANDATORY USER REQUIREMENTS — MUST FOLLOW EXACTLY      ║
+            ╠══════════════════════════════════════════════════════════╣
+            ║  The following instructions come directly from the user. ║
+            ║  They override ALL default rules. If the user says       ║
+            ║  "do X", you MUST do X. If the user says "don't do Y",  ║
+            ║  you MUST NOT do Y. No exceptions, no creative           ║
+            ║  reinterpretation. Follow them LITERALLY.                ║
+            ╚══════════════════════════════════════════════════════════╝
+
+            USER INSTRUCTIONS: \(instructions)
+
+            \(instructions)
+
+            ════════════════════════════════════════════════════════════
+            
+            
+            """
         }
         
         // Add storage locations context if provided
@@ -80,7 +117,9 @@ struct PromptBuilder {
             prompt += "\(existingContext)\n\n"
         }
         
-        if mode == .renameOnly || mode == .organizeAndRename || enableSmartRename {
+        // Rename instructions: ONLY include if in a renaming mode. 
+        // If mode is .organize, we explicitly IGNORE enableSmartRename to ensure filenames remain unchanged.
+        if mode == .renameOnly || mode == .organizeAndRename {
             prompt += """
             ## INTELLIGENT RENAMING
             Suggest meaningful, descriptive filenames that help users understand file contents at a glance.
@@ -113,7 +152,7 @@ struct PromptBuilder {
                 
                 // Include content metadata if available and requested
                 if includeContentMetadata, let metadata = file.contentMetadata, !metadata.isEmpty {
-                    fileDesc += " \(metadata.summary)"
+                    fileDesc += "\n    [Content Analysis] \(metadata.summary)"
                 }
                 
                 prompt += "\(fileDesc)\n"
@@ -122,7 +161,15 @@ struct PromptBuilder {
                 prompt += "  ... and \(fileList.count - 50) more \(extLabel) files\n"
             }
         }
-        
+
+        if includeContentMetadata {
+            prompt += "\n## IMAGE & CONTENT ANALYSIS\n"
+            prompt += "For files with content metadata, use the extracted text, descriptions, and visual content to make better organization decisions:\n"
+            prompt += "- Image content: Use visible subjects, scenes, and text to determine appropriate folders and tags\n"
+            prompt += "- Document text: Group related documents by their actual content, not just filenames\n"
+            prompt += "- OCR results: Use text found in images/screenshots for more accurate categorization\n\n"
+        }
+
         if mode == .renameOnly {
             prompt += "\nReturn the suggestions in JSON format. Use a single folder named '.' to represent the current location for all files."
         } else if enableReasoning {
@@ -245,7 +292,7 @@ struct PromptBuilder {
     }
     
     /// Compact system prompt for Apple Intelligence
-    static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, maxTopLevelFolders: Int = 10) -> String {
+    static func buildCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false, enableSmartRename: Bool = false, maxTopLevelFolders: Int = 10, enableTagging: Bool = true) -> String {
         var prompt = "You are a file management assistant. "
         
         if mode == .renameOnly {
@@ -261,10 +308,11 @@ struct PromptBuilder {
         - Never name a folder the same as an existing file in the input.
         - Use clear folder names
         - Group by type: Documents, Media, Code, Archives
-        \(mode == .renameOnly || enableSmartRename ? "- Suggest better filenames where appropriate" : "")
+        \(mode == .renameOnly || mode == .organizeAndRename ? "- Suggest better filenames where appropriate" : "")
+        \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
         Return JSON:
-        {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")"files":[\(mode == .renameOnly || enableSmartRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\"}" : "\"\"")],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\"}" : "\"\"")],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """
         
         return prompt
@@ -287,7 +335,7 @@ struct PromptBuilder {
                 }
             }
             if let instructions = customInstructions, !instructions.isEmpty {
-                prompt = "USER INSTRUCTIONS: \(instructions)\n\n" + prompt
+                prompt = "⚠️ MANDATORY USER INSTRUCTIONS (override all defaults): \(instructions)\n\n" + prompt
             }
             if let storageContext = storageLocationsContext, !storageContext.isEmpty {
                 prompt = "\(storageContext)\n\n" + prompt
@@ -349,5 +397,3 @@ struct PromptBuilder {
         return context
     }
 }
-
-

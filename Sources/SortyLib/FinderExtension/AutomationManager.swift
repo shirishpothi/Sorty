@@ -25,6 +25,9 @@ public final class AutomationManager: ObservableObject {
     
     private var selectionCheckTimer: Timer?
     private let selectionCheckInterval: TimeInterval = 2.0
+    private var isInitializing = true
+    private var isStartedUp = false
+    private var automationChecksEnabled = false
     
     // MARK: - UserDefaults Keys
     
@@ -35,7 +38,9 @@ public final class AutomationManager: ObservableObject {
     
     @Published public var enableSelectionMonitoring: Bool {
         didSet {
+            guard !isInitializing else { return }
             UserDefaults.standard.set(enableSelectionMonitoring, forKey: enableSelectionMonitoringKey)
+            guard isStartedUp else { return }
             if enableSelectionMonitoring {
                 startSelectionMonitoring()
             } else {
@@ -46,6 +51,7 @@ public final class AutomationManager: ObservableObject {
     
     @Published public var autoSelectOrganizedFolders: Bool {
         didSet {
+            guard !isInitializing else { return }
             UserDefaults.standard.set(autoSelectOrganizedFolders, forKey: autoSelectOrganizedFoldersKey)
         }
     }
@@ -62,8 +68,22 @@ public final class AutomationManager: ObservableObject {
             self.autoSelectOrganizedFolders = true
             UserDefaults.standard.set(true, forKey: "automation.settingsInitialized")
         }
+        isInitializing = false
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    // MARK: - Lifecycle
+    
+    /// Called after app launch when UI is ready; automation checks are still gated by user intent
+    public func startUp() {
+        isStartedUp = true
+        FinderAutomation.markAppReady()
         
-        // Listen for app activation to refresh status
+        // Register the notification observer here instead of init() to avoid
+        // permission checks firing during SwiftUI view graph construction
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(appDidBecomeActive),
@@ -72,24 +92,28 @@ public final class AutomationManager: ObservableObject {
         )
     }
     
-    // MARK: - Lifecycle
-    
-    /// Called after app launch when UI is ready to perform dangerous automation checks
-    public func startUp() {
-        // Check permissions
-        checkPermissions()
-        
-        // Setup monitoring if enabled
-        if enableSelectionMonitoring {
-            startSelectionMonitoring()
-        }
-    }
-    
     // MARK: - Permission Management
     
     /// Check Automation permission status
     public func checkPermissions() {
-        automationStatus = FinderAutomation.checkAutomationPermission()
+        automationStatus = FinderAutomation.checkAutomationPermission(prompt: false)
+        if automationStatus == .granted {
+            UserDefaults.standard.set(true, forKey: "automation.previouslyGranted")
+        }
+    }
+
+    /// Explicitly trigger automation permission checks after user intent
+    public func requestAutomationPermissionCheck() {
+        automationChecksEnabled = true
+        FinderAutomation.enableAutomationChecks()
+        automationStatus = FinderAutomation.checkAutomationPermission(prompt: true)
+        if automationStatus == .granted {
+            UserDefaults.standard.set(true, forKey: "automation.previouslyGranted")
+        }
+
+        if isStartedUp && enableSelectionMonitoring && automationStatus == .granted {
+            startSelectionMonitoring()
+        }
     }
     
     /// Open System Settings to Automation permissions
@@ -101,6 +125,10 @@ public final class AutomationManager: ObservableObject {
     
     /// Start monitoring Finder selection periodically
     public func startSelectionMonitoring() {
+        guard automationChecksEnabled else {
+            DebugLogger.log("Automation checks not enabled; deferring selection monitoring")
+            return
+        }
         guard automationStatus == .granted else {
             DebugLogger.log("Cannot start selection monitoring: Automation permission not granted")
             return
@@ -187,12 +215,14 @@ public final class AutomationManager: ObservableObject {
     // MARK: - Notification Handler
     
     @objc private func appDidBecomeActive() {
-        // Refresh permission status when app becomes active
-        checkPermissions()
-        
-        // Refresh selection if monitoring is enabled
-        if enableSelectionMonitoring && automationStatus == .granted {
-            updateFinderSelection()
+        Task { @MainActor [weak self] in
+            guard let self = self, self.isStartedUp else { return }
+            guard self.automationChecksEnabled else { return }
+            self.checkPermissions()
+
+            if self.enableSelectionMonitoring && self.automationStatus == .granted {
+                self.updateFinderSelection()
+            }
         }
     }
 }

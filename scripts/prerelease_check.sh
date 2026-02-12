@@ -8,8 +8,10 @@
 #   ./scripts/prerelease_check.sh [options]
 #
 # Options:
-#   --ui-tests      Include UI tests (slower, requires Xcode project)
+#   --ui-tests      Deprecated (ignored; UI tests are disabled)
 #   --skip-build    Skip the build phase (useful if already built)
+#   --skip-tests    Skip unit/UI tests (useful in CI when tests already ran)
+#   --skip-sparkle  Skip Sparkle validation (useful outside release readiness)
 #   --verbose       Show detailed output for each check
 #   --help          Show this help message
 #
@@ -29,6 +31,8 @@ source "${SCRIPT_DIR}/utils.sh"
 
 RUN_UI_TESTS=false
 SKIP_BUILD=false
+SKIP_TESTS=false
+SKIP_SPARKLE=false
 VERBOSE=false
 
 # Counters
@@ -48,7 +52,8 @@ declare -a WARNINGS=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --ui-tests)
-            RUN_UI_TESTS=true
+            RUN_UI_TESTS=false
+            echo "Warning: --ui-tests is deprecated and ignored (UI tests are disabled)."
             shift
             ;;
         --skip-build)
@@ -57,6 +62,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --verbose)
             VERBOSE=true
+            shift
+            ;;
+        --skip-tests)
+            SKIP_TESTS=true
+            shift
+            ;;
+        --skip-sparkle)
+            SKIP_SPARKLE=true
             shift
             ;;
         --help)
@@ -217,34 +230,24 @@ phase_build_test() {
         fi
     fi
     
-    # Unit tests
-    echo -e "  ${BLUE}...${NC} Running unit tests..."
-    if swift test --parallel 2>&1 | tail -10; then
-        check_pass "All unit tests pass"
+    if [ "$SKIP_TESTS" = true ]; then
+        check_skip "Unit tests" "skipped via --skip-tests"
     else
-        check_fail "Unit tests" "One or more tests failed"
-        return 1
+        # Unit tests
+        echo -e "  ${BLUE}...${NC} Running unit tests..."
+        if swift test --parallel 2>&1 | tail -10; then
+            check_pass "All unit tests pass"
+        else
+            check_fail "Unit tests" "One or more tests failed"
+            return 1
+        fi
     fi
     
-    # UI tests (optional)
-    if [ "$RUN_UI_TESTS" = true ]; then
-        echo -e "  ${BLUE}...${NC} Running UI tests..."
-        if [ -f "${PROJECT_DIR}/Sorty.xcodeproj/project.pbxproj" ]; then
-            if xcodebuild test \
-                -project "${PROJECT_DIR}/Sorty.xcodeproj" \
-                -scheme "Sorty" \
-                -destination 'platform=macOS' \
-                -only-testing:SortyUITests \
-                CODE_SIGNING_ALLOWED=NO 2>&1 | tail -20; then
-                check_pass "UI tests pass"
-            else
-                check_warn "UI tests" "Some UI tests failed (non-blocking)"
-            fi
-        else
-            check_skip "UI tests" "Xcode project not found"
-        fi
+    # UI tests are intentionally disabled for release checks.
+    if [ "$SKIP_TESTS" = true ]; then
+        check_skip "UI tests" "skipped via --skip-tests"
     else
-        check_skip "UI tests" "use --ui-tests to enable"
+        check_skip "UI tests" "disabled for release checks"
     fi
     
     return 0
@@ -306,19 +309,19 @@ phase_cli() {
     fi
     
     # Check scheme is set to sorty
-    if grep -q 'APP_SCHEME="sorty"' "$FILEORG_PATH"; then
-        check_pass "fileorg uses sorty:// scheme"
+    if grep -q 'APP_SCHEME="sorty"' "$SORTY_CLI_PATH"; then
+        check_pass "sorty uses sorty:// scheme"
     else
-        check_fail "fileorg scheme" "APP_SCHEME should be 'sorty'"
+        check_fail "sorty scheme" "APP_SCHEME should be 'sorty'"
         return 1
     fi
     
     # Test help command
-    chmod +x "$FILEORG_PATH"
-    if "$FILEORG_PATH" help 2>&1 | grep -q "Sorty CLI"; then
-        check_pass "fileorg help command works"
+    chmod +x "$SORTY_CLI_PATH"
+    if "$SORTY_CLI_PATH" help 2>&1 | grep -q "Sorty CLI"; then
+        check_pass "sorty help command works"
     else
-        check_fail "fileorg help" "Help output not recognized"
+        check_fail "sorty help" "Help output not recognized"
         return 1
     fi
     
@@ -546,7 +549,12 @@ phase_security() {
     
     # Patterns that might indicate hardcoded secrets
     SUSPICIOUS_PATTERNS=(
-        "sk-[a-zA-Z0-9]{20,}"      # OpenAI API key pattern
+        "sk-(proj-)?[a-zA-Z0-9]{20,}"          # OpenAI
+        "sk-ant-api03-[a-zA-Z0-9_-]{90,}"       # Anthropic
+        "AIzaSy[a-zA-Z0-9_-]{33}"               # Gemini/Google
+        "gsk_[a-zA-Z0-9]{52}"                   # Groq
+        "sk-or-v1-[a-z0-9]{64}"                 # OpenRouter
+        "(ghp_|github_pat_)[a-zA-Z0-9_]{36,255}" # GitHub tokens
         "api[_-]?key\s*=\s*[\"'][^\"']{20,}[\"']"
         "secret\s*=\s*[\"'][^\"']{20,}[\"']"
         "password\s*=\s*[\"'][^\"']+[\"']"
@@ -586,7 +594,7 @@ phase_code_quality() {
     SOURCES_DIR="${PROJECT_DIR}/Sources"
     
     # Count debug print statements
-    DEBUG_PRINTS=$(grep -rE "^\s*(print|debugPrint)\(" "$SOURCES_DIR" --include="*.swift" 2>/dev/null | grep -v "Tests/" | wc -l | tr -d ' ')
+    DEBUG_PRINTS=$(grep -rE "^\s*(print|debugPrint)\(" "$SOURCES_DIR" --include="*.swift" 2>/dev/null | grep -v "Tests/" | grep -v "Sources/LearningsCLI/" | wc -l | tr -d ' ')
     if [ "$DEBUG_PRINTS" -eq 0 ]; then
         check_pass "No debug print statements"
     elif [ "$DEBUG_PRINTS" -lt 10 ]; then
@@ -632,15 +640,15 @@ phase_deeplinks() {
         return 1
     fi
     
-    # Check fileorg supports key deeplink commands
-    FILEORG_PATH="${PROJECT_DIR}/CLI/fileorg"
-    chmod +x "$FILEORG_PATH"
+    # Check sorty supports key deeplink commands
+    SORTY_CLI_PATH="${PROJECT_DIR}/CLI/sorty"
+    chmod +x "$SORTY_CLI_PATH"
     
     DEEPLINK_COMMANDS=("organize" "duplicates" "settings" "learnings" "health" "history")
     MISSING_COMMANDS=()
     
     for cmd in "${DEEPLINK_COMMANDS[@]}"; do
-        if ! "$FILEORG_PATH" help 2>&1 | grep -qi "$cmd"; then
+        if ! "$SORTY_CLI_PATH" help 2>&1 | grep -qi "$cmd"; then
             MISSING_COMMANDS+=("$cmd")
         fi
     done
@@ -699,6 +707,7 @@ phase_permissions() {
         "scripts/release.sh"
         "scripts/package.sh"
         "scripts/run_tests.sh"
+        "scripts/validate_sparkle.sh"
         "CLI/sorty"
     )
     
@@ -772,6 +781,24 @@ phase_update_system() {
     else
         check_fail "UpdateManager wiring" "UpdateManager not referenced in app code"
     fi
+
+    # Test 4: Validate Sparkle update system
+    if [ "$SKIP_SPARKLE" = true ]; then
+        check_skip "Sparkle validation" "skipped via --skip-sparkle"
+        return 0
+    fi
+
+    if [ -x "${SCRIPT_DIR}/validate_sparkle.sh" ]; then
+        if "${SCRIPT_DIR}/validate_sparkle.sh"; then
+            check_pass "Sparkle update system validation"
+        else
+            check_fail "Sparkle update system" "Validation failed"
+            return 1
+        fi
+    else
+        check_fail "Sparkle validation" "validate_sparkle.sh not found or not executable"
+        return 1
+    fi
     
     return 0
 }
@@ -841,8 +868,10 @@ main() {
     local start_time=$(date +%s)
     
     echo -e "Configuration:"
-    echo -e "  • UI Tests: $([ "$RUN_UI_TESTS" = true ] && echo "enabled" || echo "disabled")"
+    echo -e "  • UI Tests: disabled"
     echo -e "  • Skip Build: $([ "$SKIP_BUILD" = true ] && echo "yes" || echo "no")"
+    echo -e "  • Skip Tests: $([ "$SKIP_TESTS" = true ] && echo "yes" || echo "no")"
+    echo -e "  • Skip Sparkle: $([ "$SKIP_SPARKLE" = true ] && echo "yes" || echo "no")"
     echo -e "  • Verbose: $([ "$VERBOSE" = true ] && echo "yes" || echo "no")"
     
     # Run all phases

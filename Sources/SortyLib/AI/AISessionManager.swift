@@ -19,16 +19,30 @@ public class AISessionManager: ObservableObject {
     
     // MARK: - Properties
     
+    /// Tracks config-relevant properties to detect when a session needs recreation
+    private struct SessionSignature: Equatable {
+        let requestTimeout: TimeInterval
+        let resourceTimeout: TimeInterval
+        let apiURL: String?
+    }
+    
     /// Cached sessions per provider
     private var sessions: [AIProvider: URLSession] = [:]
+    
+    /// Cached signatures per provider for change detection
+    private var sessionSignatures: [AIProvider: SessionSignature] = [:]
     
     /// Last usage time for cleanup
     private var lastUsed: [AIProvider: Date] = [:]
     
     /// Prewarming status
-    @Published public private(set) var prewarmingProvider: AIProvider?
+    @Published public private(set) var prewarmingProviders: Set<AIProvider> = []
     @Published public private(set) var isPrewarmed: Bool = false
     @Published public private(set) var prewarmError: String?
+
+    public var prewarmingProvider: AIProvider? {
+        prewarmingProviders.first
+    }
     
     /// Session timeout for cleanup (10 minutes of inactivity)
     private let sessionTimeout: TimeInterval = 10 * 60
@@ -46,18 +60,28 @@ public class AISessionManager: ObservableObject {
     
     /// Get or create a URLSession for a provider
     public func session(for provider: AIProvider, config: AIConfig) -> URLSession {
-        // Update last used time
         lastUsed[provider] = Date()
         
-        // Return existing session if available
+        let currentSignature = SessionSignature(
+            requestTimeout: config.requestTimeout,
+            resourceTimeout: config.resourceTimeout,
+            apiURL: config.apiURL
+        )
+        
         if let existing = sessions[provider] {
-            return existing
+            if sessionSignatures[provider] == currentSignature {
+                return existing
+            }
+            LogManager.shared.log("Config changed for \(provider.displayName), recreating session", category: "AISessionManager")
+            existing.invalidateAndCancel()
+            sessions.removeValue(forKey: provider)
+            sessionSignatures.removeValue(forKey: provider)
         }
         
-        // Create new session with optimized configuration
         let sessionConfig = createSessionConfiguration(for: provider, aiConfig: config)
         let session = URLSession(configuration: sessionConfig)
         sessions[provider] = session
+        sessionSignatures[provider] = currentSignature
         
         LogManager.shared.log("Created new session for \(provider.displayName)", category: "AISessionManager")
         
@@ -86,14 +110,14 @@ public class AISessionManager: ObservableObject {
     
     /// Prewarm connection for a provider (call when user selects folder)
     public func prewarm(provider: AIProvider, config: AIConfig) async {
-        guard prewarmingProvider == nil else { return }
+        guard !prewarmingProviders.contains(provider) else { return }
 
-        prewarmingProvider = provider
+        prewarmingProviders.insert(provider)
         prewarmError = nil
         isPrewarmed = false
 
         defer {
-            prewarmingProvider = nil
+            prewarmingProviders.remove(provider)
         }
 
         // Skip prewarming for local/on-device providers
@@ -173,16 +197,22 @@ public class AISessionManager: ObservableObject {
             return
         }
         
+        // Load saved config to use its specific settings (timeouts, URLs)
+        // This prevents immediate session invalidation when the app finishes loading
+        let savedConfigData = UserDefaults.standard.data(forKey: "aiConfig")
+        let savedConfig = savedConfigData.flatMap { try? JSONDecoder().decode(AIConfig.self, from: $0) }
+        
         LogManager.shared.log("Prewarming \(configuredProviders.count) configured providers in parallel...", category: "AISessionManager")
         
         await withTaskGroup(of: Void.self) { group in
             for provider in configuredProviders {
                 group.addTask {
-                    let config = AIConfig(
-                        provider: provider,
-                        apiKey: nil, // Will be fetched from Keychain by clients
-                        model: "default"
-                    )
+                    // Use saved settings as template if they match the provider type, 
+                    // this ensures signatures match the eventual actual config
+                    var config = (savedConfig?.provider == provider) ? savedConfig! : AIConfig.default
+                    config.provider = provider
+                    config.apiKey = nil // Fetched from Keychain by session manager
+                    
                     await self.prewarm(provider: provider, config: config)
                 }
             }
@@ -242,13 +272,12 @@ public class AISessionManager: ObservableObject {
         if let session = sessions[provider] {
             session.invalidateAndCancel()
             sessions.removeValue(forKey: provider)
+            sessionSignatures.removeValue(forKey: provider)
             lastUsed.removeValue(forKey: provider)
             LogManager.shared.log("Invalidated session for \(provider.displayName)", category: "AISessionManager")
         }
         
-        if prewarmingProvider == provider {
-            isPrewarmed = false
-        }
+        prewarmingProviders.remove(provider)
     }
     
     /// Invalidate all sessions
@@ -284,9 +313,9 @@ public class AISessionManager: ObservableObject {
         config.urlCache = nil  // No caching for AI requests
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         
-        // Enable TLS 1.3 where available for faster handshakes
-        config.tlsMinimumSupportedProtocolVersion = .TLSv12
-        config.tlsMaximumSupportedProtocolVersion = .TLSv13
+        // Enable TLS 1.2+ for security and performance
+        config.tlsMinimumSupportedProtocol = .tlsProtocol12
+        config.tlsMaximumSupportedProtocol = .tlsProtocol13
         
         // TCP connection optimization
         config.shouldUseExtendedBackgroundIdleMode = true

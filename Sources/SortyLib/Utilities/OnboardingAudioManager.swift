@@ -1,0 +1,418 @@
+//
+//  OnboardingAudioManager.swift
+//  Sorty
+//
+//  Manages audio for the onboarding demo animation.
+//  Uses AVAudioEngine with synthesized sine-wave tones to play a gentle,
+//  looping pentatonic melody with a bass drone, replacing system sounds.
+//
+
+import Foundation
+import AVFoundation
+import AppKit
+import Combine
+
+@MainActor
+class OnboardingAudioManager: ObservableObject {
+    @Published var isPlaying = false
+
+    // MARK: - Audio Engine State (nonisolated(unsafe) for audio-thread access)
+
+    /// All mutable state touched by the audio render thread lives here so we
+    /// can mark it `nonisolated(unsafe)` in one place.  The render callback
+    /// is the only writer while the engine is running; main-thread code only
+    /// writes when the engine is stopped.
+    private final class AudioState: @unchecked Sendable {
+        // Engine & nodes
+        var engine: AVAudioEngine?
+        var melodyNode: AVAudioSourceNode?
+        var bassNode: AVAudioSourceNode?
+
+        // Melody sequencer state
+        var melodyPhase: Double = 0
+        var bassPhase: Double = 0
+        var currentNoteIndex: Int = 0
+        var sampleCounter: Int = 0
+
+        // Volume / running
+        var melodyVolume: Float = 0.20
+        var bassVolume: Float = 0.12
+        var isRunning: Bool = false
+
+        // Fanfare overlay
+        var fanfareActive: Bool = false
+        var fanfareNoteIndex: Int = 0
+        var fanfareSampleCounter: Int = 0
+        var fanfarePhase: Double = 0
+        var fanfareEnvelopeSample: Int = 0
+    }
+
+    nonisolated(unsafe) private let state = AudioState()
+
+    private var audioPlayer: AVAudioPlayer?
+
+    // MARK: - Constants
+
+    /// Suspended-quality pentatonic scale rooted on C4 (Hz) for a warm, ambient feel.
+    nonisolated(unsafe) private static let melodyNotes: [Double] = [
+        261.63,  // C4
+        293.66,  // D4
+        349.23,  // F4
+        392.00,  // G4
+        440.00,  // A4
+    ]
+
+    /// A meditative, repeating melodic pattern (indices into melodyNotes).
+    nonisolated(unsafe) private static let melodyPattern: [Int] = [
+        0, 2, 3, 4,   // C F G A   (rising)
+        3, 2, 0, 2,   // G F C F   (settling)
+        0, 3, 4, 2,   // C G A F   (gentle movement)
+        4, 3, 2, 0,   // A G F C   (descending home)
+    ]
+
+    /// Gentle rising arpeggio for completion (Hz values).
+    nonisolated(unsafe) private static let fanfareNotes: [Double] = [
+        261.63,  // C4
+        349.23,  // F4
+        440.00,  // A4
+        523.25,  // C5
+    ]
+
+    /// Bass drone frequency: C3.
+    nonisolated(unsafe) private static let bassFrequency: Double = 130.81
+
+    /// Duration of each melody note in seconds (slow for ambient pacing).
+    nonisolated(unsafe) private static let noteDuration: Double = 0.55
+
+    /// Duration of each fanfare note in seconds.
+    nonisolated(unsafe) private static let fanfareNoteDuration: Double = 0.30
+
+    // MARK: - Public API
+
+    enum Phase: String {
+        case messy
+        case scanning
+        case thinking
+        case comparing
+        case organizing
+        case complete
+    }
+
+    /// Start the synthesized background melody loop.
+    func startBackgroundMelody() {
+        guard !state.isRunning else { return }
+        
+        let soundURL: URL? = {
+            if let url = SortyResources.onboardingSoundURL() {
+                print("[OnboardingAudioManager] Found OnboardingSound.wav: \(url.path)")
+                return url
+            }
+            if let url = Bundle.main.url(forResource: "OnboardingSound", withExtension: "wav") {
+                print("[OnboardingAudioManager] Found OnboardingSound.wav in main bundle: \(url.path)")
+                return url
+            }
+            return nil
+        }()
+        
+        if let url = soundURL {
+            do {
+                let player = try AVAudioPlayer(contentsOf: url)
+                player.numberOfLoops = 0
+                player.volume = 0.25
+                player.play()
+                audioPlayer = player
+                state.isRunning = true
+                isPlaying = true
+                return
+            } catch {
+                print("[OnboardingAudioManager] Failed to play OnboardingSound.wav: \(error)")
+            }
+        } else {
+            print("[OnboardingAudioManager] OnboardingSound.wav not found in any bundle location")
+        }
+        
+        // Fallback to synthesized melody
+        setupAndStartEngine()
+        isPlaying = true
+    }
+
+    /// Play a phase-transition accent.  Use soft, ambient system sounds
+    /// that layer gently on top of the melody.
+    func playPhaseSound(_ phase: Phase) {
+        let soundName: NSSound.Name
+        let volume: Float
+        switch phase {
+        case .messy:
+            return
+        case .scanning:
+            soundName = "Submarine"
+            volume = 0.15
+        case .thinking:
+            soundName = "Glass"
+            volume = 0.10
+        case .comparing:
+            return  // Let the melody carry this transition
+        case .organizing:
+            soundName = "Submarine"
+            volume = 0.10
+        case .complete:
+            soundName = "Glass"
+            volume = 0.20
+        }
+        if let sound = NSSound(named: soundName) {
+            sound.volume = volume
+            sound.play()
+        }
+    }
+
+    /// Start the ambient pulse — delegates to the background melody.
+    func startAmbientPulse(interval: TimeInterval = 1.0) {
+        startBackgroundMelody()
+    }
+
+    /// Stop ambient pulse (convenience; calls through to stopAll).
+    func stopAmbientPulse() {
+        // Don't tear down the whole engine here — just note that the pulse
+        // has been conceptually stopped.  The melody keeps going until
+        // stopAll() is called.  This preserves the call-site pattern where
+        // stopAmbientPulse() is called between phases.
+    }
+
+    /// Play a rising arpeggio completion fanfare overlaid on the melody.
+    func playCompletionFanfare() {
+        // If the melody engine isn't running, start it so we have a place
+        // to play the fanfare.
+        if !state.isRunning {
+            setupAndStartEngine()
+        }
+        state.fanfareNoteIndex = 0
+        state.fanfareSampleCounter = 0
+        state.fanfarePhase = 0
+        state.fanfareEnvelopeSample = 0
+        state.fanfareActive = true
+    }
+
+    /// Stop all audio and tear down the engine.
+    func stopAll() {
+        guard state.isRunning else {
+            isPlaying = false
+            return
+        }
+        // Stop file-based audio player if active
+        audioPlayer?.stop()
+        audioPlayer = nil
+        state.isRunning = false
+        state.fanfareActive = false
+        isPlaying = false
+
+        let engine = state.engine
+        // Fade out briefly before stopping to avoid a click.
+        DispatchQueue.global(qos: .userInitiated).async { [state] in
+            // Quick linear fade over ~30 ms.
+            let steps = 15
+            let interval: TimeInterval = 0.002
+            for i in 0..<steps {
+                let factor = Float(steps - i - 1) / Float(steps)
+                state.melodyVolume = 0.35 * factor
+                state.bassVolume = 0.10 * factor
+                Thread.sleep(forTimeInterval: interval)
+            }
+            engine?.stop()
+            // Reset volumes for next play.
+            state.melodyVolume = 0.20
+            state.bassVolume = 0.12
+        }
+    }
+
+    deinit {
+        state.isRunning = false
+        state.fanfareActive = false
+        state.engine?.stop()
+        // audioPlayer will be cleaned up automatically
+    }
+
+    // MARK: - Engine Setup
+
+    /// Engine setup is nonisolated so that AVAudioSourceNode render callbacks
+    /// do NOT inherit @MainActor isolation.  Render callbacks run on the
+    /// real-time audio IO thread; inheriting @MainActor causes a
+    /// _dispatch_assert_queue_fail crash (EXC_BREAKPOINT / SIGTRAP).
+    nonisolated private func setupAndStartEngine() {
+        let engine = AVAudioEngine()
+        let outputFormat = engine.outputNode.outputFormat(forBus: 0)
+        let sampleRate = outputFormat.sampleRate
+        let st = state
+
+        // Reset sequencer state.
+        st.melodyPhase = 0
+        st.bassPhase = 0
+        st.currentNoteIndex = 0
+        st.sampleCounter = 0
+        st.fanfareActive = false
+        st.isRunning = true
+
+        let noteSamples = Int(Self.noteDuration * sampleRate)
+        let fanfareNoteSamples = Int(Self.fanfareNoteDuration * sampleRate)
+
+        // ---- Melody source node ----
+        let melodyNode = AVAudioSourceNode(format: outputFormat) {
+            [st] (_, _, frameCount, bufferList) -> OSStatus in
+
+            guard st.isRunning else {
+                // Silence
+                let ablPointer = UnsafeMutableAudioBufferListPointer(bufferList)
+                for buffer in ablPointer {
+                    memset(buffer.mData, 0, Int(buffer.mDataByteSize))
+                }
+                return noErr
+            }
+
+            let ablPointer = UnsafeMutableAudioBufferListPointer(bufferList)
+            let patternLength = OnboardingAudioManager.melodyPattern.count
+            let noteCount = OnboardingAudioManager.melodyNotes.count
+
+            for frame in 0..<Int(frameCount) {
+                // Determine current note frequency.
+                let patIdx = st.currentNoteIndex % patternLength
+                let noteIdx = OnboardingAudioManager.melodyPattern[patIdx] % noteCount
+                let freq = OnboardingAudioManager.melodyNotes[noteIdx]
+
+                // Sine oscillator.
+                let increment = 2.0 * Double.pi * freq / sampleRate
+                st.melodyPhase += increment
+                if st.melodyPhase > 2.0 * Double.pi { st.melodyPhase -= 2.0 * Double.pi }
+                var sample = sin(st.melodyPhase)
+
+                // Envelope: smooth attack (first 5%) and release (last 10%)
+                // of each note to eliminate clicks.
+                let posInNote = st.sampleCounter
+                let attackSamples = max(noteSamples / 20, 1)
+                let releaseSamples = max(noteSamples / 10, 1)
+                var envelope: Double = 1.0
+                if posInNote < attackSamples {
+                    envelope = Double(posInNote) / Double(attackSamples)
+                } else if posInNote > noteSamples - releaseSamples {
+                    let releasePos = posInNote - (noteSamples - releaseSamples)
+                    envelope = 1.0 - Double(releasePos) / Double(releaseSamples)
+                }
+                // Use a cosine curve for smoother fades.
+                envelope = 0.5 * (1.0 - cos(Double.pi * envelope))
+
+                sample *= envelope * Double(st.melodyVolume)
+
+                // ---- Fanfare overlay ----
+                if st.fanfareActive {
+                    let fNoteCount = OnboardingAudioManager.fanfareNotes.count
+                    if st.fanfareNoteIndex < fNoteCount {
+                        let fFreq = OnboardingAudioManager.fanfareNotes[st.fanfareNoteIndex]
+                        let fInc = 2.0 * Double.pi * fFreq / sampleRate
+                        st.fanfarePhase += fInc
+                        if st.fanfarePhase > 2.0 * Double.pi { st.fanfarePhase -= 2.0 * Double.pi }
+                        var fSample = sin(st.fanfarePhase)
+
+                        // Envelope for fanfare note.
+                        let fAttack = max(fanfareNoteSamples / 20, 1)
+                        let fRelease = max(fanfareNoteSamples / 5, 1)
+                        var fEnvelope: Double = 1.0
+                        let fPos = st.fanfareEnvelopeSample
+                        if fPos < fAttack {
+                            fEnvelope = Double(fPos) / Double(fAttack)
+                        } else if fPos > fanfareNoteSamples - fRelease {
+                            let rp = fPos - (fanfareNoteSamples - fRelease)
+                            fEnvelope = 1.0 - Double(rp) / Double(fRelease)
+                        }
+                        fEnvelope = 0.5 * (1.0 - cos(Double.pi * fEnvelope))
+
+                        fSample *= fEnvelope * 0.45
+
+                        sample += fSample
+
+                        st.fanfareEnvelopeSample += 1
+                        if st.fanfareEnvelopeSample >= fanfareNoteSamples {
+                            st.fanfareEnvelopeSample = 0
+                            st.fanfarePhase = 0
+                            st.fanfareNoteIndex += 1
+                            if st.fanfareNoteIndex >= fNoteCount {
+                                st.fanfareActive = false
+                            }
+                        }
+                    }
+                }
+
+                let floatSample = Float(sample)
+                for buffer in ablPointer {
+                    let buf = buffer.mData!.assumingMemoryBound(to: Float.self)
+                    buf[frame] = floatSample
+                }
+
+                // Advance note sequencer.
+                st.sampleCounter += 1
+                if st.sampleCounter >= noteSamples {
+                    st.sampleCounter = 0
+                    st.melodyPhase = 0   // reset phase to avoid drift
+                    st.currentNoteIndex += 1
+                    if st.currentNoteIndex >= patternLength {
+                        st.currentNoteIndex = 0
+                    }
+                }
+            }
+
+            return noErr
+        }
+
+        // ---- Bass drone source node ----
+        let bassNode = AVAudioSourceNode(format: outputFormat) {
+            [st] (_, _, frameCount, bufferList) -> OSStatus in
+
+            guard st.isRunning else {
+                let ablPointer = UnsafeMutableAudioBufferListPointer(bufferList)
+                for buffer in ablPointer {
+                    memset(buffer.mData, 0, Int(buffer.mDataByteSize))
+                }
+                return noErr
+            }
+
+            let ablPointer = UnsafeMutableAudioBufferListPointer(bufferList)
+            let freq = OnboardingAudioManager.bassFrequency
+            let increment = 2.0 * Double.pi * freq / sampleRate
+
+            for frame in 0..<Int(frameCount) {
+                st.bassPhase += increment
+                if st.bassPhase > 2.0 * Double.pi { st.bassPhase -= 2.0 * Double.pi }
+                let sample = Float(sin(st.bassPhase) * Double(st.bassVolume))
+
+                for buffer in ablPointer {
+                    let buf = buffer.mData!.assumingMemoryBound(to: Float.self)
+                    buf[frame] = sample
+                }
+            }
+            return noErr
+        }
+
+        // Wire up the graph: melody + bass -> mixer -> output.
+        engine.attach(melodyNode)
+        engine.attach(bassNode)
+
+        let mixer = engine.mainMixerNode
+        engine.connect(melodyNode, to: mixer, format: outputFormat)
+        engine.connect(bassNode, to: mixer, format: outputFormat)
+
+        // Keep overall output moderate.
+        mixer.outputVolume = 1.0
+
+        do {
+            try engine.start()
+        } catch {
+            print("[OnboardingAudioManager] Failed to start AVAudioEngine: \(error)")
+            st.isRunning = false
+            st.engine = nil
+            st.melodyNode = nil
+            st.bassNode = nil
+            return
+        }
+
+        st.engine = engine
+        st.melodyNode = melodyNode
+        st.bassNode = bassNode
+    }
+}

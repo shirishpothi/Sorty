@@ -2,7 +2,7 @@
 //  HUDNotificationOverlay.swift
 //  Sorty
 //
-//  A subtle bottom-left HUD notification overlay
+//  A subtle bottom-left HUD notification overlay with liquid glass styling
 //
 
 import SwiftUI
@@ -25,8 +25,8 @@ public struct HUDNotificationOverlay: View {
                         notificationManager.dismissHUD()
                     }
                     .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
+                        insertion: .scale(scale: 0.92).combined(with: .opacity).combined(with: .offset(x: -20)),
+                        removal: .scale(scale: 0.95).combined(with: .opacity).combined(with: .offset(x: -10))
                     ))
                 }
                 
@@ -36,70 +36,126 @@ public struct HUDNotificationOverlay: View {
             .padding(.bottom, 20)
         }
         .allowsHitTesting(notificationManager.currentHUDNotification != nil)
-        .animation(.easeOut(duration: 0.2), value: notificationManager.currentHUDNotification?.id)
+        .animation(.spring(response: 0.5, dampingFraction: 0.78), value: notificationManager.currentHUDNotification?.id)
         .ignoresSafeArea()
         .zIndex(1000)
     }
 }
 
-/// Individual HUD notification card
+/// Individual HUD notification card with liquid glass styling
 struct HUDNotificationCard: View {
     let notification: HUDNotification
     let onDismiss: () -> Void
     
     @State private var isHovered = false
+    @State private var progressRemaining: CGFloat = 1.0
+    @State private var appeared = false
+    
+    private let autoDismissSeconds: Double = 4.0
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Icon
-            Image(systemName: notification.icon)
-                .font(.title3)
-                .foregroundStyle(notification.iconColor)
-                .frame(width: 24, height: 24)
+        HStack(spacing: 0) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(
+                    LinearGradient(
+                        colors: [notification.iconColor, notification.iconColor.opacity(0.5)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 3)
+                .padding(.vertical, 8)
             
-            // Content
-            VStack(alignment: .leading, spacing: 2) {
-                Text(notification.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.primary)
+            HStack(spacing: 12) {
+                Image(systemName: notification.icon)
+                    .font(.title3)
+                    .foregroundStyle(notification.iconColor)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        Circle()
+                            .fill(notification.iconColor.opacity(0.12))
+                    )
                 
-                Text(notification.message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            
-            // Dismiss button (appears on hover)
-            if isHovered {
-                Button {
-                    onDismiss()
-                } label: {
-                    Image(systemName: "xmark")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(notification.title)
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                    
+                    Text(notification.message)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
-                .buttonStyle(.plain)
-                .transition(.opacity)
+                
+                if isHovered {
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.opacity)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .frame(maxWidth: 360)
+        .fixedSize(horizontal: false, vertical: true)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(.ultraThinMaterial)
+                
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(notification.iconColor.opacity(0.03))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: 320)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.25),
+                            notification.iconColor.opacity(0.15),
+                            Color.white.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
         )
-        .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 4)
+        .overlay(alignment: .bottom) {
+            GeometryReader { geo in
+                Capsule()
+                    .fill(notification.iconColor.opacity(0.4))
+                    .frame(width: geo.size.width * progressRemaining, height: 2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: 2)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 3)
+        }
+        .shadow(color: notification.iconColor.opacity(0.12), radius: 12, x: 0, y: 6)
+        .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
+        .contentShape(RoundedRectangle(cornerRadius: 14))
         .onTapGesture {
             onDismiss()
+        }
+        .onAppear {
+            withAnimation(.linear(duration: autoDismissSeconds)) {
+                progressRemaining = 0
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(notification.title): \(notification.message)")

@@ -17,6 +17,8 @@ public struct ProviderSelectionStepView: View {
     @State private var hasCopiedCode = false
     @State private var availableModels: [String] = []
     @State private var isLoadingModels = false
+    @State private var isHoveringUsername = false
+    @State private var isShowingAPIKey = false
     
     enum ConnectionTestStatus {
         case idle
@@ -161,6 +163,11 @@ public struct ProviderSelectionStepView: View {
                             .foregroundStyle(.secondary)
                         Text(copilotAuth.username ?? "User")
                             .font(.headline)
+                            .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
+                            .animation(.spring(), value: isHoveringUsername)
+                            .onHover { hovering in
+                                isHoveringUsername = hovering
+                            }
                     }
                     
                     Spacer()
@@ -336,17 +343,46 @@ public struct ProviderSelectionStepView: View {
             // API Key field
             if settingsViewModel.config.provider.typicallyRequiresAPIKey {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("API Key")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                    
-                    SecureField("Enter your API key", text: Binding(
-                        get: { settingsViewModel.config.apiKey ?? "" },
-                        set: { 
-                            settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
-                            scheduleConnectionTest()
+                    HStack {
+                        Text("API Key")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        
+                        Spacer()
+                        
+                        if FeatureFlags.privacyModeEnabled {
+                            Button {
+                                isShowingAPIKey.toggle()
+                                HapticFeedbackManager.shared.tap()
+                            } label: {
+                                Image(systemName: isShowingAPIKey ? "eye.slash" : "eye")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .help(isShowingAPIKey ? "Hide API Key" : "Show API Key")
                         }
-                    ))
+                    }
+                    
+                    Group {
+                        if isShowingAPIKey && FeatureFlags.privacyModeEnabled {
+                            TextField("Enter your API key", text: Binding(
+                                get: { settingsViewModel.config.apiKey ?? "" },
+                                set: { 
+                                    settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
+                                    scheduleConnectionTest()
+                                }
+                            ))
+                        } else {
+                            SecureField("Enter your API key", text: Binding(
+                                get: { settingsViewModel.config.apiKey ?? "" },
+                                set: { 
+                                    settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
+                                    scheduleConnectionTest()
+                                }
+                            ))
+                        }
+                    }
                     .textFieldStyle(.roundedBorder)
                     
                     // Clickable link to get API key

@@ -34,18 +34,40 @@ public class LearningsManager: ObservableObject {
             UserDefaults.standard.set(learningStrength, forKey: "learningStrength")
         }
     }
+    @Published public var useAIForLearnings: Bool = true {
+        didSet {
+            UserDefaults.standard.set(useAIForLearnings, forKey: "useAIForLearnings")
+        }
+    }
+    @Published public var sessionLearningPaused: Bool = false
     @Published public var behaviorPreferences: BehaviorPreferences?
+
+    /// Suggestions for files that should be added to exceptions (e.g., related project files)
+    @Published public var pendingExceptionSuggestions: [ExceptionSuggestion] = []
+
+    public struct ExceptionSuggestion: Identifiable {
+        public let id = UUID()
+        public let message: String
+        public let fileNames: [String]
+        public let groupName: String
+    }
+    
+    @Published public var dataRetentionDays: Int = 0 {
+        didSet {
+            UserDefaults.standard.set(dataRetentionDays, forKey: "learningDataRetentionDays")
+        }
+    }
     
     // MARK: - Dependencies
     
     public let analyzer = LearningsAnalyzer()
     
     public init() {
-        // Check if initial setup is required
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
-        // Load learning strength from UserDefaults
         learningStrength = UserDefaults.standard.double(forKey: "learningStrength")
-        if learningStrength == 0 { learningStrength = 0.5 } // Default if not set
+        if learningStrength == 0 { learningStrength = 0.5 }
+        dataRetentionDays = UserDefaults.standard.integer(forKey: "learningDataRetentionDays")
+        useAIForLearnings = UserDefaults.standard.object(forKey: "useAIForLearnings") as? Bool ?? true
     }
     
     public func configure(with config: AIConfig) {
@@ -492,6 +514,10 @@ public class LearningsManager: ObservableObject {
     
     /// Run analysis on current profile and paths
     public func analyze(rootPaths: [String], examplePaths: [String]) async {
+        guard useAIForLearnings else {
+            error = "AI analysis is disabled. Enable 'Use AI for analysis' in Learnings settings."
+            return
+        }
         guard let profile = currentProfile else {
             error = "No profile loaded"
             return
@@ -928,7 +954,7 @@ public class LearningsManager: ObservableObject {
         }
         
         // SECTION 5: HIGH-CONFIDENCE RULES
-        let highConfidenceRules = getActiveRules()
+        let highConfidenceRules = getActiveRules(forFolder: folderPath)
             .filter { $0.confidenceLevel == .high && $0.successRate > 0.7 }
             .sorted(by: { ($0.lastAppliedAt ?? .distantPast) > ($1.lastAppliedAt ?? .distantPast) })
         if !highConfidenceRules.isEmpty {
@@ -1038,7 +1064,7 @@ public class LearningsManager: ObservableObject {
         }
         
         // SECTION 9: MEDIUM-CONFIDENCE RULES
-        let mediumConfidenceRules = getActiveRules()
+        let mediumConfidenceRules = getActiveRules(forFolder: folderPath)
             .filter { $0.confidenceLevel == .medium || ($0.confidenceLevel == .high && $0.successRate <= 0.7) }
             .sorted(by: { ($0.lastAppliedAt ?? .distantPast) > ($1.lastAppliedAt ?? .distantPast) })
         if !mediumConfidenceRules.isEmpty {
@@ -1203,25 +1229,31 @@ public class LearningsManager: ObservableObject {
     public func computeImpactSummary(lastNRuns: Int = 10) -> LearningsImpactSummary? {
         guard let profile = currentProfile else { return nil }
         
-        // Count runs with learnings (based on whether we had rules/preferences at the time)
         let totalRuns = profile.jobHistory.count
-        let runsWithLearnings = profile.jobHistory.filter { $0.status == .completed }.count
+        let completedRuns = profile.jobHistory.filter { $0.status == .completed }.count
         
-        // Files routed by learnings (estimate from successful rule applications)
         let filesRoutedByLearnings = profile.inferredRules.reduce(0) { $0 + $1.successCount }
-        
-        // Corrections after AI
         let correctionsAfterAI = profile.postOrganizationChanges.filter { $0.wasAIOrganized }.count
         
-        // Reverts
         let reverts = profile.historyReverts.count
+        let cancelled = profile.cancelledOrganizations.count
+        let regenerated = profile.regeneratedOrganizations.count
+
+        let accepted = max(0, completedRuns - reverts)
+        let rejected = min(completedRuns, reverts)
+        
+        let runsWithLearnings = completedRuns
         
         return LearningsImpactSummary(
             runsWithLearnings: runsWithLearnings,
             totalRuns: totalRuns,
             filesRoutedByLearnings: filesRoutedByLearnings,
             correctionsAfterAI: correctionsAfterAI,
-            reverts: reverts
+            reverts: reverts,
+            acceptedOrganizations: accepted,
+            rejectedOrganizations: rejected,
+            cancelledOrganizations: cancelled,
+            regeneratedOrganizations: regenerated
         )
     }
     
@@ -1271,12 +1303,41 @@ public class LearningsManager: ObservableObject {
         }
     }
     
-    /// Get active rules filtered by learning strength
-    public func getActiveRules() -> [InferredRule] {
+    /// Get active rules filtered by learning strength and optionally by scope
+    public func getActiveRules(forFolder folderPath: String? = nil, forPersona personaId: UUID? = nil) -> [InferredRule] {
         guard let profile = currentProfile else { return [] }
         
-        // Filter enabled rules
-        var activeRules = profile.inferredRules.filter { $0.isEnabled }
+        // Filter enabled rules that are active (not pending/rejected/cooldown)
+        var activeRules = profile.inferredRules.filter { rule in
+            rule.isEnabled && rule.status == .active
+        }
+        
+        // Filter by scope if provided
+        if let folderPath = folderPath {
+            activeRules = activeRules.filter { rule in
+                switch rule.scope {
+                case .global:
+                    return true
+                case .folder(let rulePath):
+                    return folderPath.hasPrefix(rulePath) || rulePath == folderPath
+                case .activePersona:
+                    return false
+                }
+            }
+        }
+        
+        if let personaId = personaId {
+            activeRules = activeRules.filter { rule in
+                switch rule.scope {
+                case .global:
+                    return true
+                case .activePersona(let rulePersonaId):
+                    return rulePersonaId == personaId
+                case .folder:
+                    return true
+                }
+            }
+        }
         
         // Sort by priority
         activeRules.sort { $0.priority > $1.priority }
@@ -1284,6 +1345,129 @@ public class LearningsManager: ObservableObject {
         // Apply learning strength to limit number of rules
         let maxRules = Int(Double(activeRules.count) * learningStrength) + 1
         return Array(activeRules.prefix(maxRules))
+    }
+    
+    // MARK: - Rule Suggestion Inbox
+    
+    /// Get pending approval rules
+    public func getPendingRules() -> [InferredRule] {
+        guard let profile = currentProfile else { return [] }
+        return profile.inferredRules.filter { $0.status == .pendingApproval }
+    }
+    
+    /// Approve a pending rule
+    public func approveRule(ruleId: String) async {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].status = .active
+            currentProfile = profile
+            await saveProfile()
+        }
+    }
+    
+    /// Reject a pending rule with cooling-off period
+    public func rejectRule(ruleId: String, cooldownDays: Int = 30) async {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].status = .rejected
+            profile.inferredRules[index].rejectedAt = Date()
+            profile.inferredRules[index].cooldownUntil = Date().addingTimeInterval(Double(cooldownDays) * 86400)
+            profile.inferredRules[index].isEnabled = false
+            
+            // Track cooldown
+            profile.rejectedRuleCooldowns[ruleId] = Date().addingTimeInterval(Double(cooldownDays) * 86400)
+            
+            currentProfile = profile
+            await saveProfile()
+        }
+    }
+    
+    /// Edit a pending rule's explanation and approve it
+    public func editAndApproveRule(ruleId: String, newExplanation: String? = nil, newPriority: Int? = nil, newScope: RuleScope? = nil) async {
+        guard var profile = currentProfile else { return }
+        
+        if let index = profile.inferredRules.firstIndex(where: { $0.id == ruleId }) {
+            profile.inferredRules[index].status = .active
+            if let explanation = newExplanation {
+                let rule = profile.inferredRules[index]
+                let updatedRule = InferredRule(
+                    id: rule.id,
+                    pattern: rule.pattern,
+                    template: rule.template,
+                    metadataCues: rule.metadataCues,
+                    priority: newPriority ?? rule.priority,
+                    exampleIds: rule.exampleIds,
+                    explanation: explanation,
+                    successCount: rule.successCount,
+                    failureCount: rule.failureCount,
+                    isEnabled: true,
+                    lastAppliedAt: rule.lastAppliedAt,
+                    supportCount: rule.supportCount,
+                    initialConfidence: rule.initialConfidence,
+                    scope: newScope ?? rule.scope,
+                    status: .active,
+                    evidenceIds: rule.evidenceIds,
+                    evidenceDescription: rule.evidenceDescription,
+                    rejectedAt: rule.rejectedAt,
+                    cooldownUntil: rule.cooldownUntil
+                )
+                profile.inferredRules[index] = updatedRule
+            } else {
+                if let priority = newPriority {
+                    profile.inferredRules[index].priority = priority
+                }
+                if let scope = newScope {
+                    profile.inferredRules[index].scope = scope
+                }
+            }
+            currentProfile = profile
+            await saveProfile()
+        }
+    }
+    
+    /// Check if a rule pattern is in cooldown (was recently rejected)
+    public func isRuleInCooldown(pattern: String) -> Bool {
+        guard let profile = currentProfile else { return false }
+        let now = Date()
+        
+        return profile.inferredRules.contains { rule in
+            rule.pattern == pattern && rule.status == .rejected &&
+            (rule.cooldownUntil ?? .distantPast) > now
+        }
+    }
+    
+    // MARK: - Learning Exclusion Patterns
+    
+    /// Add a path exclusion pattern (learning will be skipped for matching paths)
+    public func addLearningExclusion(_ pattern: String) async {
+        guard var profile = currentProfile else { return }
+        if !profile.learningExclusionPatterns.contains(pattern) {
+            profile.learningExclusionPatterns.append(pattern)
+            currentProfile = profile
+            await saveProfile()
+        }
+    }
+    
+    /// Remove a learning exclusion pattern
+    public func removeLearningExclusion(_ pattern: String) async {
+        guard var profile = currentProfile else { return }
+        profile.learningExclusionPatterns.removeAll { $0 == pattern }
+        currentProfile = profile
+        await saveProfile()
+    }
+    
+    /// Check if a path should be excluded from learning
+    public func isPathExcludedFromLearning(_ path: String) -> Bool {
+        guard let profile = currentProfile else { return false }
+        let loweredPath = path.lowercased()
+        return profile.learningExclusionPatterns.contains { pattern in
+            let loweredPattern = pattern.lowercased()
+            return loweredPath.contains(loweredPattern) ||
+                   loweredPath.hasSuffix(loweredPattern) ||
+                   URL(fileURLWithPath: path).lastPathComponent.lowercased().contains(loweredPattern)
+        }
     }
     
     /// Extract behavior preferences from honing answers

@@ -22,13 +22,27 @@ struct OrganizeView: View {
         VStack(spacing: 0) {
             // Header with selected directory
             if let directory = appState.selectedDirectory {
-                DirectoryHeader(url: directory) {
-                    HapticFeedbackManager.shared.tap()
-                    withAnimation(.pageTransition) {
-                        appState.selectedDirectory = nil
-                        organizer.reset()
+                DirectoryHeader(
+                    url: directory,
+                    onBack: {
+                        HapticFeedbackManager.shared.tap()
+                        withAnimation(.pageTransition) {
+                            if organizer.state == .ready {
+                                organizer.cancel()
+                            } else {
+                                appState.selectedDirectory = nil
+                                organizer.reset()
+                            }
+                        }
+                    },
+                    onClear: {
+                        HapticFeedbackManager.shared.tap()
+                        withAnimation(.pageTransition) {
+                            appState.selectedDirectory = nil
+                            organizer.reset()
+                        }
                     }
-                }
+                )
                 .transition(TransitionStyles.slideFromBottom)
             }
 
@@ -40,10 +54,13 @@ struct OrganizeView: View {
                 } else {
                     stateContent
                         .id(stateIdentifier)
-                        .transition(TransitionStyles.scaleAndFade)
+                        .transition(.asymmetric(
+                            insertion: .scale(scale: 0.95).combined(with: .opacity),
+                            removal: .scale(scale: 1.02).combined(with: .opacity)
+                        ))
                 }
             }
-            .animation(.pageTransition, value: stateIdentifier)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: stateIdentifier)
         }
         .navigationTitle("Organize Files")
         .toolbar {
@@ -134,29 +151,30 @@ struct OrganizeView: View {
     }
 
     private var stateIdentifier: String {
+        // Group states that show the same view to avoid unnecessary subtree rebuilds
         switch organizer.state {
         case .idle: return "idle"
-        case .scanning: return "scanning"
-        case .organizing: return "organizing"
+        case .scanning, .organizing, .applying: return "active"
         case .ready: return "ready"
-        case .applying: return "applying"
         case .completed: return "completed"
         case .error: return "error"
         }
     }
 
     private func handleStateChange(to newState: OrganizationState) {
-        switch newState {
-        case .completed:
-            HapticFeedbackManager.shared.success()
-        case .error:
-            HapticFeedbackManager.shared.error()
-        case .ready:
-            HapticFeedbackManager.shared.success()
-        case .scanning, .organizing:
-            HapticFeedbackManager.shared.selection()
-        default:
-            break
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            switch newState {
+            case .completed:
+                HapticFeedbackManager.shared.success()
+            case .error:
+                HapticFeedbackManager.shared.error()
+            case .ready:
+                HapticFeedbackManager.shared.success()
+            case .scanning, .organizing:
+                HapticFeedbackManager.shared.selection()
+            default:
+                break
+            }
         }
     }
 
@@ -174,6 +192,12 @@ struct OrganizeView: View {
         guard let directory = appState.selectedDirectory else { return }
 
         HapticFeedbackManager.shared.tap()
+
+        // Apply default steering prompt if no custom instructions provided
+        if organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let defaultPrompt = SteeringPromptManager.shared.defaultPrompt {
+            organizer.customInstructions = defaultPrompt.prompt
+        }
 
         Task {
             do {
@@ -195,10 +219,14 @@ struct OrganizeView: View {
 
 struct DirectoryHeader: View {
     let url: URL
+    let onBack: () -> Void
     let onClear: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
+            GlassyBackButton(action: onBack)
+                .padding(.trailing, 4)
+
             FolderThumbnailView(url: url, size: CGSize(width: 32, height: 32))
 
             VStack(alignment: .leading, spacing: 2) {
@@ -232,12 +260,18 @@ struct ReadyToOrganizeView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+    @EnvironmentObject var appState: AppState
     @StateObject private var sessionManager = AISessionManager.shared
+    @StateObject private var steeringManager = SteeringPromptManager.shared
     @State private var hasAppeared = false
     @State private var isTextFieldFocused = false
     @State private var showStorageLocations = false
     @State private var showingFolderPicker = false
     @State private var suggestedLocationName: String? = nil
+    @State private var showSavePromptDialog = false
+    @State private var savePromptName = ""
+    @State private var isImprovingPrompt = false
+    @State private var showSavedPromptsSheet = false
     @FocusState private var textFieldFocus: Bool
 
     var body: some View {
@@ -496,16 +530,29 @@ struct ReadyToOrganizeView: View {
                     Text("e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"...")
                         .font(.body)
                         .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
                         .allowsHitTesting(false)
                 }
-                
-                SubmittableTextEditor(text: $organizer.customInstructions) {
-                    onStart()
+
+                if isImprovingPrompt {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Improving...")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 20)
+                } else {
+                    SubmittableTextEditor(text: $organizer.customInstructions) {
+                        onStart()
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
                 }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
             }
             .frame(minHeight: 60, maxHeight: 80)
             .frame(maxWidth: .infinity)
@@ -519,14 +566,357 @@ struct ReadyToOrganizeView: View {
             )
             .accessibilityIdentifier("CustomInstructionsTextField")
             .accessibilityLabel("Additional instructions for organization")
-            .accessibilityHint("Press Enter to start organization, Command+Enter for new line")
-            
+            .accessibilityHint("Press Command+Enter to start organization, Enter for new line")
+
             HStack(spacing: 8) {
-                Text("⏎ Send")
-                Text("⌘⏎ New Line")
+                // Improve with AI button
+                if !organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        Task { await improvePromptWithAI() }
+                    } label: {
+                        Label("Improve", systemImage: "wand.and.stars")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.purple)
+                    .disabled(isImprovingPrompt)
+                    .help("Improve instructions with AI")
+                }
+
+                // Save prompt button
+                if !organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button {
+                        savePromptName = ""
+                        showSavePromptDialog.toggle()
+                    } label: {
+                        Label("Save", systemImage: "bookmark")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.accentColor)
+                    .popover(isPresented: $showSavePromptDialog) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Save Prompt")
+                                .font(.headline)
+
+                            TextField("Prompt name", text: $savePromptName)
+                                .textFieldStyle(.roundedBorder)
+
+                            HStack {
+                                Button("Cancel") {
+                                    showSavePromptDialog = false
+                                }
+                                .buttonStyle(.bordered)
+
+                                Spacer()
+
+                                Button("Save") {
+                                    let prompt = SavedSteeringPrompt(
+                                        name: savePromptName.isEmpty ? "Untitled" : savePromptName,
+                                        prompt: organizer.customInstructions
+                                    )
+                                    steeringManager.addPrompt(prompt)
+                                    showSavePromptDialog = false
+                                    HapticFeedbackManager.shared.success()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(savePromptName.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                        }
+                        .padding(16)
+                        .frame(width: 280)
+                    }
+                }
+
+                Spacer()
+
+                // Manage saved prompts button
+                Button {
+                    showSavedPromptsSheet.toggle()
+                } label: {
+                    Label(
+                        steeringManager.prompts.isEmpty ? "Saved Prompts" : "Saved Prompts (\(steeringManager.prompts.count))",
+                        systemImage: "text.alignleft"
+                    )
+                    .font(.caption2)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
             }
             .font(.caption2)
             .foregroundStyle(.quaternary)
+        }
+        .sheet(isPresented: $showSavedPromptsSheet) {
+            SavedPromptsSheet(
+                steeringManager: steeringManager,
+                settingsConfig: settingsViewModel.config,
+                onApplyPrompt: { prompt in
+                    organizer.customInstructions = prompt
+                    showSavedPromptsSheet = false
+                    HapticFeedbackManager.shared.tap()
+                }
+            )
+        }
+    }
+
+    private func improvePromptWithAI() async {
+        let original = organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !original.isEmpty else { return }
+        isImprovingPrompt = true
+        defer { isImprovingPrompt = false }
+
+        do {
+            let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+            let improved = try await client.generateText(
+                prompt: "Improve the following file organization instructions to be clearer, more specific, and more actionable for an AI file organizer. Keep the same intent but make it more precise. Return only the improved instructions text, nothing else.\n\nOriginal instructions: \"\(original)\"",
+                systemPrompt: "You are a file organization expert. You help users write better instructions for organizing their files and folders. Be concise and practical."
+            )
+            let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                organizer.customInstructions = trimmed
+                HapticFeedbackManager.shared.success()
+            }
+        } catch {
+            HapticFeedbackManager.shared.error()
+        }
+    }
+}
+
+// MARK: - Saved Prompts Sheet
+
+struct SavedPromptsSheet: View {
+    @ObservedObject var steeringManager: SteeringPromptManager
+    let settingsConfig: AIConfig
+    let onApplyPrompt: (String) -> Void
+
+    @State private var editingPromptId: UUID? = nil
+    @State private var editName = ""
+    @State private var editText = ""
+    @State private var improvingPromptId: UUID? = nil
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("Saved Prompts")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(20)
+
+            Divider()
+
+            if steeringManager.prompts.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.tertiary)
+                    Text("No saved prompts yet")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text("Save your instructions from the organize view to reuse them.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(20)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(steeringManager.prompts) { prompt in
+                            savedPromptCard(prompt)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+
+            Divider()
+
+            // Footer
+            HStack {
+                Button("Add New Prompt") {
+                    let newPrompt = SavedSteeringPrompt(name: "New Prompt", prompt: "")
+                    steeringManager.addPrompt(newPrompt)
+                    editingPromptId = newPrompt.id
+                    editName = newPrompt.name
+                    editText = newPrompt.prompt
+                    HapticFeedbackManager.shared.tap()
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                Button("Done") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(20)
+        }
+        .frame(width: 520, height: 500)
+    }
+
+    @ViewBuilder
+    private func savedPromptCard(_ prompt: SavedSteeringPrompt) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if editingPromptId == prompt.id {
+                // Editing mode
+                TextField("Prompt name", text: $editName)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.subheadline.weight(.medium))
+
+                TextEditor(text: $editText)
+                    .font(.body)
+                    .frame(minHeight: 100, maxHeight: 160)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(NSColor.textBackgroundColor))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                    )
+
+                HStack(spacing: 8) {
+                    // Improve with AI button
+                    Button {
+                        Task { await improveEditingPrompt(prompt) }
+                    } label: {
+                        if improvingPromptId == prompt.id {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            Label("Improve with AI", systemImage: "wand.and.stars")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(editText.trimmingCharacters(in: .whitespaces).isEmpty || improvingPromptId == prompt.id)
+
+                    Spacer()
+
+                    Button("Cancel") {
+                        editingPromptId = nil
+                    }
+                    .controlSize(.small)
+
+                    Button("Save") {
+                        var updated = prompt
+                        updated.name = editName.isEmpty ? "Untitled" : editName
+                        updated.prompt = editText
+                        steeringManager.updatePrompt(updated)
+                        editingPromptId = nil
+                        HapticFeedbackManager.shared.success()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            } else {
+                // Display mode
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Text(prompt.name)
+                                .font(.subheadline.weight(.semibold))
+                            if prompt.isDefault {
+                                Text("Default")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundColor(.green)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.green.opacity(0.15)))
+                            }
+                        }
+                        Text(prompt.prompt)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
+                    Spacer()
+                }
+
+                HStack(spacing: 8) {
+                    Button("Use") {
+                        onApplyPrompt(prompt.prompt)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
+                    Button("Edit") {
+                        editingPromptId = prompt.id
+                        editName = prompt.name
+                        editText = prompt.prompt
+                    }
+                    .controlSize(.small)
+
+                    Button(prompt.isDefault ? "Unset Default" : "Set Default") {
+                        if prompt.isDefault {
+                            steeringManager.clearDefault()
+                        } else {
+                            steeringManager.setDefault(id: prompt.id)
+                        }
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    .controlSize(.small)
+
+                    Spacer()
+
+                    Button(role: .destructive) {
+                        steeringManager.deletePrompt(id: prompt.id)
+                        HapticFeedbackManager.shared.tap()
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(NSColor.controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color(NSColor.separatorColor).opacity(0.5), lineWidth: 1)
+        )
+    }
+
+    private func improveEditingPrompt(_ prompt: SavedSteeringPrompt) async {
+        let original = editText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !original.isEmpty else { return }
+        improvingPromptId = prompt.id
+        defer { improvingPromptId = nil }
+
+        do {
+            let client = try AIClientFactory.createClient(config: settingsConfig)
+            let improved = try await client.generateText(
+                prompt: "Improve the following file organization instructions to be clearer, more specific, and more actionable for an AI file organizer. Keep the same intent but make it more precise. Return only the improved instructions text, nothing else.\n\nOriginal instructions: \"\(original)\"",
+                systemPrompt: "You are a file organization expert. You help users write better instructions for organizing their files and folders. Be concise and practical."
+            )
+            let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                editText = trimmed
+                HapticFeedbackManager.shared.success()
+            }
+        } catch {
+            HapticFeedbackManager.shared.error()
         }
     }
 }
@@ -610,7 +1000,7 @@ struct ErrorView: View {
 
 // MARK: - Custom Text Editor with Enter to Submit
 
-/// A TextEditor that treats Enter as submit and Cmd+Enter as new line
+/// A TextEditor that treats Cmd+Enter as submit and Enter as new line
 struct SubmittableTextEditor: NSViewRepresentable {
     @Binding var text: String
     var onSubmit: () -> Void
@@ -631,6 +1021,21 @@ struct SubmittableTextEditor: NSViewRepresentable {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         
+        let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak textView] event in
+            guard let tv = textView, tv.window?.firstResponder === tv else { return event }
+            
+            let isReturn = event.keyCode == 36
+            let hasCommand = event.modifierFlags.contains(.command)
+            
+            if isReturn && hasCommand {
+                context.coordinator.onSubmit()
+                return nil
+            }
+            
+            return event
+        }
+        context.coordinator.eventMonitor = monitor
+        
         scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
         scrollView.drawsBackground = false
@@ -642,7 +1047,6 @@ struct SubmittableTextEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         
-        // Only update if text changed externally
         if textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
@@ -659,34 +1063,22 @@ struct SubmittableTextEditor: NSViewRepresentable {
     class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var onSubmit: () -> Void
+        var eventMonitor: Any?
         
         init(text: Binding<String>, onSubmit: @escaping () -> Void) {
             self.text = text
             self.onSubmit = onSubmit
         }
         
+        deinit {
+            if let monitor = eventMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+        
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
-        }
-        
-        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-            // Handle Enter key (insertNewline:)
-            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                // Check if Command key is held using the current event
-                let commandKeyPressed = NSApp.currentEvent?.modifierFlags.contains(.command) ?? false
-                
-                if commandKeyPressed {
-                    // Cmd+Enter: Insert actual newline
-                    textView.insertNewlineIgnoringFieldEditor(nil)
-                    return true
-                } else {
-                    // Enter without modifiers: Submit
-                    onSubmit()
-                    return true
-                }
-            }
-            return false
         }
     }
 }

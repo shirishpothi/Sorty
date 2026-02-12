@@ -76,6 +76,18 @@ public enum SortyResources {
             return true
         }
 
+        // Check for audio resources copied via SPM (.copy)
+        if let resourceURL = bundle.resourceURL {
+            let wavAtRoot = resourceURL.appendingPathComponent("OnboardingSound.wav").path
+            let wavInResources = resourceURL.appendingPathComponent("Resources/OnboardingSound.wav").path
+            let resourcesDir = resourceURL.appendingPathComponent("Resources").path
+            if FileManager.default.fileExists(atPath: wavAtRoot) ||
+                FileManager.default.fileExists(atPath: wavInResources) ||
+                FileManager.default.fileExists(atPath: resourcesDir) {
+                return true
+            }
+        }
+
         // Check for SPM bundle structure
         if bundle.bundlePath.contains("Sorty_SortyLib.bundle") {
             return true
@@ -191,5 +203,59 @@ public enum SortyResources {
 
         logger.warning("Failed to load image '\(name)' from any source")
         return nil
+    }
+
+    public static func urlForCopiedResource(named fileName: String) -> URL? {
+        if let url = bundle.url(forResource: fileName, withExtension: nil) { return url }
+        if let url = bundle.url(forResource: fileName, withExtension: nil, subdirectory: "Resources") { return url }
+
+        let nameWithoutExt = (fileName as NSString).deletingPathExtension
+        let ext = (fileName as NSString).pathExtension
+        if !ext.isEmpty, let url = bundle.url(forResource: nameWithoutExt, withExtension: ext) { return url }
+
+        guard let resourceURL = bundle.resourceURL else { return nil }
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: resourceURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return nil }
+
+        for case let url as URL in enumerator {
+            if url.lastPathComponent == fileName {
+                return url
+            }
+        }
+        return nil
+    }
+
+    public static func onboardingSoundURL() -> URL? {
+        urlForCopiedResource(named: "OnboardingSound.wav")
+    }
+
+    public static func finalOnboardingSoundURL() -> URL? {
+        urlForCopiedResource(named: "Final Onboarding.wav")
+    }
+
+    /// Loads a robust NSImage for the menu bar item, bypassing asset catalog complexity
+    /// and providing a guaranteed fallback to an SF Symbol.
+    public static func menuBarNSImage() -> NSImage {
+        // Try direct file-based loading from the bundle first (most reliable for SPM/macOS 15)
+        if let url = bundle.url(forResource: "SortyMascotTemplate", withExtension: "svg"),
+           let img = NSImage(contentsOf: url) {
+            img.isTemplate = true
+            return img
+        }
+        
+        // Fallback to name-based lookup
+        if let img = image(named: "SortyMascotTemplate", withExtension: "svg") {
+            img.isTemplate = true
+            return img
+        }
+        
+        // Final fallback: standard SF Symbol
+        let symbol = NSImage(systemSymbolName: "folder.fill.badge.gearshape", accessibilityDescription: "Sorty")!
+        symbol.isTemplate = true
+        return symbol
     }
 }

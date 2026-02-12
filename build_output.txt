@@ -1,0 +1,20 @@
+⚡ Quick build (skipping tests, 8 parallel jobs)...
+
+══════════════════════════════════════════════════
+[0;34m  Sorty Build[0m
+══════════════════════════════════════════════════
+
+[0;34m--- Build Configuration ---[0m
+  Version         : 1.0.6
+  Build           : 164
+  Scheme          : Sorty
+  Method          : spm
+  Output          : /Users/shirishpothi/Code Projects/Sorty/.build
+
+  • Configuration: release
+[0;34m[1/4][0m Skipping Unit Tests...
+  • SKIP_TESTS is set.
+Injected commit hash: b6f1e34e423d05df6da70298a6526787328c8fc1 into /Users/shirishpothi/Code Projects/Sorty/Resources/commit.txt
+[0;34m[2/4][0m Compiling Project...
+  • Build flags: -j 8
+Another instance of SwiftPM is already running using '/Users/shirishpothi/Code Projects/Sorty/.build', waiting until that process has finished execution...make: *** [quick] Interrupt: 2

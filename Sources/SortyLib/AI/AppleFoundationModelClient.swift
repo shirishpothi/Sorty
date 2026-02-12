@@ -38,7 +38,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         
         switch compactionLevel {
         case .standard:
-            systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildCompactSystemPrompt(mode: config.mode, enableReasoning: config.enableReasoning, enableSmartRename: config.enableSmartRename, maxTopLevelFolders: config.maxTopLevelFolders)
+            systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildCompactSystemPrompt(mode: config.mode, enableReasoning: config.enableReasoning, enableSmartRename: config.enableSmartRename, maxTopLevelFolders: config.maxTopLevelFolders, enableTagging: config.enableFileTagging)
             userPrompt = PromptBuilder.buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
         case .ultra:
             let prompts = PromptBuilder.buildUltraCompactPrompt(files: files)
@@ -111,7 +111,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         } catch let error as LanguageModelSession.GenerationError {
             throw AIClientError.apiError(
                 statusCode: 500,
-                message: "Apple Intelligence generation error: \(error.localizedDescription)"
+                message: "Apple Foundation Model generation error: \(error.localizedDescription)"
             )
         } catch let error as AIClientError {
             throw error
@@ -150,7 +150,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         } catch let error as LanguageModelSession.GenerationError {
             throw AIClientError.apiError(
                 statusCode: 500,
-                message: "Apple Intelligence generation error: \(error.localizedDescription)"
+                message: "Apple Foundation Model generation error: \(error.localizedDescription)"
             )
         } catch {
             throw error
@@ -190,7 +190,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
 #if canImport(FoundationModels) && os(macOS)
 @available(macOS 26.0, *)
 extension AIClientError {
-    static var appleIntelligenceUnavailable: AIClientError {
+    static var appleModelUnavailable: AIClientError {
         return AIClientError.apiError(
             statusCode: 503,
             message: AppleFoundationModelClient.unavailabilityReason

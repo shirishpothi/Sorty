@@ -392,3 +392,235 @@ final class LearningsConfidenceTests: XCTestCase {
         XCTAssertFalse(alt.explanation.isEmpty)
     }
 }
+
+// MARK: - Enhanced Learnings Tests
+
+@MainActor
+final class EnhancedLearningsTests: XCTestCase {
+    
+    var manager: LearningsManager!
+    
+    override func setUp() async throws {
+        manager = LearningsManager()
+        manager.currentProfile = LearningsProfile()
+        await manager.grantConsent()
+    }
+    
+    override func tearDown() async throws {
+        manager = nil
+    }
+    
+    // MARK: - Scoped Rule Tests
+    
+    func testScopedRuleFilteringByFolder() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(pattern: ".*\\.pdf$", template: "Documents/{filename}", priority: 80, explanation: "PDFs to Documents", scope: .global, status: .active),
+            InferredRule(pattern: ".*\\.pdf$", template: "Work/Reports/{filename}", priority: 90, explanation: "Work PDFs to Reports", scope: .folder("/Users/test/Work"), status: .active),
+            InferredRule(pattern: ".*\\.jpg$", template: "Photos/{filename}", priority: 70, explanation: "Photos to Photos folder", scope: .folder("/Users/test/Personal"), status: .active)
+        ]
+        manager.currentProfile = profile
+        
+        let workRules = manager.getActiveRules(forFolder: "/Users/test/Work")
+        XCTAssertTrue(workRules.contains(where: { $0.explanation == "PDFs to Documents" }), "Global rule should be included")
+        XCTAssertTrue(workRules.contains(where: { $0.explanation == "Work PDFs to Reports" }), "Work-scoped rule should be included")
+        XCTAssertFalse(workRules.contains(where: { $0.explanation == "Photos to Photos folder" }), "Personal-scoped rule should NOT be included for Work folder")
+    }
+    
+    func testGlobalRulesAlwaysIncluded() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(pattern: ".*", template: "{category}/{filename}", priority: 50, explanation: "Global catch-all", scope: .global, status: .active)
+        ]
+        manager.currentProfile = profile
+        
+        let rules = manager.getActiveRules(forFolder: "/any/path")
+        XCTAssertEqual(rules.count, 1)
+        XCTAssertEqual(rules.first?.explanation, "Global catch-all")
+    }
+    
+    // MARK: - Pending Approval Tests
+    
+    func testPendingRulesNotIncludedInActiveRules() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(pattern: ".*\\.txt$", template: "Text/{filename}", priority: 60, explanation: "Text files rule", scope: .global, status: .active),
+            InferredRule(pattern: ".*\\.csv$", template: "Data/{filename}", priority: 50, explanation: "CSV files rule", scope: .global, status: .pendingApproval)
+        ]
+        manager.currentProfile = profile
+        
+        let activeRules = manager.getActiveRules()
+        XCTAssertTrue(activeRules.contains(where: { $0.explanation == "Text files rule" }), "Active rule should be included")
+        XCTAssertFalse(activeRules.contains(where: { $0.explanation == "CSV files rule" }), "Pending rule should NOT be in active rules")
+    }
+    
+    func testGetPendingRules() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.inferredRules = [
+            InferredRule(pattern: ".*\\.txt$", template: "Text/{filename}", priority: 60, explanation: "Text rule", scope: .global, status: .active),
+            InferredRule(pattern: ".*\\.csv$", template: "Data/{filename}", priority: 50, explanation: "CSV rule", scope: .global, status: .pendingApproval),
+            InferredRule(pattern: ".*\\.json$", template: "Config/{filename}", priority: 40, explanation: "JSON rule", scope: .global, status: .pendingApproval)
+        ]
+        manager.currentProfile = profile
+        
+        let pending = manager.getPendingRules()
+        XCTAssertEqual(pending.count, 2)
+        XCTAssertTrue(pending.allSatisfy { $0.status == .pendingApproval })
+    }
+    
+    func testApproveRule() async {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        let ruleId = UUID().uuidString
+        profile.inferredRules = [
+            InferredRule(id: ruleId, pattern: ".*\\.csv$", template: "Data/{filename}", priority: 50, explanation: "CSV rule", scope: .global, status: .pendingApproval)
+        ]
+        manager.currentProfile = profile
+        
+        await manager.approveRule(ruleId: ruleId)
+        
+        let rule = manager.currentProfile?.inferredRules.first(where: { $0.id == ruleId })
+        XCTAssertEqual(rule?.status, .active)
+    }
+    
+    func testRejectRuleWithCooldown() async {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        let ruleId = UUID().uuidString
+        profile.inferredRules = [
+            InferredRule(id: ruleId, pattern: ".*\\.csv$", template: "Data/{filename}", priority: 50, explanation: "CSV rule", scope: .global, status: .pendingApproval)
+        ]
+        manager.currentProfile = profile
+        
+        await manager.rejectRule(ruleId: ruleId, cooldownDays: 7)
+        
+        let rule = manager.currentProfile?.inferredRules.first(where: { $0.id == ruleId })
+        XCTAssertEqual(rule?.status, .rejected)
+        XCTAssertNotNil(rule?.rejectedAt)
+        XCTAssertNotNil(rule?.cooldownUntil)
+        XCTAssertFalse(rule?.isEnabled ?? true)
+        
+        XCTAssertTrue(manager.isRuleInCooldown(pattern: ".*\\.csv$"))
+    }
+    
+    // MARK: - Learning Exclusion Tests
+    
+    func testAddAndRemoveLearningExclusion() async {
+        await manager.addLearningExclusion("Temp")
+        
+        XCTAssertTrue(manager.currentProfile?.learningExclusionPatterns.contains("Temp") ?? false)
+        XCTAssertTrue(manager.isPathExcludedFromLearning("/Users/test/Temp/file.txt"))
+        
+        await manager.removeLearningExclusion("Temp")
+        
+        XCTAssertFalse(manager.currentProfile?.learningExclusionPatterns.contains("Temp") ?? true)
+        XCTAssertFalse(manager.isPathExcludedFromLearning("/Users/test/Temp/file.txt"))
+    }
+    
+    func testPathExclusionChecking() async {
+        await manager.addLearningExclusion("Temp")
+        await manager.addLearningExclusion("Downloads/Cache")
+        
+        XCTAssertTrue(manager.isPathExcludedFromLearning("/Users/test/Temp/file.pdf"))
+        XCTAssertTrue(manager.isPathExcludedFromLearning("/Users/test/Downloads/Cache/data.json"))
+        XCTAssertFalse(manager.isPathExcludedFromLearning("/Users/test/Documents/report.pdf"))
+    }
+    
+    // MARK: - Rule Evidence Tests
+    
+    func testRuleEvidenceTracking() {
+        let rule = InferredRule(
+            pattern: "Invoice.*\\.pdf$",
+            template: "Finance/{year}/Invoices/{filename}",
+            priority: 85,
+            explanation: "Organize invoices by year",
+            scope: .global,
+            status: .active,
+            evidenceIds: ["example-1", "steering-2"],
+            evidenceDescription: "Rule created because you moved 5 invoice PDFs to Finance/Invoices last week."
+        )
+        
+        XCTAssertEqual(rule.evidenceIds.count, 2)
+        XCTAssertNotNil(rule.evidenceDescription)
+        XCTAssertTrue(rule.evidenceDescription!.contains("invoice"))
+    }
+    
+    // MARK: - Session Learning Tests
+    
+    func testSessionLearningPause() {
+        XCTAssertFalse(manager.sessionLearningPaused)
+        
+        manager.sessionLearningPaused = true
+        XCTAssertTrue(manager.sessionLearningPaused)
+        
+        manager.sessionLearningPaused = false
+        XCTAssertFalse(manager.sessionLearningPaused)
+    }
+    
+    // MARK: - Scope Display Names
+    
+    func testRuleScopeDisplayNames() {
+        XCTAssertEqual(RuleScope.global.displayName, "Global")
+        
+        let folderScope = RuleScope.folder("/Users/test/Documents")
+        XCTAssertEqual(folderScope.displayName, "Folder: Documents")
+        
+        let personaScope = RuleScope.activePersona(UUID())
+        XCTAssertTrue(personaScope.displayName.hasPrefix("Persona:"))
+    }
+}
+
+// MARK: - Exclusion Parsing Tests
+
+final class ExclusionParsingTests: XCTestCase {
+    
+    func testParseExclusionFromPrompt() {
+        let testCases: [(input: String, expected: String?)] = [
+            ("Don't learn from moves in my Temp folder", "Temp"),
+            ("Skip learning for Downloads", "Downloads"),
+            ("Exclude from learning Cache directory", "Cache"),
+            ("This is a regular instruction", nil),
+            ("Organize files by date", nil),
+        ]
+        
+        for testCase in testCases {
+            let result = parseExclusionPattern(testCase.input)
+            XCTAssertEqual(result, testCase.expected, "Failed for input: \(testCase.input)")
+        }
+    }
+    
+    private func parseExclusionPattern(_ prompt: String) -> String? {
+        let lowered = prompt.lowercased()
+        let exclusionPhrases = [
+            "don't learn from",
+            "dont learn from",
+            "skip learning for",
+            "exclude from learning",
+            "ignore for learning",
+            "no learning for",
+            "stop learning from"
+        ]
+        
+        for phrase in exclusionPhrases {
+            if lowered.contains(phrase) {
+                if let range = lowered.range(of: phrase) {
+                    let remainder = String(prompt[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    let cleaned = remainder
+                        .replacingOccurrences(of: "moves in ", with: "")
+                        .replacingOccurrences(of: "my ", with: "")
+                        .replacingOccurrences(of: " folder", with: "")
+                        .replacingOccurrences(of: " directory", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                    
+                    if !cleaned.isEmpty { return cleaned }
+                }
+            }
+        }
+        return nil
+    }
+}

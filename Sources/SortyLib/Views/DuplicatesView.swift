@@ -36,6 +36,7 @@ struct DuplicatesView: View {
                 currentDirectory: effectiveDirectory,
                 onSelectDirectory: selectDirectory,
                 onScan: startScan,
+                onCancel: cancelScan,
                 onBulkDelete: prepareBulkDelete,
                 onSettings: { showSettings = true }
             )
@@ -147,6 +148,8 @@ struct DuplicatesView: View {
                         ForEach(detectionManager.allGroups) { group in
                             UnifiedDuplicateGroupRow(group: group)
                                 .tag(group)
+                                .scaleEffect(selectedGroup == group ? 1.01 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedGroup)
                         }
                     }
                     .listStyle(.inset)
@@ -183,21 +186,21 @@ struct DuplicatesView: View {
 
         // Cancel any in-flight scan
         currentScanTask?.cancel()
-        
+
         // Capture current directory
         capturedDirectory = directory
         detectionManager.state = .preparing
-        
+
         currentScanTask = Task {
             let scanner = DirectoryScanner()
             do {
                 // Pass false for computeHashes because we compute them in detectionManager with progress
                 let files = try await scanner.scanDirectory(at: directory, computeHashes: false)
-                
+
                 // Verify directory hasn't changed since scan started
                 if capturedDirectory == effectiveDirectory && !Task.isCancelled {
                     await detectionManager.scanForDuplicates(files: files, settings: settingsManager.settings)
-                    
+
                     if !Task.isCancelled {
                         // Auto-select first group
                         if let first = detectionManager.allGroups.first {
@@ -214,6 +217,14 @@ struct DuplicatesView: View {
                 }
             }
         }
+    }
+
+    private func cancelScan() {
+        currentScanTask?.cancel()
+        currentScanTask = nil
+        detectionManager.isScanning = false
+        detectionManager.state = .idle
+        HapticFeedbackManager.shared.tap()
     }
 
     private func deleteFiles(_ files: [FileItem]) {
@@ -325,6 +336,7 @@ struct DuplicatesHeaderNew: View {
     let currentDirectory: URL?
     let onSelectDirectory: () -> Void
     let onScan: () -> Void
+    let onCancel: () -> Void
     let onBulkDelete: (Bool) -> Void
     let onSettings: () -> Void
     
@@ -368,6 +380,7 @@ struct DuplicatesHeaderNew: View {
                             .padding(.vertical, 4)
                             .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
                         }
+                        .contentShape(RoundedRectangle(cornerRadius: 6))
                         .buttonStyle(.plain)
                         .help(dir.path)
                     } else {
@@ -396,6 +409,7 @@ struct DuplicatesHeaderNew: View {
                         Capsule().fill(enableSafeDeletion ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
                     )
                 }
+                .contentShape(Capsule())
                 .buttonStyle(.plain)
                 .popover(isPresented: $showInfo) {
                     SafeDeletionInfoPopover(isEnabled: enableSafeDeletion)
@@ -411,13 +425,15 @@ struct DuplicatesHeaderNew: View {
                     }
                     .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                     .help("Detection Settings")
+                    .disabled(manager.isScanning)
 
                     Button(action: onSelectDirectory) {
                          Label("Change Folder", systemImage: "folder.badge.gearshape")
                     }
                     .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                    .disabled(manager.isScanning)
 
-                    if !manager.allGroups.isEmpty {
+                    if !manager.allGroups.isEmpty && !manager.isScanning {
                         Menu {
                             Button { onBulkDelete(true) } label: {
                                 Label("Keep Newest", systemImage: "clock")
@@ -434,12 +450,20 @@ struct DuplicatesHeaderNew: View {
                         .buttonStyle(.onboardingPill(size: .small))
                         .tint(.red)
                     }
-                    
-                    Button(action: onScan) {
-                        Label(manager.lastScanDate == nil ? "Start Scan" : "Rescan", systemImage: manager.lastScanDate == nil ? "play.fill" : "arrow.clockwise")
+
+                    if manager.isScanning {
+                        Button(action: onCancel) {
+                            Label("Cancel", systemImage: "xmark")
+                        }
+                        .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                        .tint(.red)
+                    } else {
+                        Button(action: onScan) {
+                            Label(manager.lastScanDate == nil ? "Start Scan" : "Rescan", systemImage: manager.lastScanDate == nil ? "play.fill" : "arrow.clockwise")
+                        }
+                        .buttonStyle(.onboardingPill(size: .small))
+                        .disabled(currentDirectory == nil)
                     }
-                    .buttonStyle(.onboardingPill(size: .small))
-                    .disabled(manager.isScanning || currentDirectory == nil)
                 }
             }
         }
@@ -500,6 +524,7 @@ struct DuplicateGroupRow: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
@@ -576,6 +601,7 @@ struct UnifiedDuplicateGroupRow: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
@@ -680,6 +706,7 @@ struct DuplicateFileDetailRow: View {
                     .background(Color.secondary.opacity(0.1), in: Capsule())
                     .foregroundStyle(.secondary)
                 }
+                .contentShape(Capsule())
                 .buttonStyle(.plain)
                 .help("Reveal in Finder: \(fileURL.deletingLastPathComponent().path)")
                 
@@ -713,6 +740,7 @@ struct DuplicateFileDetailRow: View {
             }
         }
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 }
 
@@ -922,6 +950,7 @@ struct UnifiedFileDetailRow: View {
                     .background(Color.secondary.opacity(0.1), in: Capsule())
                     .foregroundStyle(.secondary)
                 }
+                .contentShape(Capsule())
                 .buttonStyle(.plain)
                 .help("Reveal in Finder: \(fileURL.deletingLastPathComponent().path)")
                 
@@ -960,6 +989,7 @@ struct UnifiedFileDetailRow: View {
             }
         }
         .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
     
     private func formatPixels(_ pixels: Int) -> String {
@@ -1129,6 +1159,7 @@ struct ScanProgressViewNew: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(isPreparing ? "Preparing to scan for duplicates" : "Computing file hashes to find exact duplicate matches")
         }
+        .shimmer(isLoading: progress >= 0.9 && !isPreparing)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)

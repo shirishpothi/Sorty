@@ -48,10 +48,11 @@ struct SettingsCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(color)
+                    .frame(width: 14)
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.secondary)
             }
             
@@ -163,6 +164,8 @@ struct SettingsSecureField: View {
     @Binding var text: String
     var isOptional: Bool = false
     
+    @State private var isShowingText = false
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -173,9 +176,30 @@ struct SettingsSecureField: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+                
+                Spacer()
+                
+                if FeatureFlags.privacyModeEnabled {
+                    Button {
+                        isShowingText.toggle()
+                        HapticFeedbackManager.shared.tap()
+                    } label: {
+                        Image(systemName: isShowingText ? "eye.slash" : "eye")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(isShowingText ? "Hide API Key" : "Show API Key")
+                }
             }
-            SecureField("", text: $text)
-                .textFieldStyle(.roundedBorder)
+            
+            if isShowingText && FeatureFlags.privacyModeEnabled {
+                TextField("", text: $text)
+                    .textFieldStyle(.roundedBorder)
+            } else {
+                SecureField("", text: $text)
+                    .textFieldStyle(.roundedBorder)
+            }
         }
     }
 }
@@ -186,18 +210,27 @@ struct SettingsToggle: View {
     var description: String? = nil
     
     var body: some View {
-        Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.subheadline)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundColor(.primary)
                 if let description = description {
                     Text(description)
                         .font(.caption)
                         .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineSpacing(2)
                 }
             }
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
         }
-        .toggleStyle(.switch)
+        .padding(.vertical, 4)
         .onChange(of: isOn) { _, _ in
             HapticFeedbackManager.shared.selection()
         }

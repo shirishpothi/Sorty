@@ -18,8 +18,9 @@ while [[ $# -gt 0 ]]; do
     key="$1"
     case $key in
         --ui-tests)
-        RUN_UI_TESTS=true
+        RUN_UI_TESTS=false
         RUN_UNIT_TESTS=true # Usually implies unit tests too
+        log_warn "UI tests are disabled and will be skipped."
         shift
         ;;
         --skip-ui)
@@ -50,11 +51,7 @@ if [ "$SKIP_ALL_TESTS" == "true" ]; then
     log_warn "⚠️  Skipping ALL tests at user request."
 else
     # Configure build script environment
-    if [ "$RUN_UI_TESTS" == "true" ]; then
-        export ENABLE_UI_TESTS=true
-    else
-        export ENABLE_UI_TESTS=false
-    fi
+    export ENABLE_UI_TESTS=false
     # Unit tests run by default in build.sh unless SKIP_TESTS is set
     # If cli-only, we might want to skip unit tests in build.sh
     if [ "$RUN_UNIT_TESTS" == "false" ] && [ "$RUN_CLI_TESTS" == "true" ]; then

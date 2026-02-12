@@ -205,6 +205,14 @@ public class MenuBarController: ObservableObject {
             let fileManager = FileManager.default
             let destinationFolder = URL(fileURLWithPath: suggestion.suggestedPath)
 
+            let sourceParent = fileURL.deletingLastPathComponent().path
+            let destPath = destinationFolder.path
+            guard destPath.hasPrefix(sourceParent) else {
+                errorMessage = "Destination is outside the source directory. Move blocked for safety."
+                isProcessing = false
+                return
+            }
+
             // Create folder if needed
             if !fileManager.fileExists(atPath: destinationFolder.path) {
                 try fileManager.createDirectory(at: destinationFolder, withIntermediateDirectories: true)
@@ -609,7 +617,7 @@ public struct MenuBarExtraScene: Scene {
                     controller.configure(organizer: organizer, settings: settingsViewModel)
                 }
         } label: {
-            Label("Sorty", systemImage: "tray.and.arrow.down.fill")
+            MenuBarLabel()
         }
         .menuBarExtraStyle(.window)
     }

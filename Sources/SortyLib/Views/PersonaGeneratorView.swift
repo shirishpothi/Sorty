@@ -166,6 +166,7 @@ struct PersonaGeneratorView: View {
                                 Image(systemName: "checkmark.circle.fill").foregroundColor(.blue)
                             }
                         }
+                        .contentShape(Rectangle())
                         .padding()
                         .background(Color(nsColor: .controlBackgroundColor))
                         .cornerRadius(8)

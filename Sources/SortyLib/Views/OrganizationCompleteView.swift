@@ -17,44 +17,63 @@ struct OrganizationCompleteView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     
-    @State private var appeared = false
-    @State private var showStats = false
+    @State private var iconAppeared = false
+    @State private var ringExpanded = false
+    @State private var titleAppeared = false
+    @State private var timeSavedAppeared = false
+    @State private var summaryAppeared = false
+    @State private var buttonsAppeared = false
+    @State private var historyLinkAppeared = false
+    @State private var showParticles = false
+    
+    @State private var displayedFiles = 0
+    @State private var displayedFolders = 0
+    @State private var countUpTimer: Timer?
     
     var body: some View {
         VStack(spacing: 32) {
             Spacer()
             
-            // Success Animation Header
             VStack(spacing: 16) {
                 ZStack {
                     Circle()
                         .fill(Color.green.opacity(0.1))
                         .frame(width: 100, height: 100)
-                        .scaleEffect(appeared ? 1 : 0.5)
-                        .opacity(appeared ? 1 : 0)
+                        .scaleEffect(iconAppeared ? 1 : 0.5)
+                        .opacity(iconAppeared ? 1 : 0)
+                    
+                    Circle()
+                        .stroke(Color.green.opacity(ringExpanded ? 0 : 0.5), lineWidth: 3)
+                        .frame(width: 100, height: 100)
+                        .scaleEffect(ringExpanded ? 2 : 1)
                     
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 60))
                         .foregroundStyle(.green)
-                        .scaleEffect(appeared ? 1 : 0.5)
-                        .opacity(appeared ? 1 : 0)
+                        .scaleEffect(iconAppeared ? 1 : 0.3)
+                    
+                    if showParticles {
+                        ConfettiParticlesView()
+                    }
                 }
                 
                 VStack(spacing: 8) {
                     Text("Organization Complete")
                         .font(.title.bold())
+                        .opacity(titleAppeared ? 1 : 0)
+                        .offset(y: titleAppeared ? 0 : 10)
                     
                     Text("Successfully organized your files into a clean structure.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .opacity(titleAppeared ? 1 : 0)
+                        .offset(y: titleAppeared ? 0 : 10)
                     
-                    // Show time saved - use filesScanned from stats, fallback to totalFiles
                     let effectiveTimeSaved: TimeInterval = {
                         if let stats = stats, stats.estimatedTimeSaved > 0 {
                             return stats.estimatedTimeSaved
                         }
-                        // Fallback: 4 seconds per file organized
                         return Double(totalFiles) * 4.0
                     }()
                     
@@ -67,23 +86,22 @@ struct OrganizationCompleteView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.top, 4)
-                        .opacity(appeared ? 1 : 0)
-                        .offset(y: appeared ? 0 : 10)
+                        .opacity(timeSavedAppeared ? 1 : 0)
+                        .offset(y: timeSavedAppeared ? 0 : 10)
                     }
                 }
             }
             
-            // Summary Card
             HStack(spacing: 40) {
                 SummaryStatItem(
-                    value: "\(totalFiles)",
+                    value: "\(displayedFiles)",
                     label: totalFiles == 1 ? "File Moved" : "Files Moved",
                     icon: "doc.on.doc.fill",
                     color: .blue
                 )
                 
                 SummaryStatItem(
-                    value: "\(totalFolders)",
+                    value: "\(displayedFolders)",
                     label: totalFolders == 1 ? "Folder Created" : "Folders Created",
                     icon: "folder.fill.badge.plus",
                     color: .purple
@@ -96,10 +114,9 @@ struct OrganizationCompleteView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 20)
+            .opacity(summaryAppeared ? 1 : 0)
+            .offset(y: summaryAppeared ? 0 : 30)
             
-            // Action Buttons
             VStack(spacing: 12) {
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -123,7 +140,7 @@ struct OrganizationCompleteView: View {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         withAnimation(.pageTransition) {
-                            appState.selectedDirectory = nil  // Clear selection to go back to folder picker
+                            appState.selectedDirectory = nil
                             organizer.reset()
                         }
                     } label: {
@@ -132,23 +149,24 @@ struct OrganizationCompleteView: View {
                     }
                     .buttonStyle(.sortySecondary(size: .regular))
                 }
-                
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    appState.currentView = .history
-                } label: {
-                    Label("View History", systemImage: "clock.arrow.circlepath")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 8)
             }
             .frame(maxWidth: 400)
-            .opacity(appeared ? 1 : 0)
-            .offset(y: appeared ? 0 : 20)
+            .opacity(buttonsAppeared ? 1 : 0)
+            .offset(y: buttonsAppeared ? 0 : 20)
             
-            // Stats Area
+            Button {
+                HapticFeedbackManager.shared.tap()
+                appState.currentView = .history
+            } label: {
+                Label("View History", systemImage: "clock.arrow.circlepath")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+            .opacity(historyLinkAppeared ? 1 : 0)
+            .offset(y: historyLinkAppeared ? 0 : 10)
+            
             if let stats = stats, settingsViewModel.config.showStatsForNerds {
                 OrganizationResultView(stats: stats)
                     .padding(.horizontal, 40)
@@ -159,8 +177,69 @@ struct OrganizationCompleteView: View {
         }
         .padding(40)
         .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.2)) {
-                appeared = true
+            HapticFeedbackManager.shared.success()
+            
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) {
+                iconAppeared = true
+            }
+            
+            withAnimation(.easeOut(duration: 0.6).delay(0.3)) {
+                ringExpanded = true
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                showParticles = true
+            }
+            
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2)) {
+                titleAppeared = true
+            }
+            
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.35)) {
+                timeSavedAppeared = true
+            }
+            
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5)) {
+                summaryAppeared = true
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+                startCountUp()
+            }
+            
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.65)) {
+                buttonsAppeared = true
+            }
+            
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.8)) {
+                historyLinkAppeared = true
+            }
+        }
+        .onDisappear {
+            countUpTimer?.invalidate()
+            countUpTimer = nil
+        }
+    }
+    
+    private func startCountUp() {
+        let steps = 20
+        let interval = 0.5 / Double(steps)
+        var currentStep = 0
+        
+        countUpTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
+            currentStep += 1
+            let progress = Double(currentStep) / Double(steps)
+            let easedProgress = 1 - pow(1 - progress, 3)
+            
+            displayedFiles = Int(round(Double(totalFiles) * easedProgress))
+            displayedFolders = Int(round(Double(totalFolders) * easedProgress))
+            
+            if currentStep >= steps {
+                timer.invalidate()
+                countUpTimer = nil
+                displayedFiles = totalFiles
+                displayedFolders = totalFolders
+                HapticFeedbackManager.shared.alignment()
             }
         }
     }
@@ -193,6 +272,56 @@ struct OrganizationCompleteView: View {
     }
 }
 
+private struct ConfettiParticlesView: View {
+    struct Particle: Identifiable {
+        let id = UUID()
+        let angle: Double
+        let distance: CGFloat
+        let color: Color
+        let size: CGFloat
+        let delay: Double
+    }
+    
+    @State private var burstedParticles: Set<UUID> = []
+    
+    private let particles: [Particle] = {
+        let colors: [Color] = [.green, .blue, .purple, .orange, .yellow, .mint]
+        return (0..<12).map { i in
+            Particle(
+                angle: Double(i) * 30 + Double.random(in: -10...10),
+                distance: CGFloat.random(in: 50...80),
+                color: colors[i % colors.count],
+                size: CGFloat.random(in: 4...7),
+                delay: Double.random(in: 0...0.25)
+            )
+        }
+    }()
+    
+    var body: some View {
+        ZStack {
+            ForEach(particles) { particle in
+                let isBursted = burstedParticles.contains(particle.id)
+                Circle()
+                    .fill(particle.color)
+                    .frame(width: particle.size, height: particle.size)
+                    .offset(
+                        x: isBursted ? cos(particle.angle * .pi / 180) * particle.distance : 0,
+                        y: isBursted ? sin(particle.angle * .pi / 180) * particle.distance : 0
+                    )
+                    .opacity(isBursted ? 0 : 0.8)
+                    .scaleEffect(isBursted ? 0.3 : 1)
+            }
+        }
+        .onAppear {
+            for particle in particles {
+                withAnimation(.easeOut(duration: Double.random(in: 0.5...0.9)).delay(particle.delay)) {
+                    burstedParticles.insert(particle.id)
+                }
+            }
+        }
+    }
+}
+
 private struct SummaryStatItem: View {
     let value: String
     let label: String
@@ -208,6 +337,7 @@ private struct SummaryStatItem: View {
             VStack(spacing: 2) {
                 Text(value)
                     .font(.title2.bold())
+                    .monospacedDigit()
                 Text(label)
                     .font(.caption)
                     .foregroundStyle(.secondary)

@@ -418,6 +418,7 @@ struct OnboardingPersonaCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
             .padding(.horizontal, 16)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(isSelected ? Color.accentColor.opacity(0.08) : Color(NSColor.controlBackgroundColor))
@@ -470,6 +471,7 @@ struct CreatePersonaButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
             .padding(.horizontal, 16)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color(NSColor.controlBackgroundColor))

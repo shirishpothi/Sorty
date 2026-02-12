@@ -12,11 +12,14 @@ import Combine
 @MainActor
 public class ExtensionListener: ObservableObject {
     @Published public var incomingURL: URL?
-    
+
     public init() {
         ExtensionCommunication.setupNotificationObserver { @MainActor [weak self] url in
             self?.incomingURL = url
         }
+
+        if let existingURL = ExtensionCommunication.receiveFromExtension() {
+            incomingURL = existingURL
+        }
     }
 }
-

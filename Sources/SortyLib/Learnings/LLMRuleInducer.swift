@@ -29,7 +29,9 @@ public actor LLMRuleInducer {
         exampleFolders: [URL],
         honingAnswers: [HoningAnswer] = [],
         steeringPrompts: [SteeringPrompt] = [],
-        guidingInstructions: [UserInstruction] = []
+        guidingInstructions: [UserInstruction] = [],
+        currentFolderPath: String? = nil,
+        currentPersonaId: UUID? = nil
     ) async -> [InferredRule] {
         // If no examples, we can't learn anything
         if examples.isEmpty && exampleFolders.isEmpty && steeringPrompts.isEmpty && guidingInstructions.isEmpty {
@@ -45,7 +47,9 @@ public actor LLMRuleInducer {
             exampleFolders: exampleFolders,
             honingAnswers: honingAnswers,
             steeringPrompts: steeringPrompts,
-            guidingInstructions: guidingInstructions
+            guidingInstructions: guidingInstructions,
+            currentFolderPath: currentFolderPath,
+            currentPersonaId: currentPersonaId
         )
         
         do {
@@ -104,6 +108,8 @@ public actor LLMRuleInducer {
         - "explanation": A concise human-readable explanation.
         - "priority": An integer 1-100 (100 is highest). Specific rules (e.g. "Contracts") get higher priority than generic ones (e.g. "PDFs").
         - "confidence": A float 0.0-1.0 indicating how confident you are in this rule based on the evidence.
+        - "scope": A string, either "global", "folder:<path>", or "persona:<uuid>". Default to "global".
+        - "evidence": An array of strings describing which specific examples or instructions from the input the AI used to form this rule. Be specific, e.g., "Example: 'Invoice_2023_01.pdf' -> 'Finance/2023/Invoices/...'"
         
         PRIORITY GUIDELINES:
         - Rules from explicit user feedback (steering prompts, honing answers): 80-100
@@ -126,7 +132,9 @@ public actor LLMRuleInducer {
           "template": "Finance/{year}/Invoices/{filename}",
           "explanation": "Organize invoices by year",
           "priority": 80,
-          "confidence": 0.85
+          "confidence": 0.85,
+          "scope": "global",
+          "evidence": ["Example: 'Invoice_2023_01.pdf' -> 'Finance/2023/Invoices/Invoice_2023_01.pdf'", "Example: 'Invoice_2023_02.pdf' -> 'Finance/2023/Invoices/Invoice_2023_02.pdf'"]
         }
         """
     }
@@ -136,7 +144,9 @@ public actor LLMRuleInducer {
         exampleFolders: [URL],
         honingAnswers: [HoningAnswer],
         steeringPrompts: [SteeringPrompt],
-        guidingInstructions: [UserInstruction]
+        guidingInstructions: [UserInstruction],
+        currentFolderPath: String? = nil,
+        currentPersonaId: UUID? = nil
     ) -> String {
         var context = "Analyze the following user behaviors and preferences to infer organization rules:\n\n"
         
@@ -199,6 +209,22 @@ public actor LLMRuleInducer {
             context += "\n"
         }
         
+        // 5. Current Context
+        if currentFolderPath != nil || currentPersonaId != nil {
+            context += "### CURRENT CONTEXT:\n"
+            if let folderPath = currentFolderPath {
+                context += "- Current folder: \(folderPath)\n"
+                context += "- If a rule applies specifically to this folder, set scope to \"folder:\(folderPath)\"\n"
+                context += "- If a rule applies generally, set scope to \"global\"\n"
+            }
+            if let personaId = currentPersonaId {
+                context += "- Current persona ID: \(personaId.uuidString)\n"
+                context += "- If a rule applies specifically to this persona, set scope to \"persona:\(personaId.uuidString)\"\n"
+                context += "- If a rule applies generally, set scope to \"global\"\n"
+            }
+            context += "\n"
+        }
+        
         context += "Based on this evidence, output a JSON array of organization rules. Prioritize rules that address the steering prompts and explicit preferences first."
         return context
     }
@@ -223,6 +249,8 @@ public actor LLMRuleInducer {
         let explanation: String
         let priority: Int
         let confidence: Double?
+        let scope: String?
+        let evidence: [String]?
     }
     
     private func parseResponse(_ response: String) -> [InferredRule] {
@@ -235,7 +263,6 @@ public actor LLMRuleInducer {
             let llmRules = try JSONDecoder().decode([LLMRuleResponse].self, from: data)
             
             return llmRules.map { rule in
-                // Determine initial confidence from LLM's reported confidence
                 let initialConf: RuleConfidence?
                 if let conf = rule.confidence {
                     if conf >= 0.8 {
@@ -249,12 +276,21 @@ public actor LLMRuleInducer {
                     initialConf = nil
                 }
                 
+                let parsedScope = parseScope(rule.scope)
+                let evidenceIds = rule.evidence ?? []
+                let evidenceDesc = evidenceIds.isEmpty ? nil : evidenceIds.joined(separator: "; ")
+                let status: RuleStatus = (rule.confidence ?? 1.0) < 0.8 ? .pendingApproval : .active
+                
                 return InferredRule(
                     pattern: rule.pattern,
                     template: rule.template,
                     priority: rule.priority,
                     explanation: rule.explanation,
-                    initialConfidence: initialConf
+                    initialConfidence: initialConf,
+                    scope: parsedScope,
+                    status: status,
+                    evidenceIds: evidenceIds,
+                    evidenceDescription: evidenceDesc
                 )
             }
         } catch {
@@ -293,5 +329,17 @@ public actor LLMRuleInducer {
         }
         
         return text
+    }
+    
+    private func parseScope(_ scopeString: String?) -> RuleScope {
+        guard let scope = scopeString else { return .global }
+        if scope == "global" { return .global }
+        if scope.hasPrefix("folder:") {
+            return .folder(String(scope.dropFirst("folder:".count)))
+        }
+        if scope.hasPrefix("persona:"), let uuid = UUID(uuidString: String(scope.dropFirst("persona:".count))) {
+            return .activePersona(uuid)
+        }
+        return .global
     }
 }

@@ -24,16 +24,16 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         return [
             "Authorization": "Bearer \(token)",
             "Content-Type": "application/json",
-            "Editor-Version": "vscode/1.85.1", // Mimic VS Code to ensure compatibility
+            "Editor-Version": "vscode/1.85.1",
             "Editor-Plugin-Version": "copilot/1.138.0",
-            "User-Agent": "Sorty/1.0"
+            "User-Agent": "GithubCopilot/1.138.0"
         ]
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             mode: config.mode,
@@ -76,7 +76,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
         
-        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders)
+        let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             mode: config.mode,
@@ -166,20 +166,20 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         let url = URL(string: "https://api.githubcopilot.com/models")!
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.timeoutInterval = 30
-        
+        request.timeoutInterval = min(config.requestTimeout, 60)
+
         let headers = try await getHeaders()
         for (key, value) in headers {
             request.setValue(value, forHTTPHeaderField: key)
         }
-        
+
         let session = await getSession()
         let (_, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIClientError.invalidResponse
         }
-        
+
         if !(200...299).contains(httpResponse.statusCode) {
              throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
         }

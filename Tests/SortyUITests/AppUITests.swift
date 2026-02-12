@@ -361,6 +361,17 @@ final class AppUITests: XCTestCase {
         }
     }
 
+    func testNotificationActionNavigatesToHistory() throws {
+        app.terminate()
+        app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launchEnvironment["XCUITEST_NOTIFICATION_ACTION"] = "showDetails"
+        app.launch()
+
+        let historyTitle = app.staticTexts["Organization History"]
+        XCTAssertTrue(historyTitle.waitForExistence(timeout: 5.0), "History view should open from notification action")
+    }
+
     // MARK: - Complete User Workflow Tests
     // These tests simulate real user workflows
 

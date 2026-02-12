@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var iconBounce = false
@@ -19,18 +20,18 @@ struct DirectorySelectionView: View {
     var body: some View {
         WorkflowContainer(currentStep: .selectFolder) {
             Spacer()
-                .frame(height: 24)
+                .frame(minHeight: 40, maxHeight: .infinity)
             
-            VStack(spacing: 24) {
-                VStack(spacing: 6) {
+            VStack(spacing: 32) {
+                VStack(spacing: 10) {
                     Text("Select a directory to organize")
-                        .font(.title2)
+                        .font(.title)
                         .fontWeight(.bold)
                         .opacity(hasAppeared ? 1 : 0)
                         .offset(y: hasAppeared ? 0 : 10)
 
                     Text("Drag and drop a folder here, or click to browse")
-                        .font(.body)
+                        .font(.title3)
                         .foregroundStyle(.secondary)
                         .opacity(hasAppeared ? 1 : 0)
                         .offset(y: hasAppeared ? 0 : 10)
@@ -45,12 +46,12 @@ struct DirectorySelectionView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.system(size: 15, weight: .medium))
                         Text("Browse for Folder")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: 15, weight: .semibold))
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
                 }
                 .buttonStyle(.onboardingPill)
                 .keyboardShortcut("o", modifiers: .command)
@@ -72,8 +73,12 @@ struct DirectorySelectionView: View {
                                 .fill(Color.secondary.opacity(0.2))
                                 .frame(height: 1)
                         }
-                        
-                        HStack(spacing: 12) {
+
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ], spacing: 12) {
                             ForEach(OrganizationMode.allCases, id: \.self) { mode in
                                 OrganizationModeCard(
                                     mode: mode,
@@ -86,7 +91,7 @@ struct DirectorySelectionView: View {
                                 }
                             }
                         }
-                        .frame(maxWidth: 480)
+                        .frame(maxWidth: 520)
                     }
                     .padding(.top, 8)
                     .opacity(hasAppeared ? 1 : 0)
@@ -97,6 +102,7 @@ struct DirectorySelectionView: View {
             .frame(maxWidth: .infinity)
             
             Spacer()
+                .frame(minHeight: 40, maxHeight: .infinity)
             
             quickTips
                 .opacity(hasAppeared ? 1 : 0)
@@ -126,20 +132,19 @@ struct DirectorySelectionView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(isTargeted ? Color.accentColor.opacity(0.05) : Color.secondary.opacity(0.05))
                 )
-                .frame(width: 180, height: 120)
                 .scaleEffect(isTargeted ? 1.05 : 1.0)
                 .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
             
-            VStack(spacing: 12) {
+            VStack(spacing: 14) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 14)
                         .fill(isTargeted ? Color.accentColor.opacity(0.1) : Color.blue.opacity(0.08))
-                        .frame(width: 54, height: 54)
+                        .frame(width: 64, height: 64)
                         .scaleEffect(isTargeted ? 1.1 : 1.0)
                     
                     Image(systemName: isTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
-                        .font(.system(size: 28, weight: .light))
+                        .font(.system(size: 34, weight: .light))
                         .foregroundStyle(isTargeted ? Color.accentColor : .blue)
                         .scaleEffect(iconBounce ? 1.1 : 1.0)
                 }
@@ -147,13 +152,15 @@ struct DirectorySelectionView: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.5), value: iconBounce)
                 
                 Text(isTargeted ? "Drop to select" : "Drop folder")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
             }
         }
+        .frame(width: 220, height: settingsViewModel.config.enableSmartRename ? 120 : 150)
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.9)
         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+        .contentShape(Rectangle())
         .onHover { hovering in
             isHovering = hovering
             if hovering {
@@ -182,19 +189,45 @@ struct DirectorySelectionView: View {
                 icon: "hand.draw",
                 title: "Drag & Drop",
                 description: "Drop any folder"
-            )
-            
-            QuickTipItemCompact(
-                icon: "cursorarrow.click.2",
-                title: "Right-Click",
-                description: "Finder extension"
-            )
-            
+            ) {
+                HapticFeedbackManager.shared.tap()
+                selectDirectory()
+            }
+
+            if FeatureFlags.finderSyncEnabled {
+                QuickTipItemCompact(
+                    icon: "cursorarrow.click.2",
+                    title: "Right-Click",
+                    description: "Finder extension"
+                )
+            } else {
+                if showMenuBarExtra {
+                    QuickTipItemCompact(
+                        icon: "menubar.arrow.up.rectangle",
+                        title: "Menu Bar",
+                        description: "Open menu"
+                    ) {
+                        openMenuBarTip()
+                    }
+                } else {
+                    QuickTipItemCompact(
+                        icon: "menubar.rectangle",
+                        title: "Enable Menu Bar",
+                        description: "Turn on menu bar icon"
+                    ) {
+                        enableMenuBarTip()
+                    }
+                }
+            }
+
             QuickTipItemCompact(
                 icon: "keyboard",
                 title: "Keyboard",
                 description: "⌘O to browse"
-            )
+            ) {
+                HapticFeedbackManager.shared.tap()
+                selectDirectory()
+            }
         }
         .padding(.bottom, 24)
     }
@@ -210,6 +243,21 @@ struct DirectorySelectionView: View {
             HapticFeedbackManager.shared.success()
             selectedDirectory = url
         }
+    }
+
+    private func openMenuBarTip() {
+        HapticFeedbackManager.shared.tap()
+        MenuBarHelper.shared.showMenu()
+    }
+
+    private func enableMenuBarTip() {
+        HapticFeedbackManager.shared.tap()
+        showMenuBarExtra = true
+        NotificationManager.shared.showInfo(
+            title: "Menu Bar Icon Enabled",
+            message: "You can now drop folders directly onto the Sorty icon in your menu bar."
+        )
+        MenuBarHelper.shared.showMenu()
     }
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -234,13 +282,16 @@ struct QuickTipItemCompact: View {
     let icon: String
     let title: String
     let description: String
-    
+    var action: (() -> Void)? = nil
+
+    @State private var isHovering = false
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundStyle(.secondary)
-            
+                .foregroundStyle(isHovering ? Color.accentColor : .secondary)
+
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
                     .font(.system(size: 11, weight: .bold))
@@ -249,6 +300,13 @@ struct QuickTipItemCompact: View {
                     .foregroundStyle(.tertiary)
             }
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .scaleEffect(isHovering ? 1.03 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovering)
+        .onHover { isHovering = $0 }
+        .onTapGesture { action?() }
     }
 }
 
@@ -261,22 +319,22 @@ struct OrganizationModeCard: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 ZStack {
                     Circle()
                         .fill(isSelected ? .white.opacity(0.2) : Color.accentColor.opacity(0.1))
-                        .frame(width: 36, height: 36)
-                    
+                        .frame(width: 30, height: 30)
+
                     Image(systemName: mode.iconName)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(isSelected ? .white : .accentColor)
                 }
-                
+
                 VStack(spacing: 2) {
                     Text(mode.displayName)
                         .font(.caption)
                         .fontWeight(.bold)
-                    
+
                     Text(mode.subtitle)
                         .font(.system(size: 9))
                         .fontWeight(.medium)
@@ -284,8 +342,9 @@ struct OrganizationModeCard: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
             .padding(.horizontal, 6)
+            .contentShape(RoundedRectangle(cornerRadius: 16))
             .background {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(isSelected ? Color.accentColor : Color.secondary.opacity(isHovering ? 0.12 : 0.06))

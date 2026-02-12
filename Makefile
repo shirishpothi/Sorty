@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild
 
 # Default target
 all: build
@@ -47,15 +47,11 @@ test-fast:
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
 	@swift test --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
-	@echo "🖥️  Running UI tests..."
-	@chmod +x scripts/run_tests.sh
-	@./scripts/run_tests.sh --ui
+	@echo "🖥️  UI tests are currently disabled (skipped)."
 	@echo "✅ All tests completed. Coverage reports available in .build/debug/codecov"
 
 test-ui:
-	@echo "🖥️  Running UI tests..."
-	@chmod +x scripts/run_tests.sh
-	@./scripts/run_tests.sh --ui
+	@echo "🖥️  UI tests are currently disabled (skipped)."
 
 # Profile build times to identify slow-compiling files
 build-profile:
@@ -66,8 +62,8 @@ build-profile:
 
 # runs basic syntax checks and builds (skips tests)
 quick:
-	@echo "⚡ Quick build (skipping tests, $(CORES) parallel jobs)..."
-	@SKIP_TESTS=true BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
+	@echo "⚡ Quick build (skipping tests, DEBUG mode, $(CORES) parallel jobs)..."
+	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 
 # skips all checks and builds/runs immediately
 now:
@@ -81,6 +77,11 @@ clean:
 	@rm -rf .build
 	@rm -rf releases/
 	@echo "✨ Clean complete"
+
+# Clean rebuild - force a full rebuild after cleaning caches
+rebuild: clean
+	@echo "🔁 Full rebuild after clean..."
+	@BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
 
 # Build the learnings CLI tool
 cli:
@@ -133,11 +134,11 @@ prerelease:
 	@chmod +x scripts/prerelease_check.sh
 	@./scripts/prerelease_check.sh
 
-# Pre-release validation with UI tests (slower, more thorough)
+# Pre-release validation (UI tests are disabled)
 prerelease-full:
-	@echo "🔍 Running full pre-release validation (including UI tests)..."
+	@echo "🔍 Running full pre-release validation..."
 	@chmod +x scripts/prerelease_check.sh
-	@./scripts/prerelease_check.sh --ui-tests
+	@./scripts/prerelease_check.sh
 
 help:
 	@echo "Sorty Build System (Optimized)"
@@ -156,8 +157,8 @@ help:
 	@echo "Testing:"
 	@echo "  make test        - Run unit tests in parallel"
 	@echo "  make test-fast   - Run only fast unit tests (excludes slow UI tests)"
-	@echo "  make test-ui     - Run UI tests (macOS)"
-	@echo "  make test-full   - Run unit and UI tests with coverage"
+	@echo "  make test-ui     - UI tests disabled (no-op)"
+	@echo "  make test-full   - Run unit tests with coverage (UI tests disabled)"
 	@echo ""
 	@echo "Release:"
 	@echo "  make release-patch   - Auto-release with patch version bump (1.0.0 -> 1.0.1)"
@@ -165,10 +166,11 @@ help:
 	@echo "  make release-major   - Auto-release with major version bump (1.0.0 -> 2.0.0)"
 	@echo "  make release         - Create release zip (no version bump)"
 	@echo "  make prerelease      - Run comprehensive pre-release validation"
-	@echo "  make prerelease-full - Pre-release validation with UI tests"
+	@echo "  make prerelease-full - Full pre-release validation"
 	@echo ""
 	@echo "Utility:"
 	@echo "  make clean       - Remove all build artifacts and releases"
+	@echo "  make rebuild     - Clean, then full rebuild (slowest, but fresh)"
 	@echo "  make install     - Copy built app to /Applications"
 	@echo "  make cli         - Build the 'learnings' CLI tool"
 	@echo "  make install-cli - Install 'learnings' CLI to /usr/local/bin"

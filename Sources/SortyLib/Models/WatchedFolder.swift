@@ -208,6 +208,50 @@ public class WatchedFoldersManager: ObservableObject {
         }
     }
     
+    /// Re-authorizes a watched folder by creating a new security-scoped bookmark from a freshly-picked URL
+    public func reauthorizeFolder(_ folder: WatchedFolder, with url: URL) {
+        // For URLs from fileImporter, startAccessingSecurityScopedResource()
+        // may return false because the picker already grants temporary access.
+        // We proceed with bookmark creation regardless.
+        let didStart = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStart {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let newBookmarkData = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+
+            // Immediately resolve and activate the new bookmark so the folder
+            // is usable in the current session without requiring an app restart.
+            var isStale = false
+            if let resolvedURL = try? URL(resolvingBookmarkData: newBookmarkData,
+                                          options: .withSecurityScope,
+                                          relativeTo: nil,
+                                          bookmarkDataIsStale: &isStale) {
+                // Start accessing the resolved bookmark URL. We intentionally
+                // do NOT stop this access — it must remain active for the
+                // watched folder to function until the app quits.
+                _ = resolvedURL.startAccessingSecurityScopedResource()
+            }
+
+            var updated = folder
+            updated.bookmarkData = newBookmarkData
+            updated.path = url.path
+            updated.accessStatus = .valid
+            updateFolder(updated)
+
+            DebugLogger.log("Successfully reauthorized watched folder: \(folder.name)")
+        } catch {
+            DebugLogger.log("Failed to create bookmark during reauthorization: \(error)")
+        }
+    }
+
     private func loadFolders() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) {

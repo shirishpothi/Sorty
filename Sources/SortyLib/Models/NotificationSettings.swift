@@ -71,6 +71,9 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
     
     /// Summary notification after processing multiple files
     public var batchSummary: Bool = true
+
+    /// Specifically notify when automatic organization (watched folders) occurs
+    public var notifyOnAutoOrganize: Bool = true
     
     /// Display critical errors even if notifications are off
     public var alwaysShowCriticalErrors: Bool = true

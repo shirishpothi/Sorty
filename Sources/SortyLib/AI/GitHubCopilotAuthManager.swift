@@ -20,6 +20,31 @@ enum GitHubAuthError: Error {
     case unknown(String)
 }
 
+extension GitHubAuthError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "Invalid authentication URL."
+        case .networkError(let error):
+            return "Network error: \(error.localizedDescription)"
+        case .invalidResponse:
+            return "GitHub returned an unexpected response."
+        case .decodingError:
+            return "Failed to decode authentication response."
+        case .authorizationPending:
+            return "Authorization pending. Please complete sign-in in your browser."
+        case .slowDown:
+            return "GitHub asked us to slow down. Retrying in a moment."
+        case .expiredToken:
+            return "Your authorization has expired. Please sign in again."
+        case .accessDenied:
+            return "Access denied. Please check your GitHub Copilot subscription and permissions."
+        case .unknown(let message):
+            return "Authentication failed: \(message)"
+        }
+    }
+}
+
 struct DeviceCodeResponse: Codable {
     let deviceCode: String
     let userCode: String
@@ -73,6 +98,7 @@ class GitHubCopilotAuthManager: ObservableObject {
     
     private let session = URLSession.shared
     private var pollTask: Task<Void, Never>?
+    private var refreshTask: Task<String, Error>?
     
     init() {
         checkAuthenticationStatus()
@@ -100,7 +126,7 @@ class GitHubCopilotAuthManager: ObservableObject {
         
         let body: [String: Any] = [
             "client_id": clientID,
-            "scope": "read:user" // Basic scope, Copilot specifics are handled by the token later
+            "scope": "read:user user:email" // Added user:email scope
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -201,7 +227,15 @@ class GitHubCopilotAuthManager: ObservableObject {
         request.setValue("Sorty/1.0", forHTTPHeaderField: "User-Agent")
 
         do {
-            let (data, _) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 401 {
+                    LogManager.shared.log("User profile fetch returned 401 - token potentially invalid", level: .warning, category: "AuthManager")
+                    return
+                }
+            }
+            
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let login = json["login"] as? String {
                 self.username = login
@@ -223,12 +257,17 @@ class GitHubCopilotAuthManager: ObservableObject {
     
     // Retrieve Copilot-specific token using the auth token
     func getCopilotToken() async throws -> String {
+        // If a refresh is already in progress, wait for it
+        if let task = refreshTask {
+            return try await task.value
+        }
+
         // Return cached token if valid
         if let cached = KeychainManager.get(key: "github_copilot_token"),
            let expiry = UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date,
-           expiry > Date().addingTimeInterval(900) { // Buffer increased to 15 mins (900s)
+           expiry > Date().addingTimeInterval(300) { // Buffer reduced to 5 mins (300s) for base validity
             
-            // Proactive refresh: if token expires in less than 20 mins, refresh in background
+            // Proactive refresh: if token expires in less than 20 mins, refresh in background if not already refreshing
             if expiry < Date().addingTimeInterval(1200) {
                 Task {
                     try? await refreshCopilotToken()
@@ -243,35 +282,96 @@ class GitHubCopilotAuthManager: ObservableObject {
     
     @discardableResult
     private func refreshCopilotToken() async throws -> String {
-        guard let accessToken = KeychainManager.get(key: "github_access_token") else {
-            throw GitHubAuthError.accessDenied
+        // Check if there's an ongoing refresh task
+        if let existingTask = refreshTask {
+            return try await existingTask.value
         }
-        
-        let url = URL(string: "https://api.github.com/copilot_internal/v2/token")!
-        var request = URLRequest(url: url)
-        request.setValue("token \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("Sorty/1.0", forHTTPHeaderField: "User-Agent")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            // If 401/403, might need to re-auth
-            if let httpResponse = response as? HTTPURLResponse, (httpResponse.statusCode == 401 || httpResponse.statusCode == 403) {
-                 throw GitHubAuthError.accessDenied
+
+        // Create a new refresh task
+        let task = Task<String, Error> {
+            guard let accessToken = KeychainManager.get(key: "github_access_token") else {
+                throw GitHubAuthError.accessDenied
             }
-            throw GitHubAuthError.invalidResponse
+            
+            LogManager.shared.log("Refreshing GitHub Copilot token...", category: "AuthManager")
+            
+            let url = URL(string: "https://api.github.com/copilot_internal/v2/token")!
+            var request = URLRequest(url: url)
+            request.setValue("token \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("GithubCopilot/1.138.0", forHTTPHeaderField: "User-Agent")
+            request.setValue("vscode/1.85.1", forHTTPHeaderField: "Editor-Version")
+            request.setValue("copilot/1.138.0", forHTTPHeaderField: "Editor-Plugin-Version")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            
+            let (data, response) = try await session.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                // If 401/403, might need to re-auth. 401 = Token invalid, 403 = No Copilot subscription.
+                if let httpResponse = response as? HTTPURLResponse {
+                    if httpResponse.statusCode == 401 {
+                        LogManager.shared.log("Access token invalid (401) during token refresh", level: .error, category: "AuthManager")
+                        
+                        // Before signing out, verify if it's a persistent error by checking user profile
+                        // This prevents random sign-outs due to transient GitHub API glitched 401s
+                        let isStillValid = await verifyTokenValidity(token: accessToken)
+                        if !isStillValid {
+                            LogManager.shared.log("Token confirmed invalid, force signing out", level: .fault, category: "AuthManager")
+                            await MainActor.run {
+                                signOut()
+                            }
+                        } else {
+                            LogManager.shared.log("Transient 401 detected, GitHub returned 200 for profile. Skipping signOut.", level: .warning, category: "AuthManager")
+                        }
+                    } else if httpResponse.statusCode == 403 {
+                        LogManager.shared.log("Access denied (403). User might not have an active Copilot subscription.", level: .error, category: "AuthManager")
+                    }
+                     throw GitHubAuthError.accessDenied
+                }
+                throw GitHubAuthError.invalidResponse
+            }
+            
+            let tokenResponse = try JSONDecoder().decode(CopilotTokenResponse.self, from: data)
+            
+            // Cache it
+            _ = KeychainManager.save(key: "github_copilot_token", value: tokenResponse.token)
+            let expiryDate = Date(timeIntervalSince1970: TimeInterval(tokenResponse.expiresAt))
+            UserDefaults.standard.set(expiryDate, forKey: "github_copilot_token_expiry")
+            
+            LogManager.shared.log("Successfully refreshed GitHub Copilot token, expires at \(expiryDate)", category: "AuthManager")
+            
+            return tokenResponse.token
+        }
+
+        self.refreshTask = task
+        
+        defer {
+            // Clear the task after it finishes (regardless of success/failure)
+            Task { @MainActor in
+                self.refreshTask = nil
+            }
         }
         
-        let tokenResponse = try JSONDecoder().decode(CopilotTokenResponse.self, from: data)
+        return try await task.value
+    }
+
+    /// Verifies if the token is still valid by calling the user profile API.
+    /// Returns true if the token works, false if it returns 401.
+    private func verifyTokenValidity(token: String) async -> Bool {
+        let url = URL(string: "https://api.github.com/user")!
+        var request = URLRequest(url: url)
+        request.setValue("token \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("Sorty/1.0", forHTTPHeaderField: "User-Agent")
+        request.timeoutInterval = 10
         
-        // Cache it
-        _ = KeychainManager.save(key: "github_copilot_token", value: tokenResponse.token)
-        let expiryDate = Date(timeIntervalSince1970: TimeInterval(tokenResponse.expiresAt))
-        UserDefaults.standard.set(expiryDate, forKey: "github_copilot_token_expiry")
-        
-        LogManager.shared.log("Refreshed GitHub Copilot token, expires at \(expiryDate)", category: "AuthManager")
-        
-        return tokenResponse.token
+        do {
+            let (_, response) = try await session.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                return httpResponse.statusCode != 401
+            }
+            return false
+        } catch {
+            // On network error, assume it might still be valid (don't force sign out)
+            return true
+        }
     }
 }

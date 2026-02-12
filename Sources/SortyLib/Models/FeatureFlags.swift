@@ -9,5 +9,102 @@ import Foundation
 
 @MainActor
 public enum FeatureFlags {
-    public static var finderSyncEnabled: Bool = true
+    /// Controls whether the Finder Integration section is visible in Settings and the Finder Integration view.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app finderIntegrationEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app finderIntegrationEnabled -bool false
+    /// ```
+    public static var finderSyncEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "finderIntegrationEnabled")
+    }
+
+    /// Controls whether the GitHub Releases-based in-app update checker is enabled.
+    /// Sparkle is the preferred update mechanism and is always active.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app githubUpdateCheckerEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app githubUpdateCheckerEnabled -bool false
+    /// ```
+    public static var githubUpdateCheckerEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "githubUpdateCheckerEnabled")
+    }
+
+    /// Controls privacy features like blurring sensitive handles and hiding API keys by default.
+    ///
+    /// Enabled by default. Disable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app privacyModeEnabled -bool false
+    /// ```
+    /// Enable:
+    /// ```
+    /// defaults write com.sorty.app privacyModeEnabled -bool true
+    /// ```
+    public static var privacyModeEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "privacyModeEnabled") == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "privacyModeEnabled")
+    }
+
+    /// Controls whether Finder file tagging is enabled during organization.
+    /// Tags may not apply correctly in all macOS sandboxed environments.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app fileTaggingEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app fileTaggingEnabled -bool false
+    /// ```
+    public static var fileTaggingEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "fileTaggingEnabled") == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "fileTaggingEnabled")
+    }
+
+    /// Controls whether the Batch Organization (multi-folder) feature is available.
+    ///
+    /// Enabled by default. Disable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app batchOrganizationEnabled -bool false
+    /// ```
+    /// Enable:
+    /// ```
+    /// defaults write com.sorty.app batchOrganizationEnabled -bool true
+    /// ```
+    public static var batchOrganizationEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "batchOrganizationEnabled") == nil {
+            return false
+        }
+        return UserDefaults.standard.bool(forKey: "batchOrganizationEnabled")
+    }
+
+    /// Controls whether advanced/technical notification controls are shown in Settings.
+    /// This keeps the default notifications UX focused on the most common user options.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false
+    /// ```
+    public static var advancedNotificationSettingsEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "advancedNotificationSettingsEnabled") == nil {
+            return false
+        }
+        return UserDefaults.standard.bool(forKey: "advancedNotificationSettingsEnabled")
+    }
 }

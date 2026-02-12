@@ -98,6 +98,19 @@ To enable the "Organize with AI..." context menu in Finder:
 - Add folders to the "Watched" list in the sidebar to enable automatic background monitoring.
 - **Note**: The "Auto-Organize" feature will remain disabled until a valid AI provider is configured in Settings.
 
+### 4. Advanced Notification Controls (Optional)
+Sorty keeps notification settings simple by default. If you want technical notification controls (backend selection, NotifiCLI internals, advanced test actions), enable:
+
+```bash
+defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true
+```
+
+Disable again with:
+
+```bash
+defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false
+```
+
 ## Security Considerations
 
 Sorty is designed with security and privacy in mind:
@@ -107,6 +120,7 @@ Sorty is designed with security and privacy in mind:
 - File contents are NOT uploaded unless you explicitly enable Deep Scan
 - API keys are stored in the macOS Keychain
 - The Learnings profile is encrypted with AES-256 and protected by Touch ID/Face ID
+- **Privacy Mode**: Enabled by default, blurs sensitive handles until hover and hides API keys with a manual reveal toggle.
 
 **Release Signing:**
 Pre-built releases are NOT code-signed. You will need to remove macOS quarantine flags after installation (see Installation section). Build from source if you prefer complete control.

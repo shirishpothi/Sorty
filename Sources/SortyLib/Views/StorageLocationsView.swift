@@ -241,6 +241,7 @@ struct StorageSuggestionPill: View {
                 Capsule()
                     .stroke(isHovered ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
@@ -259,6 +260,7 @@ struct StorageLocationCard: View {
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     @State private var showingConfig = false
     @State private var isHovered = false
+    @State private var showReauthorizePicker = false
     
     private var statusColor: Color {
         if !location.exists { return .red }
@@ -280,9 +282,7 @@ struct StorageLocationCard: View {
         HStack(spacing: 16) {
             // Folder Icon with Status
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "externaldrive.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(location.isEnabled ? .purple : .secondary)
+                FolderThumbnailView(url: location.url, size: CGSize(width: 32, height: 32))
                 
                 Image(systemName: statusIcon)
                     .font(.system(size: 14))
@@ -340,6 +340,13 @@ struct StorageLocationCard: View {
                         }
                         .foregroundStyle(.orange)
                         .help("App Sandbox access to this folder was lost. Try removing and re-adding it.")
+
+                        Button("Grant Access") {
+                            showReauthorizePicker = true
+                        }
+                        .font(.caption2)
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
                     } else if location.accessStatus == .stale {
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.circle.fill")
@@ -413,6 +420,7 @@ struct StorageLocationCard: View {
             .animation(.spring(response: 0.25, dampingFraction: 0.8), value: location.isEnabled)
         }
         .padding(16)
+        .contentShape(Rectangle())
         .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -422,7 +430,6 @@ struct StorageLocationCard: View {
         )
         .shadow(color: .black.opacity(0.03), radius: 3, x: 0, y: 1)
         .opacity(location.exists ? 1.0 : 0.8)
-        .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
         .contextMenu {
@@ -443,6 +450,15 @@ struct StorageLocationCard: View {
         .sheet(isPresented: $showingConfig) {
             StorageLocationConfigView(location: location)
                 .modalBounce()
+        }
+        .fileImporter(
+            isPresented: $showReauthorizePicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result, let url = urls.first {
+                storageLocationsManager.reauthorizeLocation(location, with: url)
+            }
         }
     }
 }
@@ -470,9 +486,7 @@ struct StorageLocationConfigView: View {
             // Header
             HStack {
                 HStack(spacing: 12) {
-                    Image(systemName: "externaldrive.fill")
-                        .font(.title2)
-                        .foregroundStyle(.purple)
+                    FolderThumbnailView(url: location.url, size: CGSize(width: 28, height: 28))
                     
                     VStack(alignment: .leading, spacing: 2) {
                         Text(location.name)

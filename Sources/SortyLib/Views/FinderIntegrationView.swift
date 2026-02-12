@@ -14,22 +14,32 @@ public struct FinderIntegrationView: View {
     @State private var isInstalling = false
     @State private var installationResults: [(name: String, success: Bool, message: String)] = []
     @State private var showingInstructions = false
-    @State private var enableMenuBar = false
-    @AppStorage("showMenuBarIcon") private var showMenuBarIcon = false
-    
+    @AppStorage("globalShortcutEnabled") private var globalShortcutEnabled = false
+    @StateObject private var shortcutManager = GlobalShortcutManager.shared
+    @EnvironmentObject private var automationManager: AutomationManager
+
     public init() {}
     
     public var body: some View {
         if !FeatureFlags.finderSyncEnabled {
-            VStack {
+            VStack(spacing: 16) {
                 Image(systemName: "puzzlepiece.extension")
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
                 Text("Finder Integration is currently disabled.")
                     .font(.title3)
-                Text("This feature is undergoing maintenance.")
+                Text("This feature is behind a feature flag. Enable it by running:")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                Text("defaults write com.sorty.app finderIntegrationEnabled -bool true")
+                    .font(.system(.caption, design: .monospaced))
+                    .padding(10)
+                    .background(Color.black.opacity(0.05))
+                    .cornerRadius(8)
+                    .textSelection(.enabled)
+                Text("Then relaunch Sorty.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -37,21 +47,24 @@ public struct FinderIntegrationView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     // Header
                     headerSection
-                    
+
                     // Status Overview
                     statusOverview
-                    
+
                     // Integration Options
                     integrationOptions
-                    
+
+                    // Automation Permission
+                    automationPermissionSection
+
                     // CLI Tools
                     CLIToolsSection()
-                    
+
                     // Instructions
                     if showingInstructions {
                         instructionsSection
                     }
-                    
+
                     // Installation Results
                     if !installationResults.isEmpty {
                         resultsSection
@@ -62,6 +75,7 @@ public struct FinderIntegrationView: View {
             .frame(minWidth: 600, minHeight: 500)
             .onAppear {
                 refreshStatus()
+                automationManager.requestAutomationPermissionCheck()
             }
         }
     }
@@ -108,7 +122,7 @@ public struct FinderIntegrationView: View {
             
             StatusCard(
                 title: "Active Integrations",
-                value: "\(integrationStatus.integrationCount)/4",
+                value: "\(integrationStatus.integrationCount)/5",
                 icon: "square.grid.2x2.fill",
                 color: .blue
             )
@@ -119,16 +133,125 @@ public struct FinderIntegrationView: View {
         IntegrationOptionsView(
             integrationStatus: integrationStatus,
             isInstalling: isInstalling,
-            showMenuBarIcon: showMenuBarIcon,
             showingInstructions: $showingInstructions,
             installToolbarButton: installToolbarButton,
             revealToolbarApp: revealToolbarApp,
             installQuickAction: installQuickAction,
-            toggleMenuBar: toggleMenuBar,
+            installQuickScanAction: installQuickScanAction,
+            installQuickPreviewAction: installQuickPreviewAction,
+            uninstallAllQuickActions: uninstallAllQuickActions,
             showQuickPanel: showQuickPanel,
             toggleFinderSync: toggleFinderSync,
             installAll: installAll
         )
+    }
+
+    private var keyboardShortcutSection: some View {
+        SettingsCard(title: "Keyboard Shortcut", icon: "keyboard", color: .orange) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Toggle(isOn: $globalShortcutEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Enable Global Shortcut")
+                                .font(.subheadline)
+                            Text("Organize the current Finder folder from anywhere")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                    .onChange(of: globalShortcutEnabled) { _, newValue in
+                        if newValue {
+                            shortcutManager.register()
+                        } else {
+                            shortcutManager.unregister()
+                        }
+                    }
+
+                    Spacer()
+
+                    Text(shortcutManager.shortcutDescription)
+                        .font(.title3.monospaced())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(8)
+                }
+
+                if shortcutManager.requiresAccessibility {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Accessibility permission is required for global shortcuts.")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+
+                        Spacer()
+
+                        Button("Open Accessibility Settings") {
+                            shortcutManager.openAccessibilitySettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(10)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(8)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "info.circle")
+                        .foregroundColor(.secondary)
+                    Text("Press \(shortcutManager.shortcutDescription) to organize the folder shown in the frontmost Finder window. If no Finder window is open, Sorty will activate instead.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+    }
+
+    private var automationPermissionSection: some View {
+        SettingsCard(title: "Automation Permission", icon: "gearshape.2", color: .purple) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: automationManager.automationStatus.isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(automationManager.automationStatus.isGranted ? .green : .red)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(automationManager.automationStatus.isGranted ? "Automation Granted" : "Automation Not Granted")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Allows Sorty to interact with Finder for file selection, window detection, and post-organization actions.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+
+                    if !automationManager.automationStatus.isGranted {
+                        Button("Open System Settings") {
+                            automationManager.openAutomationSettings()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+
+                if !automationManager.automationStatus.isGranted {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundColor(.orange)
+                        Text("Without Automation permission, features like global shortcuts, Finder selection monitoring, and post-organization reveal will not work.")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(8)
+                    .background(Color.orange.opacity(0.08))
+                    .cornerRadius(6)
+                }
+            }
+        }
     }
     
     private var instructionsSection: some View {
@@ -228,12 +351,24 @@ public struct FinderIntegrationView: View {
         refreshStatus()
     }
     
-    private func toggleMenuBar() {
-        showMenuBarIcon.toggle()
-        if showMenuBarIcon {
-            MenuBarHelper.shared.setup()
+    private func installQuickScanAction() {
+        let result = ExtensionCommunication.installQuickScanAction()
+        installationResults = [("Quick Scan Action", result.success, result.message)]
+        refreshStatus()
+    }
+
+    private func installQuickPreviewAction() {
+        let result = ExtensionCommunication.installQuickPreviewAction()
+        installationResults = [("Quick Preview Action", result.success, result.message)]
+        refreshStatus()
+    }
+
+    private func uninstallAllQuickActions() {
+        let result = ExtensionCommunication.uninstallAllQuickActions()
+        if result.success {
+            installationResults = [("Uninstall All", true, "Removed \(result.removed) Quick Action workflow(s).")]
         } else {
-            MenuBarHelper.shared.remove()
+            installationResults = [("Uninstall All", false, "No Quick Action workflows found to remove.")]
         }
         refreshStatus()
     }
@@ -350,12 +485,13 @@ struct IntegrationRow: View {
 private struct IntegrationOptionsView: View {
     let integrationStatus: ExtensionCommunication.FinderIntegrationStatus
     let isInstalling: Bool
-    let showMenuBarIcon: Bool
     @Binding var showingInstructions: Bool
     let installToolbarButton: () -> Void
     let revealToolbarApp: () -> Void
     let installQuickAction: () -> Void
-    let toggleMenuBar: () -> Void
+    let installQuickScanAction: () -> Void
+    let installQuickPreviewAction: () -> Void
+    let uninstallAllQuickActions: () -> Void
     let showQuickPanel: () -> Void
     let toggleFinderSync: () -> Void
     let installAll: () -> Void
@@ -375,25 +511,69 @@ private struct IntegrationOptionsView: View {
                 secondaryLabel: "Show in Finder"
             )
 
-            IntegrationRow(
-                title: "Right-Click Menu",
-                subtitle: "Organize with Sorty in context menu",
-                icon: "contextualmenu.and.cursorarrow",
-                isInstalled: integrationStatus.quickActionInstalled,
-                action: installQuickAction,
-                secondaryAction: nil,
-                secondaryLabel: nil
-            )
+            // Quick Actions section with status badges
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Quick Actions")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
 
-            IntegrationRow(
-                title: "Menu Bar Icon",
-                subtitle: "Quick access from menu bar",
-                icon: "menubar.rectangle",
-                isInstalled: showMenuBarIcon,
-                action: toggleMenuBar,
-                secondaryAction: nil,
-                secondaryLabel: nil
-            )
+                IntegrationRow(
+                    title: "Organize with Sorty",
+                    subtitle: "Right-click context menu for folders and files",
+                    icon: "contextualmenu.and.cursorarrow",
+                    isInstalled: integrationStatus.quickActionInstalled,
+                    action: installQuickAction,
+                    secondaryAction: nil,
+                    secondaryLabel: nil
+                )
+
+                IntegrationRow(
+                    title: "Scan with Sorty",
+                    subtitle: "Workspace health scan from context menu",
+                    icon: "magnifyingglass.circle",
+                    isInstalled: integrationStatus.quickScanActionInstalled,
+                    action: installQuickScanAction,
+                    secondaryAction: nil,
+                    secondaryLabel: nil
+                )
+
+                IntegrationRow(
+                    title: "Preview with Sorty",
+                    subtitle: "Preview organization from context menu",
+                    icon: "eye.circle",
+                    isInstalled: integrationStatus.quickPreviewActionInstalled,
+                    action: installQuickPreviewAction,
+                    secondaryAction: nil,
+                    secondaryLabel: nil
+                )
+
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button(action: {
+                        installQuickAction()
+                        installQuickScanAction()
+                        installQuickPreviewAction()
+                    }) {
+                        Label("Install All", systemImage: "square.and.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button(action: uninstallAllQuickActions) {
+                        Label("Uninstall All", systemImage: "trash")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .foregroundColor(.red)
+                }
+            }
+            .padding(12)
+            .background(Color.secondary.opacity(0.03))
+            .cornerRadius(10)
 
             IntegrationRow(
                 title: "Quick Organize Panel",
@@ -418,6 +598,8 @@ private struct IntegrationOptionsView: View {
                     actionLabel: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension") ? "Disable" : "Enable"
                 )
             }
+
+            dragAndDropSection
 
             HStack {
                 Spacer()
@@ -444,6 +626,33 @@ private struct IntegrationOptionsView: View {
             .padding(.top, 8)
         }
         .padding()
+    }
+
+    private var dragAndDropSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "hand.draw")
+                    .font(.title2)
+                    .foregroundColor(.accentColor)
+                    .frame(width: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Drag & Drop")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    Text("Drag folders onto the Sorty dock icon or menu bar icon to organize them instantly")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Label("Always Available", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
+            .padding(.vertical, 8)
+        }
     }
 }
 

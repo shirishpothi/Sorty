@@ -2,7 +2,7 @@
 //  AppleVisionIntelligenceAnalyzer.swift
 //  Sorty
 //
-//  Placeholder for future Apple Intelligence image understanding.
+//  Placeholder for future Apple Foundation Model image understanding.
 //  When macOS adds image understanding to Foundation Models, implement here.
 //
 
@@ -15,7 +15,7 @@ public struct ImageAnalysisResult: Sendable {
     public let confidence: Double
     
     public static let unavailable = ImageAnalysisResult(
-        description: "Apple Intelligence image analysis not available",
+        description: "Apple Foundation Model image analysis not available",
         objects: [],
         text: nil,
         confidence: 0

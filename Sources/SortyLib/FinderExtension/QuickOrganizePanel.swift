@@ -29,6 +29,10 @@ public class QuickOrganizePanelController: NSObject, ObservableObject {
         setupNotificationObservers()
     }
     
+    deinit {
+        DistributedNotificationCenter.default().removeObserver(self)
+    }
+    
     private func setupNotificationObservers() {
         DistributedNotificationCenter.default().addObserver(
             self,
@@ -588,14 +592,63 @@ public class MenuBarHelper: NSObject {
     }
     
     public func setup() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        
-        if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Sorty")
-            button.image?.isTemplate = true
+        // Status item removed - using main app menu bar instead
+    }
+
+    public func ensureSetup() {
+        // No-op
+    }
+
+    public func showMenu() {
+        // Ensure menu bar extra is enabled in UserDefaults
+        if !UserDefaults.standard.bool(forKey: "showMenuBarExtra") {
+            UserDefaults.standard.set(true, forKey: "showMenuBarExtra")
+            
+            // Post notification for main app to refresh state if needed
+            NotificationCenter.default.post(name: NSNotification.Name("com.sorty.showMenuBar"), object: nil)
         }
-        
-        setupMenu()
+
+        if !attemptOpenMenuBarExtra() {
+            // We can't always programmatically open SwiftUI MenuBarExtra window,
+            // so we show a temporary HUD to point user to the menu bar
+            NotificationManager.shared.showInfo(
+                title: "Check Menu Bar",
+                message: "The Sorty icon is now active in your status bar."
+            )
+        }
+    }
+
+    private func attemptOpenMenuBarExtra() -> Bool {
+        let script = """
+        tell application "System Events"
+            tell process "SystemUIServer"
+                set menuBarItems to menu bar items of menu bar 1
+                repeat with itemRef in menuBarItems
+                    try
+                        set itemDesc to (description of itemRef) as string
+                        if itemDesc contains "Sorty" then
+                            click itemRef
+                            return true
+                        end if
+                    end try
+                end repeat
+            end tell
+        end tell
+        return false
+        """
+
+        var error: NSDictionary?
+        guard let appleScript = NSAppleScript(source: script) else {
+            return false
+        }
+
+        let result = appleScript.executeAndReturnError(&error)
+        if let error = error {
+            DebugLogger.log("Menu bar open failed: \(error)")
+            return false
+        }
+
+        return result.booleanValue
     }
     
     public func remove() {

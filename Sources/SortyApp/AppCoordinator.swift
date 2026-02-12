@@ -22,6 +22,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     let continuousLearningObserver: ContinuousLearningObserver
     let learningsFSMonitor: LearningsFSMonitor
     private let notificationManager = NotificationManager.shared
+    private var pendingFiles: [UUID: (folder: WatchedFolder, files: Set<String>, resolvedURL: URL)] = [:]
+    private var retryTask: Task<Void, Never>?
     
     init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
         self.organizer = organizer
@@ -275,7 +277,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         
         // Post notification to show history/results view
-        NotificationCenter.default.post(name: NSNotification.Name("SortyShowHistoryView"), object: nil)
+        NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
         
         print("Coordinator: Activated app for details view")
     }
@@ -352,66 +354,92 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>, resolvedURL: URL) {
         guard !newFiles.isEmpty else { return }
         
+        if organizer.state.isOperationInProgress {
+            print("Coordinator: Organizer busy, queueing \(newFiles.count) files for \(folder.name)")
+            if var existing = pendingFiles[folder.id] {
+                existing.files.formUnion(newFiles)
+                pendingFiles[folder.id] = existing
+            } else {
+                pendingFiles[folder.id] = (folder: folder, files: newFiles, resolvedURL: resolvedURL)
+            }
+            scheduleRetry()
+            return
+        }
+        
         Task {
-            // Check if we can proceed (e.g. not already organizing)
-            // Only allow auto-organize when truly idle - not when viewing results (.completed)
-            // This prevents auto-triggering while user is reviewing organization results
-            guard organizer.state == .idle else {
-                print("Coordinator: Skipping auto-organize for \(folder.name) - organizer busy (state: \(organizer.state))")
-                return
-            }
+            await autoOrganize(folder: folder, files: newFiles, resolvedURL: resolvedURL)
+        }
+    }
+    
+    private func autoOrganize(folder: WatchedFolder, files: Set<String>, resolvedURL: URL) async {
+        guard organizer.aiClient != nil else {
+            print("Coordinator: Cannot auto-organize \(folder.name) - AI provider not configured")
+            notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no AI provider configured", isCritical: false)
+            return
+        }
+        
+        let startTime = Date()
+        
+        do {
+            folderWatcher.pause(folder)
             
-            // Validate AI provider is configured before attempting organization
-            guard organizer.aiClient != nil else {
-                print("Coordinator: Cannot auto-organize \(folder.name) - AI provider not configured")
-                notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no AI provider configured", isCritical: false)
-                return
-            }
+            watchedFoldersManager.markTriggered(folder)
             
-            let startTime = Date()
+            print("Coordinator: Auto-organizing \(files.count) new files in \(folder.name): \(files)")
             
-            do {
-                folderWatcher.pause(folder) // Prevent loop
-                
-                watchedFoldersManager.markTriggered(folder)
-                
-                print("Coordinator: Auto-organizing \(newFiles.count) new files in \(folder.name): \(newFiles)")
-                
-                // Use Incremental Organization for Smart Drop
-                // Use resolvedURL which has security access
-                try await organizer.organizeIncremental(
-                    directory: resolvedURL, 
-                    specificFiles: Array(newFiles),
-                    customPrompt: folder.customPrompt,
-                    temperature: folder.temperature,
-                    providerOverride: folder.providerOverride,
-                    modelOverride: folder.modelOverride
-                )
-                
-                // Snapshot is updated inside resume() automatically
-                folderWatcher.resume(folder)
-                
-                let duration = Date().timeIntervalSince(startTime)
-                print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
-                
-                // Show success notification with detailed stats
-                let stats = BatchSummaryStats(
-                    filesMoved: newFiles.count,
-                    foldersCreated: 0, // Will be updated by .organizationDidFinish if available
-                    duration: duration,
-                    folderName: folder.name,
-                    folderPath: resolvedURL.path,
-                    canUndo: true
-                )
-                
-                // Ensure notification is shown during auto-organization
-                // showBatchSummary logic will respect user settings for HUD vs System
-                notificationManager.showBatchSummary(stats: stats)
-                
-            } catch {
-                print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
-                notificationManager.showError(message: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)", isCritical: false)
-                folderWatcher.resume(folder)
+            try await organizer.organizeIncremental(
+                directory: resolvedURL,
+                specificFiles: Array(files),
+                customPrompt: folder.customPrompt,
+                temperature: folder.temperature,
+                providerOverride: folder.providerOverride,
+                modelOverride: folder.modelOverride
+            )
+            
+            folderWatcher.resume(folder)
+            
+            organizer.state = .idle
+            
+            let duration = Date().timeIntervalSince(startTime)
+            print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
+            
+            let stats = BatchSummaryStats(
+                filesMoved: files.count,
+                foldersCreated: 0,
+                duration: duration,
+                folderName: folder.name,
+                folderPath: resolvedURL.path,
+                canUndo: true
+            )
+            
+            notificationManager.showBatchSummary(stats: stats, isAutomated: true)
+            
+            await processPendingFiles()
+            
+        } catch {
+            print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
+            notificationManager.showError(message: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)", isCritical: false, isAutomated: true)
+            folderWatcher.resume(folder)
+            organizer.state = .idle
+        }
+    }
+    
+    private func processPendingFiles() async {
+        while let (folderId, pending) = pendingFiles.first {
+            pendingFiles.removeValue(forKey: folderId)
+            await autoOrganize(folder: pending.folder, files: pending.files, resolvedURL: pending.resolvedURL)
+        }
+    }
+    
+    private func scheduleRetry() {
+        retryTask?.cancel()
+        retryTask = Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            if !organizer.state.isOperationInProgress && !pendingFiles.isEmpty {
+                await processPendingFiles()
+            } else if !pendingFiles.isEmpty {
+                scheduleRetry()
             }
         }
     }

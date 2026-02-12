@@ -42,6 +42,11 @@ class PreviewStore: ObservableObject {
     /// Pre-computed rename mappings to avoid expensive lookups during rendering
     @Published private(set) var renameMappings: [UUID: FileRenameMapping] = [:]
     
+    @Published private(set) var tagMappings: [UUID: [String]] = [:]
+    @Published private(set) var folderTagMappings: [UUID: [String]] = [:]
+    @Published private(set) var folderCommentMappings: [UUID: String] = [:]
+    @Published private(set) var fileCommentMappings: [UUID: String] = [:]
+    
     /// Cached folder counts to avoid recalculation during scrolling
     private var folderCountCache: [UUID: Int] = [:]
     private var folderCountCacheValid = false
@@ -66,6 +71,7 @@ class PreviewStore: ObservableObject {
         self.plan = plan
         expandAllFolders()
         rebuildFlattenedRows()
+        cachedPlanVersion = plan.version
         throttledTotalFileCount = plan.totalFiles
     }
     
@@ -151,12 +157,67 @@ class PreviewStore: ObservableObject {
         return ids
     }
     
+    private var lastExpandedFolders: Set<String> = []
+    private var lastPlanID: UUID?
+    
     private func rebuildFlattenedRows() {
+        let planChanged = cachedPlanVersion != plan.version || lastPlanID != plan.id
+
+        if !planChanged && expandedFolders == lastExpandedFolders {
+            return
+        }
+        lastPlanID = plan.id
+        lastExpandedFolders = expandedFolders
+
         var rows: [FlattenedRow] = []
-        
-        // Only recalculate rename mappings if plan version changed
-        let planVersionChanged = cachedPlanVersion != plan.version
-        var mappings: [UUID: FileRenameMapping] = planVersionChanged ? [:] : renameMappings
+
+        // Always recompute rename mappings when plan version changes
+        var mappings: [UUID: FileRenameMapping] = [:]
+
+        func cacheMappings(for folder: FolderSuggestion) {
+            for file in folder.files {
+                if let mapping = folder.renameMapping(for: file) {
+                    mappings[file.id] = mapping
+                }
+            }
+            for subfolder in folder.subfolders {
+                cacheMappings(for: subfolder)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            cacheMappings(for: suggestion)
+        }
+
+        var tagsByFileID: [UUID: [String]] = [:]
+        var tagsByFolderID: [UUID: [String]] = [:]
+        var commentsByFolderID: [UUID: String] = [:]
+        var commentsByFileID: [UUID: String] = [:]
+
+        func cacheTagMappings(for folder: FolderSuggestion) {
+            for m in folder.fileTagMappings {
+                tagsByFileID[m.originalFile.id] = m.tags
+                if let comment = m.comment, !comment.isEmpty {
+                    commentsByFileID[m.originalFile.id] = comment
+                }
+            }
+            for sub in folder.subfolders { cacheTagMappings(for: sub) }
+        }
+
+        func cacheFolderMetadata(for folder: FolderSuggestion) {
+            if !folder.tags.isEmpty {
+                tagsByFolderID[folder.id] = folder.tags
+            }
+            if let comment = folder.comment, !comment.isEmpty {
+                commentsByFolderID[folder.id] = comment
+            }
+            for sub in folder.subfolders { cacheFolderMetadata(for: sub) }
+        }
+
+        for suggestion in plan.suggestions {
+            cacheTagMappings(for: suggestion)
+            cacheFolderMetadata(for: suggestion)
+        }
         
         func processFolder(_ folder: FolderSuggestion, depth: Int) {
             let id = folder.id.uuidString
@@ -176,20 +237,13 @@ class PreviewStore: ObservableObject {
                 }
                 
                 // Add files
-                for file in folder.files {
+                for (index, file) in folder.files.enumerated() {
                     rows.append(FlattenedRow(
-                        id: "\(folder.id.uuidString)-\(file.id.uuidString)",
+                        id: "\(folder.id.uuidString)-\(file.id.uuidString)-\(index)",
                         depth: depth + 1,
                         type: .file(file, parentFolderID: folder.id),
                         isExpanded: false
                     ))
-                    
-                    // Pre-compute mappings only if plan changed
-                    if planVersionChanged {
-                        if let mapping = folder.renameMapping(for: file) {
-                            mappings[file.id] = mapping
-                        }
-                    }
                 }
             }
         }
@@ -206,9 +260,9 @@ class PreviewStore: ObservableObject {
                 isExpanded: true
             ))
             
-            for file in plan.unorganizedFiles {
+            for (index, file) in plan.unorganizedFiles.enumerated() {
                 rows.append(FlattenedRow(
-                    id: "unorganized-\(file.id.uuidString)",
+                    id: "unorganized-\(file.id.uuidString)-\(index)",
                     depth: 1,
                     type: .unorganizedFile(file),
                     isExpanded: false
@@ -216,19 +270,94 @@ class PreviewStore: ObservableObject {
             }
         }
         
-        if planVersionChanged {
-            self.renameMappings = mappings
-        }
+        self.renameMappings = mappings
+        self.tagMappings = tagsByFileID
+        self.folderTagMappings = tagsByFolderID
+        self.folderCommentMappings = commentsByFolderID
+        self.fileCommentMappings = commentsByFileID
         self.flattenedRows = rows
+    }
+
+    private func buildChildRows(for folder: FolderSuggestion, depth: Int) -> [FlattenedRow] {
+        var rows: [FlattenedRow] = []
+
+        for subfolder in folder.subfolders {
+            let id = subfolder.id.uuidString
+            let isExpanded = expandedFolders.contains(id)
+
+            rows.append(FlattenedRow(
+                id: id,
+                depth: depth,
+                type: .folder(subfolder),
+                isExpanded: isExpanded
+            ))
+
+            if isExpanded {
+                rows.append(contentsOf: buildChildRows(for: subfolder, depth: depth + 1))
+            }
+        }
+
+        for (index, file) in folder.files.enumerated() {
+            rows.append(FlattenedRow(
+                id: "\(folder.id.uuidString)-\(file.id.uuidString)-\(index)",
+                depth: depth,
+                type: .file(file, parentFolderID: folder.id),
+                isExpanded: false
+            ))
+        }
+
+        return rows
+    }
+
+    private func applyIncrementalToggle(id: String, wasExpanded: Bool) -> Bool {
+        guard let rowIndex = flattenedRows.firstIndex(where: { $0.id == id }) else { return false }
+        guard case .folder(let folder) = flattenedRows[rowIndex].type else { return false }
+
+        let depth = flattenedRows[rowIndex].depth
+
+        if wasExpanded {
+            var removalIndex = rowIndex + 1
+            while removalIndex < flattenedRows.count, flattenedRows[removalIndex].depth > depth {
+                removalIndex += 1
+            }
+            if removalIndex > rowIndex + 1 {
+                flattenedRows.removeSubrange((rowIndex + 1)..<removalIndex)
+            }
+            flattenedRows[rowIndex] = FlattenedRow(
+                id: id,
+                depth: depth,
+                type: .folder(folder),
+                isExpanded: false
+            )
+            return true
+        } else {
+            let childRows = buildChildRows(for: folder, depth: depth + 1)
+            flattenedRows[rowIndex] = FlattenedRow(
+                id: id,
+                depth: depth,
+                type: .folder(folder),
+                isExpanded: true
+            )
+            if !childRows.isEmpty {
+                flattenedRows.insert(contentsOf: childRows, at: rowIndex + 1)
+            }
+            return true
+        }
     }
     
     func toggleFolder(id: String) {
-        if expandedFolders.contains(id) {
+        let wasExpanded = expandedFolders.contains(id)
+        if wasExpanded {
             expandedFolders.remove(id)
         } else {
             expandedFolders.insert(id)
         }
-        rebuildFlattenedRows()
+
+        if cachedPlanVersion == plan.version, applyIncrementalToggle(id: id, wasExpanded: wasExpanded) {
+            lastExpandedFolders = expandedFolders
+        } else {
+            rebuildFlattenedRows()
+        }
     }
     
     func moveFileToUnorganized(fileID: UUID) {
@@ -266,6 +395,51 @@ class PreviewStore: ObservableObject {
                 return
             }
         }
+    }
+    
+    func revertFolderOrganization(folderID: UUID) {
+        var updatedPlan = plan
+        var filesToMove: [FileItem] = []
+        
+        func collectFilesFromFolder(_ folder: FolderSuggestion) {
+            filesToMove.append(contentsOf: folder.files)
+            for subfolder in folder.subfolders {
+                collectFilesFromFolder(subfolder)
+            }
+        }
+        
+        for i in 0..<updatedPlan.suggestions.count {
+            if let folder = findFolderByID(folderID, in: updatedPlan.suggestions[i]) {
+                collectFilesFromFolder(folder)
+                updatedPlan.suggestions[i] = removeFolderFromSuggestion(updatedPlan.suggestions[i], targetID: folderID)
+                break
+            }
+        }
+        
+        updatedPlan.suggestions.removeAll { $0.files.isEmpty && $0.subfolders.isEmpty && $0.id == folderID }
+        
+        for file in filesToMove {
+            if !updatedPlan.unorganizedFiles.contains(where: { $0.id == file.id }) {
+                updatedPlan.unorganizedFiles.append(file)
+            }
+        }
+        
+        updateInternalPlan(updatedPlan)
+    }
+    
+    private func findFolderByID(_ id: UUID, in folder: FolderSuggestion) -> FolderSuggestion? {
+        if folder.id == id { return folder }
+        for subfolder in folder.subfolders {
+            if let found = findFolderByID(id, in: subfolder) { return found }
+        }
+        return nil
+    }
+    
+    private func removeFolderFromSuggestion(_ folder: FolderSuggestion, targetID: UUID) -> FolderSuggestion {
+        var updatedFolder = folder
+        updatedFolder.subfolders.removeAll { $0.id == targetID }
+        updatedFolder.subfolders = updatedFolder.subfolders.map { removeFolderFromSuggestion($0, targetID: targetID) }
+        return updatedFolder
     }
     
     private func updateRenameInFolder(_ folder: FolderSuggestion, targetID: UUID, fileID: UUID, newName: String) -> FolderSuggestion? {
@@ -398,24 +572,19 @@ struct OptimizedPreviewTree: View {
     let onPlanChanged: () -> Void
     
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
-                    ForEach(store.flattenedRows) { row in
-                        FlattenedRowView(
-                            row: row,
-                            store: store,
-                            dragDropManager: dragDropManager,
-                            onPlanChanged: onPlanChanged
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
-                        .padding(.vertical, 2)
-                        .id(row.id)
-                    }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(store.flattenedRows, id: \.id) { row in
+                    FlattenedRowView(
+                        row: row,
+                        store: store,
+                        dragDropManager: dragDropManager,
+                        onPlanChanged: onPlanChanged
+                    )
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
     }
 
@@ -483,57 +652,89 @@ struct FlatFolderRowView: View {
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
+    @EnvironmentObject var learningsManager: LearningsManager
     
     @State private var isDropTarget = false
-    @State private var showReasoning = false
+
+    private var folderTags: [String] {
+        store.folderTagMappings[suggestion.id] ?? []
+    }
+
+    private var folderComment: String? {
+        store.folderCommentMappings[suggestion.id]
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Button {
-                    store.toggleFolder(id: rowID)
-                } label: {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption)
-                }
-                .buttonStyle(.plain)
-                .frame(width: 20)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(width: 20)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isExpanded)
                 
                 CompactFolderThumbnail(
-                    url: nil,  // New folders don't exist yet
+                    url: nil,
                     folderName: suggestion.folderName,
                     size: 16,
                     fileCount: store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }
                 )
                 .opacity(isDropTarget ? 0.7 : 1.0)
                 
-                Text(suggestion.folderName)
+                Text(suggestion.folderName.hasPrefix("/") ? URL(fileURLWithPath: suggestion.folderName).lastPathComponent : suggestion.folderName)
                     .fontWeight(.medium)
                 
                 Text("(\(store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }) files)")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
+                if suggestion.folderName.hasPrefix("/") {
+                    Label("Storage", systemImage: "externaldrive")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.1))
+                        .clipShape(Capsule())
+                }
+
+                if !folderTags.isEmpty {
+                    TagDotsView(tags: folderTags)
+                }
+
+                if let comment = folderComment, !comment.isEmpty {
+                    CommentBubbleButton(comment: comment)
+                }
+                
                 Spacer()
                 
-                if !suggestion.reasoning.isEmpty {
-                    Button {
-                        showReasoning.toggle()
-                    } label: {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(showReasoning ? .purple : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("View AI reasoning for this folder")
+                LiquidGlassReasoningButton(
+                    suggestion: suggestion,
+                    learningsManager: learningsManager
+                )
+            }
+            .padding(.leading, CGFloat(depth * 16))
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    store.toggleFolder(id: rowID)
                 }
             }
-            .padding(.leading, CGFloat(depth * 20))
-            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isDropTarget ? Color.purple.opacity(0.1) : Color.clear)
                     .strokeBorder(isDropTarget ? Color.purple : Color.clear, lineWidth: 2)
             )
+            .contextMenu {
+                Button(role: .destructive) {
+                    store.revertFolderOrganization(folderID: suggestion.id)
+                    onPlanChanged()
+                } label: {
+                    Label("Revert Organization", systemImage: "arrow.uturn.backward")
+                }
+            }
             .onDrop(of: [.text], delegate: OptimizedFileDropDelegate(
                 targetFolderID: suggestion.id,
                 store: store,
@@ -541,30 +742,8 @@ struct FlatFolderRowView: View {
                 isTargeted: $isDropTarget,
                 onPlanChanged: onPlanChanged
             ))
-            
-            if showReasoning && !suggestion.reasoning.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("AI Reasoning")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundColor(.purple)
-                    
-                    Text(suggestion.reasoning)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(8)
-                        .background(Color.purple.opacity(0.05))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.purple.opacity(0.1), lineWidth: 1)
-                        )
-                }
-                .padding(.leading, CGFloat((depth + 1) * 20))
-                .padding(.trailing, 8)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
     }
 }
 
@@ -585,6 +764,14 @@ struct FlatFileRowView: View {
     
     private var renameMapping: FileRenameMapping? {
         store.renameMappings[file.id]
+    }
+
+    private var fileTags: [String] {
+        store.tagMappings[file.id] ?? []
+    }
+
+    private var fileComment: String? {
+        store.fileCommentMappings[file.id]
     }
     
     var body: some View {
@@ -617,6 +804,14 @@ struct FlatFileRowView: View {
                         .font(.caption)
                         .foregroundColor(.purple)
                         .help(mapping.renameReason ?? "AI suggested rename")
+                }
+
+                if !fileTags.isEmpty {
+                    TagDotsView(tags: fileTags)
+                }
+
+                if let comment = fileComment, !comment.isEmpty {
+                    CommentBubbleButton(comment: comment)
                 }
                 
                 Text(file.formattedSize)
@@ -660,12 +855,13 @@ struct FlatFileRowView: View {
                     .help("Keep original name")
                 }
                 .padding(.leading, 20)
-                .transition(.opacity)
             }
         }
-        .padding(.leading, CGFloat(depth * 20))
+        .padding(.leading, CGFloat(depth * 16))
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
@@ -690,11 +886,20 @@ struct FlatFileRowView: View {
             
             Divider()
             
+            if let mapping = renameMapping, mapping.hasRename {
+                Button(role: .destructive) {
+                    store.rejectRename(fileID: file.id, folderID: parentFolderID)
+                    onPlanChanged()
+                } label: {
+                    Label("Revert Name", systemImage: "arrow.uturn.backward")
+                }
+            }
+            
             Button(role: .destructive) {
-                store.rejectRename(fileID: file.id, folderID: parentFolderID)
+                store.moveFileToUnorganized(fileID: file.id)
                 onPlanChanged()
             } label: {
-                Label("Revert Name", systemImage: "arrow.uturn.backward")
+                Label("Revert Organization", systemImage: "questionmark.folder")
             }
         }
         .onTapGesture(count: 2) {
@@ -709,6 +914,10 @@ struct FlatFileRowView: View {
         .onDrop(of: [.text], isTargeted: nil) { _ in
             isDragging = false
             return false
+        }
+        .onDisappear {
+            isDragging = false
+            isEditingName = false
         }
     }
     
@@ -772,6 +981,7 @@ struct FlatUnorganizedHeaderView: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
         .padding(.top, 8)
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isDropTarget ? Color.orange.opacity(0.1) : Color.clear)
@@ -807,6 +1017,8 @@ struct FlatUnorganizedFileRowView: View {
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)

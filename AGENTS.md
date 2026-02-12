@@ -1,67 +1,57 @@
 # Sorty - AI Coding Agent Instructions
 
-## Build & Test Commands (Optimized)
-All builds use parallel compilation with auto-detected CPU cores for maximum speed.
-
-### Development (Fastest)
-```bash
-make dev            # Fastest dev build: debug + parallel + no tests
-make quick          # Compile only, skip tests, parallel build
-make now            # Fast debug build + launch (skips tests, parallel)
-make debug          # Debug build with symbols + launch
-```
-
-### Production Builds
-```bash
-make build          # Full optimized build with tests (parallel)
-make cli            # Build 'learnings' CLI tool (parallel)
-```
-
-### Testing
-```bash
-make test           # Unit tests only (parallel execution)
-make test-fast      # Fast tests only (excludes slow UI tests)
-make test-full      # Unit + UI tests with coverage
-make test-ui        # UI tests via Xcode
-swift test --filter SortyTests.TestClassName   # Run single test class
-swift test --filter SortyTests.TestClassName/testMethodName  # Run single test
-```
-
-### CLI Tools
-CLI tools (`sorty` and `learnings`) are now bundled inside the app at `Sorty.app/Contents/Resources/CLI/`.
-Users can install them from **Settings → Finder Integration → Command Line Tools** (installs to `/usr/local/bin`).
-
-### Build Profiling & Optimization
-```bash
-make build-profile  # Identify slow-compiling files and functions
-make clean          # Clean all build artifacts
-```
-
-### Build Configuration
-- **Package.swift**: Swift 6.0 with optimized compiler flags per configuration
-- **BuildConfig.xcconfig**: Shared build settings for consistent optimization
-- **Debug builds**: `-Onone` + batch mode for speed (~40-60% faster)
-- **Release builds**: `-O` + whole-module optimization + dead code stripping + LTO
-- **Parallel compilation**: Auto-detects CPU cores (e.g., `--jobs 8` on 8-core Mac)
-- **Eager linking**: Unblocks downstream targets faster (Xcode 14+)
-- **Test execution**: Parallel test running for ~2-3x faster test completion
+## Commands
+- `make dev` / `make now` — fast debug build (skips tests)
+- `make build` — full build with tests
+- `make test` — unit tests only
+- `swift test --filter SortyTests.TestClass/testMethod` — run single test
 
 ## Architecture
-Native macOS SwiftUI app (macOS 15.1+, Swift 6) using MVVM with service layers. State injection via `@EnvironmentObject`.
-- **SortyLib** (`Sources/SortyLib/`): Core library with AI clients, Models, Views, Organizer, Learnings, Utilities
-- **SortyApp** (`Sources/SortyApp/`): App entry, AppCoordinator
-- **LearningsCLI** (`Sources/LearningsCLI/`): `learnings` CLI tool
-- **Tests** (`Tests/SortyTests/`): Unit tests; `Tests/SortyUITests/`: UI tests
-
-Key flow: `View → ViewModel/Manager → FolderOrganizer → AIClient → OrganizationPlan → Preview → Apply`
+Native macOS SwiftUI app (macOS 15.1+, Swift 6), MVVM with service layers via `@EnvironmentObject`.
+- **SortyLib** (`Sources/SortyLib/`): Core library (AI/, Models/, Views/, Organizer/, Learnings/, Utilities/)
+- **SortyApp** (`Sources/SortyApp/`): App entry point
+- **LearningsCLI** (`Sources/LearningsCLI/`): CLI tool
+- Flow: `View → Manager → FolderOrganizer → AIClient → OrganizationPlan → Apply`
 
 ## Code Style
-- All managers: `@MainActor` `ObservableObject` classes injected via `@EnvironmentObject` at app root
+- Managers: `@MainActor ObservableObject` classes, injected via `@EnvironmentObject`
 - AI providers: Implement `AIClientProtocol`, register in `AIClientFactory`
-- Views: Add `accessibilityIdentifier` for UI testing (e.g., `"SettingsSidebarItem"`)
-- Tests: Use `MockAIClient`; create temp dirs in `setUp()`, clean in `tearDown()`
-- Deeplinks: `sorty://` URL scheme (see `DeeplinkHandler`)
-- Finder extension uses App Groups (`group.com.sorty.app`)
+- Views: Add `accessibilityIdentifier` for UI tests
+- Tests: Use `MockAIClient`; temp dirs in `setUp()`, clean in `tearDown()`
+- URL scheme: `sorty://` (see `DeeplinkHandler`)
+- Finder extension: App Groups (`group.com.sorty.app`)
 
- Release
-- **Always push a `v*` tag** (e.g., `git push origin v1.0.5`) to trigger the GitHub Actions workflow that builds Sorty.pkg; **never** use `gh release create` manually as it skips the build process and only creates source code archives.
+## Feature Flags
+Feature flags are controlled via `defaults` and defined in `Sources/SortyLib/Models/FeatureFlags.swift`.
+
+| Flag | Key | Default | Description |
+|------|-----|---------|-------------|
+| Finder Integration | `finderIntegrationEnabled` | `false` | Enables the Finder Integration settings section and all Finder integration features (Quick Actions, toolbar button, etc.) |
+| GitHub Update Checker | `githubUpdateCheckerEnabled` | `false` | Enables the GitHub Releases-based in-app update dialog. Sparkle is the preferred update mechanism and is always active. |
+| Privacy Mode | `privacyModeEnabled` | `true` | Blurs sensitive handles until hover and hides API keys with a manual reveal toggle. |
+| File Tagging | `fileTaggingEnabled` | `true` | Enables Finder file tagging during organization. Tags may not apply correctly in all macOS sandboxed environments. |
+| Batch Organization | `batchOrganizationEnabled` | `false` | Enables the Batch Organization (multi-folder) feature in the sidebar. |
+| Advanced Notification Controls | `advancedNotificationSettingsEnabled` | `false` | Shows technical notification controls in Settings (backend selection, NotifiCLI internals, test actions, and advanced toggles). |
+
+Enable Finder Integration: `defaults write com.sorty.app finderIntegrationEnabled -bool true`
+Disable Finder Integration: `defaults write com.sorty.app finderIntegrationEnabled -bool false`
+
+Enable GitHub Update Checker: `defaults write com.sorty.app githubUpdateCheckerEnabled -bool true`
+Disable GitHub Update Checker: `defaults write com.sorty.app githubUpdateCheckerEnabled -bool false`
+
+Enable Privacy Mode: `defaults write com.sorty.app privacyModeEnabled -bool true`
+Disable Privacy Mode: `defaults write com.sorty.app privacyModeEnabled -bool false`
+
+Enable File Tagging: `defaults write com.sorty.app fileTaggingEnabled -bool true`
+Disable File Tagging: `defaults write com.sorty.app fileTaggingEnabled -bool false`
+
+Enable Batch Organization: `defaults write com.sorty.app batchOrganizationEnabled -bool true`
+Disable Batch Organization: `defaults write com.sorty.app batchOrganizationEnabled -bool false`
+
+Enable Advanced Notification Controls: `defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true`
+Disable Advanced Notification Controls: `defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false`
+
+## Release
+Push `v*` tag (e.g., `git push origin v1.0.5`) to trigger GitHub Actions build.
+
+Where possible and helpful, spin up subagents to parallelise work.

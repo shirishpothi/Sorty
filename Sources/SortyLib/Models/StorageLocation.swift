@@ -148,10 +148,10 @@ public class StorageLocationsManager: ObservableObject {
         guard !enabled.isEmpty else { return nil }
         
         var prompt = """
-        STORAGE LOCATIONS:
-        The following directories are available as additional destinations for files.
-        You may move files TO these locations if appropriate, but do NOT reorganize files already in them.
-        These are external storage bins - use them for files that don't belong in the main directory:
+        ## STORAGE LOCATIONS (Additional Destinations)
+        
+        The following directories are available as destinations for files that match their purpose.
+        Use your judgment to route files to the most appropriate location:
         
         """
         
@@ -161,11 +161,13 @@ public class StorageLocationsManager: ObservableObject {
         
         prompt += """
         
-        IMPORTANT RULES FOR STORAGE LOCATIONS:
-        1. When suggesting moves to storage locations, use the FULL PATH as the destination.
-        2. ONLY use the storage locations listed above. Any other absolute path will be rejected.
-        3. Only use storage locations when files clearly belong there based on the location's purpose.
-        4. If a file doesn't fit a storage location, organize it within the source directory using relative paths.
+        STORAGE LOCATION RULES:
+        1. Use the FULL ABSOLUTE PATH as the folder name when routing files to a storage location.
+        2. ONLY use the storage locations listed above — any other absolute path will be rejected.
+        3. Match files to storage locations based on each location's stated purpose/description.
+        4. Files that don't clearly fit any storage location should be organized within the source directory using relative paths.
+        5. Do NOT reorganize or move files that are already inside a storage location.
+        6. It is perfectly fine to use zero, one, or multiple storage locations in a single plan — let the files guide your decision.
         """
         
         return prompt
@@ -246,6 +248,33 @@ public class StorageLocationsManager: ObservableObject {
         }
     }
     
+    /// Re-authorizes a storage location by creating a new security-scoped bookmark from a freshly-picked URL
+    public func reauthorizeLocation(_ location: StorageLocation, with url: URL) {
+        guard url.startAccessingSecurityScopedResource() else {
+            DebugLogger.log("Failed to access security-scoped resource for reauthorization: \(url.path)")
+            return
+        }
+
+        do {
+            let newBookmarkData = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+
+            var updated = location
+            updated.bookmarkData = newBookmarkData
+            updated.path = url.path
+            updated.accessStatus = .valid
+            updateLocation(updated)
+
+            DebugLogger.log("Successfully reauthorized storage location: \(location.name)")
+        } catch {
+            url.stopAccessingSecurityScopedResource()
+            DebugLogger.log("Failed to create bookmark during reauthorization: \(error)")
+        }
+    }
+
     private func loadLocations() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([StorageLocation].self, from: data) {

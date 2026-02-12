@@ -656,7 +656,7 @@ final class NotificationTypeExtendedTests: XCTestCase {
             canUndo: true
         )
         
-        if case .processingComplete(let count, let name, let path, let undo) = type {
+        if case .processingComplete(let count, let name, let path, let undo, _) = type {
             XCTAssertEqual(count, 42)
             XCTAssertEqual(name, "MyFolder")
             XCTAssertEqual(path, "/Users/test/MyFolder")
@@ -679,7 +679,7 @@ final class NotificationTypeExtendedTests: XCTestCase {
         
         let type = NotificationType.batchSummary(stats: stats)
         
-        if case .batchSummary(let s) = type {
+        if case .batchSummary(let s, _) = type {
             XCTAssertEqual(s.filesMoved, 100)
             XCTAssertEqual(s.foldersCreated, 20)
             XCTAssertEqual(s.errorsEncountered, 5)
@@ -699,7 +699,7 @@ final class NotificationTypeExtendedTests: XCTestCase {
             canRetry: true
         )
         
-        if case .processingError(let msg, let critical, let retry) = type {
+        if case .processingError(let msg, let critical, let retry, _) = type {
             XCTAssertEqual(msg, "Network timeout")
             XCTAssertFalse(critical)
             XCTAssertTrue(retry)

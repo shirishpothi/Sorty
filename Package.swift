@@ -30,7 +30,10 @@ let package = Package(
             resources: [
                 // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
                 // SPM only handles the Images directory as PNG fallbacks
-                .copy("Resources/Images")
+                .copy("Resources/Images"),
+                .process("Resources/SortyMascotTemplate.svg"),
+                .process("Resources/OnboardingSound.wav"),
+                .process("Resources/Final Onboarding.wav")
             ],
             swiftSettings: [
                 // Debug: Fast incremental build

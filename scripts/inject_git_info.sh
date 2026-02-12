@@ -17,6 +17,15 @@ else
     echo "Warning: Git not found or not in a git repo. Using 'unknown'."
 fi
 
-# Write to file
-echo "$COMMIT_HASH" > "$OUTPUT_DIR/commit.txt"
-echo "Injected commit hash: $COMMIT_HASH into $OUTPUT_DIR/commit.txt"
+# Write to file only when changed
+OLD_HASH=""
+if [ -f "$OUTPUT_DIR/commit.txt" ]; then
+    OLD_HASH=$(cat "$OUTPUT_DIR/commit.txt")
+fi
+
+if [ "$COMMIT_HASH" != "$OLD_HASH" ]; then
+    echo "$COMMIT_HASH" > "$OUTPUT_DIR/commit.txt"
+    echo "Injected commit hash: $COMMIT_HASH into $OUTPUT_DIR/commit.txt"
+else
+    echo "Commit hash unchanged ($COMMIT_HASH), skipping update."
+fi

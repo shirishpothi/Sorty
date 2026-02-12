@@ -11,6 +11,7 @@ public class FileThumbnailProvider: ObservableObject {
     private let cache = NSCache<NSString, NSImage>()
     private var processingKeys: Set<String> = []
     private var continuations: [String: [CheckedContinuation<NSImage, Never>]] = [:]
+    private var waveformCache: [String: NSImage] = [:]
     
     private init() {
         cache.countLimit = 500 // Cache up to 500 thumbnails
@@ -43,12 +44,22 @@ public class FileThumbnailProvider: ObservableObject {
     }
     
     private func generateThumbnail(for url: URL, size: CGSize) async -> NSImage {
-        // Handle audio files with custom waveform generator
+        // Handle audio files with custom waveform generator (only for larger sizes)
         if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType,
            type.conforms(to: .audio) {
-            if let waveform = await AudioWaveformGenerator.shared.generateWaveform(for: url, size: size) {
-                return waveform
+            if size.width >= 32 && size.height >= 32 {
+                let waveformKey = "\(url.path)|\(Int(size.width.rounded()))x\(Int(size.height.rounded()))"
+                if let cachedWaveform = waveformCache[waveformKey] {
+                    return cachedWaveform
+                }
+                if let waveform = await AudioWaveformGenerator.shared.generateWaveform(for: url, size: size) {
+                    waveformCache[waveformKey] = waveform
+                    return waveform
+                }
             }
+            let icon = NSWorkspace.shared.icon(for: type).copy() as! NSImage
+            icon.size = size
+            return icon
         }
         
         if !FileManager.default.fileExists(atPath: url.path) {
@@ -68,8 +79,8 @@ public class FileThumbnailProvider: ObservableObject {
             let thumbnail = try await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
             return thumbnail.nsImage
         } catch {
-            // Fall back to system icon from NSWorkspace
-            return NSWorkspace.shared.icon(forFile: url.path)
+            // Fall back to system icon from NSWorkspace, copying to avoid shared reference invalidation
+            return NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
         }
     }
     
@@ -80,20 +91,27 @@ public class FileThumbnailProvider: ObservableObject {
     }
     
     private func fallbackIcon(for url: URL) -> NSImage {
-        if url.hasDirectoryPath {
-            return NSWorkspace.shared.icon(for: .folder)
-        }
+        // Prioritize extension-based icon lookup before directory check
+        // This ensures moved files still get proper icons
+        // Copy icons to avoid shared reference invalidation during view recycling
         let ext = url.pathExtension
-        if !ext.isEmpty {
-            return NSWorkspace.shared.icon(forFileType: ext)
+        if !ext.isEmpty, let utType = UTType(filenameExtension: ext) {
+            return NSWorkspace.shared.icon(for: utType).copy() as! NSImage
         }
-        return NSWorkspace.shared.icon(for: .data)
+        if !ext.isEmpty {
+            return NSWorkspace.shared.icon(forFileType: ext).copy() as! NSImage
+        }
+        if url.hasDirectoryPath {
+            return NSWorkspace.shared.icon(for: .folder).copy() as! NSImage
+        }
+        return NSWorkspace.shared.icon(for: .data).copy() as! NSImage
     }
     
     /// Clear the thumbnail cache
     public func clearCache() {
         cache.removeAllObjects()
         processingKeys.removeAll()
+        waveformCache.removeAll()
         for (_, waitingContinuations) in continuations {
             for cont in waitingContinuations {
                 cont.resume(returning: NSImage(size: NSSize(width: 1, height: 1)))

@@ -24,6 +24,9 @@ struct FileOrganizationValidator {
         // Check for storage location and depth validity
         try validateDestinations(plan, at: baseURL, allowedLocations: allowedStorageLocations)
         
+        // Check that files in storage locations aren't moved out
+        try validateSourcePaths(plan, allowedLocations: allowedStorageLocations)
+        
         // Check for path conflicts
         try checkConflicts(plan, at: baseURL)
         
@@ -132,6 +135,35 @@ struct FileOrganizationValidator {
             }
         }
     }
+    
+    private static func validateSourcePaths(_ plan: OrganizationPlan, allowedLocations: [StorageLocation]) throws {
+        guard !allowedLocations.isEmpty else { return }
+        
+        func checkFiles(_ suggestion: FolderSuggestion, destinationIsStorage: Bool) throws {
+            let destIsStorage = suggestion.folderName.hasPrefix("/") && allowedLocations.contains(where: { $0.path == suggestion.folderName })
+            
+            for file in suggestion.files {
+                guard let url = file.url else { continue }
+                let filePath = url.path
+                
+                for location in allowedLocations {
+                    if filePath.hasPrefix(location.path + "/") {
+                        if !destIsStorage {
+                            throw ValidationError.sourceInStorageLocation(file.displayName, location.name)
+                        }
+                    }
+                }
+            }
+            
+            for subfolder in suggestion.subfolders {
+                try checkFiles(subfolder, destinationIsStorage: destIsStorage)
+            }
+        }
+        
+        for suggestion in plan.suggestions {
+            try checkFiles(suggestion, destinationIsStorage: false)
+        }
+    }
 }
 
 enum ValidationError: LocalizedError {
@@ -143,6 +175,7 @@ enum ValidationError: LocalizedError {
     case tooManyFolders(Int, max: Int)
     case invalidStorageLocation(String)
     case folderTooDeep(String)
+    case sourceInStorageLocation(String, String)
     
     var errorDescription: String? {
         switch self {
@@ -162,6 +195,8 @@ enum ValidationError: LocalizedError {
             return "Invalid storage location: \(path). The AI suggested a path that is not in your approved storage locations list."
         case .folderTooDeep(let folder):
             return "Folder structure is too deep at '\(folder)'. Maximum depth is 3 levels."
+        case .sourceInStorageLocation(let file, let location):
+            return "File '\(file)' is inside storage location '\(location)' and cannot be moved out. Files in storage locations are protected from reorganization."
         }
     }
 }

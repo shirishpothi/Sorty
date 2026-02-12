@@ -18,6 +18,7 @@ struct PersonaEditorView: View {
     @State private var promptModifier: String = ""
     @State private var showIconPicker: Bool = false
     @State private var showingGenerator: Bool = false
+    @State private var showingChat: Bool = false
     @State private var showingGuidingPrompt = false
     @State private var generationInput: String = ""
     @StateObject private var generator = PersonaGenerator()
@@ -119,6 +120,12 @@ struct PersonaEditorView: View {
                                 .buttonStyle(.bordered)
                                 .disabled(generator.isGenerating)
                                 
+                                Button(action: { showingChat = true }) {
+                                    Label("Test Persona", systemImage: "bubble.left.and.bubble.right")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(promptModifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                
                                 Spacer()
                                 
                                 Text("\(promptModifier.count) characters")
@@ -144,6 +151,10 @@ struct PersonaEditorView: View {
             }
         }
         .frame(width: 600, height: 600)
+        .sheet(isPresented: $showingChat) {
+            PersonaChatView(promptModifier: promptModifier)
+                .environmentObject(settingsViewModel)
+        }
         .sheet(isPresented: $showingGenerator) {
             VStack(spacing: 20) {
                 Text("Generate Persona")

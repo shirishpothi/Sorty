@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 struct NotificationPermissionCard: View {
     @ObservedObject private var notificationManager = NotificationManager.shared

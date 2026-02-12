@@ -490,7 +490,6 @@ public class WorkspaceHealthManager: ObservableObject {
     private var monitorSource: DispatchSourceFileSystemObject?
     private var monitorFileDescriptor: Int32 = -1
     private var monitorQueue = DispatchQueue(label: "com.sorty.healthmonitor", qos: .utility)
-    private var monitorDebounceTimer: DispatchWorkItem?
     private var pollingTimer: Timer?
     private var lastModDate: Date?
     private var currentMonitoredPath: String?
@@ -1107,8 +1106,8 @@ public class WorkspaceHealthManager: ObservableObject {
     
     /// Stop monitoring current directory
     public func stopMonitoring() {
-        monitorDebounceTimer?.cancel()
-        monitorDebounceTimer = nil
+        debounceTask?.cancel()
+        debounceTask = nil
         
         if let source = monitorSource {
             source.cancel()
@@ -1143,19 +1142,18 @@ public class WorkspaceHealthManager: ObservableObject {
         }
     }
     
+    private var debounceTask: Task<Void, Never>?
+    
     private func handleFileEvent() {
-        // Debounce logic - cancel any pending work item
-        monitorDebounceTimer?.cancel()
+        // Debounce logic - cancel any pending task
+        debounceTask?.cancel()
         
-        let workItem = DispatchWorkItem { [weak self] in
-            Task { @MainActor [weak self] in
-                DebugLogger.log("WorkspaceHealth: File system change detected")
-                self?.fileChangeDetected = Date()
-            }
+        debounceTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second debounce
+            guard !Task.isCancelled else { return }
+            DebugLogger.log("WorkspaceHealth: File system change detected")
+            self?.fileChangeDetected = Date()
         }
-        
-        monitorDebounceTimer = workItem
-        monitorQueue.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
 
     /// Undo the last cleanup action

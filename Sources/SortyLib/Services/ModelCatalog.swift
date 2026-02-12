@@ -14,13 +14,15 @@ public struct ModelInfo: Codable, Identifiable, Sendable, Equatable {
     public let provider: AIProvider
     public let capabilities: [String]?
     public let updatedAt: Date
-    
-    public init(id: String, displayName: String, provider: AIProvider, capabilities: [String]? = nil, updatedAt: Date = Date()) {
+    public let isFree: Bool
+
+    public init(id: String, displayName: String, provider: AIProvider, capabilities: [String]? = nil, updatedAt: Date = Date(), isFree: Bool = false) {
         self.id = id
         self.displayName = displayName
         self.provider = provider
         self.capabilities = capabilities
         self.updatedAt = updatedAt
+        self.isFree = isFree
     }
 }
 
@@ -271,21 +273,21 @@ public final class ModelCatalog: ObservableObject {
         guard let url = URL(string: "https://openrouter.ai/api/v1/models") else {
             throw ModelCatalogError.invalidURL
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 10
-        
+
         if let apiKey = KeychainManager.get(key: AIProvider.openRouter.keychainKey), !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
-        
+
         let (data, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             throw ModelCatalogError.fetchFailed
         }
-        
+
         struct OpenRouterModelsResponse: Decodable {
             let data: [OpenRouterModel]
         }
@@ -294,16 +296,24 @@ public final class ModelCatalog: ObservableObject {
             let name: String?
             let modalities: [String]?
             let capabilities: [String]?
+            let pricing: OpenRouterPricing?
         }
-        
+        struct OpenRouterPricing: Decodable {
+            let prompt: String?
+            let completion: String?
+        }
+
         let decoded = try JSONDecoder().decode(OpenRouterModelsResponse.self, from: data)
         return decoded.data.map { model in
-            ModelInfo(
+            let isFree = model.id.hasSuffix(":free") ||
+                (model.pricing?.prompt == "0" && model.pricing?.completion == "0")
+            return ModelInfo(
                 id: model.id,
                 displayName: model.name ?? model.id,
                 provider: .openRouter,
                 capabilities: model.modalities ?? model.capabilities,
-                updatedAt: Date()
+                updatedAt: Date(),
+                isFree: isFree
             )
         }
     }
@@ -565,33 +575,32 @@ public final class ModelCatalog: ObservableObject {
     
     private func anthropicFallbackModels() -> [ModelInfo] {
         let models = [
-            "claude-3-5-sonnet-20241022",
+            "claude-opus-4",
+            "claude-sonnet-4",
+            "claude-haiku-4.5",
+            "claude-sonnet-4-20250514",
+            "claude-opus-4-20250514",
             "claude-3-5-sonnet-latest",
-            "claude-3-5-haiku-20241022",
-            "claude-3-5-haiku-latest",
-            "claude-3-opus-20240229",
-            "claude-3-opus-latest",
-            "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307"
+            "claude-3-5-haiku-latest"
         ]
         return models.map { ModelInfo(id: $0, displayName: $0, provider: .anthropic) }
     }
-    
+
     private func geminiFallbackModels() -> [ModelInfo] {
         let models = [
-            "gemini-2.0-flash-exp",
+            "gemini-3-flash-preview",
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-pro",
             "gemini-1.5-pro",
-            "gemini-1.5-pro-latest",
-            "gemini-1.5-flash",
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash-8b",
-            "gemini-1.0-pro"
+            "gemini-1.5-flash"
         ]
         return models.map { ModelInfo(id: $0, displayName: $0, provider: .gemini) }
     }
     
     private func appleFoundationModels() -> [ModelInfo] {
-        [ModelInfo(id: "default", displayName: "Default", provider: .appleFoundationModel)]
+        [ModelInfo(id: "Apple Foundation Model", displayName: "Apple Foundation Model", provider: .appleFoundationModel)]
     }
     
     private func openAICompatibleFallback() -> [ModelInfo] {
@@ -644,34 +653,35 @@ public final class ModelCatalog: ObservableObject {
     /// Known models that support vision (multimodal)
     private static let knownVisionModels: Set<String> = [
         // OpenAI - GPT models
-        "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+        "gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview",
+        "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
         // OpenAI - Reasoning models with vision
         "o1", "o1-mini", "o1-preview", "o3", "o3-mini", "o4-mini",
         // Anthropic - Legacy naming
         "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest", "claude-3-5-haiku-20241022",
         "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
         // Anthropic - New naming (claude-sonnet-4, claude-opus-4, etc.)
-        "claude-sonnet-4", "claude-opus-4", "claude-sonnet-4-20250514", "claude-opus-4-20250514",
+        "claude-sonnet-4", "claude-opus-4", "claude-haiku-4.5", "claude-sonnet-4-20250514", "claude-opus-4-20250514",
         // Gemini
+        "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash",
         "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-exp",
-        "gemini-2.0-flash", "gemini-2.0-pro", "gemini-2.5-pro", "gemini-2.5-flash",
-        "gemini-exp-1206", "gemini-exp-1121",
+        "gemini-2.0-flash", "gemini-2.0-pro",
         // Groq
         "llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"
     ]
-    
+
     /// Known model prefixes that support vision (for partial matching)
     private static let visionModelPrefixes: [String] = [
         // OpenAI GPT models
-        "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
+        "gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
         // OpenAI reasoning models with vision
         "o1", "o3", "o4",
         // Anthropic - Legacy naming
         "claude-3-5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5", "claude-3.7",
         // Anthropic - New naming
-        "claude-sonnet-4", "claude-opus-4", "claude-sonnet", "claude-opus",
+        "claude-sonnet-4", "claude-opus-4", "claude-haiku-4", "claude-sonnet", "claude-opus",
         // Gemini
-        "gemini-1.5", "gemini-2.0", "gemini-2.5", "gemini-2", "gemini-exp", "gemini-pro-vision",
+        "gemini-3", "gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-exp", "gemini-pro-vision",
         // Other
         "llama-3.2-11b-vision", "llama-3.2-90b-vision", "llava", "phi-3-vision"
     ]
@@ -684,7 +694,7 @@ public final class ModelCatalog: ObservableObject {
     /// Known vision-capable model families for GitHub Copilot
     private static let copilotVisionFamilies: [String] = [
         // OpenAI GPT models
-        "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
+        "gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1",
         // OpenAI reasoning models
         "o1", "o3", "o4",
         // Anthropic models (both old and new naming)

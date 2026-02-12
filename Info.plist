@@ -32,7 +32,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.6</string>
+	<string>1.1.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -49,9 +49,13 @@
 	<key>CFBundleVersion</key>
 	<string>7</string>
 	<key>GitCommitHash</key>
-	<string>065cb4f</string>
+	<string>b6f1e34</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>LSMultipleInstancesProhibited</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Sorty needs to communicate with Finder to organize your files and folders.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Sorty uses biometrics to protect your Learnings data.</string>
 	<key>NSHighResolutionCapable</key>

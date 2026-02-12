@@ -67,11 +67,11 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
             parts.append("Title: \"\(title)\"")
         }
         if let preview = textPreview {
-            let trimmed = preview.prefix(300).replacingOccurrences(of: "\n", with: " ")
+            let trimmed = preview.prefix(500).replacingOccurrences(of: "\n", with: " ")
             parts.append("Content: \"\(trimmed)...\"")
         }
         if let ocr = ocrText {
-            let trimmed = ocr.prefix(200).replacingOccurrences(of: "\n", with: " ")
+            let trimmed = ocr.prefix(400).replacingOccurrences(of: "\n", with: " ")
             parts.append("OCR: \"\(trimmed)...\"")
         }
         if let detected = detectedKeywords, !detected.isEmpty {

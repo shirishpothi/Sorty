@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import Darwin
 
 public actor FileSystemManager {
     private var undoStack: [FileOperation] = []
@@ -16,6 +17,70 @@ public actor FileSystemManager {
 
     // Track files that are currently being reverted to prevent re-organization
     private var revertingPaths: Set<String> = []
+
+    // MARK: - Cross-Volume Move Optimization
+
+    private var crossVolumeProgressHandler: (@Sendable (String, Double) -> Void)?
+
+    private static let crossVolumeChunkSize: Int = 1_024 * 1_024 * 4 // 4 MB
+    private static let largeFileThreshold: UInt64 = 50 * 1_024 * 1_024 // 50 MB
+
+    public func setCrossVolumeProgressHandler(_ handler: (@Sendable (String, Double) -> Void)?) {
+        crossVolumeProgressHandler = handler
+    }
+
+    private func isCrossVolume(from source: URL, to destination: URL) -> Bool {
+        let sourceValues = try? source.resourceValues(forKeys: [.volumeIdentifierKey])
+        let destinationParent = destination.deletingLastPathComponent()
+        let destValues = try? destinationParent.resourceValues(forKeys: [.volumeIdentifierKey])
+
+        guard let sourceVolume = sourceValues?.volumeIdentifier as? NSObject,
+              let destVolume = destValues?.volumeIdentifier as? NSObject else {
+            return false
+        }
+
+        return !sourceVolume.isEqual(destVolume)
+    }
+
+    private func copyWithProgress(from source: URL, to destination: URL, progressHandler: (@Sendable (Double) -> Void)?) async throws {
+        let sourceAttributes = try fileManager.attributesOfItem(atPath: source.path)
+        let fileSize = (sourceAttributes[.size] as? UInt64) ?? 0
+
+        if fileSize > Self.largeFileThreshold {
+            guard let readHandle = FileHandle(forReadingAtPath: source.path) else {
+                throw FileSystemError.fileNotFound
+            }
+            defer { try? readHandle.close() }
+
+            fileManager.createFile(atPath: destination.path, contents: nil)
+            guard let writeHandle = FileHandle(forWritingAtPath: destination.path) else {
+                throw FileSystemError.permissionDenied
+            }
+            defer { try? writeHandle.close() }
+
+            var bytesWritten: UInt64 = 0
+            while true {
+                let chunk = readHandle.readData(ofLength: Self.crossVolumeChunkSize)
+                if chunk.isEmpty { break }
+                writeHandle.write(chunk)
+                bytesWritten += UInt64(chunk.count)
+                let progress = Double(bytesWritten) / Double(fileSize)
+                progressHandler?(min(progress, 1.0))
+            }
+        } else {
+            try fileManager.copyItem(at: source, to: destination)
+            progressHandler?(1.0)
+        }
+
+        let destAttributes = try fileManager.attributesOfItem(atPath: destination.path)
+        let destSize = (destAttributes[.size] as? UInt64) ?? 0
+        guard destSize == fileSize else {
+            try? fileManager.removeItem(at: destination)
+            throw FileSystemError.crossVolumeCopyVerificationFailed(source.path)
+        }
+
+        try fileManager.removeItem(at: source)
+    }
 
     /// Start accessing a security-scoped resource and track it
     private func startAccessing(_ url: URL) -> Bool {
@@ -58,6 +123,8 @@ public actor FileSystemManager {
             public var parentFolderPath: String?
             public var originalTags: [String]?
             public var newTags: [String]?
+            public var originalComment: String?
+            public var newComment: String?
 
             public init(
                 originalFilename: String? = nil,
@@ -65,7 +132,9 @@ public actor FileSystemManager {
                 wasCreatedDuringOrganization: Bool = false,
                 parentFolderPath: String? = nil,
                 originalTags: [String]? = nil,
-                newTags: [String]? = nil
+                newTags: [String]? = nil,
+                originalComment: String? = nil,
+                newComment: String? = nil
             ) {
                 self.originalFilename = originalFilename
                 self.newFilename = newFilename
@@ -73,6 +142,8 @@ public actor FileSystemManager {
                 self.parentFolderPath = parentFolderPath
                 self.originalTags = originalTags
                 self.newTags = newTags
+                self.originalComment = originalComment
+                self.newComment = newComment
             }
         }
 
@@ -300,8 +371,17 @@ public actor FileSystemManager {
                     continue
                 }
 
-                // Move file
-                try fileManager.moveItem(at: sourceURL, to: destinationURL)
+                // Move file — use cross-volume copy+delete when source and destination are on different volumes
+                if isCrossVolume(from: sourceURL, to: destinationURL) {
+                    DebugLogger.log("Cross-volume move detected: \(sourceURL.path) → \(destinationURL.path)")
+                    let fileName = sourceURL.lastPathComponent
+                    let handler = crossVolumeProgressHandler
+                    try await copyWithProgress(from: sourceURL, to: destinationURL) { progress in
+                        handler?(fileName, progress)
+                    }
+                } else {
+                    try fileManager.moveItem(at: sourceURL, to: destinationURL)
+                }
             }
 
             // Record the operation
@@ -326,6 +406,71 @@ public actor FileSystemManager {
         return operations
     }
 
+    // MARK: - Conflict Detection
+
+    public func detectConflicts(for plan: OrganizationPlan, at baseURL: URL) async -> [FileConflict] {
+        var conflicts: [FileConflict] = []
+
+        for suggestion in plan.suggestions {
+            let found = detectConflictsInSuggestion(suggestion, parentURL: baseURL)
+            conflicts.append(contentsOf: found)
+        }
+
+        return conflicts
+    }
+
+    private func detectConflictsInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) -> [FileConflict] {
+        var conflicts: [FileConflict] = []
+
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+        } else {
+            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        }
+
+        for file in suggestion.files {
+            guard let sourceURL = file.url else { continue }
+
+            let finalFilename: String
+            if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
+                finalFilename = newName
+            } else {
+                finalFilename = sourceURL.lastPathComponent
+            }
+
+            let destinationURL = folderURL.appendingPathComponent(finalFilename)
+
+            if sourceURL.standardizedFileURL.path == destinationURL.standardizedFileURL.path {
+                continue
+            }
+
+            if fileManager.fileExists(atPath: destinationURL.path) {
+                let sourceAttrs = try? fileManager.attributesOfItem(atPath: sourceURL.path)
+                let destAttrs = try? fileManager.attributesOfItem(atPath: destinationURL.path)
+
+                let conflict = FileConflict(
+                    sourceURL: sourceURL,
+                    destinationURL: destinationURL,
+                    sourceName: sourceURL.lastPathComponent,
+                    destinationName: destinationURL.lastPathComponent,
+                    sourceSize: (sourceAttrs?[.size] as? Int64) ?? file.size,
+                    destinationSize: (destAttrs?[.size] as? Int64) ?? 0,
+                    sourceDate: sourceAttrs?[.modificationDate] as? Date,
+                    destinationDate: destAttrs?[.modificationDate] as? Date
+                )
+                conflicts.append(conflict)
+            }
+        }
+
+        for subfolder in suggestion.subfolders {
+            let subConflicts = detectConflictsInSuggestion(subfolder, parentURL: folderURL)
+            conflicts.append(contentsOf: subConflicts)
+        }
+
+        return conflicts
+    }
+
     // MARK: - File Tagging
 
     func tagFiles(_ plan: OrganizationPlan, at baseURL: URL, dryRun: Bool = false, exclusionManager: ExclusionRulesManager? = nil) async throws -> [FileOperation] {
@@ -340,6 +485,133 @@ public actor FileSystemManager {
         return operations
     }
     
+    private func normalizeFinderTag(_ tag: String) -> String {
+        switch tag.lowercased() {
+        case "important", "urgent", "critical", "high priority":
+            return "Red"
+        case "in progress", "pending", "todo", "needs attention", "review":
+            return "Orange"
+        case "draft", "temporary", "temp", "wip":
+            return "Yellow"
+        case "complete", "done", "verified", "approved", "final":
+            return "Green"
+        case "reference", "info", "documentation", "docs":
+            return "Blue"
+        case "creative", "design", "media", "art":
+            return "Purple"
+        case "archive", "old", "inactive", "deprecated":
+            return "Gray"
+        case "red", "orange", "yellow", "green", "blue", "purple", "gray":
+            return tag.capitalized
+        default:
+            return tag
+        }
+    }
+
+    private func setFinderComment(_ comment: String?, for url: URL) throws {
+        let path = url.path
+        let key = "com.apple.metadata:kMDItemFinderComment"
+
+        guard let comment = comment, !comment.isEmpty else {
+            let rc = removexattr(path, key, 0)
+            if rc != 0 && errno != 93 {
+                DebugLogger.log("Failed to remove Finder comment for \(path): errno \(errno)")
+            }
+            return
+        }
+
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: comment,
+            format: .binary,
+            options: 0
+        )
+
+        let rc: Int32 = data.withUnsafeBytes { buf in
+            setxattr(path, key, buf.baseAddress!, buf.count, 0, 0)
+        }
+        if rc != 0 {
+            DebugLogger.log("Failed to set Finder comment for \(path): errno \(errno)")
+        }
+    }
+
+    private func getFinderComment(for url: URL) -> String? {
+        let path = url.path
+        let key = "com.apple.metadata:kMDItemFinderComment"
+
+        let size = getxattr(path, key, nil, 0, 0, 0)
+        guard size > 0 else { return nil }
+
+        var data = Data(count: size)
+        let result = data.withUnsafeMutableBytes { buf in
+            getxattr(path, key, buf.baseAddress, size, 0, 0)
+        }
+        guard result > 0 else { return nil }
+
+        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? String
+    }
+
+    private func applyTagsAndComment(to url: URL, tags: [String], comment: String?, dryRun: Bool) -> FileOperation? {
+        let hasComment = comment != nil && !(comment ?? "").isEmpty
+        guard !tags.isEmpty || hasComment else { return nil }
+
+        if dryRun {
+            return FileOperation(
+                type: .tagFile,
+                sourcePath: url.path,
+                destinationPath: nil,
+                metadata: FileOperation.OperationMetadata(
+                    newTags: tags,
+                    newComment: comment
+                )
+            )
+        }
+
+        guard fileManager.fileExists(atPath: url.path) else { return nil }
+
+        let resourceValues = try? url.resourceValues(forKeys: [.tagNamesKey])
+        let originalTags = resourceValues?.tagNames ?? []
+        let originalComment = getFinderComment(for: url)
+
+        var finalTags = originalTags
+        if !tags.isEmpty {
+            let normalizedTags = tags.map { normalizeFinderTag($0) }
+            var newTagsSet = Set(originalTags)
+            for tag in normalizedTags {
+                newTagsSet.insert(tag)
+            }
+            finalTags = Array(newTagsSet)
+
+            let nsURL = url as NSURL
+            do {
+                try nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
+                #if DEBUG
+                if let verifyValues = try? url.resourceValues(forKeys: [.tagNamesKey]),
+                   let verifyTags = verifyValues.tagNames {
+                    DebugLogger.log("Tags verified for \(url.lastPathComponent): \(verifyTags)")
+                }
+                #endif
+            } catch {
+                DebugLogger.log("Tagging failed for \(url.path): \(error.localizedDescription)")
+            }
+        }
+
+        if hasComment {
+            try? setFinderComment(comment, for: url)
+        }
+
+        return FileOperation(
+            type: .tagFile,
+            sourcePath: url.path,
+            destinationPath: nil,
+            metadata: FileOperation.OperationMetadata(
+                originalTags: originalTags,
+                newTags: finalTags,
+                originalComment: originalComment,
+                newComment: comment
+            )
+        )
+    }
+
     private func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         
@@ -352,6 +624,10 @@ public actor FileSystemManager {
         } else {
             // Relative path - append to parent
             folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+        }
+
+        if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
+            operations.append(folderOp)
         }
 
         // Look for tag mappings in this suggestion
@@ -368,62 +644,8 @@ public actor FileSystemManager {
             
             let fileURL = folderURL.appendingPathComponent(finalFilename)
             
-            // Only proceed if we have tags to apply
-            guard !mapping.tags.isEmpty else { continue }
-            
-            if !dryRun {
-                // Check if file exists at the expected location
-                guard fileManager.fileExists(atPath: fileURL.path) else {
-                    continue
-                }
-                
-                // Get current tags for undo
-                let resourceValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey])
-                let originalTags = resourceValues?.tagNames ?? []
-                
-                var newTagsSet = Set(originalTags)
-                for tag in mapping.tags {
-                    newTagsSet.insert(tag)
-                }
-                let finalTags = Array(newTagsSet)
-                
-                // Apply using NSURL to avoid version check error
-                let nsURL = fileURL as NSURL
-                do {
-                    try nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
-                    #if DEBUG
-                    // Verify tags were set correctly
-                    if let verifyValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey]),
-                       let verifyTags = verifyValues.tagNames {
-                        DebugLogger.log("Tags verified for \(fileURL.lastPathComponent): \(verifyTags)")
-                    }
-                    #endif
-                } catch {
-                    DebugLogger.log("Tagging failed for \(fileURL.path): \(error.localizedDescription)")
-                }
-                
-                operations.append(FileOperation(
-                    id: UUID(),
-                    type: .tagFile,
-                    sourcePath: fileURL.path,
-                    destinationPath: nil,
-                    timestamp: Date(),
-                    metadata: FileOperation.OperationMetadata(
-                        originalTags: originalTags,
-                        newTags: finalTags
-                    )
-                ))
-            } else {
-                 operations.append(FileOperation(
-                    id: UUID(),
-                    type: .tagFile,
-                    sourcePath: fileURL.path,
-                    destinationPath: nil,
-                    timestamp: Date(),
-                    metadata: FileOperation.OperationMetadata(
-                        newTags: mapping.tags
-                    )
-                ))
+            if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun) {
+                operations.append(op)
             }
         }
 
@@ -463,10 +685,19 @@ public actor FileSystemManager {
         return true
     }
 
-    // Helper type to return operations and count for progress tracking
     private struct OperationResult {
         let operations: [FileOperation]
         let processedCount: Int
+    }
+    
+    public struct ApplyOrganizationResult: Sendable {
+        public let operations: [FileOperation]
+        public let failures: [OperationFailure]
+        public let totalAttempted: Int
+        
+        public var successCount: Int { operations.filter { $0.type == .moveFile || $0.type == .renameFile }.count }
+        public var failureCount: Int { failures.count }
+        public var hasFailures: Bool { !failures.isEmpty }
     }
 
     func applyOrganization(
@@ -478,56 +709,57 @@ public actor FileSystemManager {
         exclusionManager: ExclusionRulesManager? = nil,
         progress: (@Sendable (Double, String) -> Void)? = nil
     ) async throws -> [FileOperation] {
-        // Ensure we have access to the base URL if it's security-scoped
         _ = startAccessing(baseURL)
         defer { stopAccessingAll() }
 
         var allOperations: [FileOperation] = []
+        var allFailures: [OperationFailure] = []
         
-        // Count total potential operations for progress tracking
         let totalFiles = plan.suggestions.reduce(0) { $0 + countFiles(in: $1) }
         let totalFolders = plan.suggestions.reduce(0) { $0 + countFolders(in: $1) }
-        let totalOps = totalFiles + totalFolders + (enableTagging ? totalFiles : 0)
+        let totalOps = totalFiles + totalFolders + (enableTagging ? totalFiles + totalFolders : 0)
         var completedOps = 0
         
         func updateProgress(_ message: String) {
             completedOps += 1
-            let percent = totalOps > 0 ? Double(completedOps) / Double(totalOps) : 1.0
-            progress?(percent, message)
+            let raw = totalOps > 0 ? Double(completedOps) / Double(totalOps) : 1.0
+            progress?(min(raw, 1.0), message)
         }
 
-        // 1. Create folders
+        if !dryRun {
+            progress?(0.02, "Validating files...")
+            let validationIssues = await preValidatePlan(plan, at: baseURL)
+            if !validationIssues.isEmpty {
+                DebugLogger.log("Pre-validation found \(validationIssues.count) issue(s): \(validationIssues.joined(separator: ", "))")
+            }
+        }
+
         progress?(0.05, "Creating folder structure...")
         
         for suggestion in plan.suggestions {
-            let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun) { message in
+            let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager) { message in
                 updateProgress(message)
             }
             allOperations.append(contentsOf: result.operations)
-            completedOps += result.processedCount
         }
 
-        // 2. Move files
         progress?(0.1, "Moving files...")
         
         for suggestion in plan.suggestions {
-            let result = try await moveFilesInSuggestionWithProgress(suggestion, parentURL: baseURL, dryRun: dryRun) { message in
+            let result = try await moveFilesInSuggestionWithProgress(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
                 updateProgress(message)
-            }
+            }, failures: &allFailures)
             allOperations.append(contentsOf: result.operations)
-            completedOps += result.processedCount
         }
 
-        // 3. Apply tags
         if enableTagging {
             progress?(0.8, "Applying tags...")
             
             for suggestion in plan.suggestions {
-                let result = try await tagFilesWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun) { message in
+                let result = try await tagFilesWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager) { message in
                     updateProgress(message)
                 }
                 allOperations.append(contentsOf: result.operations)
-                completedOps += result.processedCount
             }
         }
 
@@ -535,7 +767,6 @@ public actor FileSystemManager {
             progress?(0.9, "Cleaning up empty folders...")
             undoStack.append(contentsOf: allOperations)
             
-            // Cleanup logic stays the same...
             let fileOps = allOperations.filter { $0.type == .moveFile || $0.type == .renameFile }
             let sourceFolders = Set(fileOps.compactMap { URL(fileURLWithPath: $0.sourcePath).deletingLastPathComponent().path })
             let sortedFolders = sourceFolders.sorted { $0.components(separatedBy: "/").count > $1.components(separatedBy: "/").count }
@@ -552,13 +783,26 @@ public actor FileSystemManager {
                 newlyCreatedFolders.formUnion(paths)
             }
             try? cleanupEmptySubdirectories(at: baseURL, excluding: newlyCreatedFolders)
+            
+            if !allFailures.isEmpty {
+                DebugLogger.log("Organization completed with \(allFailures.count) failure(s)")
+                for failure in allFailures {
+                    DebugLogger.log("  - \(failure.sourcePath): \(failure.error)")
+                }
+            }
         }
         
-        progress?(1.0, "Organization complete!")
+        let successCount = allOperations.filter { $0.type == .moveFile || $0.type == .renameFile }.count
+        if allFailures.isEmpty {
+            progress?(1.0, "Organization complete!")
+        } else {
+            progress?(1.0, "Complete with \(allFailures.count) skipped file(s)")
+        }
+        
         return allOperations
     }
     
-    private func createFoldersWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, onProgress: (String) -> Void) async throws -> OperationResult {
+    private func createFoldersWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
         
@@ -572,9 +816,31 @@ public actor FileSystemManager {
             folderURL = currentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
         }
         
+        if let manager = exclusionManager {
+            let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
+            if await manager.shouldExclude(item) {
+                DebugLogger.log("Skipping excluded folder creation: \(folderURL.path)")
+                return OperationResult(operations: operations, processedCount: processedCount)
+            }
+        }
+        
         if !dryRun {
-            if !fileManager.fileExists(atPath: folderURL.path) {
-                try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            var isDirectory: ObjCBool = false
+            let exists = fileManager.fileExists(atPath: folderURL.path, isDirectory: &isDirectory)
+            
+            if exists && !isDirectory.boolValue {
+                let backupName = "\(suggestion.folderName)_backup_\(UUID().uuidString.prefix(8))"
+                let backupURL = currentURL.appendingPathComponent(backupName)
+                try await withRetry {
+                    try fileManager.moveItem(at: folderURL, to: backupURL)
+                }
+                DebugLogger.log("Moved conflicting file to \(backupName)")
+            }
+            
+            if !exists || !isDirectory.boolValue {
+                try await withRetry {
+                    try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                }
                 operations.append(FileOperation(
                     type: .createFolder,
                     sourcePath: folderURL.path,
@@ -587,7 +853,7 @@ public actor FileSystemManager {
         processedCount += 1
         
         for subfolder in suggestion.subfolders {
-            let subResult = try await createFoldersWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, onProgress: onProgress)
+            let subResult = try await createFoldersWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress)
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
@@ -595,7 +861,7 @@ public actor FileSystemManager {
         return OperationResult(operations: operations, processedCount: processedCount)
     }
     
-    private func moveFilesInSuggestionWithProgress(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, onProgress: (String) -> Void) async throws -> OperationResult {
+    private func moveFilesInSuggestionWithProgress(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void, failures: inout [OperationFailure]) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
         
@@ -610,6 +876,15 @@ public actor FileSystemManager {
         for file in suggestion.files {
             try Task.checkCancellation()
             guard let sourceURL = file.url else { continue }
+            
+            if let manager = exclusionManager {
+                if await manager.shouldExclude(file) {
+                    DebugLogger.log("Skipping excluded file move: \(sourceURL.path)")
+                    onProgress("Skipped \(sourceURL.lastPathComponent) (excluded)...")
+                    processedCount += 1
+                    continue
+                }
+            }
             
             let finalFilename: String
             var renameMetadata: FileOperation.OperationMetadata? = nil
@@ -630,26 +905,71 @@ public actor FileSystemManager {
             
             if sourceURL.standardizedFileURL.path != destinationURL.standardizedFileURL.path {
                 if !dryRun {
-                    if !fileManager.fileExists(atPath: folderURL.path) {
-                        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                    do {
+                        if !fileManager.fileExists(atPath: folderURL.path) {
+                            try await withRetry {
+                                try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                            }
+                        }
+                        if fileManager.fileExists(atPath: destinationURL.path) {
+                            destinationURL = generateUniqueURL(for: destinationURL)
+                        }
+                        
+                        guard fileManager.fileExists(atPath: sourceURL.path) else {
+                            failures.append(OperationFailure(
+                                sourcePath: sourceURL.path,
+                                destinationPath: destinationURL.path,
+                                error: "Source file no longer exists",
+                                isRetryable: false
+                            ))
+                            onProgress("Skipped \(finalFilename) (not found)...")
+                            processedCount += 1
+                            continue
+                        }
+                        
+                        if isCrossVolume(from: sourceURL, to: destinationURL) {
+                            DebugLogger.log("Cross-volume move detected: \(sourceURL.path) → \(destinationURL.path)")
+                            let fileName = sourceURL.lastPathComponent
+                            let handler = crossVolumeProgressHandler
+                            try await copyWithProgress(from: sourceURL, to: destinationURL) { progress in
+                                handler?(fileName, progress)
+                            }
+                        } else {
+                            try await withRetry {
+                                try fileManager.moveItem(at: sourceURL, to: destinationURL)
+                            }
+                        }
+                        
+                        let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
+                        operations.append(FileOperation(
+                            id: UUID(),
+                            type: operationType,
+                            sourcePath: sourceURL.path,
+                            destinationPath: destinationURL.path,
+                            timestamp: Date(),
+                            metadata: renameMetadata
+                        ))
+                    } catch {
+                        let isRetryable = isRetryableError(error)
+                        failures.append(OperationFailure(
+                            sourcePath: sourceURL.path,
+                            destinationPath: destinationURL.path,
+                            error: error.localizedDescription,
+                            isRetryable: isRetryable
+                        ))
+                        DebugLogger.log("Failed to move \(sourceURL.lastPathComponent): \(error.localizedDescription)")
                     }
-                    if fileManager.fileExists(atPath: destinationURL.path) {
-                        destinationURL = generateUniqueURL(for: destinationURL)
-                    }
-                    if fileManager.fileExists(atPath: sourceURL.path) {
-                        try fileManager.moveItem(at: sourceURL, to: destinationURL)
-                    }
+                } else {
+                    let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
+                    operations.append(FileOperation(
+                        id: UUID(),
+                        type: operationType,
+                        sourcePath: sourceURL.path,
+                        destinationPath: destinationURL.path,
+                        timestamp: Date(),
+                        metadata: renameMetadata
+                    ))
                 }
-
-                let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
-                operations.append(FileOperation(
-                    id: UUID(),
-                    type: operationType,
-                    sourcePath: sourceURL.path,
-                    destinationPath: destinationURL.path,
-                    timestamp: Date(),
-                    metadata: renameMetadata
-                ))
             }
             
             onProgress("Moving \(finalFilename)...")
@@ -657,7 +977,7 @@ public actor FileSystemManager {
         }
 
         for subfolder in suggestion.subfolders {
-            let subResult = try await moveFilesInSuggestionWithProgress(subfolder, parentURL: folderURL, dryRun: dryRun, onProgress: onProgress)
+            let subResult = try await moveFilesInSuggestionWithProgress(subfolder, parentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress, failures: &failures)
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
@@ -665,7 +985,7 @@ public actor FileSystemManager {
         return OperationResult(operations: operations, processedCount: processedCount)
     }
     
-    private func tagFilesWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, onProgress: (String) -> Void) async throws -> OperationResult {
+    private func tagFilesWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
         
@@ -678,47 +998,34 @@ public actor FileSystemManager {
         } else {
             folderURL = currentURL.appendingPathComponent(suggestion.folderName)
         }
+
+        if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
+            operations.append(folderOp)
+            onProgress("Tagging \(suggestion.folderName)...")
+            processedCount += 1
+        }
         
         for mapping in suggestion.fileTagMappings {
             try Task.checkCancellation()
+            
+            if let manager = exclusionManager {
+                if await manager.shouldExclude(mapping.originalFile) {
+                    continue
+                }
+            }
+            
             let finalFilename = suggestion.filesWithFinalNames.first(where: { $0.file.id == mapping.originalFile.id })?.finalName ?? mapping.originalFile.displayName
             let fileURL = folderURL.appendingPathComponent(finalFilename)
             
-            if !dryRun && fileManager.fileExists(atPath: fileURL.path) {
-                let resourceValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey])
-                let originalTags = resourceValues?.tagNames ?? []
-                
-                var newTagsSet = Set(originalTags)
-                for tag in mapping.tags { newTagsSet.insert(tag) }
-                let finalTags = Array(newTagsSet)
-                
-                let nsURL = fileURL as NSURL
-                do {
-                    try nsURL.setResourceValue(finalTags, forKey: .tagNamesKey)
-                    #if DEBUG
-                    // Verify tags were set correctly
-                    if let verifyValues = try? fileURL.resourceValues(forKeys: [.tagNamesKey]),
-                       let verifyTags = verifyValues.tagNames {
-                        DebugLogger.log("Tags verified for \(fileURL.lastPathComponent): \(verifyTags)")
-                    }
-                    #endif
-                } catch {
-                    DebugLogger.log("Tagging failed for \(fileURL.path): \(error.localizedDescription)")
-                }
-                
-                operations.append(FileOperation(
-                    type: .tagFile,
-                    sourcePath: fileURL.path,
-                    destinationPath: nil,
-                    metadata: .init(originalTags: originalTags, newTags: finalTags)
-                ))
+            if let op = applyTagsAndComment(to: fileURL, tags: mapping.tags, comment: mapping.comment, dryRun: dryRun) {
+                operations.append(op)
             }
             onProgress("Tagging \(finalFilename)...")
             processedCount += 1
         }
         
         for subfolder in suggestion.subfolders {
-            let subResult = try await tagFilesWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, onProgress: onProgress)
+            let subResult = try await tagFilesWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress)
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
@@ -887,7 +1194,6 @@ public actor FileSystemManager {
                 }
                 
             case .tagFile:
-                // Restore original tags
                 if let originalTags = operation.metadata?.originalTags {
                    let url = URL(fileURLWithPath: operation.sourcePath)
                    if fileManager.fileExists(atPath: url.path) {
@@ -895,6 +1201,12 @@ public actor FileSystemManager {
                        try? nsURL.setResourceValue(originalTags, forKey: .tagNamesKey)
                        successCount += 1
                    }
+                }
+                if operation.metadata?.newComment != nil {
+                    let url = URL(fileURLWithPath: operation.sourcePath)
+                    if fileManager.fileExists(atPath: url.path) {
+                        try? setFinderComment(operation.metadata?.originalComment, for: url)
+                    }
                 }
             }
         }
@@ -908,6 +1220,76 @@ public actor FileSystemManager {
             try? removeEmptyFolder(at: folderPath)
         }
         
+        return RestoreResult(successfulOperations: successCount, missingFiles: missingFiles)
+    }
+
+    /// Undoes a single file operation (move file back, remove created folder if empty, restore tags)
+    public func restoreSingleOperation(_ operation: FileOperation) async throws -> RestoreResult {
+        _ = startAccessing(URL(fileURLWithPath: operation.sourcePath))
+        if let dest = operation.destinationPath {
+            _ = startAccessing(URL(fileURLWithPath: dest))
+        }
+        defer { stopAccessingAll() }
+
+        var successCount = 0
+        var missingFiles: [String] = []
+
+        switch operation.type {
+        case .moveFile, .renameFile:
+            if let destinationPath = operation.destinationPath {
+                if fileManager.fileExists(atPath: destinationPath) {
+                    let originalDir = URL(fileURLWithPath: operation.sourcePath).deletingLastPathComponent()
+                    if !fileManager.fileExists(atPath: originalDir.path) {
+                        try fileManager.createDirectory(at: originalDir, withIntermediateDirectories: true)
+                    }
+
+                    var finalSourcePath = operation.sourcePath
+                    if fileManager.fileExists(atPath: finalSourcePath) {
+                        let uniqueURL = generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
+                        finalSourcePath = uniqueURL.path
+                    }
+
+                    try fileManager.moveItem(atPath: destinationPath, toPath: finalSourcePath)
+                    successCount += 1
+
+                    let parentFolder = URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path
+                    try? removeEmptyFolder(at: parentFolder)
+                } else {
+                    let filename = URL(fileURLWithPath: destinationPath).lastPathComponent
+                    missingFiles.append(filename)
+                }
+            }
+
+        case .createFolder:
+            try? removeEmptyFolder(at: operation.sourcePath)
+            successCount += 1
+
+        case .deleteFile:
+            missingFiles.append(URL(fileURLWithPath: operation.sourcePath).lastPathComponent)
+
+        case .copyFile:
+            if let destinationPath = operation.destinationPath,
+               fileManager.fileExists(atPath: destinationPath) {
+                try fileManager.removeItem(atPath: destinationPath)
+                successCount += 1
+            }
+
+        case .tagFile:
+            let url = URL(fileURLWithPath: operation.sourcePath)
+            if fileManager.fileExists(atPath: url.path) {
+                if let originalTags = operation.metadata?.originalTags {
+                    let nsURL = url as NSURL
+                    try? nsURL.setResourceValue(originalTags, forKey: .tagNamesKey)
+                }
+                if operation.metadata?.newComment != nil {
+                    try? setFinderComment(operation.metadata?.originalComment, for: url)
+                }
+                successCount += 1
+            } else {
+                missingFiles.append(url.lastPathComponent)
+            }
+        }
+
         return RestoreResult(successfulOperations: successCount, missingFiles: missingFiles)
     }
 
@@ -951,6 +1333,158 @@ public actor FileSystemManager {
             // Folder might not be empty or we don't have permission
             DebugLogger.log("Could not remove folder: \(path) - \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Retry and Validation Helpers
+    
+    private struct RetryConfig {
+        let maxAttempts: Int
+        let baseDelay: UInt64
+        let maxDelay: UInt64
+        
+        static let `default` = RetryConfig(
+            maxAttempts: 3,
+            baseDelay: 100_000_000, // 100ms
+            maxDelay: 1_000_000_000 // 1s
+        )
+    }
+    
+    private func isRetryableError(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        switch nsError.domain {
+        case NSCocoaErrorDomain:
+            switch nsError.code {
+            case NSFileWriteNoPermissionError,
+                 NSFileReadNoPermissionError:
+                return false
+            case 640, // NSFileBusyError constant value
+                 NSFileWriteVolumeReadOnlyError:
+                return true
+            default:
+                return nsError.code >= 500
+            }
+        case NSPOSIXErrorDomain:
+            switch nsError.code {
+            case Int(EBUSY), Int(EAGAIN), Int(EINTR), Int(ETXTBSY):
+                return true
+            case Int(EACCES), Int(EPERM), Int(EROFS):
+                return false
+            default:
+                return false
+            }
+        default:
+            return false
+        }
+    }
+    
+    private func withRetry<T>(
+        config: RetryConfig = .default,
+        operation: () throws -> T
+    ) async throws -> T {
+        var lastError: Error?
+        var delay = config.baseDelay
+        
+        for attempt in 1...config.maxAttempts {
+            do {
+                return try operation()
+            } catch {
+                lastError = error
+                
+                if !isRetryableError(error) || attempt == config.maxAttempts {
+                    throw error
+                }
+                
+                DebugLogger.log("Retry attempt \(attempt)/\(config.maxAttempts) after error: \(error.localizedDescription)")
+                try await Task.sleep(nanoseconds: delay)
+                delay = min(delay * 2, config.maxDelay)
+            }
+        }
+        
+        throw lastError ?? FileSystemError.fileNotFound
+    }
+    
+    private func checkFileAccessibility(at url: URL) -> (accessible: Bool, issue: String?) {
+        let path = url.path
+        
+        guard fileManager.fileExists(atPath: path) else {
+            return (false, "File does not exist: \(url.lastPathComponent)")
+        }
+        
+        guard fileManager.isReadableFile(atPath: path) else {
+            return (false, "Cannot read file: \(url.lastPathComponent)")
+        }
+        
+        let resourceValues = try? url.resourceValues(forKeys: [.isWritableKey, .isReadableKey, .volumeIsReadOnlyKey])
+        
+        if resourceValues?.volumeIsReadOnly == true {
+            return (false, "Volume is read-only for: \(url.lastPathComponent)")
+        }
+        
+        return (true, nil)
+    }
+    
+    private func checkDestinationWritable(at url: URL) -> (writable: Bool, issue: String?) {
+        let parentDir = url.deletingLastPathComponent()
+        let parentPath = parentDir.path
+        
+        if fileManager.fileExists(atPath: parentPath) {
+            guard fileManager.isWritableFile(atPath: parentPath) else {
+                return (false, "Cannot write to destination folder: \(parentDir.lastPathComponent)")
+            }
+        } else {
+            var ancestorPath = parentPath
+            while !fileManager.fileExists(atPath: ancestorPath) && ancestorPath != "/" {
+                ancestorPath = (ancestorPath as NSString).deletingLastPathComponent
+            }
+            guard fileManager.isWritableFile(atPath: ancestorPath) else {
+                return (false, "Cannot create destination folder: \(parentDir.lastPathComponent)")
+            }
+        }
+        
+        return (true, nil)
+    }
+    
+    func preValidatePlan(_ plan: OrganizationPlan, at baseURL: URL) async -> [String] {
+        var issues: [String] = []
+        
+        let baseCheck = checkDestinationWritable(at: baseURL)
+        if !baseCheck.writable, let issue = baseCheck.issue {
+            issues.append(issue)
+        }
+        
+        for suggestion in plan.suggestions {
+            let suggestionIssues = await preValidateSuggestion(suggestion, parentURL: baseURL)
+            issues.append(contentsOf: suggestionIssues)
+        }
+        
+        return issues
+    }
+    
+    private func preValidateSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async -> [String] {
+        var issues: [String] = []
+        
+        let folderURL: URL
+        if suggestion.folderName.hasPrefix("/") {
+            folderURL = URL(fileURLWithPath: suggestion.folderName)
+        } else {
+            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+        }
+        
+        for file in suggestion.files {
+            guard let sourceURL = file.url else { continue }
+            
+            let sourceCheck = checkFileAccessibility(at: sourceURL)
+            if !sourceCheck.accessible, let issue = sourceCheck.issue {
+                issues.append(issue)
+            }
+        }
+        
+        for subfolder in suggestion.subfolders {
+            let subIssues = await preValidateSuggestion(subfolder, parentURL: folderURL)
+            issues.append(contentsOf: subIssues)
+        }
+        
+        return issues
     }
 
     // MARK: - Helpers
@@ -999,7 +1533,7 @@ public actor FileSystemManager {
     }
 
     /// Move a single file
-    func moveFile(from source: URL, to destination: URL) throws -> FileOperation {
+    func moveFile(from source: URL, to destination: URL) async throws -> FileOperation {
         // Ensure destination directory exists
         let destDir = destination.deletingLastPathComponent()
         if !fileManager.fileExists(atPath: destDir.path) {
@@ -1012,7 +1546,16 @@ public actor FileSystemManager {
             finalDestination = generateUniqueURL(for: destination)
         }
 
-        try fileManager.moveItem(at: source, to: finalDestination)
+        if isCrossVolume(from: source, to: finalDestination) {
+            DebugLogger.log("Cross-volume move detected: \(source.path) → \(finalDestination.path)")
+            let fileName = source.lastPathComponent
+            let handler = crossVolumeProgressHandler
+            try await copyWithProgress(from: source, to: finalDestination) { progress in
+                handler?(fileName, progress)
+            }
+        } else {
+            try fileManager.moveItem(at: source, to: finalDestination)
+        }
 
         let operation = FileOperation(
             id: UUID(),
@@ -1100,6 +1643,10 @@ enum FileSystemError: LocalizedError {
     case invalidPath
     case pathAlreadyExists(String)
     case revertInProgress
+    case fileLocked(String)
+    case partialFailure(successCount: Int, failures: [OperationFailure])
+    case preValidationFailed([String])
+    case crossVolumeCopyVerificationFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -1115,8 +1662,23 @@ enum FileSystemError: LocalizedError {
             return "Path already exists: \(path). The file was skipped or renamed."
         case .revertInProgress:
             return "A revert operation is already in progress"
+        case .fileLocked(let path):
+            return "File is locked or in use: \(path)"
+        case .partialFailure(let successCount, let failures):
+            return "Partial failure: \(successCount) succeeded, \(failures.count) failed"
+        case .preValidationFailed(let issues):
+            return "Pre-validation failed: \(issues.joined(separator: ", "))"
+        case .crossVolumeCopyVerificationFailed(let path):
+            return "Cross-volume copy verification failed for: \(path)"
         }
     }
+}
+
+public struct OperationFailure: Sendable {
+    public let sourcePath: String
+    public let destinationPath: String?
+    public let error: String
+    public let isRetryable: Bool
 }
 
 // MARK: - Duplicate Restoration Manager
@@ -1269,4 +1831,3 @@ public class DuplicateRestorationManager: ObservableObject {
         }
     }
 }
-

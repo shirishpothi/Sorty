@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		E1C18B1FCE6F4CDA919F06DF /* LearningsHoningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C803137980F429E8E946D30 /* LearningsHoningView.swift */; };
 		9AB64201726C425D855C0797 /* DuplicateSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */; };
-		5B461775CCAE4523A380B07C /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AD0E58548934B6E962C2293 /* HelpView.swift */; };
 		C836ED182D2842A2A579A019 /* LearningsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 981E7344DFEC4943BA212BED /* LearningsView.swift */; };
 		BCB2827FDC414BD094AAAD11 /* WorkspaceHealthSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CB0D86DE50E4D9CBC5C5ECF /* WorkspaceHealthSettingsView.swift */; };
 		85137445BF444F6A88D754C4 /* PersonaGeneratorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */; };
@@ -132,6 +131,64 @@
 		AABBCC22000200000000002F /* SparkleUpdateManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000002F /* SparkleUpdateManager.swift */; };
 		AABBCC220002000000000030 /* FinderAutomation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000030 /* FinderAutomation.swift */; };
 		AABBCC220002000000000031 /* AutomationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000031 /* AutomationManager.swift */; };
+		AABBCC220002000000000060 /* AIProviderRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000060 /* AIProviderRow.swift */; };
+		AABBCC220002000000000061 /* AdvancedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000061 /* AdvancedSettingsView.swift */; };
+		AABBCC220002000000000062 /* AutomationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000062 /* AutomationSettingsView.swift */; };
+		AABBCC220002000000000063 /* BatchOrganizationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000063 /* BatchOrganizationManager.swift */; };
+		AABBCC220002000000000064 /* BatchOrganizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000064 /* BatchOrganizationView.swift */; };
+		AABBCC220002000000000065 /* CLIInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000065 /* CLIInstaller.swift */; };
+		AABBCC220002000000000066 /* CommentPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000066 /* CommentPopoverView.swift */; };
+		AABBCC220002000000000067 /* CompletionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000067 /* CompletionStepView.swift */; };
+		AABBCC220002000000000068 /* ConflictResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000068 /* ConflictResolution.swift */; };
+		AABBCC220002000000000069 /* ConflictResolutionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000069 /* ConflictResolutionSheet.swift */; };
+		AABBCC22000200000000006A /* CopyButtonWithAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006A /* CopyButtonWithAnimation.swift */; };
+		AABBCC22000200000000006B /* CostCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006B /* CostCalculator.swift */; };
+		AABBCC22000200000000006C /* DemoStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006C /* DemoStepView.swift */; };
+		AABBCC22000200000000006D /* DesignSystemReadme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006D /* DesignSystemReadme.swift */; };
+		AABBCC22000200000000006E /* EnhancedFlatFileRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006E /* EnhancedFlatFileRow.swift */; };
+		AABBCC22000200000000006F /* FinderIntegrationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */; };
+		AABBCC220002000000000070 /* FolderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000070 /* FolderScheduler.swift */; };
+		AABBCC220002000000000071 /* FormattedReasoningText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000071 /* FormattedReasoningText.swift */; };
+		AABBCC220002000000000072 /* GlassyBackButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000072 /* GlassyBackButton.swift */; };
+		AABBCC220002000000000073 /* GlobalShortcutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000073 /* GlobalShortcutManager.swift */; };
+		AABBCC220002000000000074 /* HelpSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000074 /* HelpSettingsView.swift */; };
+		AABBCC220002000000000075 /* LiquidGlassReasoningPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000075 /* LiquidGlassReasoningPopover.swift */; };
+		AABBCC220002000000000076 /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000076 /* LoginItemManager.swift */; };
+		AABBCC220002000000000077 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000077 /* MenuBarView.swift */; };
+		AABBCC220002000000000078 /* NamingInstructionsGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000078 /* NamingInstructionsGenerator.swift */; };
+		AABBCC220002000000000079 /* NamingPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000079 /* NamingPreset.swift */; };
+		AABBCC22000200000000007A /* NamingPresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007A /* NamingPresetManager.swift */; };
+		AABBCC22000200000000007B /* NotifiCLIStatusCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007B /* NotifiCLIStatusCard.swift */; };
+		AABBCC22000200000000007C /* NotificationPermissionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007C /* NotificationPermissionCard.swift */; };
+		AABBCC22000200000000007D /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007D /* NotificationsSettingsView.swift */; };
+		AABBCC22000200000000007E /* OnboardingAudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007E /* OnboardingAudioManager.swift */; };
+		AABBCC22000200000000007F /* OnboardingStepProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007F /* OnboardingStepProtocol.swift */; };
+		AABBCC220002000000000080 /* OrganizationRulesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */; };
+		AABBCC220002000000000081 /* OrganizationStrategySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */; };
+		AABBCC220002000000000082 /* OrganizingMascotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000082 /* OrganizingMascotView.swift */; };
+		AABBCC220002000000000083 /* ParameterTuningSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */; };
+		AABBCC220002000000000084 /* PermissionsStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000084 /* PermissionsStepView.swift */; };
+		AABBCC220002000000000085 /* PersonaChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000085 /* PersonaChatView.swift */; };
+		AABBCC220002000000000086 /* PostOrganizationHoningView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000086 /* PostOrganizationHoningView.swift */; };
+		AABBCC220002000000000087 /* PreviewActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000087 /* PreviewActionsView.swift */; };
+		AABBCC220002000000000088 /* PreviewHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000088 /* PreviewHeaderView.swift */; };
+		AABBCC220002000000000089 /* PreviewListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000089 /* PreviewListView.swift */; };
+		AABBCC22000200000000008A /* PreviewMocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000008A /* PreviewMocks.swift */; };
+		AABBCC22000200000000008B /* PreviewStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000008B /* PreviewStatsView.swift */; };
+		AABBCC22000200000000008C /* ProviderSelectionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000008C /* ProviderSelectionStepView.swift */; };
+		AABBCC22000200000000008D /* RefreshManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000008D /* RefreshManager.swift */; };
+		AABBCC22000200000000008E /* RuleReasoningBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000008E /* RuleReasoningBadge.swift */; };
+		AABBCC22000200000000008F /* ScheduleEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000008F /* ScheduleEditorView.swift */; };
+		AABBCC220002000000000090 /* SettingsCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000090 /* SettingsCategory.swift */; };
+		AABBCC220002000000000091 /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000091 /* SettingsComponents.swift */; };
+		AABBCC220002000000000092 /* SimulatedDemoAnimationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000092 /* SimulatedDemoAnimationView.swift */; };
+		AABBCC220002000000000093 /* SortyCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000093 /* SortyCard.swift */; };
+		AABBCC220002000000000094 /* SortyDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000094 /* SortyDesignSystem.swift */; };
+		AABBCC220002000000000095 /* SteeringPromptManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000095 /* SteeringPromptManager.swift */; };
+		AABBCC220002000000000096 /* TagDotsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000096 /* TagDotsView.swift */; };
+		AABBCC220002000000000097 /* TroubleshootingSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000097 /* TroubleshootingSettingsView.swift */; };
+		AABBCC220002000000000098 /* WelcomeStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000098 /* WelcomeStepView.swift */; };
+		AABBCC220002000000000099 /* WorkflowSelectionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000099 /* WorkflowSelectionStepView.swift */; };
 
 		AABBCC220002000000000002 /* AppAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000002 /* AppAccessibilityTests.swift */; };
 		AABBCC220002000000000003 /* OrganizationWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000003 /* OrganizationWorkflowTests.swift */; };
@@ -162,7 +219,6 @@
 		AABBCC330000000000000001 /* Sorty.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sorty.entitlements; sourceTree = "<group>"; };
 		0C803137980F429E8E946D30 /* LearningsHoningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsHoningView.swift; sourceTree = "<group>"; };
 		A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
-		9AD0E58548934B6E962C2293 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		981E7344DFEC4943BA212BED /* LearningsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsView.swift; sourceTree = "<group>"; };
 		2CB0D86DE50E4D9CBC5C5ECF /* WorkspaceHealthSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceHealthSettingsView.swift; sourceTree = "<group>"; };
 		DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaGeneratorView.swift; sourceTree = "<group>"; };
@@ -219,7 +275,7 @@
 		3353FC402F0124320097CD23 /* OrganizationResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationResultView.swift; sourceTree = "<group>"; };
 		3353FC412F0124320097CD23 /* OrganizeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizeView.swift; sourceTree = "<group>"; };
 		3353FC422F0124320097CD23 /* PreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewView.swift; sourceTree = "<group>"; };
-		3353FC432F0124320097CD23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		3353FC432F0124320097CD23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings/SettingsView.swift; sourceTree = "<group>"; };
 		3353FC452F0124320097CD23 /* SortyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/SortyApp.swift; sourceTree = "<group>"; };
 		3353FCB02F0124320097CD23 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyApp/AppCoordinator.swift; sourceTree = "<group>"; };
 		3353FCB12F0124320097CD23 /* ContentAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentAnalyzer.swift; sourceTree = "<group>"; };
@@ -273,7 +329,7 @@
 		AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubCopilotAuthManager.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000001D /* AppleVisionIntelligenceAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleVisionIntelligenceAnalyzer.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000001E /* QuickOrganizePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickOrganizePanel.swift; sourceTree = "<group>"; };
-		AABBCC11000100000000001F /* AIProviderSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000001F /* AIProviderSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings/AIProviderSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000020 /* ModelSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSelector.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000021 /* HUDNotificationOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HUDNotificationOverlay.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000022 /* StorageLocationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationsView.swift; sourceTree = "<group>"; };
@@ -292,6 +348,64 @@
 		AABBCC11000100000000002F /* SparkleUpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleUpdateManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000030 /* FinderAutomation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderAutomation.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000031 /* AutomationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000060 /* AIProviderRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderRow.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000061 /* AdvancedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvancedSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000062 /* AutomationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000063 /* BatchOrganizationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchOrganizationManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000064 /* BatchOrganizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchOrganizationView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000065 /* CLIInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIInstaller.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000066 /* CommentPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentPopoverView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000067 /* CompletionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionStepView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000068 /* ConflictResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConflictResolution.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000069 /* ConflictResolutionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConflictResolutionSheet.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000006A /* CopyButtonWithAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopyButtonWithAnimation.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000006B /* CostCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostCalculator.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000006C /* DemoStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoStepView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000006D /* DesignSystemReadme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystemReadme.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000006E /* EnhancedFlatFileRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnhancedFlatFileRow.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderIntegrationSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000070 /* FolderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderScheduler.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000071 /* FormattedReasoningText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormattedReasoningText.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000072 /* GlassyBackButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassyBackButton.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000073 /* GlobalShortcutManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalShortcutManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000074 /* HelpSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000075 /* LiquidGlassReasoningPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassReasoningPopover.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000076 /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000077 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000078 /* NamingInstructionsGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NamingInstructionsGenerator.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000079 /* NamingPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NamingPreset.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000007A /* NamingPresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NamingPresetManager.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000007B /* NotifiCLIStatusCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifiCLIStatusCard.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000007C /* NotificationPermissionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCard.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000007D /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000007E /* OnboardingAudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingAudioManager.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000007F /* OnboardingStepProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStepProtocol.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationRulesSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizationStrategySettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000082 /* OrganizingMascotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrganizingMascotView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParameterTuningSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000084 /* PermissionsStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsStepView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000085 /* PersonaChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaChatView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000086 /* PostOrganizationHoningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostOrganizationHoningView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000087 /* PreviewActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewActionsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000088 /* PreviewHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewHeaderView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000089 /* PreviewListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewListView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000008A /* PreviewMocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewMocks.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000008B /* PreviewStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewStatsView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000008C /* ProviderSelectionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderSelectionStepView.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000008D /* RefreshManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshManager.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000008E /* RuleReasoningBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleReasoningBadge.swift; sourceTree = "<group>"; };
+		AABBCC11000100000000008F /* ScheduleEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleEditorView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000090 /* SettingsCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCategory.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000091 /* SettingsComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsComponents.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000092 /* SimulatedDemoAnimationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimulatedDemoAnimationView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000093 /* SortyCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyCard.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000094 /* SortyDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyDesignSystem.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000095 /* SteeringPromptManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteeringPromptManager.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000096 /* TagDotsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagDotsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000097 /* TroubleshootingSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TroubleshootingSettingsView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000098 /* WelcomeStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeStepView.swift; sourceTree = "<group>"; };
+		AABBCC110001000000000099 /* WorkflowSelectionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowSelectionStepView.swift; sourceTree = "<group>"; };
 		99999999AAAA000000000001 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = AppIcon.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 
 /* End PBXFileReference section */
@@ -359,6 +473,7 @@
 				AABBCC11000100000000001B /* GitHubCopilotClient.swift */,
 				AABBCC11000100000000001C /* GitHubCopilotAuthManager.swift */,
 				AABBCC11000100000000001D /* AppleVisionIntelligenceAnalyzer.swift */,
+				AABBCC110001000000000078 /* NamingInstructionsGenerator.swift */,
 			);
 			path = Sources/SortyLib/AI;
 			sourceTree = "<group>";
@@ -374,6 +489,7 @@
 				3353FCB42F0124320097CD23 /* SemanticDuplicateDetector.swift */,
 				3353FCB52F0124320097CD23 /* VisionAnalyzer.swift */,
 				AABBCC11000100000000000A /* ImageVisionAnalyzer.swift */,
+				AABBCC110001000000000070 /* FolderScheduler.swift */,
 			);
 			path = Sources/SortyLib/FileSystem;
 			sourceTree = "<group>";
@@ -408,6 +524,8 @@
 				AABBCC11000100000000000C /* NotificationSettings.swift */,
 				AABBCC11000100000000000D /* FeatureFlags.swift */,
 				AABBCC11000100000000000E /* ExclusionEnforcer.swift */,
+				AABBCC110001000000000068 /* ConflictResolution.swift */,
+				AABBCC110001000000000079 /* NamingPreset.swift */,
 			);
 			path = Sources/SortyLib/Models;
 			sourceTree = "<group>";
@@ -444,6 +562,13 @@
 				AABBCC110001000000000014 /* AudioWaveformGenerator.swift */,
 				AABBCC110001000000000015 /* FileThumbnailProvider.swift */,
 				AABBCC110001000000000016 /* HashUtility.swift */,
+				AABBCC110001000000000065 /* CLIInstaller.swift */,
+				AABBCC11000100000000006B /* CostCalculator.swift */,
+				AABBCC110001000000000073 /* GlobalShortcutManager.swift */,
+				AABBCC110001000000000076 /* LoginItemManager.swift */,
+				AABBCC11000100000000007A /* NamingPresetManager.swift */,
+				AABBCC11000100000000007E /* OnboardingAudioManager.swift */,
+				AABBCC110001000000000095 /* SteeringPromptManager.swift */,
 			);
 			path = Sources/SortyLib/Utilities;
 			sourceTree = "<group>";
@@ -460,9 +585,11 @@
 			isa = PBXGroup;
 			children = (
 				AABBCC550000000000000001 /* Components */,
+				AABBCC660000000000000001 /* Settings */,
+				AABBCC660000000000000002 /* Preview */,
+				AABBCC660000000000000003 /* Onboarding */,
 				0C803137980F429E8E946D30 /* LearningsHoningView.swift */,
 				A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */,
-				9AD0E58548934B6E962C2293 /* HelpView.swift */,
 				981E7344DFEC4943BA212BED /* LearningsView.swift */,
 				2CB0D86DE50E4D9CBC5C5ECF /* WorkspaceHealthSettingsView.swift */,
 				DD45CA7DAA5F44C7A079DB75 /* PersonaGeneratorView.swift */,
@@ -497,6 +624,11 @@
 				AABBCC11000100000000002B /* OptimizedPreviewTree.swift */,
 				AABBCC11000100000000002C /* OrganizationCompleteView.swift */,
 				AABBCC11000100000000002D /* OnboardingView.swift */,
+				AABBCC110001000000000064 /* BatchOrganizationView.swift */,
+				AABBCC110001000000000069 /* ConflictResolutionSheet.swift */,
+				AABBCC110001000000000077 /* MenuBarView.swift */,
+				AABBCC110001000000000085 /* PersonaChatView.swift */,
+				AABBCC11000100000000008F /* ScheduleEditorView.swift */,
 			);
 			path = Sources/SortyLib/Views;
 			sourceTree = "<group>";
@@ -510,6 +642,9 @@
 				AABBCC110001000000000026 /* FolderThumbnailView.swift */,
 				AABBCC110001000000000027 /* VisionRecommendationBanner.swift */,
 				AABBCC110001000000000028 /* UpdateDialogView.swift */,
+				AABBCC11000100000000006A /* CopyButtonWithAnimation.swift */,
+				AABBCC110001000000000072 /* GlassyBackButton.swift */,
+				AABBCC110001000000000082 /* OrganizingMascotView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -536,6 +671,8 @@
 				3353FC3A2F0124320097CD23 /* ViewModels */,
 				3353FC442F0124320097CD23 /* Views */,
 				AABBCC440000000000000001 /* Services */,
+				AABBCC660000000000000004 /* DesignSystem */,
+				AABBCC660000000000000005 /* Managers */,
 				3353FCB02F0124320097CD23 /* AppCoordinator.swift */,
 				3353FC452F0124320097CD23 /* SortyApp.swift */,
 			);
@@ -579,6 +716,80 @@
 				AABBCC110001000000000005 /* DeeplinkUITests.swift */,
 			);
 			path = Tests/SortyUITests;
+			sourceTree = "<group>";
+		};
+		AABBCC660000000000000001 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCC110001000000000060 /* AIProviderRow.swift */,
+				AABBCC110001000000000061 /* AdvancedSettingsView.swift */,
+				AABBCC110001000000000062 /* AutomationSettingsView.swift */,
+				AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */,
+				AABBCC110001000000000074 /* HelpSettingsView.swift */,
+				AABBCC11000100000000007B /* NotifiCLIStatusCard.swift */,
+				AABBCC11000100000000007C /* NotificationPermissionCard.swift */,
+				AABBCC11000100000000007D /* NotificationsSettingsView.swift */,
+				AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */,
+				AABBCC110001000000000081 /* OrganizationStrategySettingsView.swift */,
+				AABBCC110001000000000083 /* ParameterTuningSettingsView.swift */,
+				AABBCC110001000000000090 /* SettingsCategory.swift */,
+				AABBCC110001000000000091 /* SettingsComponents.swift */,
+				AABBCC110001000000000097 /* TroubleshootingSettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		AABBCC660000000000000002 /* Preview */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCC110001000000000066 /* CommentPopoverView.swift */,
+				AABBCC11000100000000006E /* EnhancedFlatFileRow.swift */,
+				AABBCC110001000000000071 /* FormattedReasoningText.swift */,
+				AABBCC110001000000000075 /* LiquidGlassReasoningPopover.swift */,
+				AABBCC110001000000000086 /* PostOrganizationHoningView.swift */,
+				AABBCC110001000000000087 /* PreviewActionsView.swift */,
+				AABBCC110001000000000088 /* PreviewHeaderView.swift */,
+				AABBCC110001000000000089 /* PreviewListView.swift */,
+				AABBCC11000100000000008B /* PreviewStatsView.swift */,
+				AABBCC11000100000000008E /* RuleReasoningBadge.swift */,
+				AABBCC110001000000000096 /* TagDotsView.swift */,
+			);
+			path = Preview;
+			sourceTree = "<group>";
+		};
+		AABBCC660000000000000003 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCC110001000000000067 /* CompletionStepView.swift */,
+				AABBCC11000100000000006C /* DemoStepView.swift */,
+				AABBCC11000100000000007F /* OnboardingStepProtocol.swift */,
+				AABBCC110001000000000084 /* PermissionsStepView.swift */,
+				AABBCC11000100000000008C /* ProviderSelectionStepView.swift */,
+				AABBCC110001000000000092 /* SimulatedDemoAnimationView.swift */,
+				AABBCC110001000000000098 /* WelcomeStepView.swift */,
+				AABBCC110001000000000099 /* WorkflowSelectionStepView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		AABBCC660000000000000004 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCC11000100000000006D /* DesignSystemReadme.swift */,
+				AABBCC11000100000000008A /* PreviewMocks.swift */,
+				AABBCC110001000000000093 /* SortyCard.swift */,
+				AABBCC110001000000000094 /* SortyDesignSystem.swift */,
+			);
+			path = Sources/SortyLib/DesignSystem;
+			sourceTree = "<group>";
+		};
+		AABBCC660000000000000005 /* Managers */ = {
+			isa = PBXGroup;
+			children = (
+				AABBCC110001000000000063 /* BatchOrganizationManager.swift */,
+				AABBCC11000100000000008D /* RefreshManager.swift */,
+			);
+			path = Sources/SortyLib/Managers;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -719,7 +930,6 @@
 			files = (
 				E1C18B1FCE6F4CDA919F06DF /* LearningsHoningView.swift in Sources */,
 				9AB64201726C425D855C0797 /* DuplicateSettingsView.swift in Sources */,
-				5B461775CCAE4523A380B07C /* HelpView.swift in Sources */,
 				C836ED182D2842A2A579A019 /* LearningsView.swift in Sources */,
 				BCB2827FDC414BD094AAAD11 /* WorkspaceHealthSettingsView.swift in Sources */,
 				85137445BF444F6A88D754C4 /* PersonaGeneratorView.swift in Sources */,
@@ -841,6 +1051,64 @@
 				AABBCC22000200000000002F /* SparkleUpdateManager.swift in Sources */,
 				AABBCC220002000000000030 /* FinderAutomation.swift in Sources */,
 				AABBCC220002000000000031 /* AutomationManager.swift in Sources */,
+				AABBCC220002000000000060 /* AIProviderRow.swift in Sources */,
+				AABBCC220002000000000061 /* AdvancedSettingsView.swift in Sources */,
+				AABBCC220002000000000062 /* AutomationSettingsView.swift in Sources */,
+				AABBCC220002000000000063 /* BatchOrganizationManager.swift in Sources */,
+				AABBCC220002000000000064 /* BatchOrganizationView.swift in Sources */,
+				AABBCC220002000000000065 /* CLIInstaller.swift in Sources */,
+				AABBCC220002000000000066 /* CommentPopoverView.swift in Sources */,
+				AABBCC220002000000000067 /* CompletionStepView.swift in Sources */,
+				AABBCC220002000000000068 /* ConflictResolution.swift in Sources */,
+				AABBCC220002000000000069 /* ConflictResolutionSheet.swift in Sources */,
+				AABBCC22000200000000006A /* CopyButtonWithAnimation.swift in Sources */,
+				AABBCC22000200000000006B /* CostCalculator.swift in Sources */,
+				AABBCC22000200000000006C /* DemoStepView.swift in Sources */,
+				AABBCC22000200000000006D /* DesignSystemReadme.swift in Sources */,
+				AABBCC22000200000000006E /* EnhancedFlatFileRow.swift in Sources */,
+				AABBCC22000200000000006F /* FinderIntegrationSettingsView.swift in Sources */,
+				AABBCC220002000000000070 /* FolderScheduler.swift in Sources */,
+				AABBCC220002000000000071 /* FormattedReasoningText.swift in Sources */,
+				AABBCC220002000000000072 /* GlassyBackButton.swift in Sources */,
+				AABBCC220002000000000073 /* GlobalShortcutManager.swift in Sources */,
+				AABBCC220002000000000074 /* HelpSettingsView.swift in Sources */,
+				AABBCC220002000000000075 /* LiquidGlassReasoningPopover.swift in Sources */,
+				AABBCC220002000000000076 /* LoginItemManager.swift in Sources */,
+				AABBCC220002000000000077 /* MenuBarView.swift in Sources */,
+				AABBCC220002000000000078 /* NamingInstructionsGenerator.swift in Sources */,
+				AABBCC220002000000000079 /* NamingPreset.swift in Sources */,
+				AABBCC22000200000000007A /* NamingPresetManager.swift in Sources */,
+				AABBCC22000200000000007B /* NotifiCLIStatusCard.swift in Sources */,
+				AABBCC22000200000000007C /* NotificationPermissionCard.swift in Sources */,
+				AABBCC22000200000000007D /* NotificationsSettingsView.swift in Sources */,
+				AABBCC22000200000000007E /* OnboardingAudioManager.swift in Sources */,
+				AABBCC22000200000000007F /* OnboardingStepProtocol.swift in Sources */,
+				AABBCC220002000000000080 /* OrganizationRulesSettingsView.swift in Sources */,
+				AABBCC220002000000000081 /* OrganizationStrategySettingsView.swift in Sources */,
+				AABBCC220002000000000082 /* OrganizingMascotView.swift in Sources */,
+				AABBCC220002000000000083 /* ParameterTuningSettingsView.swift in Sources */,
+				AABBCC220002000000000084 /* PermissionsStepView.swift in Sources */,
+				AABBCC220002000000000085 /* PersonaChatView.swift in Sources */,
+				AABBCC220002000000000086 /* PostOrganizationHoningView.swift in Sources */,
+				AABBCC220002000000000087 /* PreviewActionsView.swift in Sources */,
+				AABBCC220002000000000088 /* PreviewHeaderView.swift in Sources */,
+				AABBCC220002000000000089 /* PreviewListView.swift in Sources */,
+				AABBCC22000200000000008A /* PreviewMocks.swift in Sources */,
+				AABBCC22000200000000008B /* PreviewStatsView.swift in Sources */,
+				AABBCC22000200000000008C /* ProviderSelectionStepView.swift in Sources */,
+				AABBCC22000200000000008D /* RefreshManager.swift in Sources */,
+				AABBCC22000200000000008E /* RuleReasoningBadge.swift in Sources */,
+				AABBCC22000200000000008F /* ScheduleEditorView.swift in Sources */,
+				AABBCC220002000000000090 /* SettingsCategory.swift in Sources */,
+				AABBCC220002000000000091 /* SettingsComponents.swift in Sources */,
+				AABBCC220002000000000092 /* SimulatedDemoAnimationView.swift in Sources */,
+				AABBCC220002000000000093 /* SortyCard.swift in Sources */,
+				AABBCC220002000000000094 /* SortyDesignSystem.swift in Sources */,
+				AABBCC220002000000000095 /* SteeringPromptManager.swift in Sources */,
+				AABBCC220002000000000096 /* TagDotsView.swift in Sources */,
+				AABBCC220002000000000097 /* TroubleshootingSettingsView.swift in Sources */,
+				AABBCC220002000000000098 /* WelcomeStepView.swift in Sources */,
+				AABBCC220002000000000099 /* WorkflowSelectionStepView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1025,7 +1293,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.Sorty;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1068,7 +1336,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.Sorty;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1094,7 +1362,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -1119,7 +1387,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -1143,7 +1411,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;
@@ -1167,7 +1435,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.6;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.SortyUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = auto;

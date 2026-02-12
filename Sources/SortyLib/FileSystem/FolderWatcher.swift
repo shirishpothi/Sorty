@@ -29,8 +29,18 @@ public final class FolderWatcher: @unchecked Sendable {
     
     private var pausedFolders: Set<UUID> = []
     private var folderSnapshots: [UUID: Set<String>] = [:]
+    private var fileModDates: [UUID: [String: Date]] = [:]
     private var resolvedURLs: [UUID: URL] = [:] // Store resolved security URLs
     private let fileManager = FileManager.default
+    
+    // Debounce support
+    private var debounceWorkItems: [UUID: DispatchWorkItem] = [:]
+    private let debounceInterval: TimeInterval = 0.3
+    
+    // Temp file extensions to ignore
+    private static let ignoredExtensions: Set<String> = ["tmp", "download", "partial", "crdownload", "part"]
+    private static let ignoredSuffixes: Set<Character> = ["~"]
+    private static let ignoredNames: Set<String> = [".DS_Store", "Thumbs.db", "desktop.ini"]
     
     // Heartbeat for keeping streams alive
     private var heartbeatTimer: DispatchSourceTimer?
@@ -241,6 +251,9 @@ public final class FolderWatcher: @unchecked Sendable {
         }
         
         folderSnapshots.removeValue(forKey: id)
+        fileModDates.removeValue(forKey: id)
+        debounceWorkItems[id]?.cancel()
+        debounceWorkItems.removeValue(forKey: id)
         pausedFolders.remove(id)
         watchedFolders.removeValue(forKey: id)
         
@@ -255,12 +268,29 @@ public final class FolderWatcher: @unchecked Sendable {
     }
     
     private func updateSnapshot(for folder: WatchedFolder) {
-        // Must be called on queue
         let path = resolvedURLs[folder.id]?.path ?? folder.path
         let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
-        // Only track files, not dot files
-        let files = contents.filter { !$0.hasPrefix(".") }
+        let files = contents.filter { !Self.isIgnoredFile($0) }
         folderSnapshots[folder.id] = Set(files)
+        
+        var modDates: [String: Date] = [:]
+        for file in files {
+            let filePath = (path as NSString).appendingPathComponent(file)
+            if let attrs = try? fileManager.attributesOfItem(atPath: filePath),
+               let modDate = attrs[.modificationDate] as? Date {
+                modDates[file] = modDate
+            }
+        }
+        fileModDates[folder.id] = modDates
+    }
+    
+    private static func isIgnoredFile(_ name: String) -> Bool {
+        if name.hasPrefix(".") { return true }
+        if ignoredNames.contains(name) { return true }
+        if let lastChar = name.last, ignoredSuffixes.contains(lastChar) { return true }
+        let ext = (name as NSString).pathExtension.lowercased()
+        if ignoredExtensions.contains(ext) { return true }
+        return false
     }
     
     fileprivate func handleEvents(for folderId: UUID) {
@@ -272,30 +302,61 @@ public final class FolderWatcher: @unchecked Sendable {
             return
         }
         
-        // Resolve path
+        debounceWorkItems[folderId]?.cancel()
+        
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.processChanges(for: folderId)
+        }
+        debounceWorkItems[folderId] = workItem
+        queue.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+    }
+    
+    private func processChanges(for folderId: UUID) {
+        guard let folder = watchedFolders[folderId] else { return }
+        guard !pausedFolders.contains(folderId) else { return }
+        
         let path = resolvedURLs[folderId]?.path ?? folder.path
         
-        // Diffing Logic
         let currentContents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
-        let currentSet = Set(currentContents.filter { !$0.hasPrefix(".") })
+        let currentSet = Set(currentContents.filter { !Self.isIgnoredFile($0) })
         let previousSet = folderSnapshots[folderId] ?? []
+        let previousModDates = fileModDates[folderId] ?? [:]
         
-        let newFiles = currentSet.subtracting(previousSet)
+        var genuineNewFiles = Set<String>()
         
-        // Update snapshot
-        folderSnapshots[folderId] = currentSet
+        let brandNewFiles = currentSet.subtracting(previousSet)
+        genuineNewFiles.formUnion(brandNewFiles)
         
-        guard !newFiles.isEmpty else {
-            return
+        let existingFiles = currentSet.intersection(previousSet)
+        for file in existingFiles {
+            let filePath = (path as NSString).appendingPathComponent(file)
+            if let attrs = try? fileManager.attributesOfItem(atPath: filePath),
+               let modDate = attrs[.modificationDate] as? Date {
+                if let previousMod = previousModDates[file], modDate > previousMod {
+                    genuineNewFiles.insert(file)
+                }
+            }
         }
         
-        DebugLogger.log("New files detected in \(folder.name): \(newFiles)")
+        var newModDates: [String: Date] = [:]
+        for file in currentSet {
+            let filePath = (path as NSString).appendingPathComponent(file)
+            if let attrs = try? fileManager.attributesOfItem(atPath: filePath),
+               let modDate = attrs[.modificationDate] as? Date {
+                newModDates[file] = modDate
+            }
+        }
+        folderSnapshots[folderId] = currentSet
+        fileModDates[folderId] = newModDates
         
-        // Use resolved URL if available, otherwise fallback to path-based URL
+        guard !genuineNewFiles.isEmpty else { return }
+        
+        DebugLogger.log("New/changed files detected in \(folder.name): \(genuineNewFiles)")
+        
         let resolvedURL = resolvedURLs[folderId] ?? folder.url
         
         Task { @MainActor in
-            self.delegate?.folderWatcher(self, didDetectChangesIn: folder, newFiles: newFiles, resolvedURL: resolvedURL)
+            self.delegate?.folderWatcher(self, didDetectChangesIn: folder, newFiles: genuineNewFiles, resolvedURL: resolvedURL)
         }
     }
     

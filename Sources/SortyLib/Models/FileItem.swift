@@ -7,6 +7,13 @@
 
 import Foundation
 
+public enum CloudFileStatus: String, Codable, Sendable {
+    case local
+    case cloudOnly
+    case downloading
+    case synced
+}
+
 public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     public let id: UUID
     public var path: String
@@ -37,6 +44,9 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     public var imageWidth: Int?
     public var imageHeight: Int?
 
+    // Cloud storage status
+    public var cloudStatus: CloudFileStatus?
+
     public init(
         id: UUID = UUID(),
         path: String,
@@ -53,7 +63,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         ocrText: String? = nil,
         contentFingerprint: String? = nil,
         imageWidth: Int? = nil,
-        imageHeight: Int? = nil
+        imageHeight: Int? = nil,
+        cloudStatus: CloudFileStatus? = nil
     ) {
         self.id = id
         self.path = path
@@ -71,6 +82,7 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         self.contentFingerprint = contentFingerprint
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
+        self.cloudStatus = cloudStatus
     }
 
     public var url: URL? {
@@ -78,10 +90,19 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     }
 
     public var displayName: String {
-        if `extension`.isEmpty {
-            return name
-        }
-        return "\(name).\(`extension`)"
+        let url = URL(fileURLWithPath: path)
+
+        let baseName = name.isEmpty
+            ? url.deletingPathExtension().lastPathComponent
+            : name
+
+        let ext = `extension`.isEmpty
+            ? url.pathExtension
+            : `extension`
+
+        if ext.isEmpty { return baseName }
+        if baseName.isEmpty { return url.lastPathComponent }
+        return "\(baseName).\(ext)"
     }
 
     public var formattedSize: String {
@@ -137,5 +158,12 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         guard let width = imageWidth, let height = imageHeight else { return nil }
         return width * height
     }
-}
 
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+
+    public static func == (lhs: FileItem, rhs: FileItem) -> Bool {
+        lhs.id == rhs.id
+    }
+}

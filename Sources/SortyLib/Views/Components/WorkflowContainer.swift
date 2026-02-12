@@ -60,14 +60,17 @@ struct WorkflowContainer<Content: View>: View {
                     .padding(.bottom, 8)
             }
             
-            ScrollView {
-                VStack(spacing: 24) {
-                    content
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: 24) {
+                        content
+                    }
+                    .frame(maxWidth: 580)
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 28)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: geometry.size.height)
                 }
-                .frame(maxWidth: 580)
-                .padding(.horizontal, 32)
-                .padding(.vertical, 28)
-                .frame(maxWidth: .infinity)
             }
         }
         .background(.background)

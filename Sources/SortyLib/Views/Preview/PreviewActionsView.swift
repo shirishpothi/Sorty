@@ -53,9 +53,10 @@ struct PreviewActionsView: View {
                     Image(systemName: "xmark")
                         .font(.system(size: 11))
                     Text("Cancel")
+                        .font(.system(size: 12))
                 }
             }
-            .buttonStyle(.sortySecondary)
+            .buttonStyle(.sortySecondary(size: .small))
             .keyboardShortcut(.cancelAction)
             .keyboardShortcut(".", modifiers: .command)  // Cmd+.
             .accessibilityIdentifier("PreviewCancelButton")
@@ -71,9 +72,10 @@ struct PreviewActionsView: View {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 11))
                         Text("Reset")
+                            .font(.system(size: 12))
                     }
                 }
-                .buttonStyle(.sortySecondary(color: .orange))
+                .buttonStyle(.sortySecondary(size: .small, color: .orange))
                 .accessibilityIdentifier("ResetEditsButton")
                 .accessibilityLabel("Reset all manual edits")
                 .transition(.opacity.combined(with: .move(edge: .leading)))
@@ -93,13 +95,14 @@ struct PreviewActionsView: View {
                         .font(.system(size: 11))
                     Text("Regenerate")
                         .font(.system(size: 12))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     if hasCustomInstructions {
                         Circle()
                             .fill(Color.accentColor)
                             .frame(width: 5, height: 5)
                     }
                 }
-                .frame(minWidth: 90)
             }
             .buttonStyle(.sortySecondary(size: .small))
             .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -117,9 +120,8 @@ struct PreviewActionsView: View {
                     Image(systemName: "wand.and.stars")
                         .font(.system(size: 10))
                     Text("Model")
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                 }
-                .frame(minWidth: 90)
             }
             .buttonStyle(.sortySecondary(size: .small))
             .disabled(shouldDisableButtons || isRedoingWithModel)
@@ -201,6 +203,7 @@ struct PreviewProgressView: View {
                                     .stroke(Color.red.opacity(0.3), lineWidth: 1)
                             )
                     )
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)

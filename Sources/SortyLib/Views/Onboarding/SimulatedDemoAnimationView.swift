@@ -29,7 +29,21 @@ struct SimulatedDemoAnimationView: View {
     @State private var showUndoBadge: Bool = false
     @State private var transitionParticles: Bool = false
     @State private var fileRotations: [Double] = []
-    
+    @State private var fileBobbing: Bool = false
+    @State private var confettiActive: Bool = false
+    @State private var displayedFileCount: Int = 0
+    @State private var displayedFolderCount: Int = 0
+    @State private var displayedPercent: Int = 0
+    @State private var organizingTrailOpacities: [UUID: Bool] = [:]
+    @State private var animationTask: Task<Void, Never>?
+    @State private var pendingWorkItems: [DispatchWorkItem] = []
+
+    @StateObject private var audioManager = OnboardingAudioManager()
+    @State private var backgroundGradientPhase: Double = 0
+    @State private var glowIntensity: Double = 0
+    @State private var glowColor: Color = .purple
+    @State private var showBackgroundParticles: Bool = false
+
     enum DemoPhase: CaseIterable {
         case messy
         case scanning
@@ -74,6 +88,50 @@ struct SimulatedDemoAnimationView: View {
     ]
     
     var body: some View {
+        ZStack {
+            // Animated gradient background - more vibrant, shifting colors
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        Color.purple.opacity(0.12 + sin(backgroundGradientPhase) * 0.06),
+                        Color.blue.opacity(0.08 + cos(backgroundGradientPhase * 0.7) * 0.04),
+                        Color.indigo.opacity(0.07 + sin(backgroundGradientPhase * 1.3) * 0.04),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                // Secondary radial glow for depth
+                RadialGradient(
+                    colors: [
+                        glowColor.opacity(glowIntensity * 0.5),
+                        Color.clear
+                    ],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: 400
+                )
+            }
+            .ignoresSafeArea()
+            .animation(.easeInOut(duration: 5.0).repeatForever(autoreverses: true), value: backgroundGradientPhase)
+
+            // Phase-specific glow
+            Circle()
+                .fill(glowColor.opacity(glowIntensity))
+                .frame(width: 350, height: 350)
+                .blur(radius: 150)
+                .offset(y: -50)
+                .animation(.easeInOut(duration: 1.5), value: glowIntensity)
+                .animation(.easeInOut(duration: 1.0), value: glowColor)
+
+            // Ambient floating particles
+            if showBackgroundParticles {
+                ForEach(0..<10, id: \.self) { i in
+                    DemoFloatingParticle(index: i)
+                }
+            }
+
         VStack(spacing: 24) {
             phaseIndicator
             
@@ -98,7 +156,7 @@ struct SimulatedDemoAnimationView: View {
                     completeAnimationView
                 }
             }
-            .frame(height: 320)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             if phase != .complete {
                 aiThoughtBubble
@@ -117,11 +175,21 @@ struct SimulatedDemoAnimationView: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
+        } // ZStack
         .onAppear {
             files = sampleFiles
             folders = sampleFolders
             fileRotations = (0..<sampleFiles.count).map { _ in Double.random(in: -15...15) }
+            backgroundGradientPhase = 1.0
+            showBackgroundParticles = true
             startAnimation()
+        }
+        .onDisappear {
+            animationTask?.cancel()
+            animationTask = nil
+            pendingWorkItems.forEach { $0.cancel() }
+            pendingWorkItems.removeAll()
+            audioManager.stopAll()
         }
     }
     
@@ -131,7 +199,8 @@ struct SimulatedDemoAnimationView: View {
                 Circle()
                     .fill(phaseIndex >= index ? Color.purple : Color.secondary.opacity(0.3))
                     .frame(width: 8, height: 8)
-                    .scaleEffect(phaseIndex == index ? 1.2 : 1.0)
+                    .scaleEffect(phaseIndex == index ? 1.3 : 1.0)
+                    .shadow(color: phaseIndex == index ? Color.purple.opacity(0.5) : .clear, radius: 4)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: phaseIndex)
             }
         }
@@ -153,10 +222,19 @@ struct SimulatedDemoAnimationView: View {
             ForEach(Array(files.enumerated()), id: \.element.id) { index, file in
                 fileIcon(for: file)
                     .offset(messyOffset(for: index))
+                    .offset(y: fileBobbing ? CGFloat.random(in: -6...6) : 0)
                     .rotationEffect(.degrees(fileRotations.indices.contains(index) ? fileRotations[index] : 0))
+                    .animation(
+                        .easeInOut(duration: Double.random(in: 1.5...2.5))
+                            .repeatForever(autoreverses: true),
+                        value: fileBobbing
+                    )
             }
         }
         .transition(.opacity)
+        .onAppear {
+            fileBobbing = true
+        }
     }
     
     private var scanningView: some View {
@@ -173,17 +251,31 @@ struct SimulatedDemoAnimationView: View {
                     )
             }
             
-            // Scanning line
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [.purple.opacity(0), .purple.opacity(0.5), .purple.opacity(0)],
-                        startPoint: .leading,
-                        endPoint: .trailing
+            // Scanning line with glow trail
+            ZStack {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.purple.opacity(0), .purple.opacity(0.15), .purple.opacity(0)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
                     )
-                )
-                .frame(width: 100, height: 320)
-                .offset(x: -200 + scanProgress * 400)
+                    .frame(width: 240, height: 480)
+                    .blur(radius: 8)
+                    .offset(x: -300 + scanProgress * 600 - 20)
+
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            colors: [.purple.opacity(0), .purple.opacity(0.6), .purple.opacity(0)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 150, height: 480)
+                    .offset(x: -300 + scanProgress * 600)
+            }
             
             // Privacy badge at bottom
             VStack {
@@ -207,7 +299,7 @@ struct SimulatedDemoAnimationView: View {
                 
                 BouncingSpinner(size: 50, color: .purple)
             }
-            .frame(height: 200)
+            .frame(maxHeight: .infinity)
             
             // Persona card
             if showPersonaCard {
@@ -271,17 +363,23 @@ struct SimulatedDemoAnimationView: View {
     }
     
     private var organizingView: some View {
-        HStack(spacing: 40) {
+        HStack(spacing: 60) {
             VStack(spacing: 8) {
                 ForEach(files.filter { !$0.isOrganized }) { file in
                     fileIcon(for: file)
+                        .background(
+                            fileIcon(for: file)
+                                .opacity(organizingTrailOpacities[file.id] == true ? 0.3 : 0)
+                                .blur(radius: 4)
+                                .offset(x: -8, y: -4)
+                        )
                         .transition(.asymmetric(
                             insertion: .identity,
-                            removal: .move(edge: .trailing).combined(with: .opacity).combined(with: .scale(scale: 0.8))
+                            removal: .offset(x: 60, y: -45).combined(with: .opacity).combined(with: .scale(scale: 0.6))
                         ))
                 }
             }
-            .frame(width: 120)
+            .frame(width: 180)
             
             VStack(spacing: 8) {
                 // Animated sliver effect container
@@ -321,16 +419,21 @@ struct SimulatedDemoAnimationView: View {
                     }
                 }
             }
-            .frame(width: 180)
+            .frame(width: 270)
         }
     }
-    
+
     private var completeAnimationView: some View {
         VStack(spacing: 20) {
             ZStack {
                 // Particle burst effect
                 if particleEffect {
                     TransitionParticleView(isActive: particleEffect, color: .green, particleCount: 20)
+                }
+                
+                // Confetti burst
+                if confettiActive {
+                    ConfettiBurstView(isActive: confettiActive)
                 }
                 
                 Image(systemName: "checkmark.circle.fill")
@@ -341,9 +444,9 @@ struct SimulatedDemoAnimationView: View {
             
             if showStats {
                 HStack(spacing: 20) {
-                    statBadge(value: "10", label: "Files", icon: "doc.fill", color: .blue)
-                    statBadge(value: "4", label: "Folders", icon: "folder.fill", color: .orange)
-                    statBadge(value: "100%", label: "Organized", icon: "sparkles", color: .purple)
+                    statBadge(value: "\(displayedFileCount)", label: "Files", icon: "doc.fill", color: .blue)
+                    statBadge(value: "\(displayedFolderCount)", label: "Folders", icon: "folder.fill", color: .orange)
+                    statBadge(value: "\(displayedPercent)%", label: "Organized", icon: "sparkles", color: .purple)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -361,10 +464,12 @@ struct SimulatedDemoAnimationView: View {
         HStack(spacing: 8) {
             Image(systemName: thoughtIcon)
                 .foregroundStyle(.purple)
+                .contentTransition(.interpolate)
             
             Text(currentThought)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .contentTransition(.interpolate)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -374,6 +479,7 @@ struct SimulatedDemoAnimationView: View {
                 .stroke(Color.purple.opacity(0.2), lineWidth: 1)
         )
         .opacity(thoughtOpacity)
+        .animation(.easeInOut(duration: 0.3), value: currentThought)
     }
     
     private var thoughtIcon: String {
@@ -393,19 +499,21 @@ struct SimulatedDemoAnimationView: View {
     private func fileIcon(for file: DemoFileNode) -> some View {
         VStack(spacing: 4) {
             Image(systemName: file.icon)
-                .font(.system(size: 24))
+                .font(.system(size: 28))
                 .foregroundStyle(file.color)
+                .shadow(color: file.color.opacity(0.3), radius: 3, y: 1)
             
             Text(file.name)
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .frame(width: 70, height: 50)
+        .frame(width: 76, height: 54)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color(NSColor.controlBackgroundColor))
-                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                .shadow(color: .black.opacity(0.08), radius: 3, y: 1)
+                .shadow(color: file.color.opacity(0.1), radius: 6, y: 2)
         )
     }
     
@@ -452,16 +560,16 @@ struct SimulatedDemoAnimationView: View {
     
     private func messyOffset(for index: Int) -> CGSize {
         let positions: [CGSize] = [
-            CGSize(width: -80, height: -60),
-            CGSize(width: 60, height: -80),
-            CGSize(width: -40, height: 20),
-            CGSize(width: 90, height: -20),
-            CGSize(width: -100, height: 60),
-            CGSize(width: 20, height: 80),
-            CGSize(width: 70, height: 50),
-            CGSize(width: -60, height: -100),
-            CGSize(width: 100, height: 90),
-            CGSize(width: -20, height: -40)
+            CGSize(width: -120, height: -90),
+            CGSize(width: 90, height: -120),
+            CGSize(width: -60, height: 30),
+            CGSize(width: 135, height: -30),
+            CGSize(width: -150, height: 90),
+            CGSize(width: 30, height: 120),
+            CGSize(width: 105, height: 75),
+            CGSize(width: -90, height: -150),
+            CGSize(width: 150, height: 135),
+            CGSize(width: -30, height: -60)
         ]
         return positions[index % positions.count]
     }
@@ -473,142 +581,215 @@ struct SimulatedDemoAnimationView: View {
     }
     
     private func startAnimation() {
-        Task { @MainActor in
-            // Phase 1: Messy (brief pause to show initial state)
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            
+        animationTask = Task { @MainActor in
+            // Phase 1: Messy (let the user absorb the initial state)
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+
             // Phase 2: Scanning with privacy callout
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            withAnimation(.easeOut(duration: 0.5)) {
+                transitionParticles = true
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.9)) {
                 phase = .scanning
             }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            transitionParticles = false
+            audioManager.playPhaseSound(.scanning)
+            audioManager.startAmbientPulse(interval: 0.8)
+            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .blue; glowIntensity = 0.12 }
             showThought(aiThoughts[0]) // "Scanning file types..."
-            
-            withAnimation(.linear(duration: 1.5)) {
+
+            withAnimation(.easeInOut(duration: 2.5)) {
                 scanProgress = 1.0
             }
-            
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            
+
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+
             // Show privacy badge during scan
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
                 showPrivacyBadge = true
             }
             showThought(aiThoughts[1]) // "Files never leave your device"
-            
-            try? await Task.sleep(nanoseconds: 800_000_000)
+
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
             showThought(aiThoughts[2]) // "Found 4 image files"
-            
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            
+
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+
             // Transition particles
-            withAnimation(.easeOut(duration: 0.3)) {
+            withAnimation(.easeOut(duration: 0.5)) {
                 transitionParticles = true
             }
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
             transitionParticles = false
-            
+
             // Phase 3: Thinking with persona showcase
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.9)) {
                 phase = .thinking
                 showPrivacyBadge = false
             }
+            audioManager.stopAmbientPulse()
+            audioManager.playPhaseSound(.thinking)
+            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .purple; glowIntensity = 0.15 }
             showThought(aiThoughts[3]) // "Detected document patterns"
-            
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            
+
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled else { return }
+
             // Show persona card
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.85)) {
                 showPersonaCard = true
             }
             showThought(aiThoughts[4]) // "Using 'Minimal' persona style..."
-            
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            
+
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
+
             // Persona applied
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 personaApplying = false
             }
             showThought(aiThoughts[5]) // "Organizing with minimal folders"
-            
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            
-            // Phase 4: Comparing options (NEW)
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+
+            // Phase 4: Comparing options
+            withAnimation(.easeOut(duration: 0.5)) {
+                transitionParticles = true
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.9)) {
                 phase = .comparing
                 showPersonaCard = false
             }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            transitionParticles = false
+            audioManager.playPhaseSound(.comparing)
+            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .orange; glowIntensity = 0.12 }
             showThought(aiThoughts[6]) // "Comparing organization options..."
-            
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            
+
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
+
             // Highlight each plan briefly
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 selectedPlanIndex = 1
             }
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                 selectedPlanIndex = 0
             }
             showThought(aiThoughts[7]) // "Option A uses fewer folders"
-            
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            
+
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled else { return }
+
             // Show checkmark on selected plan
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
                 showPlanCheckmark = true
             }
             HapticFeedbackManager.shared.selection()
-            
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            
+
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+
             // Phase 5: Organizing
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+            withAnimation(.easeOut(duration: 0.5)) {
+                transitionParticles = true
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.9)) {
                 phase = .organizing
             }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            transitionParticles = false
+            audioManager.playPhaseSound(.organizing)
+            audioManager.startAmbientPulse(interval: 0.5)
+            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .green; glowIntensity = 0.15 }
             showThought(aiThoughts[8]) // "Moving files to categories"
-            
+
             // Show folders appearing
             for i in 0..<folders.count {
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
                     folders[i].isVisible = true
                 }
             }
-            
-            // Animate files moving
+
+            // Animate files moving with trail effect
             for i in 0..<files.count {
-                try? await Task.sleep(nanoseconds: 180_000_000)
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                try? await Task.sleep(nanoseconds: 260_000_000)
+                guard !Task.isCancelled else { return }
+                let fileId = files[i].id
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    organizingTrailOpacities[fileId] = true
+                }
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
                     files[i].isOrganized = true
                     organizedCount += 1
                 }
                 HapticFeedbackManager.shared.selection()
+                scheduleWorkItem(delay: 0.4) {
+                    organizingTrailOpacities[fileId] = false
+                }
             }
-            
+
             showThought(aiThoughts[9]) // "Creating undo checkpoint..."
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled else { return }
+
             // Phase 6: Complete with undo highlight
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+            withAnimation(.easeOut(duration: 0.5)) {
+                transitionParticles = true
+            }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.85)) {
                 phase = .complete
                 thoughtOpacity = 0
             }
-            
-            withAnimation(.easeOut(duration: 0.6)) {
+            audioManager.stopAmbientPulse()
+            audioManager.playCompletionFanfare()
+            withAnimation(.easeInOut(duration: 1.2)) { glowColor = .green; glowIntensity = 0.2 }
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            transitionParticles = false
+
+            withAnimation(.easeOut(duration: 0.8)) {
                 particleEffect = true
+                confettiActive = true
             }
-            
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
                 showStats = true
             }
-            
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            
-            // Show undo safety badge prominently
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+
+            startCountingAnimation()
+
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            guard !Task.isCancelled else { return }
+
+            // Show undo safety badge
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.85)) {
                 showUndoBadge = true
             }
             HapticFeedbackManager.shared.success()
@@ -616,16 +797,77 @@ struct SimulatedDemoAnimationView: View {
     }
     
     private func showThought(_ thought: String) {
-        withAnimation(.easeOut(duration: 0.15)) {
-            thoughtOpacity = 0
+        withAnimation(.easeInOut(duration: 0.4)) {
+            thoughtOpacity = 0.3
         }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            currentThought = thought
-            withAnimation(.easeIn(duration: 0.2)) {
+
+        scheduleWorkItem(delay: 0.3) {
+            withAnimation(.easeInOut(duration: 0.5)) {
+                currentThought = thought
                 thoughtOpacity = 1
             }
         }
+    }
+
+    private func startCountingAnimation() {
+        let totalFiles = 10
+        let totalFolders = 4
+        let totalPercent = 100
+        let steps = 10
+        let interval = 0.09
+
+        for step in 1...steps {
+            scheduleWorkItem(delay: interval * Double(step)) {
+                withAnimation(.easeOut(duration: 0.05)) {
+                    displayedFileCount = min(totalFiles, totalFiles * step / steps)
+                    displayedFolderCount = min(totalFolders, totalFolders * step / steps)
+                    displayedPercent = min(totalPercent, totalPercent * step / steps)
+                }
+            }
+        }
+    }
+
+    /// Schedule a cancellable work item on the main queue
+    private func scheduleWorkItem(delay: TimeInterval, action: @escaping () -> Void) {
+        let workItem = DispatchWorkItem(block: action)
+        pendingWorkItems.append(workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+}
+
+// MARK: - Demo Floating Particle
+
+private struct DemoFloatingParticle: View {
+    let index: Int
+    @State private var offset: CGSize = .zero
+    @State private var opacity: Double = 0
+
+    private var particleSize: CGFloat {
+        CGFloat.random(in: 2...5)
+    }
+
+    var body: some View {
+        Circle()
+            .fill(Color.white.opacity(opacity))
+            .frame(width: particleSize, height: particleSize)
+            .offset(offset)
+            .onAppear {
+                let randomX = CGFloat.random(in: -300...300)
+                let randomY = CGFloat.random(in: -300...300)
+                offset = CGSize(width: randomX, height: randomY)
+
+                withAnimation(
+                    .easeInOut(duration: Double.random(in: 3...6))
+                    .repeatForever(autoreverses: true)
+                    .delay(Double(index) * 0.2)
+                ) {
+                    offset = CGSize(
+                        width: randomX + CGFloat.random(in: -120...120),
+                        height: randomY + CGFloat.random(in: -120...120)
+                    )
+                    opacity = Double.random(in: 0.1...0.3)
+                }
+            }
     }
 }
 
@@ -852,6 +1094,37 @@ struct TransitionParticleView: View {
     private func particleOffset(for index: Int) -> CGSize {
         let angle = Double(index) * (360.0 / Double(particleCount)) + Double.random(in: -10...10)
         let radius: CGFloat = isActive ? CGFloat.random(in: 60...100) : 0
+        return CGSize(
+            width: cos(angle * .pi / 180) * radius,
+            height: sin(angle * .pi / 180) * radius
+        )
+    }
+}
+
+// MARK: - Confetti Burst Effect
+struct ConfettiBurstView: View {
+    let isActive: Bool
+    
+    private let confettiColors: [Color] = [.green, .blue, .purple, .orange, .pink, .yellow, .red, .mint]
+    private let particleCount = 24
+    
+    var body: some View {
+        ZStack {
+            ForEach(0..<particleCount, id: \.self) { index in
+                Circle()
+                    .fill(confettiColors[index % confettiColors.count].opacity(0.8))
+                    .frame(width: CGFloat.random(in: 4...10), height: CGFloat.random(in: 4...10))
+                    .offset(confettiOffset(for: index))
+                    .opacity(isActive ? 0 : 1)
+                    .scaleEffect(isActive ? 0.3 : 1)
+            }
+        }
+        .animation(.easeOut(duration: 1.2), value: isActive)
+    }
+    
+    private func confettiOffset(for index: Int) -> CGSize {
+        let angle = Double(index) * (360.0 / Double(particleCount)) + Double.random(in: -20...20)
+        let radius: CGFloat = isActive ? CGFloat.random(in: 80...160) : 0
         return CGSize(
             width: cos(angle * .pi / 180) * radius,
             height: sin(angle * .pi / 180) * radius

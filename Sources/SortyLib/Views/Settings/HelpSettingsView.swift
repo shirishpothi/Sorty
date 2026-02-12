@@ -96,7 +96,16 @@ struct HelpSettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        Link("Documentation", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/docs/README.md")!)
+                    }
+                    
+                    HStack(spacing: 16) {
+                        Link("Documentation", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!)
+                            .font(.subheadline)
+                        
+                        Link("Report Issue", destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!)
+                            .font(.subheadline)
+                        
+                        Link("View Changelog", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/CHANGELOG.md")!)
                             .font(.subheadline)
                     }
                 }

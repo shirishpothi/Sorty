@@ -440,13 +440,16 @@ public struct ExclusionRulePreset: Identifiable, Sendable {
 public class ExclusionRulesManager: ObservableObject {
     @Published public private(set) var rules: [ExclusionRule] = []
     @Published public var activePresetName: String?
+    @Published public private(set) var naturalLanguageExceptions: [String] = []
 
     private let userDefaults = UserDefaults.standard
     private let rulesKey = "exclusionRules"
     private let presetKey = "activeExclusionPreset"
+    private let nlExceptionsKey = "naturalLanguageExceptions"
 
     public init() {
         loadRules()
+        loadNaturalLanguageExceptions()
         if rules.isEmpty {
             setupDefaultRules()
         }
@@ -529,6 +532,65 @@ public class ExclusionRulesManager: ObservableObject {
 
     public var rulesByType: [ExclusionRuleType: [ExclusionRule]] {
         Dictionary(grouping: rules) { $0.type }
+    }
+
+    // MARK: - Natural Language Exceptions
+
+    public func addNaturalLanguageException(_ text: String) {
+        let sanitized = sanitizeException(text)
+        guard !sanitized.isEmpty else { return }
+        naturalLanguageExceptions.append(sanitized)
+        saveNaturalLanguageExceptions()
+    }
+
+    public func removeNaturalLanguageException(at index: Int) {
+        guard naturalLanguageExceptions.indices.contains(index) else { return }
+        naturalLanguageExceptions.remove(at: index)
+        saveNaturalLanguageExceptions()
+    }
+
+    /// Returns sanitized exceptions formatted for injection into AI prompts
+    public var sanitizedExceptionsForPrompt: [String] {
+        naturalLanguageExceptions.map { sanitizeException($0) }.filter { !$0.isEmpty }
+    }
+
+    /// Sanitizes user input to prevent prompt injection
+    private func sanitizeException(_ text: String) -> String {
+        var sanitized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Truncate to reasonable length
+        if sanitized.count > 200 {
+            sanitized = String(sanitized.prefix(200))
+        }
+
+        // Remove patterns that could be prompt injection
+        let injectionPatterns = [
+            "ignore previous", "ignore above", "disregard", "forget",
+            "system:", "assistant:", "user:", "```",
+            "override", "new instructions", "instead of"
+        ]
+        let lowered = sanitized.lowercased()
+        for pattern in injectionPatterns {
+            if lowered.contains(pattern) {
+                sanitized = sanitized.replacingOccurrences(
+                    of: pattern,
+                    with: "",
+                    options: .caseInsensitive
+                )
+            }
+        }
+
+        return sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func loadNaturalLanguageExceptions() {
+        if let saved = userDefaults.stringArray(forKey: nlExceptionsKey) {
+            naturalLanguageExceptions = saved
+        }
+    }
+
+    private func saveNaturalLanguageExceptions() {
+        userDefaults.set(naturalLanguageExceptions, forKey: nlExceptionsKey)
     }
 
     // MARK: - Persistence

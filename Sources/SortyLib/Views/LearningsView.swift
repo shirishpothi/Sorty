@@ -42,12 +42,12 @@ extension View {
 struct LearningsView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var manager: LearningsManager
+    @EnvironmentObject var appState: AppState
     
     @State private var showingConsentSheet = false
     @State private var showingHoningSheet = false
     @State private var showingDeleteConfirmation = false
     @State private var showingWithdrawConfirmation = false
-    @State private var showingImportPicker = false
     @State private var selectedTab: LearningsTab = .overview
     
     enum LearningsTab: String, CaseIterable {
@@ -95,32 +95,32 @@ struct LearningsView: View {
     // MARK: - Authentication Gate
     
     private var authenticationGateView: some View {
-        VStack(spacing: 40) {
+        WorkflowContainer(currentStep: .configure) {
             Spacer()
-            
-            Image(systemName: manager.securityManager.biometryType == .touchID ? "touchid" : 
+
+            Image(systemName: manager.securityManager.biometryType == .touchID ? "touchid" :
                   manager.securityManager.biometryType == .faceID ? "faceid" : "lock.shield.fill")
                 .font(.system(size: 60))
                 .foregroundStyle(.blue)
                 .padding(32)
                 .liquidGlassCard(cornerRadius: 30)
                 .accessibilityHidden(true)
-            
+
             VStack(spacing: 8) {
                 Text("Authentication Required")
                     .font(.title2.bold())
-                
+
                 Text("Use \(manager.securityManager.biometryDisplayName) to access your learning data.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 400)
             }
-            
+
             Button(action: {
-                Task { 
+                Task {
                     HapticFeedbackManager.shared.tap()
-                    await manager.unlock() 
+                    await manager.unlock()
                 }
             }) {
                 Label("Unlock with \(manager.securityManager.biometryDisplayName)", systemImage: "lock.open.fill")
@@ -131,7 +131,7 @@ struct LearningsView: View {
             .keyboardShortcut(.return)
             .accessibilityLabel("Unlock Learnings")
             .accessibilityHint("Authenticate to view your learning data")
-            
+
             if let error = manager.securityManager.error {
                 Text(error)
                     .font(.caption.bold())
@@ -142,11 +142,9 @@ struct LearningsView: View {
                     .cornerRadius(8)
                     .accessibilityLabel("Authentication error: \(error)")
             }
-            
+
             Spacer()
         }
-        .padding(40)
-        .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Authentication required to access Learnings")
     }
@@ -154,38 +152,38 @@ struct LearningsView: View {
     // MARK: - Onboarding
     
     private var onboardingView: some View {
-        VStack(spacing: 40) {
+        WorkflowContainer(currentStep: .configure) {
             Spacer()
-            
+
             Image(systemName: "brain.head.profile")
                 .font(.system(size: 60))
                 .foregroundStyle(.purple)
                 .padding(32)
                 .liquidGlassCard(cornerRadius: 30)
                 .accessibilityHidden(true)
-            
+
             VStack(spacing: 8) {
                 Text("The Learnings")
                     .font(.largeTitle.bold())
-                
+
                 Text("A passive learning system that watches how you organize files and learns your preferences over time.")
                     .font(.body)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 500)
             }
-            
+
             VStack(alignment: .leading, spacing: 16) {
                 featureRow(icon: "eye.fill", title: "Watches", description: "Observes when you modify directories after AI organization")
                 featureRow(icon: "arrow.uturn.backward.circle.fill", title: "Learns from Reverts", description: "Understands when AI suggestions weren't right")
                 featureRow(icon: "text.bubble.fill", title: "Remembers Instructions", description: "Captures your additional guidance and preferences")
                 featureRow(icon: "sparkles", title: "Improves Over Time", description: "Uses learnings to make better future suggestions")
             }
-            .padding(24)
-            .liquidGlassCard(cornerRadius: 24)
+            .padding(16)
+            .liquidGlassCard(cornerRadius: 20)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings features")
-            
+
             HStack(spacing: 12) {
                 Image(systemName: "lock.shield.fill")
                     .foregroundColor(.green)
@@ -199,7 +197,7 @@ struct LearningsView: View {
             .cornerRadius(20)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Privacy: Data is encrypted locally with biometric protection. You can delete anytime.")
-            
+
             Button(action: {
                 Task {
                     HapticFeedbackManager.shared.success()
@@ -215,11 +213,9 @@ struct LearningsView: View {
             .keyboardShortcut(.return)
             .accessibilityLabel("Enable Learning")
             .accessibilityHint("Start learning from your organization habits")
-            
+
             Spacer()
         }
-        .padding(40)
-        .background(Color(NSColor.windowBackgroundColor))
     }
     
     private func featureRow(icon: String, title: String, description: String) -> some View {
@@ -251,36 +247,26 @@ struct LearningsView: View {
             dashboardHeader
             
             Divider()
-            
-            HStack(spacing: 12) {
-                ForEach(LearningsTab.allCases, id: \.self) { tab in
-                    tabButton(tab)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 16)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Navigation tabs")
-            
-            Divider()
-            
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                LazyVStack(alignment: .leading, spacing: 16) {
                     switch selectedTab {
                     case .overview:
                         overviewSection
-                            .animatedAppearance(delay: 0.1)
+                            .animatedAppearance(delay: 0.05)
                     case .preferences:
                         preferencesSection
-                            .animatedAppearance(delay: 0.1)
+                            .animatedAppearance(delay: 0.05)
                     case .activity:
                         activitySection
-                            .animatedAppearance(delay: 0.1)
+                            .animatedAppearance(delay: 0.05)
                     }
                 }
-                .padding(32)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 24)
             }
+            .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
         }
         .sheet(isPresented: $showingHoningSheet) {
             LearningsHoningView(config: settingsViewModel.config) { answers in
@@ -320,6 +306,28 @@ struct LearningsView: View {
         .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) { _ in
             exportProfile()
         }
+        .fileImporter(
+            isPresented: $manager.showingImportPicker,
+            allowedContentTypes: [UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let url = urls.first else { return }
+                Task {
+                    do {
+                        try await manager.importProfile(from: url)
+                        HapticFeedbackManager.shared.success()
+                    } catch {
+                        DebugLogger.log("Failed to import profile: \(error)")
+                        HapticFeedbackManager.shared.error()
+                        manager.error = "Import failed: \(error.localizedDescription)"
+                    }
+                }
+            case .failure(let error):
+                DebugLogger.log("Import failed: \(error)")
+            }
+        }
     }
     
     // MARK: - Export Profile
@@ -350,7 +358,17 @@ struct LearningsView: View {
     }
     
     private var dashboardHeader: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(spacing: 16) {
+            // Back button when navigated from settings
+            if appState.navigatedFromSettings {
+                GlassyBackButton {
+                    HapticFeedbackManager.shared.tap()
+                    appState.navigatedFromSettings = false
+                    appState.currentView = .settings
+                    appState.selectedSettingsSection = .help
+                }
+            }
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     Image(systemName: "brain.head.profile")
@@ -359,65 +377,88 @@ struct LearningsView: View {
                     Text("The Learnings")
                         .font(.title2.bold())
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("The Learnings")
+
                 Text("Passively learning from your organization habits")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("The Learnings: Passively learning from your organization habits")
-            
+
             Spacer()
-            
+
+            // Glass pill tab selector
+            HStack(spacing: 0) {
+                ForEach(Array(LearningsTab.allCases.enumerated()), id: \.offset) { index, tab in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            selectedTab = tab
+                        }
+                        HapticFeedbackManager.shared.selection()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.icon)
+                                .font(.caption)
+                            Text(tab.rawValue)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                        .background(
+                            selectedTab == tab
+                                ? Color.accentColor.opacity(0.15)
+                                : Color.clear
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(selectedTab == tab ? .accentColor : .secondary)
+                    .accessibilityLabel(tab.rawValue)
+                    .accessibilityHint(tab.accessibilityHint)
+                    
+                    if index < LearningsTab.allCases.count - 1 {
+                        Text(index == 0 ? "  " : "•")
+                            .font(.caption2)
+                            .foregroundColor(.secondary.opacity(0.4))
+                            .padding(.horizontal, 4)
+                    }
+                }
+            }
+            .padding(4)
+            .liquidGlassCard(cornerRadius: 20)
+            .accessibilityLabel("Learnings navigation")
+            .accessibilityIdentifier("LearningsTabPicker")
+
             LearningStrengthControl(manager: manager)
-            
+
             statusBadge
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .background(.bar)
-    }
-
-    private func tabButton(_ tab: LearningsTab) -> some View {
-        Button(action: { 
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedTab = tab 
-                HapticFeedbackManager.shared.selection()
-            }
-        }) {
-            HStack(spacing: 8) {
-                Image(systemName: tab.icon)
-                    .font(.title2)
-                Text(tab.rawValue)
-                    .font(selectedTab == tab ? .body.bold() : .body)
-            }
-            .foregroundColor(selectedTab == tab ? .accentColor : .secondary)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(selectedTab == tab ? Color.accentColor.opacity(0.1) : Color.white.opacity(0.001))
-            .clipShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .contentShape(Capsule())
-        .accessibilityLabel(tab.rawValue)
-        .accessibilityHint(tab.accessibilityHint)
-        .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
-        .accessibilityAddTraits(.isButton)
+        .background(.ultraThinMaterial)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Learnings controls")
     }
 
     // MARK: - Overview Section
 
     private var overviewSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            LearningsImpactCard(manager: manager)
+        VStack(alignment: .leading, spacing: 20) {
+            LearningsImpactCard(manager: manager, onStartHoning: { showingHoningSheet = true })
+            
+            OrganizationBreakdownCard(manager: manager)
 
             statsSection
 
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
                 Text("Quick Actions")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
 
-                HStack(spacing: 20) {
+                HStack(spacing: 16) {
                     ActionCard(
                         icon: "wand.and.stars",
                         title: "Refine Preferences",
@@ -439,13 +480,13 @@ struct LearningsView: View {
                     }
                 }
             }
-            .padding(24)
-            .liquidGlassCard(cornerRadius: 20)
+            .padding(16)
+            .liquidGlassCard(cornerRadius: 16)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Quick actions")
 
             if let profile = manager.currentProfile, !profile.inferredRules.isEmpty {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: 16) {
                     HStack {
                         Image(systemName: "sparkles")
                             .font(.headline)
@@ -471,8 +512,8 @@ struct LearningsView: View {
                         }
                     }
                 }
-                .padding(24)
-                .liquidGlassCard(cornerRadius: 20)
+                .padding(16)
+                .liquidGlassCard(cornerRadius: 16)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Top learned patterns: \(profile.inferredRules.count) rules")
             }
@@ -484,6 +525,12 @@ struct LearningsView: View {
     private var preferencesSection: some View {
         VStack(alignment: .leading, spacing: 24) {
             if let profile = manager.currentProfile {
+                // Rule Suggestions Inbox
+                let pendingRules = manager.getPendingRules()
+                if !pendingRules.isEmpty {
+                    RuleSuggestionsSection(rules: pendingRules, manager: manager)
+                }
+                
                 if let behaviorPrefs = manager.behaviorPreferences {
                     BehaviorPreferencesCard(preferences: behaviorPrefs)
                 }
@@ -535,15 +582,59 @@ struct LearningsView: View {
                     }
                 }
                 
+                // Learning Exclusions
+                if !profile.learningExclusionPatterns.isEmpty {
+                    AccessiblePreferenceGroup(
+                        title: "Learning Exclusions",
+                        subtitle: "Paths excluded from learning",
+                        icon: "eye.slash.fill",
+                        color: .gray
+                    ) {
+                        ForEach(profile.learningExclusionPatterns, id: \.self) { pattern in
+                            HStack(spacing: 12) {
+                                Image(systemName: "folder.badge.minus")
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 24)
+                                Text(pattern)
+                                    .font(.subheadline.bold())
+                                Spacer()
+                                Button {
+                                    Task {
+                                        HapticFeedbackManager.shared.tap()
+                                        await manager.removeLearningExclusion(pattern)
+                                    }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Remove exclusion for \(pattern)")
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+                
+                // Add Learning Exclusion button
+                AddExclusionView(manager: manager)
+                
                 if profile.honingAnswers.isEmpty && profile.inferredRules.isEmpty && profile.steeringPrompts.isEmpty {
                     VStack(spacing: 20) {
-                        Spacer(minLength: 20)
-                        ContentUnavailableView(
-                            "No Preferences Yet",
-                            systemImage: "brain.head.profile",
-                            description: Text("Preferences will appear here as you organize files and provide feedback.")
-                        )
-                        .padding(.bottom, 20)
+                        Image(systemName: "brain.head.profile")
+                            .font(.system(size: 64))
+                            .foregroundStyle(.secondary)
+                            .opacity(0.8)
+                            .accessibilityHidden(true)
+                        
+                        VStack(spacing: 8) {
+                            Text("No Preferences Yet")
+                                .font(.title2.bold())
+                            Text("Preferences will appear here as you organize files and provide feedback.")
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 350)
+                        }
                         
                         Button(action: { 
                             HapticFeedbackManager.shared.tap()
@@ -553,15 +644,12 @@ struct LearningsView: View {
                                 .font(.headline)
                         }
                         .buttonStyle(.plain)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 14)
-                        .liquidGlassCard(cornerRadius: 16)
-                        
-                        Spacer(minLength: 20)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .liquidGlassCard(cornerRadius: 12)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(32)
-                    .liquidGlassCard(cornerRadius: 32)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityElement(children: .combine)
                     .accessibilityLabel("No preferences recorded yet")
                 } else {
                     HStack {
@@ -589,7 +677,7 @@ struct LearningsView: View {
     // MARK: - Activity Section
     
     private var activitySection: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 20) {
             if let profile = manager.currentProfile {
                 if !profile.postOrganizationChanges.isEmpty {
                     AccessibleActivityGroup(
@@ -615,6 +703,34 @@ struct LearningsView: View {
                     ) {
                         ForEach(profile.historyReverts.suffix(10).reversed()) { revert in
                             AccessibleRevertRow(revert: revert)
+                        }
+                    }
+                }
+                
+                if !profile.cancelledOrganizations.isEmpty {
+                    AccessibleActivityGroup(
+                        title: "Cancelled",
+                        subtitle: "Organizations you cancelled before applying",
+                        icon: "xmark.octagon.fill",
+                        color: .orange,
+                        count: profile.cancelledOrganizations.count
+                    ) {
+                        ForEach(profile.cancelledOrganizations.suffix(10).reversed()) { cancelled in
+                            AccessibleCancelledRow(cancelled: cancelled)
+                        }
+                    }
+                }
+                
+                if !profile.regeneratedOrganizations.isEmpty {
+                    AccessibleActivityGroup(
+                        title: "Regenerated",
+                        subtitle: "Organizations you regenerated with new instructions",
+                        icon: "arrow.triangle.2.circlepath",
+                        color: .blue,
+                        count: profile.regeneratedOrganizations.count
+                    ) {
+                        ForEach(profile.regeneratedOrganizations.suffix(10).reversed()) { regen in
+                            AccessibleRegeneratedRow(regenerated: regen)
                         }
                     }
                 }
@@ -647,20 +763,15 @@ struct LearningsView: View {
                     }
                 }
                 
-                if profile.postOrganizationChanges.isEmpty && profile.historyReverts.isEmpty && profile.rejections.isEmpty && profile.additionalInstructionsHistory.isEmpty {
-                    VStack(spacing: 20) {
-                        Spacer(minLength: 20)
-                        ContentUnavailableView(
-                            "No Activity Yet",
-                            systemImage: "clock",
-                            description: Text("Your organization activity will appear here as you use the app.")
-                        )
-                        Spacer(minLength: 20)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(32)
-                    .liquidGlassCard(cornerRadius: 32)
-                    .accessibilityLabel("No organization activity recorded yet")
+                let hasActivity = !profile.postOrganizationChanges.isEmpty ||
+                    !profile.historyReverts.isEmpty ||
+                    !profile.rejections.isEmpty ||
+                    !profile.additionalInstructionsHistory.isEmpty ||
+                    !profile.cancelledOrganizations.isEmpty ||
+                    !profile.regeneratedOrganizations.isEmpty
+                
+                if !hasActivity {
+                    LearningsEmptyStateView()
                 }
             }
             
@@ -668,37 +779,15 @@ struct LearningsView: View {
             
             dataManagementSection
         }
-        .fileImporter(
-            isPresented: $showingImportPicker,
-            allowedContentTypes: [UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json],
-            allowsMultipleSelection: false
-        ) { result in
-            switch result {
-            case .success(let urls):
-                guard let url = urls.first else { return }
-                Task {
-                    do {
-                        try await manager.importProfile(from: url)
-                        HapticFeedbackManager.shared.success()
-                    } catch {
-                        DebugLogger.log("Failed to import profile: \(error)")
-                        HapticFeedbackManager.shared.error()
-                        manager.error = "Import failed: \(error.localizedDescription)"
-                    }
-                }
-            case .failure(let error):
-                DebugLogger.log("Import failed: \(error)")
-            }
-        }
     }
     
     private var dataManagementSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             Text("Data & Privacy")
                 .font(.title3.bold())
                 .accessibilityAddTraits(.isHeader)
             
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 HStack(spacing: 16) {
                     Image(systemName: "lock.shield.fill")
                         .foregroundColor(.green)
@@ -712,67 +801,158 @@ struct LearningsView: View {
                     }
                     Spacer()
                 }
-                .padding(20)
-                .liquidGlassCard(cornerRadius: 16)
+                .padding(16)
+                .liquidGlassCard(cornerRadius: 12)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Security: Your data is encrypted locally and protected with \(manager.securityManager.biometryDisplayName)")
                 
                 Divider()
                 
-                HStack(spacing: 12) {
-                    Button(action: { 
-                        HapticFeedbackManager.shared.tap()
-                        exportProfile() 
-                    }) {
-                        Label("Export", systemImage: "square.and.arrow.up")
+                HStack(spacing: 16) {
+                    Image(systemName: "calendar.badge.clock")
+                        .foregroundColor(.blue)
+                        .font(.title3.bold())
+                        .frame(width: 24)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Data Retention")
+                            .font(.headline)
+                        Text("How long to keep learning data")
                             .font(.caption.bold())
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .liquidGlassCard(cornerRadius: 12)
-                    
-                    Button(action: { 
-                        HapticFeedbackManager.shared.tap()
-                        showingImportPicker = true 
-                    }) {
-                        Label("Import", systemImage: "square.and.arrow.down")
-                            .font(.caption.bold())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .liquidGlassCard(cornerRadius: 12)
-                    
                     Spacer()
-                    
-                    Button(action: { 
-                        HapticFeedbackManager.shared.tap()
-                        showingWithdrawConfirmation = true 
-                    }) {
-                        Label("Pause", systemImage: "pause.circle.fill")
-                            .font(.caption.bold())
+                    Picker("", selection: $manager.dataRetentionDays) {
+                        Text("30 days").tag(30)
+                        Text("90 days").tag(90)
+                        Text("1 year").tag(365)
+                        Text("Forever").tag(0)
                     }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .liquidGlassCard(cornerRadius: 16)
-                    
-                    Button(role: .destructive, action: { 
-                        HapticFeedbackManager.shared.error()
-                        showingDeleteConfirmation = true 
-                    }) {
-                        Label("Delete", systemImage: "trash.fill")
-                            .font(.caption.bold())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .liquidGlassCard(cornerRadius: 16)
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                    .accessibilityLabel("Data retention period")
                 }
+                .padding(16)
+                .liquidGlassCard(cornerRadius: 12)
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Import & Export")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                    
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            HapticFeedbackManager.shared.tap()
+                            exportProfile()
+                        }) {
+                            Label("Export Profile", systemImage: "square.and.arrow.up")
+                                .font(.caption.bold())
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .accessibilityLabel("Export learning profile")
+                        
+                        Button(action: {
+                            HapticFeedbackManager.shared.tap()
+                            manager.showingImportPicker = true
+                        }) {
+                            Label("Import Profile", systemImage: "square.and.arrow.down")
+                                .font(.caption.bold())
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .accessibilityLabel("Import learning profile")
+                    }
+                }
+                .padding(16)
+                .liquidGlassCard(cornerRadius: 12)
+                
+                Divider()
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Learning Controls")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                    
+                    HStack(spacing: 12) {
+                        Image(systemName: "cpu")
+                            .foregroundColor(.purple)
+                            .font(.body.bold())
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use AI for analysis")
+                                .font(.caption.bold())
+                            Text("Spend AI credits on pattern analysis & rule induction")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: $manager.useAIForLearnings)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                    .padding(12)
+                    .liquidGlassCard(cornerRadius: 10)
+                    
+                    HStack(spacing: 12) {
+                        Image(systemName: "pause.circle")
+                            .foregroundColor(.orange)
+                            .font(.body.bold())
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Session-based Learning")
+                                .font(.caption.bold())
+                            Text("Temporarily pause learning from file moves")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { !manager.sessionLearningPaused },
+                            set: { manager.sessionLearningPaused = !$0 }
+                        ))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                    .padding(12)
+                    .liquidGlassCard(cornerRadius: 10)
+                    
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            HapticFeedbackManager.shared.tap()
+                            showingWithdrawConfirmation = true
+                        }) {
+                            Label("Pause Learning", systemImage: "pause.circle.fill")
+                                .font(.caption.bold())
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .accessibilityLabel("Pause learning")
+                        .accessibilityHint("Learning will stop but data is preserved")
+                        
+                        Button(role: .destructive, action: {
+                            HapticFeedbackManager.shared.error()
+                            showingDeleteConfirmation = true
+                        }) {
+                            Label("Delete All Data", systemImage: "trash.fill")
+                                .font(.caption.bold())
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.regular)
+                        .accessibilityLabel("Delete all learning data")
+                        .accessibilityHint("Permanently deletes all learning data")
+                    }
+                }
+                .padding(16)
+                .liquidGlassCard(cornerRadius: 12)
             }
-            .padding(24)
-            .liquidGlassCard(cornerRadius: 24)
+            .padding(16)
+            .liquidGlassCard(cornerRadius: 16)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Data and privacy settings")
@@ -797,17 +977,28 @@ struct LearningsView: View {
     // MARK: - Stats Section
     
     private var statsSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Learning Progress")
-                .font(.title3.bold())
-                .accessibilityAddTraits(.isHeader)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.headline)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [SortyDesignSystem.Colors.primary, SortyDesignSystem.Colors.primary.opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Text("Learning Progress")
+                    .font(.title3.bold())
+                    .accessibilityAddTraits(.isHeader)
+            }
             
             LazyVGrid(columns: [
                 GridItem(.flexible()),
                 GridItem(.flexible()),
                 GridItem(.flexible()),
                 GridItem(.flexible())
-            ], spacing: 16) {
+            ], spacing: 12) {
                 AccessibleStatCard(
                     value: "\(manager.currentProfile?.postOrganizationChanges.count ?? 0)",
                     label: "Corrections",
@@ -838,8 +1029,8 @@ struct LearningsView: View {
                 )
             }
         }
-        .padding(24)
-        .liquidGlassCard(cornerRadius: 24)
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 16)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learning progress statistics")
     }
@@ -907,55 +1098,90 @@ struct LearningStrengthPopover: View {
     @ObservedObject var manager: LearningsManager
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Learning Influence")
-                .font(.headline)
-            
-            Text("Controls how much learned patterns affect organization decisions.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Conservative")
-                        .font(.caption.bold())
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("Aggressive")
-                        .font(.caption.bold())
-                        .foregroundColor(.secondary)
-                }
-                
-                Slider(value: $manager.learningStrength, in: 0...1, step: 0.1)
-                    .accentColor(.accentColor)
-                    .accessibilityLabel("Learning strength slider")
-                    .accessibilityValue("\(Int(manager.learningStrength * 100)) percent")
-                
-                HStack {
-                    Image(systemName: "checkmark.shield.fill")
-                        .foregroundColor(.blue)
-                    Text("Higher confidence")
-                        .font(.caption2.bold())
-                    Spacer()
-                    Text("Full personalization")
-                        .font(.caption2.bold())
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.12))
+                        .frame(width: 28, height: 28)
+
                     Image(systemName: "wand.and.stars")
-                        .foregroundColor(.green)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
                 }
-                .foregroundColor(.secondary)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Learning Influence")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+
+                    Text("Organization Personalization")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
             }
-            .padding()
-            .liquidGlassCard(cornerRadius: 16)
-            
+            .padding(.bottom, 10)
+
             Divider()
-            
-            Text("Current: \(Int(manager.learningStrength * 100))% – \(strengthDescription)")
-                .font(.caption.bold())
-                .foregroundColor(.accentColor)
+                .opacity(0.4)
+                .padding(.bottom, 14)
+
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Controls how much learned patterns affect organization decisions.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Conservative")
+                            .font(.caption.bold())
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("Aggressive")
+                            .font(.caption.bold())
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Slider(value: $manager.learningStrength, in: 0...1, step: 0.1)
+                        .accentColor(.accentColor)
+                        .accessibilityLabel("Learning strength slider")
+                        .accessibilityValue("\(Int(manager.learningStrength * 100)) percent")
+                    
+                    HStack {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.shield.fill")
+                                .foregroundColor(.blue)
+                            Text("Higher confidence")
+                                .font(.caption2.bold())
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        Spacer()
+                        HStack(spacing: 4) {
+                            Text("Full personalization")
+                                .font(.caption2.bold())
+                                .fixedSize(horizontal: true, vertical: false)
+                            Image(systemName: "wand.and.stars")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                }
+                
+                Divider()
+                    .opacity(0.3)
+                
+                Text("Current: \(Int(manager.learningStrength * 100))% – \(strengthDescription)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.accentColor)
+            }
         }
-        .padding(24)
+        .padding(14)
         .frame(width: 320)
-        .background(Color(NSColor.windowBackgroundColor))
     }
     
     private var strengthDescription: String {
@@ -971,6 +1197,7 @@ struct LearningStrengthPopover: View {
 
 struct LearningsImpactCard: View {
     @ObservedObject var manager: LearningsManager
+    var onStartHoning: (() -> Void)?
     
     private var impact: LearningsImpactSummary? {
         manager.computeImpactSummary()
@@ -1022,18 +1249,8 @@ struct LearningsImpactCard: View {
                     )
                 }
                 
-                if impact.correctionRate > 0.3 {
-                    HStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                        Text("High correction rate detected. Consider refining your preferences.")
-                            .font(.subheadline.bold())
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(16)
-                    .liquidGlassCard(cornerRadius: 16)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Warning: High correction rate. Consider refining preferences.")
+                if impact.correctionsAfterAI > 0 {
+                    HighCorrectionRateInsight(impact: impact, manager: manager, onStartHoning: onStartHoning)
                 }
             } else {
                 HStack(spacing: 12) {
@@ -1049,8 +1266,8 @@ struct LearningsImpactCard: View {
                 .accessibilityLabel("No impact data yet. Organize some files to see results.")
             }
         }
-        .padding(24)
-        .liquidGlassCard(cornerRadius: 24)
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 16)
         .accessibilityElement(children: .contain)
     }
 }
@@ -1158,8 +1375,8 @@ struct BehaviorPreferencesCard: View {
                 )
             }
         }
-        .padding(24)
-        .liquidGlassCard(cornerRadius: 24)
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 16)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Your organization philosophy preferences")
     }
@@ -1289,8 +1506,8 @@ struct AccessiblePreferenceGroup<Content: View>: View {
     @ViewBuilder let content: Content
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.headline)
                     .foregroundColor(color)
@@ -1313,7 +1530,7 @@ struct AccessiblePreferenceGroup<Content: View>: View {
             .liquidGlassCard(cornerRadius: 12)
         }
         .padding(16)
-        .liquidGlassCard(cornerRadius: 12)
+        .liquidGlassCard(cornerRadius: 16)
         .accessibilityElement(children: .contain)
     }
 }
@@ -1321,6 +1538,7 @@ struct AccessiblePreferenceGroup<Content: View>: View {
 struct RuleRow: View {
     let rule: InferredRule
     @ObservedObject var manager: LearningsManager
+    @State private var showingEvidence = false
     
     private var confidenceColor: Color {
         if rule.failureRate > 0.3 { return .red }
@@ -1329,55 +1547,259 @@ struct RuleRow: View {
     }
     
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
-                .font(.body.bold())
-                .foregroundColor(rule.isEnabled ? confidenceColor : .gray)
-                .frame(width: 24)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(rule.explanation)
-                    .font(.subheadline.bold())
-                    .foregroundColor(rule.isEnabled ? .primary : .secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: rule.isEnabled ? "checkmark.circle.fill" : "circle")
+                    .font(.body.bold())
+                    .foregroundColor(rule.isEnabled ? confidenceColor : .gray)
+                    .frame(width: 24)
                 
-                HStack(spacing: 12) {
-                    Text("\(rule.successCount) SUCCESS")
-                        .font(.caption2.bold())
-                        .foregroundColor(.green)
-                    if rule.failureCount > 0 {
-                        Text("\(rule.failureCount) CORRECTION")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(rule.explanation)
+                        .font(.subheadline.bold())
+                        .foregroundColor(rule.isEnabled ? .primary : .secondary)
+                    
+                    HStack(spacing: 8) {
+                        Text("\(rule.successCount) SUCCESS")
                             .font(.caption2.bold())
-                            .foregroundColor(.orange)
+                            .foregroundColor(.green)
+                        if rule.failureCount > 0 {
+                            Text("\(rule.failureCount) CORRECTION")
+                                .font(.caption2.bold())
+                                .foregroundColor(.orange)
+                        }
+                        
+                        // Scope badge
+                        if case .folder = rule.scope {
+                            Text(rule.scope.displayName)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.blue)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.1))
+                                .clipShape(Capsule())
+                        } else if case .activePersona = rule.scope {
+                            Text(rule.scope.displayName)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.purple)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.purple.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
                     }
+                }
+                
+                Spacer()
+                
+                // Evidence button
+                if rule.evidenceDescription != nil || !rule.evidenceIds.isEmpty {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showingEvidence.toggle()
+                        }
+                        HapticFeedbackManager.shared.tap()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.caption.bold())
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Show rule evidence")
+                }
+                
+                Text("\(rule.priority)%")
+                    .font(.caption2.bold().monospaced())
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .liquidGlassCard(cornerRadius: 6)
+                
+                Toggle("", isOn: Binding(
+                    get: { rule.isEnabled },
+                    set: { newValue in
+                        Task { 
+                            HapticFeedbackManager.shared.selection()
+                            await manager.setRuleEnabled(ruleId: rule.id, enabled: newValue) 
+                        }
+                    }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .scaleEffect(0.7)
+            }
+            .padding(.vertical, 8)
+            
+            // Evidence lineage panel
+            if showingEvidence, let evidence = rule.evidenceDescription {
+                HStack(spacing: 8) {
+                    Image(systemName: "link")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                    Text(evidence)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(3)
+                }
+                .padding(.horizontal, 36)
+                .padding(.vertical, 8)
+                .padding(.bottom, 4)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(rule.explanation). \(rule.scope.displayName). Priority \(rule.priority) percent. \(rule.successCount) successes, \(rule.failureCount) failures. \(rule.isEnabled ? "Enabled" : "Disabled")")
+        .accessibilityHint("Toggle to enable or disable this rule")
+    }
+}
+
+struct RuleSuggestionsSection: View {
+    let rules: [InferredRule]
+    @ObservedObject var manager: LearningsManager
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                Image(systemName: "tray.full.fill")
+                    .font(.headline)
+                    .foregroundColor(.orange)
+                Text("Rule Suggestions")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                
+                Spacer()
+                
+                Text("\(rules.count) PENDING")
+                    .font(.caption2.bold())
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(Capsule())
+            }
+            
+            Text("These rules were inferred with lower confidence. Review and approve or reject them.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            VStack(spacing: 12) {
+                ForEach(rules) { rule in
+                    PendingRuleRow(rule: rule, manager: manager)
+                }
+            }
+        }
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 16)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Rule suggestions: \(rules.count) pending")
+    }
+}
+
+struct PendingRuleRow: View {
+    let rule: InferredRule
+    @ObservedObject var manager: LearningsManager
+    @State private var showingEvidence = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.body.bold())
+                    .foregroundColor(.orange)
+                    .frame(width: 24)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(rule.explanation)
+                        .font(.subheadline.bold())
+                    
+                    HStack(spacing: 8) {
+                        Text(rule.scope.displayName.uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.blue.opacity(0.1))
+                            .clipShape(Capsule())
+                        
+                        if let confidence = rule.initialConfidence {
+                            Text("CONFIDENCE: \(confidence.rawValue.uppercased())")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(confidence == .high ? .green : (confidence == .medium ? .orange : .red))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                
+                Spacer()
+            }
+            
+            // Evidence lineage
+            if let evidence = rule.evidenceDescription {
+                Button {
+                    withAnimation { showingEvidence.toggle() }
+                    HapticFeedbackManager.shared.tap()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "link")
+                            .font(.caption2)
+                        Text(showingEvidence ? "Hide Evidence" : "Show Evidence")
+                            .font(.caption2.bold())
+                    }
+                    .foregroundColor(.blue)
+                }
+                .buttonStyle(.plain)
+                
+                if showingEvidence {
+                    Text(evidence)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(8)
+                        .transition(.opacity)
                 }
             }
             
-            Spacer()
-            
-            Text("\(rule.priority)%")
-                .font(.caption2.bold().monospaced())
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .liquidGlassCard(cornerRadius: 6)
-            
-            Toggle("", isOn: Binding(
-                get: { rule.isEnabled },
-                set: { newValue in
-                    Task { 
-                        HapticFeedbackManager.shared.selection()
-                        await manager.setRuleEnabled(ruleId: rule.id, enabled: newValue) 
+            // Action buttons
+            HStack(spacing: 12) {
+                Button {
+                    Task {
+                        HapticFeedbackManager.shared.success()
+                        await manager.approveRule(ruleId: rule.id)
                     }
+                } label: {
+                    Label("Accept", systemImage: "checkmark.circle.fill")
+                        .font(.caption.bold())
+                        .frame(maxWidth: .infinity)
                 }
-            ))
-            .labelsHidden()
-            .toggleStyle(.switch)
-            .scaleEffect(0.7)
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .controlSize(.small)
+                
+                Button {
+                    Task {
+                        HapticFeedbackManager.shared.error()
+                        await manager.rejectRule(ruleId: rule.id)
+                    }
+                } label: {
+                    Label("Reject", systemImage: "xmark.circle.fill")
+                        .font(.caption.bold())
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .controlSize(.small)
+            }
         }
-        .padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(rule.explanation). Priority \(rule.priority) percent. \(rule.successCount) successes, \(rule.failureCount) failures. \(rule.isEnabled ? "Enabled" : "Disabled")")
-        .accessibilityHint("Toggle to enable or disable this rule")
+        .padding(12)
+        .liquidGlassCard(cornerRadius: 12)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Suggested rule: \(rule.explanation)")
     }
 }
 
@@ -1434,8 +1856,8 @@ struct AccessibleActivityGroup<Content: View>: View {
                 .transition(.opacity.combined(with: .scale))
             }
         }
-        .padding(24)
-        .liquidGlassCard(cornerRadius: 24)
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 16)
         .accessibilityElement(children: .contain)
     }
 }
@@ -1630,8 +2052,8 @@ struct ActionCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
-            .liquidGlassCard(cornerRadius: 20)
+            .padding(16)
+            .liquidGlassCard(cornerRadius: 16)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -1666,6 +2088,457 @@ struct PreferenceRow: View {
         .padding(.vertical, 6)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(text + (priority.map { ", priority \($0) percent" } ?? ""))
+    }
+}
+
+// MARK: - Organization Breakdown Card
+
+struct OrganizationBreakdownCard: View {
+    @ObservedObject var manager: LearningsManager
+    
+    private var impact: LearningsImpactSummary? {
+        manager.computeImpactSummary()
+    }
+    
+    var body: some View {
+        if let impact = impact, (impact.acceptedOrganizations + impact.rejectedOrganizations + impact.cancelledOrganizations + impact.regeneratedOrganizations) > 0 {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.headline)
+                        .foregroundColor(.accentColor)
+                    Text("Organization Outcomes")
+                        .font(.title3.bold())
+                    Spacer()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible()),
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: 12) {
+                    BreakdownMetric(
+                        value: "\(impact.acceptedOrganizations)",
+                        label: "Accepted",
+                        icon: "checkmark.circle.fill",
+                        color: .green
+                    )
+                    BreakdownMetric(
+                        value: "\(impact.rejectedOrganizations)",
+                        label: "Rejected",
+                        icon: "xmark.circle.fill",
+                        color: .red
+                    )
+                    BreakdownMetric(
+                        value: "\(impact.cancelledOrganizations)",
+                        label: "Cancelled",
+                        icon: "xmark.octagon.fill",
+                        color: .orange
+                    )
+                    BreakdownMetric(
+                        value: "\(impact.regeneratedOrganizations)",
+                        label: "Regenerated",
+                        icon: "arrow.triangle.2.circlepath",
+                        color: .blue
+                    )
+                }
+            }
+            .padding(16)
+            .liquidGlassCard(cornerRadius: 16)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Organization outcomes breakdown")
+        }
+    }
+}
+
+struct BreakdownMetric: View {
+    let value: String
+    let label: String
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.headline)
+                .foregroundColor(color)
+            Text(value)
+                .font(.title2.bold())
+            Text(label.uppercased())
+                .font(.caption2.bold())
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .liquidGlassCard(cornerRadius: 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
+    }
+}
+
+// MARK: - Empty State View (matches HistoryEmptyStateView pattern)
+
+struct LearningsEmptyStateView: View {
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 96, height: 96)
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 44))
+                    .foregroundStyle(.secondary)
+                    .opacity(0.8)
+            }
+            .accessibilityHidden(true)
+            
+            VStack(spacing: 8) {
+                Text("No Activity Yet")
+                    .font(.title2.bold())
+                
+                Text("Your organization activity will appear here as you use the app.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 350)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No activity yet. Your organization activity will appear here.")
+    }
+}
+
+// MARK: - Cancelled Row
+
+struct AccessibleCancelledRow: View {
+    let cancelled: CancelledOrganization
+    
+    private var folderName: String {
+        URL(fileURLWithPath: cancelled.folderPath).lastPathComponent
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "xmark.octagon.fill")
+                .font(.body.bold())
+                .foregroundColor(.orange)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(folderName)
+                    .font(.headline)
+                    .lineLimit(1)
+                HStack(spacing: 8) {
+                    Text("\(cancelled.fileCount) files")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                    Text("at \(cancelled.cancelledAtStage)")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            Text(cancelled.timestamp, style: .relative)
+                .font(.caption2.bold())
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(folderName) cancelled at \(cancelled.cancelledAtStage), \(cancelled.fileCount) files")
+    }
+}
+
+// MARK: - Regenerated Row
+
+struct AccessibleRegeneratedRow: View {
+    let regenerated: RegeneratedOrganization
+    
+    private var folderName: String {
+        URL(fileURLWithPath: regenerated.folderPath).lastPathComponent
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.body.bold())
+                .foregroundColor(.blue)
+                .frame(width: 24)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(folderName)
+                    .font(.headline)
+                    .lineLimit(1)
+                if let instruction = regenerated.guidingInstruction {
+                    Text(instruction)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
+                    Text("Regenerated \(regenerated.regenerationCount) time\(regenerated.regenerationCount == 1 ? "" : "s")")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            Text(regenerated.timestamp, style: .relative)
+                .font(.caption2.bold())
+                .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(folderName) regenerated\(regenerated.guidingInstruction.map { ", instruction: \($0)" } ?? "")")
+    }
+}
+
+// MARK: - High Correction Rate Insight
+
+enum InsightAction {
+    case addSteering(String)
+    case startHoning
+    case none
+}
+
+struct ActionableInsight: Identifiable {
+    let id = UUID()
+    let icon: String
+    let color: Color
+    let title: String
+    let detail: String
+    let action: InsightAction
+    let actionLabel: String?
+    
+    init(icon: String, color: Color, title: String, detail: String, action: InsightAction = .none, actionLabel: String? = nil) {
+        self.icon = icon
+        self.color = color
+        self.title = title
+        self.detail = detail
+        self.action = action
+        self.actionLabel = actionLabel
+    }
+}
+
+struct HighCorrectionRateInsight: View {
+    let impact: LearningsImpactSummary
+    @ObservedObject var manager: LearningsManager
+    var onStartHoning: (() -> Void)?
+    
+    private var adjustmentCount: Int {
+        impact.correctionsAfterAI
+    }
+    
+    private var badgeText: String {
+        if adjustmentCount == 0 { return "No adjustments" }
+        return "\(adjustmentCount) adjustment\(adjustmentCount == 1 ? "" : "s")"
+    }
+    
+    private var badgeColor: Color {
+        if adjustmentCount == 0 { return .green }
+        if adjustmentCount <= 5 { return .orange }
+        return .red
+    }
+    
+    private var insights: [ActionableInsight] {
+        var results: [ActionableInsight] = []
+        
+        if let profile = manager.currentProfile {
+            let correctionsByExtension = Dictionary(grouping: profile.postOrganizationChanges.filter { $0.wasAIOrganized }) { change in
+                URL(fileURLWithPath: change.newPath).pathExtension.lowercased()
+            }
+            if let topType = correctionsByExtension.max(by: { $0.value.count < $1.value.count }),
+               topType.value.count >= 3 {
+                let suggestedInstruction = "Keep .\(topType.key) files in their current location"
+                results.append(ActionableInsight(
+                    icon: "doc.badge.arrow.up",
+                    color: .blue,
+                    title: ".\(topType.key) files frequently corrected (\(topType.value.count)×)",
+                    detail: "Add a steering instruction to improve how these files are handled.",
+                    action: .addSteering(suggestedInstruction),
+                    actionLabel: "Add Instruction"
+                ))
+            }
+            
+            if impact.reverts > 2 && impact.revertRate > 0.3 {
+                results.append(ActionableInsight(
+                    icon: "arrow.uturn.backward.circle",
+                    color: .orange,
+                    title: "Frequent full reverts (\(impact.reverts) of \(impact.runsWithLearnings) runs)",
+                    detail: "Entire organizations are being undone. A honing session can help the AI understand your preferences.",
+                    action: .startHoning,
+                    actionLabel: "Start Honing"
+                ))
+            }
+            
+            let destinationFolders = profile.postOrganizationChanges.compactMap { change -> String? in
+                let folder = URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent
+                return folder.isEmpty ? nil : folder
+            }
+            let folderCounts = Dictionary(grouping: destinationFolders) { $0 }.mapValues { $0.count }
+            if let topFolder = folderCounts.max(by: { $0.value < $1.value }),
+               topFolder.value >= 3 {
+                let suggestedInstruction = "Prefer placing files in \(topFolder.key) when appropriate"
+                results.append(ActionableInsight(
+                    icon: "folder.badge.questionmark",
+                    color: .purple,
+                    title: "Files frequently moved to \"\(topFolder.key)\" (\(topFolder.value)×)",
+                    detail: "You often move files here after organization. Add this as a preference.",
+                    action: .addSteering(suggestedInstruction),
+                    actionLabel: "Add Preference"
+                ))
+            }
+            
+            let cancelledCount = profile.cancelledOrganizations.count
+            let regeneratedCount = profile.regeneratedOrganizations.count
+            if cancelledCount + regeneratedCount > 3 {
+                results.append(ActionableInsight(
+                    icon: "arrow.triangle.2.circlepath",
+                    color: .red,
+                    title: "\(cancelledCount + regeneratedCount) cancelled or regenerated plans",
+                    detail: "The AI needs more context about your preferences.",
+                    action: .startHoning,
+                    actionLabel: "Refine Preferences"
+                ))
+            }
+        }
+        
+        if results.isEmpty {
+            results.append(ActionableInsight(
+                icon: "lightbulb",
+                color: .orange,
+                title: "\(adjustmentCount) file\(adjustmentCount == 1 ? "" : "s") adjusted after AI organization",
+                detail: "Run a Honing Session to teach your preferences and reduce future adjustments.",
+                action: .startHoning,
+                actionLabel: "Start Honing"
+            ))
+        }
+        
+        return results
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                Text("Improvement Opportunities")
+                    .font(.subheadline.bold())
+                Spacer()
+                Text(badgeText)
+                    .font(.caption.bold())
+                    .foregroundColor(badgeColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(badgeColor.opacity(0.12))
+                    .clipShape(Capsule())
+                    .help("Number of files you moved or corrected after AI organization")
+            }
+            
+            ForEach(insights) { insight in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: insight.icon)
+                        .font(.caption)
+                        .foregroundColor(insight.color)
+                        .frame(width: 20, height: 20)
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(insight.title)
+                            .font(.caption.bold())
+                        Text(insight.detail)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    
+                    Spacer()
+                    
+                    if let actionLabel = insight.actionLabel {
+                        Button(action: { performAction(insight.action) }) {
+                            Text(actionLabel)
+                                .font(.caption2.bold())
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .liquidGlassCard(cornerRadius: 14)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Improvement opportunities")
+    }
+    
+    private func performAction(_ action: InsightAction) {
+        HapticFeedbackManager.shared.tap()
+        switch action {
+        case .addSteering(let prompt):
+            manager.recordSteeringPrompt(prompt, folderPath: nil, sessionId: nil)
+        case .startHoning:
+            onStartHoning?()
+        case .none:
+            break
+        }
+    }
+}
+
+struct AddExclusionView: View {
+    @ObservedObject var manager: LearningsManager
+    @State private var newExclusion = ""
+    @State private var isExpanded = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
+                }
+                HapticFeedbackManager.shared.tap()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundColor(.blue)
+                    Text("Add Learning Exclusion")
+                        .font(.caption.bold())
+                }
+            }
+            .buttonStyle(.plain)
+            
+            if isExpanded {
+                HStack(spacing: 8) {
+                    TextField("Folder name or path pattern...", text: $newExclusion)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.caption)
+                    
+                    Button {
+                        guard !newExclusion.isEmpty else { return }
+                        Task {
+                            HapticFeedbackManager.shared.success()
+                            await manager.addLearningExclusion(newExclusion)
+                            newExclusion = ""
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(newExclusion.isEmpty)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+                
+                Text("Example: \"Temp\", \"/Downloads/Temp\", or a folder name")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .liquidGlassCard(cornerRadius: 16)
     }
 }
 

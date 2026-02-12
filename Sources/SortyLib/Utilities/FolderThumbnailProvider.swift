@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Combine
+import UniformTypeIdentifiers
 @preconcurrency import QuickLookThumbnailing
 
 /// A wrapper to make NSImage sendable for use with continuations
@@ -97,26 +98,34 @@ public class FolderThumbnailProvider: ObservableObject {
     // MARK: - Thumbnail Generation
     
     private func generateThumbnail(for url: URL, size: CGSize) async -> NSImage {
-        // Try QuickLook first - it can generate folder previews
+        // Check if the URL is a directory
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else {
+            return NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
+        }
+
+        // For directories: skip QuickLook (it only returns a generic folder icon)
+        // and go straight to composite thumbnail showing actual folder contents
+        if isDir.boolValue {
+            let icon = NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
+            icon.size = size
+            return icon
+        }
+
+        // For files: use QuickLook for rich thumbnails (images, PDFs, etc.)
         let scale = NSScreen.main?.backingScaleFactor ?? 2.0
         let request = QLThumbnailGenerator.Request(
             fileAt: url,
             size: size,
             scale: scale,
-            representationTypes: .all
+            representationTypes: .thumbnail
         )
-        
+
         do {
             let thumbnail = try await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
             return thumbnail.nsImage
         } catch {
-            // QuickLook failed, try composite thumbnail
-            if let composite = await generateCompositeThumbnail(for: url, size: size) {
-                return composite
-            }
-            
-            // Fall back to system folder icon
-            return NSWorkspace.shared.icon(forFile: url.path)
+            return NSWorkspace.shared.icon(forFile: url.path).copy() as! NSImage
         }
     }
     
@@ -200,7 +209,7 @@ public class FolderThumbnailProvider: ObservableObject {
     
     /// Compose thumbnails into a folder-style preview - runs synchronously on MainActor
     private func composeFolder(with thumbnails: [NSImage], size: CGSize) -> NSImage {
-        let folderIcon = NSWorkspace.shared.icon(forFile: "/tmp")
+        let folderIcon = NSWorkspace.shared.icon(forFile: "/tmp").copy() as! NSImage
         
         let image = NSImage(size: size)
         image.lockFocus()
@@ -225,11 +234,13 @@ public class FolderThumbnailProvider: ObservableObject {
             
             let drawRect = NSRect(x: x, y: y, width: cellWidth * 0.8, height: cellHeight * 0.8)
             
+            NSGraphicsContext.saveGraphicsState()
+            defer { NSGraphicsContext.restoreGraphicsState() }
+            
             // Draw with rounded corners and shadow
             let path = NSBezierPath(roundedRect: drawRect, xRadius: 2, yRadius: 2)
             
             // Shadow
-            NSShadow().set()
             let shadow = NSShadow()
             shadow.shadowOffset = NSSize(width: 0, height: -1)
             shadow.shadowBlurRadius = 2
@@ -238,8 +249,6 @@ public class FolderThumbnailProvider: ObservableObject {
             
             path.addClip()
             thumbnail.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-            
-            NSGraphicsContext.restoreGraphicsState()
         }
         
         image.unlockFocus()

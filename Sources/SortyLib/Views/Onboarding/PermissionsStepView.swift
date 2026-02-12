@@ -12,6 +12,7 @@ public struct PermissionsStepView: View {
     @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
+    @EnvironmentObject private var automationManager: AutomationManager
     
     public init(hasRequiredPermissions: Binding<Bool>) {
         self._hasRequiredPermissions = hasRequiredPermissions
@@ -157,8 +158,8 @@ public struct PermissionsStepView: View {
         }
         
         // Check Automation permission using FinderAutomation service
-        let automationStatus = FinderAutomation.checkAutomationPermission()
-        switch automationStatus {
+        automationManager.requestAutomationPermissionCheck()
+        switch automationManager.automationStatus {
         case .granted:
             permissionStates[.automation] = .granted
         case .denied:

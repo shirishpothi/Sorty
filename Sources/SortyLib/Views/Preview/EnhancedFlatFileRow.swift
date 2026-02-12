@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct EnhancedFlatFileRow: View {
     let file: FileItem
@@ -26,6 +27,10 @@ struct EnhancedFlatFileRow: View {
     private var renameMapping: FileRenameMapping? {
         store.renameMappings[file.id]
     }
+
+    private var fileTags: [String] {
+        store.tagMappings[file.id] ?? []
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -41,6 +46,10 @@ struct EnhancedFlatFileRow: View {
                 Spacer()
                 
                 renameIndicator
+
+                if !fileTags.isEmpty {
+                    TagDotsView(tags: fileTags)
+                }
                 
                 Text(file.formattedSize)
                     .font(.caption2)
@@ -162,7 +171,7 @@ struct EnhancedFlatFileRow: View {
             store.moveFileToUnorganized(fileID: file.id)
             onPlanChanged()
         } label: {
-            Label("Move to Unorganized", systemImage: "questionmark.folder")
+            Label("Revert Organization", systemImage: "arrow.uturn.backward")
         }
     }
     

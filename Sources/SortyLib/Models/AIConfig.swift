@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case openAI = "openai"
@@ -37,7 +38,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .gemini:
             return "Google Gemini"
         case .appleFoundationModel:
-            return "Apple Foundation Model"
+            return "Apple"
         }
     }
     
@@ -113,7 +114,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .gemini:
             return "gemini-3-flash-preview"
         case .appleFoundationModel:
-            return "default"
+            return "Apple Foundation Model"
         }
     }
     
@@ -283,28 +284,60 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         default: return false
         }
     }
-    
+
+    public var brandColor: Color {
+        switch self {
+        case .openAI:
+            return Color(red: 0.13, green: 0.71, blue: 0.42)
+        case .anthropic:
+            return Color(red: 0.85, green: 0.55, blue: 0.35)
+        case .groq:
+            return Color(red: 0.95, green: 0.45, blue: 0.25)
+        case .ollama:
+            return Color(red: 0.55, green: 0.35, blue: 0.95)
+        case .githubCopilot:
+            return Color(red: 0.32, green: 0.35, blue: 0.94)
+        case .appleFoundationModel:
+            return Color.gray
+        case .openAICompatible:
+            return Color.blue
+        case .openRouter:
+            return Color.purple
+        case .gemini:
+            return Color.cyan
+        }
+    }
+
+    public var hasColorLogo: Bool {
+        switch self {
+        case .anthropic, .gemini:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// Recommended models for this provider
     public var recommendedModels: [String] {
         switch self {
         case .openAI:
-            return ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o1-preview", "o1-mini"]
+            return ["gpt-5.2", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o4-mini", "o3", "gpt-4o", "gpt-4o-mini"]
         case .anthropic:
-            return ["claude-3-5-sonnet-20241022", "claude-3-haiku-20240307", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"]
+            return ["claude-opus-4", "claude-sonnet-4", "claude-haiku-4.5", "claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"]
         case .gemini:
-            return ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro", "gemini-2.0-flash-exp"]
+            return ["gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-pro", "gemini-1.5-flash"]
         case .groq:
-            return ["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "llama3-groq-70b-8192-tool-use-preview"]
+            return ["llama-4-70b-versatile", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
         case .openRouter:
-            return ["anthropic/claude-3.5-sonnet", "openai/gpt-4o", "google/gemini-pro-1.5", "meta-llama/llama-3.1-70b-instruct"]
+            return ["anthropic/claude-sonnet-4", "openai/gpt-5-mini", "google/gemini-2.5-flash", "meta-llama/llama-4-70b-instruct"]
         case .ollama:
-            return ["llama3", "mistral", "codellama", "phi3", "gemma2", "qwen2"]
+            return ["llama4", "llama3", "mistral", "codellama", "phi3", "gemma2", "qwen2"]
         case .githubCopilot:
-            return ["gpt-4o", "gpt-4", "gpt-3.5-turbo", "claude-3.5-sonnet"]
+            return ["gpt-5-mini", "gpt-4o", "claude-sonnet-4", "claude-3.5-sonnet"]
         case .openAICompatible:
-            return ["gpt-4", "gpt-3.5-turbo"]
+            return ["gpt-5-mini", "gpt-4o"]
         case .appleFoundationModel:
-            return ["default"]
+            return ["Apple Foundation Model"]
         }
     }
 
@@ -397,6 +430,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var enableVision: Bool // Use AI vision to analyze image content
     public var namingStyle: NamingStyle // Preferred naming convention
     public var customNamingInstructions: String? // Custom naming preferences
+    public var selectedNamingPresetId: UUID? // Selected naming preset ID
     public var visionBatchSize: Int // Number of images to process in one AI call
     
     // Automation-specific settings (for background/watched folder operations)
@@ -428,6 +462,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableVision: Bool = false,
         namingStyle: NamingStyle = .descriptive,
         customNamingInstructions: String? = nil,
+        selectedNamingPresetId: UUID? = nil,
         visionBatchSize: Int = 5,
         automationProvider: AIProvider? = nil,
         automationModel: String? = nil
@@ -456,6 +491,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.enableVision = enableVision
         self.namingStyle = namingStyle
         self.customNamingInstructions = customNamingInstructions
+        self.selectedNamingPresetId = selectedNamingPresetId
         self.visionBatchSize = visionBatchSize
         self.automationProvider = automationProvider
         self.automationModel = automationModel
@@ -485,6 +521,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableVision: false,
         namingStyle: .descriptive,
         customNamingInstructions: nil,
+        selectedNamingPresetId: nil,
         visionBatchSize: 5,
         automationProvider: nil,
         automationModel: nil
@@ -496,6 +533,7 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
     case minimalist  // [Subject]
     case technical   // [Type]_[Date]_[ID]
     case datePrefix  // YYYY-MM-DD - [Subject]
+    case custom      // User-defined naming style
     
     public var displayName: String {
         switch self {
@@ -503,6 +541,7 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
         case .minimalist: return "Minimalist (Subject Only)"
         case .technical: return "Technical (Type_Date_ID)"
         case .datePrefix: return "Date First (YYYY-MM-DD - Subject)"
+        case .custom: return "Custom"
         }
     }
     
@@ -516,6 +555,8 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
             return "Use a technical style: [Type]_[Date]_[ID].[ext] (e.g., INVOICE_20240115_ABC.pdf). Use uppercase for the type."
         case .datePrefix:
             return "Use a date-first style: YYYY-MM-DD - [Subject].[ext] (e.g., 2024-01-15 - TaxReturn.pdf)."
+        case .custom:
+            return "Follow the custom naming instructions provided by the user exactly as specified."
         }
     }
 }
