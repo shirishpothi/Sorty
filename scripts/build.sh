@@ -15,6 +15,7 @@ copy_resources_safely() {
     local spm_bundle="$2"
     local resources_dir="$3"
     local fallback_images="$4"
+    local source_resources_dir="$5"
     
     mkdir -p "${dest_dir}"
     
@@ -32,6 +33,12 @@ copy_resources_safely() {
     if [ -d "${resources_dir}" ]; then
         log_item "Syncing additional resources from Resources folder"
         rsync -a --ignore-existing "${resources_dir}/" "${dest_dir}/"
+    fi
+
+    # Priority 2b: SortyLib source resources (audio/svg not in top-level Resources)
+    if [ -d "${source_resources_dir}" ]; then
+        log_item "Syncing additional resources from SortyLib source resources"
+        rsync -a --ignore-existing --exclude "Images/" "${source_resources_dir}/" "${dest_dir}/"
     fi
     
     # Priority 3: Fallback images (only if Images folder doesn't exist yet)
@@ -147,7 +154,8 @@ mkdir -p "${BUILD_DIR}"
 mkdir -p "${RELEASE_DIR}"
 
 # Binary and App names from config if needed, or hardcoded for reliability
-BINARY_NAME="SortyApp"
+BINARY_NAME="Sorty"
+SPM_BINARY_NAME="SortyApp"
 APP_BUNDLE="Sorty.app"
 
 TOTAL_STEPS=4
@@ -208,7 +216,6 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         CODE_SIGN_IDENTITY="-" \
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGNING_REQUIRED=NO \
-        CODE_SIGN_ENTITLEMENTS="" \
         ARCHS="${BUILD_ARCHS}" \
         "${XCODE_EXTRA_FLAGS_ARRAY[@]}" \
         build 2>&1 | tee "${BUILD_DIR}/build_output.log" | tail -50; then
@@ -239,7 +246,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     SPM_BUNDLE=$(find "${BUILD_DIR}/DerivedData" -name "Sorty_SortyLib.bundle" -type d | head -1)
     IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
     
-    copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}"
+    copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
 
     # Note: Assets.xcassets is in ${PROJECT_DIR}/Resources/ and compiled to Assets.car by xcodebuild
 
@@ -338,14 +345,14 @@ else
     mkdir -p "${MACOS_DIR}"
     mkdir -p "${RESOURCES_DIR}"
 
-    # Copy binary
-    if [ -f "${BIN_PATH}/${BINARY_NAME}" ]; then
-        cp "${BIN_PATH}/${BINARY_NAME}" "${MACOS_DIR}/"
+    # Copy binary (SPM output target remains SortyApp; bundled executable is Sorty)
+    if [ -f "${BIN_PATH}/${SPM_BINARY_NAME}" ]; then
+        cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
         # Ensure binary has correct RPATH for embedded frameworks
         install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${BINARY_NAME}" 2>/dev/null || true
         strip -x "${MACOS_DIR}/${BINARY_NAME}"
     else
-        log_failure "Binary not found at ${BIN_PATH}/${BINARY_NAME}"
+        log_failure "Binary not found at ${BIN_PATH}/${SPM_BINARY_NAME}"
         exit 1
     fi
 
@@ -369,7 +376,7 @@ else
     SPM_BUNDLE_PATH="${BIN_PATH}/Sorty_SortyLib.bundle"
     IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
     
-    copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}"
+    copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
 
     # Copy entitlements
     if [ -f "${PROJECT_DIR}/Sorty.entitlements" ]; then
@@ -432,7 +439,12 @@ fi
 print_step 4 $TOTAL_STEPS "Ad-hoc Signing"
 start_step_timer "sign"
 
-codesign --force --deep --sign - "${APP_PATH}" 2>/dev/null || true
+ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
+if [ -f "${ENTITLEMENTS_FILE}" ]; then
+    codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}" 2>/dev/null || true
+else
+    codesign --force --deep --sign - "${APP_PATH}" 2>/dev/null || true
+fi
 log_success "App signed ($(get_step_duration "sign"))"
 
 APP_SIZE=$(get_file_size "${APP_PATH}")

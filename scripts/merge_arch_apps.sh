@@ -150,9 +150,15 @@ echo "Merged ${MERGED_COUNT} Mach-O files"
 # Artifact upload/download in GitHub Actions strips executable bits (files become 0644).
 # Ensure all Mach-O files in the merged app are executable before packaging/signing.
 restore_executable_permissions "${OUTPUT_APP}"
-codesign --force --deep --sign - "${OUTPUT_APP}" >/dev/null 2>&1 || true
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENTITLEMENTS_FILE="${SCRIPT_DIR}/../Sorty.entitlements"
+if [ -f "${ENTITLEMENTS_FILE}" ]; then
+    codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${OUTPUT_APP}" >/dev/null 2>&1 || true
+else
+    codesign --force --deep --sign - "${OUTPUT_APP}" >/dev/null 2>&1 || true
+fi
 
-MAIN_BIN="${OUTPUT_APP}/Contents/MacOS/SortyApp"
+MAIN_BIN="${OUTPUT_APP}/Contents/MacOS/Sorty"
 verify_executable_file "${MAIN_BIN}"
 verify_executable_file "${OUTPUT_APP}/Contents/Resources/CLI/sorty"
 verify_executable_file "${OUTPUT_APP}/Contents/Resources/CLI/learnings"

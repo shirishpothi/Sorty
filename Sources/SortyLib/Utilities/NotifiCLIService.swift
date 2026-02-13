@@ -302,13 +302,19 @@ public actor NotifiCLIService {
     }
     
     private func compileSwift(source: URL, output: URL) async throws {
+        #if arch(x86_64)
+        let targetArch = "x86_64"
+        #else
+        let targetArch = "arm64"
+        #endif
+        
         try await runProcess(
             executable: "/usr/bin/swiftc",
             arguments: [
                 source.path,
                 "-o", output.path,
-                "-target", "arm64-apple-macosx11.0",
-                "-O"  // Optimize for speed
+                "-target", "\(targetArch)-apple-macosx11.0",
+                "-O"
             ]
         )
     }
