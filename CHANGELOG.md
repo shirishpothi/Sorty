@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-02-13
+
+### Fixed
+- embed entitlements during code signing and fix NotifiCLI arch for release builds
+- Fix completion checkmark artifact and release menu bar mascot loading
+
+### Other
+- bump version to 1.1.1
+- update various components and prepare for v1.1.1 release
+
 ## [1.1.0] - 2026-02-12
 
 ### Highlights
