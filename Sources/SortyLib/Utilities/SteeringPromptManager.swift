@@ -40,6 +40,13 @@ public class SteeringPromptManager: ObservableObject {
 
     private init() {
         load()
+        setupNotificationObservers()
+    }
+
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.clearAll()
+        }
     }
 
     // MARK: - CRUD
@@ -70,6 +77,11 @@ public class SteeringPromptManager: ObservableObject {
     public func deletePrompt(id: UUID) {
         prompts.removeAll { $0.id == id }
         save()
+    }
+
+    public func clearAll() {
+        prompts.removeAll()
+        UserDefaults.standard.removeObject(forKey: SteeringPromptManager.storageKey)
     }
 
     public func setDefault(id: UUID) {

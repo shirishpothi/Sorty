@@ -84,10 +84,31 @@ public class StorageLocationsManager: ObservableObject {
     
     public init() {
         loadLocations()
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.clearAll()
+        }
     }
     
     public var enabledLocations: [StorageLocation] {
         locations.filter { $0.isEnabled && $0.exists }
+    }
+
+    public func clearAll() {
+        // Stop accessing all security scoped resources
+        for location in locations {
+            if let bookmarkData = location.bookmarkData {
+                var isStale = false
+                if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+        }
+        locations.removeAll()
+        userDefaults.removeObject(forKey: storageKey)
     }
     
     public func addLocation(_ location: StorageLocation) {

@@ -14,6 +14,9 @@ import Combine
 
 @MainActor
 class OnboardingAudioManager: ObservableObject {
+    nonisolated(unsafe) private static let defaultMelodyVolume: Float = 0.20
+    nonisolated(unsafe) private static let defaultBassVolume: Float = 0.12
+
     @Published var isPlaying = false
 
     // MARK: - Audio Engine State (nonisolated(unsafe) for audio-thread access)
@@ -35,8 +38,8 @@ class OnboardingAudioManager: ObservableObject {
         var sampleCounter: Int = 0
 
         // Volume / running
-        var melodyVolume: Float = 0.20
-        var bassVolume: Float = 0.12
+        var melodyVolume: Float = OnboardingAudioManager.defaultMelodyVolume
+        var bassVolume: Float = OnboardingAudioManager.defaultBassVolume
         var isRunning: Bool = false
 
         // Fanfare overlay
@@ -194,33 +197,54 @@ class OnboardingAudioManager: ObservableObject {
 
     /// Stop all audio and tear down the engine.
     func stopAll() {
-        guard state.isRunning else {
+        guard state.isRunning || audioPlayer != nil else {
             isPlaying = false
             return
         }
-        // Stop file-based audio player if active
-        audioPlayer?.stop()
-        audioPlayer = nil
-        state.isRunning = false
+
+        let fadeDuration: TimeInterval = 0.35
+
+        // Fade file-based audio instead of abruptly stopping.
+        if let player = audioPlayer {
+            player.setVolume(0, fadeDuration: fadeDuration)
+            let playerToStop = player
+            DispatchQueue.main.asyncAfter(deadline: .now() + fadeDuration) {
+                playerToStop.stop()
+            }
+            audioPlayer = nil
+        }
+
+        let engine = state.engine
+        let startingMelodyVolume = state.melodyVolume
+        let startingBassVolume = state.bassVolume
+
+        // Prevent new fanfare from being mixed during fade.
         state.fanfareActive = false
         isPlaying = false
 
-        let engine = state.engine
-        // Fade out briefly before stopping to avoid a click.
-        DispatchQueue.global(qos: .userInitiated).async { [state] in
-            // Quick linear fade over ~30 ms.
-            let steps = 15
-            let interval: TimeInterval = 0.002
-            for i in 0..<steps {
-                let factor = Float(steps - i - 1) / Float(steps)
-                state.melodyVolume = 0.35 * factor
-                state.bassVolume = 0.10 * factor
-                Thread.sleep(forTimeInterval: interval)
+        // Fade synthesized audio before stopping to avoid abrupt cutoff.
+        if engine != nil {
+            DispatchQueue.global(qos: .userInitiated).async { [state] in
+                let steps = 20
+                let interval = fadeDuration / Double(steps)
+                for i in 0..<steps {
+                    let factor = Float(steps - i - 1) / Float(steps)
+                    state.melodyVolume = startingMelodyVolume * factor
+                    state.bassVolume = startingBassVolume * factor
+                    Thread.sleep(forTimeInterval: interval)
+                }
+
+                state.isRunning = false
+                engine?.stop()
+
+                // Reset for next play.
+                state.melodyVolume = OnboardingAudioManager.defaultMelodyVolume
+                state.bassVolume = OnboardingAudioManager.defaultBassVolume
             }
-            engine?.stop()
-            // Reset volumes for next play.
-            state.melodyVolume = 0.20
-            state.bassVolume = 0.12
+        } else {
+            state.isRunning = false
+            state.melodyVolume = OnboardingAudioManager.defaultMelodyVolume
+            state.bassVolume = OnboardingAudioManager.defaultBassVolume
         }
     }
 

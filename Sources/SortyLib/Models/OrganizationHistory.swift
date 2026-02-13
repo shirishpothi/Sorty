@@ -18,6 +18,11 @@ public enum OrganizationStatus: String, Codable, Sendable {
     case duplicatesCleanup // New: Duplicate removal session
 }
 
+public enum OrganizationEntrySource: String, Codable, Sendable {
+    case manual
+    case watchedFolder
+}
+
 public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public let timestamp: Date
@@ -31,6 +36,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public let rawAIResponse: String?
     public var operations: [FileSystemManager.FileOperation]?
     public var isUndone: Bool
+    public var source: OrganizationEntrySource
     
     // Undo result tracking
     public var undoRestoredCount: Int?
@@ -54,6 +60,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         rawAIResponse: String? = nil,
         operations: [FileSystemManager.FileOperation]? = nil,
         isUndone: Bool = false,
+        source: OrganizationEntrySource = .manual,
         undoRestoredCount: Int? = nil,
         undoFailedFiles: [String]? = nil,
         duplicatesDeleted: Int? = nil,
@@ -85,6 +92,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         self.rawAIResponse = rawAIResponse
         self.operations = operations
         self.isUndone = isUndone
+        self.source = source
         self.undoRestoredCount = undoRestoredCount
         self.undoFailedFiles = undoFailedFiles
         self.duplicatesDeleted = duplicatesDeleted
@@ -110,6 +118,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         rawAIResponse = try container.decodeIfPresent(String.self, forKey: .rawAIResponse)
         operations = try container.decodeIfPresent([FileSystemManager.FileOperation].self, forKey: .operations)
         isUndone = try container.decodeIfPresent(Bool.self, forKey: .isUndone) ?? false
+        source = try container.decodeIfPresent(OrganizationEntrySource.self, forKey: .source) ?? .manual
         undoRestoredCount = try container.decodeIfPresent(Int.self, forKey: .undoRestoredCount)
         undoFailedFiles = try container.decodeIfPresent([String].self, forKey: .undoFailedFiles)
         
@@ -143,6 +152,13 @@ public class OrganizationHistory: ObservableObject {
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
         loadHistory()
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.clearHistory()
+        }
     }
     
     public func addEntry(_ entry: OrganizationHistoryEntry) {

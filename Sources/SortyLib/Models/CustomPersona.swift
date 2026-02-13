@@ -56,11 +56,23 @@ public class CustomPersonaStore: ObservableObject {
     
     public init() {
         loadPersonas()
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.clearAll()
+        }
     }
     
     public func addPersona(_ persona: CustomPersona) {
         customPersonas.append(persona)
         savePersonas()
+    }
+
+    public func clearAll() {
+        customPersonas.removeAll()
+        userDefaults.removeObject(forKey: storageKey)
     }
     
     public func updatePersona(_ persona: CustomPersona) {

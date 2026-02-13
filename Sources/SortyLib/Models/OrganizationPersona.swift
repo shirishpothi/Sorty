@@ -142,6 +142,13 @@ public class PersonaManager: ObservableObject {
         loadPersona()
         loadCustomPrompts()
         loadCustomPersonaId()
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.reset()
+        }
     }
     
     public func selectPersona(_ persona: PersonaType) {
@@ -184,6 +191,15 @@ public class PersonaManager: ObservableObject {
     public func resetCustomPrompt(for persona: PersonaType) {
         customPrompts.removeValue(forKey: persona)
         saveCustomPrompts()
+    }
+
+    public func reset() {
+        selectedPersona = .general
+        selectedCustomPersonaId = nil
+        customPrompts.removeAll()
+        userDefaults.removeObject(forKey: storageKey)
+        userDefaults.removeObject(forKey: customPromptsKey)
+        userDefaults.removeObject(forKey: customIdKey)
     }
     
     private func loadPersona() {

@@ -425,8 +425,12 @@ public final class ModelCatalog: ObservableObject {
         
         apiKey = KeychainManager.get(key: AIProvider.openAICompatible.keychainKey)
         
+        var urlString = apiURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !urlString.contains("://") && !urlString.isEmpty {
+            urlString = "https://" + urlString
+        }
+
         // Ensure URL ends with /v1/models or similar if it's just a base URL
-        var urlString = apiURL
         if !urlString.hasSuffix("/models") {
             if urlString.hasSuffix("/") {
                 urlString += "v1/models"
@@ -435,7 +439,7 @@ public final class ModelCatalog: ObservableObject {
             }
         }
         
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: urlString), url.scheme != nil else {
             return (openAICompatibleFallback(), true)
         }
         

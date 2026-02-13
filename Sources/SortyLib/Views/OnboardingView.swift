@@ -33,7 +33,7 @@ public struct OnboardingView: View {
             VStack(spacing: 0) {
                 // Progress indicator
                 OnboardingProgressBar(currentStep: currentStep)
-                    .padding(.top, 16)
+                    .padding(.top, 28)
                     .padding(.horizontal, 60)
                 
                 // Main content
@@ -86,84 +86,95 @@ public struct OnboardingView: View {
     }
     
     private var navigationControls: some View {
-        HStack(spacing: 16) {
-            // Back button - show for all steps except welcome and completion
-            if currentStep != .welcome && currentStep != .completion {
-                Button {
-                    HapticFeedbackManager.shared.selection()
-                    withAnimation(.pageTransition) {
-                        currentStep = currentStep.previous
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("Back")
-                    }
-                    .frame(minWidth: 80)
-                }
-                .buttonStyle(.bordered)
-                .keyboardShortcut(.leftArrow, modifiers: [])
-            }
-            
-            Spacer()
-            
-            // Step indicators
-            stepIndicator
-            
-            Spacer()
-            
-            // Next/Skip button
-            if currentStep != .completion {
-                if currentStep == .demo {
-                    Button {
-                        HapticFeedbackManager.shared.selection()
-                        withAnimation(.pageTransition) {
-                            currentStep = .completion
-                        }
-                    } label: {
-                        Text("Skip Demo")
+        let sideControlWidth: CGFloat = 180
+
+        return ZStack {
+            HStack(spacing: 16) {
+                // Back button - show for all steps except welcome and completion
+                Group {
+                    if currentStep != .welcome && currentStep != .completion {
+                        Button {
+                            HapticFeedbackManager.shared.selection()
+                            withAnimation(.pageTransition) {
+                                currentStep = currentStep.previous
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "chevron.left")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("Back")
+                            }
                             .frame(minWidth: 80)
+                        }
+                        .buttonStyle(.bordered)
+                        .keyboardShortcut(.leftArrow, modifiers: [])
                     }
-                    .buttonStyle(.bordered)
-                } else if currentStep == .welcome {
-                    Button {
-                        HapticFeedbackManager.shared.selection()
-                        withAnimation(.pageTransition) {
-                            currentStep = currentStep.next
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("Get Started")
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                    }
-                    .buttonStyle(.onboardingPill)
-                    .keyboardShortcut(.defaultAction)
-                } else {
-                    // Determine if Continue should be disabled on permissions step
-                    let canProceed = currentStep != .permissions || hasFilesAndFoldersPermission
-                    
-                    Button {
-                        HapticFeedbackManager.shared.selection()
-                        withAnimation(.pageTransition) {
-                            currentStep = currentStep.next
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(currentStep == .permissions ? "Continue" : "Next")
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                    }
-                    .buttonStyle(.onboardingPill)
-                    .keyboardShortcut(.rightArrow, modifiers: [])
-                    .disabled(!canProceed)
-                    .opacity(canProceed ? 1.0 : 0.5)
                 }
+                .frame(width: sideControlWidth, alignment: .leading)
+
+                Spacer(minLength: 0)
+
+                // Next/Skip button
+                Group {
+                    if currentStep != .completion {
+                        if currentStep == .demo {
+                            Button {
+                                HapticFeedbackManager.shared.selection()
+                                withAnimation(.pageTransition) {
+                                    currentStep = .completion
+                                }
+                            } label: {
+                                Text("Skip Demo")
+                                    .frame(minWidth: 80)
+                            }
+                            .buttonStyle(.bordered)
+                        } else if currentStep == .welcome {
+                            Button {
+                                HapticFeedbackManager.shared.selection()
+                                withAnimation(.pageTransition) {
+                                    currentStep = currentStep.next
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("Get Started")
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                            }
+                            .buttonStyle(.onboardingPill)
+                            .keyboardShortcut(.defaultAction)
+                        } else {
+                            // Determine if Continue should be disabled on permissions step
+                            let canProceed = currentStep != .permissions || hasFilesAndFoldersPermission
+
+                            Button {
+                                HapticFeedbackManager.shared.selection()
+                                withAnimation(.pageTransition) {
+                                    currentStep = currentStep.next
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text(currentStep == .permissions ? "Continue" : "Next")
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                            }
+                            .buttonStyle(.onboardingPill)
+                            .keyboardShortcut(.rightArrow, modifiers: [])
+                            .disabled(!canProceed)
+                            .opacity(canProceed ? 1.0 : 0.5)
+                        }
+                    }
+                }
+                .frame(width: sideControlWidth, alignment: .trailing)
             }
+            .frame(maxWidth: .infinity)
+
+            // Step indicators - always centered in the navigation row
+            stepIndicator
         }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 44)
     }
     
     private var stepIndicator: some View {
@@ -253,6 +264,7 @@ struct OnboardingProgressBar: View {
                 .frame(width: 80)
             }
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

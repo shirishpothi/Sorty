@@ -393,7 +393,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 customPrompt: folder.customPrompt,
                 temperature: folder.temperature,
                 providerOverride: folder.providerOverride,
-                modelOverride: folder.modelOverride
+                modelOverride: folder.modelOverride,
+                historySource: .watchedFolder
             )
             
             folderWatcher.resume(folder)

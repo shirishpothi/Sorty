@@ -39,10 +39,6 @@ struct SimulatedDemoAnimationView: View {
     @State private var pendingWorkItems: [DispatchWorkItem] = []
 
     @StateObject private var audioManager = OnboardingAudioManager()
-    @State private var backgroundGradientPhase: Double = 0
-    @State private var glowIntensity: Double = 0
-    @State private var glowColor: Color = .purple
-    @State private var showBackgroundParticles: Bool = false
 
     enum DemoPhase: CaseIterable {
         case messy
@@ -89,48 +85,12 @@ struct SimulatedDemoAnimationView: View {
     
     var body: some View {
         ZStack {
-            // Animated gradient background - more vibrant, shifting colors
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color.purple.opacity(0.12 + sin(backgroundGradientPhase) * 0.06),
-                        Color.blue.opacity(0.08 + cos(backgroundGradientPhase * 0.7) * 0.04),
-                        Color.indigo.opacity(0.07 + sin(backgroundGradientPhase * 1.3) * 0.04),
-                        Color.clear
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.controlBackgroundColor).opacity(0.7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
                 )
-
-                // Secondary radial glow for depth
-                RadialGradient(
-                    colors: [
-                        glowColor.opacity(glowIntensity * 0.5),
-                        Color.clear
-                    ],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: 400
-                )
-            }
-            .ignoresSafeArea()
-            .animation(.easeInOut(duration: 5.0).repeatForever(autoreverses: true), value: backgroundGradientPhase)
-
-            // Phase-specific glow
-            Circle()
-                .fill(glowColor.opacity(glowIntensity))
-                .frame(width: 350, height: 350)
-                .blur(radius: 150)
-                .offset(y: -50)
-                .animation(.easeInOut(duration: 1.5), value: glowIntensity)
-                .animation(.easeInOut(duration: 1.0), value: glowColor)
-
-            // Ambient floating particles
-            if showBackgroundParticles {
-                ForEach(0..<10, id: \.self) { i in
-                    DemoFloatingParticle(index: i)
-                }
-            }
 
         VStack(spacing: 24) {
             phaseIndicator
@@ -180,8 +140,6 @@ struct SimulatedDemoAnimationView: View {
             files = sampleFiles
             folders = sampleFolders
             fileRotations = (0..<sampleFiles.count).map { _ in Double.random(in: -15...15) }
-            backgroundGradientPhase = 1.0
-            showBackgroundParticles = true
             startAnimation()
         }
         .onDisappear {
@@ -197,10 +155,10 @@ struct SimulatedDemoAnimationView: View {
         HStack(spacing: 8) {
             ForEach(0..<6) { index in
                 Circle()
-                    .fill(phaseIndex >= index ? Color.purple : Color.secondary.opacity(0.3))
+                    .fill(phaseIndex >= index ? Color.accentColor : Color.secondary.opacity(0.3))
                     .frame(width: 8, height: 8)
                     .scaleEffect(phaseIndex == index ? 1.3 : 1.0)
-                    .shadow(color: phaseIndex == index ? Color.purple.opacity(0.5) : .clear, radius: 4)
+                    .shadow(color: phaseIndex == index ? Color.accentColor.opacity(0.4) : .clear, radius: 4)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: phaseIndex)
             }
         }
@@ -245,7 +203,7 @@ struct SimulatedDemoAnimationView: View {
                     .offset(messyOffset(for: index))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.purple, lineWidth: 2)
+                            .stroke(Color.accentColor, lineWidth: 2)
                             .opacity(scanLinePosition(for: index) ? 1 : 0)
                             .animation(.easeInOut(duration: 0.2), value: scanLinePosition(for: index))
                     )
@@ -256,7 +214,7 @@ struct SimulatedDemoAnimationView: View {
                 Rectangle()
                     .fill(
                         LinearGradient(
-                            colors: [.purple.opacity(0), .purple.opacity(0.15), .purple.opacity(0)],
+                            colors: [.accentColor.opacity(0), .accentColor.opacity(0.12), .accentColor.opacity(0)],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -268,7 +226,7 @@ struct SimulatedDemoAnimationView: View {
                 Rectangle()
                     .fill(
                         LinearGradient(
-                            colors: [.purple.opacity(0), .purple.opacity(0.6), .purple.opacity(0)],
+                            colors: [.accentColor.opacity(0), .accentColor.opacity(0.45), .accentColor.opacity(0)],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
@@ -297,7 +255,7 @@ struct SimulatedDemoAnimationView: View {
                         .scaleEffect(0.9)
                 }
                 
-                BouncingSpinner(size: 50, color: .purple)
+                BouncingSpinner(size: 50, color: .accentColor)
             }
             .frame(maxHeight: .infinity)
             
@@ -307,7 +265,7 @@ struct SimulatedDemoAnimationView: View {
                     name: "Minimal",
                     description: "Clean, simple folder structure",
                     icon: "square.grid.2x2",
-                    color: .purple,
+                    color: .accentColor,
                     isApplying: $personaApplying
                 )
                 .frame(width: 280)
@@ -386,7 +344,7 @@ struct SimulatedDemoAnimationView: View {
                 ZStack {
                     Image(systemName: "arrow.right")
                         .font(.title)
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(Color.accentColor)
                         .symbolEffect(.pulse.byLayer, options: .repeating)
                     
                     // Sliver animation overlay
@@ -397,7 +355,7 @@ struct SimulatedDemoAnimationView: View {
                 HStack(spacing: 4) {
                     ForEach(0..<3) { i in
                         Circle()
-                            .fill(Color.purple.opacity(0.5))
+                            .fill(Color.accentColor.opacity(0.5))
                             .frame(width: 4, height: 4)
                             .offset(y: organizedCount % 3 == i ? -3 : 0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.5).delay(Double(i) * 0.1), value: organizedCount)
@@ -463,7 +421,7 @@ struct SimulatedDemoAnimationView: View {
     private var aiThoughtBubble: some View {
         HStack(spacing: 8) {
             Image(systemName: thoughtIcon)
-                .foregroundStyle(.purple)
+                .foregroundStyle(Color.accentColor)
                 .contentTransition(.interpolate)
             
             Text(currentThought)
@@ -475,8 +433,8 @@ struct SimulatedDemoAnimationView: View {
         .padding(.vertical, 10)
         .background(
             Capsule()
-                .fill(Color.purple.opacity(0.1))
-                .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+                .fill(Color.accentColor.opacity(0.1))
+                .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
         )
         .opacity(thoughtOpacity)
         .animation(.easeInOut(duration: 0.3), value: currentThought)
@@ -600,7 +558,6 @@ struct SimulatedDemoAnimationView: View {
             transitionParticles = false
             audioManager.playPhaseSound(.scanning)
             audioManager.startAmbientPulse(interval: 0.8)
-            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .blue; glowIntensity = 0.12 }
             showThought(aiThoughts[0]) // "Scanning file types..."
 
             withAnimation(.easeInOut(duration: 2.5)) {
@@ -638,7 +595,6 @@ struct SimulatedDemoAnimationView: View {
             }
             audioManager.stopAmbientPulse()
             audioManager.playPhaseSound(.thinking)
-            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .purple; glowIntensity = 0.15 }
             showThought(aiThoughts[3]) // "Detected document patterns"
 
             try? await Task.sleep(nanoseconds: 800_000_000)
@@ -676,7 +632,6 @@ struct SimulatedDemoAnimationView: View {
             guard !Task.isCancelled else { return }
             transitionParticles = false
             audioManager.playPhaseSound(.comparing)
-            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .orange; glowIntensity = 0.12 }
             showThought(aiThoughts[6]) // "Comparing organization options..."
 
             try? await Task.sleep(nanoseconds: 1_200_000_000)
@@ -720,7 +675,6 @@ struct SimulatedDemoAnimationView: View {
             transitionParticles = false
             audioManager.playPhaseSound(.organizing)
             audioManager.startAmbientPulse(interval: 0.5)
-            withAnimation(.easeInOut(duration: 1.0)) { glowColor = .green; glowIntensity = 0.15 }
             showThought(aiThoughts[8]) // "Moving files to categories"
 
             // Show folders appearing
@@ -766,7 +720,6 @@ struct SimulatedDemoAnimationView: View {
             }
             audioManager.stopAmbientPulse()
             audioManager.playCompletionFanfare()
-            withAnimation(.easeInOut(duration: 1.2)) { glowColor = .green; glowIntensity = 0.2 }
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             transitionParticles = false

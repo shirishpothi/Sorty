@@ -1422,7 +1422,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // MARK: - Incremental Organization (for watched folders)
 
-    public func organizeIncremental(directory: URL, specificFiles: [String]? = nil, customPrompt: String? = nil, temperature: Double? = nil, providerOverride: AIProvider? = nil, modelOverride: String? = nil) async throws {
+    public func organizeIncremental(
+        directory: URL,
+        specificFiles: [String]? = nil,
+        customPrompt: String? = nil,
+        temperature: Double? = nil,
+        providerOverride: AIProvider? = nil,
+        modelOverride: String? = nil,
+        historySource: OrganizationEntrySource = .manual
+    ) async throws {
         guard !isOperationInProgress() else {
             DebugLogger.log("Incremental organization blocked: Already in progress")
             return
@@ -1432,7 +1440,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         isCancellationRequested = false
 
         currentTask = Task {
-            try await performIncrementalOrganization(directory: directory, specificFiles: specificFiles, customPrompt: customPrompt, temperature: temperature, providerOverride: providerOverride, modelOverride: modelOverride)
+            try await performIncrementalOrganization(
+                directory: directory,
+                specificFiles: specificFiles,
+                customPrompt: customPrompt,
+                temperature: temperature,
+                providerOverride: providerOverride,
+                modelOverride: modelOverride,
+                historySource: historySource
+            )
         }
         defer { currentTask = nil }
 
@@ -1443,7 +1459,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    private func performIncrementalOrganization(directory: URL, specificFiles: [String]?, customPrompt: String?, temperature: Double?, providerOverride: AIProvider? = nil, modelOverride: String? = nil) async throws {
+    private func performIncrementalOrganization(
+        directory: URL,
+        specificFiles: [String]?,
+        customPrompt: String?,
+        temperature: Double?,
+        providerOverride: AIProvider? = nil,
+        modelOverride: String? = nil,
+        historySource: OrganizationEntrySource = .manual
+    ) async throws {
         // Use override client if specified, otherwise use default
         let client: AIClientProtocol
         if let providerOverride = providerOverride, let modelOverride = modelOverride {
@@ -1475,10 +1499,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             // We assume specificFiles are filenames or relative paths
             for filename in specificFiles {
                 let fileURL = directory.appendingPathComponent(filename)
-                if let item = try? await scanner.scanFile(at: fileURL) {
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isDirectory) else {
+                    continue
+                }
+
+                if isDirectory.boolValue {
+                    if let nestedFiles = try? await scanner.scanDirectory(at: fileURL) {
+                        files.append(contentsOf: nestedFiles)
+                    }
+                } else if let item = try? await scanner.scanFile(at: fileURL) {
                     files.append(item)
                 }
             }
+            files = Array(Set(files))
             setScannedFiles(files)
         } else {
             // Fallback to scanning root
@@ -1579,7 +1613,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Auto-apply for incremental
-            try await apply(at: directory, dryRun: false, enableTagging: true)
+            try await apply(at: directory, dryRun: false, enableTagging: true, source: historySource)
 
         } catch {
             stopTimeoutTimer()
@@ -1760,7 +1794,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // MARK: - Apply Organization
 
-    public func apply(at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true) async throws {
+    public func apply(at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true, source: OrganizationEntrySource = .manual) async throws {
         guard let plan = currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
@@ -1813,7 +1847,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 success: true,
                 status: .completed,
                 rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
-                operations: operations
+                operations: operations,
+                source: source
             )
 
             await MainActor.run {
@@ -1863,7 +1898,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 success: false,
                 status: .failed,
                 errorMessage: error.localizedDescription,
-                rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
+                rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                source: source
             )
 
             await MainActor.run {

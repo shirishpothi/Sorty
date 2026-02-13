@@ -38,8 +38,12 @@ public enum SortyResources {
     /// Detects the appropriate resource bundle using multiple strategies
     private static func detectResourceBundle() -> Bundle {
         // Strategy 0: SwiftPM module bundle (most reliable for SPM resources)
+        // NOTE: Bundle.module's accessor calls fatalError if the .bundle directory
+        // doesn't exist at runtime (e.g., xcodebuild release that didn't produce it).
+        // We pre-check for the bundle file before accessing Bundle.module to avoid
+        // an EXC_BREAKPOINT crash at launch.
         #if SWIFT_PACKAGE
-        if hasResources(in: Bundle.module) {
+        if spmBundleExistsOnDisk(), hasResources(in: Bundle.module) {
             logger.debug("Using Bundle.module for SPM resources")
             return Bundle.module
         }
@@ -128,6 +132,20 @@ public enum SortyResources {
         }
 
         return nil
+    }
+
+    /// Pre-flight check: verify the SPM resource bundle file actually exists on disk
+    /// before calling `Bundle.module` (whose generated accessor calls `fatalError` if missing).
+    private static func spmBundleExistsOnDisk() -> Bool {
+        let bundleName = "Sorty_SortyLib.bundle"
+        let candidates = [
+            Bundle.main.bundleURL.appendingPathComponent(bundleName),
+            Bundle.main.resourceURL?.appendingPathComponent(bundleName),
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/\(bundleName)"),
+            Bundle(for: BundleLocator.self).resourceURL?.appendingPathComponent(bundleName),
+        ].compactMap { $0 }
+
+        return candidates.contains { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     /// Helper class for bundle location via class-based lookup
@@ -282,8 +300,14 @@ public enum SortyResources {
         }
         
         // Final fallback: standard SF Symbol
-        let symbol = NSImage(systemSymbolName: "folder.fill.badge.gearshape", accessibilityDescription: "Sorty")!
-        symbol.isTemplate = true
-        return symbol
+        if let symbol = NSImage(systemSymbolName: "folder.fill.badge.gearshape", accessibilityDescription: "Sorty") {
+            symbol.isTemplate = true
+            return symbol
+        }
+        
+        // Absolute last resort: 1×1 empty template image (should never happen)
+        let empty = NSImage(size: NSSize(width: 18, height: 18))
+        empty.isTemplate = true
+        return empty
     }
 }

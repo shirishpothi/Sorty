@@ -10,6 +10,7 @@ import SwiftUI
 struct TroubleshootingSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var notificationSettings: NotificationSettingsManager
+    @EnvironmentObject var appState: AppState
     
     @State private var cacheSize: String = "Calculating..."
     @State private var showingResetConfirmation = false
@@ -69,11 +70,11 @@ struct TroubleshootingSettingsView: View {
             .animatedAppearance(delay: 0.1)
             .alert("Reset All Settings?", isPresented: $showingResetConfirmation) {
                 Button("Cancel", role: .cancel) {}
-                Button("Reset & Restart", role: .destructive) {
+                Button("Reset", role: .destructive) {
                     resetAllSettings()
                 }
             } message: {
-                Text("This will completely reset Sorty to its initial state, clearing all settings, history, and learnings. The app will restart and you'll go through onboarding again. This cannot be undone.")
+                Text("This will completely reset Sorty to its initial state, clearing all settings, history, and learnings. You'll go through onboarding again. This cannot be undone.")
             }
             
             // Common Issues section added for better Help integration
@@ -217,10 +218,9 @@ struct TroubleshootingSettingsView: View {
         
         HapticFeedbackManager.shared.success()
         
-        // Force app restart to apply all changes
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-            NSApplication.shared.terminate(nil)
+        // Take user to onboarding screen immediately
+        withAnimation(.spring()) {
+            appState.hasCompletedOnboarding = false
         }
     }
 }

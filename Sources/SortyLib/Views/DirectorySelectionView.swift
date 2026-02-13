@@ -11,7 +11,6 @@ import UniformTypeIdentifiers
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var iconBounce = false
@@ -132,6 +131,7 @@ struct DirectorySelectionView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(isTargeted ? Color.accentColor.opacity(0.05) : Color.secondary.opacity(0.05))
                 )
+                .frame(width: 220, height: settingsViewModel.config.enableSmartRename ? 120 : 150)
                 .scaleEffect(isTargeted ? 1.05 : 1.0)
                 .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
@@ -156,11 +156,10 @@ struct DirectorySelectionView: View {
                     .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
             }
         }
-        .frame(width: 220, height: settingsViewModel.config.enableSmartRename ? 120 : 150)
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.9)
         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
-        .contentShape(Rectangle())
+        .contentShape(RoundedRectangle(cornerRadius: 16))
         .onHover { hovering in
             isHovering = hovering
             if hovering {
@@ -201,22 +200,12 @@ struct DirectorySelectionView: View {
                     description: "Finder extension"
                 )
             } else {
-                if showMenuBarExtra {
-                    QuickTipItemCompact(
-                        icon: "menubar.arrow.up.rectangle",
-                        title: "Menu Bar",
-                        description: "Open menu"
-                    ) {
-                        openMenuBarTip()
-                    }
-                } else {
-                    QuickTipItemCompact(
-                        icon: "menubar.rectangle",
-                        title: "Enable Menu Bar",
-                        description: "Turn on menu bar icon"
-                    ) {
-                        enableMenuBarTip()
-                    }
+                QuickTipItemCompact(
+                    icon: "menubar.rectangle",
+                    title: "Menu Bar",
+                    description: "Open menu"
+                ) {
+                    openMenuBarTip()
                 }
             }
 
@@ -247,16 +236,9 @@ struct DirectorySelectionView: View {
 
     private func openMenuBarTip() {
         HapticFeedbackManager.shared.tap()
-        MenuBarHelper.shared.showMenu()
-    }
-
-    private func enableMenuBarTip() {
-        HapticFeedbackManager.shared.tap()
-        showMenuBarExtra = true
-        NotificationManager.shared.showInfo(
-            title: "Menu Bar Icon Enabled",
-            message: "You can now drop folders directly onto the Sorty icon in your menu bar."
-        )
+        if !UserDefaults.standard.bool(forKey: "showMenuBarIcon") {
+            UserDefaults.standard.set(true, forKey: "showMenuBarIcon")
+        }
         MenuBarHelper.shared.showMenu()
     }
 
@@ -300,11 +282,9 @@ struct QuickTipItemCompact: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
         .scaleEffect(isHovering ? 1.03 : 1.0)
         .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isHovering)
+        .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .onTapGesture { action?() }
     }
@@ -344,7 +324,6 @@ struct OrganizationModeCard: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .padding(.horizontal, 6)
-            .contentShape(RoundedRectangle(cornerRadius: 16))
             .background {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(isSelected ? Color.accentColor : Color.secondary.opacity(isHovering ? 0.12 : 0.06))

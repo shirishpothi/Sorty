@@ -18,6 +18,13 @@ public class NamingPresetManager: ObservableObject {
 
     private init() {
         load()
+        setupNotificationObservers()
+    }
+
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.clearAll()
+        }
     }
 
     // MARK: - Stable UUID Generation
@@ -75,6 +82,11 @@ public class NamingPresetManager: ObservableObject {
         guard !builtInPresets.contains(where: { $0.id == id }) else { return }
         customPresets.removeAll { $0.id == id }
         save()
+    }
+
+    public func clearAll() {
+        customPresets.removeAll()
+        UserDefaults.standard.removeObject(forKey: NamingPresetManager.storageKey)
     }
 
     public func preset(for id: UUID) -> NamingPreset? {

@@ -11,16 +11,23 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
     
     /// Helper to construct the full endpoint URL from a base URL
     static func constructEndpoint(from apiURL: String) -> String {
-        if apiURL.hasSuffix("/v1/chat/completions") {
-             return apiURL
-        } else if apiURL.hasSuffix("/v1") {
-             return "\(apiURL)/chat/completions"
-        } else if apiURL.hasSuffix("/v1/") {
-             return "\(apiURL)chat/completions"
-        } else if apiURL.hasSuffix("/") {
-             return "\(apiURL)v1/chat/completions"
+        var base = apiURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Prepend https:// if no scheme is present
+        if !base.contains("://") && !base.isEmpty {
+            base = "https://" + base
+        }
+        
+        if base.hasSuffix("/v1/chat/completions") {
+             return base
+        } else if base.hasSuffix("/v1") {
+             return "\(base)/chat/completions"
+        } else if base.hasSuffix("/v1/") {
+             return "\(base)chat/completions"
+        } else if base.hasSuffix("/") {
+             return "\(base)v1/chat/completions"
         } else {
-             return "\(apiURL)/v1/chat/completions"
+             return "\(base)/v1/chat/completions"
         }
     }
     public let config: AIConfig
@@ -49,7 +56,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         // Ollama: http://localhost:11434/v1/chat/completions
         let endpoint = OpenAIClient.constructEndpoint(from: apiURL)
         
-        guard let url = URL(string: endpoint) else {
+        guard let url = URL(string: endpoint), url.scheme != nil else {
             throw AIClientError.invalidURL
         }
         
@@ -101,7 +108,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         
         let endpoint = OpenAIClient.constructEndpoint(from: apiURL)
         
-        guard let url = URL(string: endpoint) else {
+        guard let url = URL(string: endpoint), url.scheme != nil else {
             throw AIClientError.invalidURL
         }
         
@@ -168,7 +175,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         
         let endpoint = OpenAIClient.constructEndpoint(from: apiURL)
         
-        guard let url = URL(string: endpoint) else {
+        guard let url = URL(string: endpoint), url.scheme != nil else {
             throw AIClientError.invalidURL
         }
         
@@ -247,7 +254,7 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
             modelsURL = baseURL + "/v1/models"
         }
         
-        guard let url = URL(string: modelsURL) else {
+        guard let url = URL(string: modelsURL), url.scheme != nil else {
             throw AIClientError.invalidURL
         }
         

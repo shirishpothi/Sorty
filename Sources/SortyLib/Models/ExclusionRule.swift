@@ -453,6 +453,13 @@ public class ExclusionRulesManager: ObservableObject {
         if rules.isEmpty {
             setupDefaultRules()
         }
+        setupNotificationObservers()
+    }
+
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.clearEverything()
+        }
     }
 
     // MARK: - Rule Management
@@ -460,6 +467,16 @@ public class ExclusionRulesManager: ObservableObject {
     public func addRule(_ rule: ExclusionRule) {
         rules.append(rule)
         saveRules()
+    }
+
+    public func clearEverything() {
+        rules.removeAll()
+        activePresetName = nil
+        naturalLanguageExceptions.removeAll()
+        userDefaults.removeObject(forKey: rulesKey)
+        userDefaults.removeObject(forKey: presetKey)
+        userDefaults.removeObject(forKey: nlExceptionsKey)
+        setupDefaultRules()
     }
 
     public func removeRule(_ rule: ExclusionRule) {

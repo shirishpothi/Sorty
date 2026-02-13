@@ -68,7 +68,15 @@ public final class BatchOrganizationManager: ObservableObject {
     private var currentBatchFolders: Set<URL> = []
     private var lastBatchEntries: [OrganizationHistoryEntry] = []
 
-    public init() {}
+    public init() {
+        setupNotificationObservers()
+    }
+
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.reset()
+        }
+    }
 
     public var totalFolders: Int {
         selectedFolders.count

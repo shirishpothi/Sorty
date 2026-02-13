@@ -40,13 +40,7 @@ public struct DemoStepView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Image(systemName: demoState == .simulatedDemo ? "sparkles" : "wand.and.stars")
                         .font(.system(size: 48))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.purple, .blue],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundStyle(Color.accentColor)
                         .symbolEffect(.pulse.byLayer, options: .repeating, isActive: demoState == .simulatedDemo)
                     
                     Text(demoState == .complete ? "That's Sorty!" : "See the Magic")
@@ -58,10 +52,10 @@ public struct DemoStepView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        DemoFeatureRow(icon: "magnifyingglass", text: "Deep file analysis", isActive: demoState == .simulatedDemo || demoState == .analyzing)
-                        DemoFeatureRow(icon: "brain", text: "AI-powered categorization", isActive: demoState == .simulatedDemo || demoState == .organizing)
-                        DemoFeatureRow(icon: "folder.badge.gearshape", text: "Smart folder structure", isActive: demoState == .complete)
-                        DemoFeatureRow(icon: "arrow.uturn.backward.circle", text: "Fully reversible changes", isActive: demoState == .complete)
+                        DemoFeatureRow(icon: "magnifyingglass", activeIcon: "magnifyingglass.circle.fill", text: "Deep file analysis", isActive: demoState == .simulatedDemo || demoState == .analyzing)
+                        DemoFeatureRow(icon: "brain.head.profile", activeIcon: "brain.head.profile", text: "AI-powered categorization", isActive: demoState == .simulatedDemo || demoState == .organizing)
+                        DemoFeatureRow(icon: "folder.badge.gearshape", activeIcon: "folder.badge.gearshape", text: "Smart folder structure", isActive: demoState == .complete)
+                        DemoFeatureRow(icon: "arrow.uturn.backward.circle", activeIcon: "arrow.uturn.backward.circle.fill", text: "Fully reversible changes", isActive: demoState == .complete)
                     }
                     .padding(.top, 8)
                 }
@@ -122,24 +116,12 @@ public struct DemoStepView: View {
         VStack(spacing: 28) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.purple.opacity(0.15), .blue.opacity(0.15)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(Color.accentColor.opacity(0.12))
                     .frame(width: 100, height: 100)
                 
                 Image(systemName: "sparkles")
                     .font(.system(size: 48))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .foregroundStyle(Color.accentColor)
                     .symbolEffect(.pulse.byLayer, options: .repeating)
             }
             
@@ -326,7 +308,7 @@ public struct DemoStepView: View {
                 )
                 
                 ProcessingStepRow(
-                    icon: "brain",
+                    icon: "brain.head.profile",
                     text: "AI analyzing patterns...",
                     isComplete: demoState == .complete,
                     isActive: demoState == .organizing
@@ -572,27 +554,27 @@ public struct DemoStepView: View {
 
 struct DemoFeatureRow: View {
     let icon: String
+    let activeIcon: String
     let text: String
     let isActive: Bool
     
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: isActive ? "\(icon).fill" : icon)
-                .font(.system(size: 14))
-                .foregroundStyle(isActive ? .green : .secondary)
-                .frame(width: 20)
+            ZStack {
+                Circle()
+                    .fill(isActive ? Color.green.opacity(0.15) : Color.secondary.opacity(0.1))
+                    .frame(width: 26, height: 26)
+
+                Image(systemName: isActive ? activeIcon : icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isActive ? .green : .secondary)
+            }
             
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(isActive ? .primary : .secondary)
             
             Spacer()
-            
-            if isActive {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                    .font(.caption)
-            }
         }
     }
 }

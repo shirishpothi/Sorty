@@ -465,12 +465,16 @@ public struct ProviderSelectionStepView: View {
                     Button {
                         testConnection()
                     } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "network")
+                        HStack(spacing: 8) {
+                            Image(systemName: "bolt.horizontal.circle.fill")
                             Text("Test Connection")
                         }
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
                     .disabled(!canTestConnection)
                     
                 case .testing:

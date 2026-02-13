@@ -130,6 +130,13 @@ public class DuplicateSettingsManager: ObservableObject {
         } else {
             self.settings = DuplicateSettings()
         }
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.reset()
+        }
     }
     
     public func save() {

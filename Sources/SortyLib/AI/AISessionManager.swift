@@ -73,7 +73,9 @@ public class AISessionManager: ObservableObject {
                 return existing
             }
             LogManager.shared.log("Config changed for \(provider.displayName), recreating session", category: "AISessionManager")
-            existing.invalidateAndCancel()
+            // Don't call invalidateAndCancel() here as it can cause crashes (NSGenericException)
+            // if other concurrent tasks are still using this session or about to use it.
+            // The session will be naturally deallocated once all tasks referencing it complete.
             sessions.removeValue(forKey: provider)
             sessionSignatures.removeValue(forKey: provider)
         }
@@ -224,9 +226,14 @@ public class AISessionManager: ObservableObject {
     /// Get the appropriate URLs for prewarming (models endpoint and fallback to base URL)
     /// Returns array of URLs to try in order - specific endpoint first, then root URL
     private func getPrewarmURLs(for provider: AIProvider, config: AIConfig) -> [URL] {
-        let baseURLString = (config.apiURL?.isEmpty ?? true) ? provider.defaultAPIURL : config.apiURL
+        let rawURLString = (config.apiURL?.isEmpty ?? true) ? provider.defaultAPIURL : config.apiURL
 
-        guard var urlString = baseURLString else { return [] }
+        guard var urlString = rawURLString?.trimmingCharacters(in: .whitespacesAndNewlines), !urlString.isEmpty else { return [] }
+        
+        // Ensure scheme is present
+        if !urlString.contains("://") {
+            urlString = "https://" + urlString
+        }
 
         var urls: [URL] = []
 
@@ -251,13 +258,13 @@ public class AISessionManager: ObservableObject {
             return [] // No prewarming needed for on-device
         }
 
-        if let modelsURL = URL(string: modelsURLString) {
+        if let modelsURL = URL(string: modelsURLString), modelsURL.scheme != nil {
             urls.append(modelsURL)
         }
 
         // Add base URL as fallback for custom setups (Azure, proxies, enterprise gateways)
         // where the models endpoint might not exist but the base connection works
-        if let baseURL = URL(string: urlString) {
+        if let baseURL = URL(string: urlString), baseURL.scheme != nil {
             // Only add if different from models URL
             if urls.isEmpty || baseURL.absoluteString != modelsURLString {
                 urls.append(baseURL)
@@ -269,12 +276,12 @@ public class AISessionManager: ObservableObject {
     
     /// Invalidate session for a provider (e.g., after auth failure)
     public func invalidate(provider: AIProvider) {
-        if let session = sessions[provider] {
-            session.invalidateAndCancel()
+        if let _ = sessions[provider] {
+            // Don't call invalidateAndCancel() as it can cause crashes in concurrent tasks
             sessions.removeValue(forKey: provider)
             sessionSignatures.removeValue(forKey: provider)
             lastUsed.removeValue(forKey: provider)
-            LogManager.shared.log("Invalidated session for \(provider.displayName)", category: "AISessionManager")
+            LogManager.shared.log("Removed session for \(provider.displayName)", category: "AISessionManager")
         }
         
         prewarmingProviders.remove(provider)
@@ -282,11 +289,14 @@ public class AISessionManager: ObservableObject {
     
     /// Invalidate all sessions
     public func invalidateAll() {
-        for (provider, session) in sessions {
-            session.invalidateAndCancel()
-            LogManager.shared.log("Invalidated session for \(provider.displayName)", category: "AISessionManager")
+        for (provider, _) in sessions {
+            LogManager.shared.log("Removing session for \(provider.displayName)", category: "AISessionManager")
         }
+        // Just remove from dictionary. Existing tasks will finish naturally on their session objects.
+        // Calling invalidateAndCancel() here can cause crashes (NSGenericException) if any tasks 
+        // are about to start on these sessions (e.g. during rapid config changes).
         sessions.removeAll()
+        sessionSignatures.removeAll()
         lastUsed.removeAll()
         isPrewarmed = false
     }

@@ -26,6 +26,7 @@ public final class FolderWatcher: @unchecked Sendable {
     
     private var watchedFolders: [UUID: WatchedFolder] = [:]
     private let queue = DispatchQueue(label: "com.sorty.folderwatcher", qos: .utility)
+    private let queueSpecificKey = DispatchSpecificKey<Void>()
     
     private var pausedFolders: Set<UUID> = []
     private var folderSnapshots: [UUID: Set<String>] = [:]
@@ -47,9 +48,11 @@ public final class FolderWatcher: @unchecked Sendable {
     
     // Stream health monitoring
     private var lastEventTime: [UUID: Date] = [:]
+    private var streamStartTime: [UUID: Date] = [:]
     private let stuckStreamThreshold: TimeInterval = 300 // 5 minutes
     
     public init() {
+        queue.setSpecific(key: queueSpecificKey, value: ())
         startHeartbeat()
     }
     
@@ -62,16 +65,15 @@ public final class FolderWatcher: @unchecked Sendable {
     
     /// Pause watching for a specific folder (prevent auto-trigger loops)
     public func pause(_ folder: WatchedFolder) {
-        queue.async { [weak self] in
-            self?.pausedFolders.insert(folder.id)
+        performOnQueueSyncIfNeeded {
+            self.pausedFolders.insert(folder.id)
             DebugLogger.log("Paused watching: \(folder.name)")
         }
     }
     
     /// Resume watching
     public func resume(_ folder: WatchedFolder) {
-        queue.async { [weak self] in
-            guard let self = self else { return }
+        performOnQueueSyncIfNeeded {
             self.pausedFolders.remove(folder.id)
             // Update snapshot to current state to avoid triggering on changes we just made
             self.updateSnapshot(for: folder)
@@ -224,6 +226,8 @@ public final class FolderWatcher: @unchecked Sendable {
         FSEventStreamSetDispatchQueue(stream, queue)
         if FSEventStreamStart(stream) {
             streams[folder.id] = stream
+            streamStartTime[folder.id] = Date()
+            lastEventTime[folder.id] = Date()
             DebugLogger.log("FSEvents: Started watching \(path)")
         } else {
             DebugLogger.log("FSEvents: Failed to start stream for \(path)")
@@ -265,22 +269,14 @@ public final class FolderWatcher: @unchecked Sendable {
         }
         
         lastEventTime.removeValue(forKey: id)
+        streamStartTime.removeValue(forKey: id)
     }
     
     private func updateSnapshot(for folder: WatchedFolder) {
         let path = resolvedURLs[folder.id]?.path ?? folder.path
-        let contents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
-        let files = contents.filter { !Self.isIgnoredFile($0) }
+        let modDates = recursiveFileState(atRootPath: path)
+        let files = Set(modDates.keys)
         folderSnapshots[folder.id] = Set(files)
-        
-        var modDates: [String: Date] = [:]
-        for file in files {
-            let filePath = (path as NSString).appendingPathComponent(file)
-            if let attrs = try? fileManager.attributesOfItem(atPath: filePath),
-               let modDate = attrs[.modificationDate] as? Date {
-                modDates[file] = modDate
-            }
-        }
         fileModDates[folder.id] = modDates
     }
     
@@ -291,6 +287,41 @@ public final class FolderWatcher: @unchecked Sendable {
         let ext = (name as NSString).pathExtension.lowercased()
         if ignoredExtensions.contains(ext) { return true }
         return false
+    }
+
+    private func recursiveFileState(atRootPath rootPath: String) -> [String: Date] {
+        guard let enumerator = fileManager.enumerator(
+            at: URL(fileURLWithPath: rootPath),
+            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .contentModificationDateKey],
+            options: [.skipsPackageDescendants, .skipsHiddenFiles]
+        ) else {
+            return [:]
+        }
+
+        var modDates: [String: Date] = [:]
+
+        for case let fileURL as URL in enumerator {
+            let name = fileURL.lastPathComponent
+            if Self.isIgnoredFile(name) {
+                if let values = try? fileURL.resourceValues(forKeys: [.isDirectoryKey]), values.isDirectory == true {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
+
+            guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey]) else {
+                continue
+            }
+
+            guard values.isRegularFile == true else {
+                continue
+            }
+
+            let relativePath = fileURL.path.replacingOccurrences(of: rootPath + "/", with: "")
+            modDates[relativePath] = values.contentModificationDate ?? Date.distantPast
+        }
+
+        return modDates
     }
     
     fileprivate func handleEvents(for folderId: UUID) {
@@ -316,9 +347,9 @@ public final class FolderWatcher: @unchecked Sendable {
         guard !pausedFolders.contains(folderId) else { return }
         
         let path = resolvedURLs[folderId]?.path ?? folder.path
-        
-        let currentContents = (try? fileManager.contentsOfDirectory(atPath: path)) ?? []
-        let currentSet = Set(currentContents.filter { !Self.isIgnoredFile($0) })
+
+        let modDates = recursiveFileState(atRootPath: path)
+        let currentSet = Set(modDates.keys)
         let previousSet = folderSnapshots[folderId] ?? []
         let previousModDates = fileModDates[folderId] ?? [:]
         
@@ -329,23 +360,14 @@ public final class FolderWatcher: @unchecked Sendable {
         
         let existingFiles = currentSet.intersection(previousSet)
         for file in existingFiles {
-            let filePath = (path as NSString).appendingPathComponent(file)
-            if let attrs = try? fileManager.attributesOfItem(atPath: filePath),
-               let modDate = attrs[.modificationDate] as? Date {
-                if let previousMod = previousModDates[file], modDate > previousMod {
-                    genuineNewFiles.insert(file)
-                }
+            if let modDate = modDates[file],
+               let previousMod = previousModDates[file],
+               modDate > previousMod {
+                genuineNewFiles.insert(file)
             }
         }
-        
-        var newModDates: [String: Date] = [:]
-        for file in currentSet {
-            let filePath = (path as NSString).appendingPathComponent(file)
-            if let attrs = try? fileManager.attributesOfItem(atPath: filePath),
-               let modDate = attrs[.modificationDate] as? Date {
-                newModDates[file] = modDate
-            }
-        }
+
+        let newModDates = modDates
         folderSnapshots[folderId] = currentSet
         fileModDates[folderId] = newModDates
         
@@ -367,18 +389,31 @@ public final class FolderWatcher: @unchecked Sendable {
         heartbeatTimer?.setEventHandler { [weak self] in
             guard let self = self else { return }
             
-            // Check for stuck streams and restart them
-            for (id, lastTime) in self.lastEventTime {
-                if Date().timeIntervalSince(lastTime) > self.stuckStreamThreshold {
-                    if let folder = self.watchedFolders[id], !self.pausedFolders.contains(id) {
-                        DebugLogger.log("Restarting potentially stuck stream for: \(folder.name)")
-                        self.stopWatchingSync(id: id)
-                        self.startWatchingSync(folder)
-                    }
+            // Poll for missed changes and refresh quiet streams periodically.
+            for (id, folder) in self.watchedFolders {
+                guard !self.pausedFolders.contains(id) else { continue }
+
+                let lastSeen = self.lastEventTime[id] ?? self.streamStartTime[id] ?? Date.distantPast
+                if Date().timeIntervalSince(lastSeen) > self.stuckStreamThreshold {
+                    DebugLogger.log("Heartbeat poll for quiet watcher: \(folder.name)")
+                    self.processChanges(for: id)
+                    self.lastEventTime[id] = Date()
+
+                    DebugLogger.log("Refreshing quiet stream for: \(folder.name)")
+                    self.stopWatchingSync(id: id)
+                    self.startWatchingSync(folder)
                 }
             }
         }
         heartbeatTimer?.resume()
+    }
+
+    private func performOnQueueSyncIfNeeded(_ block: @escaping () -> Void) {
+        if DispatchQueue.getSpecific(key: queueSpecificKey) != nil {
+            block()
+        } else {
+            queue.sync(execute: block)
+        }
     }
     
     // MARK: - Public Health & Recovery Methods

@@ -352,10 +352,10 @@ phase_app_bundle() {
     fi
     
     # Check binary exists
-    if [ -f "$APP_PATH/Contents/MacOS/SortyApp" ]; then
+    if [ -f "$APP_PATH/Contents/MacOS/Sorty" ]; then
         check_pass "Main binary present"
     else
-        check_fail "Main binary" "SortyApp not found in bundle"
+        check_fail "Main binary" "Sorty not found in bundle"
         return 1
     fi
     

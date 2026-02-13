@@ -80,6 +80,13 @@ public class WatchedFoldersManager: ObservableObject {
     
     public init() {
         loadFolders()
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.clearAll()
+        }
     }
     
     public func addFolder(_ folder: WatchedFolder) {
@@ -87,6 +94,20 @@ public class WatchedFoldersManager: ObservableObject {
         guard !folders.contains(where: { $0.path == folder.path }) else { return }
         folders.append(folder)
         saveFolders()
+    }
+
+    public func clearAll() {
+        // Stop accessing all security scoped resources
+        for folder in folders {
+            if let bookmarkData = folder.bookmarkData {
+                var isStale = false
+                if let url = try? URL(resolvingBookmarkData: bookmarkData, options: .withSecurityScope, relativeTo: nil, bookmarkDataIsStale: &isStale) {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+        }
+        folders.removeAll()
+        userDefaults.removeObject(forKey: storageKey)
     }
     
     public func removeFolder(_ folder: WatchedFolder) {

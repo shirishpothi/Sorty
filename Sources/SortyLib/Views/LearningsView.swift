@@ -279,7 +279,12 @@ struct LearningsView: View {
         .alert("Delete All Learning Data?", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
-                Task { await manager.clearAllData() }
+                Task {
+                    await manager.clearAllData()
+                    withAnimation(.spring()) {
+                        appState.hasCompletedOnboarding = false
+                    }
+                }
             }
         } message: {
             Text("This will permanently delete all your learning data and preferences. This cannot be undone.")

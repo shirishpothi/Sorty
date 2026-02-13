@@ -99,6 +99,13 @@ public class SettingsViewModel: ObservableObject {
     public init() {
         loadConfig()
         checkAppleModelAvailability()
+        setupNotificationObservers()
+    }
+    
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.reset()
+        }
     }
     
     private func loadConfig() {
@@ -227,6 +234,13 @@ public class SettingsViewModel: ObservableObject {
                 self.isLoadingModels = false
             }
         }
+    }
+
+    public func reset() {
+        config = .default
+        availableModels = config.provider.recommendedModels
+        // No need to save manually here as config.didSet will trigger debouncedSave,
+        // but since we want to clear from UserDefaults, we already handled it in AppState.
     }
 }
 

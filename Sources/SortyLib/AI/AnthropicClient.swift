@@ -26,7 +26,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         
         // Anthropic uses Messages API: https://api.anthropic.com/v1/messages
         let urlString = "https://api.anthropic.com/v1/messages"
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: urlString), url.scheme != nil else {
             throw AIClientError.invalidURL
         }
         
@@ -65,7 +65,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         }
 
         let urlString = "https://api.anthropic.com/v1/messages"
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: urlString), url.scheme != nil else {
             throw AIClientError.invalidURL
         }
 
@@ -236,7 +236,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         }
         
         let urlString = "https://api.anthropic.com/v1/messages"
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: urlString), url.scheme != nil else {
             throw AIClientError.invalidURL
         }
         

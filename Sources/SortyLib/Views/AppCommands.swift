@@ -336,7 +336,9 @@ public class AppState: ObservableObject {
     
     /// Show the onboarding flow again (for revisiting setup)
     public func showOnboarding() {
-        hasCompletedOnboarding = false
+        withAnimation(.spring()) {
+            hasCompletedOnboarding = false
+        }
     }
 
     public func exportResults() {
@@ -632,13 +634,27 @@ public class AppState: ObservableObject {
     }
     
     public func deleteUsageData() {
-        DuplicateRestorationManager.shared.clearAllData()
+        // 1. Clear Security-sensitive data (Keychain)
+        _ = KeychainManager.deleteAll()
         
+        // 2. Sign out of external services
+        GitHubCopilotAuthManager.shared.signOut()
+        
+        // 3. Clear core infrastructure data
+        DuplicateRestorationManager.shared.clearAllData()
         UserDefaults.standard.removeObject(forKey: "organizationHistory")
         
+        // 4. Notify all managers to reset their state and clear their storage
         NotificationCenter.default.post(name: .clearLearningsData, object: nil)
+        NotificationCenter.default.post(name: .clearAllUsageData, object: nil)
         
+        // 5. Reset primary engine
         organizer?.reset()
+        
+        // 6. Reset onboarding state to trigger fresh start
+        withAnimation(.spring()) {
+            hasCompletedOnboarding = false
+        }
         
         HapticFeedbackManager.shared.success()
     }

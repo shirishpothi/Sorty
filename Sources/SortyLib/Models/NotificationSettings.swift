@@ -111,6 +111,13 @@ public class NotificationSettingsManager: ObservableObject {
     
     private init() {
         load()
+        setupNotificationObservers()
+    }
+
+    private func setupNotificationObservers() {
+        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+            self?.reset()
+        }
     }
     
     private func load() {

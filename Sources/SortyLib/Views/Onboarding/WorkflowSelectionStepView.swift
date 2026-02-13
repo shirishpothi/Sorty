@@ -10,7 +10,7 @@ import SwiftUI
 public struct WorkflowSelectionStepView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @StateObject private var customPersonaStore = CustomPersonaStore()
+    @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @State private var hasAppeared = false
     @State private var showingPersonaGenerator = false
     @State private var isCreatingCustom = false
@@ -494,4 +494,5 @@ struct CreatePersonaButton: View {
     WorkflowSelectionStepView()
         .environmentObject(PersonaManager())
         .environmentObject(SettingsViewModel())
+    .environmentObject(CustomPersonaStore())
 }

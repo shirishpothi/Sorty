@@ -20,7 +20,7 @@
 		</dict>
 	</array>
 	<key>CFBundleExecutable</key>
-	<string>SortyApp</string>
+	<string>Sorty</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>

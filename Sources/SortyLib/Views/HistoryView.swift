@@ -18,6 +18,7 @@ struct HistoryView: View {
     @State private var selectedFilter: HistoryFilter = .all
     @State private var contentOpacity: Double = 0
     @State private var showingDetail = false
+    @State private var showWatchedAutomations = false
     
     // Lazy loading state
     @State private var displayedEntryCount: Int = 50
@@ -25,27 +26,45 @@ struct HistoryView: View {
     private let pageSize: Int = 50
     private let loadMoreThreshold: Int = 10 // Load more when within 10 items of end
 
-    private var filteredEntries: [OrganizationHistoryEntry] {
-        let allEntries: [OrganizationHistoryEntry]
+    private var allFilteredEntries: [OrganizationHistoryEntry] {
         switch selectedFilter {
-        case .all: allEntries = organizer.history.entries
-        case .success: allEntries = organizer.history.entries.filter { $0.status == .completed }
-        case .failed: allEntries = organizer.history.entries.filter { $0.status == .failed }
-        case .skipped: allEntries = organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }
+        case .all:
+            return organizer.history.entries
+        case .success:
+            return organizer.history.entries.filter { $0.status == .completed }
+        case .failed:
+            return organizer.history.entries.filter { $0.status == .failed }
+        case .skipped:
+            return organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }
+        case .manual:
+            return organizer.history.entries.filter { $0.source == .manual }
+        case .watched:
+            return organizer.history.entries.filter { $0.source == .watchedFolder }
         }
-        // Return only the entries up to the current display limit
-        return Array(allEntries.prefix(displayedEntryCount))
+    }
+
+    private var filteredEntries: [OrganizationHistoryEntry] {
+        Array(allFilteredEntries.prefix(displayedEntryCount))
+    }
+
+    private var manualEntries: [OrganizationHistoryEntry] {
+        filteredEntries.filter { $0.source == .manual }
+    }
+
+    private var watchedEntries: [OrganizationHistoryEntry] {
+        filteredEntries.filter { $0.source == .watchedFolder }
+    }
+
+    private var totalManualFilteredCount: Int {
+        allFilteredEntries.filter { $0.source == .manual }.count
+    }
+
+    private var totalWatchedFilteredCount: Int {
+        allFilteredEntries.filter { $0.source == .watchedFolder }.count
     }
     
     private var hasMoreEntries: Bool {
-        let totalCount: Int
-        switch selectedFilter {
-        case .all: totalCount = organizer.history.entries.count
-        case .success: totalCount = organizer.history.entries.filter { $0.status == .completed }.count
-        case .failed: totalCount = organizer.history.entries.filter { $0.status == .failed }.count
-        case .skipped: totalCount = organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }.count
-        }
-        return displayedEntryCount < totalCount
+        displayedEntryCount < allFilteredEntries.count
     }
 
     enum HistoryFilter: String, CaseIterable, Identifiable {
@@ -53,6 +72,8 @@ struct HistoryView: View {
         case success = "Success"
         case failed = "Failed"
         case skipped = "Skipped"
+        case manual = "Manual"
+        case watched = "Watched"
 
         var id: String { rawValue }
     }
@@ -81,31 +102,86 @@ struct HistoryView: View {
                                 .accessibilityElement(children: .contain)
                                 .accessibilityLabel("History Summary")
 
-                            // Session Cards
-                            ForEach(Array(filteredEntries.enumerated()), id: \.element.id) { index, entry in
-                                HistorySessionCard(
-                                    entry: entry,
-                                    isSelected: selectedEntry == entry,
-                                    onSelect: {
-                                        HapticFeedbackManager.shared.selection()
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            selectedEntry = entry
-                                            showingDetail = true
+                            if !manualEntries.isEmpty {
+                                HStack {
+                                    Label("Manual Sessions", systemImage: "person.fill")
+                                        .font(.headline)
+                                    Spacer()
+                                    Text("\(totalManualFilteredCount)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                ForEach(Array(manualEntries.enumerated()), id: \.element.id) { index, entry in
+                                    HistorySessionCard(
+                                        entry: entry,
+                                        isSelected: selectedEntry == entry,
+                                        onSelect: {
+                                            HapticFeedbackManager.shared.selection()
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                selectedEntry = entry
+                                                showingDetail = true
+                                            }
+                                        },
+                                        onUndo: { handleUndo(entry) },
+                                        onRedo: { handleRedo(entry) },
+                                        onRedoWithModel: { provider, model in
+                                            handleRedoWithModel(entry, provider: provider, model: model)
                                         }
-                                    },
-                                    onUndo: { handleUndo(entry) },
-                                    onRedo: { handleRedo(entry) },
-                                    onRedoWithModel: { provider, model in
-                                        handleRedoWithModel(entry, provider: provider, model: model)
-                                    }
-                                )
-                                .animatedAppearance(delay: Double(index) * 0.03)
-                                .onAppear {
-                                    // Load more when approaching the end of the list
-                                    if index >= filteredEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
-                                        loadMoreEntries()
+                                    )
+                                    .animatedAppearance(delay: Double(index) * 0.03)
+                                    .onAppear {
+                                        if index >= manualEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                                            loadMoreEntries()
+                                        }
                                     }
                                 }
+                            }
+
+                            if !watchedEntries.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Button {
+                                        HapticFeedbackManager.shared.selection()
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            showWatchedAutomations.toggle()
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
+                                                .font(.headline)
+                                            Spacer()
+                                            Text("\(totalWatchedFilteredCount)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                            Image(systemName: showWatchedAutomations ? "chevron.up" : "chevron.down")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if showWatchedAutomations {
+                                        ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
+                                            WatchedAutomationRow(entry: entry) {
+                                                HapticFeedbackManager.shared.selection()
+                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                    selectedEntry = entry
+                                                    showingDetail = true
+                                                }
+                                            }
+                                            .animatedAppearance(delay: Double(index) * 0.02)
+                                            .onAppear {
+                                                if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                                                    loadMoreEntries()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .padding(14)
+                                .background(.ultraThinMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
                             
                             // Load More Button
@@ -292,7 +368,7 @@ struct HistoryHeader: View {
                 }
             }
             .pickerStyle(.segmented)
-            .frame(width: 280)
+            .frame(width: 420)
             .accessibilityLabel("Filter history sessions")
             .accessibilityIdentifier("HistoryFilterPicker")
             .onChange(of: selectedFilter) { _, _ in
@@ -712,6 +788,66 @@ struct HistorySessionCard: View {
                 }
             )
         }
+    }
+}
+
+struct WatchedAutomationRow: View {
+    let entry: OrganizationHistoryEntry
+    let onSelect: () -> Void
+
+    private var statusColor: Color {
+        switch entry.status {
+        case .completed: return .green
+        case .failed: return .red
+        case .cancelled: return .gray
+        case .skipped: return .secondary
+        case .undo: return .orange
+        case .partiallyUndone: return .yellow
+        case .duplicatesCleanup: return .purple
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bolt.horizontal.circle.fill")
+                .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
+                    Label("\(entry.filesOrganized)", systemImage: "doc")
+                    Label("\(entry.foldersCreated)", systemImage: "folder")
+                    Text(entry.timestamp.formatted(date: .abbreviated, time: .shortened))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(entry.status.rawValue.capitalized)
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(statusColor.opacity(0.15))
+                .foregroundStyle(statusColor)
+                .clipShape(Capsule())
+
+            Button("Details") {
+                onSelect()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Watched automation for \(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue)")
+        .accessibilityIdentifier("WatchedAutomationRow-\(entry.id.uuidString)")
     }
 }
 
