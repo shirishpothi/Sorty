@@ -74,8 +74,12 @@ struct TroubleshootingSettingsView: View {
                 Button("Cancel", role: .cancel) {}
                 Button("Delete", role: .destructive) {
                     Task {
-                        await learningsManager.clearAllData()
-                        HapticFeedbackManager.shared.success()
+                        let didClear = await learningsManager.clearAllData()
+                        if didClear {
+                            HapticFeedbackManager.shared.success()
+                        } else {
+                            HapticFeedbackManager.shared.error()
+                        }
                     }
                 }
             } message: {

@@ -137,9 +137,11 @@ public class LearningsManager: ObservableObject {
         }
     }
     
-    /// Delete all learning data securely
-    public func clearAllData() async {
-        guard !isLocked else { return }
+    /// Delete all learning data securely.
+    /// - Returns: `true` when data was deleted, `false` when the operation could not run.
+    @discardableResult
+    public func clearAllData() async -> Bool {
+        guard !isLocked else { return false }
         
         do {
             try await consentManager.deleteAllData()
@@ -147,8 +149,10 @@ public class LearningsManager: ObservableObject {
             currentProfile = LearningsProfile() // Reset to empty
             analysisResult = nil
             requiresInitialSetup = true
+            return true
         } catch {
             self.error = "Failed to clear data: \(error.localizedDescription)"
+            return false
         }
     }
     

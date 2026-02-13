@@ -157,25 +157,28 @@ else
     log_item "No appcast script found, skipping"
 fi
 
-# Step 6: Tagging release
-print_step 6 6 "Tagging release"
+# Step 6: Commit and Tagging release
+print_step 6 6 "Committing and Tagging release"
 
-# Create tag first so build can pick it up if we were to rebuild, 
-# although we usually build BEFORE tagging in this script.
-# However, for the NEXT build, the tag will be the source of truth.
+# 6a. Commit changes (Changelog, Version Bumps)
+git add "${PROJECT_DIR}/CHANGELOG.md" 2>/dev/null || true
+git add "${PROJECT_DIR}/Info.plist" 2>/dev/null || true
+git add "${PROJECT_DIR}/${PROJECT_NAME}.xcodeproj/project.pbxproj" 2>/dev/null || true
+
+if ! git diff --cached --quiet; then
+    git commit -m "chore: release notes and version bump for v${NEW_VERSION}"
+    log_success "Committed release changes"
+else
+    log_item "No changes to commit"
+fi
+
+# 6b. Create tag on the commit we just made
 TAG_NAME="v${NEW_VERSION}"
 if git tag -l | grep -q "^${TAG_NAME}$"; then
     log_warn "Tag ${TAG_NAME} already exists"
 else
     git tag -a "${TAG_NAME}" -m "Release ${NEW_VERSION}"
     log_success "Created tag ${TAG_NAME}"
-fi
-
-# Commit any other changes (like CHANGELOG) if they exist
-git add "${PROJECT_DIR}/CHANGELOG.md" 2>/dev/null || true
-if ! git diff --cached --quiet; then
-    git commit -m "chore: release notes for v${NEW_VERSION}"
-    log_success "Committed release notes"
 fi
 
 echo ""

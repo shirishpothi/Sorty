@@ -22,6 +22,12 @@ if [ ! -f "$CHANGELOG_FILE" ]; then
     exit 1
 fi
 
+# Check if version already exists to avoid duplicates
+if grep -q "## \[${NEW_VERSION}\]" "$CHANGELOG_FILE"; then
+    log_success "Changelog entry for ${NEW_VERSION} already exists. Skipping."
+    exit 0
+fi
+
 # Determine if this is a pre-release
 RELEASE_TYPE=""
 if [[ "$NEW_VERSION" == *"beta"* ]] || [[ "$NEW_VERSION" == *"alpha"* ]]; then

@@ -156,7 +156,7 @@ public class OrganizationHistory: ObservableObject {
     }
     
     private func setupNotificationObservers() {
-        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+        NotificationCenter.default.addMainActorObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] in
             self?.clearHistory()
         }
     }

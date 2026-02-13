@@ -9,9 +9,9 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 
 <div align="center">
 
-| <img src="Assets/Screenshots/A%20preview%20of%20the%20mid-generation%20UI,%20with%20streaming%20enabled.png" width="300" /> | <img src="Assets/Screenshots/A%20preview%20of%20the%20settings%20page.png" width="300" /> | <img src="Assets/Screenshots/A%20preview%20of%20the%20post-organisation%20UI.png" width="300" /> |
+| <img src="Assets/Screenshots/New UI/Live Insights View.png" width="300" /> | <img src="Assets/Screenshots/New UI/Watched Folder View.png" width="300" /> | <img src="Assets/Screenshots/New UI/Post Generation View.png" width="300" /> |
 | :---: | :---: | :---: |
-| *Streaming AI responses* | *Advanced settings* | *Interactive preview* |
+| *Streaming AI Organisation, with Live Insights* | *Watched Folders* | *Interactive preview* |
 
 </div>
 
@@ -24,7 +24,7 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 - **Multiple AI Providers**: 
   - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, Groq, Ollama, etc.)
   - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
-- **AI Vision Support**: Multimodal analysis for providers that support it (GPT-4o, Claude 3, Gemini) to understand image content when organizing.
+- **AI Vision Support**: Multimodal analysis for providers that support it to understand image content when organizing.
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
 - **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
 - **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
@@ -84,7 +84,7 @@ make run
   - **OpenAI-Compatible**: Enter the API URL and your private key.
   - **Apple Foundation Models**: Requires macOS 15+ with Apple Intelligence enabled.
 
-### 2. Finder Extension (Optional)
+### 2. Finder Extension (disabled by default via defaults feature flag)
 To enable the "Organize with AI..." context menu in Finder:
 1. Build and run the `SortyExtension` target.
 2. Go to **System Settings → Privacy & Security → Extensions → Finder Extensions**.
@@ -149,7 +149,7 @@ If you see an error indicating that access to a watched folder has been lost (e.
 - If update checks fail, verify you have an active internet connection.
 - Check if you can access [GitHub Releases](https://github.com/shirishpothi/Sorty/releases) in your browser.
 - Rate limiting may occur if too many requests are made; wait a few minutes and try again.
-- To verify your current version: go to **About** (⌘,) and compare with the latest release.
+
 
 ### Verifying App is Up to Date
 1. Open **Settings** and click **Check for Updates**.
@@ -233,9 +233,6 @@ sorty learnings                                    # Open Learnings dashboard
 sorty history                                      # Open History
 ```
 
-`sorty` performs strict input validation and exits with a non-zero status for invalid commands or arguments.
-For automation/tests, set `SORTY_CLI_DRY_RUN=1` to print the deeplink URL instead of opening the app.
-
 ## Deeplinks Reference
 
 Sorty supports the `sorty://` URL scheme for automation and external control:
@@ -246,7 +243,6 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 | `sorty://duplicates?path=<path>&autostart=true` | Scan for duplicates |
 | `sorty://learnings?action=honing` | Open Learnings with specific action |
 | `sorty://settings?section=ai` | Open specific settings section |
-| `sorty://open` | Activate Sorty without forcing a view change |
 | `sorty://health` | Open Workspace Health |
 | `sorty://history` | Open organization history |
 | `sorty://persona?generate=true&prompt=<text>` | Generate a persona |
@@ -260,7 +256,7 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## Support
 
-- **Documentation**: See [HELP.md](HELP.md) for detailed usage guides
+- **Documentation**: See [HELP.md](https://github.com/shirishpothi/Sorty/blob/main/HELP.md) for detailed usage guides
 - **Bug Reports**: Use the [Bug Report template](../../issues/new?template=bug_report.md)
 - **Feature Requests**: Use the [Feature Request template](../../issues/new?template=feature_request.md)
 - **Security Issues**: Email shirish.pothi.27@gmail.com (do not open public issues)

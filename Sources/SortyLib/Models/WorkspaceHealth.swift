@@ -1429,6 +1429,9 @@ public class WorkspaceHealthManager: ObservableObject {
     }
 
     private func sendNotification(_ insight: HealthInsight) async {
+        // Avoid running in xctest tool environment which crashes UNUserNotificationCenter
+        guard Bundle.main.bundleIdentifier != "com.apple.dt.xctest.tool" else { return }
+        
         let center = UNUserNotificationCenter.current()
 
         // Request authorization if needed

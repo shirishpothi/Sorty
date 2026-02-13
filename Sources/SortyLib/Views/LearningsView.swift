@@ -280,9 +280,11 @@ struct LearningsView: View {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
                 Task {
-                    await manager.clearAllData()
-                    withAnimation(.spring()) {
-                        appState.hasCompletedOnboarding = false
+                    let didClear = await manager.clearAllData()
+                    if didClear {
+                        withAnimation(.spring()) {
+                            appState.hasCompletedOnboarding = false
+                        }
                     }
                 }
             }

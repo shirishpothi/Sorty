@@ -264,20 +264,27 @@ public class NotificationManager: ObservableObject {
         }
         
         // Setup NotifiCLI in background (builds on first run)
-        await MainActor.run {
-            self.notifiCLISetupStatus = "Setting up enhanced notifications..."
-        }
-        
-        let available = await NotifiCLIService.shared.ensureSetup()
-        
-        await MainActor.run {
-            self.isNotifiCLIAvailable = available
-            self.notifiCLISetupStatus = available ? "Ready" : "Using native notifications"
-        }
-        
-        if available {
-            print("NotificationManager: NotifiCLI ready for enhanced notifications")
+        if isSafeToUseSystemNotifications {
+            await MainActor.run {
+                self.notifiCLISetupStatus = "Setting up enhanced notifications..."
+            }
+            
+            let available = await NotifiCLIService.shared.ensureSetup()
+            
+            await MainActor.run {
+                self.isNotifiCLIAvailable = available
+                self.notifiCLISetupStatus = available ? "Ready" : "Using native notifications"
+            }
         } else {
+            await MainActor.run {
+                self.notifiCLISetupStatus = "Notifications disabled in this environment"
+                self.isNotifiCLIAvailable = false
+            }
+        }
+        
+        if isSafeToUseSystemNotifications && isNotifiCLIAvailable {
+            print("NotificationManager: NotifiCLI ready for enhanced notifications")
+        } else if isSafeToUseSystemNotifications {
             print("NotificationManager: Using native macOS notifications")
         }
     }
