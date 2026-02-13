@@ -14,6 +14,8 @@ struct TroubleshootingSettingsView: View {
     
     @State private var cacheSize: String = "Calculating..."
     @State private var showingResetConfirmation = false
+    @State private var showingDeleteDataConfirmation = false
+    @EnvironmentObject var learningsManager: LearningsManager
     
     var body: some View {
         VStack(spacing: 16) {
@@ -45,6 +47,39 @@ struct TroubleshootingSettingsView: View {
             .animatedAppearance(delay: 0.05)
             .onAppear {
                 calculateCacheSize()
+            }
+
+            // Data Management
+            SettingsCard(title: "Learnings Data", icon: "brain.head.profile", color: .purple) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Delete all recorded organization patterns, preferences, and personalizations.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Button {
+                        showingDeleteDataConfirmation = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "trash")
+                            Text("Delete All Learning Data")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.onboardingPill)
+                    .tint(.purple)
+                }
+            }
+            .animatedAppearance(delay: 0.08)
+            .alert("Delete All Learning Data?", isPresented: $showingDeleteDataConfirmation) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {
+                    Task {
+                        await learningsManager.clearAllData()
+                        HapticFeedbackManager.shared.success()
+                    }
+                }
+            } message: {
+                Text("This will permanently delete all your learning data. This cannot be undone.")
             }
             
             // Reset Settings

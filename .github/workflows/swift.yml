@@ -129,9 +129,9 @@ jobs:
           echo "Running release.sh with args: $ARGS"
           ./scripts/release.sh $ARGS
         env:
-           NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
-           NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-           TEAM_ID: ${{ secrets.TEAM_ID }}
+          NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
+          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
 
       - name: Archive Release Artifacts
         if: github.event_name == 'workflow_dispatch' && inputs.release_type != 'None'

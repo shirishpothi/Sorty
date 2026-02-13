@@ -310,6 +310,7 @@ jobs:
           cp -R artifacts/arm64/Sorty-arm64.app releases/
           cp -R artifacts/x86_64/Sorty-x86_64.app releases/
           cp artifacts/arm64/Sorty-arm64.zip releases/
+          cp artifacts/x86_64/Sorty-x86_64.zip releases/
 
           if [ -f "artifacts/arm64/sparkle-tools/sign_update" ]; then
             mkdir -p ".build/artifacts/sparkle/Sparkle/bin"
@@ -374,6 +375,7 @@ jobs:
           files: |
             releases/Sorty-universal.zip
             releases/Sorty-arm64.zip
+            releases/Sorty-x86_64.zip
             releases/appcast.xml
           generate_release_notes: true
           append_body: true
