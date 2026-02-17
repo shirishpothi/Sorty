@@ -293,9 +293,7 @@ struct WatchedFolderCard: View {
                     
                     if isOrganizing {
                         HStack(spacing: 4) {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .scaleEffect(0.7)
+                            SortyGradientCircularLoader(size: 10, lineWidth: 2)
                             Text("Organizing...")
                                 .font(.caption2)
                         }

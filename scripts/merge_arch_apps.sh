@@ -152,11 +152,6 @@ echo "Merged ${MERGED_COUNT} Mach-O files"
 restore_executable_permissions "${OUTPUT_APP}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENTITLEMENTS_FILE="${SCRIPT_DIR}/../Sorty.entitlements"
-if [ -f "${ENTITLEMENTS_FILE}" ]; then
-    codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${OUTPUT_APP}" >/dev/null 2>&1 || true
-else
-    codesign --force --deep --sign - "${OUTPUT_APP}" >/dev/null 2>&1 || true
-fi
 
 MAIN_BIN="${OUTPUT_APP}/Contents/MacOS/Sorty"
 verify_executable_file "${MAIN_BIN}"
@@ -171,6 +166,36 @@ if [ -d "${OUTPUT_APP}/Contents/Frameworks" ]; then
         FRAMEWORK_BIN="${FRAMEWORK_DIR}/${FRAMEWORK_NAME}"
         verify_universal_binary "${FRAMEWORK_BIN}" "false"
     done < <(find "${OUTPUT_APP}/Contents/Frameworks" -maxdepth 1 -type d -name "*.framework" -print0)
+fi
+
+# Verify and sign embedded extensions (PlugIns)
+if [ -d "${OUTPUT_APP}/Contents/PlugIns" ]; then
+    while IFS= read -r -d '' APPEX_DIR; do
+        APPEX_NAME="$(basename "${APPEX_DIR}" .appex)"
+        APPEX_BIN="${APPEX_DIR}/Contents/MacOS/${APPEX_NAME}"
+        if [ -f "${APPEX_BIN}" ]; then
+            verify_universal_binary "${APPEX_BIN}" "false"
+            echo "Verified ${APPEX_NAME}.appex binary"
+        fi
+    done < <(find "${OUTPUT_APP}/Contents/PlugIns" -maxdepth 1 -type d -name "*.appex" -print0)
+fi
+
+# Re-sign with inner-to-outer order (extensions before main app)
+FINDER_SYNC_ENTITLEMENTS="${SCRIPT_DIR}/../SortyFinderSync/SortyFinderSync.entitlements"
+FINDER_SYNC_APPEX="${OUTPUT_APP}/Contents/PlugIns/SortyFinderSync.appex"
+if [ -d "${FINDER_SYNC_APPEX}" ]; then
+    if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
+        codesign --force --sign - --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${FINDER_SYNC_APPEX}" >/dev/null 2>&1 || true
+    else
+        codesign --force --sign - "${FINDER_SYNC_APPEX}" >/dev/null 2>&1 || true
+    fi
+    echo "Signed SortyFinderSync.appex"
+fi
+
+if [ -f "${ENTITLEMENTS_FILE}" ]; then
+    codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${OUTPUT_APP}" >/dev/null 2>&1 || true
+else
+    codesign --force --deep --sign - "${OUTPUT_APP}" >/dev/null 2>&1 || true
 fi
 
 echo "Universal app created at ${OUTPUT_APP}"

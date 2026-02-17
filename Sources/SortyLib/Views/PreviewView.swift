@@ -97,7 +97,7 @@ struct PreviewView: View {
                 PreviewStatsView(stats: editablePlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: Int(organizer.progress * Double(editablePlan.totalFiles)), totalFiles: editablePlan.totalFiles, stage: organizer.organizationStage)
             }
             Divider()
-            PreviewListView(store: previewStore, dragDropManager: dragDropManager, onPlanChanged: { hasEdits = true; editablePlan = previewStore.plan }, emptyStateType: emptyStateType)
+            PreviewListView(store: previewStore, dragDropManager: dragDropManager, onPlanChanged: { hasEdits = true; editablePlan = previewStore.plan }, emptyStateType: emptyStateType, onFocusInstructions: { instructionsFocused = true }, onRegenerate: regeneratePreview)
             Divider()
             bottomToolbar
         }
@@ -122,6 +122,10 @@ struct PreviewView: View {
                 previewStore.updatePlan(editablePlan)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { _ in
+            guard organizer.state == .ready else { return }
+            showRedoModelPicker = true
+        }
         .sheet(isPresented: $showPostOrganizationHoning) { PostOrganizationHoningView(fileCount: editablePlan.totalFiles, folderCount: editablePlan.totalFolders, config: settingsViewModel.config, onComplete: { answers in Task { await learningsManager.saveHoningResults(answers); showPostOrganizationHoning = false } }, onSkip: { showPostOrganizationHoning = false }) }
         .sheet(isPresented: $showRedoModelPicker) { ModelSelectionPopover(isPresented: $showRedoModelPicker, currentProvider: settingsViewModel.config.provider, currentModel: settingsViewModel.config.model, onSelect: redoWithProviderAndModel) }
         .environmentObject(dragDropManager)
@@ -138,7 +142,18 @@ struct PreviewView: View {
             if isOrganizing {
                 PreviewProgressView(progress: organizer.progress, stage: organizer.organizationStage, estimatedTimeRemaining: calculateTimeRemaining(), onCancel: { organizer.cancel() })
             } else {
-                PreviewActionsView(isApplying: isApplying, hasEdits: hasEdits, hasCustomInstructions: !organizer.customInstructions.isEmpty, isRedoingWithModel: isRedoingWithModel, shouldDisableButtons: shouldDisableButtons, onCancel: { recordCancelledOrganization(); organizer.cancel() }, onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); hasEdits = false }, onRegenerate: regeneratePreview, onChooseModel: { showRedoModelPicker = true }, onApply: { HapticFeedbackManager.shared.tap(); showApplyConfirmation = true })
+                PreviewActionsView(
+                    isApplying: isApplying,
+                    hasEdits: hasEdits,
+                    hasCustomInstructions: !organizer.customInstructions.isEmpty,
+                    isRedoingWithModel: isRedoingWithModel,
+                    shouldDisableButtons: shouldDisableButtons,
+                    onCancel: { recordCancelledOrganization(); organizer.cancel() },
+                    onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); hasEdits = false },
+                    onRegenerate: regeneratePreview,
+                    onChooseModel: { showRedoModelPicker = true },
+                    onApply: { HapticFeedbackManager.shared.tap(); showApplyConfirmation = true }
+                )
             }
         }
     }

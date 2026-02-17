@@ -1069,6 +1069,7 @@ struct LearningStrengthControl: View {
             .liquidGlassCard(cornerRadius: 10)
         }
         .buttonStyle(.plain)
+        .minimumHitTarget()
         .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
             LearningStrengthPopover(manager: manager)
         }
@@ -1847,8 +1848,17 @@ struct AccessibleActivityGroup<Content: View>: View {
                         .font(.caption2.bold())
                         .foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.primary.opacity(0.04))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .minimumHitTarget(44)
             .accessibilityLabel("\(title), \(count) items")
             .accessibilityHint(isExpanded ? "Collapse to hide items" : "Expand to show items")
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
@@ -2516,6 +2526,7 @@ struct AddExclusionView: View {
                 }
             }
             .buttonStyle(.plain)
+            .minimumHitTarget()
             
             if isExpanded {
                 HStack(spacing: 8) {

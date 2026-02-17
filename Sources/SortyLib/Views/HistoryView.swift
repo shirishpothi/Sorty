@@ -893,6 +893,7 @@ struct HistoryDetailSheet: View {
     @State private var undoneOperationIDs: Set<UUID> = []
     @State private var failedOperationIDs: Set<UUID> = []
     @State private var undoingOperationID: UUID?
+    @State private var highlightedFileID: UUID? = nil
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
 
@@ -1219,6 +1220,15 @@ struct HistoryDetailSheet: View {
                         HistoryLiquidGlassReasoningCard(notes: plan.notes)
                     }
 
+                    // Duplicate Files
+                    if let plan = entry.plan {
+                        HistoryLiquidGlassDuplicateCard(
+                            plan: plan,
+                            handoffDirectory: URL(fileURLWithPath: entry.directoryPath),
+                            highlightedFileID: $highlightedFileID
+                        )
+                    }
+
                     // Organization Details
                     if let plan = entry.plan {
                         VStack(alignment: .leading, spacing: 12) {
@@ -1227,7 +1237,11 @@ struct HistoryDetailSheet: View {
                                 .accessibilityAddTraits(.isHeader)
 
                             ForEach(plan.suggestions) { suggestion in
-                                FolderHistoryDetailRow(suggestion: suggestion)
+                                FolderHistoryDetailRow(
+                                    suggestion: suggestion,
+                                    rootDirectory: URL(fileURLWithPath: entry.directoryPath),
+                                    highlightedFileID: $highlightedFileID
+                                )
                             }
 
                             if !plan.unorganizedFiles.isEmpty {
@@ -1242,8 +1256,24 @@ struct HistoryDetailSheet: View {
                                                 FileThumbnailView(url: URL(fileURLWithPath: fileItem.path), size: CGSize(width: 20, height: 20))
                                                 Text(fileItem.displayName)
                                                 Spacer()
+                                                
+                                                if let hash = fileItem.sha256Hash, !hash.isEmpty {
+                                                    let others = plan.unorganizedFiles.filter { $0.id != fileItem.id && $0.sha256Hash == hash }
+                                                    if !others.isEmpty {
+                                                        LiquidGlassDuplicateButton(
+                                                            duplicateInfo: DuplicateInfo(file: fileItem, duplicates: others),
+                                                            handoffDirectory: URL(fileURLWithPath: entry.directoryPath),
+                                                            highlightedFileID: $highlightedFileID
+                                                        )
+                                                    }
+                                                }
                                             }
                                             .font(.caption)
+                                            .padding(8)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .fill(highlightedFileID == fileItem.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                                            )
                                             .accessibilityElement(children: .combine)
                                             .accessibilityLabel("Unorganized file: \(fileItem.displayName)")
                                         }
@@ -1757,6 +1787,8 @@ struct SectionView<Content: View>: View {
 
 struct FolderHistoryDetailRow: View {
     let suggestion: FolderSuggestion
+    var rootDirectory: URL? = nil
+    @Binding var highlightedFileID: UUID?
     @State private var isExpanded = false
     @State private var isHovered = false
     @State private var visibleFileCount: Int = 60
@@ -1769,6 +1801,17 @@ struct FolderHistoryDetailRow: View {
 
     private func fileComment(for file: FileItem) -> String? {
         suggestion.comment(for: file)
+    }
+
+    private var allSiblingFiles: [FileItem] {
+        suggestion.files
+    }
+
+    private func fileDuplicateInfo(for file: FileItem) -> DuplicateInfo? {
+        guard let hash = file.sha256Hash, !hash.isEmpty else { return nil }
+        let duplicates = allSiblingFiles.filter { $0.id != file.id && $0.sha256Hash == hash }
+        guard !duplicates.isEmpty else { return nil }
+        return DuplicateInfo(file: file, duplicates: duplicates, isExactMatch: true, similarity: 1.0)
     }
 
     var body: some View {
@@ -1841,12 +1884,26 @@ struct FolderHistoryDetailRow: View {
                                     CommentBubbleButton(comment: comment)
                                 }
 
+                                if let dupInfo = fileDuplicateInfo(for: fileItem) {
+                                    LiquidGlassDuplicateButton(
+                                        duplicateInfo: dupInfo,
+                                        handoffDirectory: rootDirectory,
+                                        highlightedFileID: $highlightedFileID
+                                    )
+                                }
+
                                 Spacer()
                                 Text(fileItem.formattedSize)
                                     .foregroundStyle(.tertiary)
                             }
                             .font(.caption)
                             .padding(.leading, 12)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(highlightedFileID == fileItem.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                            )
                             .opacity(isExpanded ? 1 : 0)
                             .offset(y: isExpanded ? 0 : -5)
                             .animation(
@@ -1875,8 +1932,12 @@ struct FolderHistoryDetailRow: View {
                     }
 
                     ForEach(suggestion.subfolders) { subfolder in
-                        FolderHistoryDetailRow(suggestion: subfolder)
-                            .padding(.leading, 12)
+                        FolderHistoryDetailRow(
+                            suggestion: subfolder,
+                            rootDirectory: rootDirectory,
+                            highlightedFileID: $highlightedFileID
+                        )
+                        .padding(.leading, 12)
                     }
                 }
                 .padding(.leading, 12)
@@ -2012,8 +2073,279 @@ struct HistoryLiquidGlassReasoningCard: View {
     }
 }
 
+// MARK: - Liquid Glass Duplicate Summary Card (History)
+
+struct HistoryLiquidGlassDuplicateCard: View {
+    let plan: OrganizationPlan
+    var handoffDirectory: URL? = nil
+    @Binding var highlightedFileID: UUID?
+    @State private var showPopover = false
+    @EnvironmentObject var appState: AppState
+
+    private var duplicateGroups: [DuplicateInfo] {
+        var allFiles: [FileItem] = []
+        func collectFiles(from folder: FolderSuggestion) {
+            allFiles.append(contentsOf: folder.files)
+            for subfolder in folder.subfolders { collectFiles(from: subfolder) }
+        }
+        for suggestion in plan.suggestions { collectFiles(from: suggestion) }
+        allFiles.append(contentsOf: plan.unorganizedFiles)
+
+        var hashGroups: [String: [FileItem]] = [:]
+        for file in allFiles {
+            guard let hash = file.sha256Hash, !hash.isEmpty else { continue }
+            hashGroups[hash, default: []].append(file)
+        }
+
+        var infos: [DuplicateInfo] = []
+        var seenHashes: Set<String> = []
+        for (hash, files) in hashGroups where files.count > 1 {
+            guard !seenHashes.contains(hash) else { continue }
+            seenHashes.insert(hash)
+            if let first = files.first {
+                let others = Array(files.dropFirst())
+                infos.append(DuplicateInfo(file: first, duplicates: others, isExactMatch: true, similarity: 1.0))
+            }
+        }
+        return infos.sorted { $0.duplicateCount > $1.duplicateCount }
+    }
+
+    private var totalDuplicateCount: Int {
+        duplicateGroups.reduce(0) { $0 + $1.duplicateCount }
+    }
+
+    var body: some View {
+        if !duplicateGroups.isEmpty {
+            Button {
+                showPopover.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "doc.on.doc")
+                        .foregroundStyle(.red)
+                    Text("Duplicates")
+                        .font(.headline)
+                    Text("\(totalDuplicateCount)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.red))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Duplicates found: \(totalDuplicateCount)")
+            .accessibilityHint("Tap to view duplicate file groups")
+            .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+                historyDuplicatePopover
+            }
+        }
+    }
+
+    private var historyDuplicatePopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.red.opacity(0.12))
+                        .frame(width: 28, height: 28)
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.red)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Duplicate Files")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                    Text("\(duplicateGroups.count) group\(duplicateGroups.count == 1 ? "" : "s"), \(totalDuplicateCount) duplicate\(totalDuplicateCount == 1 ? "" : "s")")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+            }
+            .padding(.bottom, 10)
+
+            Divider()
+                .opacity(0.4)
+                .padding(.bottom, 10)
+
+            Button {
+                handoffToDuplicates()
+            } label: {
+                Label("Handle in Duplicates", systemImage: "arrowshape.turn.up.right.circle.fill")
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.accentColor.opacity(0.12))
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 10)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(duplicateGroups) { group in
+                        HistoryDuplicateGroupRow(group: group, highlightedFileID: $highlightedFileID)
+                    }
+                }
+            }
+            .frame(maxHeight: 300)
+        }
+        .padding(14)
+        .frame(minWidth: 300, maxWidth: 400)
+    }
+
+    private func handoffToDuplicates() {
+        let filePaths = duplicateGroups.flatMap { group in
+            [group.file.path] + group.duplicates.map(\.path)
+        }
+        appState.handoffToDuplicates(
+            forFilePaths: filePaths,
+            preferredDirectory: handoffDirectory,
+            autoStart: true
+        )
+        showPopover = false
+        HapticFeedbackManager.shared.selection()
+    }
+}
+
+// MARK: - History Helper Views
+
+struct HistoryDuplicateGroupRow: View {
+    let group: DuplicateInfo
+    @Binding var highlightedFileID: UUID?
+    @EnvironmentObject var appState: AppState
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    highlightedFileID = group.file.id
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    FileThumbnailView(url: URL(fileURLWithPath: group.file.path), size: CGSize(width: 20, height: 20))
+                    Text(group.file.displayName)
+                        .font(.callout)
+                        .fontWeight(highlightedFileID == group.file.id ? .semibold : .medium)
+                        .foregroundStyle(highlightedFileID == group.file.id ? .primary : .primary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text("\(group.duplicateCount + 1) copies")
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.red))
+                }
+                .padding(4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(highlightedFileID == group.file.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                )
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                contextMenu(for: group.file.path)
+            }
+
+            ForEach(group.duplicates) { dup in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        highlightedFileID = dup.id
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.turn.down.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Text(dup.displayName)
+                            .font(.caption)
+                            .fontWeight(highlightedFileID == dup.id ? .semibold : .regular)
+                            .foregroundStyle(highlightedFileID == dup.id ? .primary : .secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text(dup.formattedSize)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 2)
+                    .padding(.horizontal, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(highlightedFileID == dup.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 8)
+                .contextMenu {
+                    contextMenu(for: dup.path)
+                }
+            }
+        }
+        .padding(8)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+    
+    @ViewBuilder
+    private func contextMenu(for path: String) -> some View {
+        Button {
+            NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+        } label: {
+            Label("Show in Finder", systemImage: "folder")
+        }
+        Button {
+            appState.handoffToDuplicates(forFilePaths: [path], autoStart: true)
+        } label: {
+            Label("Handle in Duplicates", systemImage: "arrowshape.turn.up.right.circle")
+        }
+        Button {
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+        } label: {
+            Label("Quick Look", systemImage: "eye")
+        }
+        Button {
+            do {
+                try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
+                NotificationManager.shared.show(.info(title: "Success", message: "Moved duplicate to Trash"))
+            } catch {
+                NotificationManager.shared.showError(message: "Could not move to Trash: \(error.localizedDescription)")
+            }
+        } label: {
+            Label("Move to Trash", systemImage: "trash")
+        }
+    }
+}
+
 #Preview {
     HistoryView()
+        .environmentObject(AppState())
         .environmentObject(FolderOrganizer())
         .environmentObject(SettingsViewModel())
         .frame(width: 900, height: 700)

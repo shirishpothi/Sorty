@@ -170,7 +170,10 @@ public struct MenuBarView: View {
                 openMainWindow()
             }
             
-            MenuBarButton(title: "Organize Current Folder", icon: "wand.and.stars") {
+            MenuBarButton(
+                title: "Organize Current Folder",
+                customImage: Image(nsImage: SortyResources.menuBarNSImage()).renderingMode(.template)
+            ) {
                 organizeCurrentFolder()
             }
             .disabled(isOrganizing)
@@ -433,7 +436,8 @@ public struct MenuBarView: View {
 
 private struct MenuBarButton: View {
     let title: String
-    let icon: String
+    var icon: String? = nil
+    var customImage: Image? = nil
     let action: () -> Void
     
     @State private var isHovered = false
@@ -442,8 +446,15 @@ private struct MenuBarButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .frame(width: 16)
+                if let customImage = customImage {
+                    customImage
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 16, height: 16)
+                } else if let icon = icon {
+                    Image(systemName: icon)
+                        .frame(width: 16)
+                }
                 Text(title)
                 Spacer()
             }
@@ -576,7 +587,11 @@ private struct WatchedFolderMenuItem: View {
             Button {
                 organizeFolder()
             } label: {
-                Label("Organize Now", systemImage: "wand.and.stars")
+                Label {
+                    Text("Organize Now")
+                } icon: {
+                    MenuBarMascotIcon(size: CGSize(width: 14, height: 14))
+                }
             }
             .disabled(organizer.state != .idle)
 

@@ -7,29 +7,7 @@
 
 import Foundation
 
-public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
-    
-    /// Helper to construct the full endpoint URL from a base URL
-    static func constructEndpoint(from apiURL: String) -> String {
-        var base = apiURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Prepend https:// if no scheme is present
-        if !base.contains("://") && !base.isEmpty {
-            base = "https://" + base
-        }
-        
-        if base.hasSuffix("/v1/chat/completions") {
-             return base
-        } else if base.hasSuffix("/v1") {
-             return "\(base)/chat/completions"
-        } else if base.hasSuffix("/v1/") {
-             return "\(base)chat/completions"
-        } else if base.hasSuffix("/") {
-             return "\(base)v1/chat/completions"
-        } else {
-             return "\(base)/v1/chat/completions"
-        }
-    }
+public final class OpenAIClient: AIClientProtocol, Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
     
@@ -37,28 +15,10 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         self.config = config
     }
     
-    private func getSession() async -> URLSession {
-        return await AISessionManager.shared.session(for: config.provider, config: config)
-    }
-    
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
-        guard let apiURL = config.apiURL else {
-            throw AIClientError.missingAPIURL
-        }
-        
-        // API key is now optional - only required if config.requiresAPIKey is true
-        if config.requiresAPIKey && (config.apiKey == nil || config.apiKey?.isEmpty == true) {
-            throw AIClientError.missingAPIKey
-        }
-        
-        // Use standard OpenAI-compatible endpoint structure for both providers
-        // OpenAI: https://api.openai.com/v1/chat/completions
-        // Ollama: http://localhost:11434/v1/chat/completions
-        let endpoint = OpenAIClient.constructEndpoint(from: apiURL)
-        
-        guard let url = URL(string: endpoint), url.scheme != nil else {
-            throw AIClientError.invalidURL
-        }
+        let apiURL = try AIRequestSupport.requireAPIURL(from: config)
+        try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
+        let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
         
         // Use custom system prompt if provided, otherwise use default
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
@@ -98,19 +58,9 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
     }
     
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
-        guard let apiURL = config.apiURL else {
-            throw AIClientError.missingAPIURL
-        }
-        
-        if config.requiresAPIKey && (config.apiKey == nil || config.apiKey?.isEmpty == true) {
-            throw AIClientError.missingAPIKey
-        }
-        
-        let endpoint = OpenAIClient.constructEndpoint(from: apiURL)
-        
-        guard let url = URL(string: endpoint), url.scheme != nil else {
-            throw AIClientError.invalidURL
-        }
+        let apiURL = try AIRequestSupport.requireAPIURL(from: config)
+        try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
+        let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
         
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
@@ -165,19 +115,9 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
     }
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
-        guard let apiURL = config.apiURL else {
-            throw AIClientError.missingAPIURL
-        }
-        
-        if config.requiresAPIKey && (config.apiKey == nil || config.apiKey?.isEmpty == true) {
-            throw AIClientError.missingAPIKey
-        }
-        
-        let endpoint = OpenAIClient.constructEndpoint(from: apiURL)
-        
-        guard let url = URL(string: endpoint), url.scheme != nil else {
-            throw AIClientError.invalidURL
-        }
+        let apiURL = try AIRequestSupport.requireAPIURL(from: config)
+        try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
+        let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
         
         var requestBody: [String: Any] = [
             "model": config.model,
@@ -192,27 +132,18 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
             requestBody["max_tokens"] = maxTokens
         }
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        
+        var headers: [String: String] = [:]
         if let apiKey = config.apiKey, !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            headers["Authorization"] = "Bearer \(apiKey)"
         }
-        
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let session = await getSession()
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIClientError.invalidResponse
+        let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+
+        let session = await AIRequestSupport.session(for: config)
+        let (data, response) = try await AIRequestSupport.withTransientRetry {
+            try await session.data(for: request)
         }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-        }
+
+        _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
         
         let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         
@@ -227,86 +158,44 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
     }
     
     public func checkHealth() async throws {
-        guard let apiURL = config.apiURL else {
-            throw AIClientError.missingAPIURL
+        let apiURL = try AIRequestSupport.requireAPIURL(from: config)
+        let url = try AIRequestSupport.openAIModelsURL(from: apiURL)
+
+        var headers: [String: String] = [:]
+        if config.requiresAPIKey, let apiKey = config.apiKey, !apiKey.isEmpty {
+            headers["Authorization"] = "Bearer \(apiKey)"
         }
-        
-        // Construct the models endpoint URL properly based on the base URL format
-        var modelsURL: String
-        
-        if apiURL.hasSuffix("/chat/completions") {
-            // Strip /chat/completions and use /models
-            modelsURL = String(apiURL.dropLast("/chat/completions".count)) + "/models"
-        } else if apiURL.hasSuffix("/chat/completions/") {
-            modelsURL = String(apiURL.dropLast("/chat/completions/".count)) + "/models"
-        } else if apiURL.hasSuffix("/v1") {
-            // URL ends with /v1, add /models
-            modelsURL = apiURL + "/models"
-        } else if apiURL.hasSuffix("/v1/") {
-            modelsURL = apiURL + "models"
-        } else if apiURL.contains("/v1/") || apiURL.contains("/v1beta/") {
-            // URL already has versioning path (like OpenRouter or Gemini)
-            let baseURL = apiURL.hasSuffix("/") ? apiURL : apiURL + "/"
-            modelsURL = baseURL + "models"
-        } else {
-            // Standard API base URL (like https://api.openai.com), add /v1/models
-            let baseURL = apiURL.hasSuffix("/") ? String(apiURL.dropLast()) : apiURL
-            modelsURL = baseURL + "/v1/models"
-        }
-        
-        guard let url = URL(string: modelsURL), url.scheme != nil else {
-            throw AIClientError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+
+        var request = try AIRequestSupport.makeJSONRequest(url: url, method: "GET", headers: headers)
         request.timeoutInterval = min(config.requestTimeout, 60)
 
-        if config.requiresAPIKey, let apiKey = config.apiKey, !apiKey.isEmpty {
-            request.addValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let session = await AIRequestSupport.session(for: config)
+        let (data, response) = try await AIRequestSupport.withTransientRetry {
+            try await session.data(for: request)
         }
-
-        let session = await getSession()
-        let (_, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIClientError.invalidResponse
-        }
-
-        if !(200...299).contains(httpResponse.statusCode) {
-             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
-        }
+        _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
     }
     
     // MARK: - Non-Streaming Implementation
     
     private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], systemPrompt: String, userPrompt: String) async throws -> OrganizationPlan {
         let startTime = Date()
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        
-        // Only add Authorization header if API key is provided
+        var headers: [String: String] = [:]
         if let apiKey = config.apiKey, !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            headers["Authorization"] = "Bearer \(apiKey)"
         }
-        
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let session = await getSession()
+
+        let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
+
+        let session = await AIRequestSupport.session(for: config)
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await AIRequestSupport.withTransientRetry {
+                try await session.data(for: request)
+            }
             let endTime = Date()
             let duration = endTime.timeIntervalSince(startTime)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw AIClientError.invalidResponse
-            }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-                throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-            }
+
+            _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
             
             let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
             
@@ -352,23 +241,19 @@ public final class OpenAIClient: AIClientProtocol, @unchecked Sendable {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        
-        // Only add Authorization header if API key is provided
+        var headers: [String: String] = [:]
         if let apiKey = config.apiKey, !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            headers["Authorization"] = "Bearer \(apiKey)"
         }
-        
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: streamingRequestBody)
+
+        let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: streamingRequestBody)
         
         let startTime = Date()
         var firstTokenTime: Date?
         var accumulatedContent = ""
         var tokenCountEstimate = 0
         
-        let session = await getSession()
+        let session = await AIRequestSupport.session(for: config)
         do {
             let (bytes, response) = try await session.bytes(for: request)
             

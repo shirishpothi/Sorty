@@ -38,6 +38,10 @@ public final class FolderWatcher: @unchecked Sendable {
     private var debounceWorkItems: [UUID: DispatchWorkItem] = [:]
     private let debounceInterval: TimeInterval = 0.3
     
+    // Incremental scanning support
+    private var pendingEventPaths: [UUID: Set<String>] = [:]
+    private var forcedFullRescan: Set<UUID> = []
+    
     // Temp file extensions to ignore
     private static let ignoredExtensions: Set<String> = ["tmp", "download", "partial", "crdownload", "part"]
     private static let ignoredSuffixes: Set<Character> = ["~"]
@@ -260,6 +264,8 @@ public final class FolderWatcher: @unchecked Sendable {
         debounceWorkItems.removeValue(forKey: id)
         pausedFolders.remove(id)
         watchedFolders.removeValue(forKey: id)
+        pendingEventPaths.removeValue(forKey: id)
+        forcedFullRescan.remove(id)
         
         // Release security scoped resource
         if let url = resolvedURLs[id] {
@@ -324,13 +330,83 @@ public final class FolderWatcher: @unchecked Sendable {
         return modDates
     }
     
-    fileprivate func handleEvents(for folderId: UUID) {
+    private func incrementalFileState(changedPaths: Set<String>, rootPath: String, existingModDates: [String: Date]) -> [String: Date] {
+        var modDates = existingModDates
+        
+        // Get unique parent directories of changed paths
+        let changedDirs = Set(changedPaths.compactMap { path -> String? in
+            let url = URL(fileURLWithPath: path)
+            let parent = url.deletingLastPathComponent().path
+            guard parent.hasPrefix(rootPath) else { return nil }
+            return parent
+        })
+        
+        // Also include the root if any direct children changed
+        var dirsToScan = changedDirs
+        if changedPaths.contains(where: { URL(fileURLWithPath: $0).deletingLastPathComponent().path == rootPath }) {
+            dirsToScan.insert(rootPath)
+        }
+        
+        // For each changed directory, do a shallow enumeration
+        for dir in dirsToScan {
+            let dirURL = URL(fileURLWithPath: dir)
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: dirURL,
+                includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+            
+            // Track what files currently exist in this dir
+            var currentFilesInDir = Set<String>()
+            
+            for fileURL in contents {
+                let name = fileURL.lastPathComponent
+                guard !Self.isIgnoredFile(name) else { continue }
+                
+                guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey]),
+                      values.isRegularFile == true else { continue }
+                
+                let relativePath = fileURL.path.replacingOccurrences(of: rootPath + "/", with: "")
+                currentFilesInDir.insert(relativePath)
+                modDates[relativePath] = values.contentModificationDate ?? Date.distantPast
+            }
+            
+            // Remove files that were deleted from this directory
+            let dirRelativePrefix = dir == rootPath ? "" : dir.replacingOccurrences(of: rootPath + "/", with: "") + "/"
+            let existingInDir = modDates.keys.filter { key in
+                if dirRelativePrefix.isEmpty {
+                    return !key.contains("/")
+                }
+                return key.hasPrefix(dirRelativePrefix) && !key.dropFirst(dirRelativePrefix.count).contains("/")
+            }
+            for existingKey in existingInDir {
+                if !currentFilesInDir.contains(existingKey) {
+                    modDates.removeValue(forKey: existingKey)
+                }
+            }
+        }
+        
+        return modDates
+    }
+    
+    fileprivate func handleEvents(for folderId: UUID, changedPaths: Set<String>, requiresFullRescan: Bool) {
         lastEventTime[folderId] = Date()
         guard let folder = watchedFolders[folderId] else { return }
         guard folder.autoOrganize else { return }
         guard !pausedFolders.contains(folderId) else {
             DebugLogger.log("Watcher paused for \(folder.name), ignoring event")
             return
+        }
+        
+        // Accumulate event paths
+        if pendingEventPaths[folderId] != nil {
+            pendingEventPaths[folderId]?.formUnion(changedPaths)
+        } else {
+            pendingEventPaths[folderId] = changedPaths
+        }
+        
+        if requiresFullRescan {
+            forcedFullRescan.insert(folderId)
         }
         
         debounceWorkItems[folderId]?.cancel()
@@ -347,11 +423,24 @@ public final class FolderWatcher: @unchecked Sendable {
         guard !pausedFolders.contains(folderId) else { return }
         
         let path = resolvedURLs[folderId]?.path ?? folder.path
+        let previousModDates = fileModDates[folderId] ?? [:]
+        
+        let useFullRescan = forcedFullRescan.contains(folderId)
+        let changedPaths = pendingEventPaths[folderId] ?? []
+        
+        // Clear pending state
+        pendingEventPaths.removeValue(forKey: folderId)
+        forcedFullRescan.remove(folderId)
 
-        let modDates = recursiveFileState(atRootPath: path)
+        let modDates: [String: Date]
+        if useFullRescan || changedPaths.isEmpty || previousModDates.isEmpty {
+            modDates = recursiveFileState(atRootPath: path)
+        } else {
+            modDates = incrementalFileState(changedPaths: changedPaths, rootPath: path, existingModDates: previousModDates)
+        }
+        
         let currentSet = Set(modDates.keys)
         let previousSet = folderSnapshots[folderId] ?? []
-        let previousModDates = fileModDates[folderId] ?? [:]
         
         var genuineNewFiles = Set<String>()
         
@@ -479,13 +568,26 @@ private func callback(
     guard let watcher = context.watcher else { return }
     let folderId = context.folderId
     
-    // We received an event batch. Since we rely on snapshotting,
-    // we can simply trigger a check. FSEvents coalesces events, so this is efficient.
+    // Extract event paths from the CFArray (kFSEventStreamCreateFlagUseCFTypes)
+    var changedPaths = Set<String>()
+    var requiresFullRescan = false
     
-    // Dispatch back to watcher queue to handle safely
-    // Note: If we set the dispatch queue on the stream, this callback is already on that queue.
-    // However, to be safe and consistent with class structure:
-    watcher.handleEvents(for: folderId)
+    let cfPaths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue()
+    for i in 0..<numEvents {
+        let flags = eventFlags[i]
+        
+        if flags & UInt32(kFSEventStreamEventFlagMustScanSubDirs) != 0 ||
+           flags & UInt32(kFSEventStreamEventFlagRootChanged) != 0 {
+            requiresFullRescan = true
+        }
+        
+        if let cfPath = CFArrayGetValueAtIndex(cfPaths, i) {
+            let path = Unmanaged<CFString>.fromOpaque(cfPath).takeUnretainedValue() as String
+            changedPaths.insert(path)
+        }
+    }
+    
+    watcher.handleEvents(for: folderId, changedPaths: changedPaths, requiresFullRescan: requiresFullRescan)
 }
 
 // Add extension to handle private method access in callback workaround if needed,
@@ -494,7 +596,7 @@ private func callback(
 // We'll make handleEvents fileprivate and put callback in same file.
 
 extension FolderWatcher {
-    fileprivate func handleEventsPublicWrapper(for folderId: UUID) {
-        handleEvents(for: folderId)
+    fileprivate func handleEventsPublicWrapper(for folderId: UUID, changedPaths: Set<String>, requiresFullRescan: Bool) {
+        handleEvents(for: folderId, changedPaths: changedPaths, requiresFullRescan: requiresFullRescan)
     }
 }

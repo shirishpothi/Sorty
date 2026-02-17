@@ -266,8 +266,7 @@ struct OrganizationStrategySettingsView: View {
                                     .disabled(namingPreferenceInput.isEmpty || namingGenerator.isGenerating)
 
                                     if namingGenerator.isGenerating {
-                                        ProgressView()
-                                            .scaleEffect(0.7)
+                                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                                             .padding(.leading, 4)
                                     }
 

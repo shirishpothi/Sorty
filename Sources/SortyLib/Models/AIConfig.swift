@@ -395,6 +395,25 @@ public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
     }
 }
 
+public enum DuplicateHandlingMode: String, CaseIterable, Identifiable, Sendable {
+    case off = "Off"
+    case detectOnly = "Detect in Preview"
+    case detectAndPreserveMetadata = "Detect + Preserve Metadata"
+
+    public var id: String { rawValue }
+
+    public var description: String {
+        switch self {
+        case .off:
+            return "Skip duplicate detection when generating plans."
+        case .detectOnly:
+            return "Detect duplicates and surface them in preview insights."
+        case .detectAndPreserveMetadata:
+            return "Detect duplicates and preserve metadata for safer cleanup workflows."
+        }
+    }
+}
+
 public struct AIConfig: Codable, Sendable, Equatable {
     public var provider: AIProvider
     public var apiURL: String?
@@ -528,6 +547,27 @@ public struct AIConfig: Codable, Sendable, Equatable {
     )
 }
 
+public extension AIConfig {
+    var duplicateHandlingMode: DuplicateHandlingMode {
+        get {
+            guard detectDuplicates else { return .off }
+            return storeDuplicateMetadata ? .detectAndPreserveMetadata : .detectOnly
+        }
+        set {
+            switch newValue {
+            case .off:
+                detectDuplicates = false
+            case .detectOnly:
+                detectDuplicates = true
+                storeDuplicateMetadata = false
+            case .detectAndPreserveMetadata:
+                detectDuplicates = true
+                storeDuplicateMetadata = true
+            }
+        }
+    }
+}
+
 public enum NamingStyle: String, Codable, CaseIterable, Sendable {
     case descriptive // [Date]_[Subject]_[Type]
     case minimalist  // [Subject]
@@ -560,6 +600,5 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
         }
     }
 }
-
 
 

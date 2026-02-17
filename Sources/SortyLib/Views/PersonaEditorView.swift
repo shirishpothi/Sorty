@@ -188,8 +188,7 @@ struct PersonaEditorView: View {
                     }
                     
                     if generator.isGenerating {
-                        ProgressView()
-                            .controlSize(.small)
+                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     } else {
                         Button("Generate") {
                             Task {

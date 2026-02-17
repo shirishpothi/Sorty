@@ -20,6 +20,9 @@ public final class AutomationManager: ObservableObject {
     @Published public private(set) var automationStatus: PermissionStatus = .unknown
     @Published public private(set) var selectedFinderItems: [URL] = []
     @Published public private(set) var hasValidFinderSelection: Bool = false
+    @Published public private(set) var statusMessage: String = "Waiting for permission check"
+    @Published public private(set) var lastPermissionError: String?
+    @Published public private(set) var lastSelectionRefresh: Date?
     
     // MARK: - Private Properties
     
@@ -97,6 +100,16 @@ public final class AutomationManager: ObservableObject {
     /// Check Automation permission status
     public func checkPermissions() {
         automationStatus = FinderAutomation.checkAutomationPermission(prompt: false)
+        switch automationStatus {
+        case .granted:
+            statusMessage = "Finder automation permission granted"
+            lastPermissionError = nil
+        case .denied:
+            statusMessage = "Finder automation permission denied"
+            lastPermissionError = "Grant Finder automation in System Settings > Privacy & Security > Automation."
+        case .unknown:
+            statusMessage = "Finder automation permission not yet determined"
+        }
         if automationStatus == .granted {
             UserDefaults.standard.set(true, forKey: "automation.previouslyGranted")
         }
@@ -107,6 +120,16 @@ public final class AutomationManager: ObservableObject {
         automationChecksEnabled = true
         FinderAutomation.enableAutomationChecks()
         automationStatus = FinderAutomation.checkAutomationPermission(prompt: true)
+        switch automationStatus {
+        case .granted:
+            statusMessage = "Finder automation ready"
+            lastPermissionError = nil
+        case .denied:
+            statusMessage = "Finder automation denied"
+            lastPermissionError = "Automation permission was denied. Open System Settings to allow Finder control."
+        case .unknown:
+            statusMessage = "Waiting for automation decision"
+        }
         if automationStatus == .granted {
             UserDefaults.standard.set(true, forKey: "automation.previouslyGranted")
         }
@@ -127,10 +150,12 @@ public final class AutomationManager: ObservableObject {
     public func startSelectionMonitoring() {
         guard automationChecksEnabled else {
             DebugLogger.log("Automation checks not enabled; deferring selection monitoring")
+            statusMessage = "Selection monitoring deferred until permission check"
             return
         }
         guard automationStatus == .granted else {
             DebugLogger.log("Cannot start selection monitoring: Automation permission not granted")
+            statusMessage = "Selection monitoring unavailable (permission not granted)"
             return
         }
         
@@ -148,6 +173,7 @@ public final class AutomationManager: ObservableObject {
                 self?.updateFinderSelection()
             }
         }
+        statusMessage = "Monitoring Finder selection"
     }
     
     /// Stop monitoring Finder selection
@@ -156,18 +182,26 @@ public final class AutomationManager: ObservableObject {
         selectionCheckTimer = nil
         selectedFinderItems = []
         hasValidFinderSelection = false
+        statusMessage = "Finder selection monitoring paused"
     }
     
     /// Manually update the Finder selection
     public func updateFinderSelection() {
-        guard automationStatus == .granted else { return }
+        guard automationStatus == .granted else {
+            statusMessage = "Cannot refresh Finder selection without permission"
+            return
+        }
         
         if let selection = FinderAutomation.getSelectedFiles() {
             selectedFinderItems = selection
             hasValidFinderSelection = !selection.isEmpty
+            lastSelectionRefresh = Date()
+            statusMessage = selection.isEmpty ? "Finder selection is empty" : "Finder selection updated (\(selection.count) item\(selection.count == 1 ? "" : "s"))"
         } else {
             selectedFinderItems = []
             hasValidFinderSelection = false
+            lastSelectionRefresh = Date()
+            statusMessage = "Finder selection unavailable"
         }
     }
     
@@ -210,6 +244,18 @@ public final class AutomationManager: ObservableObject {
     public func refreshFinder(at url: URL) {
         guard automationStatus == .granted else { return }
         FinderAutomation.refreshFinder(at: url)
+    }
+
+    /// Attempt recovery from stale/denied automation states without app restart.
+    public func recoverAutomationState() {
+        checkPermissions()
+        guard automationStatus == .granted else { return }
+        if enableSelectionMonitoring {
+            startSelectionMonitoring()
+        } else {
+            updateFinderSelection()
+        }
+        statusMessage = "Automation state refreshed"
     }
     
     // MARK: - Notification Handler

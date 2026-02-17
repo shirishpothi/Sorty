@@ -56,8 +56,7 @@ struct PersonaGeneratorView: View {
 
     private var generationOverlay: some View {
         VStack(spacing: 24) {
-            ProgressView()
-                .controlSize(.large)
+            SortyGradientLoadingBar(width: 180, height: 10)
             
             VStack(spacing: 8) {
                 Text("Architecting Strategy...")
@@ -126,7 +125,7 @@ struct PersonaGeneratorView: View {
                     startHoning()
                 } label: {
                     if isLoadingQuestions {
-                        ProgressView().controlSize(.small)
+                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     } else {
                         Text("Next")
                     }
@@ -145,7 +144,10 @@ struct PersonaGeneratorView: View {
                 .fontWeight(.bold)
                 .padding(.top, 20)
             
-            ProgressView(value: Double(currentQuestionIndex + 1), total: Double(questions.count))
+            SortyGradientProgressBar(
+                progress: Double(currentQuestionIndex + 1) / Double(max(questions.count, 1)),
+                height: 10
+            )
                 .padding(.horizontal)
             
             let question = questions[currentQuestionIndex]

@@ -174,7 +174,9 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
 
         let session = await getSession()
-        let (_, response) = try await session.data(for: request)
+        let (_, response) = try await AIRequestSupport.withTransientRetry {
+            try await session.data(for: request)
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIClientError.invalidResponse
@@ -208,7 +210,9 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
         let session = await getSession()
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await AIRequestSupport.withTransientRetry {
+            try await session.data(for: request)
+        }
         
         guard let httpResponse = response as? HTTPURLResponse else {
             throw AIClientError.invalidResponse
@@ -253,7 +257,9 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         
         let session = await getSession()
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await AIRequestSupport.withTransientRetry {
+                try await session.data(for: request)
+            }
             let endTime = Date()
             let duration = endTime.timeIntervalSince(startTime)
             

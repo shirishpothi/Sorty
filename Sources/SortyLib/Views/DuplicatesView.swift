@@ -109,6 +109,7 @@ struct DuplicatesView: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
             }
+            consumePendingHandoffIfNeeded()
         }
         .onChange(of: effectiveDirectory) { _, _ in
             // Cancel in-flight scan if directory changes
@@ -117,8 +118,35 @@ struct DuplicatesView: View {
             detectionManager.clearResults()
             selectedGroup = nil
         }
+        .onChange(of: appState.pendingDuplicatesHandoff) { _, handoff in
+            guard let handoff else { return }
+            apply(handoff: handoff)
+        }
         .sheet(isPresented: $showSettings) {
             DuplicateSettingsView(settingsManager: settingsManager)
+        }
+    }
+
+    private func consumePendingHandoffIfNeeded() {
+        guard let handoff = appState.pendingDuplicatesHandoff else { return }
+        apply(handoff: handoff)
+    }
+
+    private func apply(handoff: AppState.DuplicatesHandoff) {
+        currentScanTask?.cancel()
+        currentScanTask = nil
+
+        if let directory = handoff.directory {
+            localDirectory = directory
+            appState.selectedDirectory = directory
+        }
+
+        detectionManager.clearResults()
+        selectedGroup = nil
+        appState.pendingDuplicatesHandoff = nil
+
+        if handoff.autoStart, effectiveDirectory != nil {
+            startScan()
         }
     }
 
@@ -229,12 +257,13 @@ struct DuplicatesView: View {
 
     private func deleteFiles(_ files: [FileItem]) {
         let fm = FileManager.default
+        var totalDeleted = 0
+        var totalSizeRecovered: Int64 = 0
+        var potentialRestorables: [RestorableDuplicate] = []
+        let cleanupMode: DuplicateCleanupMode = enableSafeDeletion ? .safeDeletion : .directDelete
+
         do {
             if enableSafeDeletion {
-                var totalDeleted = 0
-                var totalSizeRecovered: Int64 = 0
-                var potentialRestorables: [RestorableDuplicate] = []
-                
                 for file in files {
                     if let exactGroup = detectionManager.duplicateGroups.first(where: { $0.files.contains(file) }) {
                         if let survivor = exactGroup.files.first(where: { !files.contains($0) }) {
@@ -256,30 +285,34 @@ struct DuplicatesView: View {
                         totalSizeRecovered += file.size
                     }
                 }
-                
-                Task { @MainActor in
-                    let entry = OrganizationHistoryEntry(
-                        directoryPath: effectiveDirectory?.path ?? "",
-                        filesOrganized: 0,
-                        foldersCreated: 0,
-                        success: true,
-                        status: .duplicatesCleanup,
-                        duplicatesDeleted: totalDeleted,
-                        recoveredSpace: totalSizeRecovered,
-                        restorableItems: potentialRestorables
-                    )
-                    appState.organizer?.history.addEntry(entry)
-                }
             } else {
                 for file in files {
                     do {
                         try fm.removeItem(atPath: file.path)
+                        totalDeleted += 1
+                        totalSizeRecovered += file.size
                     } catch {
                          DebugLogger.log("Failed to remove file: \(file.path), error: \(error.localizedDescription)")
                          // Continue deleting others
                     }
                 }
             }
+
+            Task { @MainActor in
+                let entry = OrganizationHistoryEntry(
+                    directoryPath: effectiveDirectory?.path ?? "",
+                    filesOrganized: 0,
+                    foldersCreated: 0,
+                    success: true,
+                    status: .duplicatesCleanup,
+                    duplicatesDeleted: totalDeleted,
+                    recoveredSpace: totalSizeRecovered,
+                    restorableItems: potentialRestorables,
+                    duplicateCleanupMode: cleanupMode
+                )
+                appState.organizer?.history.addEntry(entry)
+            }
+
             HapticFeedbackManager.shared.success()
         } catch {
             HapticFeedbackManager.shared.error()
@@ -405,9 +438,23 @@ struct DuplicatesHeaderNew: View {
                     .foregroundStyle(enableSafeDeletion ? .green : .orange)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(
-                        Capsule().fill(enableSafeDeletion ? Color.green.opacity(0.1) : Color.orange.opacity(0.1))
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(showInfo ? 0.45 : 0.28),
+                                        Color.white.opacity(0.06)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
                     )
+                    .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
                 }
                 .contentShape(Capsule())
                 .buttonStyle(.plain)
@@ -1114,19 +1161,11 @@ struct ScanProgressViewNew: View {
     var body: some View {
         VStack(spacing: 28) {
             ZStack {
-                Circle()
-                    .stroke(.secondary.opacity(0.1), lineWidth: 10)
-                    .frame(width: 120, height: 120)
-                
-                Circle()
-                    .trim(from: 0, to: isPreparing ? 0.2 : progress)
-                    .stroke(
-                        Color.accentColor,
-                        style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                    )
-                    .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(isPreparing ? 360 : -90))
-                    .animation(isPreparing ? .linear(duration: 1).repeatForever(autoreverses: false) : .spring(response: 0.4, dampingFraction: 0.8), value: isPreparing ? true : false)
+                if isPreparing {
+                    SortyGradientCircularLoader(size: 120, lineWidth: 10)
+                } else {
+                    SortyGradientCircularProgress(progress: progress, size: 120, lineWidth: 10)
+                }
                 
                 if isPreparing {
                     Image(systemName: "magnifyingglass")
@@ -1197,5 +1236,6 @@ struct SafeDeletionInfoPopover: View {
         }
         .padding(16)
         .frame(width: 280)
+        .background(.ultraThinMaterial)
     }
 }

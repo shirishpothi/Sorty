@@ -75,6 +75,9 @@ struct OrganizeView: View {
                         Label("Regenerate", systemImage: "arrow.clockwise")
                     }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .help("Regenerate organization plan with current settings")
+                    .accessibilityLabel("Regenerate organization plan")
+                    .accessibilityHint("Use when you want different AI suggestions")
                 }
             }
         }
@@ -120,7 +123,7 @@ struct OrganizeView: View {
             if let plan = organizer.currentPlan {
                 PreviewView(plan: plan, baseURL: appState.selectedDirectory!)
             } else {
-                ProgressView()
+                SortyGradientLoadingBar(width: 180, height: 10)
             }
         case .applying:
             AnalysisView()
@@ -261,6 +264,7 @@ struct ReadyToOrganizeView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var automationManager: AutomationManager
     @StateObject private var sessionManager = AISessionManager.shared
     @StateObject private var steeringManager = SteeringPromptManager.shared
     @State private var hasAppeared = false
@@ -273,6 +277,10 @@ struct ReadyToOrganizeView: View {
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
     @FocusState private var textFieldFocus: Bool
+    
+    private var isConnecting: Bool {
+        sessionManager.prewarmingProvider != nil
+    }
 
     var body: some View {
         WorkflowContainer(currentStep: .configure) {
@@ -315,29 +323,38 @@ struct ReadyToOrganizeView: View {
                 onStart()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 12))
-                    Text("Start Organization")
+                    if isConnecting {
+                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                            .frame(width: 12, height: 12)
+                        Text("Connecting...")
+                    } else {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 12))
+                        Text("Start Organization")
+                    }
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .keyboardShortcut(.return, modifiers: [])
+            .disabled(isConnecting)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
+            .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start organizing files using your current settings")
             .accessibilityIdentifier("StartOrganizationButton")
-            .accessibilityLabel("Start organization")
-            .accessibilityHint("Press Enter to start")
+            .accessibilityLabel(isConnecting ? "Connecting to provider" : "Start organization")
+            .accessibilityHint(isConnecting ? "Please wait until connection completes" : "Press Enter to start")
+            .accessibilityValue(isConnecting ? "Connecting" : "Ready")
             .accessibilityAddTraits(.isButton)
-            
+
             // Keyboard shortcut hint
             HStack(spacing: 4) {
                 Text("⏎")
                     .font(.caption2)
                     .fontWeight(.medium)
-                Text("Start")
+                Text(isConnecting ? "Waiting..." : "Start")
                     .font(.caption2)
             }
             .foregroundStyle(.quaternary)
@@ -410,6 +427,8 @@ struct ReadyToOrganizeView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help(showStorageLocations ? "Hide storage destination locations" : "Show storage destination locations")
+            .accessibilityHint("Expand to manage folders files can move into")
             
             if showStorageLocations {
                 VStack(alignment: .leading, spacing: 10) {
@@ -465,6 +484,8 @@ struct ReadyToOrganizeView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
+                        .help("Add a folder that Sorty can use as a destination")
+                        .accessibilityHint("Opens folder picker to add a destination location")
                         
                         Spacer()
                         
@@ -497,8 +518,7 @@ struct ReadyToOrganizeView: View {
     private var connectionStatusView: some View {
         HStack(spacing: 6) {
             if sessionManager.prewarmingProvider != nil {
-                ProgressView()
-                    .scaleEffect(0.6)
+                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     .frame(width: 12, height: 12)
                 Text("Connecting to \(settingsViewModel.config.provider.displayName)...")
                     .font(.caption2)
@@ -521,6 +541,9 @@ struct ReadyToOrganizeView: View {
             }
         }
         .frame(height: 16)
+        .help("Current AI connection state")
+        .accessibilityLabel("Connection status")
+        .accessibilityHint("Shows whether Sorty can reach the selected AI provider")
     }
     
     private var instructionsContent: some View {
@@ -538,8 +561,7 @@ struct ReadyToOrganizeView: View {
                 if isImprovingPrompt {
                     HStack {
                         Spacer()
-                        ProgressView()
-                            .scaleEffect(0.8)
+                        SortyGradientCircularLoader(size: 13, lineWidth: 2.4)
                         Text("Improving...")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -581,6 +603,7 @@ struct ReadyToOrganizeView: View {
                     .foregroundColor(.purple)
                     .disabled(isImprovingPrompt)
                     .help("Improve instructions with AI")
+                    .accessibilityHint("Rewrites your prompt to be clearer and more specific")
                 }
 
                 // Save prompt button
@@ -594,6 +617,8 @@ struct ReadyToOrganizeView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.accentColor)
+                    .help("Save current instructions for reuse")
+                    .accessibilityHint("Stores this prompt in your saved prompts list")
                     .popover(isPresented: $showSavePromptDialog) {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Save Prompt")
@@ -642,6 +667,8 @@ struct ReadyToOrganizeView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.accentColor)
+                .help("Open your saved instruction prompts")
+                .accessibilityHint("View, edit, and apply saved prompts")
             }
             .font(.caption2)
             .foregroundStyle(.quaternary)
@@ -799,8 +826,7 @@ struct SavedPromptsSheet: View {
                         Task { await improveEditingPrompt(prompt) }
                     } label: {
                         if improvingPromptId == prompt.id {
-                            ProgressView()
-                                .scaleEffect(0.7)
+                            SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                         } else {
                             Label("Improve with AI", systemImage: "wand.and.stars")
                         }
@@ -973,15 +999,77 @@ struct CompactStorageLocationRow: View {
 struct ErrorView: View {
     let error: Error
     let onRetry: () -> Void
+    
+    @EnvironmentObject private var appState: AppState
+    
+    private enum ErrorCategory {
+        case apiKey
+        case network
+        case permissions
+        case generic
+    }
+    
+    private var category: ErrorCategory {
+        let description = error.localizedDescription.lowercased()
+        if description.contains("api key") || description.contains("unauthorized") || description.contains("authentication") {
+            return .apiKey
+        }
+        if description.contains("network") || description.contains("internet") || description.contains("offline") || description.contains("timeout") {
+            return .network
+        }
+        if description.contains("permission") || description.contains("access") || description.contains("sandbox") {
+            return .permissions
+        }
+        return .generic
+    }
+    
+    private var errorIcon: String {
+        switch category {
+        case .apiKey:
+            return "key.fill"
+        case .network:
+            return "wifi.exclamationmark"
+        case .permissions:
+            return "lock.trianglebadge.exclamationmark"
+        case .generic:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+    
+    private var errorTitle: String {
+        switch category {
+        case .apiKey:
+            return "AI Credentials Required"
+        case .network:
+            return "Connection Problem"
+        case .permissions:
+            return "Permission Required"
+        case .generic:
+            return "Something Went Wrong"
+        }
+    }
+    
+    private var recoveryText: String {
+        switch category {
+        case .apiKey:
+            return "Check your provider and API key in Settings, then retry."
+        case .network:
+            return "Check your internet connection and provider availability, then retry."
+        case .permissions:
+            return "Grant file access for this folder and try again."
+        case .generic:
+            return "Try again. If this keeps happening, open Help & Support with the copied error details."
+        }
+    }
 
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: errorIcon)
                 .font(.system(size: 48))
                 .foregroundStyle(.red)
 
             VStack(spacing: 8) {
-                Text("Something went wrong")
+                Text(errorTitle)
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -990,11 +1078,42 @@ struct ErrorView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 400)
+                
+                Text(recoveryText)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
             }
 
-            Button("Try Again", action: onRetry)
-                .buttonStyle(.borderedProminent)
+            HStack(spacing: 10) {
+                Button("Try Again", action: onRetry)
+                    .buttonStyle(.borderedProminent)
+                    .help("Retry the organization workflow")
+                    .accessibilityHint("Attempts the last operation again")
+                
+                if category == .apiKey || category == .permissions {
+                    Button("Open Settings") {
+                        appState.selectedSettingsSection = category == .apiKey ? .provider : .troubleshooting
+                        appState.navigatedFromSettings = true
+                        appState.currentView = .settings
+                    }
+                    .buttonStyle(.bordered)
+                    .help("Open Settings to resolve this issue")
+                    .accessibilityHint("Navigates to relevant settings section")
+                }
+                
+                Button("Copy Details") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(error.localizedDescription, forType: .string)
+                    HapticFeedbackManager.shared.selection()
+                }
+                .buttonStyle(.bordered)
+                .help("Copy error details for support")
+                .accessibilityHint("Copies this error message to clipboard")
+            }
         }
+        .padding(.horizontal, 20)
     }
 }
 

@@ -9,8 +9,14 @@ import SwiftUI
 
 struct NotificationsSettingsView: View {
     @EnvironmentObject var notificationSettings: NotificationSettingsManager
+    @ObservedObject private var notificationManager = NotificationManager.shared
+    @State private var showAdvancedControlsOptIn = false
 
     private var showsAdvancedControls: Bool {
+        FeatureFlags.advancedNotificationSettingsEnabled || showAdvancedControlsOptIn
+    }
+
+    private var hasFeatureFlagEnabled: Bool {
         FeatureFlags.advancedNotificationSettingsEnabled
     }
     
@@ -19,6 +25,11 @@ struct NotificationsSettingsView: View {
             // Permission Status
             NotificationPermissionCard()
                 .animatedAppearance(delay: 0.0)
+
+            if !hasFeatureFlagEnabled {
+                advancedDiscoveryCard
+                    .animatedAppearance(delay: 0.02)
+            }
             
             if showsAdvancedControls {
                 // NotifiCLI Status Card
@@ -68,6 +79,9 @@ struct NotificationsSettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .animatedAppearance(delay: 0.1)
+
+            inFlowPreviewCard
+                .animatedAppearance(delay: 0.11)
             
             // NotifiCLI Settings (advanced controls only)
             if showsAdvancedControls && notificationSettings.settings.notificationBackend == .notifiCLI {
@@ -401,7 +415,105 @@ struct NotificationsSettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .animatedAppearance(delay: 0.25)
+
+                notificationAnalyticsCard
+                    .animatedAppearance(delay: 0.28)
             }
+        }
+    }
+
+    private var advancedDiscoveryCard: some View {
+        SettingsCard(title: "Advanced Controls", icon: "switch.2", color: .orange) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Want backend selection, actionable experiments, and diagnostics? You can opt in here without using Terminal flags.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Show advanced notification controls in this session", isOn: $showAdvancedControlsOptIn)
+                    .toggleStyle(.switch)
+                    .font(.caption)
+                    .accessibilityIdentifier("NotificationAdvancedOptInToggle")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var inFlowPreviewCard: some View {
+        SettingsCard(title: "In-Flow Preview", icon: "waveform.badge.magnifyingglass", color: .teal) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Preview the notification experience that appears while previews are generated.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 10) {
+                    Button {
+                        notificationManager.sendInFlowPreviewSample()
+                        HapticFeedbackManager.shared.selection()
+                    } label: {
+                        Label("Preview During Organization", systemImage: "play.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("NotificationInFlowPreviewButton")
+
+                    if showsAdvancedControls {
+                        Button {
+                            NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil)
+                            HapticFeedbackManager.shared.tap()
+                        } label: {
+                            Label("Try Redo Action", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("NotificationRedoWithModelPreviewButton")
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var notificationAnalyticsCard: some View {
+        SettingsCard(title: "Notification Analytics", icon: "chart.xyaxis.line", color: .indigo) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Recent events: \\(notificationManager.analyticsEvents.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Clear") {
+                        notificationManager.clearAnalytics()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("NotificationAnalyticsClearButton")
+                }
+
+                if notificationManager.analyticsEvents.isEmpty {
+                    Text("No analytics yet. Send a test notification to populate this list.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(notificationManager.analyticsEvents.prefix(6)) { event in
+                        HStack(spacing: 8) {
+                            Text(event.eventType.rawValue.capitalized)
+                                .font(.caption2)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.15))
+                                .clipShape(Capsule())
+                            Text(event.notificationType)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(event.backend.displayName)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

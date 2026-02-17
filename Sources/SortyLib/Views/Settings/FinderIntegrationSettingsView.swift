@@ -10,6 +10,8 @@ import SwiftUI
 struct FinderIntegrationSettingsView: View {
     @State private var isQuickActionInstalled = ExtensionCommunication.isQuickActionInstalled()
     @State private var quickActionMessage: String?
+    @State private var showAdvancedFinder = false
+    @EnvironmentObject var automationManager: AutomationManager
     
     var body: some View {
         VStack(spacing: 16) {
@@ -30,30 +32,41 @@ struct FinderIntegrationSettingsView: View {
                         }
                         
                         Spacer()
-                        
-                        if isQuickActionInstalled {
-                            Button("Uninstall") {
-                                if ExtensionCommunication.uninstallQuickAction() {
-                                    isQuickActionInstalled = false
-                                    quickActionMessage = "Quick Action removed"
-                                    HapticFeedbackManager.shared.success()
-                                }
+
+                        HStack(spacing: 8) {
+                            Button("Open Extensions") {
+                                ExtensionCommunication.openFinderExtensionSettings()
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
-                        } else {
-                            Button("Install") {
-                                let result = ExtensionCommunication.installQuickAction()
-                                isQuickActionInstalled = result.success
-                                quickActionMessage = result.message
-                                if result.success {
-                                    HapticFeedbackManager.shared.success()
-                                } else {
-                                    HapticFeedbackManager.shared.error()
+
+                            if isQuickActionInstalled {
+                                Button("Uninstall") {
+                                    if ExtensionCommunication.uninstallQuickAction() {
+                                        isQuickActionInstalled = false
+                                        quickActionMessage = "Quick Action removed"
+                                        HapticFeedbackManager.shared.success()
+                                    }
                                 }
+                                .buttonStyle(.sortySecondary(size: .regular))
+                            } else {
+                                Button("Install") {
+                                    let result = ExtensionCommunication.installQuickAction()
+                                    isQuickActionInstalled = result.success
+                                    quickActionMessage = result.message
+                                    if result.success {
+                                        HapticFeedbackManager.shared.success()
+                                    } else {
+                                        HapticFeedbackManager.shared.error()
+                                    }
+                                }
+                                .buttonStyle(.sortyPrimary(size: .regular))
                             }
-                            .buttonStyle(.sortyPrimary(size: .regular))
                         }
                     }
+
+                    Text("If the item does not show in Finder right-click menus, enable Sorty under System Settings > Extensions > Finder.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                     
                     if let message = quickActionMessage {
                         HStack(spacing: 6) {
@@ -91,28 +104,72 @@ struct FinderIntegrationSettingsView: View {
             }
             .animatedAppearance(delay: 0.1)
             
-            // Finder Extension (for signed builds)
-            SettingsCard(title: "Finder Sync Extension", icon: "puzzlepiece.extension", color: .purple) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
-                        Text("Requires code signing")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.orange)
+            if FeatureFlags.finderSyncEnabled {
+                // Finder Extension (for signed builds)
+                SettingsCard(title: "Finder Sync Extension", icon: "puzzlepiece.extension", color: .purple) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Text("Requires code signing")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.orange)
+                        }
+                        
+                        Text("The native Finder extension requires the app to be code-signed with an Apple Developer certificate. Use the Quick Action above for unsigned builds.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        Button("Open Extension Preferences") {
+                            ExtensionCommunication.openFinderExtensionSettings()
+                        }
+                        .buttonStyle(.sortySecondary(size: .small))
                     }
-                    
-                    Text("The native Finder extension requires the app to be code-signed with an Apple Developer certificate. Use the Quick Action above for unsigned builds.")
+                }
+                .animatedAppearance(delay: 0.15)
+            }
+            
+            // Advanced Controls
+            SettingsCard(title: "Advanced Controls", icon: "slider.horizontal.3", color: .purple) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Configure global shortcuts, CLI tools, automation permissions, and detailed integration options.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     
-                    Button("Open Extension Preferences") {
-                        ExtensionCommunication.openFinderExtensionSettings()
+                    Button {
+                        showAdvancedFinder = true
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("Open Advanced Controls")
+                                .font(.subheadline)
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption)
+                        }
                     }
-                    .buttonStyle(.sortySecondary(size: .small))
+                    .buttonStyle(.sortySecondary(size: .regular))
+                    .accessibilityIdentifier("FinderAdvancedControlsButton")
                 }
             }
-            .animatedAppearance(delay: 0.15)
+            .animatedAppearance(delay: 0.2)
+        }
+        .sheet(isPresented: $showAdvancedFinder) {
+            NavigationStack {
+                FinderIntegrationView()
+                    .environmentObject(automationManager)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") {
+                                showAdvancedFinder = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 700, minHeight: 600)
+        }
+        .onAppear {
+            let quickActionStatus = ExtensionCommunication.ensureQuickActionInstalled()
+            isQuickActionInstalled = quickActionStatus.installed
+            quickActionMessage = quickActionStatus.message
         }
     }
 }

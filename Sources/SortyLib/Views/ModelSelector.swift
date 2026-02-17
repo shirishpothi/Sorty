@@ -227,8 +227,7 @@ struct ModelSelectionPopover: View {
                 }
                 
                 if modelCatalog.isFetching[provider] ?? false {
-                    ProgressView()
-                        .scaleEffect(0.5)
+                    SortyGradientCircularLoader(size: 9, lineWidth: 1.8)
                 }
             }
             .padding(.horizontal, 10)

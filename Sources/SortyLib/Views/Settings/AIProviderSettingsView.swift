@@ -59,6 +59,16 @@ struct AIProviderSettingsView: View {
                     .animatedAppearance(delay: 0.15)
             }
         }
+        .onAppear {
+            if viewModel.config.provider == .githubCopilot {
+                copilotAuth.checkAuthenticationStatus()
+            }
+        }
+        .onChange(of: viewModel.config.provider) { _, newProvider in
+            if newProvider == .githubCopilot {
+                copilotAuth.checkAuthenticationStatus()
+            }
+        }
     }
     
     private var copilotConfigSection: some View {

@@ -23,6 +23,28 @@ public enum BatchRunMode: String, Sendable {
     case apply
 }
 
+public enum BatchPersonaSelection: Hashable, Sendable {
+    case global
+    case builtIn(PersonaType)
+    case custom(String)
+}
+
+public struct BatchFolderConfiguration: Sendable {
+    public var instructions: String
+    public var personaSelection: BatchPersonaSelection
+    public var lastUpdatedAt: Date
+
+    public init(
+        instructions: String = "",
+        personaSelection: BatchPersonaSelection = .global,
+        lastUpdatedAt: Date = Date()
+    ) {
+        self.instructions = instructions
+        self.personaSelection = personaSelection
+        self.lastUpdatedAt = lastUpdatedAt
+    }
+}
+
 public struct BatchResult: Identifiable, Sendable {
     public let id: UUID
     public let folderURL: URL
@@ -59,6 +81,8 @@ public final class BatchOrganizationManager: ObservableObject {
     @Published public var overallProgress: Double = 0.0
     @Published public var maxConcurrentFolders: Int = 3
     @Published public var currentMode: BatchRunMode?
+    @Published public private(set) var folderConfigurations: [URL: BatchFolderConfiguration] = [:]
+    @Published public private(set) var previewPlanHistory: [URL: [OrganizationPlan]] = [:]
 
     private var batchTask: Task<Void, Never>?
     private var isCancelled: Bool = false
@@ -129,6 +153,8 @@ public final class BatchOrganizationManager: ObservableObject {
         activeOrganizers = [:]
         dependencies = nil
         aiConfig = nil
+        folderConfigurations = [:]
+        previewPlanHistory = [:]
     }
 
     public func addFolder(_ url: URL, expandSubfolders: Bool = false) {
@@ -145,6 +171,9 @@ public final class BatchOrganizationManager: ObservableObject {
             guard !selectedFolders.contains(url) else { continue }
             selectedFolders.append(url)
             results.append(BatchResult(folderURL: url, filesOrganized: 0, status: .pending))
+            if folderConfigurations[url] == nil {
+                folderConfigurations[url] = BatchFolderConfiguration()
+            }
         }
         updateProgress()
     }
@@ -154,7 +183,48 @@ public final class BatchOrganizationManager: ObservableObject {
         selectedFolders.removeAll { $0 == url }
         results.removeAll { $0.folderURL == url }
         currentBatchFolders.remove(url)
+        folderConfigurations.removeValue(forKey: url)
+        previewPlanHistory.removeValue(forKey: url)
         updateProgress()
+    }
+
+    public func configuration(for folder: URL) -> BatchFolderConfiguration {
+        folderConfigurations[folder] ?? BatchFolderConfiguration()
+    }
+
+    public func updateInstructions(_ instructions: String, for folder: URL) {
+        var config = configuration(for: folder)
+        config.instructions = instructions
+        config.lastUpdatedAt = Date()
+        folderConfigurations[folder] = config
+    }
+
+    public func updatePersonaSelection(_ selection: BatchPersonaSelection, for folder: URL) {
+        var config = configuration(for: folder)
+        config.personaSelection = selection
+        config.lastUpdatedAt = Date()
+        folderConfigurations[folder] = config
+    }
+
+    public func clearFolderCustomization(for folder: URL) {
+        folderConfigurations[folder] = BatchFolderConfiguration()
+    }
+
+    public func updatePreviewPlan(_ plan: OrganizationPlan, for folder: URL) {
+        let existingPlan = resultPlan(for: folder)
+        if let existingPlan, existingPlan != plan {
+            var history = previewPlanHistory[folder] ?? []
+            history.append(existingPlan)
+            previewPlanHistory[folder] = Array(history.suffix(8))
+        }
+        updateResult(
+            for: folder,
+            status: .previewed,
+            filesOrganized: plan.totalFiles,
+            error: nil,
+            plan: plan,
+            historyEntry: nil
+        )
     }
 
     public func startPreviewBatch(config: AIConfig, sharedOrganizer: FolderOrganizer) async {
@@ -195,6 +265,57 @@ public final class BatchOrganizationManager: ObservableObject {
         await batchTask?.value
     }
 
+    public func retryAllFailed() async {
+        guard !isProcessing else { return }
+        guard aiConfig != nil else { return }
+
+        let failedFolders = results.filter { $0.status == .failed }.map { $0.folderURL }
+        guard !failedFolders.isEmpty else { return }
+
+        for folder in failedFolders {
+            updateResult(for: folder, status: .pending, filesOrganized: 0, error: nil, plan: nil, historyEntry: nil)
+        }
+
+        isProcessing = true
+        isCancelled = false
+        currentMode = .preview
+        currentBatchFolders = Set(failedFolders)
+        overallProgress = 0.0
+
+        let semaphore = AsyncSemaphore(value: max(1, maxConcurrentFolders))
+
+        batchTask = Task { [weak self] in
+            guard let self else { return }
+
+            await withTaskGroup(of: Void.self) { group in
+                for folder in failedFolders {
+                    if self.isCancelled { break }
+                    await semaphore.acquire()
+                    group.addTask { [weak self] in
+                        defer { Task { await semaphore.release() } }
+                        guard let self else { return }
+                        await self.processFolder(folder, mode: .preview)
+                    }
+                }
+                await group.waitForAll()
+            }
+
+            await MainActor.run {
+                self.overallProgress = 1.0
+                self.isProcessing = false
+                self.batchTask = nil
+                self.currentMode = nil
+                self.currentBatchFolders = []
+            }
+        }
+
+        await batchTask?.value
+    }
+
+    public var hasFailedFolders: Bool {
+        results.contains { $0.status == .failed }
+    }
+
     public func undoLastBatch(using organizer: FolderOrganizer) async {
         guard !isProcessing else { return }
         guard !lastBatchEntries.isEmpty else { return }
@@ -221,6 +342,7 @@ public final class BatchOrganizationManager: ObservableObject {
     }
 
     public func cancelBatch() {
+        recordCancellationForActiveFolders()
         isCancelled = true
         batchTask?.cancel()
         batchTask = nil
@@ -316,12 +438,19 @@ public final class BatchOrganizationManager: ObservableObject {
 
         do {
             let organizer = try await makeOrganizer(config: aiConfig, dependencies: dependencies)
+            applyFolderConfiguration(folder, to: organizer, dependencies: dependencies)
             await MainActor.run {
                 self.activeOrganizers[folder] = organizer
             }
 
             switch mode {
             case .preview:
+                if !organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    dependencies.learningsManager?.recordAdditionalInstruction(
+                        organizer.customInstructions,
+                        for: folder.path
+                    )
+                }
                 try await organizer.organize(directory: folder)
                 if isCancelled { return }
 
@@ -363,6 +492,13 @@ public final class BatchOrganizationManager: ObservableObject {
                         self.lastBatchEntries.append(entry)
                     }
                 }
+                if !organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    dependencies.learningsManager?.recordGuidingInstruction(
+                        organizer.customInstructions,
+                        for: folder.path,
+                        fileCount: fileCount
+                    )
+                }
             }
         } catch {
             await MainActor.run {
@@ -385,6 +521,11 @@ public final class BatchOrganizationManager: ObservableObject {
     ) {
         if let index = results.firstIndex(where: { $0.folderURL == folder }) {
             let existing = results[index]
+            if let existingPlan = existing.plan, let plan, existingPlan != plan {
+                var history = previewPlanHistory[folder] ?? []
+                history.append(existingPlan)
+                previewPlanHistory[folder] = Array(history.suffix(8))
+            }
             results[index] = BatchResult(
                 id: existing.id,
                 folderURL: folder,
@@ -435,7 +576,7 @@ public final class BatchOrganizationManager: ObservableObject {
     private func makeOrganizer(config: AIConfig, dependencies: BatchDependencies) async throws -> FolderOrganizer {
         let organizer = FolderOrganizer()
         organizer.exclusionRules = dependencies.exclusionRules
-        organizer.personaManager = dependencies.personaManager
+        organizer.personaManager = dependencies.makePersonaManagerCopy()
         organizer.customPersonaStore = dependencies.customPersonaStore
         organizer.learningsManager = dependencies.learningsManager
         organizer.storageLocationsManager = dependencies.storageLocationsManager
@@ -444,6 +585,52 @@ public final class BatchOrganizationManager: ObservableObject {
         organizer.customInstructions = dependencies.customInstructions
         try await organizer.configure(with: config)
         return organizer
+    }
+
+    private func applyFolderConfiguration(_ folder: URL, to organizer: FolderOrganizer, dependencies: BatchDependencies) {
+        let config = configuration(for: folder)
+        let defaultInstructions = dependencies.customInstructions
+        let resolvedInstructions = config.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        organizer.customInstructions = resolvedInstructions.isEmpty ? defaultInstructions : resolvedInstructions
+
+        guard let personaManager = organizer.personaManager else { return }
+
+        switch config.personaSelection {
+        case .global:
+            personaManager.selectedPersona = dependencies.selectedPersona
+            personaManager.selectedCustomPersonaId = dependencies.selectedCustomPersonaId
+        case .builtIn(let persona):
+            personaManager.selectedPersona = persona
+            personaManager.selectedCustomPersonaId = nil
+        case .custom(let customId):
+            personaManager.selectedPersona = dependencies.selectedPersona
+            personaManager.selectedCustomPersonaId = customId
+        }
+    }
+
+    private func recordCancellationForActiveFolders() {
+        guard let learnings = dependencies?.learningsManager else { return }
+        guard learnings.consentManager.canCollectData else { return }
+
+        let pendingFolders = currentBatchFolders.isEmpty ? Set(selectedFolders) : currentBatchFolders
+        for folder in pendingFolders {
+            let plan = resultPlan(for: folder)
+            let folderNames = plan?.suggestions.map { $0.folderName }
+            let allFiles = plan?.suggestions.flatMap(\.files) ?? []
+            let extensionCounts = Dictionary(grouping: allFiles, by: { $0.extension.lowercased() })
+                .mapValues(\.count)
+            let instructions = configuration(for: folder).instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+            learnings.recordCancelledOrganization(
+                folderPath: folder.path,
+                fileCount: plan?.totalFiles ?? 0,
+                proposedFolderCount: plan?.totalFolders ?? 0,
+                instructions: instructions.isEmpty ? nil : instructions,
+                stage: currentMode == .apply ? "batch-apply" : "batch-preview",
+                proposedFolderNames: folderNames,
+                fileExtensionCounts: extensionCounts.isEmpty ? nil : extensionCounts,
+                aiModel: aiConfig?.model
+            )
+        }
     }
 }
 
@@ -457,6 +644,9 @@ private struct BatchDependencies {
     let learningsObserver: ContinuousLearningObserver?
     let history: OrganizationHistory?
     let customInstructions: String
+    let selectedPersona: PersonaType
+    let selectedCustomPersonaId: String?
+    let personaPrompts: [PersonaType: String]
 
     @MainActor init(from organizer: FolderOrganizer) {
         self.exclusionRules = organizer.exclusionRules
@@ -468,6 +658,19 @@ private struct BatchDependencies {
         self.learningsObserver = organizer.learningsObserver
         self.history = organizer.history
         self.customInstructions = organizer.customInstructions
+        self.selectedPersona = organizer.personaManager?.selectedPersona ?? .general
+        self.selectedCustomPersonaId = organizer.personaManager?.selectedCustomPersonaId
+        self.personaPrompts = organizer.personaManager?.customPrompts ?? [:]
+    }
+
+    @MainActor
+    func makePersonaManagerCopy() -> PersonaManager? {
+        guard personaManager != nil else { return nil }
+        let copy = PersonaManager()
+        copy.selectedPersona = selectedPersona
+        copy.selectedCustomPersonaId = selectedCustomPersonaId
+        copy.customPrompts = personaPrompts
+        return copy
     }
 }
 

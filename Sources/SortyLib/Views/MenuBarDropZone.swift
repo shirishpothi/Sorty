@@ -332,8 +332,7 @@ public struct MenuBarDropZoneView: View {
 
             // Icon
             if controller.isProcessing {
-                ProgressView()
-                    .scaleEffect(0.6)
+                SortyGradientCircularLoader(size: 12, lineWidth: 2.1)
                     .frame(width: 14, height: 14)
             } else {
                 Image(systemName: isTargeted ? "tray.and.arrow.down.fill" : "tray.and.arrow.down")
@@ -388,8 +387,7 @@ struct LiquidGlassPopover: View {
             if controller.isProcessing {
                 // Loading state
                 VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.2)
+                    SortyGradientLoadingBar(width: 160, height: 10)
 
                     Text("Analyzing file...")
                         .font(.subheadline)

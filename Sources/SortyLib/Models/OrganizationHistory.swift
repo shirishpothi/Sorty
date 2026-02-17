@@ -23,6 +23,11 @@ public enum OrganizationEntrySource: String, Codable, Sendable {
     case watchedFolder
 }
 
+public enum DuplicateCleanupMode: String, Codable, Sendable {
+    case safeDeletion
+    case directDelete
+}
+
 public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendable {
     public let id: UUID
     public let timestamp: Date
@@ -46,6 +51,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public var duplicatesDeleted: Int?
     public var recoveredSpace: Int64?
     public var restorableItems: [RestorableDuplicate]?
+    public var duplicateCleanupMode: DuplicateCleanupMode?
     
     public init(
         id: UUID = UUID(),
@@ -65,7 +71,8 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         undoFailedFiles: [String]? = nil,
         duplicatesDeleted: Int? = nil,
         recoveredSpace: Int64? = nil,
-        restorableItems: [RestorableDuplicate]? = nil
+        restorableItems: [RestorableDuplicate]? = nil,
+        duplicateCleanupMode: DuplicateCleanupMode? = nil
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -98,6 +105,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         self.duplicatesDeleted = duplicatesDeleted
         self.recoveredSpace = recoveredSpace
         self.restorableItems = restorableItems
+        self.duplicateCleanupMode = duplicateCleanupMode
     }
     
     // Custom decoding to handle migration from old format
@@ -139,6 +147,7 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
         duplicatesDeleted = try container.decodeIfPresent(Int.self, forKey: .duplicatesDeleted)
         recoveredSpace = try container.decodeIfPresent(Int64.self, forKey: .recoveredSpace)
         restorableItems = try container.decodeIfPresent([RestorableDuplicate].self, forKey: .restorableItems)
+        duplicateCleanupMode = try container.decodeIfPresent(DuplicateCleanupMode.self, forKey: .duplicateCleanupMode)
     }
 }
 

@@ -206,6 +206,10 @@ public struct SortyCommands: Commands {
             Button("Restart Onboarding...") {
                 appState.showOnboarding()
             }
+            
+            Button("Feature Tour...") {
+                appState.showFeatureTour()
+            }
 
             Button("Delete All Usage Data...") {
                 appState.showDeleteUsageDataConfirmation = true
@@ -232,6 +236,7 @@ public class AppState: ObservableObject {
     @Published public var selectedDirectory: URL?
     @Published public var updateManager = SparkleUpdateManager()
     @Published public var selectedSettingsSection: SettingsCategory?
+    @Published public var settingsFocusTarget: SettingsFocusTarget?
     @Published public var duplicateManager = DuplicateDetectionManager()
     @Published public var duplicateSettings = DuplicateSettingsManager()
     @Published public var debugMode: Bool = false
@@ -239,6 +244,7 @@ public class AppState: ObservableObject {
     @Published public var lastOrganizedDirectory: URL?
     @Published public var navigatedFromSettings: Bool = false
     @Published public var showDeleteUsageDataConfirmation: Bool = false
+    @Published public var pendingDuplicatesHandoff: DuplicatesHandoff?
     
     /// Trigger update check with visible UI feedback.
     /// Uses Sparkle's native UI by default. The in-app update dialog is only shown
@@ -256,6 +262,12 @@ public class AppState: ObservableObject {
             UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
         }
     }
+    @Published public var hasCompletedFeatureTour: Bool {
+        didSet {
+            UserDefaults.standard.set(hasCompletedFeatureTour, forKey: "hasCompletedFeatureTour")
+        }
+    }
+    @Published public var isFeatureTourPresented: Bool = false
 
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
@@ -278,12 +290,25 @@ public class AppState: ObservableObject {
         case batchOrganization
     }
 
+    public struct DuplicatesHandoff: Equatable, Sendable {
+        public let id: UUID
+        public let directory: URL?
+        public let autoStart: Bool
+
+        public init(id: UUID = UUID(), directory: URL?, autoStart: Bool) {
+            self.id = id
+            self.directory = directory
+            self.autoStart = autoStart
+        }
+    }
+
     public init() {
         // Detect fresh install vs in-app update
         // Fresh install: no previous version stored AND onboarding not completed
         // In-app update: previous version exists, so skip onboarding even if flag was reset
         let previousVersion = UserDefaults.standard.string(forKey: "lastLaunchedVersion")
         let onboardingCompleted = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
+        let featureTourCompleted = UserDefaults.standard.bool(forKey: "hasCompletedFeatureTour")
         let currentVersion = BuildInfo.version
         
         if previousVersion == nil {
@@ -294,6 +319,7 @@ public class AppState: ObservableObject {
             // Even if hasCompletedOnboarding was somehow reset, don't show it
             self.hasCompletedOnboarding = true
         }
+        self.hasCompletedFeatureTour = featureTourCompleted
         
         // Always store current version for future launches
         UserDefaults.standard.set(currentVersion, forKey: "lastLaunchedVersion")
@@ -333,12 +359,67 @@ public class AppState: ObservableObject {
         selectedDirectory = nil
         organizer?.reset()
     }
+
+    public func handoffToDuplicates(directory: URL?, autoStart: Bool = true) {
+        let normalizedDirectory = directory?.standardizedFileURL ?? selectedDirectory?.standardizedFileURL
+        if let normalizedDirectory {
+            selectedDirectory = normalizedDirectory
+        }
+        pendingDuplicatesHandoff = DuplicatesHandoff(directory: normalizedDirectory, autoStart: autoStart)
+        withAnimation(.pageTransition) {
+            currentView = .duplicates
+        }
+    }
+
+    public func handoffToDuplicates(
+        forFilePaths filePaths: [String],
+        preferredDirectory: URL? = nil,
+        autoStart: Bool = true
+    ) {
+        let pathDerivedDirectory = Self.commonParentDirectory(forFilePaths: filePaths)
+        let targetDirectory = preferredDirectory?.standardizedFileURL ?? pathDerivedDirectory
+        handoffToDuplicates(directory: targetDirectory, autoStart: autoStart)
+    }
+
+    private static func commonParentDirectory(forFilePaths filePaths: [String]) -> URL? {
+        let directories = filePaths
+            .map { URL(fileURLWithPath: $0).standardizedFileURL.deletingLastPathComponent() }
+
+        guard let firstDirectory = directories.first else { return nil }
+        var commonComponents = firstDirectory.pathComponents
+
+        for directory in directories.dropFirst() {
+            let components = directory.pathComponents
+            var index = 0
+            while index < commonComponents.count && index < components.count && commonComponents[index] == components[index] {
+                index += 1
+            }
+            commonComponents = Array(commonComponents.prefix(index))
+            if commonComponents.isEmpty {
+                break
+            }
+        }
+
+        guard !commonComponents.isEmpty else { return firstDirectory }
+        let commonPath = NSString.path(withComponents: commonComponents)
+        return URL(fileURLWithPath: commonPath, isDirectory: true).standardizedFileURL
+    }
     
     /// Show the onboarding flow again (for revisiting setup)
     public func showOnboarding() {
         withAnimation(.spring()) {
+            isFeatureTourPresented = false
             hasCompletedOnboarding = false
         }
+    }
+    
+    public func showFeatureTour() {
+        isFeatureTourPresented = true
+    }
+    
+    public func completeFeatureTour() {
+        hasCompletedFeatureTour = true
+        isFeatureTourPresented = false
     }
 
     public func exportResults() {
@@ -594,11 +675,10 @@ public class AppState: ObservableObject {
     }
 
     public func showHelp() {
-        // Redirect to Settings -> Help & Support instead of opening a new window
         currentView = .settings
         selectedSettingsSection = .help
-        
-        // Haptic feedback for the transition
+        settingsFocusTarget = nil
+        navigatedFromSettings = true
         HapticFeedbackManager.shared.selection()
     }
     
@@ -653,6 +733,8 @@ public class AppState: ObservableObject {
         
         // 6. Reset onboarding state to trigger fresh start
         withAnimation(.spring()) {
+            hasCompletedFeatureTour = false
+            isFeatureTourPresented = false
             hasCompletedOnboarding = false
         }
         

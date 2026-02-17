@@ -7,6 +7,38 @@
 
 import SwiftUI
 
+private struct SettingsFocusTargetKey: EnvironmentKey {
+    static let defaultValue: SettingsFocusTarget? = nil
+}
+
+extension EnvironmentValues {
+    var settingsFocusTarget: SettingsFocusTarget? {
+        get { self[SettingsFocusTargetKey.self] }
+        set { self[SettingsFocusTargetKey.self] = newValue }
+    }
+}
+
+private struct SettingsFocusableModifier: ViewModifier {
+    @Environment(\.settingsFocusTarget) private var focusTarget
+    let target: SettingsFocusTarget
+
+    func body(content: Content) -> some View {
+        content
+            .id(target.rawValue)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(
+                        focusTarget == target
+                        ? Color.accentColor.opacity(0.8)
+                        : Color.clear,
+                        lineWidth: 2
+                    )
+            )
+            .shadow(color: focusTarget == target ? Color.accentColor.opacity(0.2) : .clear, radius: 8, x: 0, y: 1)
+            .animation(.easeInOut(duration: 0.2), value: focusTarget == target)
+    }
+}
+
 struct SidebarButton: View {
     let title: String
     let icon: String
@@ -287,6 +319,14 @@ extension View {
         } else {
             self
         }
+    }
+
+    func settingsFocusTarget(_ target: SettingsFocusTarget?) -> some View {
+        environment(\.settingsFocusTarget, target)
+    }
+
+    func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
+        modifier(SettingsFocusableModifier(target: target))
     }
 }
 

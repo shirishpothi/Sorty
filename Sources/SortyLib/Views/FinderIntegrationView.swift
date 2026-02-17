@@ -14,6 +14,8 @@ public struct FinderIntegrationView: View {
     @State private var isInstalling = false
     @State private var installationResults: [(name: String, success: Bool, message: String)] = []
     @State private var showingInstructions = false
+    @State private var showCLITools = false
+    @State private var frontmostFinderFolder: URL?
     @AppStorage("globalShortcutEnabled") private var globalShortcutEnabled = false
     @StateObject private var shortcutManager = GlobalShortcutManager.shared
     @EnvironmentObject private var automationManager: AutomationManager
@@ -54,11 +56,14 @@ public struct FinderIntegrationView: View {
                     // Integration Options
                     integrationOptions
 
+                    // Finder workflow status and mini preview
+                    finderWorkflowStatusSection
+
                     // Automation Permission
                     automationPermissionSection
 
-                    // CLI Tools
-                    CLIToolsSection()
+                    // Optional CLI Tools
+                    optionalCLIToolsSection
 
                     // Instructions
                     if showingInstructions {
@@ -76,6 +81,7 @@ public struct FinderIntegrationView: View {
             .onAppear {
                 refreshStatus()
                 automationManager.requestAutomationPermissionCheck()
+                refreshFinderContext()
             }
         }
     }
@@ -144,6 +150,108 @@ public struct FinderIntegrationView: View {
             toggleFinderSync: toggleFinderSync,
             installAll: installAll
         )
+    }
+
+    private var finderWorkflowStatusSection: some View {
+        SettingsCard(title: "Finder Workflow", icon: "sparkles.rectangle.stack", color: .mint) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    Image(systemName: automationManager.hasValidFinderSelection ? "checkmark.seal.fill" : "scope")
+                        .font(.title2)
+                        .foregroundStyle(automationManager.hasValidFinderSelection ? .green : .secondary)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(automationManager.statusMessage)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Selection: \(automationManager.selectedFinderItems.count) item\(automationManager.selectedFinderItems.count == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Refresh") {
+                        refreshFinderContext()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("FinderWorkflowRefreshButton")
+                }
+
+                if let folder = frontmostFinderFolder {
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder")
+                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Front Finder Folder")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                            Text(folder.path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.06))
+                    .cornerRadius(8)
+                }
+
+                HStack(spacing: 10) {
+                    Button {
+                        openFinderSelectionInSorty()
+                    } label: {
+                        Label("Organize Finder Selection", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(!automationManager.hasValidFinderSelection && frontmostFinderFolder == nil)
+                    .accessibilityIdentifier("FinderWorkflowOrganizeButton")
+
+                    Button {
+                        if let folder = frontmostFinderFolder {
+                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+                        }
+                    } label: {
+                        Label("Reveal Folder", systemImage: "folder")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(frontmostFinderFolder == nil)
+                    .accessibilityIdentifier("FinderWorkflowRevealButton")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var optionalCLIToolsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Optional CLI Tools")
+                    .font(.headline)
+                Spacer()
+                Button(showCLITools ? "Hide" : "Show") {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showCLITools.toggle()
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("FinderToggleCLIToolsButton")
+            }
+
+            Text("CLI install is optional for Finder workflows and hidden by default to keep this experience lightweight.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if showCLITools {
+                CLIToolsSection()
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
     }
 
     private var keyboardShortcutSection: some View {
@@ -250,6 +358,20 @@ public struct FinderIntegrationView: View {
                     .background(Color.orange.opacity(0.08))
                     .cornerRadius(6)
                 }
+
+                HStack(spacing: 8) {
+                    Text(automationManager.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Recover") {
+                        automationManager.recoverAutomationState()
+                        refreshFinderContext()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("FinderAutomationRecoverButton")
+                }
             }
         }
     }
@@ -330,6 +452,36 @@ public struct FinderIntegrationView: View {
     
     private func refreshStatus() {
         integrationStatus = ExtensionCommunication.getIntegrationStatus()
+    }
+
+    private func refreshFinderContext() {
+        automationManager.checkPermissions()
+        if automationManager.automationStatus.isGranted {
+            automationManager.updateFinderSelection()
+            frontmostFinderFolder = automationManager.getFrontmostFinderWindow()
+        } else {
+            frontmostFinderFolder = nil
+        }
+    }
+
+    private func openFinderSelectionInSorty() {
+        let selectedTarget: URL? = automationManager.selectedFinderItems.first.map { item in
+            let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            return isDirectory ? item : item.deletingLastPathComponent()
+        }
+        let target = selectedTarget ?? frontmostFinderFolder
+        guard let target else { return }
+        var components = URLComponents()
+        components.scheme = "sorty"
+        components.host = "organize"
+        components.queryItems = [
+            URLQueryItem(name: "path", value: target.path),
+            URLQueryItem(name: "autostart", value: "true"),
+            URLQueryItem(name: "source", value: "finder")
+        ]
+        if let url = components.url {
+            NSWorkspace.shared.open(url)
+        }
     }
     
     private func installToolbarButton() {
@@ -523,7 +675,7 @@ private struct IntegrationOptionsView: View {
 
                 IntegrationRow(
                     title: "Organize with Sorty",
-                    subtitle: "Right-click context menu for folders and files",
+                    subtitle: "Right-click context menu that starts organization immediately",
                     icon: "contextualmenu.and.cursorarrow",
                     isInstalled: integrationStatus.quickActionInstalled,
                     action: installQuickAction,
@@ -607,8 +759,7 @@ private struct IntegrationOptionsView: View {
                 Button(action: installAll) {
                     HStack {
                         if isInstalling {
-                            ProgressView()
-                                .scaleEffect(0.8)
+                            SortyGradientCircularLoader(size: 13, lineWidth: 2.4)
                         } else {
                             Image(systemName: "square.and.arrow.down.fill")
                         }
@@ -688,8 +839,7 @@ struct CLIToolsSection: View {
                     Button(action: installAllCLIs) {
                         HStack(spacing: 6) {
                             if installer.isInstalling {
-                                ProgressView()
-                                    .scaleEffect(0.7)
+                                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                             } else {
                                 Image(systemName: "arrow.down.circle.fill")
                             }

@@ -167,8 +167,11 @@ struct QuickOrganizeView: View {
     
     private var header: some View {
         HStack(spacing: 12) {
-            Image(systemName: "wand.and.stars")
-                .font(.title)
+            Image(nsImage: SortyResources.menuBarNSImage())
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 26)
                 .foregroundStyle(.linearGradient(
                     colors: [.blue, .purple],
                     startPoint: .topLeading,
@@ -186,8 +189,7 @@ struct QuickOrganizeView: View {
             Spacer()
             
             if controller.isOrganizing {
-                ProgressView()
-                    .scaleEffect(0.8)
+                SortyGradientCircularLoader(size: 13, lineWidth: 2.4)
             }
         }
         .padding()
@@ -370,8 +372,7 @@ struct QuickOrganizeView: View {
             
             Button(action: startOrganization) {
                 if controller.isOrganizing {
-                    ProgressView()
-                        .scaleEffect(0.7)
+                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                         .frame(width: 80)
                 } else {
                     Text("Organize")
@@ -393,8 +394,15 @@ struct QuickOrganizeView: View {
         controller.status = "Opening in Sorty..."
         
         // Send organization request to main app
-        let url = ExtensionCommunication.urlForOrganizing(path: directory.path)
-        if let url = url {
+        var components = URLComponents()
+        components.scheme = "sorty"
+        components.host = "organize"
+        components.queryItems = [
+            URLQueryItem(name: "path", value: directory.path),
+            URLQueryItem(name: "autostart", value: "true"),
+            URLQueryItem(name: "source", value: "finder-panel")
+        ]
+        if let url = components.url {
             NSWorkspace.shared.open(url)
             
             // Just indicate handoff to main app
@@ -533,7 +541,7 @@ public class FinderToolbarHelper {
             if [ -n "$FINDER_PATH" ]; then
                 # Encode the path for URL (using sys.argv to handle special characters safely)
                 ENCODED_PATH=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$FINDER_PATH")
-                open "sorty://organize?path=$ENCODED_PATH"
+                open -g "sorty://organize?path=$ENCODED_PATH&autostart=true&source=finder-toolbar"
             else
                 # No Finder window, just open the app
                 open "sorty://open"
@@ -714,7 +722,15 @@ public class MenuBarHelper: NSObject {
         var error: NSDictionary?
         if let appleScript = NSAppleScript(source: script),
            let result = appleScript.executeAndReturnError(&error).stringValue {
-            if let url = ExtensionCommunication.urlForOrganizing(path: result) {
+            var components = URLComponents()
+            components.scheme = "sorty"
+            components.host = "organize"
+            components.queryItems = [
+                URLQueryItem(name: "path", value: result),
+                URLQueryItem(name: "autostart", value: "true"),
+                URLQueryItem(name: "source", value: "finder-menubar")
+            ]
+            if let url = components.url {
                 NSWorkspace.shared.open(url)
             }
         }

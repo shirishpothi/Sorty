@@ -206,7 +206,7 @@ final class StreamingLogicTests: XCTestCase {
         organizer.didReceiveChunk("first chunk of streaming data")
         try? await Task.sleep(nanoseconds: 100_000_000)
         
-        XCTAssertEqual(organizer.organizationStage, "Receiving AI response...")
+        XCTAssertEqual(organizer.organizationStage, "AI is analyzing your files...")
     }
     
     // MARK: - OrganizationProgress Struct Tests

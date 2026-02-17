@@ -268,6 +268,7 @@ final class NotificationActionTests: XCTestCase {
         let openFolder = NotificationAction.openFolder(path: "/test")
         let showDetails = NotificationAction.showDetails
         let retry = NotificationAction.retry
+        let redo = NotificationAction.redoWithModel
         let dismiss = NotificationAction.dismiss
         
         // Basic check that actions are distinct
@@ -293,6 +294,12 @@ final class NotificationActionTests: XCTestCase {
             XCTAssertTrue(true)
         } else {
             XCTFail("retry action should match .retry")
+        }
+
+        if case .redoWithModel = redo {
+            XCTAssertTrue(true)
+        } else {
+            XCTFail("redo action should match .redoWithModel")
         }
         
         if case .dismiss = dismiss {
@@ -471,7 +478,9 @@ final class NotificationManagerNamesTests: XCTestCase {
         XCTAssertNotNil(NSNotification.Name.undoLastOrganization)
         XCTAssertNotNil(NSNotification.Name.retryLastOrganization)
         XCTAssertNotNil(NSNotification.Name.showOrganizationDetails)
+        XCTAssertNotNil(NSNotification.Name.showOrganizationPreview)
         XCTAssertNotNil(NSNotification.Name.openOrganizedFolder)
+        XCTAssertNotNil(NSNotification.Name.redoOrganizationWithModel)
     }
     
     func testOrganizationNotificationNamesAreUnique() {
@@ -479,7 +488,9 @@ final class NotificationManagerNamesTests: XCTestCase {
             .undoLastOrganization,
             .retryLastOrganization,
             .showOrganizationDetails,
-            .openOrganizedFolder
+            .showOrganizationPreview,
+            .openOrganizedFolder,
+            .redoOrganizationWithModel
         ]
         
         let uniqueNames = Set(names.map { $0.rawValue })

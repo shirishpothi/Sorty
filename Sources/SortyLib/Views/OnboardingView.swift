@@ -80,6 +80,9 @@ public struct OnboardingView: View {
                 withAnimation(.easeOut(duration: 0.5)) {
                     hasCompletedOnboarding = true
                 }
+                if !appState.hasCompletedFeatureTour {
+                    appState.isFeatureTourPresented = true
+                }
             })
             .transition(TransitionStyles.scaleAndFade)
         }
@@ -179,7 +182,7 @@ public struct OnboardingView: View {
     
     private var stepIndicator: some View {
         HStack(spacing: 8) {
-            ForEach(OnboardingStep.allCases, id: \.self) { step in
+            ForEach(OnboardingStep.activeCases, id: \.self) { step in
                 Circle()
                     .fill(step == currentStep ? Color.accentColor : 
                           step.rawValue < currentStep.rawValue ? Color.green : Color.secondary.opacity(0.3))
@@ -206,6 +209,16 @@ enum OnboardingStep: Int, CaseIterable {
     case demo = 4
     case completion = 5
     
+    @MainActor
+    static var activeCases: [OnboardingStep] {
+        allCases.filter { step in
+            if step == .demo {
+                return FeatureFlags.featureDemoEnabled
+            }
+            return true
+        }
+    }
+    
     var title: String {
         switch self {
         case .welcome: return "Welcome"
@@ -217,12 +230,20 @@ enum OnboardingStep: Int, CaseIterable {
         }
     }
     
+    @MainActor
     var next: OnboardingStep {
-        OnboardingStep(rawValue: min(rawValue + 1, OnboardingStep.allCases.count - 1)) ?? self
+        let active = OnboardingStep.activeCases
+        guard let currentIndex = active.firstIndex(of: self) else { return self }
+        let nextIndex = min(currentIndex + 1, active.count - 1)
+        return active[nextIndex]
     }
     
+    @MainActor
     var previous: OnboardingStep {
-        OnboardingStep(rawValue: max(rawValue - 1, 0)) ?? self
+        let active = OnboardingStep.activeCases
+        guard let currentIndex = active.firstIndex(of: self) else { return self }
+        let prevIndex = max(currentIndex - 1, 0)
+        return active[prevIndex]
     }
 }
 
@@ -231,10 +252,17 @@ enum OnboardingStep: Int, CaseIterable {
 struct OnboardingProgressBar: View {
     let currentStep: OnboardingStep
     
+    @MainActor
+    private var activeSteps: [OnboardingStep] {
+        OnboardingStep.activeCases
+    }
+    
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(OnboardingStep.allCases, id: \.self) { step in
-                if step.rawValue > 0 {
+            ForEach(0..<activeSteps.count, id: \.self) { index in
+                let step = activeSteps[index]
+                
+                if index > 0 {
                     Rectangle()
                         .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.2))
                         .frame(height: 2)
@@ -251,7 +279,7 @@ struct OnboardingProgressBar: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)
                         } else {
-                            Text("\(step.rawValue + 1)")
+                            Text("\(index + 1)")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(step.rawValue <= currentStep.rawValue ? .white : .secondary)
                         }

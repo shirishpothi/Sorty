@@ -31,6 +31,7 @@ struct OrganizationRulesSettingsView: View {
                 appState.navigatedFromSettings = true
                 appState.currentView = .watchedFolders
             }
+            .settingsFocusable(.rulesWatchedFolders)
             .animatedAppearance(delay: 0.05)
             
             SettingsNavigationCard(
@@ -42,6 +43,7 @@ struct OrganizationRulesSettingsView: View {
                 appState.navigatedFromSettings = true
                 appState.currentView = .exclusions
             }
+            .settingsFocusable(.rulesExclusionRules)
             .animatedAppearance(delay: 0.1)
             
             SettingsNavigationCard(
@@ -53,6 +55,7 @@ struct OrganizationRulesSettingsView: View {
                 appState.navigatedFromSettings = true
                 appState.currentView = .storageLocations
             }
+            .settingsFocusable(.rulesStorageLocations)
             .animatedAppearance(delay: 0.15)
             
             SettingsNavigationCard(
@@ -64,6 +67,7 @@ struct OrganizationRulesSettingsView: View {
                 appState.navigatedFromSettings = true
                 showingHealthSettings = true
             }
+            .settingsFocusable(.rulesWorkspaceHealth)
             .animatedAppearance(delay: 0.2)
             
             SettingsCard(title: "Organization Limits", icon: "folder.badge.questionmark", color: .purple) {
@@ -106,17 +110,11 @@ struct OrganizationRulesSettingsView: View {
                         .padding(.top, 4)
                 }
             }
+            .settingsFocusable(.rulesOrganizationLimits)
             .animatedAppearance(delay: 0.25)
             
             SettingsCard(title: "Content Rules", icon: "checklist", color: .orange) {
                 VStack(alignment: .leading, spacing: 12) {
-                    SettingsToggle(
-                        isOn: $viewModel.config.detectDuplicates,
-                        title: "Detect Duplicates",
-                        description: "Find files with identical content using SHA-256 hashing"
-                    )
-                    
-                    Divider()
                     SettingsToggle(
                         isOn: $viewModel.config.enableFileTagging,
                         title: "Enable File Tagging",
@@ -124,6 +122,7 @@ struct OrganizationRulesSettingsView: View {
                     )
                 }
             }
+            .settingsFocusable(.rulesContentRules)
             .animatedAppearance(delay: 0.3)
 
             SettingsCard(title: "Steering Prompts", icon: "wand.and.stars", color: .purple) {
@@ -159,8 +158,7 @@ struct OrganizationRulesSettingsView: View {
                         if isImprovingPrompt {
                             HStack {
                                 Spacer()
-                                ProgressView()
-                                    .scaleEffect(0.8)
+                                SortyGradientCircularLoader(size: 13, lineWidth: 2.4)
                                 Text("Improving...")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -276,12 +274,14 @@ struct OrganizationRulesSettingsView: View {
                     }
                 }
             }
+            .settingsFocusable(.rulesSteeringPrompts)
             .animatedAppearance(delay: 0.32)
 
             // Organization Style
             SettingsCard(title: "Organization Style", icon: "paintpalette", color: .purple) {
                 PersonaPickerView()
             }
+            .settingsFocusable(.rulesOrganizationStyle)
             .animatedAppearance(delay: 0.35)
         }
         .sheet(isPresented: $showingHealthSettings) {

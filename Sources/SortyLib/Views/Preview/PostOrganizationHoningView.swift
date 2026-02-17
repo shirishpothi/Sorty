@@ -140,8 +140,7 @@ struct PostOrganizationHoningView: View {
         Group {
             if engine.isGenerating {
                 VStack(spacing: 12) {
-                    ProgressView()
-                        .controlSize(.regular)
+                    SortyGradientLoadingBar(width: 140, height: 9)
                     Text("Preparing question...")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

@@ -170,6 +170,8 @@ actor DirectoryScanner {
             options.insert(.skipsHiddenFiles)
         }
         
+        try Task.checkCancellation()
+        
         guard let enumerator = fileManager.enumerator(
             at: url,
             includingPropertiesForKeys: resourceKeys,
@@ -194,7 +196,8 @@ actor DirectoryScanner {
         
         while let fileURL = enumerator.nextObject() as? URL {
             // Check and wait if paused due to memory pressure
-            await waitIfPaused()
+            try await waitIfPaused()
+            try Task.checkCancellation()
             
             // Skip hidden files if not including them
             if !includeHidden {
@@ -257,7 +260,7 @@ actor DirectoryScanner {
             scannedCount += 1
             
             // Periodic memory pressure check and yield
-            if scannedCount % batchSize == 0 {
+            if scannedCount % getCurrentBatchSize() == 0 {
                 await Task.yield()
                 await checkMemoryPressure()
                 
@@ -522,10 +525,10 @@ actor DirectoryScanner {
         }
     }
     
-    private func waitIfPaused() async {
+    private func waitIfPaused() async throws {
         while isPaused && isScanning {
+            try Task.checkCancellation()
             await Task.yield()
-            // Check if pressure has decreased
             await checkMemoryPressure()
             try? await Task.sleep(for: .milliseconds(100))
         }

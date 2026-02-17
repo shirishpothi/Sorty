@@ -38,6 +38,7 @@ class PreviewStore: ObservableObject {
     @Published private(set) var flattenedRows: [FlattenedRow] = []
     @Published private(set) var plan: OrganizationPlan
     @Published var expandedFolders: Set<String> = []
+    @Published var highlightedFileID: UUID? = nil
     
     /// Pre-computed rename mappings to avoid expensive lookups during rendering
     @Published private(set) var renameMappings: [UUID: FileRenameMapping] = [:]
@@ -46,6 +47,9 @@ class PreviewStore: ObservableObject {
     @Published private(set) var folderTagMappings: [UUID: [String]] = [:]
     @Published private(set) var folderCommentMappings: [UUID: String] = [:]
     @Published private(set) var fileCommentMappings: [UUID: String] = [:]
+
+    /// Duplicate file mappings - maps file ID to its duplicate info
+    @Published private(set) var duplicateMappings: [UUID: DuplicateInfo] = [:]
     
     /// Cached folder counts to avoid recalculation during scrolling
     private var folderCountCache: [UUID: Int] = [:]
@@ -259,7 +263,7 @@ class PreviewStore: ObservableObject {
                 type: .unorganizedHeader,
                 isExpanded: true
             ))
-            
+
             for (index, file) in plan.unorganizedFiles.enumerated() {
                 rows.append(FlattenedRow(
                     id: "unorganized-\(file.id.uuidString)-\(index)",
@@ -269,13 +273,60 @@ class PreviewStore: ObservableObject {
                 ))
             }
         }
-        
+
+        // Compute duplicate mappings based on file hashes
+        let duplicatesByFileID = computeDuplicateMappings()
+
         self.renameMappings = mappings
         self.tagMappings = tagsByFileID
         self.folderTagMappings = tagsByFolderID
         self.folderCommentMappings = commentsByFolderID
         self.fileCommentMappings = commentsByFileID
+        self.duplicateMappings = duplicatesByFileID
         self.flattenedRows = rows
+    }
+
+    /// Computes duplicate mappings by grouping files with the same hash
+    private func computeDuplicateMappings() -> [UUID: DuplicateInfo] {
+        var allFiles: [FileItem] = []
+
+        // Collect all files from suggestions
+        func collectFiles(from folder: FolderSuggestion) {
+            allFiles.append(contentsOf: folder.files)
+            for subfolder in folder.subfolders {
+                collectFiles(from: subfolder)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            collectFiles(from: suggestion)
+        }
+
+        // Also include unorganized files
+        allFiles.append(contentsOf: plan.unorganizedFiles)
+
+        // Group by hash (only files that have a hash)
+        var hashGroups: [String: [FileItem]] = [:]
+        for file in allFiles {
+            guard let hash = file.sha256Hash, !hash.isEmpty else { continue }
+            hashGroups[hash, default: []].append(file)
+        }
+
+        // Create duplicate info for files that have duplicates
+        var duplicateInfo: [UUID: DuplicateInfo] = [:]
+        for (_, files) in hashGroups where files.count > 1 {
+            for file in files {
+                let others = files.filter { $0.id != file.id }
+                duplicateInfo[file.id] = DuplicateInfo(
+                    file: file,
+                    duplicates: others,
+                    isExactMatch: true,
+                    similarity: 1.0
+                )
+            }
+        }
+
+        return duplicateInfo
     }
 
     private func buildChildRows(for folder: FolderSuggestion, depth: Int) -> [FlattenedRow] {
@@ -636,7 +687,8 @@ struct FlattenedRowView: View {
         case .unorganizedFile(let file):
             FlatUnorganizedFileRowView(
                 file: file,
-                dragDropManager: dragDropManager
+                dragDropManager: dragDropManager,
+                store: store
             )
         }
     }
@@ -756,6 +808,7 @@ struct FlatFileRowView: View {
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
+    @EnvironmentObject var appState: AppState
     
     @State private var isDragging = false
     @State private var isEditingName = false
@@ -767,11 +820,21 @@ struct FlatFileRowView: View {
     }
 
     private var fileTags: [String] {
-        store.tagMappings[file.id] ?? []
+        // Filter out "Duplicate" tag since we show it via LiquidGlassDuplicateButton
+        let tags = store.tagMappings[file.id] ?? []
+        return tags.filter { $0.lowercased() != "duplicate" }
     }
 
     private var fileComment: String? {
         store.fileCommentMappings[file.id]
+    }
+
+    private var duplicateInfo: DuplicateInfo? {
+        store.duplicateMappings[file.id]
+    }
+    
+    private var isHighlighted: Bool {
+        store.highlightedFileID == file.id
     }
     
     var body: some View {
@@ -813,7 +876,15 @@ struct FlatFileRowView: View {
                 if let comment = fileComment, !comment.isEmpty {
                     CommentBubbleButton(comment: comment)
                 }
-                
+
+                if let dupInfo = duplicateInfo {
+                    LiquidGlassDuplicateButton(
+                        duplicateInfo: dupInfo,
+                        handoffDirectory: appState.selectedDirectory,
+                        highlightedFileID: $store.highlightedFileID
+                    )
+                }
+
                 Text(file.formattedSize)
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -864,11 +935,11 @@ struct FlatFileRowView: View {
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
+                .fill(isHighlighted ? Color.accentColor.opacity(0.12) : (isDragging ? Color.accentColor.opacity(0.1) : Color.clear))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isEditingName ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                .stroke(isHighlighted ? Color.accentColor.opacity(0.3) : (isEditingName ? Color.accentColor.opacity(0.3) : Color.clear), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .contextMenu {
@@ -1001,17 +1072,36 @@ struct FlatUnorganizedHeaderView: View {
 struct FlatUnorganizedFileRowView: View {
     let file: FileItem
     @ObservedObject var dragDropManager: DragDropManager
-    
+    @ObservedObject var store: PreviewStore
+    @EnvironmentObject var appState: AppState
+
     @State private var isDragging = false
-    
+
+    private var duplicateInfo: DuplicateInfo? {
+        store.duplicateMappings[file.id]
+    }
+
+    private var isHighlighted: Bool {
+        store.highlightedFileID == file.id
+    }
+
     var body: some View {
         HStack {
             FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 20, height: 20))
             Text(file.displayName)
             Spacer()
+
+            if let dupInfo = duplicateInfo {
+                LiquidGlassDuplicateButton(
+                    duplicateInfo: dupInfo,
+                    handoffDirectory: appState.selectedDirectory,
+                    highlightedFileID: $store.highlightedFileID
+                )
+            }
+
             Text(file.formattedSize)
                 .foregroundColor(.secondary)
-            
+
             Image(systemName: "line.3.horizontal")
                 .foregroundColor(.secondary.opacity(0.6))
         }
@@ -1021,7 +1111,11 @@ struct FlatUnorganizedFileRowView: View {
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
+                .fill(isHighlighted ? Color.accentColor.opacity(0.12) : (isDragging ? Color.accentColor.opacity(0.1) : Color.clear))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isHighlighted ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .contextMenu {

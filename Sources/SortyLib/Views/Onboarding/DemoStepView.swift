@@ -59,7 +59,7 @@ public struct DemoStepView: View {
                     }
                     .padding(.top, 8)
                 }
-                .frame(maxWidth: 350)
+                .frame(maxWidth: 420)
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : -20)
                 .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)

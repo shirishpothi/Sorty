@@ -201,8 +201,7 @@ public struct WorkflowSelectionStepView: View {
                             .foregroundStyle(.secondary)
                     }
                     
-                    ProgressView()
-                        .scaleEffect(1.2)
+                    SortyGradientLoadingBar(width: 180, height: 10)
                         .padding(.top, 8)
                 }
                 .frame(minHeight: 200)

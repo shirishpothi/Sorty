@@ -59,6 +59,7 @@ struct PreviewActionsView: View {
             .buttonStyle(.sortySecondary(size: .small))
             .keyboardShortcut(.cancelAction)
             .keyboardShortcut(".", modifiers: .command)  // Cmd+.
+            .help("Cancel this organization session")
             .accessibilityIdentifier("PreviewCancelButton")
             .accessibilityLabel("Cancel organization")
             .accessibilityHint("Press Command+Period to cancel")
@@ -76,8 +77,10 @@ struct PreviewActionsView: View {
                     }
                 }
                 .buttonStyle(.sortySecondary(size: .small, color: .orange))
+                .help("Discard manual preview edits and restore the original plan")
                 .accessibilityIdentifier("ResetEditsButton")
                 .accessibilityLabel("Reset all manual edits")
+                .accessibilityHint("Restores the initial generated organization")
                 .transition(.opacity.combined(with: .move(edge: .leading)))
             }
         }
@@ -107,6 +110,7 @@ struct PreviewActionsView: View {
             .buttonStyle(.sortySecondary(size: .small))
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(shouldDisableButtons || isRedoingWithModel)
+            .help("Regenerate organization plan with current instructions")
             .accessibilityIdentifier("RegenerateButton")
             .accessibilityLabel("Regenerate with current model")
             .accessibilityHint("Press Command+Shift+R to regenerate")
@@ -125,8 +129,10 @@ struct PreviewActionsView: View {
             }
             .buttonStyle(.sortySecondary(size: .small))
             .disabled(shouldDisableButtons || isRedoingWithModel)
+            .help("Choose a different AI model and regenerate")
             .accessibilityIdentifier("ChooseModelButton")
             .accessibilityLabel("Choose a different model")
+            .accessibilityHint("Opens model picker for regeneration")
         }
     }
     
@@ -147,9 +153,10 @@ struct PreviewActionsView: View {
         .buttonStyle(.sortyPrimary)
         .keyboardShortcut(.defaultAction)
         .disabled(shouldDisableButtons)
+        .help("Apply file moves and create the planned folder structure")
         .accessibilityIdentifier("ApplyOrganizationButton")
         .accessibilityLabel("Apply this organization to your files")
-        .accessibilityHint("Press Return to apply")
+        .accessibilityHint("This action moves files and is not easily undone")
     }
 }
 
@@ -163,12 +170,14 @@ struct PreviewProgressView: View {
     
     @State private var showCancelTooltip = false
     
+    private var progressPercentText: String {
+        "\(Int(progress * 100))%"
+    }
+    
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                ProgressView(value: progress, total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle())
-                    .accentColor(.purple)
+                SortyGradientProgressBar(progress: progress, height: 10)
                     .frame(maxWidth: .infinity)
                 
                 // Time estimate
@@ -179,6 +188,12 @@ struct PreviewProgressView: View {
                         .monospacedDigit()
                         .help("Estimated time remaining")
                 }
+                
+                Text(progressPercentText)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .help("Organization progress")
                 
                 // Prominent Cancel Button during operation
                 Button {
@@ -241,6 +256,9 @@ struct PreviewProgressView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color(NSColor.controlBackgroundColor))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Organization in progress")
+        .accessibilityValue("\(progressPercentText) complete. \(stage)")
     }
 
     private var showsAILoadingIndicator: Bool {

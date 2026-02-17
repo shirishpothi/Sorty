@@ -7,28 +7,23 @@
 
 import Foundation
 
-public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
+public final class AnthropicClient: AIClientProtocol, Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
+
+    private static let messagesURL = URL(string: "https://api.anthropic.com/v1/messages")!
+    private static let modelsURL = URL(string: "https://api.anthropic.com/v1/models")!
     
     public init(config: AIConfig) {
         self.config = config
-    }
-    
-    private func getSession() async -> URLSession {
-        return await AISessionManager.shared.session(for: config.provider, config: config)
     }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
             throw AIClientError.missingAPIKey
         }
-        
-        // Anthropic uses Messages API: https://api.anthropic.com/v1/messages
-        let urlString = "https://api.anthropic.com/v1/messages"
-        guard let url = URL(string: urlString), url.scheme != nil else {
-            throw AIClientError.invalidURL
-        }
+
+        let url = Self.messagesURL
         
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
@@ -64,10 +59,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.missingAPIKey
         }
 
-        let urlString = "https://api.anthropic.com/v1/messages"
-        guard let url = URL(string: urlString), url.scheme != nil else {
-            throw AIClientError.invalidURL
-        }
+        let url = Self.messagesURL
 
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
@@ -117,25 +109,21 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
     }
     
     private func analyzeStandard(url: URL, requestBody: [String: Any], apiKey: String, files: [FileItem]) async throws -> OrganizationPlan {
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let session = await getSession()
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIClientError.invalidResponse
+        let request = try AIRequestSupport.makeJSONRequest(
+            url: url,
+            headers: [
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01"
+            ],
+            body: requestBody
+        )
+
+        let session = await AIRequestSupport.session(for: config)
+        let (data, response) = try await AIRequestSupport.withTransientRetry {
+            try await session.data(for: request)
         }
-        
-        if httpResponse.statusCode != 200 {
-            let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorText)
-        }
+
+        _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
         
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let content = json?["content"] as? [[String: Any]],
@@ -149,16 +137,17 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
     private func analyzeWithStreaming(url: URL, requestBody: [String: Any], apiKey: String, files: [FileItem]) async throws -> OrganizationPlan {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: streamingRequestBody)
-        
-        let session = await getSession()
+
+        let request = try AIRequestSupport.makeJSONRequest(
+            url: url,
+            headers: [
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01"
+            ],
+            body: streamingRequestBody
+        )
+
+        let session = await AIRequestSupport.session(for: config)
         let (bytes, response) = try await session.bytes(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -210,24 +199,22 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
         guard let apiKey = config.apiKey, !apiKey.isEmpty else {
             throw AIClientError.missingAPIKey
         }
-        
-        let url = URL(string: "https://api.anthropic.com/v1/models")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+
+        var request = try AIRequestSupport.makeJSONRequest(
+            url: Self.modelsURL,
+            method: "GET",
+            headers: [
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01"
+            ]
+        )
         request.timeoutInterval = min(config.requestTimeout, 60)
-        request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
 
-        let session = await getSession()
-        let (_, response) = try await session.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIClientError.invalidResponse
+        let session = await AIRequestSupport.session(for: config)
+        let (data, response) = try await AIRequestSupport.withTransientRetry {
+            try await session.data(for: request)
         }
-
-        if !(200...299).contains(httpResponse.statusCode) {
-             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
-        }
+        _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
     }
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
@@ -235,10 +222,7 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
             throw AIClientError.missingAPIKey
         }
         
-        let urlString = "https://api.anthropic.com/v1/messages"
-        guard let url = URL(string: urlString), url.scheme != nil else {
-            throw AIClientError.invalidURL
-        }
+        let url = Self.messagesURL
         
         let requestBody: [String: Any] = [
             "model": config.model,
@@ -250,16 +234,19 @@ public final class AnthropicClient: AIClientProtocol, @unchecked Sendable {
             "temperature": config.temperature
         ]
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.addValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let session = await getSession()
-        let (data, response) = try await session.data(for: request)
+        let request = try AIRequestSupport.makeJSONRequest(
+            url: url,
+            headers: [
+                "x-api-key": apiKey,
+                "anthropic-version": "2023-06-01"
+            ],
+            body: requestBody
+        )
+
+        let session = await AIRequestSupport.session(for: config)
+        let (data, response) = try await AIRequestSupport.withTransientRetry {
+            try await session.data(for: request)
+        }
         
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1

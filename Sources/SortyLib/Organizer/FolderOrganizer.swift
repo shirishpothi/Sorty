@@ -171,7 +171,7 @@ public enum OrganizationError: LocalizedError, Equatable {
 
 /// AI reasoning insight extracted from streaming content
 public struct AIInsight: Identifiable, Sendable {
-    public let id = UUID()
+    public let id: String
     public let text: String
     public let category: Category
     public let timestamp: Date
@@ -208,11 +208,37 @@ public struct AIInsight: Identifiable, Sendable {
         }
     }
     
-    public init(text: String, category: Category, filePath: String? = nil) {
+    public init(text: String, category: Category, filePath: String? = nil, stableSeed: String? = nil) {
         self.text = text
         self.category = category
         self.timestamp = Date()
         self.filePath = filePath
+        self.id = Self.makeStableID(text: text, category: category, filePath: filePath, stableSeed: stableSeed)
+    }
+
+    private static func makeStableID(
+        text: String,
+        category: Category,
+        filePath: String?,
+        stableSeed: String?
+    ) -> String {
+        let normalizedText = text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let normalizedPath = filePath?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+        let normalizedSeed = stableSeed?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() ?? ""
+
+        let base = "\(category.rawValue.lowercased())|\(normalizedPath)|\(normalizedText)|\(normalizedSeed)"
+        var hash: UInt64 = 1469598103934665603
+        for byte in base.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1099511628211
+        }
+        return "insight-\(String(hash, radix: 16))"
     }
 }
 
@@ -288,6 +314,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Internal backing storage for streaming content (not @Published to avoid high-frequency redraws)
     public var streamingContent: String = ""
     @Published public var displayStreamingContent: String = "" // Throttled version for UI to prevent layout loops
+    @Published public var truncatedDisplayStreamingContent: String = "" // UI-ready preview text (pre-computed off render path)
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
     
@@ -295,9 +322,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var displayUpdateTask: Task<Void, Never>?
     private var lastDisplayUpdate: Date = .distantPast
     private let displayUpdateInterval: TimeInterval = 0.2 // 200ms throttle
+    nonisolated private static let streamPreviewCharacterLimit = 1000
     
     // Steady progress animation during streaming
-    private var steadyProgressTask: Task<Void, Never>?
+    private let steadyProgressTimer = SteadyProgressTimer()
     private var lastChunkTime: Date = .distantPast
     
     // AI reasoning insights - extracted from streaming content
@@ -305,6 +333,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var insightHistory: [AIInsight] = []
     private var lastInsightExtraction: Date = .distantPast
     private let insightExtractionInterval: TimeInterval = 0.8 // Throttle to avoid too frequent updates
+    private let insightExtractor = AIInsightExtractor()
+    private var insightExtractionTask: Task<Void, Never>?
     
     // MARK: - AI Insights Cache
     
@@ -427,7 +457,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private let visionAnalyzer = ImageVisionAnalyzer()
     
     public init() {}
-    
+
     #if DEBUG
     /// Test-only method to inject a mock AI client for unit testing
     public func setAIClientForTesting(_ client: AIClientProtocol?) {
@@ -463,6 +493,68 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // MARK: - StreamingDelegate
 
+    private struct StreamPresentationPayload: Sendable {
+        let fullContent: String
+        let truncatedContent: String
+    }
+
+    nonisolated private static func makeStreamPresentationPayload(from content: String) -> StreamPresentationPayload {
+        let truncatedContent: String
+        if content.count > streamPreviewCharacterLimit {
+            let start = content.index(content.endIndex, offsetBy: -streamPreviewCharacterLimit)
+            truncatedContent = "..." + String(content[start...])
+        } else {
+            truncatedContent = content
+        }
+        return StreamPresentationPayload(fullContent: content, truncatedContent: truncatedContent)
+    }
+
+    @MainActor
+    private func scheduleDisplayUpdate(for contentSnapshot: String, force: Bool = false) {
+        let now = Date()
+        if !force && now.timeIntervalSince(lastDisplayUpdate) < displayUpdateInterval {
+            return
+        }
+        lastDisplayUpdate = now
+
+        let estimatedTotal = estimatedStreamingCharacterTarget()
+        let contentLength = contentSnapshot.count
+
+        displayUpdateTask?.cancel()
+        displayUpdateTask = Task { @MainActor [weak self] in
+            let payload = Self.makeStreamPresentationPayload(from: contentSnapshot)
+            guard let self, !Task.isCancelled, !self.isCancellationRequested else { return }
+            guard self.streamingContent.count >= contentLength else { return }
+
+            self.withBatchUpdates {
+                self.displayStreamingContent = payload.fullContent
+                self.truncatedDisplayStreamingContent = payload.truncatedContent
+
+                let contentProgress = min(0.80, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.50)
+                if self.progress < contentProgress {
+                    self.progress = contentProgress
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func syncDisplayContentImmediately() {
+        let payload = Self.makeStreamPresentationPayload(from: streamingContent)
+        displayStreamingContent = payload.fullContent
+        truncatedDisplayStreamingContent = payload.truncatedContent
+    }
+
+    @MainActor
+    private func clearStreamingDisplayState() {
+        displayUpdateTask?.cancel()
+        displayUpdateTask = nil
+        streamingContent = ""
+        displayStreamingContent = ""
+        truncatedDisplayStreamingContent = ""
+        lastDisplayUpdate = .distantPast
+    }
+
     public nonisolated func didReceiveChunk(_ chunk: String) {
         Task { @MainActor in
             guard !self.isCancellationRequested else { return }
@@ -475,9 +567,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 // Batch all initial state updates together
                 self.withBatchUpdates {
                     self.isStreaming = true
-                    self.organizationStage = "Receiving AI response..."
+                    self.organizationStage = "AI is Analysing your files..."
                     self.progress = 0.30
-                    self.displayStreamingContent = self.streamingContent
+                    self.syncDisplayContentImmediately()
                 }
                 
                 // Start steady progress task for smooth animation
@@ -485,23 +577,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             // Throttle UI-impacting updates to prevent layout thrashing and main actor congestion
-            let now = Date()
-            if now.timeIntervalSince(self.lastDisplayUpdate) >= self.displayUpdateInterval {
-                self.withBatchUpdates {
-                    self.displayStreamingContent = self.streamingContent
-                    
-                    // Increment progress based on content received
-                    // Estimate total based on file count (~100 chars per file in JSON output)
-                    let contentLength = self.streamingContent.count
-                    let estimatedTotal = max(3000, self.scannedFileCount * 100)
-                    let contentProgress = min(0.80, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.50)
-
-                    if self.progress < contentProgress {
-                        self.progress = contentProgress
-                    }
-                }
-                self.lastDisplayUpdate = now
-            }
+            self.scheduleDisplayUpdate(for: self.streamingContent)
             
             // Extract insights from streaming content (throttled and cached)
             self.extractInsightsIfNeeded()
@@ -510,30 +586,20 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Starts a background task that ensures progress keeps moving even during pauses
     private func startSteadyProgressTask() {
-        steadyProgressTask?.cancel()
-        steadyProgressTask = Task { @MainActor [weak self] in
-            while let self = self, !Task.isCancelled, !self.isCancellationRequested, self.isStreaming {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
-                if Task.isCancelled || self.isCancellationRequested || !self.isStreaming { break }
-                
-                // If we haven't reached 0.82 and no recent chunk, nudge progress
-                if self.progress < 0.82 {
-                    let timeSinceLastChunk = Date().timeIntervalSince(self.lastChunkTime)
-                    
-                    // If it's been more than 1 second since last chunk, nudge progress
-                    if timeSinceLastChunk > 1.0 {
-                        // Small increment to keep progress moving (0.5% every 500ms)
-                        self.progress = min(0.82, self.progress + 0.005)
-                    }
-                }
+        steadyProgressTimer.start(interval: .milliseconds(500)) { [weak self] in
+            guard let self = self, !self.isCancellationRequested, self.isStreaming else { return }
+            guard self.progress < 0.82 else { return }
+
+            let timeSinceLastChunk = Date().timeIntervalSince(self.lastChunkTime)
+            if timeSinceLastChunk > 1.0 {
+                self.progress = min(0.82, self.progress + 0.005)
             }
         }
     }
     
     /// Stops the steady progress task
     private func stopSteadyProgressTask() {
-        steadyProgressTask?.cancel()
-        steadyProgressTask = nil
+        steadyProgressTimer.stop()
     }
     
     /// Extract meaningful insights from the streaming AI response
@@ -559,25 +625,37 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
             return
         }
-        
-        // Look for meaningful patterns in the content
-        let insight = extractInsight(from: content)
-        if let insight = insight, insight.text != currentInsight {
-            // Batch update all insight-related properties at once
-            withBatchUpdates {
+
+        let fileLookup = scannedFilePathLookup
+        let currentDirectoryPath = currentDirectory?.path
+
+        insightExtractionTask?.cancel()
+        insightExtractionTask = Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            let insight = await self.insightExtractor.extractInsight(
+                from: content,
+                scannedFilePathLookup: fileLookup,
+                currentDirectoryPath: currentDirectoryPath
+            )
+
+            guard !Task.isCancelled,
+                  let insight,
+                  insight.text != self.currentInsight else { return }
+
+            self.withBatchUpdates {
                 self.currentInsight = insight.text
-                
-                // Keep history limited to last 5 insights
+                if let existingIndex = self.insightHistory.firstIndex(where: { $0.id == insight.id }) {
+                    self.insightHistory.remove(at: existingIndex)
+                }
                 if self.insightHistory.count >= 5 {
                     self.insightHistory.removeFirst()
                 }
                 self.insightHistory.append(insight)
             }
-            
-            // Update cache
-            insightsCache = InsightsCache(
+
+            self.insightsCache = InsightsCache(
                 streamingContentHash: contentHash,
-                insights: insightHistory,
+                insights: self.insightHistory,
                 currentInsight: insight.text,
                 timestamp: Date()
             )
@@ -598,78 +676,26 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         insightsCache = nil
     }
     
-    /// Parse streaming content to find meaningful insights
-    private func extractInsight(from content: String) -> AIInsight? {
-        // Get the last ~500 characters for analysis
-        let analysisWindow = String(content.suffix(500))
-        
-        // Look for file-related insights
-        if let fileMatch = extractFileInsight(from: analysisWindow) {
-            return fileMatch
-        }
-        
-        // Look for folder/destination insights
-        if let folderMatch = extractFolderInsight(from: analysisWindow) {
-            return folderMatch
-        }
-        
-        // Look for constraint/consideration insights
-        if let constraintMatch = extractConstraintInsight(from: analysisWindow) {
-            return constraintMatch
-        }
-        
-        // Look for decision/action insights
-        if let decisionMatch = extractDecisionInsight(from: analysisWindow) {
-            return decisionMatch
-        }
-        
-        // Fallback: extract any recent meaningful text
-        return extractGeneralInsight(from: analysisWindow)
-    }
-    
-    private func extractFileInsight(from text: String) -> AIInsight? {
-        // Look for patterns like "file: X", "processing X.pdf", "analyzing document.txt"
-        let patterns = [
-            #"(?:file|document|processing|analyzing)[:\s]+["']?([^"'\n,]{3,40})["']?"#,
-            #""([^"]{3,40}\.[a-zA-Z]{2,5})""#,
-            #"'([^']{3,40}\.[a-zA-Z]{2,5})'"#
-        ]
-        
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
-               let range = Range(match.range(at: 1), in: text) {
-                let fileName = String(text[range]).trimmingCharacters(in: .whitespaces)
-                if !fileName.isEmpty && fileName.count < 50 {
-                    // Try to match with an actual file path from the scan if possible
-                    let filePath = findScannedFilePath(for: fileName)
-                    return AIInsight(text: "Analyzing \(fileName)", category: .file, filePath: filePath)
-                }
-            }
-        }
-        return nil
-    }
+    private func estimatedStreamingCharacterTarget() -> Int {
+        let fileCount = max(1, scannedFileCount)
+        let provider = aiConfig?.provider
 
-    private func findScannedFilePath(for fileName: String) -> String? {
-        guard currentDirectory != nil else { return nil }
-        let sanitized = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "\"", with: "")
-            .replacingOccurrences(of: "'", with: "")
-        let lastComponent = sanitized.contains("/")
-            ? URL(fileURLWithPath: sanitized).lastPathComponent
-            : sanitized
-        let key = lastComponent.lowercased()
-        if let matches = scannedFilePathLookup[key], !matches.isEmpty {
-            if matches.count == 1 {
-                return matches[0]
-            }
-            if let basePath = currentDirectory?.path,
-               let preferred = matches.first(where: { $0.hasPrefix(basePath + "/") }) {
-                return preferred
-            }
-            return matches[0]
+        let base = 1200
+        let perFile = min(220, max(70, 80 + Int(log2(Double(fileCount) + 1.0) * 14)))
+        let complexityBoost = min(2500, fileCount * 18)
+
+        let providerMultiplier: Double
+        switch provider {
+        case .anthropic:
+            providerMultiplier = 1.15
+        case .ollama, .openAICompatible:
+            providerMultiplier = 1.05
+        default:
+            providerMultiplier = 1.0
         }
-        return nil
+
+        let estimated = Int(Double(base + (fileCount * perFile) + complexityBoost) * providerMultiplier)
+        return min(24_000, max(2_000, estimated))
     }
     
     private func setScannedFiles(_ files: [FileItem]) {
@@ -678,100 +704,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             .mapValues { $0.map { $0.path } }
     }
     
-    private func extractFolderInsight(from text: String) -> AIInsight? {
-        // Look for folder/destination patterns
-        let patterns = [
-            #"(?:folder|directory|destination|move to|into)[:\s]+["']?([^"'\n,/]{3,30})["']?"#,
-            #"→\s*["']?([^"'\n,]{3,30})["']?"#,
-            #"creating folder[:\s]+["']?([^"'\n,]{3,30})["']?"#
-        ]
-        
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
-               let range = Range(match.range(at: 1), in: text) {
-                let folderName = String(text[range]).trimmingCharacters(in: .whitespaces)
-                if !folderName.isEmpty && folderName.count < 40 {
-                    return AIInsight(text: "Organizing into \(folderName)", category: .folder)
-                }
-            }
-        }
-        return nil
-    }
-    
-    private func extractConstraintInsight(from text: String) -> AIInsight? {
-        // Look for constraint/consideration patterns
-        let patterns = [
-            #"(?:considering|constraint|rule|preference)[:\s]+([^.\n]{10,60})"#,
-            #"(?:because|since|due to)[:\s]+([^.\n]{10,50})"#,
-            #"(?:based on|according to)[:\s]+([^.\n]{10,50})"#
-        ]
-        
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
-               let range = Range(match.range(at: 1), in: text) {
-                let constraint = String(text[range]).trimmingCharacters(in: .whitespaces)
-                if constraint.count > 10 && constraint.count < 70 {
-                    return AIInsight(text: constraint.prefix(60) + (constraint.count > 60 ? "..." : ""), category: .constraint)
-                }
-            }
-        }
-        return nil
-    }
-    
-    private func extractDecisionInsight(from text: String) -> AIInsight? {
-        // Look for decision/action patterns
-        let patterns = [
-            #"(?:will move|moving|placing|organizing)[:\s]+([^.\n]{10,50})"#,
-            #"(?:grouped with|categorized as|belongs to)[:\s]+([^.\n]{5,40})"#
-        ]
-        
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)),
-               let range = Range(match.range(at: 1), in: text) {
-                let decision = String(text[range]).trimmingCharacters(in: .whitespaces)
-                if decision.count > 5 && decision.count < 60 {
-                    return AIInsight(text: decision, category: .decision)
-                }
-            }
-        }
-        return nil
-    }
-    
-    private func extractGeneralInsight(from text: String) -> AIInsight? {
-        // Look for any meaningful recent text segment
-        // Find the last complete sentence or phrase
-        let sentences = text.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
-        
-        // Get the last meaningful sentence
-        for sentence in sentences.reversed() {
-            let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // Refined JSON/Code detection
-            guard trimmed.count >= 15 && trimmed.count <= 80 else { continue }
-            
-            // Skip if it looks like JSON or code
-            let isProbablyJSON = trimmed.contains("{") || 
-                                 trimmed.contains("}") || 
-                                 trimmed.contains("[") || 
-                                 trimmed.contains("]") ||
-                                 trimmed.contains("\":") ||
-                                 trimmed.contains("':") ||
-                                 (trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""))
-            
-            if !isProbablyJSON {
-                return AIInsight(text: trimmed, category: .general)
-            }
-        }
-        return nil
-    }
-
     public nonisolated func didComplete(content: String) {
         Task { @MainActor in
             self.isStreaming = false
-            self.organizationStage = "Processing response..."
+            self.organizationStage = "Building organization plan..."
             self.stopTimeoutTimer()
             self.stopSteadyProgressTask()
         }
@@ -868,9 +804,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             currentDirectory = directory
 
             let files = try await scanPhase(directory: directory)
-            let duplicateContext = try await duplicateDetectionPhase(files: files)
+            let (filesWithHashes, duplicateContext) = try await duplicateDetectionPhase(files: files)
             let (plan, instructions, personaPrompt, imagePayload) = try await aiAnalysisPhase(
-                files: files,
+                files: filesWithHashes,
                 directory: directory,
                 customPrompt: customPrompt,
                 temperature: temperature,
@@ -878,7 +814,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
             let validatedPlan = try await validationPhase(
                 plan: plan,
-                files: files,
+                files: filesWithHashes,
                 directory: directory,
                 instructions: instructions,
                 personaPrompt: personaPrompt,
@@ -942,32 +878,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return files
     }
 
-    private func duplicateDetectionPhase(files: [FileItem]) async throws -> String {
-        var duplicateContext: String = ""
-        if aiConfig?.detectDuplicates ?? false {
-            updateProgress(0.21, stage: "Checking for duplicates...")
-            let duplicates = await DuplicateDetector().findDuplicates(in: files)
-            await MainActor.run {
-                self.detectedDuplicates = duplicates
-            }
-            if !duplicates.isEmpty {
-                duplicateContext = "\n\nDUPLICATE FILES DETECTED:\n"
-                for group in duplicates {
-                    duplicateContext += "- The following files are identical (SHA-256 hash: \(group.hash)):\n"
-                    for file in group.files {
-                        duplicateContext += "  • \(file.displayName) (\(file.path))\n"
-                    }
-                }
-                duplicateContext += "\nRECOMMENDATION FOR DUPLICATES:\n"
-                duplicateContext += "1. If you suggest moving duplicates, try to consolidate them or use a 'Duplicates' folder.\n"
-                duplicateContext += "2. You can suggest better names for them, but keep them in mind for organization.\n"
-            }
-        } else {
-            await MainActor.run {
-                self.detectedDuplicates = []
-            }
+    private func duplicateDetectionPhase(files: [FileItem]) async throws -> ([FileItem], String) {
+        updateProgress(0.21, stage: "Checking for duplicates...")
+
+        let detector = DuplicateDetector()
+        var updatedFiles = files
+        if updatedFiles.contains(where: { $0.sha256Hash == nil }) {
+            await detector.computeHashes(for: &updatedFiles)
         }
-        return duplicateContext
+
+        let duplicates = await detector.findDuplicates(in: updatedFiles)
+        await MainActor.run {
+            self.detectedDuplicates = duplicates
+        }
+
+        if aiConfig?.detectDuplicates ?? true {
+            return (updatedFiles, PromptContextHelper.duplicateContext(from: duplicates))
+        }
+
+        return (updatedFiles, "")
     }
 
     private func aiAnalysisPhase(
@@ -977,7 +906,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         temperature: Double?,
         duplicateContext: String
     ) async throws -> (OrganizationPlan, String, String?, [String: Data]) {
-        updateState(.organizing, stage: "Establishing connection...", progress: 0.22)
+        updateState(.organizing, stage: "Connecting to AI provider...", progress: 0.22)
         await MainActor.run {
             isStreaming = false
         }
@@ -1073,7 +1002,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         temperature: Double?,
         imagePayload: [String: Data]
     ) async throws -> OrganizationPlan {
-        updateState(.organizing, stage: "Validating plan...", progress: 0.85)
+        updateState(.organizing, stage: "Checking organization plan...", progress: 0.85)
         await MainActor.run {
             isStreaming = false
         }
@@ -1159,6 +1088,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         isCancellationRequested = true
         currentTask?.cancel()
         currentTask = nil
+        displayUpdateTask?.cancel()
+        displayUpdateTask = nil
+        insightExtractionTask?.cancel()
+        insightExtractionTask = nil
         stopTimeoutTimer()
     }
 
@@ -1239,10 +1172,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         }
 
-        state = .idle
-        organizationStage = "Cancelled"
+        transition(to: .idle, force: true)
+        organizationStage = "Organization cancelled"
         isStreaming = false
-        displayStreamingContent = streamingContent // Sync final content
+        syncDisplayContentImmediately()
         isCancellationRequested = false
         userInitiatedAction = false
         stopSteadyProgressTask()
@@ -1262,7 +1195,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         )
         history.addEntry(failedEntry)
 
-        state = .error(error)
+        transition(to: .error(error), force: true)
         errorMessage = error.localizedDescription
         
         // Show error notification (unless cancelled)
@@ -1291,7 +1224,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard let enforcer = exclusionEnforcer else { return nil }
         
         LogManager.shared.log("Retrying with enhanced exclusion prompt", category: "FolderOrganizer")
-        updateProgress(0.87, stage: "Correcting exclusions...")
+        updateProgress(0.87, stage: "Adjusting plan for excluded files...")
         
         // Generate enhanced prompt with violation details
         let enhancedPrompt = instructions + enforcer.generateRetryPromptEnhancement(for: violations)
@@ -1492,7 +1425,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         if let specificFiles = specificFiles {
             // Processing specific files
-            updateState(.scanning, stage: "Processing \(specificFiles.count) new files...", progress: 0.1)
+            updateState(.scanning, stage: "Scanning \(specificFiles.count) new files...", progress: 0.1)
             try checkCancellation()
             
             // map file names to FileItems
@@ -1535,13 +1468,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         if files.isEmpty {
             await MainActor.run {
-                state = .idle
+                transition(to: .idle, force: true)
                 organizationStage = "No new files to organize"
             }
             return
         }
 
-        updateState(.organizing, stage: "Sorting \(files.count) new files...", progress: 0.3)
+        updateState(.organizing, stage: "Organizing \(files.count) new files...", progress: 0.3)
         await MainActor.run {
             isStreaming = true
         }
@@ -1646,7 +1579,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Get the selected files from Finder
         guard let selectedFiles = FinderAutomation.getSelectedFiles(), !selectedFiles.isEmpty else {
             await MainActor.run {
-                state = .idle
+                transition(to: .idle, force: true)
                 organizationStage = "No files selected in Finder"
             }
             return 0
@@ -1667,8 +1600,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         guard !files.isEmpty else {
             await MainActor.run {
-                state = .idle
-                organizationStage = "Could not scan selected files"
+                transition(to: .idle, force: true)
+                organizationStage = "No files found to organize"
             }
             return 0
         }
@@ -1680,8 +1613,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         guard !files.isEmpty else {
             await MainActor.run {
-                state = .idle
-                organizationStage = "Selected files filtered by exclusion rules"
+                transition(to: .idle, force: true)
+                organizationStage = "All selected files are excluded by your rules"
             }
             return 0
         }
@@ -1728,7 +1661,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw OrganizationError.clientNotConfigured
         }
 
-        updateState(.organizing, stage: "Organizing \(files.count) selected files...", progress: 0.3)
+        updateState(.organizing, stage: "Analyzing \(files.count) selected files...", progress: 0.3)
         await MainActor.run {
             isStreaming = true
         }
@@ -1807,7 +1740,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         )
         defer { ProcessInfo.processInfo.endActivity(activity) }
 
-        updateState(.applying, stage: "Preparing organization...", progress: 0.0)
+        updateState(.applying, stage: "Applying changes to your files...", progress: 0.0)
         
         // Start learning session for rule tracking
         if let learningsObserver = learningsObserver {
@@ -1855,7 +1788,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 history.addEntry(historyEntry)
                 organizationStage = "Complete!"
                 progress = 1.0
-                state = .completed
+                transition(to: .completed)
             }
 
             NotificationCenter.default.post(
@@ -1929,11 +1862,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             await MainActor.run {
                 organizationStage = "Redo complete"
                 progress = 1.0
-                state = .completed
+                transition(to: .completed)
             }
         } catch {
             await MainActor.run {
-                state = .error(error)
+                transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
             throw error
@@ -2073,12 +2006,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         // Reset streaming state
         await MainActor.run {
-            streamingContent = ""
+            clearStreamingDisplayState()
             isStreaming = false
             showTimeoutMessage = false
+            currentInsight = ""
+            insightHistory = []
+            insightsCache = nil
         }
         
-        updateState(.organizing, stage: "Regenerating with \(provider.displayName)...", progress: 0.3)
+        updateState(.organizing, stage: "Getting a new plan from \(provider.displayName)...", progress: 0.3)
         
         do {
             var newPlan = try await generatePlanWithProvider(files: files, provider: provider)
@@ -2106,11 +2042,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     }
                 }
                 self.currentPlan = newPlan
-                state = .ready
+                transition(to: .ready)
             }
         } catch {
             await MainActor.run {
-                state = .error(error)
+                transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
             throw error
@@ -2141,12 +2077,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         // Reset streaming state
         await MainActor.run {
-            streamingContent = ""
+            clearStreamingDisplayState()
             isStreaming = false
             showTimeoutMessage = false
+            currentInsight = ""
+            insightHistory = []
+            insightsCache = nil
         }
         
-        updateState(.organizing, stage: "Regenerating with \(provider.displayName) (\(model))...", progress: 0.3)
+        updateState(.organizing, stage: "Getting a new plan from \(provider.displayName) (\(model))...", progress: 0.3)
         await MainActor.run {
             isStreaming = true
         }
@@ -2181,12 +2120,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     }
                 }
                 self.currentPlan = newPlan
-                state = .ready
+                transition(to: .ready)
             }
         } catch {
             stopTimeoutTimer()
             await MainActor.run {
-                state = .error(error)
+                transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
             throw error
@@ -2208,9 +2147,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Reset streaming state
         await MainActor.run {
-            streamingContent = ""
+            clearStreamingDisplayState()
             isStreaming = false
             showTimeoutMessage = false
+            currentInsight = ""
+            insightHistory = []
+            insightsCache = nil
         }
 
         // Get original files from current plan
@@ -2230,7 +2172,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             allFiles = exclusionRules.filterFiles(allFiles)
         }
 
-        updateState(.organizing, stage: "Regenerating organization...", progress: 0.3)
+        updateState(.organizing, stage: "Generating a new organization plan...", progress: 0.3)
         await MainActor.run {
             isStreaming = true
         }
@@ -2321,7 +2263,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     }
                 }
                 self.currentPlan = newPlan
-                state = .ready
+                transition(to: .ready)
             }
 
         } catch {
@@ -2399,7 +2341,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     organizationStage = "Undo complete"
                 }
                 progress = 1.0
-                state = .idle
+                transition(to: .idle, force: true)
             }
 
             NotificationCenter.default.post(
@@ -2416,7 +2358,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         } catch {
             await MainActor.run {
-                state = .error(error)
+                transition(to: .error(error), force: true)
                 errorMessage = error.localizedDescription
             }
             throw error
@@ -2458,7 +2400,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         await MainActor.run {
             organizationStage = combinedResult.hasIssues ? "Restoration complete (some files skipped)" : "Restoration complete"
             progress = 1.0
-            state = .idle
+            transition(to: .idle, force: true)
         }
         
         return combinedResult
@@ -2501,13 +2443,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Batch all reset operations into a single UI update cycle
         withBatchUpdates {
-            state = .idle
+            transition(to: .idle, force: true)
             progress = 0.0
             currentPlan = nil
             planHistory = []
             errorMessage = nil
-            streamingContent = ""
-            displayStreamingContent = ""
+            clearStreamingDisplayState()
             organizationStage = ""
             isStreaming = false
             showTimeoutMessage = false
@@ -2516,10 +2457,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             scannedFileCount = 0
             isCancellationRequested = false
             userInitiatedAction = false
-            lastDisplayUpdate = .distantPast
             lastChunkTime = .distantPast
             
             // Clear AI insights and cache
+            insightExtractionTask?.cancel()
+            insightExtractionTask = nil
             currentInsight = ""
             insightHistory = []
             lastInsightExtraction = .distantPast

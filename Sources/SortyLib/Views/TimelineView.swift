@@ -319,8 +319,7 @@ struct CompactTimelineView: View {
         .disabled(isProcessing)
         .overlay {
             if isProcessing {
-                ProgressView()
-                    .scaleEffect(1.2)
+                SortyGradientLoadingBar(width: 160, height: 10)
                     .padding(20)
                     .background(.ultraThinMaterial)
                     .cornerRadius(10)

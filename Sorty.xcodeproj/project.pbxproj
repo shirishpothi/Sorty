@@ -59,7 +59,8 @@
 		3353FC5F2F0124320097CD23 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC362F0124320097CD23 /* Extensions.swift */; };
 		3353FC602F0124320097CD23 /* ExclusionRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC2A2F0124320097CD23 /* ExclusionRule.swift */; };
 		3353FC612F0124320097CD23 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC3F2F0124320097CD23 /* HistoryView.swift */; };
-		3353FC622F0124320097CD23 /* SortyActionExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC272F0124320097CD23 /* SortyActionExtension.swift */; };
+		F1A1B001B001B001B001B001 /* SortyFinderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F001 /* SortyFinderSync.swift */; };
+		F1A1B001B001B001B001B002 /* SortyFinderSync.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F004 /* SortyFinderSync.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		3353FC632F0124320097CD23 /* SortyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC452F0124320097CD23 /* SortyApp.swift */; };
 		3353FC642F0124320097CD23 /* SystemPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC212F0124320097CD23 /* SystemPrompt.swift */; };
 		3353FC652F0124320097CD23 /* PreviewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC322F0124320097CD23 /* PreviewManager.swift */; };
@@ -213,10 +214,34 @@
 			remoteGlobalIDString = 33A128612F01230000A86470;
 			remoteInfo = Sorty;
 		};
+		F1A1A001A001A001A001A001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 33A1285A2F01230000A86470 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F1A1E001E001E001E001E001;
+			remoteInfo = SortyFinderSync;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F1A1D001D001D001D001D001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				F1A1B001B001B001B001B002 /* SortyFinderSync.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		AABBCC330000000000000001 /* Sorty.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sorty.entitlements; sourceTree = "<group>"; };
+		F1A1F001F001F001F001F002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F1A1F001F001F001F001F003 /* SortyFinderSync.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SortyFinderSync.entitlements; sourceTree = "<group>"; };
+		F1A1F001F001F001F001F001 /* SortyFinderSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyFinderSync/SortyFinderSync.swift; sourceTree = SOURCE_ROOT; };
 		0C803137980F429E8E946D30 /* LearningsHoningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsHoningView.swift; sourceTree = "<group>"; };
 		A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
 		981E7344DFEC4943BA212BED /* LearningsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsView.swift; sourceTree = "<group>"; };
@@ -300,6 +325,7 @@
 		33A128622F01230000A86470 /* Sorty.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sorty.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A1286F2F01230200A86470 /* SortyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SortyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A128792F01230200A86470 /* SortyUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SortyUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F1A1F001F001F001F001F004 /* SortyFinderSync.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SortyFinderSync.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		33A128912F01230200A86470 /* AppUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUITests.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000001 /* UpdateManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000002 /* AppAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccessibilityTests.swift; sourceTree = "<group>"; };
@@ -426,6 +452,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		33A128762F01230200A86470 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A1D001D001D001D001D003 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -657,10 +690,21 @@
 			path = Sources/SortyLib/Services;
 			sourceTree = "<group>";
 		};
+		F1A1C001C001C001C001C001 /* SortyFinderSync */ = {
+			isa = PBXGroup;
+			children = (
+				F1A1F001F001F001F001F002 /* Info.plist */,
+				F1A1F001F001F001F001F003 /* SortyFinderSync.entitlements */,
+				F1A1F001F001F001F001F001 /* SortyFinderSync.swift */,
+			);
+			path = SortyFinderSync;
+			sourceTree = "<group>";
+		};
 		3353FC462F0124320097CD23 = {
 			isa = PBXGroup;
 			children = (
 				AABBCC330000000000000001 /* Sorty.entitlements */,
+				F1A1C001C001C001C001C001 /* SortyFinderSync */,
 				141AC570FAC743F08B8A7DD4 /* Learnings */,
 				3353FC222F0124320097CD23 /* AI */,
 				3353FC252F0124320097CD23 /* FileSystem */,
@@ -702,6 +746,7 @@
 				33A128622F01230000A86470 /* Sorty.app */,
 				33A1286F2F01230200A86470 /* SortyTests.xctest */,
 				33A128792F01230200A86470 /* SortyUITests.xctest */,
+				F1A1F001F001F001F001F004 /* SortyFinderSync.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -802,10 +847,12 @@
 				33A1285E2F01230000A86470 /* Sources */,
 				33A1285F2F01230000A86470 /* Frameworks */,
 				33A128602F01230000A86470 /* Resources */,
+				F1A1D001D001D001D001D001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F1A1A001A001A001A001A002 /* PBXTargetDependency */,
 			);
 			name = Sorty;
 			packageProductDependencies = (
@@ -813,6 +860,25 @@
 			productName = Sorty;
 			productReference = 33A128622F01230000A86470 /* Sorty.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F1A1E001E001E001E001E001 /* SortyFinderSync */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1A1BC01BC01BC01BC01BC03 /* Build configuration list for PBXNativeTarget "SortyFinderSync" */;
+			buildPhases = (
+				F1A1D001D001D001D001D002 /* Sources */,
+				F1A1D001D001D001D001D003 /* Frameworks */,
+				F1A1D001D001D001D001D004 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SortyFinderSync;
+			packageProductDependencies = (
+			);
+			productName = SortyFinderSync;
+			productReference = F1A1F001F001F001F001F004 /* SortyFinderSync.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		33A1286E2F01230200A86470 /* SortyTests */ = {
 			isa = PBXNativeTarget;
@@ -875,6 +941,9 @@
 						CreatedOnToolsVersion = 26.2;
 						TestTargetID = 33A128612F01230000A86470;
 					};
+					F1A1E001E001E001E001E001 = {
+						CreatedOnToolsVersion = 26.2;
+					};
 				};
 			};
 			buildConfigurationList = 33A1285D2F01230000A86470 /* Build configuration list for PBXProject "Sorty" */;
@@ -892,6 +961,7 @@
 			projectRoot = "";
 			targets = (
 				33A128612F01230000A86470 /* Sorty */,
+				F1A1E001E001E001E001E001 /* SortyFinderSync */,
 				33A1286E2F01230200A86470 /* SortyTests */,
 				33A128782F01230200A86470 /* SortyUITests */,
 			);
@@ -915,6 +985,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		33A128772F01230200A86470 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A1D001D001D001D001D004 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -979,7 +1056,6 @@
 				3353FC5F2F0124320097CD23 /* Extensions.swift in Sources */,
 				3353FC602F0124320097CD23 /* ExclusionRule.swift in Sources */,
 				3353FC612F0124320097CD23 /* HistoryView.swift in Sources */,
-				3353FC622F0124320097CD23 /* SortyActionExtension.swift in Sources */,
 				3353FC632F0124320097CD23 /* SortyApp.swift in Sources */,
 				3353FC642F0124320097CD23 /* SystemPrompt.swift in Sources */,
 				3353FC652F0124320097CD23 /* PreviewManager.swift in Sources */,
@@ -1131,6 +1207,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F1A1D001D001D001D001D002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1A1B001B001B001B001B001 /* SortyFinderSync.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1143,6 +1227,11 @@
 			isa = PBXTargetDependency;
 			target = 33A128612F01230000A86470 /* Sorty */;
 			targetProxy = 33A1287A2F01230200A86470 /* PBXContainerItemProxy */;
+		};
+		F1A1A001A001A001A001A002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F1A1E001E001E001E001E001 /* SortyFinderSync */;
+			targetProxy = F1A1A001A001A001A001A001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1353,6 +1442,68 @@
 			};
 			name = Release;
 		};
+		F1A1BC01BC01BC01BC01BC01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SortyFinderSync/SortyFinderSync.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 8;
+				ENABLE_APP_SANDBOX = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SortyFinderSync/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.Sorty.SortyFinderSync;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F1A1BC01BC01BC01BC01BC02 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SortyFinderSync/SortyFinderSync.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 8;
+				ENABLE_APP_SANDBOX = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SortyFinderSync/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = shirishpothi.Sorty.SortyFinderSync;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		33A128872F01230200A86470 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1486,6 +1637,15 @@
 			buildConfigurations = (
 				33A1288A2F01230200A86470 /* Debug */,
 				33A1288B2F01230200A86470 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F1A1BC01BC01BC01BC01BC03 /* Build configuration list for PBXNativeTarget "SortyFinderSync" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1A1BC01BC01BC01BC01BC01 /* Debug */,
+				F1A1BC01BC01BC01BC01BC02 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

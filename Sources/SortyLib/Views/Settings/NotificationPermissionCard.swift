@@ -54,8 +54,7 @@ struct NotificationPermissionCard: View {
                         } label: {
                             HStack(spacing: 4) {
                                 if isRequestingPermission {
-                                    ProgressView()
-                                        .controlSize(.small)
+                                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                                 } else {
                                     Image(systemName: "bell.badge")
                                 }

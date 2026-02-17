@@ -23,6 +23,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     let learningsFSMonitor: LearningsFSMonitor
     private let notificationManager = NotificationManager.shared
     private var pendingFiles: [UUID: (folder: WatchedFolder, files: Set<String>, resolvedURL: URL)] = [:]
+    private var ignoredWatchEventsUntil: [UUID: Date] = [:]
     private var retryTask: Task<Void, Never>?
     
     init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
@@ -103,6 +104,20 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             guard let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry else { return }
             
             Task { @MainActor in
+                // If the user manually organized a watched folder, treat that run as
+                // the new baseline and ignore the immediate filesystem event burst.
+                if entry.source == .manual {
+                    let completedPath = URL(fileURLWithPath: entry.directoryPath).standardizedFileURL.path
+                    if let watchedFolder = self.watchedFoldersManager.folders.first(where: {
+                        URL(fileURLWithPath: $0.path).standardizedFileURL.path == completedPath
+                    }) {
+                        self.pendingFiles.removeValue(forKey: watchedFolder.id)
+                        self.ignoredWatchEventsUntil[watchedFolder.id] = Date().addingTimeInterval(2.0)
+                        self.folderWatcher.pause(watchedFolder)
+                        self.folderWatcher.resume(watchedFolder)
+                    }
+                }
+
                 let stats = self.extractBatchStats(from: entry)
                 self.notificationManager.showBatchSummary(stats: stats)
                 
@@ -146,6 +161,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         NotificationCenter.default.addObserver(forName: .showOrganizationDetails, object: nil, queue: .main) { [weak self] _ in
             guard let self = self else { return }
             
+            Task { @MainActor in
+                self.handleShowDetailsAction()
+            }
+        }
+
+        // Handle "Review/Preview" action from notification
+        NotificationCenter.default.addObserver(forName: .showOrganizationPreview, object: nil, queue: .main) { [weak self] _ in
+            guard let self = self else { return }
+
             Task { @MainActor in
                 self.handleShowDetailsAction()
             }
@@ -271,14 +295,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
     }
     
-    /// Handle show details action - bring app to front
+    /// Handle show details action from notifications by activating the app.
+    /// The originating notification already carries navigation intent.
     private func handleShowDetailsAction() {
         // Activate the app and bring it to front
         NSApplication.shared.activate(ignoringOtherApps: true)
-        
-        // Post notification to show history/results view
-        NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
-        
+
         print("Coordinator: Activated app for details view")
     }
     
@@ -353,8 +375,16 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     
     func folderWatcher(_ watcher: FolderWatcher, didDetectChangesIn folder: WatchedFolder, newFiles: Set<String>, resolvedURL: URL) {
         guard !newFiles.isEmpty else { return }
+
+        if let ignoreUntil = ignoredWatchEventsUntil[folder.id] {
+            if ignoreUntil > Date() {
+                print("Coordinator: Ignoring watcher burst for \(folder.name) after manual apply")
+                return
+            }
+            ignoredWatchEventsUntil.removeValue(forKey: folder.id)
+        }
         
-        if organizer.state.isOperationInProgress {
+        if organizer.state != .idle {
             print("Coordinator: Organizer busy, queueing \(newFiles.count) files for \(folder.name)")
             if var existing = pendingFiles[folder.id] {
                 existing.files.formUnion(newFiles)
@@ -437,7 +467,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         retryTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
-            if !organizer.state.isOperationInProgress && !pendingFiles.isEmpty {
+            if organizer.state == .idle && !pendingFiles.isEmpty {
                 await processPendingFiles()
             } else if !pendingFiles.isEmpty {
                 scheduleRetry()

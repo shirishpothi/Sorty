@@ -1,0 +1,64 @@
+//
+//  GitHubCopilotAuthManagerTests.swift
+//  SortyTests
+//
+//  Tests for cached Copilot auth state inference.
+//
+
+import XCTest
+@testable import SortyLib
+
+@MainActor
+final class GitHubCopilotAuthManagerTests: XCTestCase {
+    func testHasValidCachedCopilotTokenReturnsTrueForNonEmptyTokenAndFutureExpiry() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let expiry = now.addingTimeInterval(601)
+
+        let result = GitHubCopilotAuthManager.hasValidCachedCopilotToken(
+            cachedToken: "cached-token",
+            expiry: expiry,
+            now: now
+        )
+
+        XCTAssertTrue(result)
+    }
+
+    func testHasValidCachedCopilotTokenReturnsFalseWhenTokenMissing() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let expiry = now.addingTimeInterval(601)
+
+        let result = GitHubCopilotAuthManager.hasValidCachedCopilotToken(
+            cachedToken: nil,
+            expiry: expiry,
+            now: now
+        )
+
+        XCTAssertFalse(result)
+    }
+
+    func testHasValidCachedCopilotTokenReturnsFalseWhenTokenIsEmpty() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let expiry = now.addingTimeInterval(601)
+
+        let result = GitHubCopilotAuthManager.hasValidCachedCopilotToken(
+            cachedToken: "",
+            expiry: expiry,
+            now: now
+        )
+
+        XCTAssertFalse(result)
+    }
+
+    func testHasValidCachedCopilotTokenReturnsFalseWhenExpiryIsTooClose() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let expiry = now.addingTimeInterval(300)
+
+        let result = GitHubCopilotAuthManager.hasValidCachedCopilotToken(
+            cachedToken: "cached-token",
+            expiry: expiry,
+            now: now
+        )
+
+        XCTAssertFalse(result)
+    }
+}

@@ -90,8 +90,7 @@ struct PersonaChatView: View {
 
                         if isLoading {
                             HStack {
-                                ProgressView()
-                                    .controlSize(.small)
+                                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                                 Text("Thinking...")
                                     .font(.caption)
                                     .foregroundColor(.secondary)

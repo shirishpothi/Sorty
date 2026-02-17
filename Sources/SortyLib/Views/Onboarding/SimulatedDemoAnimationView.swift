@@ -937,14 +937,13 @@ struct DemoPersonaCard: View {
                 Text(description)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
             
             Spacer()
             
             if isApplying {
-                ProgressView()
-                    .scaleEffect(0.7)
+                SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
             } else {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)

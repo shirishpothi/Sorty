@@ -28,8 +28,7 @@ struct NotifiCLIStatusCard: View {
                 // Status indicator
                 HStack(spacing: 12) {
                     if notificationManager.notifiCLISetupStatus.contains("Setting up") {
-                        ProgressView()
-                            .controlSize(.small)
+                        SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     } else {
                         Image(systemName: statusInfo.icon)
                             .font(.title2)
@@ -51,8 +50,7 @@ struct NotifiCLIStatusCard: View {
                         rebuildNotifiCLI()
                     } label: {
                         if isRebuilding {
-                            ProgressView()
-                                .controlSize(.small)
+                            SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                         } else {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.triangle.2.circlepath")

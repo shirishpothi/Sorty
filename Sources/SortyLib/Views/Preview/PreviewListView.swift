@@ -12,6 +12,8 @@ struct PreviewListView: View {
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
     let emptyStateType: EmptyStateType
+    var onFocusInstructions: (() -> Void)? = nil
+    var onRegenerate: (() -> Void)? = nil
     
     enum EmptyStateType {
         case allUnorganized(Int)  // Int is the file count
@@ -61,12 +63,14 @@ struct PreviewListView: View {
                     EmptyAction(
                         title: "Add Instructions",
                         icon: "text.bubble",
-                        action: { /* Trigger instructions focus */ }
+                        accessibilityID: "PreviewEmptyStateAddInstructions",
+                        action: { onFocusInstructions?() }
                     ),
                     EmptyAction(
                         title: "Regenerate",
                         icon: "arrow.triangle.2.circlepath",
-                        action: { /* Trigger regeneration */ }
+                        accessibilityID: "PreviewEmptyStateRegenerate",
+                        action: { onRegenerate?() }
                     )
                 ]
             )
@@ -132,6 +136,7 @@ struct EmptyPreviewState: View {
                             .padding(.vertical, 8)
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityIdentifier(action.accessibilityID ?? "")
                     }
                 }
                 .padding(.top, 8)
@@ -154,6 +159,7 @@ struct EmptyAction: Identifiable {
     let id = UUID()
     let title: String
     let icon: String
+    var accessibilityID: String? = nil
     let action: () -> Void
 }
 

@@ -56,6 +56,7 @@ struct SortyApp: App {
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
+    @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
     @StateObject private var settingsViewModel = SettingsViewModel()
     @StateObject private var appState = AppState()
     @StateObject private var personaManager = PersonaManager()
@@ -144,6 +145,10 @@ struct SortyApp: App {
                 watchedFoldersManager.restoreSecurityScopedAccess()
                 // Restore sandbox access for storage locations
                 storageLocationsManager.restoreSecurityScopedAccess()
+
+                if finderIntegrationEnabled {
+                    _ = ExtensionCommunication.ensureQuickActionInstalled()
+                }
                 
                 if coordinator == nil {
                     coordinator = AppCoordinator(
@@ -220,6 +225,11 @@ struct SortyApp: App {
             .onChange(of: hideDockIcon) { _, newValue in
                 appDelegate.updateActivationPolicy(hideDockIcon: newValue)
             }
+            .onChange(of: finderIntegrationEnabled) { _, newValue in
+                if newValue {
+                    _ = ExtensionCommunication.ensureQuickActionInstalled()
+                }
+            }
             .onOpenURL { url in
                 processDeepLink(url)
             }
@@ -249,6 +259,22 @@ struct SortyApp: App {
             .onReceive(NotificationCenter.default.publisher(for: .showOrganizationDetails)) { _ in
                 withAnimation(.pageTransition) {
                     appState.currentView = .history
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationPreview)) { _ in
+                withAnimation(.pageTransition) {
+                    if appState.selectedDirectory == nil, let currentDirectory = organizer.currentDirectory {
+                        appState.selectedDirectory = currentDirectory
+                    }
+                    appState.currentView = .organize
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { _ in
+                withAnimation(.pageTransition) {
+                    if appState.selectedDirectory == nil, let currentDirectory = organizer.currentDirectory {
+                        appState.selectedDirectory = currentDirectory
+                    }
+                    appState.currentView = .organize
                 }
             }
             .alert("Delete All Usage Data?", isPresented: $appState.showDeleteUsageDataConfirmation) {
@@ -366,13 +392,21 @@ struct SortyApp: App {
                 if let section = section?.lowercased() {
                     switch section {
                     case "watched", "watched-folders", "folders":
-                        appState.currentView = .watchedFolders
+                        appState.currentView = .settings
+                        appState.selectedSettingsSection = .rules
+                        appState.settingsFocusTarget = .rulesWatchedFolders
                     case "exclusions", "rules":
-                        appState.currentView = .exclusions
+                        appState.currentView = .settings
+                        appState.selectedSettingsSection = .rules
+                        appState.settingsFocusTarget = .rulesExclusionRules
                     case "storage", "storage-locations":
-                        appState.currentView = .storageLocations
+                        appState.currentView = .settings
+                        appState.selectedSettingsSection = .rules
+                        appState.settingsFocusTarget = .rulesStorageLocations
                     case "health", "workspace-health":
-                        appState.currentView = .workspaceHealth
+                        appState.currentView = .settings
+                        appState.selectedSettingsSection = .rules
+                        appState.settingsFocusTarget = .rulesWorkspaceHealth
                     default:
                         appState.currentView = .settings
                         let category = SettingsCategory.allCases.first {
@@ -380,10 +414,12 @@ struct SortyApp: App {
                             String(describing: $0).lowercased() == section
                         }
                         appState.selectedSettingsSection = category
+                        appState.settingsFocusTarget = nil
                     }
                 } else {
                     appState.currentView = .settings
                     appState.selectedSettingsSection = nil
+                    appState.settingsFocusTarget = nil
                 }
                 
             case .help:

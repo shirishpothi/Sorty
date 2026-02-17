@@ -48,9 +48,11 @@ final class DeeplinkUITests: XCTestCase {
         app.launchEnvironment["XCUITEST_DEEPLINK"] = "sorty://history"
         app.launch()
         
-        // Verify History view by checking for the filter dropdown
-        let filterDropdown = app.buttons["HistoryFilterDropdown"]
-        XCTAssertTrue(waitForElement(filterDropdown, timeout: 10.0), "History view (FilterDropdown) should be shown")
+        // Verify History view by checking for the view or filter picker
+        let historyView = app.otherElements["HistoryView"]
+        let filterPicker = app.segmentedControls["HistoryFilterPicker"]
+        let found = waitForElement(historyView, timeout: 10.0) || waitForElement(filterPicker, timeout: 5.0)
+        XCTAssertTrue(found, "History view should be shown")
     }
 
     func testHealthDeeplinkNavigation() throws {

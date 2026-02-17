@@ -9,6 +9,42 @@ import SwiftUI
 import Combine
 import UniformTypeIdentifiers
 
+// MARK: - Analysis Icon Provider
+
+@MainActor
+enum AnalysisIconProvider {
+    private static var cache: [String: NSImage] = [:]
+
+    static func icon(for contentType: UTType) -> NSImage {
+        let key = "type:\(contentType.identifier)"
+        if let image = cache[key] {
+            return image
+        }
+        let image = NSWorkspace.shared.icon(for: contentType)
+        image.size = NSSize(width: 32, height: 32)
+        cache[key] = image
+        return image
+    }
+
+    static func icon(forFileExtension fileExtension: String) -> NSImage {
+        let normalizedExtension = fileExtension
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalizedExtension.isEmpty else {
+            return icon(for: .data)
+        }
+
+        let key = "ext:\(normalizedExtension)"
+        if let image = cache[key] {
+            return image
+        }
+        let image = NSWorkspace.shared.icon(forFileType: normalizedExtension)
+        image.size = NSSize(width: 32, height: 32)
+        cache[key] = image
+        return image
+    }
+}
+
 // MARK: - Unified Refresh Manager
 
 /// Consolidates multiple timers into a single refresh manager to reduce memory overhead
@@ -143,11 +179,11 @@ final class AnalysisRefreshManager: ObservableObject {
     private func cycleFunnyMessage() async {
         guard organizer != nil else { return }
         
-        withAnimation(.easeOut(duration: 0.4)) {
+        withAnimation(.easeInOut(duration: 0.55)) {
             funnyMessageOpacity = 0
         }
         
-        try? await Task.sleep(nanoseconds: 450_000_000)
+        try? await Task.sleep(nanoseconds: 520_000_000)
         guard organizer != nil else { return }
         
         let elapsedSeconds = Int(organizer?.elapsedTime ?? 0)
@@ -157,7 +193,7 @@ final class AnalysisRefreshManager: ObservableObject {
             currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
         }
         
-        withAnimation(.easeIn(duration: 0.4)) {
+        withAnimation(.easeInOut(duration: 0.65)) {
             funnyMessageOpacity = 1
         }
     }
@@ -175,16 +211,16 @@ final class AnalysisRefreshManager: ObservableObject {
         
         guard let fileName = nextFileName, !fileName.isEmpty else { return }
         
-        withAnimation(.easeOut(duration: 0.25)) {
+        withAnimation(.easeInOut(duration: 0.35)) {
             fileDisplayOpacity = 0
         }
         
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        try? await Task.sleep(nanoseconds: 360_000_000)
         guard organizer != nil else { return }
         
         currentFileDisplay = fileName
         
-        withAnimation(.easeIn(duration: 0.25)) {
+        withAnimation(.easeInOut(duration: 0.4)) {
             fileDisplayOpacity = 1
         }
     }
@@ -217,7 +253,6 @@ struct AnalysisView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @StateObject private var refreshManager = AnalysisRefreshManager()
     @State private var hasAppeared = false
-    @State private var elapsedSeconds: Int = 0
     @State private var isCancelHovered = false
     @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
@@ -229,6 +264,7 @@ struct AnalysisView: View {
     }
     
     private var currentMessageTier: MessageTier {
+        let elapsedSeconds = Int(organizer.elapsedTime)
         if elapsedSeconds >= 90 || organizer.showTimeoutMessage {
             return .takingLonger
         } else if elapsedSeconds >= 30 {
@@ -314,9 +350,6 @@ struct AnalysisView: View {
         .onDisappear {
             refreshManager.stop()
         }
-        .onChange(of: organizer.elapsedTime) { _, newTime in
-            elapsedSeconds = Int(newTime)
-        }
     }
     
     @ViewBuilder
@@ -342,118 +375,33 @@ struct AnalysisView: View {
     }
     
     private var progressSection: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                Circle()
-                    .stroke(Color.secondary.opacity(0.15), lineWidth: 8)
-                    .frame(width: 120, height: 120)
-                    .shimmer(isLoading: isEstablishingConnection)
-                
-                Circle()
-                    .trim(from: 0, to: organizer.progress)
-                    .stroke(
-                        Color.accentColor,
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 120, height: 120)
-                    .rotationEffect(.degrees(-90))
-                    .animation(.spring(response: 0.4, dampingFraction: 0.9), value: organizer.progress)
-                
-                VStack(spacing: 2) {
-                    Text("\(Int(organizer.progress * 100))%")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.3), value: Int(organizer.progress * 100))
-
-                    if elapsedSeconds > 0 {
-                        Text(formatTime(Double(elapsedSeconds)))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-                }
-                .accessibilityIdentifier("AnalysisPercentageText")
-            }
-        }
+        StreamingProgressRing(
+            progress: organizer.progress,
+            elapsedSeconds: Int(organizer.elapsedTime),
+            isEstablishingConnection: isEstablishingConnection
+        )
     }
 
     private var stageIndicator: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                stageIcon
-                    .font(.system(size: 24))
-                
-                Text(organizer.organizationStage)
-                    .font(.headline)
-            }
-            
-            if isEstablishingConnection {
-                HStack(spacing: 6) {
-                    Text("Connecting to AI provider")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
-                }
-                .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
-            } else if organizer.isStreaming {
-                VStack(spacing: 8) {
-                Text(refreshManager.currentFunnyMessage)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .opacity(refreshManager.funnyMessageOpacity)
-                    .frame(height: 20)
-                    
-                    if !refreshManager.currentFileDisplay.isEmpty {
-                        HStack(spacing: 4) {
-                            Text("Analyzing")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                            Text(refreshManager.currentFileDisplay)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fontWeight(.medium)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        .opacity(refreshManager.fileDisplayOpacity)
-                        .frame(maxWidth: 300)
-                    }
-                }
-                .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Current organization stage: \(organizer.organizationStage)")
-        .accessibilityIdentifier("AnalysisStageInfo")
+        AIReasoningStatus(
+            state: organizer.state,
+            organizationStage: organizer.organizationStage,
+            isStreaming: organizer.isStreaming,
+            isEstablishingConnection: isEstablishingConnection,
+            funnyMessage: refreshManager.currentFunnyMessage,
+            funnyMessageOpacity: refreshManager.funnyMessageOpacity,
+            fileDisplay: refreshManager.currentFileDisplay,
+            fileDisplayOpacity: refreshManager.fileDisplayOpacity
+        )
     }
     
     private var isEstablishingConnection: Bool {
         if case .organizing = organizer.state {
-            return organizer.organizationStage.contains("Establishing") && !organizer.isStreaming
+            let stage = organizer.organizationStage
+            let isConnecting = stage.contains("Establishing") || stage.contains("Connecting")
+            return isConnecting && !organizer.isStreaming
         }
         return false
-    }
-    
-    @ViewBuilder
-    private var stageIcon: some View {
-        if case .scanning = organizer.state {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.blue)
-                .symbolEffect(.pulse.byLayer, options: .repeating)
-        } else if case .organizing = organizer.state {
-            if isEstablishingConnection {
-                Image(systemName: "network")
-                    .foregroundStyle(.orange)
-                    .symbolEffect(.variableColor.iterative, options: .repeating)
-            } else {
-                ZStack {
-                    PingRingView()
-                    OrganizingMascotView()
-                }
-            }
-        }
     }
     
     private var timeoutMessage: some View {
@@ -503,10 +451,6 @@ struct AnalysisView: View {
         .accessibilityHint("You will be notified when the preview is ready")
     }
     
-    @State private var isHoveringHistory = false
-    @State private var showDebugStream = false
-    @State private var isInsightHistoryExpanded = true
-    
     // MARK: - AI Insights View
     
     private var cachedInsights: (current: String, history: [AIInsight]) {
@@ -514,356 +458,12 @@ struct AnalysisView: View {
     }
     
     private var aiInsightsView: some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isInsightHistoryExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    if organizer.isStreaming {
-                        if let nsImage = SortyResources.image(named: "SortyMascot") {
-                            Image(nsImage: nsImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 18, height: 18)
-                        } else {
-                            Image(systemName: "sparkles")
-                                .font(.callout)
-                                .foregroundStyle(Color.accentColor)
-                                .symbolEffect(.pulse.byLayer, options: .repeating)
-                        }
-                    } else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.green)
-                    }
-                    
-                    Text(organizer.isStreaming ? "AI is reasoning..." : "Analysis complete")
-                        .font(.callout)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
-                    
-                    if organizer.isStreaming {
-                        Image(systemName: "waveform")
-                            .font(.caption)
-                            .foregroundStyle(Color.accentColor)
-                            .symbolEffect(.variableColor.iterative, options: .repeating)
-                    }
-                    
-                    Spacer()
-                    
-                    let insightCount = cachedInsights.history.count
-                    if insightCount > 0 {
-                        Text("\(insightCount)")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.accentColor))
-                    }
-                    
-                    if appState.debugMode {
-                        Button {
-                            withAnimation(.spring()) {
-                                showDebugStream.toggle()
-                            }
-                        } label: {
-                            Image(systemName: showDebugStream ? "terminal.fill" : "terminal")
-                                .font(.caption)
-                                .foregroundStyle(showDebugStream ? Color.accentColor : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Toggle raw AI stream")
-                    }
-                    
-                    Image(systemName: "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isInsightHistoryExpanded ? 0 : -90))
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isInsightHistoryExpanded)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: isInsightHistoryExpanded ? 0 : 16)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.accentColor.opacity(0.08),
-                                    Color.accentColor.opacity(0.03)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                )
-            }
-            .buttonStyle(.plain)
-            .contentShape(RoundedRectangle(cornerRadius: isInsightHistoryExpanded ? 0 : 16))
-            
-            if isInsightHistoryExpanded {
-                LazyVStack(spacing: 16) {
-                    let insights = cachedInsights
-                    let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
-                    if !insights.current.isEmpty {
-                        currentInsightPill(insight: insights.current, detail: currentInsightItem)
-                    } else if organizer.isStreaming {
-                        receivingResponseView
-                    }
-                    
-                    if insights.history.count > 1 {
-                        insightHistoryWrap(history: insights.history)
-                    }
-                    
-                    if showDebugStream && appState.debugMode {
-                        streamingPreview
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-        .frame(maxWidth: 550)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(NSColor.separatorColor).opacity(0.8), lineWidth: 1)
-                )
+        InsightHistorySection(
+            isStreaming: organizer.isStreaming,
+            insights: cachedInsights,
+            debugModeEnabled: appState.debugMode,
+            streamPreview: organizer.truncatedDisplayStreamingContent
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .frame(maxHeight: 220)
-    }
-    
-    private var receivingResponseView: some View {
-        HStack(spacing: 12) {
-            ProgressView()
-                .controlSize(.small)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-            
-            Text("Receiving AI response...")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .italic()
-            
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(Color.accentColor.opacity(0.05))
-                .overlay(
-                    Capsule()
-                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
-                )
-        )
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
-    }
-    
-    private func currentInsightPill(insight: String, detail: AIInsight?) -> some View {
-        HStack(spacing: 12) {
-            // Icon based on insight content - Finder-style icons
-            insightIcon(for: detail, fallbackText: insight)
-                .frame(width: 24, height: 24)
-            
-            Text(insight)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            
-            Spacer()
-            
-            if organizer.isStreaming {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.4))
-                    .frame(width: 6, height: 6)
-                    .scaleEffect(organizer.isStreaming ? 1.3 : 1.0)
-                    .animation(.default.speed(0.8), value: organizer.isStreaming)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(Color.accentColor.opacity(0.08))
-                .overlay(
-                    Capsule()
-                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
-                )
-        )
-    }
-    
-    @ViewBuilder
-    private func insightIcon(for insight: AIInsight?, fallbackText: String) -> some View {
-        if let filePath = insight?.filePath {
-            let url = URL(fileURLWithPath: filePath)
-            if url.hasDirectoryPath {
-                FolderThumbnailView(url: url, size: CGSize(width: 20, height: 20))
-            } else {
-                FileThumbnailView(url: url, size: CGSize(width: 20, height: 20))
-            }
-        } else {
-            let lowercased = fallbackText.lowercased()
-            
-            if lowercased.contains("folder") || lowercased.contains("directory") || lowercased.contains("organizing") {
-                Image(nsImage: NSWorkspace.shared.icon(for: .folder))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
-            } else if lowercased.contains("image") || lowercased.contains("photo") || lowercased.contains("picture") || lowercased.contains("screenshot") {
-                ZStack {
-                    Circle()
-                        .fill(Color.pink.opacity(0.15))
-                        .frame(width: 24, height: 24)
-                    Image(nsImage: NSWorkspace.shared.icon(for: .image))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                }
-            } else if lowercased.contains("document") || lowercased.contains("pdf") || lowercased.contains("file") {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.15))
-                        .frame(width: 24, height: 24)
-                    Image(nsImage: NSWorkspace.shared.icon(for: .pdf))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                }
-            } else if lowercased.contains("video") || lowercased.contains("movie") {
-                ZStack {
-                    Circle()
-                        .fill(Color.orange.opacity(0.15))
-                        .frame(width: 24, height: 24)
-                    Image(nsImage: NSWorkspace.shared.icon(for: .movie))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                }
-            } else if lowercased.contains("audio") || lowercased.contains("music") || lowercased.contains("sound") {
-                ZStack {
-                    Circle()
-                        .fill(Color.red.opacity(0.15))
-                        .frame(width: 24, height: 24)
-                    Image(nsImage: NSWorkspace.shared.icon(for: .audio))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                }
-            } else if lowercased.contains("code") || lowercased.contains("script") || lowercased.contains("programming") {
-                ZStack {
-                    Circle()
-                        .fill(Color.cyan.opacity(0.15))
-                        .frame(width: 24, height: 24)
-                    Image(nsImage: NSWorkspace.shared.icon(for: .sourceCode))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                }
-            } else if lowercased.contains("archive") || lowercased.contains("zip") || lowercased.contains("compress") {
-                ZStack {
-                    Circle()
-                        .fill(Color.brown.opacity(0.15))
-                        .frame(width: 24, height: 24)
-                    Image(nsImage: NSWorkspace.shared.icon(for: .archive))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                }
-            } else {
-                Image(nsImage: NSWorkspace.shared.icon(for: .data))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
-            }
-        }
-    }
-    
-    private func insightHistoryWrap(history: [AIInsight]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            FlowLayout(spacing: 8) {
-                ForEach(Array(history.dropLast().reversed().prefix(3))) { insight in
-                    InsightPill(insight: insight)
-                        .opacity(isHoveringHistory ? 1.0 : 0.4)
-                        .blur(radius: isHoveringHistory ? 0 : 0.5)
-                        .animation(.spring(response: 0.3), value: isHoveringHistory)
-                }
-            }
-        }
-        .padding(.horizontal, 4)
-        .onHover { hovering in
-            withAnimation(.spring(response: 0.3)) {
-                isHoveringHistory = hovering
-            }
-        }
-    }
-    
-    private var streamingPreview: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "text.word.spacing")
-                    .foregroundStyle(.purple)
-                Text("AI Response")
-                    .fontWeight(.medium)
-            }
-            .font(.caption)
-            
-            ScrollView {
-                ScrollViewReader { proxy in
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(truncatedStreamContent)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.leading)
-                            .id("bottom")
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .onChange(of: organizer.displayStreamingContent) { _, _ in
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo("bottom", anchor: .bottom)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: 550, maxHeight: 180)
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                )
-        )
-        .accessibilityLabel("AI response preview")
-    }
-
-    private var truncatedStreamContent: String {
-        let content = organizer.displayStreamingContent
-        if content.count > 1000 {
-            let start = content.index(content.endIndex, offsetBy: -1000)
-            return "..." + String(content[start...])
-        }
-        return content
-    }
-
-    private func formatTime(_ interval: TimeInterval) -> String {
-        let minutes = Int(interval) / 60
-        let seconds = Int(interval) % 60
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        }
-        return "\(seconds)s"
     }
 
     private func recordCancelledAnalysis() {
@@ -890,14 +490,496 @@ struct AnalysisView: View {
     }
 }
 
+private struct StreamingProgressRing: View {
+    let progress: Double
+    let elapsedSeconds: Int
+    let isEstablishingConnection: Bool
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                SortyGradientCircularProgress(
+                    progress: progress,
+                    size: 120,
+                    lineWidth: 8
+                )
+                .shimmer(isLoading: isEstablishingConnection)
+                
+                VStack(spacing: 2) {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.easeInOut(duration: 0.3), value: Int(progress * 100))
+
+                    if elapsedSeconds > 0 {
+                        Text(Self.formatTime(elapsedSeconds))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                .accessibilityIdentifier("AnalysisPercentageText")
+            }
+        }
+    }
+
+    private static func formatTime(_ elapsedSeconds: Int) -> String {
+        let minutes = elapsedSeconds / 60
+        let seconds = elapsedSeconds % 60
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+        return "\(seconds)s"
+    }
+}
+
+private struct AIReasoningStatus: View {
+    let state: OrganizationState
+    let organizationStage: String
+    let isStreaming: Bool
+    let isEstablishingConnection: Bool
+    let funnyMessage: String
+    let funnyMessageOpacity: Double
+    let fileDisplay: String
+    let fileDisplayOpacity: Double
+
+    private var isAnalyzingStage: Bool {
+        let stage = organizationStage.lowercased()
+        return stage.contains("analyz") || stage.contains("analys")
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                stageIcon
+                    .font(.system(size: 24))
+                
+                Text(organizationStage)
+                    .font(.headline)
+                    .shimmer(isLoading: isAnalyzingStage)
+            }
+            .modifier(SliverMotionEffect(isActive: isAnalyzingStage))
+            
+            if isEstablishingConnection {
+                HStack(spacing: 6) {
+                    Text("Connecting to AI provider")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
+                }
+                .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
+            } else if isStreaming {
+                VStack(spacing: 5) {
+                    Text(funnyMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .opacity(funnyMessageOpacity)
+                        .offset(y: funnyMessageOpacity > 0.5 ? 0 : 2)
+                        .blur(radius: funnyMessageOpacity > 0.5 ? 0 : 0.35)
+                        .animation(.easeInOut(duration: 0.6), value: funnyMessageOpacity)
+                        .frame(height: 20)
+                    
+                    if !fileDisplay.isEmpty {
+                        HStack(spacing: 4) {
+                            Text("Analysing")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                            Text(fileDisplay)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .shimmer(isLoading: true)
+                        .opacity(fileDisplayOpacity)
+                        .modifier(SliverMotionEffect(isActive: true))
+                        .frame(maxWidth: 300)
+                    }
+                }
+                .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Current organization stage: \(organizationStage)")
+        .accessibilityIdentifier("AnalysisStageInfo")
+    }
+
+    @ViewBuilder
+    private var stageIcon: some View {
+        if case .scanning = state {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.blue)
+                .symbolEffect(.pulse.byLayer, options: .repeating)
+        } else if case .organizing = state {
+            if isEstablishingConnection {
+                Image(systemName: "network")
+                    .foregroundStyle(.orange)
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
+            } else {
+                ZStack {
+                    PingRingView()
+                    OrganizingMascotView()
+                        .drawingGroup()
+                }
+            }
+        }
+    }
+}
+
+private struct SliverMotionEffect: ViewModifier {
+    let isActive: Bool
+    @State private var animate = false
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: isActive && animate ? 0.8 : -0.8)
+            .opacity(isActive ? (animate ? 1.0 : 0.94) : 1.0)
+            .animation(
+                isActive
+                    ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true)
+                    : .default,
+                value: animate
+            )
+            .onAppear {
+                guard isActive else { return }
+                animate = true
+            }
+            .onChange(of: isActive) { _, newValue in
+                if newValue {
+                    animate = true
+                } else {
+                    animate = false
+                }
+            }
+    }
+}
+
+@MainActor
+final class AnalysisInsightViewState: ObservableObject {
+    @Published var isHoveringHistory = false
+    @Published var showDebugStream = false
+    @Published var isExpanded = true
+}
+
+private struct InsightHistorySection: View {
+    let isStreaming: Bool
+    let insights: (current: String, history: [AIInsight])
+    let debugModeEnabled: Bool
+    let streamPreview: String
+    
+    @StateObject private var viewState = AnalysisInsightViewState()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    viewState.isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if isStreaming {
+                        if let nsImage = SortyResources.image(named: "SortyMascot") {
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 18, height: 18)
+                        } else {
+                            Image(systemName: "sparkles")
+                                .font(.callout)
+                                .foregroundStyle(Color.accentColor)
+                                .symbolEffect(.pulse.byLayer, options: .repeating)
+                        }
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.callout)
+                            .foregroundStyle(.green)
+                    }
+                    
+                    Text(isStreaming ? "AI is reasoning..." : "Analysis complete")
+                        .font(.callout)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                    
+                    if isStreaming {
+                        Image(systemName: "waveform")
+                            .font(.caption)
+                            .foregroundStyle(Color.accentColor)
+                            .symbolEffect(.variableColor.iterative, options: .repeating)
+                    }
+                    
+                    Spacer()
+                    
+                    let insightCount = insights.history.count
+                    if insightCount > 0 {
+                        Text("\(insightCount)")
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.accentColor))
+                    }
+                    
+                    if debugModeEnabled {
+                        Button {
+                            withAnimation(.spring()) {
+                                viewState.showDebugStream.toggle()
+                            }
+                        } label: {
+                            Image(systemName: viewState.showDebugStream ? "terminal.fill" : "terminal")
+                                .font(.caption)
+                                .foregroundStyle(viewState.showDebugStream ? Color.accentColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Toggle raw AI stream")
+                    }
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(viewState.isExpanded ? 0 : -90))
+                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewState.isExpanded)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.accentColor.opacity(0.08),
+                                    Color.accentColor.opacity(0.03)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+            .contentShape(RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16))
+            
+            if viewState.isExpanded {
+                LazyVStack(spacing: 16) {
+                    let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
+                    if !insights.current.isEmpty {
+                        currentInsightPill(insight: insights.current, detail: currentInsightItem)
+                    } else if isStreaming {
+                        receivingResponseView
+                    }
+                    
+                    if insights.history.count > 1 {
+                        insightHistoryWrap(history: insights.history)
+                    }
+                    
+                    if viewState.showDebugStream && debugModeEnabled {
+                        streamingPreview
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .frame(maxWidth: 550)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(NSColor.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color(NSColor.separatorColor).opacity(0.8), lineWidth: 1)
+                )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .frame(maxHeight: 220)
+    }
+
+    private var receivingResponseView: some View {
+        HStack(spacing: 12) {
+            SortyGradientLoadingBar(width: 84, height: 8)
+                .padding(.vertical, 6)
+            
+            Text("Receiving AI response...")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .italic()
+            
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color.accentColor.opacity(0.05))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                )
+        )
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+    }
+
+    private func currentInsightPill(insight: String, detail: AIInsight?) -> some View {
+        HStack(spacing: 12) {
+            insightIcon(for: detail, fallbackText: insight)
+                .frame(width: 24, height: 24)
+            
+            Text(insight)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            
+            Spacer()
+            
+            if isStreaming {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.4))
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(isStreaming ? 1.3 : 1.0)
+                    .animation(.default.speed(0.8), value: isStreaming)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(Color.accentColor.opacity(0.08))
+                .overlay(
+                    Capsule()
+                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                )
+        )
+    }
+
+    @ViewBuilder
+    private func insightIcon(for insight: AIInsight?, fallbackText: String) -> some View {
+        if let filePath = insight?.filePath {
+            let url = URL(fileURLWithPath: filePath)
+            if url.hasDirectoryPath {
+                FolderThumbnailView(url: url, size: CGSize(width: 20, height: 20))
+            } else {
+                FileThumbnailView(url: url, size: CGSize(width: 20, height: 20))
+            }
+        } else {
+            let iconStyle = fallbackIconStyle(for: fallbackText)
+            if let tint = iconStyle.tint {
+                ZStack {
+                    Circle()
+                        .fill(tint.opacity(0.15))
+                        .frame(width: 24, height: 24)
+                    Image(nsImage: AnalysisIconProvider.icon(for: iconStyle.type))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                }
+            } else {
+                Image(nsImage: AnalysisIconProvider.icon(for: iconStyle.type))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 20, height: 20)
+            }
+        }
+    }
+
+    private func insightHistoryWrap(history: [AIInsight]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            FlowLayout(spacing: 8) {
+                ForEach(Array(history.dropLast().reversed().prefix(3))) { insight in
+                    InsightPill(insight: insight)
+                        .opacity(viewState.isHoveringHistory ? 1.0 : 0.4)
+                        .blur(radius: viewState.isHoveringHistory ? 0 : 0.5)
+                        .animation(.spring(response: 0.3), value: viewState.isHoveringHistory)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .onHover { hovering in
+            withAnimation(.spring(response: 0.3)) {
+                viewState.isHoveringHistory = hovering
+            }
+        }
+    }
+
+    private var streamingPreview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "text.word.spacing")
+                    .foregroundStyle(.purple)
+                Text("AI Response")
+                    .fontWeight(.medium)
+            }
+            .font(.caption)
+            
+            ScrollView {
+                ScrollViewReader { proxy in
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(streamPreview)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                            .id("bottom")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onChange(of: streamPreview) { _, _ in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            proxy.scrollTo("bottom", anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: 550, maxHeight: 180)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(NSColor.controlBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(NSColor.separatorColor), lineWidth: 1)
+                )
+        )
+        .accessibilityLabel("AI response preview")
+    }
+
+    private func fallbackIconStyle(for text: String) -> (type: UTType, tint: Color?) {
+        let lowercased = text.lowercased()
+        if lowercased.contains("folder") || lowercased.contains("directory") || lowercased.contains("organizing") {
+            return (.folder, nil)
+        }
+        if lowercased.contains("image") || lowercased.contains("photo") || lowercased.contains("picture") || lowercased.contains("screenshot") {
+            return (.image, .pink)
+        }
+        if lowercased.contains("document") || lowercased.contains("pdf") || lowercased.contains("file") {
+            return (.pdf, .blue)
+        }
+        if lowercased.contains("video") || lowercased.contains("movie") {
+            return (.movie, .orange)
+        }
+        if lowercased.contains("audio") || lowercased.contains("music") || lowercased.contains("sound") {
+            return (.audio, .red)
+        }
+        if lowercased.contains("code") || lowercased.contains("script") || lowercased.contains("programming") {
+            return (.sourceCode, .cyan)
+        }
+        if lowercased.contains("archive") || lowercased.contains("zip") || lowercased.contains("compress") {
+            return (.archive, .brown)
+        }
+        return (.data, nil)
+    }
+}
+
 // MARK: - Animated Progress Ring
 
 struct AnimatedProgressRing: View {
     let progress: Double
     let lineWidth: CGFloat
     let color: Color
-
-    @State private var animatedProgress: Double = 0
 
     init(progress: Double, lineWidth: CGFloat = 8, color: Color = .blue) {
         self.progress = progress
@@ -906,28 +988,12 @@ struct AnimatedProgressRing: View {
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(color.opacity(0.2), lineWidth: lineWidth)
-
-            Circle()
-                .trim(from: 0, to: animatedProgress)
-                .stroke(
-                    color,
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-        }
-        .onChange(of: progress) { _, newValue in
-            withAnimation(.easeOut(duration: 0.3)) {
-                animatedProgress = newValue
-            }
-        }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.3)) {
-                animatedProgress = progress
-            }
-        }
+        SortyGradientCircularProgress(
+            progress: progress,
+            accent: color,
+            size: 120,
+            lineWidth: lineWidth
+        )
     }
 }
 
@@ -1078,23 +1144,15 @@ struct InlineNotice: View {
 struct InsightPill: View {
     let insight: AIInsight
     
-    private var iconColor: Color {
-        switch insight.category {
-        case .file: return .blue
-        case .folder: return .orange
-        case .constraint: return .yellow
-        case .decision: return .green
-        case .pattern: return .purple
-        case .general: return .secondary
+    private var resolvedIcon: NSImage {
+        if insight.category == .folder {
+            return AnalysisIconProvider.icon(for: .folder)
         }
-    }
-    
-    private var fileIcon: NSImage {
-        // Optimized for high-frequency redraws - avoid disk I/O
+
         if let filePath = insight.filePath {
             let ext = URL(fileURLWithPath: filePath).pathExtension
             if !ext.isEmpty {
-                return NSWorkspace.shared.icon(forFileType: ext)
+                return AnalysisIconProvider.icon(forFileExtension: ext)
             }
         }
         
@@ -1104,31 +1162,19 @@ struct InsightPill: View {
                 .trimmingCharacters(in: .whitespaces)
                 .components(separatedBy: .whitespaces).first ?? ""
             if !ext.isEmpty {
-                return NSWorkspace.shared.icon(forFileType: ext)
+                return AnalysisIconProvider.icon(forFileExtension: ext)
             }
         }
         
-        return NSWorkspace.shared.icon(for: .data)
+        return AnalysisIconProvider.icon(for: .data)
     }
     
     var body: some View {
         HStack(spacing: 6) {
-            if insight.category == .folder {
-                Image(nsImage: NSWorkspace.shared.icon(for: .folder))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
-            } else if insight.category == .file || insight.filePath != nil {
-                Image(nsImage: fileIcon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
-            } else {
-                Image(nsImage: NSWorkspace.shared.icon(for: .data))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
-            }
+            Image(nsImage: resolvedIcon)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 14, height: 14)
             
             Text(insight.text)
                 .font(.caption2)

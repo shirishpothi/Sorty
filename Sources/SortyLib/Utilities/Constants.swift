@@ -271,38 +271,50 @@ struct PulsingLoadingModifier: ViewModifier {
     }
 }
 
-/// Shimmer loading effect modifier
+/// Shimmer loading effect modifier with smooth continuous animation
 struct ShimmerModifier: ViewModifier {
     let isLoading: Bool
-    @State private var phase: CGFloat = 0
+    private let bandWidthRatio: CGFloat = 0.42
+    private let shimmerAngle = Angle(degrees: 18)
+    private let shimmerSpeed: Double = 1.15
 
     func body(content: Content) -> some View {
-        content
-            .overlay {
-                if isLoading {
+        if isLoading {
+            content
+                .overlay {
                     GeometryReader { geometry in
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .white.opacity(0.3),
-                                .clear
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: geometry.size.width * 0.5)
-                        .offset(x: -geometry.size.width * 0.25 + phase * geometry.size.width * 1.5)
-                        .animation(
-                            .linear(duration: 1.5).repeatForever(autoreverses: false),
-                            value: phase
-                        )
-                    }
-                    .mask(content)
-                    .onAppear {
-                        phase = 1
+                        let width = max(geometry.size.width, 1)
+                        let height = max(geometry.size.height, 1)
+                        let bandWidth = width * bandWidthRatio
+                        let travelDistance = width + (bandWidth * 2)
+
+                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 45.0, paused: !isLoading)) { context in
+                            let elapsed = context.date.timeIntervalSinceReferenceDate * shimmerSpeed
+                            let progress = elapsed - floor(elapsed)
+                            let offsetX = (progress * travelDistance) - bandWidth
+
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    .white.opacity(0.6),
+                                    .white.opacity(0.28),
+                                    .clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: bandWidth, height: height * 2.2)
+                            .rotationEffect(shimmerAngle)
+                            .offset(x: offsetX)
+                        }
                     }
                 }
-            }
+                .blendMode(.screen)
+                .mask(content)
+                .compositingGroup()
+        } else {
+            content
+        }
     }
 }
 
@@ -524,5 +536,3 @@ public struct PulsingRingLoader: View {
         }
     }
 }
-
-

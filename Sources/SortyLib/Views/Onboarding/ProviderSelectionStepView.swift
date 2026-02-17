@@ -142,6 +142,14 @@ public struct ProviderSelectionStepView: View {
         }
         .onAppear {
             withAnimation { hasAppeared = true }
+            if settingsViewModel.config.provider == .githubCopilot {
+                copilotAuth.checkAuthenticationStatus()
+            }
+        }
+        .onChange(of: settingsViewModel.config.provider) { _, newProvider in
+            if newProvider == .githubCopilot {
+                copilotAuth.checkAuthenticationStatus()
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Provider Selection Step")
@@ -286,7 +294,7 @@ public struct ProviderSelectionStepView: View {
             } else {
                 // Sign in prompt
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Access OpenAI models via your GitHub Copilot subscription.")
+                    Text("Access frontier AI models via your GitHub Copilot subscription.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     

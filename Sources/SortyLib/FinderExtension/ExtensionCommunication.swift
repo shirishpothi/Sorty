@@ -8,10 +8,24 @@
 
 import Foundation
 import AppKit
+import Darwin
 
 public struct ExtensionCommunication {
     private static let appGroupIdentifier = "group.com.sorty.app"
     private static let directoryKey = "selectedDirectory"
+    private static let organizeQuickActionWorkflowName = "Organize with Sorty.workflow"
+    private static let scanQuickActionWorkflowName = "Scan with Sorty.workflow"
+    private static let previewQuickActionWorkflowName = "Preview with Sorty.workflow"
+    private static let organizeQuickActionBundleIdentifier = "com.sorty.workflow.organize"
+    private static let scanQuickActionBundleIdentifier = "com.sorty.workflow.scan"
+    private static let previewQuickActionBundleIdentifier = "com.sorty.workflow.preview"
+    private static let servicesDirectoryPathDefaultsKey = "finderQuickActionServicesDirectoryPath"
+    private static let pbsDomain = "pbs"
+    private static let sortyServiceStatusKeys = [
+        "com.sorty.workflow.organize - Organize with Sorty - runWorkflowAsService",
+        "com.sorty.workflow.scan - Scan with Sorty - runWorkflowAsService",
+        "com.sorty.workflow.preview - Preview with Sorty - runWorkflowAsService"
+    ]
     public static let notificationName = Notification.Name("SortyDirectorySelected")
     
     // MARK: - URL Scheme Handling
@@ -115,14 +129,205 @@ public struct ExtensionCommunication {
     }
     
     // MARK: - Quick Action Installation
+
+    private static func currentUserHomeDirectoryURL() -> URL {
+        if let pwd = getpwuid(getuid()), let home = pwd.pointee.pw_dir {
+            return URL(fileURLWithPath: String(cString: home), isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    private static func defaultServicesDirectoryURL() -> URL {
+        currentUserHomeDirectoryURL().appendingPathComponent("Library/Services", isDirectory: true)
+    }
+
+    private static func savedServicesDirectoryURL() -> URL? {
+        guard let path = UserDefaults.standard.string(forKey: servicesDirectoryPathDefaultsKey),
+              !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path, isDirectory: true)
+    }
+
+    private static func candidateServicesDirectories() -> [URL] {
+        var directories: [URL] = []
+        if let saved = savedServicesDirectoryURL() {
+            directories.append(saved)
+        }
+        directories.append(defaultServicesDirectoryURL())
+
+        var unique: [URL] = []
+        for directory in directories where !unique.contains(where: { $0.path == directory.path }) {
+            unique.append(directory)
+        }
+        return unique
+    }
+
+    private static func canWriteWorkflow(in servicesDirectory: URL) -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: servicesDirectory, withIntermediateDirectories: true)
+            let probeURL = servicesDirectory.appendingPathComponent(".sorty-write-check")
+            try Data("ok".utf8).write(to: probeURL)
+            try? FileManager.default.removeItem(at: probeURL)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func promptForServicesDirectoryAccess(suggestedDirectory: URL) -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = "Allow Access to Finder Quick Actions Folder"
+        panel.message = "Select your ~/Library/Services folder so Sorty can install the Finder Quick Action."
+        panel.prompt = "Allow Access"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.directoryURL = suggestedDirectory
+
+        guard panel.runModal() == .OK, let selectedDirectory = panel.url else {
+            return nil
+        }
+        return selectedDirectory
+    }
+
+    private static func resolveServicesDirectoryForInstall() -> URL? {
+        for directory in candidateServicesDirectories() {
+            if canWriteWorkflow(in: directory) {
+                UserDefaults.standard.set(directory.path, forKey: servicesDirectoryPathDefaultsKey)
+                return directory
+            }
+        }
+
+        // In sandboxed/signed builds this path may require user-granted access.
+        if let selectedDirectory = promptForServicesDirectoryAccess(suggestedDirectory: defaultServicesDirectoryURL()),
+           canWriteWorkflow(in: selectedDirectory) {
+            UserDefaults.standard.set(selectedDirectory.path, forKey: servicesDirectoryPathDefaultsKey)
+            return selectedDirectory
+        }
+
+        return nil
+    }
+
+    private static func workflowHasFinderContext(infoPlist: [String: Any]) -> Bool {
+        guard let services = infoPlist["NSServices"] as? [[String: Any]], let firstService = services.first,
+              let requiredContext = firstService["NSRequiredContext"] as? [String: Any],
+              let appIdentifier = requiredContext["NSApplicationIdentifier"] as? String else {
+            return false
+        }
+        return appIdentifier == "com.apple.finder"
+    }
+
+    private static func isWorkflowInstalledAndCompatible(workflowName: String, bundleIdentifier: String) -> Bool {
+        for servicesDir in candidateServicesDirectories() {
+            let workflowPath = servicesDir.appendingPathComponent(workflowName)
+            guard FileManager.default.fileExists(atPath: workflowPath.path) else { continue }
+
+            let infoPath = workflowPath.appendingPathComponent("Contents/Info.plist")
+            guard let info = NSDictionary(contentsOf: infoPath) as? [String: Any],
+                  let currentBundleIdentifier = info["CFBundleIdentifier"] as? String,
+                  currentBundleIdentifier == bundleIdentifier,
+                  workflowHasFinderContext(infoPlist: info) else {
+                continue
+            }
+
+            return true
+        }
+        return false
+    }
+
+    private static func forceEnableSortyServiceEntries() {
+        var pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
+        var serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
+
+        for statusKey in sortyServiceStatusKeys {
+            var currentStatus = serviceStatus[statusKey] as? [String: Any] ?? [:]
+            currentStatus["enabled_context_menu"] = 1
+            currentStatus["enabled_services_menu"] = 1
+
+            var presentationModes = currentStatus["presentation_modes"] as? [String: Any] ?? [:]
+            presentationModes["ContextMenu"] = 1
+            presentationModes["ServicesMenu"] = 1
+            presentationModes["FinderPreview"] = 1
+            presentationModes["TouchBar"] = 0
+            currentStatus["presentation_modes"] = presentationModes
+
+            serviceStatus[statusKey] = currentStatus
+        }
+
+        pbsDomainValues["NSServicesStatus"] = serviceStatus
+        UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
+        UserDefaults.standard.synchronize()
+    }
+
+    private static func isEnabledValue(_ value: Any?) -> Bool {
+        if let intValue = value as? Int {
+            return intValue == 1
+        }
+        if let boolValue = value as? Bool {
+            return boolValue
+        }
+        if let numberValue = value as? NSNumber {
+            return numberValue.intValue == 1
+        }
+        return false
+    }
+
+    private static func areSortyServiceEntriesEnabled() -> Bool {
+        let pbsDomainValues = UserDefaults.standard.persistentDomain(forName: pbsDomain) ?? [:]
+        let serviceStatus = pbsDomainValues["NSServicesStatus"] as? [String: Any] ?? [:]
+
+        for statusKey in sortyServiceStatusKeys {
+            guard let currentStatus = serviceStatus[statusKey] as? [String: Any] else {
+                return false
+            }
+            guard isEnabledValue(currentStatus["enabled_context_menu"]),
+                  isEnabledValue(currentStatus["enabled_services_menu"]) else {
+                return false
+            }
+
+            let presentationModes = currentStatus["presentation_modes"] as? [String: Any] ?? [:]
+            guard isEnabledValue(presentationModes["ContextMenu"]),
+                  isEnabledValue(presentationModes["ServicesMenu"]),
+                  isEnabledValue(presentationModes["FinderPreview"]) else {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private static func refreshDynamicServicesRegistry() {
+        forceEnableSortyServiceEntries()
+        NSUpdateDynamicServices()
+
+        // A plain NSUpdateDynamicServices call is sometimes not enough for Finder
+        // to immediately refresh the Quick Actions registry.
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/System/Library/CoreServices/pbs")
+        process.arguments = ["-flush"]
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            // Best-effort refresh only.
+        }
+
+        forceEnableSortyServiceEntries()
+    }
     
     /// Install the Quick Action workflow to ~/Library/Services
     public static func installQuickAction() -> (success: Bool, message: String) {
-        let workflowName = "Organize with Sorty.workflow"
-        
+        let workflowName = organizeQuickActionWorkflowName
+        guard let servicesDir = resolveServicesDirectoryForInstall() else {
+            return (
+                false,
+                "Could not access ~/Library/Services. Open Finder Integration settings, click Install again, and allow folder access when prompted."
+            )
+        }
+
         // Create the workflow directory structure
-        let servicesDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services")
         let workflowDir = servicesDir.appendingPathComponent(workflowName)
         let contentsDir = workflowDir.appendingPathComponent("Contents")
         
@@ -136,6 +341,12 @@ public struct ExtensionCommunication {
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
             <dict>
+                <key>CFBundleIdentifier</key>
+                <string>\(organizeQuickActionBundleIdentifier)</string>
+                <key>CFBundleName</key>
+                <string>Organize with Sorty</string>
+                <key>CFBundlePackageType</key>
+                <string>BNDL</string>
                 <key>NSServices</key>
                 <array>
                     <dict>
@@ -146,6 +357,11 @@ public struct ExtensionCommunication {
                         </dict>
                         <key>NSMessage</key>
                         <string>runWorkflowAsService</string>
+                        <key>NSRequiredContext</key>
+                        <dict>
+                            <key>NSApplicationIdentifier</key>
+                            <string>com.apple.finder</string>
+                        </dict>
                         <key>NSSendFileTypes</key>
                         <array>
                             <string>public.folder</string>
@@ -204,7 +420,7 @@ public struct ExtensionCommunication {
                             <key>AMParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded"; done</string>
+                                <string>for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open -g "sorty://organize?path=$encoded&amp;autostart=true&amp;source=finder"; done</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -232,7 +448,7 @@ public struct ExtensionCommunication {
                             <key>ActionParameters</key>
                             <dict>
                                 <key>COMMAND_STRING</key>
-                                <string>for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded"; done</string>
+                                <string>for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open -g "sorty://organize?path=$encoded&amp;autostart=true&amp;source=finder"; done</string>
                                 <key>CheckedForUserDefaultShell</key>
                                 <true/>
                                 <key>inputMethod</key>
@@ -370,30 +586,54 @@ public struct ExtensionCommunication {
             try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
             
             // Refresh services
-            NSUpdateDynamicServices()
+            refreshDynamicServicesRegistry()
             
-            return (true, "Quick Action installed! Right-click any folder in Finder to use 'Organize with Sorty'.")
+            return (true, "Quick Action installed. If it is not visible yet, enable it in System Settings > Extensions > Finder.")
             
         } catch {
             return (false, "Installation failed: \(error.localizedDescription)")
         }
     }
+
+    /// Install the main organize Quick Action if it is not present yet.
+    /// Returns whether the Quick Action is installed after this call.
+    public static func ensureQuickActionInstalled() -> (installed: Bool, message: String) {
+        if isWorkflowInstalledAndCompatible(
+            workflowName: organizeQuickActionWorkflowName,
+            bundleIdentifier: organizeQuickActionBundleIdentifier
+        ) {
+            if !areSortyServiceEntriesEnabled() {
+                refreshDynamicServicesRegistry()
+                return (true, "Quick Action repaired and Finder services refreshed.")
+            }
+
+            return (true, "Quick Action already installed.")
+        }
+
+        // Don't auto-install (which prompts for folder access).
+        // The user can install manually from Finder Integration settings.
+        return (false, "Quick Action not installed. Install it from Settings > Finder Integration.")
+    }
     
     /// Check if Quick Action is installed
     public static func isQuickActionInstalled() -> Bool {
-        let workflowPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services/Organize with Sorty.workflow")
-        return FileManager.default.fileExists(atPath: workflowPath.path)
+        return isWorkflowInstalledAndCompatible(
+            workflowName: organizeQuickActionWorkflowName,
+            bundleIdentifier: organizeQuickActionBundleIdentifier
+        )
     }
     
     // MARK: - Quick Scan Action Installation
     
     /// Install a "Scan with Sorty" Quick Action workflow to ~/Library/Services
     public static func installQuickScanAction() -> (success: Bool, message: String) {
-        let workflowName = "Scan with Sorty.workflow"
-        
-        let servicesDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services")
+        let workflowName = scanQuickActionWorkflowName
+        guard let servicesDir = resolveServicesDirectoryForInstall() else {
+            return (
+                false,
+                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
+            )
+        }
         let workflowDir = servicesDir.appendingPathComponent(workflowName)
         let contentsDir = workflowDir.appendingPathComponent("Contents")
         
@@ -405,6 +645,12 @@ public struct ExtensionCommunication {
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
             <dict>
+                <key>CFBundleIdentifier</key>
+                <string>\(scanQuickActionBundleIdentifier)</string>
+                <key>CFBundleName</key>
+                <string>Scan with Sorty</string>
+                <key>CFBundlePackageType</key>
+                <string>BNDL</string>
                 <key>NSServices</key>
                 <array>
                     <dict>
@@ -415,6 +661,11 @@ public struct ExtensionCommunication {
                         </dict>
                         <key>NSMessage</key>
                         <string>runWorkflowAsService</string>
+                        <key>NSRequiredContext</key>
+                        <dict>
+                            <key>NSApplicationIdentifier</key>
+                            <string>com.apple.finder</string>
+                        </dict>
                         <key>NSSendFileTypes</key>
                         <array>
                             <string>public.folder</string>
@@ -641,7 +892,7 @@ public struct ExtensionCommunication {
             """
             try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
             
-            NSUpdateDynamicServices()
+            refreshDynamicServicesRegistry()
             
             return (true, "Quick Scan Action installed! Right-click any folder in Finder to use 'Scan with Sorty'.")
             
@@ -652,47 +903,69 @@ public struct ExtensionCommunication {
     
     /// Check if Quick Scan Action is installed
     public static func isQuickScanActionInstalled() -> Bool {
-        let workflowPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services/Scan with Sorty.workflow")
-        return FileManager.default.fileExists(atPath: workflowPath.path)
+        return isWorkflowInstalledAndCompatible(
+            workflowName: scanQuickActionWorkflowName,
+            bundleIdentifier: scanQuickActionBundleIdentifier
+        )
     }
     
     /// Uninstall the Quick Scan Action
     public static func uninstallQuickScanAction() -> Bool {
-        let workflowPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services/Scan with Sorty.workflow")
-        
-        do {
-            try FileManager.default.removeItem(at: workflowPath)
-            NSUpdateDynamicServices()
-            return true
-        } catch {
-            return false
+        var removed = false
+
+        for servicesDir in candidateServicesDirectories() {
+            let workflowPath = servicesDir.appendingPathComponent(scanQuickActionWorkflowName)
+            if FileManager.default.fileExists(atPath: workflowPath.path) {
+                do {
+                    try FileManager.default.removeItem(at: workflowPath)
+                    removed = true
+                } catch {
+                    // Continue trying other candidate directories.
+                }
+            }
         }
+
+        if removed {
+            refreshDynamicServicesRegistry()
+        }
+
+        return removed
     }
     
     /// Uninstall the Quick Action
     public static func uninstallQuickAction() -> Bool {
-        let workflowPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services/Organize with Sorty.workflow")
+        var removed = false
 
-        do {
-            try FileManager.default.removeItem(at: workflowPath)
-            NSUpdateDynamicServices()
-            return true
-        } catch {
-            return false
+        for servicesDir in candidateServicesDirectories() {
+            let workflowPath = servicesDir.appendingPathComponent(organizeQuickActionWorkflowName)
+            if FileManager.default.fileExists(atPath: workflowPath.path) {
+                do {
+                    try FileManager.default.removeItem(at: workflowPath)
+                    removed = true
+                } catch {
+                    // Continue trying other candidate directories.
+                }
+            }
         }
+
+        if removed {
+            refreshDynamicServicesRegistry()
+        }
+
+        return removed
     }
 
     // MARK: - Quick Preview Action Installation
 
     /// Install a "Preview with Sorty" Quick Action workflow to ~/Library/Services
     public static func installQuickPreviewAction() -> (success: Bool, message: String) {
-        let workflowName = "Preview with Sorty.workflow"
-
-        let servicesDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services")
+        let workflowName = previewQuickActionWorkflowName
+        guard let servicesDir = resolveServicesDirectoryForInstall() else {
+            return (
+                false,
+                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
+            )
+        }
         let workflowDir = servicesDir.appendingPathComponent(workflowName)
         let contentsDir = workflowDir.appendingPathComponent("Contents")
 
@@ -704,6 +977,12 @@ public struct ExtensionCommunication {
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
             <plist version="1.0">
             <dict>
+                <key>CFBundleIdentifier</key>
+                <string>\(previewQuickActionBundleIdentifier)</string>
+                <key>CFBundleName</key>
+                <string>Preview with Sorty</string>
+                <key>CFBundlePackageType</key>
+                <string>BNDL</string>
                 <key>NSServices</key>
                 <array>
                     <dict>
@@ -714,6 +993,11 @@ public struct ExtensionCommunication {
                         </dict>
                         <key>NSMessage</key>
                         <string>runWorkflowAsService</string>
+                        <key>NSRequiredContext</key>
+                        <dict>
+                            <key>NSApplicationIdentifier</key>
+                            <string>com.apple.finder</string>
+                        </dict>
                         <key>NSSendFileTypes</key>
                         <array>
                             <string>public.folder</string>
@@ -940,7 +1224,7 @@ public struct ExtensionCommunication {
             """
             try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
 
-            NSUpdateDynamicServices()
+            refreshDynamicServicesRegistry()
 
             return (true, "Preview Action installed! Right-click any folder in Finder to use 'Preview with Sorty'.")
 
@@ -951,51 +1235,60 @@ public struct ExtensionCommunication {
 
     /// Check if Quick Preview Action is installed
     public static func isQuickPreviewActionInstalled() -> Bool {
-        let workflowPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services/Preview with Sorty.workflow")
-        return FileManager.default.fileExists(atPath: workflowPath.path)
+        return isWorkflowInstalledAndCompatible(
+            workflowName: previewQuickActionWorkflowName,
+            bundleIdentifier: previewQuickActionBundleIdentifier
+        )
     }
 
     /// Uninstall the Quick Preview Action
     public static func uninstallQuickPreviewAction() -> Bool {
-        let workflowPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services/Preview with Sorty.workflow")
+        var removed = false
 
-        do {
-            try FileManager.default.removeItem(at: workflowPath)
-            NSUpdateDynamicServices()
-            return true
-        } catch {
-            return false
+        for servicesDir in candidateServicesDirectories() {
+            let workflowPath = servicesDir.appendingPathComponent(previewQuickActionWorkflowName)
+            if FileManager.default.fileExists(atPath: workflowPath.path) {
+                do {
+                    try FileManager.default.removeItem(at: workflowPath)
+                    removed = true
+                } catch {
+                    // Continue trying other candidate directories.
+                }
+            }
         }
+
+        if removed {
+            refreshDynamicServicesRegistry()
+        }
+
+        return removed
     }
 
     /// Uninstall all Quick Action workflows
     public static func uninstallAllQuickActions() -> (success: Bool, removed: Int) {
         let workflows = [
-            "Organize with Sorty.workflow",
-            "Scan with Sorty.workflow",
-            "Preview with Sorty.workflow"
+            organizeQuickActionWorkflowName,
+            scanQuickActionWorkflowName,
+            previewQuickActionWorkflowName
         ]
 
         var removedCount = 0
-        let servicesDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Services")
-
-        for workflow in workflows {
-            let workflowPath = servicesDir.appendingPathComponent(workflow)
-            if FileManager.default.fileExists(atPath: workflowPath.path) {
-                do {
-                    try FileManager.default.removeItem(at: workflowPath)
-                    removedCount += 1
-                } catch {
-                    // Continue trying other workflows
+        for servicesDir in candidateServicesDirectories() {
+            for workflow in workflows {
+                let workflowPath = servicesDir.appendingPathComponent(workflow)
+                if FileManager.default.fileExists(atPath: workflowPath.path) {
+                    do {
+                        try FileManager.default.removeItem(at: workflowPath)
+                        removedCount += 1
+                    } catch {
+                        // Continue trying other workflows.
+                    }
                 }
             }
         }
 
         if removedCount > 0 {
-            NSUpdateDynamicServices()
+            refreshDynamicServicesRegistry()
         }
 
         return (removedCount > 0, removedCount)
@@ -1010,7 +1303,7 @@ public struct ExtensionCommunication {
             repeat with theItem in input
                 set thePath to POSIX path of theItem
                 set encodedPath to do shell script "/usr/bin/python3 -c \\"import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))\\" " & quoted form of thePath & " 2>/dev/null || printf '%s' " & quoted form of thePath & " | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\\\$/%24/g; s/&/%26/g; s/(/%28/g; s/)/%29/g'"
-                do shell script "open 'sorty://organize?path=" & encodedPath & "'"
+                do shell script "open -g 'sorty://organize?path=" & encodedPath & "&autostart=true&source=finder'"
             end repeat
             return input
         end run
@@ -1019,9 +1312,16 @@ public struct ExtensionCommunication {
     
     /// Open Finder Extension preferences
     public static func openFinderExtensionSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preferences.extensions?Extensions")
-        if let url = url {
-            NSWorkspace.shared.open(url)
+        let candidateURLs = [
+            "x-apple.systempreferences:com.apple.preferences.extensions?Finder",
+            "x-apple.systempreferences:com.apple.preferences.extensions?Extensions",
+            "x-apple.systempreferences:com.apple.ExtensionsPreferences"
+        ]
+
+        for rawURL in candidateURLs {
+            if let url = URL(string: rawURL), NSWorkspace.shared.open(url) {
+                return
+            }
         }
     }
     

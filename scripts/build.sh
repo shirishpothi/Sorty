@@ -123,6 +123,51 @@ bundle_cli_tools() {
     fi
 }
 
+# Build and embed the SortyFinderSync Finder extension (.appex)
+bundle_finder_extension() {
+    local app_path="$1"
+    local build_config="$2"
+
+    local plugins_dir="${app_path}/Contents/PlugIns"
+    local appex_name="SortyFinderSync.appex"
+    local xcode_config="Release"
+    if [ "$build_config" = "debug" ]; then
+        xcode_config="Debug"
+    fi
+
+    log_item "Building SortyFinderSync extension..."
+
+    local derived_data="${BUILD_DIR}/FinderSyncDerivedData"
+
+    if xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
+        -target "SortyFinderSync" \
+        -configuration "${xcode_config}" \
+        SYMROOT="${derived_data}/Build/Products" \
+        OBJROOT="${derived_data}/Build/Intermediates" \
+        CODE_SIGN_IDENTITY="-" \
+        CODE_SIGNING_ALLOWED=NO \
+        CODE_SIGNING_REQUIRED=NO \
+        ENABLE_APP_SANDBOX=NO \
+        ONLY_ACTIVE_ARCH=NO \
+        build 2>&1 | tail -5; then
+
+        local built_appex
+        built_appex=$(find "${derived_data}/Build/Products" -name "${appex_name}" -type d | head -1)
+
+        if [ -n "${built_appex}" ] && [ -d "${built_appex}" ]; then
+            mkdir -p "${plugins_dir}"
+            rm -rf "${plugins_dir}/${appex_name}"
+            cp -R "${built_appex}" "${plugins_dir}/${appex_name}"
+            codesign --force --sign - "${plugins_dir}/${appex_name}" 2>/dev/null || true
+            log_item "Embedded SortyFinderSync.appex in PlugIns"
+        else
+            log_item "Warning: SortyFinderSync.appex not found after build"
+        fi
+    else
+        log_item "Warning: SortyFinderSync extension build failed (non-fatal)"
+    fi
+}
+
 print_header "${PROJECT_NAME} Build" 50
 
 VERSION=$(get_version)
@@ -268,6 +313,9 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         CLI_BUILD_ARCH="${BUILD_ARCH_ARRAY[0]}"
     fi
     bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "" "${CLI_BUILD_ARCH}"
+
+    # Embed Finder Sync extension
+    bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
 
     log_success "xcodebuild succeeded ($(get_step_duration "build"))"
 
@@ -432,6 +480,9 @@ else
 
     bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "${BUILD_FLAGS_EXTRA}" ""
 
+    # Embed Finder Sync extension
+    bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
+
     log_success "App bundle assembled ($(get_step_duration "assemble"))"
 fi
 
@@ -440,6 +491,18 @@ print_step 4 $TOTAL_STEPS "Ad-hoc Signing"
 start_step_timer "sign"
 
 ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
+FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
+
+# Sign the Finder Sync extension first (inner-to-outer signing order)
+if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
+    if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
+        codesign --force --sign - --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
+    else
+        codesign --force --sign - "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
+    fi
+    log_item "Signed SortyFinderSync.appex"
+fi
+
 if [ -f "${ENTITLEMENTS_FILE}" ]; then
     codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}" 2>/dev/null || true
 else

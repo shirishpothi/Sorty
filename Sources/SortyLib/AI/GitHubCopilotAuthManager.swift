@@ -99,21 +99,68 @@ class GitHubCopilotAuthManager: ObservableObject {
     private let session = URLSession.shared
     private var pollTask: Task<Void, Never>?
     private var refreshTask: Task<String, Error>?
+    private let defaults = UserDefaults.standard
+    private let persistedAuthStateKey = "github_copilot_persisted_auth_state"
+    private let persistedUsernameKey = "github_copilot_persisted_username"
     
     init() {
+        restorePersistedState()
         checkAuthenticationStatus()
+    }
+
+    private func restorePersistedState() {
+        guard defaults.bool(forKey: persistedAuthStateKey) else { return }
+        isAuthenticated = true
+        username = defaults.string(forKey: persistedUsernameKey)
+    }
+
+    private func persistAuthState(authenticated: Bool, username: String? = nil) {
+        defaults.set(authenticated, forKey: persistedAuthStateKey)
+        if let username {
+            defaults.set(username, forKey: persistedUsernameKey)
+        } else {
+            defaults.removeObject(forKey: persistedUsernameKey)
+        }
     }
     
     func checkAuthenticationStatus() {
-        if let _ = KeychainManager.get(key: "github_access_token") {
+        let hadPersistedSignedInState = defaults.bool(forKey: persistedAuthStateKey)
+
+        let hasAccessToken = {
+            guard let token = KeychainManager.get(key: "github_access_token") else { return false }
+            return !token.isEmpty
+        }()
+        let hasValidCachedCopilotToken = Self.hasValidCachedCopilotToken(
+            cachedToken: KeychainManager.get(key: "github_copilot_token"),
+            expiry: UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date
+        )
+
+        self.isAuthenticated = hasAccessToken || hasValidCachedCopilotToken
+
+        if self.isAuthenticated {
+            self.username = self.username ?? defaults.string(forKey: persistedUsernameKey)
+            persistAuthState(authenticated: true, username: self.username)
+        } else if hadPersistedSignedInState {
+            // Preserve signed-in state across relaunches when keychain access is temporarily unavailable.
+            // Explicit sign-out and confirmed 401/403 auth failures still clear this state.
             self.isAuthenticated = true
+            self.username = self.username ?? defaults.string(forKey: persistedUsernameKey)
+        } else {
+            self.isAuthenticated = false
+            self.username = nil
+        }
+
+        if hasAccessToken {
             // Optionally fetch user profile to confirm validity and get username
             Task {
                 await fetchUserProfile()
             }
-        } else {
-            self.isAuthenticated = false
         }
+    }
+
+    static func hasValidCachedCopilotToken(cachedToken: String?, expiry: Date?, now: Date = Date()) -> Bool {
+        guard let token = cachedToken, !token.isEmpty, let expiry else { return false }
+        return expiry > now.addingTimeInterval(300)
     }
     
     func startDeviceFlow() async throws {
@@ -157,6 +204,7 @@ class GitHubCopilotAuthManager: ObservableObject {
                     // Success!
                     _ = KeychainManager.save(key: "github_access_token", value: token)
                     self.isAuthenticated = true
+                    self.persistAuthState(authenticated: true, username: self.username)
                     self.isPolling = false
                     self.deviceCodeResponse = nil
                     await fetchUserProfile()
@@ -231,7 +279,8 @@ class GitHubCopilotAuthManager: ObservableObject {
             
             if let httpResponse = response as? HTTPURLResponse {
                 if httpResponse.statusCode == 401 {
-                    LogManager.shared.log("User profile fetch returned 401 - token potentially invalid", level: .warning, category: "AuthManager")
+                    LogManager.shared.log("User profile fetch returned 401 - token invalid, signing out", level: .warning, category: "AuthManager")
+                    signOut()
                     return
                 }
             }
@@ -239,6 +288,9 @@ class GitHubCopilotAuthManager: ObservableObject {
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let login = json["login"] as? String {
                 self.username = login
+                persistAuthState(authenticated: true, username: login)
+            } else if isAuthenticated {
+                persistAuthState(authenticated: true, username: username)
             }
         } catch {
             LogManager.shared.log("Error fetching user profile: \(error)", level: .error, category: "AuthManager")
@@ -248,8 +300,10 @@ class GitHubCopilotAuthManager: ObservableObject {
     func signOut() {
         _ = KeychainManager.delete(key: "github_access_token")
         _ = KeychainManager.delete(key: "github_copilot_token") // Also clear the cached copilot token
+        UserDefaults.standard.removeObject(forKey: "github_copilot_token_expiry")
         self.isAuthenticated = false
         self.username = nil
+        persistAuthState(authenticated: false)
         self.pollTask?.cancel()
         self.isPolling = false
         self.deviceCodeResponse = nil
@@ -263,9 +317,14 @@ class GitHubCopilotAuthManager: ObservableObject {
         }
 
         // Return cached token if valid
-        if let cached = KeychainManager.get(key: "github_copilot_token"),
-           let expiry = UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date,
-           expiry > Date().addingTimeInterval(300) { // Buffer reduced to 5 mins (300s) for base validity
+        let cachedToken = KeychainManager.get(key: "github_copilot_token")
+        let cachedExpiry = UserDefaults.standard.object(forKey: "github_copilot_token_expiry") as? Date
+        if Self.hasValidCachedCopilotToken(
+            cachedToken: cachedToken,
+            expiry: cachedExpiry
+        ),
+           let cached = cachedToken,
+           let expiry = cachedExpiry {
             
             // Proactive refresh: if token expires in less than 20 mins, refresh in background if not already refreshing
             if expiry < Date().addingTimeInterval(1200) {
@@ -323,7 +382,10 @@ class GitHubCopilotAuthManager: ObservableObject {
                             LogManager.shared.log("Transient 401 detected, GitHub returned 200 for profile. Skipping signOut.", level: .warning, category: "AuthManager")
                         }
                     } else if httpResponse.statusCode == 403 {
-                        LogManager.shared.log("Access denied (403). User might not have an active Copilot subscription.", level: .error, category: "AuthManager")
+                        LogManager.shared.log("Access denied (403). User does not have an active Copilot subscription, signing out.", level: .error, category: "AuthManager")
+                        await MainActor.run {
+                            signOut()
+                        }
                     }
                      throw GitHubAuthError.accessDenied
                 }

@@ -152,26 +152,20 @@ public struct WorkspaceHealthView: View {
     
     private func healthScoreBadge(snapshot: DirectorySnapshot) -> some View {
         let score = healthManager.healthScore(for: snapshot.directoryPath)
-        let color = scoreColor(score)
         let healthDescription = scoreDescription(score)
         
         return VStack(spacing: 16) {
             ZStack {
-                Circle()
-                    .stroke(color.opacity(0.2), lineWidth: 8)
-                    .frame(width: 80, height: 80)
-                    .accessibilityHidden(true)
-                
-                Circle()
-                    .trim(from: 0, to: CGFloat(score) / 100)
-                    .stroke(color, style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                    .frame(width: 80, height: 80)
-                    .rotationEffect(.degrees(-90))
+                SortyGradientCircularProgress(
+                    progress: Double(score) / 100.0,
+                    size: 80,
+                    lineWidth: 8
+                )
                     .accessibilityHidden(true)
                 
                 Text("\(score)")
                     .font(.title.bold())
-                    .foregroundColor(color)
+                    .foregroundStyle(Color.accentColor)
                     .accessibilityHidden(true)
             }
             .accessibilityElement(children: .ignore)
@@ -256,7 +250,7 @@ public struct WorkspaceHealthView: View {
         VStack(alignment: .leading, spacing: 8) {
             if isAnalyzing {
                 HStack(spacing: 10) {
-                    ProgressView()
+                    SortyGradientLoadingBar(width: 96, height: 8)
                     Text(analysisStage ?? "Analyzing workspace…")
                         .font(.callout)
                         .foregroundStyle(.primary)
@@ -661,14 +655,6 @@ public struct WorkspaceHealthView: View {
         healthManager.markAnalysisComplete(path: dir.path, files: files)
     }
     
-    private func scoreColor(_ score: Int) -> Color {
-        switch score {
-        case 80...100: return .green
-        case 60..<80: return .yellow
-        case 40..<60: return .orange
-        default: return .red
-        }
-    }
 }
 
 // MARK: - Supporting Views

@@ -85,8 +85,11 @@ public struct ConflictResolutionSheet: View {
 
             Spacer()
 
-            ProgressView(value: Double(resolvedCount), total: Double(max(totalConflicts, 1)))
-                .frame(width: 80)
+            SortyGradientProgressBar(
+                progress: Double(resolvedCount) / Double(max(totalConflicts, 1)),
+                height: 8
+            )
+            .frame(width: 90)
         }
     }
 

@@ -8,7 +8,15 @@
 import Foundation
 import SwiftUI
 
+private struct MinimumHitTargetModifier: ViewModifier {
+    let size: CGFloat
 
+    func body(content: Content) -> some View {
+        content
+            .frame(minWidth: size, minHeight: size)
+            .contentShape(Rectangle())
+    }
+}
 
 extension KeyEquivalent {
     static let cancelAction = KeyEquivalent("\u{1b}") // Escape
@@ -44,5 +52,11 @@ extension Date {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
         return formatter.string(from: self)
+    }
+}
+
+extension View {
+    func minimumHitTarget(_ size: CGFloat = 40) -> some View {
+        modifier(MinimumHitTargetModifier(size: size))
     }
 }

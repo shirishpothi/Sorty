@@ -23,9 +23,15 @@ public extension NSNotification.Name {
     
     /// Posted when user clicks "Show Details" on a notification
     static let showOrganizationDetails = NSNotification.Name("SortyShowOrganizationDetails")
+
+    /// Posted when user clicks "Review/Preview" on a notification
+    static let showOrganizationPreview = NSNotification.Name("SortyShowOrganizationPreview")
     
     /// Posted when user clicks "Open Folder" on a notification
     static let openOrganizedFolder = NSNotification.Name("SortyOpenOrganizedFolder")
+
+    /// Posted when user wants to redo the last organization using a different model
+    static let redoOrganizationWithModel = NSNotification.Name("SortyRedoOrganizationWithModel")
 }
 
 /// Detailed statistics for batch organization summary
@@ -87,6 +93,7 @@ public enum NotificationAction: Sendable {
     case openFolder(path: String)
     case showDetails
     case retry
+    case redoWithModel
     case dismiss
 }
 
@@ -107,6 +114,7 @@ private enum NativeNotificationActionIdentifier {
     static let retry = "SORTY_RETRY"
     static let showDetails = "SORTY_SHOW_DETAILS"
     static let review = "SORTY_REVIEW"
+    static let redoModel = "SORTY_REDO_MODEL"
 }
 
 private enum NativeNotificationUserInfoKey {
@@ -209,6 +217,38 @@ public struct HUDNotification: Identifiable, Equatable {
     }
 }
 
+public struct NotificationAnalyticsEvent: Identifiable, Sendable {
+    public enum EventType: String, Sendable {
+        case shown
+        case suppressed
+        case action
+        case failed
+    }
+
+    public let id: UUID
+    public let timestamp: Date
+    public let eventType: EventType
+    public let backend: NotificationBackend
+    public let notificationType: String
+    public let detail: String
+
+    public init(
+        id: UUID = UUID(),
+        timestamp: Date = Date(),
+        eventType: EventType,
+        backend: NotificationBackend,
+        notificationType: String,
+        detail: String
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.eventType = eventType
+        self.backend = backend
+        self.notificationType = notificationType
+        self.detail = detail
+    }
+}
+
 /// Manages all app notifications (HUD overlays and system notifications)
 @MainActor
 public class NotificationManager: ObservableObject {
@@ -219,6 +259,7 @@ public class NotificationManager: ObservableObject {
     @Published public var notificationPermissionStatus: UNAuthorizationStatus = .notDetermined
     @Published public var isNotifiCLIAvailable: Bool = false
     @Published public var notifiCLISetupStatus: String = "Initializing..."
+    @Published public private(set) var analyticsEvents: [NotificationAnalyticsEvent] = []
     
     private var settings: NotificationSettingsManager { NotificationSettingsManager.shared }
     private var dismissTask: Task<Void, Never>?
@@ -346,11 +387,13 @@ public class NotificationManager: ObservableObject {
              .batchSummary(_, let isAutomated):
             if isAutomated && !settingsValue.notifyOnAutoOrganize {
                 print("NotificationManager: Automated organization notification suppressed by settings")
+                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "automated notifications disabled")
                 return
             }
         case .processingError(_, _, _, let isAutomated):
             if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
                 print("NotificationManager: Automated organization error suppressed by settings")
+                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "automated notifications disabled")
                 return
             }
         default:
@@ -362,11 +405,13 @@ public class NotificationManager: ObservableObject {
         case .processingComplete:
             guard settingsValue.processingComplete else {
                 print("NotificationManager: processingComplete notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "processing complete disabled")
                 return
             }
         case .previewReady:
             guard settingsValue.previewReady else {
                 print("NotificationManager: previewReady notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "preview ready disabled")
                 return
             }
         case .processingError(_, let isCritical, _, _):
@@ -374,11 +419,13 @@ public class NotificationManager: ObservableObject {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
                 print("NotificationManager: processingErrors notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "processing errors disabled")
                 return
             }
         case .batchSummary:
             guard settingsValue.batchSummary else {
                 print("NotificationManager: batchSummary notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "batch summary disabled")
                 return
             }
         case .info:
@@ -415,8 +462,10 @@ public class NotificationManager: ObservableObject {
                     playSound: settingsValue.systemNotificationSounds
                 )
             }
+            trackAnalytics(.shown, type: type, backend: settingsValue.notificationBackend, detail: "system notification sent")
         } else {
             print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem), critical=\(isCriticalError))")
+            trackAnalytics(.shown, type: type, backend: settingsValue.notificationBackend, detail: "hud only")
         }
     }
     
@@ -450,6 +499,7 @@ public class NotificationManager: ObservableObject {
                     actionHandler: actionHandler
                 )
             }
+            trackAnalytics(.shown, type: type, backend: settingsValue.notificationBackend, detail: "system notification sent with actions")
         }
     }
     
@@ -537,8 +587,51 @@ public class NotificationManager: ObservableObject {
         }
         processQueue()
     }
+
+    public func clearAnalytics() {
+        analyticsEvents = []
+    }
+
+    public func sendInFlowPreviewSample() {
+        show(.previewReady(folderName: "Current Batch"))
+    }
     
     // MARK: - Private Methods
+
+    private func analyticsTypeLabel(for type: NotificationType) -> String {
+        switch type {
+        case .processingComplete:
+            return "processingComplete"
+        case .previewReady:
+            return "previewReady"
+        case .processingError:
+            return "processingError"
+        case .batchSummary:
+            return "batchSummary"
+        case .info:
+            return "info"
+        }
+    }
+
+    private func trackAnalytics(
+        _ eventType: NotificationAnalyticsEvent.EventType,
+        type: NotificationType,
+        backend: NotificationBackend,
+        detail: String
+    ) {
+        analyticsEvents.insert(
+            NotificationAnalyticsEvent(
+                eventType: eventType,
+                backend: backend,
+                notificationType: analyticsTypeLabel(for: type),
+                detail: detail
+            ),
+            at: 0
+        )
+        if analyticsEvents.count > 200 {
+            analyticsEvents = Array(analyticsEvents.prefix(200))
+        }
+    }
     
     private func notificationContent(for type: NotificationType) -> (title: String, message: String, icon: String, iconColor: Color) {
         switch type {
@@ -769,6 +862,7 @@ public class NotificationManager: ObservableObject {
                 if let _ = path {
                     actions.append("Open Folder")
                 }
+                actions.append("Redo with Model")
                 actions.append("Dismiss")
                 
             case .processingError(_, _, let retry, _):
@@ -788,6 +882,7 @@ public class NotificationManager: ObservableObject {
                 if let _ = stats.folderPath {
                     actions.append("Open Folder")
                 }
+                actions.append("Redo with Model")
                 if stats.hasErrors {
                     actions.append("Show Details")
                 }
@@ -799,6 +894,7 @@ public class NotificationManager: ObservableObject {
                 
             case .previewReady:
                 actions.append("Review")
+                actions.append("Redo with Model")
                 actions.append("Dismiss")
             }
         }
@@ -815,8 +911,9 @@ public class NotificationManager: ObservableObject {
         
         // Send notification and handle response
         let response = await NotifiCLIService.shared.send(config)
-        
+
         print("NotificationManager: NotifiCLI response: \(response)")
+        trackAnalytics(.shown, type: type, backend: .notifiCLI, detail: "sent via NotifiCLI")
         
         // Handle the response
         await handleNotifiCLIResponse(
@@ -844,6 +941,7 @@ public class NotificationManager: ObservableObject {
                     await actionHandler?(.undo)
                     // Post notification for undo action
                     NotificationCenter.default.post(name: .undoLastOrganization, object: nil)
+                    trackAnalytics(.action, type: .info(title: "action", message: "undo"), backend: .notifiCLI, detail: actionLabel)
                 }
                 
             case "Open Folder":
@@ -858,19 +956,33 @@ public class NotificationManager: ObservableObject {
                     // Open folder in Finder
                     let url = URL(fileURLWithPath: path)
                     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+                    trackAnalytics(.action, type: .info(title: "action", message: "openFolder"), backend: .notifiCLI, detail: actionLabel)
                 }
                 
             case "Show Details":
                 await actionHandler?(.showDetails)
                 // Post notification to show details
                 NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+                trackAnalytics(.action, type: .info(title: "action", message: "showDetails"), backend: .notifiCLI, detail: actionLabel)
+
+            case "Review":
+                await actionHandler?(.showDetails)
+                // Post notification to show preview workflow
+                NotificationCenter.default.post(name: .showOrganizationPreview, object: nil)
+                trackAnalytics(.action, type: .info(title: "action", message: "review"), backend: .notifiCLI, detail: actionLabel)
                 
             case "Retry":
                 if canRetry {
                     await actionHandler?(.retry)
                     // Post notification for retry
                     NotificationCenter.default.post(name: .retryLastOrganization, object: nil)
+                    trackAnalytics(.action, type: .info(title: "action", message: "retry"), backend: .notifiCLI, detail: actionLabel)
                 }
+
+            case "Redo with Model":
+                await actionHandler?(.redoWithModel)
+                NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil)
+                trackAnalytics(.action, type: .info(title: "action", message: "redoWithModel"), backend: .notifiCLI, detail: actionLabel)
                 
             case "Dismiss":
                 await actionHandler?(.dismiss)
@@ -897,6 +1009,7 @@ public class NotificationManager: ObservableObject {
             
         case .error(let error):
             print("NotificationManager: NotifiCLI error: \(error)")
+            trackAnalytics(.failed, type: .info(title: "notificli", message: "error"), backend: .notifiCLI, detail: error)
             // Fall back to native notification
             await showNativeNotification(title: "Notification Error", message: error, playSound: false)
         }
@@ -937,6 +1050,7 @@ public class NotificationManager: ObservableObject {
         
         guard status == .authorized else {
             print("NotificationManager: System notifications not authorized (status: \(status.rawValue)), trying NotifiCLI fallback")
+            trackAnalytics(.failed, type: type, backend: .native, detail: "authorization denied")
             if await NotifiCLIService.shared.checkAvailability() {
                 let config = NotifiCLIConfig(title: title, message: message)
                 _ = await NotifiCLIService.shared.send(config)
@@ -980,6 +1094,7 @@ public class NotificationManager: ObservableObject {
             print("NotificationManager: Native system notification sent successfully")
         } catch {
             print("NotificationManager: Failed to send system notification: \(error), trying NotifiCLI fallback")
+            trackAnalytics(.failed, type: type, backend: .native, detail: error.localizedDescription)
             if await NotifiCLIService.shared.checkAvailability() {
                 let config = NotifiCLIConfig(title: title, message: message)
                 _ = await NotifiCLIService.shared.send(config)
@@ -1055,10 +1170,15 @@ public class NotificationManager: ObservableObject {
             title: "Review",
             options: [.foreground]
         )
+        let redoModelAction = UNNotificationAction(
+            identifier: NativeNotificationActionIdentifier.redoModel,
+            title: "Redo Model",
+            options: [.foreground]
+        )
 
         let processingComplete = UNNotificationCategory(
             identifier: NativeNotificationCategory.processingComplete,
-            actions: [undoAction, openFolderAction],
+            actions: [undoAction, openFolderAction, redoModelAction],
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
@@ -1070,13 +1190,13 @@ public class NotificationManager: ObservableObject {
         )
         let batchSummary = UNNotificationCategory(
             identifier: NativeNotificationCategory.batchSummary,
-            actions: [undoAllAction, openFolderAction, showDetailsAction],
+            actions: [undoAllAction, openFolderAction, redoModelAction, showDetailsAction],
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
         let previewReady = UNNotificationCategory(
             identifier: NativeNotificationCategory.previewReady,
-            actions: [reviewAction],
+            actions: [reviewAction, redoModelAction],
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
@@ -1092,6 +1212,7 @@ public class NotificationManager: ObservableObject {
     func handleNativeNotificationResponse(_ response: UNNotificationResponse) {
         let identifier = response.notification.request.identifier
         let userInfo = response.notification.request.content.userInfo
+        let categoryIdentifier = response.notification.request.content.categoryIdentifier
         let folderPath = userInfo[NativeNotificationUserInfoKey.folderPath] as? String
         let actionHandler = pendingNativeActionHandlers.removeValue(forKey: identifier)
 
@@ -1105,17 +1226,25 @@ public class NotificationManager: ObservableObject {
                 )
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
                 Task { await actionHandler?(.openFolder(path: path)) }
+                trackAnalytics(.action, type: .info(title: "action", message: "defaultOpen"), backend: .native, detail: "default click")
+            } else if categoryIdentifier == NativeNotificationCategory.previewReady {
+                NotificationCenter.default.post(name: .showOrganizationPreview, object: nil)
+                Task { await actionHandler?(.showDetails) }
+                trackAnalytics(.action, type: .info(title: "action", message: "defaultPreview"), backend: .native, detail: "default click")
             } else {
                 NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
                 Task { await actionHandler?(.showDetails) }
+                trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: .native, detail: "default click")
             }
 
         case UNNotificationDismissActionIdentifier:
             Task { await actionHandler?(.dismiss) }
+            trackAnalytics(.action, type: .info(title: "action", message: "dismiss"), backend: .native, detail: "dismiss")
 
         case NativeNotificationActionIdentifier.undo, NativeNotificationActionIdentifier.undoAll:
             NotificationCenter.default.post(name: .undoLastOrganization, object: nil)
             Task { await actionHandler?(.undo) }
+            trackAnalytics(.action, type: .info(title: "action", message: "undo"), backend: .native, detail: response.actionIdentifier)
 
         case NativeNotificationActionIdentifier.openFolder:
             if let path = folderPath {
@@ -1126,16 +1255,28 @@ public class NotificationManager: ObservableObject {
                 )
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
                 Task { await actionHandler?(.openFolder(path: path)) }
+                trackAnalytics(.action, type: .info(title: "action", message: "openFolder"), backend: .native, detail: response.actionIdentifier)
             }
 
         case NativeNotificationActionIdentifier.retry:
             NotificationCenter.default.post(name: .retryLastOrganization, object: nil)
             Task { await actionHandler?(.retry) }
+            trackAnalytics(.action, type: .info(title: "action", message: "retry"), backend: .native, detail: response.actionIdentifier)
+
+        case NativeNotificationActionIdentifier.redoModel:
+            NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil)
+            Task { await actionHandler?(.redoWithModel) }
+            trackAnalytics(.action, type: .info(title: "action", message: "redoWithModel"), backend: .native, detail: response.actionIdentifier)
 
         case NativeNotificationActionIdentifier.showDetails,
              NativeNotificationActionIdentifier.review:
-            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+            if response.actionIdentifier == NativeNotificationActionIdentifier.review {
+                NotificationCenter.default.post(name: .showOrganizationPreview, object: nil)
+            } else {
+                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+            }
             Task { await actionHandler?(.showDetails) }
+            trackAnalytics(.action, type: .info(title: "action", message: "showDetails"), backend: .native, detail: response.actionIdentifier)
 
         default:
             break

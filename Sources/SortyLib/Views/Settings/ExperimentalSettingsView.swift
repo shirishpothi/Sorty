@@ -1,0 +1,177 @@
+//
+//  ExperimentalSettingsView.swift
+//  Sorty
+//
+//  Experimental features section showing disabled feature flags with enablement guidance
+//
+
+import SwiftUI
+
+struct ExperimentalSettingsView: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("These features are available but disabled by default. You can enable them directly here or with Terminal commands.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            ForEach(experimentalFlags) { flag in
+                ExperimentalFlagRow(flag: flag)
+            }
+        }
+    }
+
+    private var experimentalFlags: [ExperimentalFlag] {
+        [
+            ExperimentalFlag(
+                name: "Batch Organization",
+                description: "Organize multiple folders at once with concurrent processing and batch preview/apply.",
+                defaultsKey: "batchOrganizationEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app batchOrganizationEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app batchOrganizationEnabled -bool false"
+            ),
+            ExperimentalFlag(
+                name: "GitHub Update Checker",
+                description: "In-app update dialog using GitHub Releases. Sparkle handles updates by default.",
+                defaultsKey: "githubUpdateCheckerEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app githubUpdateCheckerEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app githubUpdateCheckerEnabled -bool false"
+            ),
+            ExperimentalFlag(
+                name: "Advanced Notification Controls",
+                description: "Shows technical notification controls including backend selection and test actions.",
+                defaultsKey: "advancedNotificationSettingsEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false"
+            ),
+        ]
+    }
+}
+
+struct ExperimentalFlag: Identifiable {
+    let id = UUID()
+    let name: String
+    let description: String
+    let defaultsKey: String
+    let defaultValue: Bool
+    let enableCommand: String
+    let disableCommand: String
+
+    func currentValue() -> Bool {
+        if UserDefaults.standard.object(forKey: defaultsKey) == nil {
+            return defaultValue
+        }
+        return UserDefaults.standard.bool(forKey: defaultsKey)
+    }
+}
+
+struct ExperimentalFlagRow: View {
+    let flag: ExperimentalFlag
+    @State private var copied = false
+    @State private var isEnabled: Bool
+    @State private var setupMessage: String?
+
+    init(flag: ExperimentalFlag) {
+        self.flag = flag
+        _isEnabled = State(initialValue: flag.currentValue())
+    }
+
+    var body: some View {
+        SettingsCard(title: flag.name, icon: isEnabled ? "checkmark.circle.fill" : "circle.dashed", color: isEnabled ? .green : .secondary) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(flag.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle(
+                    "Enable in Sorty",
+                    isOn: Binding(
+                        get: { isEnabled },
+                        set: { newValue in
+                            UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
+
+                            if flag.defaultsKey == "finderIntegrationEnabled" {
+                                if newValue {
+                                    let quickActionResult = ExtensionCommunication.ensureQuickActionInstalled()
+                                    setupMessage = quickActionResult.message
+                                } else {
+                                    setupMessage = nil
+                                }
+                            }
+
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                isEnabled = newValue
+                            }
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    )
+                )
+                .toggleStyle(.switch)
+
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(isEnabled ? Color.green : Color.orange)
+                        .frame(width: 8, height: 8)
+                    Text(isEnabled ? "Enabled" : "Disabled")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(isEnabled ? .green : .orange)
+                }
+
+                if let setupMessage, flag.defaultsKey == "finderIntegrationEnabled" {
+                    Text(setupMessage)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                let command = isEnabled ? flag.disableCommand : flag.enableCommand
+                HStack(spacing: 8) {
+                    Text(command)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .textSelection(.enabled)
+
+                    Spacer()
+
+                    Button {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(command, forType: .string)
+                        HapticFeedbackManager.shared.tap()
+                        withAnimation { copied = true }
+                        Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: 1_500_000_000)
+                            withAnimation { copied = false }
+                        }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.caption2)
+                            .foregroundStyle(copied ? .green : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy command")
+                }
+                .padding(8)
+                .background(Color.black.opacity(0.05))
+                .cornerRadius(6)
+
+                Text("Relaunch Sorty to ensure all views pick up this change.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .onAppear {
+            isEnabled = flag.currentValue()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ExperimentalFlag-\(flag.name)")
+    }
+}
+
+#Preview {
+    ExperimentalSettingsView()
+        .frame(width: 500, height: 600)
+}

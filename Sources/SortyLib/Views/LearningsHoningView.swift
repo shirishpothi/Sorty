@@ -46,8 +46,7 @@ struct LearningsHoningView: View {
     
     private var loadingView: some View {
         VStack(spacing: 24) {
-            ProgressView()
-                .controlSize(.large)
+            SortyGradientLoadingBar(width: 180, height: 10)
             
             VStack(spacing: 8) {
                 Text("Analyzing your organization style...")
@@ -129,7 +128,10 @@ struct LearningsHoningView: View {
                 .fontWeight(.bold)
                 .padding(.top, 30)
             
-            ProgressView(value: Double(min(session.answers.count + 1, session.targetQuestionCount)), total: Double(session.targetQuestionCount))
+            SortyGradientProgressBar(
+                progress: Double(min(session.answers.count + 1, session.targetQuestionCount)) / Double(max(session.targetQuestionCount, 1)),
+                height: 10
+            )
                 .padding(.horizontal, 40)
             
             if let error = engine.error {

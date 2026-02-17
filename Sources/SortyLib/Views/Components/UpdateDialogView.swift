@@ -27,7 +27,7 @@ public struct UpdateDialogView: View {
             switch appState.updateManager.updateState {
             case .idle:
                 HStack {
-                    ProgressView().controlSize(.small)
+                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     Text("Preparing to check for updates...")
                         .foregroundColor(.secondary)
                 }
@@ -39,7 +39,7 @@ public struct UpdateDialogView: View {
                 
             case .checking:
                 HStack {
-                    ProgressView().controlSize(.small)
+                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     Text("Checking for updates...")
                         .foregroundColor(.secondary)
                 }
@@ -99,14 +99,14 @@ public struct UpdateDialogView: View {
                 
             case .downloading:
                 HStack {
-                    ProgressView().controlSize(.small)
+                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     Text("Downloading update...")
                         .foregroundColor(.secondary)
                 }
                 
             case .installing:
                 HStack {
-                    ProgressView().controlSize(.small)
+                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                     Text("Installing update...")
                         .foregroundColor(.secondary)
                 }

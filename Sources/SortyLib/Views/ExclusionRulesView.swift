@@ -211,8 +211,7 @@ struct ExclusionRulesView: View {
                         Task { await improveExceptionWithAI() }
                     } label: {
                         if isImprovingException {
-                            ProgressView()
-                                .scaleEffect(0.7)
+                            SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                         } else {
                             Image(systemName: "wand.and.stars")
                         }
