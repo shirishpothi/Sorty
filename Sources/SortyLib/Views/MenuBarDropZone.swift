@@ -21,14 +21,10 @@ public class MenuBarController: ObservableObject {
     @Published public var errorMessage: String?
     @Published public var showPopover: Bool = false
 
-    private var organizer: FolderOrganizer?
-    private var settingsViewModel: SettingsViewModel?
-
     public init() {}
 
-    public func configure(organizer: FolderOrganizer, settings: SettingsViewModel) {
-        self.organizer = organizer
-        self.settingsViewModel = settings
+    public func configure(settings: SettingsViewModel) {
+        _ = settings
     }
 
     public func handleDrop(providers: [NSItemProvider]) async -> Bool {
@@ -76,10 +72,6 @@ public class MenuBarController: ObservableObject {
     }
 
     private func getQuickSuggestion(for fileURL: URL) async throws -> QuickOrganizeSuggestion {
-        guard let organizer = organizer else {
-            throw MenuBarError.organizerNotConfigured
-        }
-
         // Create a FileItem for the dropped file
         let resourceValues = try fileURL.resourceValues(forKeys: [.fileSizeKey, .creationDateKey, .isDirectoryKey])
 
@@ -101,25 +93,7 @@ public class MenuBarController: ObservableObject {
             .map { $0.lastPathComponent }
             .filter { !$0.hasPrefix(".") }
 
-        // If we have an AI client configured, get a real suggestion
-        if organizer.aiClient != nil {
-            // For quick mode, we'll use a simplified approach
-            // Analyze just this one file with context
-            // For future AI integration, we can use the following prompt:
-            /*
-            Quick organize this single file. Existing folders: \(existingFolders.joined(separator: ", ")).
-            Choose the best existing folder OR suggest a new folder name.
-            Also suggest a better filename if the current name is not descriptive.
-            Return JSON: {"folder": "FolderName", "suggestedFilename": "optional_new_name.ext", "reason": "brief explanation"}
-            */
-
-
-            // For now, return a smart default based on file type
-            return suggestBasedOnFileType(fileItem, existingFolders: existingFolders, parentDirectory: parentDirectory)
-        } else {
-            // Fallback to basic suggestion
-            return suggestBasedOnFileType(fileItem, existingFolders: existingFolders, parentDirectory: parentDirectory)
-        }
+        return suggestBasedOnFileType(fileItem, existingFolders: existingFolders, parentDirectory: parentDirectory)
     }
 
     private func suggestBasedOnFileType(_ file: FileItem, existingFolders: [String], parentDirectory: URL) -> QuickOrganizeSuggestion {
@@ -292,15 +266,12 @@ public struct QuickOrganizeSuggestion: Sendable {
 
 enum MenuBarError: LocalizedError {
     case invalidDrop
-    case organizerNotConfigured
     case aiUnavailable
 
     var errorDescription: String? {
         switch self {
         case .invalidDrop:
             return "Invalid file dropped"
-        case .organizerNotConfigured:
-            return "Organizer not configured"
         case .aiUnavailable:
             return "AI service unavailable"
         }
@@ -603,7 +574,6 @@ struct FileIconView: View {
 
 public struct MenuBarExtraScene: Scene {
     @StateObject private var controller = MenuBarController()
-    @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
 
     public init() {}
@@ -612,7 +582,7 @@ public struct MenuBarExtraScene: Scene {
         MenuBarExtra {
             MenuBarDropZoneView(controller: controller)
                 .onAppear {
-                    controller.configure(organizer: organizer, settings: settingsViewModel)
+                    controller.configure(settings: settingsViewModel)
                 }
         } label: {
             MenuBarLabel()

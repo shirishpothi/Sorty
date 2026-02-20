@@ -10,7 +10,7 @@ import SwiftUI
 import AppKit
 
 public struct FinderIntegrationView: View {
-    @State private var integrationStatus = ExtensionCommunication.getIntegrationStatus()
+    @State private var integrationStatus = ExtensionCommunication.FinderIntegrationStatus.empty
     @State private var isInstalling = false
     @State private var installationResults: [(name: String, success: Bool, message: String)] = []
     @State private var showingInstructions = false
@@ -78,8 +78,8 @@ public struct FinderIntegrationView: View {
                 .padding(24)
             }
             .frame(minWidth: 600, minHeight: 500)
-            .onAppear {
-                refreshStatus()
+            .task {
+                await refreshStatus()
                 automationManager.requestAutomationPermissionCheck()
                 refreshFinderContext()
             }
@@ -108,7 +108,11 @@ public struct FinderIntegrationView: View {
                 
                 Spacer()
                 
-                Button(action: refreshStatus) {
+                Button(action: {
+                    Task {
+                        await refreshStatus()
+                    }
+                }) {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
@@ -128,7 +132,7 @@ public struct FinderIntegrationView: View {
             
             StatusCard(
                 title: "Active Integrations",
-                value: "\(integrationStatus.integrationCount)/5",
+                value: "\(integrationStatus.integrationCount)/\(ExtensionCommunication.FinderIntegrationStatus.totalIntegrations)",
                 icon: "square.grid.2x2.fill",
                 color: .blue
             )
@@ -140,14 +144,12 @@ public struct FinderIntegrationView: View {
             integrationStatus: integrationStatus,
             isInstalling: isInstalling,
             showingInstructions: $showingInstructions,
+            repairFinderSyncExtension: repairFinderSyncExtension,
             installToolbarButton: installToolbarButton,
             revealToolbarApp: revealToolbarApp,
-            installQuickAction: installQuickAction,
-            installQuickScanAction: installQuickScanAction,
-            installQuickPreviewAction: installQuickPreviewAction,
+            installQuickWatchAction: installQuickWatchAction,
             uninstallAllQuickActions: uninstallAllQuickActions,
             showQuickPanel: showQuickPanel,
-            toggleFinderSync: toggleFinderSync,
             installAll: installAll
         )
     }
@@ -450,8 +452,8 @@ public struct FinderIntegrationView: View {
     
     // MARK: - Actions
     
-    private func refreshStatus() {
-        integrationStatus = ExtensionCommunication.getIntegrationStatus()
+    private func refreshStatus() async {
+        integrationStatus = await ExtensionCommunication.getIntegrationStatusAsync()
     }
 
     private func refreshFinderContext() {
@@ -476,7 +478,6 @@ public struct FinderIntegrationView: View {
         components.host = "organize"
         components.queryItems = [
             URLQueryItem(name: "path", value: target.path),
-            URLQueryItem(name: "autostart", value: "true"),
             URLQueryItem(name: "source", value: "finder")
         ]
         if let url = components.url {
@@ -485,71 +486,81 @@ public struct FinderIntegrationView: View {
     }
     
     private func installToolbarButton() {
-        let result = FinderToolbarHelper.createToolbarApp()
-        installationResults = [("Toolbar Button", result.success, result.message)]
-        if result.success {
-            FinderToolbarHelper.revealToolbarApp()
+        isInstalling = true
+
+        Task {
+            let result = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    continuation.resume(returning: FinderToolbarHelper.createToolbarApp())
+                }
+            }
+
+            installationResults = [("Toolbar Button", result.success, result.message)]
+            if result.success {
+                FinderToolbarHelper.revealToolbarApp()
+            }
+            await refreshStatus()
+            isInstalling = false
         }
-        refreshStatus()
+    }
+
+    private func repairFinderSyncExtension() {
+        isInstalling = true
+
+        Task {
+            let result = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
+            installationResults = [("Finder Sync Extension", result.success, result.message)]
+            await refreshStatus()
+            isInstalling = false
+        }
     }
     
     private func revealToolbarApp() {
         FinderToolbarHelper.revealToolbarApp()
     }
     
-    private func installQuickAction() {
-        let result = ExtensionCommunication.installQuickAction()
-        installationResults = [("Quick Action", result.success, result.message)]
-        refreshStatus()
-    }
-    
-    private func installQuickScanAction() {
-        let result = ExtensionCommunication.installQuickScanAction()
-        installationResults = [("Quick Scan Action", result.success, result.message)]
-        refreshStatus()
-    }
+    private func installQuickWatchAction() {
+        isInstalling = true
 
-    private func installQuickPreviewAction() {
-        let result = ExtensionCommunication.installQuickPreviewAction()
-        installationResults = [("Quick Preview Action", result.success, result.message)]
-        refreshStatus()
+        Task {
+            let result = await ExtensionCommunication.installQuickWatchActionAsync()
+            installationResults = [("Quick Watch Action", result.success, result.message)]
+            await refreshStatus()
+            isInstalling = false
+        }
     }
 
     private func uninstallAllQuickActions() {
-        let result = ExtensionCommunication.uninstallAllQuickActions()
-        if result.success {
-            installationResults = [("Uninstall All", true, "Removed \(result.removed) Quick Action workflow(s).")]
-        } else {
-            installationResults = [("Uninstall All", false, "No Quick Action workflows found to remove.")]
+        isInstalling = true
+
+        Task {
+            let result = await ExtensionCommunication.uninstallAllQuickActionsAsync()
+            if result.success {
+                installationResults = [("Uninstall All", true, "Removed \(result.removed) Quick Action workflow(s).")]
+            } else {
+                installationResults = [("Uninstall All", false, "No Quick Action workflows found to remove.")]
+            }
+            await refreshStatus()
+            isInstalling = false
         }
-        refreshStatus()
     }
     
     private func showQuickPanel() {
         QuickOrganizePanelController.shared.showPanel()
     }
     
-    private func toggleFinderSync() {
-        let current = UserDefaults.standard.bool(forKey: "enableFinderSyncExtension")
-        UserDefaults.standard.set(!current, forKey: "enableFinderSyncExtension")
-        refreshStatus()
-    }
-    
     private func installAll() {
         isInstalling = true
         
         Task {
-            let results = ExtensionCommunication.installAllIntegrations()
-            
-            await MainActor.run {
-                self.installationResults = results
-                self.isInstalling = false
-                self.refreshStatus()
-                
-                // Show the toolbar app in Finder
-                if results.contains(where: { $0.name == "Toolbar Button" && $0.success }) {
-                    FinderToolbarHelper.revealToolbarApp()
-                }
+            let results = await ExtensionCommunication.installAllIntegrationsAsync()
+            installationResults = results
+            isInstalling = false
+            await refreshStatus()
+
+            // Show the toolbar app in Finder
+            if results.contains(where: { $0.name == "Toolbar Button" && $0.success }) {
+                FinderToolbarHelper.revealToolbarApp()
             }
         }
     }
@@ -638,20 +649,31 @@ private struct IntegrationOptionsView: View {
     let integrationStatus: ExtensionCommunication.FinderIntegrationStatus
     let isInstalling: Bool
     @Binding var showingInstructions: Bool
+    let repairFinderSyncExtension: () -> Void
     let installToolbarButton: () -> Void
     let revealToolbarApp: () -> Void
-    let installQuickAction: () -> Void
-    let installQuickScanAction: () -> Void
-    let installQuickPreviewAction: () -> Void
+    let installQuickWatchAction: () -> Void
     let uninstallAllQuickActions: () -> Void
     let showQuickPanel: () -> Void
-    let toggleFinderSync: () -> Void
     let installAll: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Integration Options")
                 .font(.headline)
+
+            IntegrationRow(
+                title: "Finder Sync Extension",
+                subtitle: "Native .appex context menu integration (repairable in-app)",
+                icon: "puzzlepiece.extension",
+                isInstalled: integrationStatus.finderSyncEnabled,
+                action: repairFinderSyncExtension,
+                secondaryAction: {
+                    ExtensionCommunication.openFinderExtensionSettings()
+                },
+                secondaryLabel: "Open Extensions",
+                actionLabel: integrationStatus.finderSyncEnabled ? "Repair" : "Activate"
+            )
 
             IntegrationRow(
                 title: "Finder Toolbar Button",
@@ -673,48 +695,22 @@ private struct IntegrationOptionsView: View {
                     Spacer()
                 }
 
-                IntegrationRow(
-                    title: "Organize with Sorty",
-                    subtitle: "Right-click context menu that starts organization immediately",
-                    icon: "contextualmenu.and.cursorarrow",
-                    isInstalled: integrationStatus.quickActionInstalled,
-                    action: installQuickAction,
-                    secondaryAction: nil,
-                    secondaryLabel: nil
-                )
+                Text("'Organize with Sorty' is intentionally available only in Finder's main context menu via Finder Sync.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 IntegrationRow(
-                    title: "Scan with Sorty",
-                    subtitle: "Workspace health scan from context menu",
-                    icon: "magnifyingglass.circle",
-                    isInstalled: integrationStatus.quickScanActionInstalled,
-                    action: installQuickScanAction,
-                    secondaryAction: nil,
-                    secondaryLabel: nil
-                )
-
-                IntegrationRow(
-                    title: "Preview with Sorty",
-                    subtitle: "Preview organization from context menu",
+                    title: "Watch with Sorty",
+                    subtitle: "Add a folder to watched folders from Finder context menu",
                     icon: "eye.circle",
-                    isInstalled: integrationStatus.quickPreviewActionInstalled,
-                    action: installQuickPreviewAction,
+                    isInstalled: integrationStatus.quickWatchActionInstalled,
+                    action: installQuickWatchAction,
                     secondaryAction: nil,
                     secondaryLabel: nil
                 )
 
                 HStack(spacing: 8) {
                     Spacer()
-                    Button(action: {
-                        installQuickAction()
-                        installQuickScanAction()
-                        installQuickPreviewAction()
-                    }) {
-                        Label("Install All", systemImage: "square.and.arrow.down")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-
                     Button(action: uninstallAllQuickActions) {
                         Label("Uninstall All", systemImage: "trash")
                     }
@@ -737,19 +733,6 @@ private struct IntegrationOptionsView: View {
                 secondaryLabel: nil,
                 actionLabel: "Open Panel"
             )
-
-            if UserDefaults.standard.bool(forKey: "showExperimentalFeatures") {
-                IntegrationRow(
-                    title: "Finder Sync Extension",
-                    subtitle: "Icon overlays and sidebar icons",
-                    icon: "externaldrive.fill.badge.checkmark",
-                    isInstalled: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension"),
-                    action: toggleFinderSync,
-                    secondaryAction: nil,
-                    secondaryLabel: nil,
-                    actionLabel: UserDefaults.standard.bool(forKey: "enableFinderSyncExtension") ? "Disable" : "Enable"
-                )
-            }
 
             dragAndDropSection
 

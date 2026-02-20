@@ -184,7 +184,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return [
                 SettingsFeatureSnippet(title: "Quick Action", summary: "Run Sorty directly from Finder context menus."),
                 SettingsFeatureSnippet(title: "URL Scheme", summary: "Use sorty:// deep links for Finder and scripts."),
-                SettingsFeatureSnippet(title: "Finder Sync Extension", summary: "Enable extension status and integration checks."),
                 SettingsFeatureSnippet(title: "Advanced Controls", summary: "Access permission and troubleshooting controls for Finder integration.")
             ]
         case .notifications:

@@ -410,6 +410,44 @@ class PreviewStore: ObservableObject {
             rebuildFlattenedRows()
         }
     }
+
+    func revealFileAndResolveRowID(_ fileID: UUID) -> String? {
+        var didExpandAnyFolder = false
+
+        if let folderPath = folderPathForFile(fileID: fileID) {
+            for folderID in folderPath {
+                let folderRowID = folderID.uuidString
+                if !expandedFolders.contains(folderRowID) {
+                    expandedFolders.insert(folderRowID)
+                    didExpandAnyFolder = true
+                }
+            }
+        }
+
+        if didExpandAnyFolder {
+            rebuildFlattenedRows()
+        }
+
+        return flattenedRows.first { row in
+            switch row.type {
+            case .file(let file, _):
+                return file.id == fileID
+            case .unorganizedFile(let file):
+                return file.id == fileID
+            case .folder, .unorganizedHeader:
+                return false
+            }
+        }?.id
+    }
+
+    func folderSuggestion(for folderID: UUID) -> FolderSuggestion? {
+        for suggestion in plan.suggestions {
+            if let matched = folderSuggestion(for: folderID, in: suggestion) {
+                return matched
+            }
+        }
+        return nil
+    }
     
     func moveFileToUnorganized(fileID: UUID) {
         guard let file = findFile(by: fileID) else { return }
@@ -588,6 +626,42 @@ class PreviewStore: ObservableObject {
         }
         return nil
     }
+
+    private func folderPathForFile(fileID: UUID) -> [UUID]? {
+        for suggestion in plan.suggestions {
+            if let path = folderPathForFile(fileID: fileID, in: suggestion, ancestors: []) {
+                return path
+            }
+        }
+        return nil
+    }
+
+    private func folderPathForFile(fileID: UUID, in folder: FolderSuggestion, ancestors: [UUID]) -> [UUID]? {
+        let nextAncestors = ancestors + [folder.id]
+        if folder.files.contains(where: { $0.id == fileID }) {
+            return nextAncestors
+        }
+
+        for subfolder in folder.subfolders {
+            if let found = folderPathForFile(fileID: fileID, in: subfolder, ancestors: nextAncestors) {
+                return found
+            }
+        }
+
+        return nil
+    }
+
+    private func folderSuggestion(for folderID: UUID, in folder: FolderSuggestion) -> FolderSuggestion? {
+        if folder.id == folderID {
+            return folder
+        }
+        for subfolder in folder.subfolders {
+            if let matched = folderSuggestion(for: folderID, in: subfolder) {
+                return matched
+            }
+        }
+        return nil
+    }
     
     private func removeFileFromFolder(_ file: FileItem, from folder: FolderSuggestion) -> FolderSuggestion {
         var updatedFolder = folder
@@ -623,19 +697,28 @@ struct OptimizedPreviewTree: View {
     let onPlanChanged: () -> Void
     
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(store.flattenedRows, id: \.id) { row in
-                    FlattenedRowView(
-                        row: row,
-                        store: store,
-                        dragDropManager: dragDropManager,
-                        onPlanChanged: onPlanChanged
-                    )
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(store.flattenedRows, id: \.id) { row in
+                        FlattenedRowView(
+                            row: row,
+                            store: store,
+                            dragDropManager: dragDropManager,
+                            onPlanChanged: onPlanChanged
+                        )
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+            .onChange(of: store.highlightedFileID) { _, highlightedFileID in
+                guard let highlightedFileID else { return }
+                guard let rowID = store.revealFileAndResolveRowID(highlightedFileID) else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    scrollProxy.scrollTo(rowID, anchor: .center)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
         }
     }
 
@@ -809,6 +892,7 @@ struct FlatFileRowView: View {
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var learningsManager: LearningsManager
     
     @State private var isDragging = false
     @State private var isEditingName = false
@@ -831,6 +915,10 @@ struct FlatFileRowView: View {
 
     private var duplicateInfo: DuplicateInfo? {
         store.duplicateMappings[file.id]
+    }
+
+    private var parentSuggestion: FolderSuggestion? {
+        store.folderSuggestion(for: parentFolderID)
     }
     
     private var isHighlighted: Bool {
@@ -875,6 +963,14 @@ struct FlatFileRowView: View {
 
                 if let comment = fileComment, !comment.isEmpty {
                     CommentBubbleButton(comment: comment)
+                }
+
+                if let parentSuggestion {
+                    LiquidGlassLearningsButton(
+                        file: file,
+                        suggestion: parentSuggestion,
+                        learningsManager: learningsManager
+                    )
                 }
 
                 if let dupInfo = duplicateInfo {

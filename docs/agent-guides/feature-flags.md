@@ -22,3 +22,14 @@ defaults write com.sorty.app <key> -bool false
 | Batch Organization | `batchOrganizationEnabled` | `false` | Multi-folder batch organization in the sidebar |
 | Advanced Notification Controls | `advancedNotificationSettingsEnabled` | `false` | Technical notification controls in Settings |
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
+
+## Finder Integration Repair
+
+After the Finder Integration flag is enabled, Quick Action and Finder Sync repair should be done from the app UI:
+
+1. Open Settings -> Finder Integration
+2. Use `Install`/`Reinstall` for Quick Action
+3. Use `Repair Finder Sync` (or `Activate Extension`) for the `.appex`
+4. Use `Open Extensions` to confirm Sorty is enabled in macOS Extensions settings
+
+Do not require users to run external terminal commands for normal Quick Action/Finder Sync repair.

@@ -62,7 +62,7 @@ let package = Package(
         ),
         .testTarget(
             name: "SortyTests",
-            dependencies: ["SortyLib"],
+            dependencies: ["SortyLib", "SortyApp"],
             path: "Tests/SortyTests",
             swiftSettings: [
                 // Tests: Fast build with debug info

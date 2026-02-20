@@ -269,4 +269,125 @@ class ResponseParserTests: XCTestCase {
         XCTAssertTrue(suggestion.files.contains(where: { $0.name == "CHANGELOG" }))
         XCTAssertTrue(suggestion.files.contains(where: { $0.name == "docker-setup" }))
     }
+
+    func testCompactFileIDAssignmentsParsing() throws {
+        let json = """
+        {
+          "folder_assignments": [
+            {
+              "name": "Documents",
+              "file_ids": [1, 3]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/notes.txt", name: "notes", extension: "txt", size: 100, isDirectory: false),
+            FileItem(path: "/path/image.png", name: "image", extension: "png", size: 200, isDirectory: false),
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 300, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        let suggestion = plan.suggestions[0]
+        XCTAssertEqual(suggestion.folderName, "Documents")
+        XCTAssertEqual(suggestion.files.count, 2)
+        XCTAssertTrue(suggestion.files.contains(where: { $0.displayName == "notes.txt" }))
+        XCTAssertTrue(suggestion.files.contains(where: { $0.displayName == "report.pdf" }))
+    }
+
+    func testCompactAndLegacyFileMappingTogether() throws {
+        let json = """
+        {
+          "folder_assignments": [
+            {
+              "name": "Mixed",
+              "file_ids": [1],
+              "files": ["photo.jpg"]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/todo.md", name: "todo", extension: "md", size: 50, isDirectory: false),
+            FileItem(path: "/path/photo.jpg", name: "photo", extension: "jpg", size: 150, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].files.count, 2)
+    }
+
+    func testUnassignedFilesFallBackToUnorganized() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Docs",
+              "files": ["missing-file.pdf"]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false),
+            FileItem(path: "/path/image.jpg", name: "image", extension: "jpg", size: 200, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].files.count, 0)
+        XCTAssertEqual(plan.unorganizedFiles.count, 2)
+        XCTAssertEqual(plan.totalFiles, 2)
+    }
+
+    func testPathBasedFilenameIsMatchedToOriginalFile() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Documents",
+              "files": ["Archive\\\\report.pdf"]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].files.count, 1)
+        XCTAssertEqual(plan.suggestions[0].files.first?.displayName, "report.pdf")
+        XCTAssertEqual(plan.unorganizedFiles.count, 0)
+    }
+
+    func testInvalidCompactFileIDsFallBackToUnorganized() throws {
+        let json = """
+        {
+          "folder_assignments": [
+            {
+              "name": "Invalid",
+              "file_ids": [99]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/notes.txt", name: "notes", extension: "txt", size: 100, isDirectory: false),
+            FileItem(path: "/path/photo.jpg", name: "photo", extension: "jpg", size: 200, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].files.count, 0)
+        XCTAssertEqual(plan.unorganizedFiles.count, 2)
+        XCTAssertEqual(plan.totalFiles, 2)
+    }
 }

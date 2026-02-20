@@ -187,55 +187,166 @@ struct PromptBuilder {
         return text.count / 4
     }
 
-    /// Select compaction level based on file count and names
+    /// Select compaction level based on full prompt budget.
     enum CompactionLevel {
-        case standard    // Current compact prompt
-        case ultra       // Minimal system prompt, truncated names
-        case summary     // Extension counts only + few examples
+        case standard
+        case ultra
+        case summary
+        case micro
+    }
+
+    static func selectCompactionLevel(
+        files: [FileItem],
+        config: AIConfig,
+        customInstructions: String? = nil,
+        maxTokens: Int = 1200,
+        safetyMargin: Double = 0.65
+    ) -> CompactionLevel {
+        let effectiveBudget = max(200, Int(Double(maxTokens) * safetyMargin))
+
+        let levels: [CompactionLevel] = [.standard, .ultra, .summary, .micro]
+        for level in levels {
+            let prompts = promptPair(for: level, config: config, files: files)
+            let fullPrompt = mergePromptBudgetStrings(
+                system: prompts.system,
+                user: prompts.user,
+                customInstructions: customInstructions
+            )
+            if estimateTokens(fullPrompt) <= effectiveBudget {
+                return level
+            }
+        }
+
+        return .micro
     }
 
     static func selectCompactionLevel(files: [FileItem], maxTokens: Int = 1500) -> CompactionLevel {
         let samplePrompt = buildCompactPrompt(files: files)
         let estimated = estimateTokens(samplePrompt)
-        
-        if estimated < 500 { return .standard }
-        if estimated < maxTokens { return .ultra }
-        return .summary
+
+        if estimated < Int(Double(maxTokens) * 0.45) { return .standard }
+        if estimated < Int(Double(maxTokens) * 0.7) { return .ultra }
+        if estimated < maxTokens { return .summary }
+        return .micro
     }
 
-    static func buildUltraCompactPrompt(files: [FileItem]) -> (system: String, user: String) {
-        // ~60 char system prompt
-        let system = "Sort files into folders. JSON:{\"folders\":[{\"name\":\"\",\"files\":[\"\"]}]}"
-        
-        var user = ""
-        let maxFiles = 30
-        let maxNameLen = 20
-        
-        for file in files.prefix(maxFiles) {
-            let name = String(file.name.prefix(maxNameLen))
-            user += "\(name)\n"
+    private static func mergePromptBudgetStrings(system: String, user: String, customInstructions: String?) -> String {
+        var merged = system + "\n" + user
+        if let customInstructions, !customInstructions.isEmpty {
+            merged += "\nUSER INSTRUCTIONS:\n" + customInstructions
         }
-        if files.count > maxFiles {
-            user += "(+\(files.count - maxFiles) more)"
+        return merged
+    }
+
+    private static func compactFileLine(id: Int, file: FileItem, maxNameLength: Int) -> String {
+        let ext = file.extension.isEmpty ? "-" : file.extension.lowercased()
+        let displayName = file.displayName.isEmpty ? file.name : file.displayName
+        let clippedName = String(displayName.prefix(maxNameLength))
+        return "\(id)|\(ext)|\(clippedName)"
+    }
+
+    private static func compactFileIdTable(files: [FileItem], maxNameLength: Int) -> String {
+        var lines: [String] = []
+        lines.reserveCapacity(files.count)
+        for (index, file) in files.enumerated() {
+            lines.append(compactFileLine(id: index + 1, file: file, maxNameLength: maxNameLength))
         }
-        
+        return lines.joined(separator: "\n")
+    }
+
+    private static func compactFileSummary(files: [FileItem], maxExtensions: Int = 12) -> String {
+        let grouped = Dictionary(grouping: files) { $0.extension.lowercased() }
+        let summary = grouped
+            .sorted { $0.value.count > $1.value.count }
+            .prefix(maxExtensions)
+            .map { ext, entries in
+                "\(ext.isEmpty ? "misc" : ext):\(entries.count)"
+            }
+            .joined(separator: ", ")
+        return "Types: \(summary)"
+    }
+
+    private static func compactResponseContract(mode: OrganizationMode, enableReasoning: Bool) -> String {
+        let reasoning = enableReasoning ? ",\"reasoning\":\"\"" : ""
+        let filePayload: String
+        if mode == .renameOnly || mode == .organizeAndRename {
+            filePayload = "\"files\":[{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\"}]"
+        } else {
+            filePayload = "\"files\":[\"filename\"]"
+        }
+        return """
+        Return JSON. Preferred compact format:
+        {"folder_assignments":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")"file_ids":[1,2]}],"notes":""}
+        Legacy format is also accepted:
+        {"folders":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")\(filePayload),"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        """
+    }
+
+    private static func minimalCompactSystemPrompt(mode: OrganizationMode = .organize, enableReasoning: Bool = false) -> String {
+        var base = "You organize files into practical folders."
+        if mode == .renameOnly {
+            base += " Keep all files in '.' and only suggest better names."
+        }
+        base += " Use file_ids from the user list. Include every file exactly once unless unorganized."
+        if enableReasoning {
+            base += " Add concise reasoning for each folder."
+        }
+        return base
+    }
+
+    static func buildUltraCompactPrompt(
+        files: [FileItem],
+        mode: OrganizationMode = .organize,
+        enableReasoning: Bool = false
+    ) -> (system: String, user: String) {
+        let system = minimalCompactSystemPrompt(mode: mode, enableReasoning: enableReasoning)
+        let table = compactFileIdTable(files: files, maxNameLength: 24)
+        let user = """
+        \(compactFileSummary(files: files))
+        Files (id|ext|name):
+        \(table)
+
+        \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
+        """
         return (system, user)
     }
 
-    static func buildSummaryPrompt(files: [FileItem]) -> (system: String, user: String) {
-        let system = "Sort files. JSON:{\"folders\":[{\"name\":\"\",\"files\":[\"\"]}]}"
-        
-        let grouped = Dictionary(grouping: files) { $0.extension.lowercased() }
-        var user = "Types:\n"
-        
-        for (ext, list) in grouped.sorted(by: { $0.value.count > $1.value.count }).prefix(8) {
-            let extLabel = ext.isEmpty ? "other" : ext
-            user += "\(extLabel):\(list.count)"
-            // Show 2 examples max
-            let examples = list.prefix(2).map { String($0.name.prefix(15)) }.joined(separator: ",")
-            user += " (\(examples))\n"
+    static func buildSummaryPrompt(
+        files: [FileItem],
+        mode: OrganizationMode = .organize,
+        enableReasoning: Bool = false
+    ) -> (system: String, user: String) {
+        let system = minimalCompactSystemPrompt(mode: mode, enableReasoning: enableReasoning)
+        let table = compactFileIdTable(files: files, maxNameLength: 14)
+        let user = """
+        \(compactFileSummary(files: files, maxExtensions: 8))
+        IDs (id|ext|name):
+        \(table)
+
+        \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
+        """
+        return (system, user)
+    }
+
+    static func buildMicroPrompt(
+        files: [FileItem],
+        mode: OrganizationMode = .organize,
+        enableReasoning: Bool = false
+    ) -> (system: String, user: String) {
+        let system = minimalCompactSystemPrompt(mode: mode, enableReasoning: false)
+        var lines: [String] = []
+        lines.reserveCapacity(files.count)
+        for (index, file) in files.enumerated() {
+            let ext = file.extension.isEmpty ? "-" : file.extension.lowercased()
+            lines.append("\(index + 1)|\(ext)")
         }
-        
+        let user = """
+        \(compactFileSummary(files: files, maxExtensions: 6))
+        IDs (id|ext):
+        \(lines.joined(separator: "\n"))
+
+        \(compactResponseContract(mode: mode, enableReasoning: enableReasoning))
+        """
         return (system, user)
     }
     
@@ -247,46 +358,12 @@ struct PromptBuilder {
         } else {
             prompt = "Organize these files:\n\n"
         }
-        
-        // Group by extension
-        let grouped = Dictionary(grouping: files) { $0.extension.lowercased() }
-        
-        // Only include summary counts if too many files
-        if files.count > 100 {
-            prompt += "File summary (\(files.count) total):\n"
-            for (ext, fileList) in grouped.sorted(by: { $0.value.count > $1.value.count }).prefix(10) {
-                let extLabel = ext.isEmpty ? "misc" : ext
-                prompt += "- \(extLabel): \(fileList.count) files\n"
-                // Show first 5 examples
-                for file in fileList.prefix(5) {
-                    let name = file.name.prefix(30)
-                    prompt += "  • \(name)\n"
-                }
-            }
-        } else {
-            // Show all files but truncate names
-            for (ext, fileList) in grouped.sorted(by: { $0.key < $1.key }) {
-                let extLabel = ext.isEmpty ? "misc" : ext
-                prompt += "\(extLabel) (\(fileList.count)):\n"
-                for file in fileList.prefix(20) {
-                    let name = file.name.prefix(25)
-                    prompt += "  - \(name)\n"
-                }
-                if fileList.count > 20 {
-                    prompt += "  (+\(fileList.count - 20) more)\n"
-                }
-            }
-        }
-        
-        if mode == .renameOnly {
-            prompt += "\nReturn JSON with suggested names in '.' folder."
-        } else {
-            prompt += "\nReturn JSON with folder structure."
-        }
-        
-        if enableReasoning {
-            prompt += " Include reasoning for each folder."
-        }
+        prompt += "\(compactFileSummary(files: files, maxExtensions: 12))\n"
+        prompt += "Use file IDs for mapping. Every file is listed once.\n"
+        prompt += "Files (id|ext|name):\n"
+        prompt += compactFileIdTable(files: files, maxNameLength: 32)
+        prompt += "\n\n"
+        prompt += compactResponseContract(mode: mode, enableReasoning: enableReasoning)
         
         return prompt
     }
@@ -307,15 +384,40 @@ struct PromptBuilder {
         - HARD LIMIT: You MUST output ≤ \(maxTopLevelFolders) top-level folders. Merge categories if needed.
         - Never name a folder the same as an existing file in the input.
         - Use clear folder names
+        - Prefer using file_ids in compact responses when IDs are provided.
         - Group by type: Documents, Media, Code, Archives
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Suggest better filenames where appropriate" : "")
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
         Return JSON:
+        {"folder_assignments":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")"file_ids":[1,2]}],"notes":""}
+        or legacy:
         {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\"}" : "\"\"")],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """
         
         return prompt
+    }
+
+    static func promptPair(for level: CompactionLevel, config: AIConfig, files: [FileItem]) -> (system: String, user: String) {
+        switch level {
+        case .standard:
+            let system = config.systemPromptOverride
+                ?? buildCompactSystemPrompt(
+                    mode: config.mode,
+                    enableReasoning: config.enableReasoning,
+                    enableSmartRename: config.enableSmartRename,
+                    maxTopLevelFolders: config.maxTopLevelFolders,
+                    enableTagging: config.enableFileTagging
+                )
+            let user = buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
+            return (system, user)
+        case .ultra:
+            return buildUltraCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
+        case .summary:
+            return buildSummaryPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
+        case .micro:
+            return buildMicroPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
+        }
     }
     
     // Legacy method for compatibility

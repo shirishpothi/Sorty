@@ -254,6 +254,39 @@ class AppStateTests: XCTestCase {
         appState.selectedDirectory = nil
         appState.applyChanges()
     }
+
+    func testHandoffToDuplicatesCarriesNormalizedFilePaths() {
+        let folder = URL(fileURLWithPath: "/tmp/handoff-folder")
+        appState.handoffToDuplicates(
+            forFilePaths: [
+                "/tmp/handoff-folder/a/../a/file1.txt",
+                "/tmp/handoff-folder/a/file1.txt",
+                "/tmp/handoff-folder/b/file2.txt"
+            ],
+            preferredDirectory: folder,
+            autoStart: true
+        )
+
+        XCTAssertEqual(appState.currentView, .duplicates)
+        XCTAssertEqual(appState.selectedDirectory, folder.standardizedFileURL)
+        XCTAssertEqual(appState.pendingDuplicatesHandoff?.directory, folder.standardizedFileURL)
+        XCTAssertEqual(
+            appState.pendingDuplicatesHandoff?.filePaths ?? [],
+            [
+                "/tmp/handoff-folder/a/file1.txt",
+                "/tmp/handoff-folder/b/file2.txt"
+            ]
+        )
+    }
+
+    func testHandoffToDuplicatesDirectoryOnlyHasNoFilePaths() {
+        let folder = URL(fileURLWithPath: "/tmp/directory-only")
+        appState.handoffToDuplicates(directory: folder, autoStart: false)
+
+        XCTAssertEqual(appState.currentView, .duplicates)
+        XCTAssertEqual(appState.pendingDuplicatesHandoff?.directory, folder.standardizedFileURL)
+        XCTAssertEqual(appState.pendingDuplicatesHandoff?.filePaths ?? [], [])
+    }
     
     func testRegenerateOrganizationWithNoOrganizer() {
         appState.organizer = nil
@@ -408,67 +441,43 @@ class AppStateTests: XCTestCase {
     func testUpdateManagerExists() {
         XCTAssertNotNil(appState.updateManager)
     }
+
+    func testMultipleAppStatesKeepIndependentSelections() {
+        let stateA = AppState()
+        let stateB = AppState()
+        stateA.selectedDirectory = URL(fileURLWithPath: "/tmp/a")
+        stateB.selectedDirectory = URL(fileURLWithPath: "/tmp/b")
+
+        XCTAssertEqual(stateA.selectedDirectory?.path, "/tmp/a")
+        XCTAssertEqual(stateB.selectedDirectory?.path, "/tmp/b")
+    }
+
+    func testCancelOperationDoesNotAffectOtherWindowOrganizer() {
+        let stateA = AppState()
+        let stateB = AppState()
+        let organizerA = FolderOrganizer()
+        let organizerB = FolderOrganizer()
+        stateA.organizer = organizerA
+        stateB.organizer = organizerB
+
+        organizerA.state = .organizing
+        organizerB.state = .organizing
+
+        stateA.cancelOperation()
+
+        XCTAssertEqual(organizerA.state, .idle)
+        XCTAssertEqual(organizerB.state, .organizing)
+    }
 }
 
 // MARK: - SortyCommands Tests
 
 @MainActor
 class SortyCommandsTests: XCTestCase {
-    
-    var appState: AppState!
-    var organizer: FolderOrganizer!
-    
-    override func setUp() async throws {
-        
-        appState = AppState()
-        organizer = FolderOrganizer()
-        appState.organizer = organizer
-    }
-    
-    override func tearDown() async throws {
-        appState = nil
-        organizer = nil
-        
-    }
-    
+
     func testSortyCommandsInitialization() {
-        let commands = SortyCommands(appState: appState)
+        let commands = SortyCommands()
         XCTAssertNotNil(commands)
-    }
-    
-    func testCommandsCanAccessAppState() {
-        let commands = SortyCommands(appState: appState)
-        
-        appState.currentView = .settings
-        XCTAssertEqual(commands.appState.currentView, .settings)
-    }
-    
-    func testCommandsReflectSidebarState() {
-        let commands = SortyCommands(appState: appState)
-        
-        XCTAssertTrue(commands.appState.showingSidebar)
-        
-        appState.showingSidebar = false
-        XCTAssertFalse(commands.appState.showingSidebar)
-    }
-    
-    func testCommandsReflectDirectoryState() {
-        let commands = SortyCommands(appState: appState)
-        
-        XCTAssertNil(commands.appState.selectedDirectory)
-        
-        let testURL = URL(fileURLWithPath: "/tmp/test")
-        appState.selectedDirectory = testURL
-        XCTAssertEqual(commands.appState.selectedDirectory, testURL)
-    }
-    
-    func testCommandsReflectComputedProperties() {
-        let commands = SortyCommands(appState: appState)
-        
-        XCTAssertFalse(commands.appState.hasResults)
-        XCTAssertFalse(commands.appState.hasFiles)
-        XCTAssertFalse(commands.appState.canApply)
-        XCTAssertFalse(commands.appState.isOperationInProgress)
     }
 }
 

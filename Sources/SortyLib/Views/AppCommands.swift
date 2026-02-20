@@ -11,43 +11,65 @@ import Combine
 
 // MARK: - App Commands
 
-public struct SortyCommands: Commands {
-    @ObservedObject var appState: AppState
+public struct AppStateFocusedKey: FocusedValueKey {
+    public typealias Value = AppState
+}
 
-    public init(appState: AppState) {
-        self.appState = appState
+public struct OrganizerFocusedKey: FocusedValueKey {
+    public typealias Value = FolderOrganizer
+}
+
+public extension FocusedValues {
+    var appState: AppState? {
+        get { self[AppStateFocusedKey.self] }
+        set { self[AppStateFocusedKey.self] = newValue }
     }
+
+    var organizer: FolderOrganizer? {
+        get { self[OrganizerFocusedKey.self] }
+        set { self[OrganizerFocusedKey.self] = newValue }
+    }
+}
+
+public struct SortyCommands: Commands {
+    @FocusedValue(\.appState) private var appState
+
+    public init() {}
 
     public var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("About Sorty") {
-                appState.showAbout()
+                appState?.showAbout()
             }
+            .disabled(appState == nil)
             
             Button("Check for Updates...") {
-                appState.checkForUpdatesInteractive()
+                appState?.checkForUpdatesInteractive()
             }
+            .disabled(appState == nil)
         }
 
         // Replace default New/Open with custom commands
         CommandGroup(replacing: .newItem) {
             Button("New Session") {
-                appState.resetSession()
+                appState?.resetSession()
             }
             .keyboardShortcut("n", modifiers: .command)
+            .disabled(appState == nil)
 
             Button("Open Directory...") {
-                appState.showDirectoryPicker = true
+                appState?.showDirectoryPicker = true
             }
             .keyboardShortcut("o", modifiers: .command)
+            .disabled(appState == nil)
 
             Divider()
 
             Button("Export Results...") {
-                appState.exportResults()
+                appState?.exportResults()
             }
             .keyboardShortcut("e", modifiers: .command)
-            .disabled(!appState.hasResults)
+            .disabled(!(appState?.hasResults ?? false))
         }
 
         // Edit menu additions
@@ -55,18 +77,19 @@ public struct SortyCommands: Commands {
             Divider()
 
             Button("Select All Files") {
-                appState.selectAllFiles()
+                appState?.selectAllFiles()
             }
             .keyboardShortcut("a", modifiers: .command)
-            .disabled(!appState.hasFiles)
+            .disabled(!(appState?.hasFiles ?? false))
         }
 
         // View menu - use CommandGroup to add to existing View menu, not create a new one
         CommandGroup(replacing: .sidebar) {
-            Button(appState.showingSidebar ? "Hide Sidebar" : "Show Sidebar") {
-                appState.showingSidebar.toggle()
+            Button((appState?.showingSidebar ?? true) ? "Hide Sidebar" : "Show Sidebar") {
+                appState?.showingSidebar.toggle()
             }
             .keyboardShortcut("\\", modifiers: .command)
+            .disabled(appState == nil)
         }
         
         // Navigation commands added to View menu
@@ -78,124 +101,139 @@ public struct SortyCommands: Commands {
                 .font(.caption)
             
             Button("Organize") {
-                appState.currentView = .organize
+                appState?.currentView = .organize
             }
             .keyboardShortcut("1", modifiers: .command)
+            .disabled(appState == nil)
 
             Button("Workspace Health") {
-                appState.currentView = .workspaceHealth
+                appState?.currentView = .workspaceHealth
             }
             .keyboardShortcut("2", modifiers: .command)
+            .disabled(appState == nil)
 
             Button("Duplicates") {
-                appState.currentView = .duplicates
+                appState?.currentView = .duplicates
             }
             .keyboardShortcut("3", modifiers: .command)
+            .disabled(appState == nil)
             
             Button("The Learnings") {
-                appState.currentView = .learnings
+                appState?.currentView = .learnings
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
+            .disabled(appState == nil)
 
             Divider()
 
             // Configuration Views section
             Button("Settings") {
-                appState.currentView = .settings
+                appState?.currentView = .settings
             }
             .keyboardShortcut(",", modifiers: .command)
+            .disabled(appState == nil)
 
             Button("History") {
-                appState.currentView = .history
+                appState?.currentView = .history
             }
             .keyboardShortcut("h", modifiers: [.command, .shift])
+            .disabled(appState == nil)
 
             Button("Exclusions") {
-                appState.currentView = .exclusions
+                appState?.currentView = .exclusions
             }
             .keyboardShortcut("4", modifiers: .command)
+            .disabled(appState == nil)
 
             Button("Watched Folders") {
-                appState.currentView = .watchedFolders
+                appState?.currentView = .watchedFolders
             }
             .keyboardShortcut("5", modifiers: .command)
+            .disabled(appState == nil)
         }
 
         // Organize menu
         CommandMenu("Organize") {
             Button("Start Organization") {
-                appState.startOrganization()
+                appState?.startOrganization()
             }
             .keyboardShortcut("r", modifiers: .command)
-            .disabled(!appState.canStartOrganization)
+            .disabled(!(appState?.canStartOrganization ?? false))
 
             Button("Regenerate Organization") {
-                appState.regenerateOrganization()
+                appState?.regenerateOrganization()
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
-            .disabled(!appState.hasCurrentPlan)
+            .disabled(!(appState?.hasCurrentPlan ?? false))
 
             Divider()
 
             Button("Apply Changes") {
-                appState.applyChanges()
+                appState?.applyChanges()
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
-            .disabled(!appState.canApply)
+            .disabled(!(appState?.canApply ?? false))
 
             Button("Preview Changes") {
-                appState.previewChanges()
+                appState?.previewChanges()
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
-            .disabled(!appState.hasCurrentPlan)
+            .disabled(!(appState?.hasCurrentPlan ?? false))
 
             Divider()
 
             Button("Cancel") {
-                appState.cancelOperation()
+                appState?.cancelOperation()
             }
             .keyboardShortcut(.escape, modifiers: [])
-            .disabled(!appState.isOperationInProgress)
+            .disabled(!(appState?.isOperationInProgress ?? false))
         }
 
         // Learnings menu
         CommandMenu("Learnings") {
             Button("Open Dashboard") {
-                appState.currentView = .learnings
+                appState?.currentView = .learnings
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
+            .disabled(appState == nil)
             
             Divider()
             
             Button("Start Honing Session") {
-                appState.startHoningSession()
+                appState?.startHoningSession()
             }
             .keyboardShortcut("h", modifiers: [.command, .option])
+            .disabled(appState == nil)
             
             Button("View Statistics") {
-                appState.showLearningsStats()
+                appState?.showLearningsStats()
             }
+            .disabled(appState == nil)
             
             Divider()
             
             Button("Pause Learning") {
-                appState.pauseLearning()
+                appState?.pauseLearning()
             }
+            .disabled(appState == nil)
             
             Button("Export Learning Profile...") {
-                appState.exportLearningsProfile()
+                appState?.exportLearningsProfile()
             }
+            .disabled(appState == nil)
             
             Button("Import Learning Profile...") {
-                appState.importLearningsProfile()
+                appState?.importLearningsProfile()
             }
+            .disabled(appState == nil)
         }
 
         CommandGroup(replacing: .help) {
             Button("Sorty Help") {
-                appState.showHelp()
+                appState?.showHelp()
             }
             .keyboardShortcut("?", modifiers: .command)
+            .disabled(appState == nil)
             
             Link("Documentation", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!)
             
@@ -204,24 +242,28 @@ public struct SortyCommands: Commands {
             Divider()
             
             Button("Restart Onboarding...") {
-                appState.showOnboarding()
+                appState?.showOnboarding()
             }
+            .disabled(appState == nil)
             
             Button("Feature Tour...") {
-                appState.showFeatureTour()
+                appState?.showFeatureTour()
             }
+            .disabled(appState == nil)
 
             Button("Delete All Usage Data...") {
-                appState.showDeleteUsageDataConfirmation = true
+                appState?.showDeleteUsageDataConfirmation = true
             }
+            .disabled(appState == nil)
             
             Divider()
             
             Link("GitHub Repository", destination: URL(string: "https://github.com/shirishpothi/Sorty")!)
 
             Button("Check for Updates...") {
-                appState.checkForUpdatesInteractive()
+                appState?.checkForUpdatesInteractive()
             }
+            .disabled(appState == nil)
         }
     }
 }
@@ -245,6 +287,7 @@ public class AppState: ObservableObject {
     @Published public var navigatedFromSettings: Bool = false
     @Published public var showDeleteUsageDataConfirmation: Bool = false
     @Published public var pendingDuplicatesHandoff: DuplicatesHandoff?
+    @Published public var highlightedWatchedFolderID: UUID?
     
     /// Trigger update check with visible UI feedback.
     /// Uses Sparkle's native UI by default. The in-app update dialog is only shown
@@ -293,11 +336,18 @@ public class AppState: ObservableObject {
     public struct DuplicatesHandoff: Equatable, Sendable {
         public let id: UUID
         public let directory: URL?
+        public let filePaths: [String]
         public let autoStart: Bool
 
-        public init(id: UUID = UUID(), directory: URL?, autoStart: Bool) {
+        public init(
+            id: UUID = UUID(),
+            directory: URL?,
+            filePaths: [String] = [],
+            autoStart: Bool
+        ) {
             self.id = id
             self.directory = directory
+            self.filePaths = filePaths
             self.autoStart = autoStart
         }
     }
@@ -360,12 +410,21 @@ public class AppState: ObservableObject {
         organizer?.reset()
     }
 
-    public func handoffToDuplicates(directory: URL?, autoStart: Bool = true) {
+    public func handoffToDuplicates(
+        directory: URL?,
+        filePaths: [String] = [],
+        autoStart: Bool = true
+    ) {
         let normalizedDirectory = directory?.standardizedFileURL ?? selectedDirectory?.standardizedFileURL
+        let normalizedFilePaths = Self.normalizedFilePaths(filePaths)
         if let normalizedDirectory {
             selectedDirectory = normalizedDirectory
         }
-        pendingDuplicatesHandoff = DuplicatesHandoff(directory: normalizedDirectory, autoStart: autoStart)
+        pendingDuplicatesHandoff = DuplicatesHandoff(
+            directory: normalizedDirectory,
+            filePaths: normalizedFilePaths,
+            autoStart: autoStart
+        )
         withAnimation(.pageTransition) {
             currentView = .duplicates
         }
@@ -376,9 +435,14 @@ public class AppState: ObservableObject {
         preferredDirectory: URL? = nil,
         autoStart: Bool = true
     ) {
-        let pathDerivedDirectory = Self.commonParentDirectory(forFilePaths: filePaths)
+        let normalizedFilePaths = Self.normalizedFilePaths(filePaths)
+        let pathDerivedDirectory = Self.commonParentDirectory(forFilePaths: normalizedFilePaths)
         let targetDirectory = preferredDirectory?.standardizedFileURL ?? pathDerivedDirectory
-        handoffToDuplicates(directory: targetDirectory, autoStart: autoStart)
+        handoffToDuplicates(
+            directory: targetDirectory,
+            filePaths: normalizedFilePaths,
+            autoStart: autoStart
+        )
     }
 
     private static func commonParentDirectory(forFilePaths filePaths: [String]) -> URL? {
@@ -403,6 +467,20 @@ public class AppState: ObservableObject {
         guard !commonComponents.isEmpty else { return firstDirectory }
         let commonPath = NSString.path(withComponents: commonComponents)
         return URL(fileURLWithPath: commonPath, isDirectory: true).standardizedFileURL
+    }
+
+    private static func normalizedFilePaths(_ filePaths: [String]) -> [String] {
+        var seenPaths: Set<String> = []
+        var normalizedPaths: [String] = []
+
+        for path in filePaths {
+            let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+            if seenPaths.insert(normalizedPath).inserted {
+                normalizedPaths.append(normalizedPath)
+            }
+        }
+
+        return normalizedPaths
     }
     
     /// Show the onboarding flow again (for revisiting setup)

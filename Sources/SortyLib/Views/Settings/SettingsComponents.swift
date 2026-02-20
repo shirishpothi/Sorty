@@ -286,6 +286,7 @@ struct URLSchemeRow: View {
             Text(description)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             
             Button {
                 let pasteboard = NSPasteboard.general

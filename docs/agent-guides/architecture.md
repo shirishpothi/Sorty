@@ -53,6 +53,8 @@ URL scheme `sorty://` — see `DeeplinkHandler` for routes:
 
 ## Finder Extension
 Uses App Groups (`group.com.sorty.app`) for IPC. Behind the `finderIntegrationEnabled` feature flag.
+Quick Action and Finder Sync repair flows are exposed in-app via Finder Integration settings.
+The Finder Sync `.appex` registration repair path is `ExtensionCommunication.repairFinderSyncExtensionRegistration` and should be preferred over external terminal instructions.
 
 ## Learnings System
 User preference learning stored in `LearningsProfile`. Secured with biometric auth via `SecurityManager`.

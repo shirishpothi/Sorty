@@ -189,7 +189,11 @@ public struct ContentView: View {
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {
                 previousView = oldValue
+                ensureActiveSidebarSectionExpanded(for: newValue)
             }
+        }
+        .onAppear {
+            ensureActiveSidebarSectionExpanded(for: appState.currentView)
         }
         .onChange(of: appState.showDirectoryPicker) { oldValue, showPicker in
             if showPicker {
@@ -277,6 +281,19 @@ public struct ContentView: View {
         }
 
         appState.showDirectoryPicker = false
+    }
+
+    private func ensureActiveSidebarSectionExpanded(for view: AppState.AppView) {
+        switch view {
+        case .organize, .settings:
+            isCoreExpanded = true
+        case .workspaceHealth, .duplicates, .history:
+            isProductivityExpanded = true
+        case .batchOrganization, .exclusions, .watchedFolders, .learnings:
+            isAdvancedExpanded = true
+        case .storageLocations:
+            break
+        }
     }
 
     @ViewBuilder

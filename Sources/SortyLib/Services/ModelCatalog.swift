@@ -483,49 +483,70 @@ public final class ModelCatalog: ObservableObject {
         guard let url = URL(string: "https://api.githubcopilot.com/models") else {
             throw ModelCatalogError.invalidURL
         }
-        
-        let token = try await GitHubCopilotAuthManager.shared.getCopilotToken()
-        
+
+        let authManager = GitHubCopilotAuthManager.shared
+        let initialToken = try await authManager.getCopilotToken()
+        let (initialData, initialStatusCode) = try await fetchGitHubCopilotModelsResponse(url: url, token: initialToken)
+
+        var data = initialData
+        var statusCode = initialStatusCode
+
+        // Recover from stale cached Copilot token by forcing a refresh once.
+        if statusCode == 401 || statusCode == 403 {
+            authManager.invalidateCachedCopilotToken()
+            let refreshedToken = try await authManager.getCopilotToken(forceRefresh: true)
+            let retryResult = try await fetchGitHubCopilotModelsResponse(url: url, token: refreshedToken)
+            data = retryResult.data
+            statusCode = retryResult.statusCode
+        }
+
+        guard (200...299).contains(statusCode) else {
+            if statusCode == 401 || statusCode == 403 {
+                throw GitHubAuthError.accessDenied
+            }
+            throw ModelCatalogError.fetchFailed
+        }
+
+        struct ModelsResponse: Decodable {
+            let data: [ModelData]
+            struct ModelData: Decodable {
+                let id: String
+            }
+        }
+
+        let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
+        if decoded.data.isEmpty {
+            throw ModelCatalogError.fetchFailed
+        }
+
+        let models = decoded.data.map { model in
+            ModelInfo(
+                id: model.id,
+                displayName: model.id,
+                provider: .githubCopilot,
+                updatedAt: Date()
+            )
+        }
+        return (models, false)
+    }
+
+    private func fetchGitHubCopilotModelsResponse(url: URL, token: String) async throws -> (data: Data, statusCode: Int) {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 10
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("vscode/1.85.1", forHTTPHeaderField: "Editor-Version")
         request.setValue("copilot/1.138.0", forHTTPHeaderField: "Editor-Plugin-Version")
-        request.setValue("Sorty/1.0", forHTTPHeaderField: "User-Agent")
-        
-        do {
-            let (data, response) = try await session.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-                throw ModelCatalogError.fetchFailed
-            }
-            
-            struct ModelsResponse: Decodable {
-                let data: [ModelData]
-                struct ModelData: Decodable {
-                    let id: String
-                }
-            }
-            
-            let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
-            if decoded.data.isEmpty {
-                throw ModelCatalogError.fetchFailed
-            }
-            
-            let models = decoded.data.map { model in
-                ModelInfo(
-                    id: model.id,
-                    displayName: model.id,
-                    provider: .githubCopilot,
-                    updatedAt: Date()
-                )
-            }
-            return (models, false)
-        } catch {
-            throw error
+        request.setValue("GithubCopilot/1.138.0", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ModelCatalogError.fetchFailed
         }
+
+        return (data, httpResponse.statusCode)
     }
     
     private func fetchGeminiModels() async throws -> (models: [ModelInfo], isFallback: Bool) {

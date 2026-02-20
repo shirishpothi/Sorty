@@ -37,9 +37,18 @@ struct OrganizeView: View {
                     },
                     onClear: {
                         HapticFeedbackManager.shared.tap()
-                        withAnimation(.pageTransition) {
-                            appState.selectedDirectory = nil
-                            organizer.reset()
+                        let panel = NSOpenPanel()
+                        panel.canChooseDirectories = true
+                        panel.canChooseFiles = false
+                        panel.allowsMultipleSelection = false
+                        panel.message = "Select a directory to organize"
+                        panel.prompt = "Select"
+                        if panel.runModal() == .OK, let url = panel.url {
+                            withAnimation(.pageTransition) {
+                                organizer.reset()
+                                appState.selectedDirectory = url
+                            }
+                            HapticFeedbackManager.shared.success()
                         }
                     }
                 )

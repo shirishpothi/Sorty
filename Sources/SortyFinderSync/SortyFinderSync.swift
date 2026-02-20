@@ -19,7 +19,8 @@ final class SortyFinderSync: FIFinderSync {
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
         let menu = NSMenu()
-        let mascotImage = Self.finderMascotImage()
+        let organizeImage = Self.normalizedMenuIcon(Self.finderOrganizeImage(), isTemplate: false)
+        let watchImage = Self.normalizedMenuIcon(Self.finderWatchImage(), isTemplate: true)
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer:
@@ -28,18 +29,36 @@ final class SortyFinderSync: FIFinderSync {
                 action: #selector(organizeAction(_:)),
                 keyEquivalent: ""
             )
-            organizeItem.image = mascotImage
+            organizeItem.image = organizeImage
             organizeItem.target = self
             menu.addItem(organizeItem)
+
+            let watchItem = NSMenuItem(
+                title: "Watch with Sorty",
+                action: #selector(watchAction(_:)),
+                keyEquivalent: ""
+            )
+            watchItem.image = watchImage
+            watchItem.target = self
+            menu.addItem(watchItem)
         case .toolbarItemMenu:
             let organizeItem = NSMenuItem(
                 title: "Organize Folder",
                 action: #selector(organizeAction(_:)),
                 keyEquivalent: ""
             )
-            organizeItem.image = mascotImage
+            organizeItem.image = organizeImage
             organizeItem.target = self
             menu.addItem(organizeItem)
+
+            let watchItem = NSMenuItem(
+                title: "Watch Folder",
+                action: #selector(watchAction(_:)),
+                keyEquivalent: ""
+            )
+            watchItem.image = watchImage
+            watchItem.target = self
+            menu.addItem(watchItem)
         case .contextualMenuForSidebar:
             break
         @unknown default:
@@ -52,20 +71,35 @@ final class SortyFinderSync: FIFinderSync {
     @objc private func organizeAction(_ sender: AnyObject?) {
         _ = sender
 
-        let selectedURLs = FIFinderSyncController.default().selectedItemURLs() ?? []
-        let targetURL = FIFinderSyncController.default().targetedURL()
-
-        let directoryURL: URL?
-        if let firstSelected = selectedURLs.first {
-            directoryURL = firstSelected
-        } else {
-            directoryURL = targetURL
-        }
-
-        guard let url = directoryURL else { return }
+        guard let url = Self.selectedDirectoryURL() else { return }
         guard let organizeURL = Self.urlForOrganizing(path: url.path) else { return }
 
         NSWorkspace.shared.open(organizeURL)
+    }
+
+    @objc private func watchAction(_ sender: AnyObject?) {
+        _ = sender
+
+        guard let url = Self.selectedDirectoryURL() else { return }
+        guard let watchURL = Self.urlForWatching(path: url.path) else { return }
+
+        NSWorkspace.shared.open(watchURL)
+    }
+
+    private static func selectedDirectoryURL() -> URL? {
+        let selectedURLs = FIFinderSyncController.default().selectedItemURLs() ?? []
+        let targetURL = FIFinderSyncController.default().targetedURL()
+
+        guard let rawURL = selectedURLs.first ?? targetURL else { return nil }
+        return normalizedDirectoryURL(for: rawURL)
+    }
+
+    private static func normalizedDirectoryURL(for url: URL) -> URL {
+        if let values = try? url.resourceValues(forKeys: [.isDirectoryKey]),
+           values.isDirectory == false {
+            return url.deletingLastPathComponent()
+        }
+        return url
     }
 
     private static func urlForOrganizing(path: String) -> URL? {
@@ -76,27 +110,54 @@ final class SortyFinderSync: FIFinderSync {
         return components.url
     }
 
-    private static func finderMascotImage() -> NSImage {
-        if let image = NSImage(named: "SortyMascotTemplate") ?? NSImage(named: "SortyMascot") {
-            image.isTemplate = true
+    private static func urlForWatching(path: String) -> URL? {
+        var components = URLComponents()
+        components.scheme = "sorty"
+        components.host = "watched"
+        components.queryItems = [
+            URLQueryItem(name: "action", value: "add"),
+            URLQueryItem(name: "path", value: path)
+        ]
+        return components.url
+    }
+
+    private static func finderOrganizeImage() -> NSImage {
+        // Prefer the PNG mascot head — it renders cleanly at small menu sizes.
+        if let imageURL = Bundle.main.url(forResource: "SortyMascotHead", withExtension: "png"),
+           let image = NSImage(contentsOf: imageURL) {
+            image.isTemplate = false
             return image
         }
 
-        if let directURL = Bundle.main.url(forResource: "SortyMascotTemplate", withExtension: "svg"),
-           let image = NSImage(contentsOf: directURL) {
-            image.isTemplate = true
+        // Prefer the dedicated mascot head icon supplied for Finder context menus.
+        if let imageURL = Bundle.main.url(forResource: "SortyMascotHead", withExtension: "icns"),
+           let image = NSImage(contentsOf: imageURL) {
+            image.isTemplate = false
+            return image
+        }
+
+        if let imageURL = Bundle.main.url(forResource: "Sorty Mascot Head", withExtension: "icns"),
+           let image = NSImage(contentsOf: imageURL) {
+            image.isTemplate = false
             return image
         }
 
         if let resourceURL = Bundle.main.resourceURL {
+            let hostAppResourcesURL = Bundle.main.bundleURL
+                .deletingLastPathComponent() // PlugIns
+                .deletingLastPathComponent() // Contents
+                .appendingPathComponent("Resources", isDirectory: true)
+
             let bundledCandidates = [
-                resourceURL.appendingPathComponent("SortyLib_SortyLib.bundle/SortyMascotTemplate.svg"),
-                resourceURL.appendingPathComponent("SortyMascotTemplate.svg")
+                resourceURL.appendingPathComponent("SortyMascotHead.png"),
+                resourceURL.appendingPathComponent("SortyMascotHead.icns"),
+                hostAppResourcesURL.appendingPathComponent("SortyMascotHead.png"),
+                hostAppResourcesURL.appendingPathComponent("SortyMascotHead.icns"),
             ]
 
             for candidate in bundledCandidates {
                 if let image = NSImage(contentsOf: candidate) {
-                    image.isTemplate = true
+                    image.isTemplate = false
                     return image
                 }
             }
@@ -106,5 +167,41 @@ final class SortyFinderSync: FIFinderSync {
             ?? NSImage(size: NSSize(width: 16, height: 16))
         fallback.isTemplate = true
         return fallback
+    }
+
+    private static func finderWatchImage() -> NSImage {
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        if let symbol = NSImage(systemSymbolName: "eye", accessibilityDescription: "Watch") {
+            let configured = symbol.withSymbolConfiguration(config) ?? symbol
+            configured.isTemplate = true
+            return configured
+        }
+        let fallback = NSImage(size: NSSize(width: 16, height: 16))
+        fallback.isTemplate = true
+        return fallback
+    }
+
+    private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {
+        let menuIconSize = NSSize(width: 16, height: 16)
+        let sourceImage = (image.copy() as? NSImage) ?? image
+
+        // Fit into the menu icon size preserving aspect ratio for both template and non-template images.
+        let sourceSize = sourceImage.size
+        let maxDimension = max(sourceSize.width, sourceSize.height, 1)
+        let scale = min(menuIconSize.width, menuIconSize.height) / maxDimension
+        let drawSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+        let drawRect = NSRect(
+            x: (menuIconSize.width - drawSize.width) / 2,
+            y: (menuIconSize.height - drawSize.height) / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        )
+
+        let rendered = NSImage(size: menuIconSize)
+        rendered.lockFocus()
+        sourceImage.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        rendered.unlockFocus()
+        rendered.isTemplate = isTemplate
+        return rendered
     }
 }

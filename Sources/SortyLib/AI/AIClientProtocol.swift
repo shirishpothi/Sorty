@@ -103,6 +103,7 @@ public enum AIClientError: LocalizedError, Sendable {
         case 401: return "Authentication failed. Your API key may be invalid or expired. Please check your credentials."
         case 403: return "Access denied. Your API key doesn't have permissions for this model or feature."
         case 404: return "Model or endpoint not found. Please verify the model name and API URL in settings."
+        case 413: return "Request too large for the selected model context window. Try fewer files or a smaller batch."
         case 429: return "Rate limit exceeded. You've sent too many requests. Please wait a moment before trying again."
         case 500: return "Internal server error. The AI provider is experiencing technical difficulties."
         case 501: return "Not supported. This provider or feature is not available in your current environment."
@@ -146,6 +147,5 @@ public enum AIClientError: LocalizedError, Sendable {
         return message.count > 300 ? String(message.prefix(300)) + "..." : message
     }
 }
-
 
 

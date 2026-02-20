@@ -17,6 +17,7 @@ struct AIProviderSettingsView: View {
     @State private var hasCopiedCode = false
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
+    @State private var isDetailsExpanded = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -306,14 +307,30 @@ struct AIProviderSettingsView: View {
                             .foregroundColor(status.contains("Success") ? .green : .red)
                             
                             if !status.contains("Success") {
-                                Text(status.replacingOccurrences(of: "Error: ", with: ""))
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.red)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text(status.replacingOccurrences(of: "Error: ", with: ""))
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.red)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .textSelection(.enabled)
+                                    
+                                    Button {
+                                        let pb = NSPasteboard.general
+                                        pb.clearContents()
+                                        pb.setString(status.replacingOccurrences(of: "Error: ", with: ""), forType: .string)
+                                        HapticFeedbackManager.shared.tap()
+                                    } label: {
+                                        Image(systemName: "doc.on.doc")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .help("Copy error message")
+                                }
                                 
                                 if let details = testConnectionDetails, !details.isEmpty {
-                                    DisclosureGroup {
+                                    DisclosureGroup(isExpanded: $isDetailsExpanded) {
                                         Text(details)
                                             .font(.system(.caption, design: .monospaced))
                                             .padding(6)
@@ -322,9 +339,18 @@ struct AIProviderSettingsView: View {
                                             .fixedSize(horizontal: false, vertical: true)
                                             .textSelection(.enabled)
                                     } label: {
-                                        Text("Technical Details")
-                                            .font(.caption2)
-                                            .foregroundColor(.secondary)
+                                        HStack {
+                                            Text("Technical Details")
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                            Spacer()
+                                        }
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            withAnimation(.spring(response: 0.3)) {
+                                                isDetailsExpanded.toggle()
+                                            }
+                                        }
                                     }
                                     .frame(maxWidth: 400)
                                 }
@@ -343,6 +369,7 @@ struct AIProviderSettingsView: View {
         isTestingConnection = true
         testConnectionStatus = nil
         testConnectionDetails = nil
+        isDetailsExpanded = false
 
         Task {
             do {

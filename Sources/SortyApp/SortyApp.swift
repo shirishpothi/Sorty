@@ -33,12 +33,23 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
         let showMenuBarExtra = UserDefaults.standard.bool(forKey: "showMenuBarExtra")
-        
-        // Only terminate if BOTH background and menu bar are disabled
+
         return !keepInBackground && !showMenuBarExtra
     }
 
-    /// Updates the application activation policy to show or hide the Dock icon
+    /// Track whether a deeplink URL is being handled so the app can suppress
+    /// the extra window that SwiftUI creates when activated via URL scheme.
+    @MainActor static var pendingDeeplinkActivation = false
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if Self.pendingDeeplinkActivation {
+            Self.pendingDeeplinkActivation = false
+            // If we already have a visible window, suppress creating another one.
+            if flag { return false }
+        }
+        return true
+    }
+
     @MainActor
     func updateActivationPolicy(hideDockIcon: Bool) {
         if hideDockIcon {
@@ -57,36 +68,31 @@ struct SortyApp: App {
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
+
     @StateObject private var settingsViewModel = SettingsViewModel()
-    @StateObject private var appState = AppState()
     @StateObject private var personaManager = PersonaManager()
     @StateObject private var customPersonaStore = CustomPersonaStore()
     @StateObject private var watchedFoldersManager = WatchedFoldersManager()
     @StateObject private var storageLocationsManager = StorageLocationsManager()
-    @StateObject private var organizer = FolderOrganizer()
     @StateObject private var exclusionRules = ExclusionRulesManager()
     @StateObject private var extensionListener = ExtensionListener()
     @StateObject private var deeplinkHandler = DeeplinkHandler.shared
-    @StateObject private var learningsManager = LearningsManager() // Promoted to App State
+    @StateObject private var learningsManager = LearningsManager()
     @StateObject private var automationManager = AutomationManager()
     @StateObject private var notificationSettings = NotificationSettingsManager.shared
-    @StateObject private var healthManager = WorkspaceHealthManager()
     @StateObject private var loginItemManager = LoginItemManager.shared
     @StateObject private var namingPresetManager = NamingPresetManager.shared
     @StateObject private var globalShortcutManager = GlobalShortcutManager.shared
     @StateObject private var steeringPromptManager = SteeringPromptManager.shared
     @StateObject private var menuBarController = MenuBarController()
-    @StateObject private var batchManager = BatchOrganizationManager()
 
-    private var activeWatchedFoldersCount: Int {
-        watchedFoldersManager.folders.filter { $0.isEnabled && $0.autoOrganize }.count
-    }
+    @StateObject private var automationOrganizer = FolderOrganizer()
 
     @State private var coordinator: AppCoordinator?
-    
-    /// Background activity token to prevent app suspension during folder watching
+    @State private var hasConfiguredGlobals = false
+
     private var backgroundActivity: NSObjectProtocol?
-    
+
     init() {
         UserDefaults.standard.register(defaults: [
             "showMenuBarExtra": true,
@@ -94,224 +100,30 @@ struct SortyApp: App {
             "hideDockIcon": false,
             "launchAtLogin": false
         ])
-        
-        // Begin background activity to keep FolderWatcher alive when window is closed
-        // Include .userInitiated to prevent App Nap from throttling the process
+
         backgroundActivity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .automaticTerminationDisabled, .suddenTerminationDisabled],
             reason: "Monitoring watched folders for automatic organization"
         )
     }
-    
-    @ViewBuilder
-    private var configuredContentView: some View {
-        ContentView()
-            .environmentObject(settingsViewModel)
-            .environmentObject(appState)
-            .environmentObject(personaManager)
-            .environmentObject(customPersonaStore)
-            .environmentObject(watchedFoldersManager)
-            .environmentObject(organizer)
-            .environmentObject(exclusionRules)
-            .environmentObject(extensionListener)
-            .environmentObject(deeplinkHandler)
-            .environmentObject(learningsManager) // Inject
-            .environmentObject(storageLocationsManager)
-            .environmentObject(automationManager)
-            .environmentObject(notificationSettings)
-            .environmentObject(healthManager)
-            .environmentObject(loginItemManager)
-            .environmentObject(namingPresetManager)
-            .environmentObject(globalShortcutManager)
-            .environmentObject(steeringPromptManager)
-            .environmentObject(batchManager)
-            .environmentObject(appState.duplicateManager)
-            .environmentObject(appState.duplicateSettings)
-    }
-
-    private func applyLifecycleModifiers<V: View>(to view: V) -> some View {
-        view
-            .onAppear {
-                appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
-                
-                // Sync login item/background status
-                loginItemManager.syncServiceRegistration(
-                    launchAtLogin: launchAtLogin,
-                    keepInBackground: keepInBackground,
-                    showMenuBarExtra: showMenuBarExtra
-                )
-
-                // Restore sandbox access for watched folders
-                watchedFoldersManager.restoreSecurityScopedAccess()
-                // Restore sandbox access for storage locations
-                storageLocationsManager.restoreSecurityScopedAccess()
-
-                if finderIntegrationEnabled {
-                    _ = ExtensionCommunication.ensureQuickActionInstalled()
-                }
-                
-                if coordinator == nil {
-                    coordinator = AppCoordinator(
-                        organizer: organizer, 
-                        watchedFoldersManager: watchedFoldersManager,
-                        learningsManager: learningsManager // Pass to Coordinator
-                    )
-                }
-                
-                // Setup organizer
-                organizer.exclusionRules = exclusionRules
-                organizer.personaManager = personaManager
-                organizer.customPersonaStore = customPersonaStore
-                organizer.storageLocationsManager = storageLocationsManager
-                organizer.learningsManager = learningsManager
-                organizer.automationManager = automationManager
-                appState.organizer = organizer
-
-                appState.calibrateAction = { folder in
-                    coordinator?.calibrateFolder(folder)
-                }
-                
-                // Initial configuration of organizer
-                Task<Void, Never> { @MainActor in
-                    // Defer automation startup slightly to ensure UI is ready
-                    // This prevents crashes on macOS 15+ related to early AppleScript execution
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                    automationManager.startUp()
-                    
-                    try? await organizer.configure(with: settingsViewModel.config)
-                    learningsManager.configure(with: settingsViewModel.config)
-                    menuBarController.configure(organizer: organizer, settings: settingsViewModel)
-                    
-                    // Check for updates on launch (once per 24 hours)
-                    appState.updateManager.checkOnLaunchIfNeeded()
-
-                    // Global shortcut disabled
-                }
-                
-                // Testability Hook for UI Tests to trigger deeplinks reliably
-                if let urlString = ProcessInfo.processInfo.environment["XCUITEST_DEEPLINK"],
-                   let url = URL(string: urlString) {
-                    // Delay slightly to ensure app is ready
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 1_000_000_000) // 1.0s
-                        processDeepLink(url)
-                    }
-                }
-
-                if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 800_000_000) // 0.8s
-                        NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
-                    }
-                }
-            }
-            .onChange(of: settingsViewModel.config) { _, newConfig in
-                Task<Void, Never> { @MainActor in
-                    try? await organizer.configure(with: newConfig)
-                    learningsManager.configure(with: newConfig)
-                }
-            }
-            .onChange(of: organizer.isAIConfigured) { oldValue, newValue in
-                if oldValue == true && newValue == false {
-                    // AI became invalid - disable auto-organize on all folders
-                    watchedFoldersManager.disableAutoOrganizeForAll(
-                        reason: "AI provider is no longer configured"
-                    )
-                }
-            }
-            .onChange(of: watchedFoldersManager.folders) { oldValue, newValue in
-                coordinator?.syncWatchedFolders()
-            }
-            .onChange(of: hideDockIcon) { _, newValue in
-                appDelegate.updateActivationPolicy(hideDockIcon: newValue)
-            }
-            .onChange(of: finderIntegrationEnabled) { _, newValue in
-                if newValue {
-                    _ = ExtensionCommunication.ensureQuickActionInstalled()
-                }
-            }
-            .onOpenURL { url in
-                processDeepLink(url)
-            }
-    }
-
-    private func applyNotificationModifiers<V: View>(to view: V) -> some View {
-        view
-            .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { _ in
-                appState.currentView = .learnings
-                // Small delay to ensure view transition happens before showing picker
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-                    learningsManager.showingImportPicker = true
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                Task<Void, Never> { @MainActor in
-                    settingsViewModel.forceSave()
-                    await learningsManager.forceSave()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .clearLearningsData)) { _ in
-                Task { @MainActor in
-                    await learningsManager.clearAllData()
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationDetails)) { _ in
-                withAnimation(.pageTransition) {
-                    appState.currentView = .history
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationPreview)) { _ in
-                withAnimation(.pageTransition) {
-                    if appState.selectedDirectory == nil, let currentDirectory = organizer.currentDirectory {
-                        appState.selectedDirectory = currentDirectory
-                    }
-                    appState.currentView = .organize
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { _ in
-                withAnimation(.pageTransition) {
-                    if appState.selectedDirectory == nil, let currentDirectory = organizer.currentDirectory {
-                        appState.selectedDirectory = currentDirectory
-                    }
-                    appState.currentView = .organize
-                }
-            }
-            .alert("Delete All Usage Data?", isPresented: $appState.showDeleteUsageDataConfirmation) {
-                Button("Delete", role: .destructive) {
-                    appState.deleteUsageData()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will permanently delete all organization history, learnings data, and cached sessions. This action cannot be undone.")
-            }
-    }
-
-    @ViewBuilder
-    private var mainView: some View {
-        applyNotificationModifiers(to: applyLifecycleModifiers(to: configuredContentView))
-    }
 
     @SceneBuilder
     var body: some Scene {
-        WindowGroup {
-            mainView
+        WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
+            mainWindowContent(launchRequest: launchRequest)
         }
         .windowStyle(.automatic)
         .defaultSize(width: 1100, height: 750)
         .commands {
-            SortyCommands(appState: appState)
+            SortyCommands()
         }
-        
+
         MenuBarExtra(isInserted: Binding(
             get: { showMenuBarExtra || keepInBackground },
             set: { showMenuBarExtra = $0 }
         )) {
             MenuBarView()
                 .environmentObject(watchedFoldersManager)
-                .environmentObject(appState)
-                .environmentObject(organizer)
-                .environmentObject(settingsViewModel)
                 .environmentObject(loginItemManager)
                 .environmentObject(notificationSettings)
                 .environmentObject(menuBarController)
@@ -321,192 +133,115 @@ struct SortyApp: App {
         .menuBarExtraStyle(.window)
     }
 
-    private func processDeepLink(_ url: URL) {
-        // Handle deeplinks
-        deeplinkHandler.handle(url: url)
-        
-        // Navigate based on destination
-        if let destination = deeplinkHandler.pendingDestination {
-            switch destination {
-            case .organize(let path, let personaId, let autostart):
-                if let path = path {
-                    appState.selectedDirectory = URL(fileURLWithPath: path)
-                }
-                if let personaId = personaId {
-                    // Try built-in first
-                    if let persona = PersonaType(rawValue: personaId) {
-                        personaManager.selectPersona(persona)
-                    } else {
-                        // Then custom
-                        personaManager.selectCustomPersona(personaId)
-                    }
-                }
-                appState.currentView = .organize
-                if autostart {
-                    // Trigger organization via coordinator
-                    Task<Void, Never> { @MainActor in
-                        // Small delay to allow view to load
-                        try? await Task.sleep(nanoseconds: 500_000_000)
-                        if let directory = appState.selectedDirectory {
-                            try? await appState.organizer?.organize(directory: directory)
-                        }
-                    }
-                }
-                
-            case .duplicates(let path, let autostart):
-                if let path = path {
-                    appState.selectedDirectory = URL(fileURLWithPath: path)
-                }
-                appState.currentView = .duplicates
-                if autostart {
-                    Task<Void, Never> { @MainActor in
-                        try? await Task.sleep(nanoseconds: 500_000_000)
-                        // Trigger duplicate scan logic if accessible
-                        // appState.duplicatesManager.scan(directory) -> if available
-                    }
-                }
-                
-            case .learnings(let action, _):
-                switch action {
-                case .honing:
-                    appState.startHoningSession()
-                case .stats:
-                    appState.showLearningsStats()
-                case .withdraw:
-                    appState.currentView = .learnings
-                    appState.pauseLearning()
-                case .export:
-                    appState.exportLearningsProfile()
-                case .importProfile:
-                    appState.importLearningsProfile()
-                case .clear:
-                    appState.currentView = .learnings
-                    Task { @MainActor in
-                        await learningsManager.clearAllData()
-                    }
-                case .none:
-                    appState.currentView = .learnings
-                }
-                
-            case .settings(let section):
-                if let section = section?.lowercased() {
-                    switch section {
-                    case "watched", "watched-folders", "folders":
-                        appState.currentView = .settings
-                        appState.selectedSettingsSection = .rules
-                        appState.settingsFocusTarget = .rulesWatchedFolders
-                    case "exclusions", "rules":
-                        appState.currentView = .settings
-                        appState.selectedSettingsSection = .rules
-                        appState.settingsFocusTarget = .rulesExclusionRules
-                    case "storage", "storage-locations":
-                        appState.currentView = .settings
-                        appState.selectedSettingsSection = .rules
-                        appState.settingsFocusTarget = .rulesStorageLocations
-                    case "health", "workspace-health":
-                        appState.currentView = .settings
-                        appState.selectedSettingsSection = .rules
-                        appState.settingsFocusTarget = .rulesWorkspaceHealth
-                    default:
-                        appState.currentView = .settings
-                        let category = SettingsCategory.allCases.first {
-                            $0.rawValue.lowercased().contains(section) ||
-                            String(describing: $0).lowercased() == section
-                        }
-                        appState.selectedSettingsSection = category
-                        appState.settingsFocusTarget = nil
-                    }
-                } else {
-                    appState.currentView = .settings
-                    appState.selectedSettingsSection = nil
-                    appState.settingsFocusTarget = nil
-                }
-                
-            case .help:
-                appState.showHelp()
-                
-            case .open(let path):
-                NSApp.activate(ignoringOtherApps: true)
-                if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
-                    window.makeKeyAndOrderFront(nil)
-                }
-                if let path = path {
-                    var isDirectory = ObjCBool(false)
-                    if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
-                        appState.selectedDirectory = URL(fileURLWithPath: path)
-                    }
-                }
-                
-            case .history:
-                appState.currentView = .history
-                
-            case .health:
-                appState.currentView = .workspaceHealth
-                
-            case .persona(let action, let prompt, let generate):
-                appState.currentView = .settings
-                // settingsViewModel.selectedSection = .advanced // Not supported
-                if action == "create" || generate {
-                    if generate, let prompt = prompt {
-                        Task<Void, Never> {
-                            // "Agentic" persona generation
-                            let generator = PersonaGenerator()
-                            do {
-                                let result = try await generator.generatePersona(from: prompt, config: settingsViewModel.config)
-                                await MainActor.run {
-                                    let newPersona = CustomPersona(
-                                        name: result.name,
-                                        description: prompt,
-                                        promptModifier: result.prompt
-                                    )
-                                    customPersonaStore.addPersona(newPersona)
-                                    personaManager.selectCustomPersona(newPersona.id)
-                                    // Ideally notify user success
-                                }
-                            } catch {
-                                print("Failed to generate persona: \(error)")
-                            }
-                        }
-                    } else {
-                        // Just show UI for manual creation
-                    }
-                }
-                
-            case .watched(let action, let path):
-                appState.currentView = .watchedFolders
-                if action == "add", let path = path {
-                    watchedFoldersManager.addFolder(WatchedFolder(path: path))
-                }
-                
-            case .rules(let action, _, let pattern):
-                appState.currentView = .exclusions
-                if action == "add", let pattern = pattern {
-                    let rule = ExclusionRule(type: .pathContains, pattern: pattern)
-                    exclusionRules.addRule(rule)
-                }
-                
-            case .exclusions(let action, let pattern):
-                appState.currentView = .exclusions
-                if action == "add", let pattern = pattern {
-                    let rule = ExclusionRule(type: .pathContains, pattern: pattern)
-                    exclusionRules.addRule(rule)
-                }
-                
-            case .scan(let path):
-                if let path = path {
-                    appState.selectedDirectory = URL(fileURLWithPath: path)
-                }
-                appState.currentView = .workspaceHealth
-                
-            case .storage(let action, let path):
-                appState.currentView = .storageLocations
-                if action == "add", let path = path {
-                    let url = URL(fileURLWithPath: path)
-                    try? storageLocationsManager.addLocation(url: url)
+    @ViewBuilder
+    private func mainWindowContent(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
+        MainWindowRootView(
+            launchRequest: launchRequest.wrappedValue,
+            coordinator: coordinator
+        )
+        .environmentObject(settingsViewModel)
+        .environmentObject(personaManager)
+        .environmentObject(customPersonaStore)
+        .environmentObject(watchedFoldersManager)
+        .environmentObject(storageLocationsManager)
+        .environmentObject(exclusionRules)
+        .environmentObject(extensionListener)
+        .environmentObject(deeplinkHandler)
+        .environmentObject(learningsManager)
+        .environmentObject(automationManager)
+        .environmentObject(notificationSettings)
+        .environmentObject(loginItemManager)
+        .environmentObject(namingPresetManager)
+        .environmentObject(globalShortcutManager)
+        .environmentObject(steeringPromptManager)
+        .environmentObject(menuBarController)
+        .task {
+            configureGlobalsIfNeeded()
+        }
+        .onChange(of: settingsViewModel.config) { _, newConfig in
+            Task { @MainActor in
+                try? await automationOrganizer.configure(with: newConfig)
+                learningsManager.configure(with: newConfig)
+            }
+        }
+        .onChange(of: hideDockIcon) { _, newValue in
+            appDelegate.updateActivationPolicy(hideDockIcon: newValue)
+        }
+        .onChange(of: launchAtLogin) { _, _ in
+            syncLoginItemState()
+        }
+        .onChange(of: keepInBackground) { _, _ in
+            syncLoginItemState()
+        }
+        .onChange(of: showMenuBarExtra) { _, _ in
+            syncLoginItemState()
+        }
+        .onChange(of: finderIntegrationEnabled) { _, newValue in
+            if newValue {
+                Task {
+                    _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
                 }
             }
-            deeplinkHandler.clearPending()
+        }
+        .onChange(of: watchedFoldersManager.folders) { _, _ in
+            coordinator?.syncWatchedFolders()
         }
     }
 
+    @MainActor
+    private func configureGlobalsIfNeeded() {
+        guard !hasConfiguredGlobals else { return }
+        hasConfiguredGlobals = true
+
+        appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
+        syncLoginItemState()
+
+        watchedFoldersManager.restoreSecurityScopedAccess()
+        storageLocationsManager.restoreSecurityScopedAccess()
+
+        if finderIntegrationEnabled {
+            Task {
+                _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+            }
+        }
+
+        if coordinator == nil {
+            coordinator = AppCoordinator(
+                organizer: automationOrganizer,
+                watchedFoldersManager: watchedFoldersManager,
+                learningsManager: learningsManager
+            )
+        }
+
+        automationOrganizer.exclusionRules = exclusionRules
+        automationOrganizer.personaManager = personaManager
+        automationOrganizer.customPersonaStore = customPersonaStore
+        automationOrganizer.storageLocationsManager = storageLocationsManager
+        automationOrganizer.learningsManager = learningsManager
+        automationOrganizer.automationManager = automationManager
+
+        Task<Void, Never> { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            automationManager.startUp()
+            try? await automationOrganizer.configure(with: settingsViewModel.config)
+            learningsManager.configure(with: settingsViewModel.config)
+            menuBarController.configure(settings: settingsViewModel)
+        }
+
+        if ProcessInfo.processInfo.environment["XCUITEST_NOTIFICATION_ACTION"] == "showDetails" {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
+            }
+        }
+    }
+
+    @MainActor
+    private func syncLoginItemState() {
+        loginItemManager.syncServiceRegistration(
+            launchAtLogin: launchAtLogin,
+            keepInBackground: keepInBackground,
+            showMenuBarExtra: showMenuBarExtra
+        )
+    }
 }

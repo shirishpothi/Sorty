@@ -144,6 +144,7 @@ bundle_finder_extension() {
         -configuration "${xcode_config}" \
         SYMROOT="${derived_data}/Build/Products" \
         OBJROOT="${derived_data}/Build/Intermediates" \
+        PRODUCT_BUNDLE_IDENTIFIER="${APP_BUNDLE_ID}.SortyFinderSync" \
         CODE_SIGN_IDENTITY="-" \
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGNING_REQUIRED=NO \
@@ -152,7 +153,10 @@ bundle_finder_extension() {
         build 2>&1 | tail -5; then
 
         local built_appex
-        built_appex=$(find "${derived_data}/Build/Products" -name "${appex_name}" -type d | head -1)
+        built_appex=$(find "${derived_data}/Build/Products/${xcode_config}" -name "${appex_name}" -type d 2>/dev/null | head -1)
+        if [ -z "${built_appex}" ]; then
+            built_appex=$(find "${derived_data}/Build/Products" -name "${appex_name}" -type d | head -1)
+        fi
 
         if [ -n "${built_appex}" ] && [ -d "${built_appex}" ]; then
             mkdir -p "${plugins_dir}"

@@ -153,19 +153,22 @@ public struct WorkspaceHealthView: View {
     private func healthScoreBadge(snapshot: DirectorySnapshot) -> some View {
         let score = healthManager.healthScore(for: snapshot.directoryPath)
         let healthDescription = scoreDescription(score)
+        let healthColor = healthManager.healthScoreBand(for: score).color
         
         return VStack(spacing: 16) {
             ZStack {
                 SortyGradientCircularProgress(
                     progress: Double(score) / 100.0,
+                    accent: healthColor,
                     size: 80,
-                    lineWidth: 8
+                    lineWidth: 8,
+                    showsShimmer: false
                 )
                     .accessibilityHidden(true)
                 
                 Text("\(score)")
                     .font(.title.bold())
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(healthColor)
                     .accessibilityHidden(true)
             }
             .accessibilityElement(children: .ignore)
@@ -197,7 +200,6 @@ public struct WorkspaceHealthView: View {
         switch score {
         case 80...100: return "Excellent"
         case 60..<80: return "Good"
-        case 40..<60: return "Fair"
         default: return "Needs Attention"
         }
     }

@@ -29,94 +29,26 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
         guard Self.isAvailable() else {
             throw AIClientError.apiError(statusCode: 503, message: Self.unavailabilityReason)
         }
-        
-        // Determine compaction level to fit context window
-        let compactionLevel = PromptBuilder.selectCompactionLevel(files: files, maxTokens: 1200)
-        
-        var systemPrompt: String
-        var userPrompt: String
-        
-        switch compactionLevel {
-        case .standard:
-            systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildCompactSystemPrompt(mode: config.mode, enableReasoning: config.enableReasoning, enableSmartRename: config.enableSmartRename, maxTopLevelFolders: config.maxTopLevelFolders, enableTagging: config.enableFileTagging)
-            userPrompt = PromptBuilder.buildCompactPrompt(files: files, mode: config.mode, enableReasoning: config.enableReasoning)
-        case .ultra:
-            let prompts = PromptBuilder.buildUltraCompactPrompt(files: files)
-            systemPrompt = prompts.system
-            userPrompt = prompts.user
-        case .summary:
-            let prompts = PromptBuilder.buildSummaryPrompt(files: files)
-            systemPrompt = prompts.system
-            userPrompt = prompts.user
-        }
-        
-        // Incorporate custom instructions
-        if let instructions = customInstructions, !instructions.isEmpty {
-            userPrompt = "USER INSTRUCTIONS: \(instructions)\n\n" + userPrompt
-        }
-        
-        // Log strategy for debugging
-        DebugLogger.log("AFM Strategy: \(compactionLevel) compaction for \(files.count) files")
-        
+
         do {
-            // Create a language model session with the system instructions
-            let session = LanguageModelSession(instructions: systemPrompt)
-            
-            // Generate response from the model
-            let response = try await session.respond(to: userPrompt)
-            let content = response.content
-            
-            // Simulate streaming for UI feedback since this API might be synchronous
-            let chunkSize = 20
-            var currentIndex = content.startIndex
-            
-            while currentIndex < content.endIndex {
-                let nextIndex = content.index(currentIndex, offsetBy: chunkSize, limitedBy: content.endIndex) ?? content.endIndex
-                let chunk = String(content[currentIndex..<nextIndex])
-                
-                await MainActor.run {
-                    streamingDelegate?.didReceiveChunk(chunk)
-                }
-                
-                // minimal delay to allow UI updates
-                try? await Task.sleep(nanoseconds: 5_000_000) 
-                currentIndex = nextIndex
-            }
-            
-            await MainActor.run {
-                streamingDelegate?.didComplete(content: content)
-            }
-            
-            // Parse the response into an OrganizationPlan
-            var plan = try ResponseParser.parseResponse(content, originalFiles: files)
-            
-            // Calculate stats
-            let duration = Date().timeIntervalSince(startTime)
-            let estimatedTokens = content.count / 4
-            let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
-            
-            plan.generationStats = GenerationStats(
-                duration: duration,
-                tps: tps,
-                ttft: 0.1, // Near instant for on-device
-                totalTokens: estimatedTokens,
-                model: "Apple Foundation Model",
-                filesScanned: files.count,
-                totalFileSize: files.reduce(0) { $0 + $1.size },
-                promptTokens: nil
+            return try await analyzeSingleRequest(
+                files: files,
+                customInstructions: customInstructions,
+                startTime: startTime
             )
-            
-            return plan
-            
-        } catch let error as LanguageModelSession.GenerationError {
+        } catch let error as AIClientError where Self.isContextLimitError(error) {
+            if files.count > 1 {
+                DebugLogger.log("AFM context limit reached for \(files.count) files. Retrying in adaptive batches.")
+                return try await analyzeInAdaptiveBatches(
+                    files: files,
+                    customInstructions: customInstructions,
+                    overallStartTime: startTime
+                )
+            }
             throw AIClientError.apiError(
-                statusCode: 500,
-                message: "Apple Foundation Model generation error: \(error.localizedDescription)"
+                statusCode: 413,
+                message: "The folder contents exceed Apple Intelligence's on-device context limits. Try organizing a smaller folder or switching to a cloud AI provider."
             )
-        } catch let error as AIClientError {
-            throw error
-        } catch {
-            throw AIClientError.networkError(error)
         }
     }
     
@@ -148,13 +80,258 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
             return response.content
             
         } catch let error as LanguageModelSession.GenerationError {
-            throw AIClientError.apiError(
-                statusCode: 500,
-                message: "Apple Foundation Model generation error: \(error.localizedDescription)"
-            )
+            throw Self.mapGenerationError(error)
         } catch {
             throw error
         }
+    }
+
+    private static func compactionStrategies(startingWith level: PromptBuilder.CompactionLevel) -> [PromptBuilder.CompactionLevel] {
+        switch level {
+        case .standard:
+            return [.standard, .ultra, .micro, .summary]
+        case .ultra:
+            return [.ultra, .micro, .summary]
+        case .summary:
+            return [.summary, .micro]
+        case .micro:
+            return [.micro, .summary]
+        }
+    }
+
+    private static func prompts(for level: PromptBuilder.CompactionLevel, config: AIConfig, files: [FileItem]) -> (system: String, user: String) {
+        return PromptBuilder.promptPair(for: level, config: config, files: files)
+    }
+
+    private static func isContextLimitError(_ error: AIClientError) -> Bool {
+        if case .apiError(let statusCode, let message) = error {
+            if statusCode == 413 { return true }
+            let lowered = message.lowercased()
+            return lowered.contains("context") || lowered.contains("token") || lowered.contains("length")
+        }
+        return false
+    }
+
+    private func analyzeSingleRequest(
+        files: [FileItem],
+        customInstructions: String?,
+        startTime: Date
+    ) async throws -> OrganizationPlan {
+        // Apple Foundation Models have a small on-device context window.
+        // Start with aggressive compaction to avoid context limit errors.
+        let compactionLevel = PromptBuilder.selectCompactionLevel(
+            files: files,
+            config: config,
+            customInstructions: customInstructions,
+            maxTokens: 600
+        )
+
+        let strategies = Self.compactionStrategies(startingWith: compactionLevel)
+        var lastGenerationError: LanguageModelSession.GenerationError?
+        var lastError: Error?
+
+        for (index, strategy) in strategies.enumerated() {
+            let isLastAttempt = index == strategies.count - 1
+            var prompts = Self.prompts(
+                for: strategy,
+                config: config,
+                files: files
+            )
+
+            if let instructions = customInstructions, !instructions.isEmpty {
+                prompts.user = "USER INSTRUCTIONS: \(instructions)\n\n" + prompts.user
+            }
+
+            DebugLogger.log("AFM Strategy: \(strategy) compaction for \(files.count) files")
+
+            do {
+                let session = LanguageModelSession(instructions: prompts.system)
+                let response = try await session.respond(to: prompts.user)
+                let content = response.content
+
+                await streamContent(content)
+
+                var plan = try ResponseParser.parseResponse(content, originalFiles: files)
+                plan.generationStats = makeStats(
+                    from: content,
+                    files: files,
+                    startTime: startTime
+                )
+                return plan
+
+            } catch let error as LanguageModelSession.GenerationError {
+                lastGenerationError = error
+                DebugLogger.log("AFM generation failed with \(strategy) compaction: \(error.localizedDescription)")
+                if isLastAttempt {
+                    throw Self.mapGenerationError(error)
+                }
+            } catch let error as AIClientError {
+                // Retry with a stricter/smaller prompt if model output was malformed.
+                if case .invalidResponseFormat = error, !isLastAttempt {
+                    DebugLogger.log("AFM produced invalid response format with \(strategy) compaction; retrying.")
+                    continue
+                }
+                throw error
+            } catch {
+                lastError = error
+                if !isLastAttempt {
+                    DebugLogger.log("AFM attempt failed with \(strategy) compaction: \(error.localizedDescription). Retrying.")
+                    continue
+                }
+            }
+        }
+
+        if let generationError = lastGenerationError {
+            throw Self.mapGenerationError(generationError)
+        }
+        if let error = lastError {
+            throw AIClientError.networkError(error)
+        }
+        throw AIClientError.invalidResponse
+    }
+
+    private func analyzeInAdaptiveBatches(
+        files: [FileItem],
+        customInstructions: String?,
+        overallStartTime: Date
+    ) async throws -> OrganizationPlan {
+        var pendingChunks: [[FileItem]] = [files]
+        var completedPlans: [OrganizationPlan] = []
+        var processedChunkCount = 0
+
+        while !pendingChunks.isEmpty {
+            let chunk = pendingChunks.removeFirst()
+            let chunkStart = Date()
+
+            do {
+                let chunkPlan = try await analyzeSingleRequest(
+                    files: chunk,
+                    customInstructions: customInstructions,
+                    startTime: chunkStart
+                )
+                completedPlans.append(chunkPlan)
+                processedChunkCount += 1
+            } catch let error as AIClientError where Self.isContextLimitError(error) && chunk.count > 1 {
+                let midpoint = max(1, chunk.count / 2)
+                let left = Array(chunk[..<midpoint])
+                let right = Array(chunk[midpoint...])
+                // Depth-first split to resolve tight context limits quickly.
+                pendingChunks.insert(right, at: 0)
+                pendingChunks.insert(left, at: 0)
+            }
+        }
+
+        var mergedSuggestions: [FolderSuggestion] = []
+        var mergedUnorganizedFiles: [FileItem] = []
+        var mergedUnorganizedDetails: [UnorganizedFile] = []
+        var seenUnorganizedIDs: Set<UUID> = []
+        var seenUnorganizedNames: Set<String> = []
+        var totalTokens = 0
+
+        for plan in completedPlans {
+            mergedSuggestions.append(contentsOf: plan.suggestions)
+
+            for file in plan.unorganizedFiles where seenUnorganizedIDs.insert(file.id).inserted {
+                mergedUnorganizedFiles.append(file)
+            }
+
+            for detail in plan.unorganizedDetails where seenUnorganizedNames.insert(detail.filename).inserted {
+                mergedUnorganizedDetails.append(detail)
+            }
+
+            totalTokens += plan.generationStats?.totalTokens ?? 0
+        }
+
+        let duration = Date().timeIntervalSince(overallStartTime)
+        let tps = duration > 0 ? Double(totalTokens) / duration : 0
+        let stats = GenerationStats(
+            duration: duration,
+            tps: tps,
+            ttft: 0.1,
+            totalTokens: totalTokens,
+            model: "Apple Foundation Model",
+            filesScanned: files.count,
+            totalFileSize: files.reduce(0) { $0 + $1.size },
+            promptTokens: nil
+        )
+
+        let notes = "Generated in \(processedChunkCount) adaptive batch(es) to fit Apple model context limits."
+        return OrganizationPlan(
+            suggestions: mergedSuggestions,
+            unorganizedFiles: mergedUnorganizedFiles,
+            unorganizedDetails: mergedUnorganizedDetails,
+            notes: notes,
+            timestamp: Date(),
+            version: 1,
+            generationStats: stats
+        )
+    }
+
+    private func makeStats(
+        from content: String,
+        files: [FileItem],
+        startTime: Date
+    ) -> GenerationStats {
+        let duration = Date().timeIntervalSince(startTime)
+        let estimatedTokens = content.count / 4
+        let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
+
+        return GenerationStats(
+            duration: duration,
+            tps: tps,
+            ttft: 0.1, // Near instant for on-device
+            totalTokens: estimatedTokens,
+            model: "Apple Foundation Model",
+            filesScanned: files.count,
+            totalFileSize: files.reduce(0) { $0 + $1.size },
+            promptTokens: nil
+        )
+    }
+
+    private func streamContent(_ content: String) async {
+        let chunkSize = 20
+        var currentIndex = content.startIndex
+
+        while currentIndex < content.endIndex {
+            let nextIndex = content.index(currentIndex, offsetBy: chunkSize, limitedBy: content.endIndex) ?? content.endIndex
+            let chunk = String(content[currentIndex..<nextIndex])
+
+            await MainActor.run {
+                streamingDelegate?.didReceiveChunk(chunk)
+            }
+
+            // Minimal delay so the streaming UI can animate updates smoothly.
+            try? await Task.sleep(nanoseconds: 5_000_000)
+            currentIndex = nextIndex
+        }
+
+        await MainActor.run {
+            streamingDelegate?.didComplete(content: content)
+        }
+    }
+
+    private static func mapGenerationError(_ error: LanguageModelSession.GenerationError) -> AIClientError {
+        let message = error.localizedDescription
+        let lowered = message.lowercased()
+
+        if lowered.contains("context") || lowered.contains("token") || lowered.contains("length") {
+            return AIClientError.apiError(
+                statusCode: 413,
+                message: "Apple Foundation Model request exceeded local context limits. Sorty will retry in smaller batches automatically. Details: \(message)"
+            )
+        }
+
+        if lowered.contains("not ready") || lowered.contains("download") || lowered.contains("unavailable") {
+            return AIClientError.apiError(
+                statusCode: 503,
+                message: "Apple Foundation Model is not ready yet. \(message)"
+            )
+        }
+
+        return AIClientError.apiError(
+            statusCode: 503,
+            message: "Apple Foundation Model generation failed: \(message)"
+        )
     }
     
     /// Check if Apple Intelligence is available on this device

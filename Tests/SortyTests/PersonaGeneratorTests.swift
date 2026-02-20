@@ -290,11 +290,13 @@ final class PersonaGeneratorTests: XCTestCase {
         let missingAPIURL = AIClientError.missingAPIURL
         let missingAPIKey = AIClientError.missingAPIKey
         let invalidURL = AIClientError.invalidURL
+        let contextLimit = AIClientError.apiError(statusCode: 413, message: "too many tokens")
         
         XCTAssertNotNil(missingAPIURL.errorDescription)
         XCTAssertNotNil(missingAPIKey.errorDescription)
         XCTAssertNotNil(invalidURL.errorDescription)
         XCTAssertTrue(missingAPIURL.errorDescription?.contains("API URL") ?? false)
+        XCTAssertTrue(contextLimit.errorDescription?.contains("Request too large") ?? false)
     }
     
     // MARK: - Fallback Extraction Tests

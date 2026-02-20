@@ -21,9 +21,10 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
+            .lineLimit(1)
             .foregroundColor(.white)
-            .padding(.horizontal, size == .small ? 16 : 28)
-            .padding(.vertical, size == .small ? 8 : 14)
+            .padding(.horizontal, size == .small ? 16 : 22)
+            .padding(.vertical, size == .small ? 8 : 10)
             .background(
                 ZStack {
                     if isSecondary {
@@ -97,9 +98,10 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
+            .lineLimit(1)
             .foregroundColor(.white)
-            .padding(.horizontal, size == .small ? 16 : 28)
-            .padding(.vertical, size == .small ? 8 : 14)
+            .padding(.horizontal, size == .small ? 16 : 22)
+            .padding(.vertical, size == .small ? 8 : 10)
             .background(
                 ZStack {
                     if isSecondary {
@@ -176,6 +178,7 @@ public struct SortySecondaryButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size == .small ? 12 : 14, weight: .medium))
+            .lineLimit(1)
             .padding(.horizontal, size == .small ? 12 : 16)
             .padding(.vertical, size == .small ? 6 : 10)
             .background(
@@ -208,6 +211,7 @@ public struct SortyDestructiveButtonStyle: ButtonStyle {
     public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: size == .small ? 12 : 14, weight: .semibold))
+            .lineLimit(1)
             .foregroundColor(.white)
             .padding(.horizontal, size == .small ? 12 : 16)
             .padding(.vertical, size == .small ? 6 : 10)

@@ -12,6 +12,7 @@ Welcome to the official Sorty documentation. Sorty is an AI-powered file organiz
 - [Duplicate Detection](#duplicate-detection)
 - [Exclusion Rules](#exclusion-rules)
 - [Watched Folders](#watched-folders)
+- [Finder Integration](#finder-integration)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [App Deeplinks](#app-deeplinks)
 - [CLI Tool](#cli-tool)
@@ -171,6 +172,21 @@ Set up automatic organization for folders like Downloads. New files are organize
 2. Click "Add Folder" or use suggested folders (Downloads, Desktop, Documents)
 3. Configure auto-organization settings
 4. Enable the folder to start monitoring
+
+---
+
+## Finder Integration
+
+Sorty can expose Finder actions without needing terminal commands.
+
+### Quick Action and Finder Sync Repair (In-App)
+
+1. Open **Settings -> Finder Integration**
+2. In **Quick Action**, click **Install** (or **Uninstall/Install** to reinstall)
+3. Click **Repair Finder Sync** (or **Activate Extension**) to refresh the `.appex` registration
+4. Click **Open Extensions** and confirm Sorty is enabled under Finder extensions
+
+If Finder still shows stale state, run the in-app repair buttons again and then re-open Finder.
 
 ---
 

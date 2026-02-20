@@ -1354,18 +1354,37 @@ public class WorkspaceHealthManager: ObservableObject {
 
         return Int(max(0, min(100, score)))
     }
+
+    public enum HealthScoreBand: String, Sendable {
+        case healthy
+        case caution
+        case critical
+
+        public var color: Color {
+            switch self {
+            case .healthy: return .green
+            case .caution: return .yellow
+            case .critical: return .red
+            }
+        }
+    }
+
+    public func healthScoreBand(for score: Int) -> HealthScoreBand {
+        switch score {
+        case 80...100:
+            return .healthy
+        case 60..<80:
+            return .caution
+        default:
+            return .critical
+        }
+    }
     
     public var healthStatus: (title: String, color: Color) {
-        let score = healthScore
-        if score >= 90 {
-            return ("Excellent", .green)
-        } else if score >= 70 {
-            return ("Good", .blue)
-        } else if score >= 50 {
-            return ("Fair", .orange)
-        } else {
-            return ("Needs Attention", .red)
-        }
+        let score = Int(healthScore.rounded())
+        let band = healthScoreBand(for: score)
+        let title = score >= 80 ? "Excellent" : (score >= 60 ? "Good" : "Needs Attention")
+        return (title, band.color)
     }
 
     // MARK: - Private Methods

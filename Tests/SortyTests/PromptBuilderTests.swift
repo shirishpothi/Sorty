@@ -37,4 +37,76 @@ class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(systemPrompt.contains("Reasoning Mode Enabled"))
         XCTAssertTrue(systemPrompt.contains("\"reasoning\":"))
     }
+
+    func testUltraCompactPromptIncludesAllFileIDs() {
+        let files = (1...40).map { index in
+            FileItem(
+                path: "/tmp/file\(index).txt",
+                name: "file\(index)",
+                extension: "txt",
+                size: 128,
+                isDirectory: false
+            )
+        }
+
+        let prompt = PromptBuilder.buildUltraCompactPrompt(files: files)
+        XCTAssertTrue(prompt.user.contains("1|txt|file1"))
+        XCTAssertTrue(prompt.user.contains("40|txt|file40"))
+        XCTAssertFalse(prompt.user.contains("+10 more"))
+    }
+
+    func testSummaryPromptIncludesAllFileIDs() {
+        let files = (1...40).map { index in
+            FileItem(
+                path: "/tmp/file\(index).txt",
+                name: "file\(index)",
+                extension: "txt",
+                size: 128,
+                isDirectory: false
+            )
+        }
+
+        let prompt = PromptBuilder.buildSummaryPrompt(files: files)
+        XCTAssertTrue(prompt.user.contains("1|txt|file1"))
+        XCTAssertTrue(prompt.user.contains("40|txt|file40"))
+    }
+
+    func testMicroPromptIncludesAllFileIDs() {
+        let files = (1...40).map { index in
+            FileItem(
+                path: "/tmp/file\(index).txt",
+                name: "file\(index)",
+                extension: "txt",
+                size: 128,
+                isDirectory: false
+            )
+        }
+
+        let prompt = PromptBuilder.buildMicroPrompt(files: files)
+        XCTAssertTrue(prompt.user.contains("1|txt"))
+        XCTAssertTrue(prompt.user.contains("40|txt"))
+    }
+
+    func testCompactionLevelUsesFullPromptBudget() {
+        let files = (1...120).map { index in
+            FileItem(
+                path: "/tmp/very_long_file_name_\(index).pdf",
+                name: "very_long_file_name_\(index)",
+                extension: "pdf",
+                size: 1024,
+                isDirectory: false
+            )
+        }
+        let config = AIConfig(provider: .appleFoundationModel)
+        let longInstructions = String(repeating: "keep all files strictly organized by project and date. ", count: 200)
+
+        let level = PromptBuilder.selectCompactionLevel(
+            files: files,
+            config: config,
+            customInstructions: longInstructions,
+            maxTokens: 1200
+        )
+
+        XCTAssertTrue(level == .summary || level == .micro)
+    }
 }

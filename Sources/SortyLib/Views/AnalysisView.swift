@@ -52,12 +52,9 @@ enum AnalysisIconProvider {
 @MainActor
 final class AnalysisRefreshManager: ObservableObject {
     @Published var currentFunnyMessage: String = ""
-    @Published var currentFileDisplay: String = ""
     @Published var funnyMessageOpacity: Double = 0
-    @Published var fileDisplayOpacity: Double = 0
     
     private var refreshManager: RefreshManager?
-    private(set) var fileNames: [String] = []
     private weak var organizer: FolderOrganizer?
     private var timerGroup: CoordinatedRefreshGroup?
     
@@ -94,19 +91,12 @@ final class AnalysisRefreshManager: ObservableObject {
     
     func start(organizer: FolderOrganizer) {
         self.organizer = organizer
-        collectFileNames()
         
         // Set initial values
         currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
-        if !fileNames.isEmpty {
-            currentFileDisplay = fileNames.randomElement() ?? ""
-        }
         
         withAnimation(.easeIn(duration: 0.5)) {
             funnyMessageOpacity = 1
-        }
-        withAnimation(.easeIn(duration: 0.3)) {
-            fileDisplayOpacity = 1
         }
         
         // Use the centralized RefreshManager with coordinated group
@@ -122,11 +112,8 @@ final class AnalysisRefreshManager: ObservableObject {
         refreshManager?.cancelAll()
         refreshManager = nil
         organizer = nil
-        fileNames = []
         currentFunnyMessage = ""
-        currentFileDisplay = ""
         funnyMessageOpacity = 0
-        fileDisplayOpacity = 0
     }
     
     func pause() {
@@ -137,37 +124,8 @@ final class AnalysisRefreshManager: ObservableObject {
         timerGroup?.resume()
     }
     
-    private func collectFileNames() {
-        var names: [String] = []
-        
-        if let plan = organizer?.currentPlan {
-            func collect(from suggestions: [FolderSuggestion]) -> [String] {
-                var result: [String] = []
-                for suggestion in suggestions {
-                    result.append(contentsOf: suggestion.files.map { $0.displayName })
-                    result.append(contentsOf: collect(from: suggestion.subfolders))
-                }
-                return result
-            }
-            names = collect(from: plan.suggestions) + plan.unorganizedFiles.map { $0.displayName }
-        }
-        
-        if names.isEmpty, let scanned = organizer?.scannedFiles, !scanned.isEmpty {
-            names = scanned.map { $0.displayName }
-        }
-        
-        fileNames = names
-    }
-    
     private func startRefreshLoop() {
         // Use async tasks with weak self to prevent retain cycles
-        // File display cycle: every 3s (reduced from 1.5s to cut redraw frequency)
-        timerGroup?.addTimer(interval: 3.0) { [weak self] in
-            Task { [weak self] in
-                await self?.cycleFileDisplay()
-            }
-        }
-        
         // Funny message cycle: every 5s (reduced from 4s)
         timerGroup?.addTimer(interval: 5.0) { [weak self] in
             Task { [weak self] in
@@ -196,53 +154,6 @@ final class AnalysisRefreshManager: ObservableObject {
         withAnimation(.easeInOut(duration: 0.65)) {
             funnyMessageOpacity = 1
         }
-    }
-    
-    private func cycleFileDisplay() async {
-        guard organizer != nil else { return }
-        
-        var nextFileName: String?
-        
-        if !fileNames.isEmpty {
-            nextFileName = fileNames.randomElement()
-        } else if let content = organizer?.displayStreamingContent {
-            nextFileName = extractFileNameFromContent(content)
-        }
-        
-        guard let fileName = nextFileName, !fileName.isEmpty else { return }
-        
-        withAnimation(.easeInOut(duration: 0.35)) {
-            fileDisplayOpacity = 0
-        }
-        
-        try? await Task.sleep(nanoseconds: 360_000_000)
-        guard organizer != nil else { return }
-        
-        currentFileDisplay = fileName
-        
-        withAnimation(.easeInOut(duration: 0.4)) {
-            fileDisplayOpacity = 1
-        }
-    }
-    
-    private static let fileNameRegexes: [NSRegularExpression] = {
-        let patterns = [
-            "\"name\":\\s*\"([^\"]+)\"",
-            "\"file\":\\s*\"([^\"]+)\"",
-            "([\\w\\-\\.]+\\.(pdf|doc|docx|jpg|png|txt|md|swift|js|py|zip|mp3|mp4))"
-        ]
-        return patterns.compactMap { try? NSRegularExpression(pattern: $0, options: .caseInsensitive) }
-    }()
-    
-    private func extractFileNameFromContent(_ content: String) -> String? {
-        for regex in Self.fileNameRegexes {
-            let range = NSRange(content.startIndex..., in: content)
-            let matches = regex.matches(in: content, options: [], range: range)
-            if let match = matches.last, let range = Range(match.range(at: 1), in: content) {
-                return String(content[range])
-            }
-        }
-        return nil
     }
 }
 
@@ -389,9 +300,7 @@ struct AnalysisView: View {
             isStreaming: organizer.isStreaming,
             isEstablishingConnection: isEstablishingConnection,
             funnyMessage: refreshManager.currentFunnyMessage,
-            funnyMessageOpacity: refreshManager.funnyMessageOpacity,
-            fileDisplay: refreshManager.currentFileDisplay,
-            fileDisplayOpacity: refreshManager.fileDisplayOpacity
+            funnyMessageOpacity: refreshManager.funnyMessageOpacity
         )
     }
     
@@ -407,20 +316,15 @@ struct AnalysisView: View {
     private var timeoutMessage: some View {
         InlineNotice(
             icon: "folder.badge.gearshape",
-            title: "Complex folder detected",
+            title: "Complex folder detected —",
             message: "Large folders with many files may take 1-3 minutes to analyze. Feel free to switch windows—we'll notify you when ready.",
             severity: .info,
             actions: [
-                InlineNoticeAction(title: "Cancel", systemImage: "xmark.circle") {
-                    recordCancelledAnalysis()
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        organizer.reset()
-                    }
-                },
                 InlineNoticeAction(title: "Try Faster Model", systemImage: "bolt.circle") {
                     showFasterModelPicker = true
                 }
-            ]
+            ],
+            isCentered: true
         )
         .sheet(isPresented: $showFasterModelPicker) {
             ModelSelectionPopover(
@@ -445,7 +349,8 @@ struct AnalysisView: View {
             icon: "bell.badge",
             title: "Working in the background",
             message: "Sorty will send a notification when your preview is ready",
-            severity: .tip
+            severity: .tip,
+            isCentered: true
         )
         .accessibilityLabel("Background processing")
         .accessibilityHint("You will be notified when the preview is ready")
@@ -501,9 +406,9 @@ private struct StreamingProgressRing: View {
                 SortyGradientCircularProgress(
                     progress: progress,
                     size: 120,
-                    lineWidth: 8
+                    lineWidth: 8,
+                    showsShimmer: false
                 )
-                .shimmer(isLoading: isEstablishingConnection)
                 
                 VStack(spacing: 2) {
                     Text("\(Int(progress * 100))%")
@@ -541,8 +446,6 @@ private struct AIReasoningStatus: View {
     let isEstablishingConnection: Bool
     let funnyMessage: String
     let funnyMessageOpacity: Double
-    let fileDisplay: String
-    let fileDisplayOpacity: Double
 
     private var isAnalyzingStage: Bool {
         let stage = organizationStage.lowercased()
@@ -557,15 +460,16 @@ private struct AIReasoningStatus: View {
                 
                 Text(organizationStage)
                     .font(.headline)
-                    .shimmer(isLoading: isAnalyzingStage)
+                    .foregroundStyle(.primary)
+                    .textShimmer(isLoading: isAnalyzingStage)
             }
-            .modifier(SliverMotionEffect(isActive: isAnalyzingStage))
             
             if isEstablishingConnection {
                 HStack(spacing: 6) {
                     Text("Connecting to AI provider")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .textShimmer(isLoading: true)
 
                     LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
                 }
@@ -575,29 +479,12 @@ private struct AIReasoningStatus: View {
                     Text(funnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                        .textShimmer(isLoading: true)
                         .opacity(funnyMessageOpacity)
                         .offset(y: funnyMessageOpacity > 0.5 ? 0 : 2)
                         .blur(radius: funnyMessageOpacity > 0.5 ? 0 : 0.35)
                         .animation(.easeInOut(duration: 0.6), value: funnyMessageOpacity)
                         .frame(height: 20)
-                    
-                    if !fileDisplay.isEmpty {
-                        HStack(spacing: 4) {
-                            Text("Analysing")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                            Text(fileDisplay)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fontWeight(.medium)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        .shimmer(isLoading: true)
-                        .opacity(fileDisplayOpacity)
-                        .modifier(SliverMotionEffect(isActive: true))
-                        .frame(maxWidth: 300)
-                    }
                 }
                 .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
             }
@@ -626,34 +513,6 @@ private struct AIReasoningStatus: View {
                 }
             }
         }
-    }
-}
-
-private struct SliverMotionEffect: ViewModifier {
-    let isActive: Bool
-    @State private var animate = false
-
-    func body(content: Content) -> some View {
-        content
-            .offset(x: isActive && animate ? 0.8 : -0.8)
-            .opacity(isActive ? (animate ? 1.0 : 0.94) : 1.0)
-            .animation(
-                isActive
-                    ? .easeInOut(duration: 1.6).repeatForever(autoreverses: true)
-                    : .default,
-                value: animate
-            )
-            .onAppear {
-                guard isActive else { return }
-                animate = true
-            }
-            .onChange(of: isActive) { _, newValue in
-                if newValue {
-                    animate = true
-                } else {
-                    animate = false
-                }
-            }
     }
 }
 
@@ -1039,19 +898,22 @@ struct InlineNotice: View {
     let message: String?
     let severity: NoticeSeverity
     var actions: [InlineNoticeAction]
+    var isCentered: Bool
     
     init(
         icon: String? = nil,
         title: String,
         message: String? = nil,
         severity: NoticeSeverity = .info,
-        actions: [InlineNoticeAction] = []
+        actions: [InlineNoticeAction] = [],
+        isCentered: Bool = false
     ) {
         self.icon = icon
         self.title = title
         self.message = message
         self.severity = severity
         self.actions = actions
+        self.isCentered = isCentered
     }
     
     @available(*, deprecated, message: "Use severity-based initializer instead")
@@ -1061,6 +923,7 @@ struct InlineNotice: View {
         self.message = message
         self.severity = tintColor == .orange ? .warning : (tintColor == .green ? .tip : .info)
         self.actions = []
+        self.isCentered = false
     }
     
     private var effectiveIcon: String {
@@ -1068,32 +931,39 @@ struct InlineNotice: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: isCentered ? .center : .leading, spacing: 6) {
             HStack(spacing: 6) {
+                if isCentered { Spacer(minLength: 0) }
+                
                 Image(systemName: effectiveIcon)
                     .font(.caption)
                     .foregroundStyle(severity.color)
                 
                 Text(title)
                     .font(.caption)
-                    .fontWeight(.medium)
+                    .fontWeight(.semibold)
                 
-                if let message = message {
-                    Text("—")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    
-                    Text(message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                if !isCentered {
+                    Spacer(minLength: 0)
+                } else {
+                    Spacer(minLength: 0)
                 }
-                
-                Spacer(minLength: 0)
+            }
+            
+            if let message = message {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(isCentered ? .center : .leading)
+                    .padding(.leading, isCentered ? 0 : 20)
             }
             
             if !actions.isEmpty {
                 HStack(spacing: 8) {
+                    if isCentered { Spacer(minLength: 0) }
+                    
                     ForEach(actions.indices, id: \.self) { index in
                         let action = actions[index]
                         Button {
@@ -1118,13 +988,15 @@ struct InlineNotice: View {
                                 .fill(severity.color.opacity(0.12))
                         )
                     }
+                    
+                    if isCentered { Spacer(minLength: 0) }
                 }
-                .padding(.leading, 20)
+                .padding(.leading, isCentered ? 0 : 20)
             }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: isCentered ? .center : .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(severity.color.opacity(0.06))

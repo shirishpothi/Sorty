@@ -125,6 +125,7 @@ struct SortyGradientCircularProgress: View {
     var accent: Color = .accentColor
     var size: CGFloat = 80
     var lineWidth: CGFloat = 8
+    var showsShimmer: Bool = false
 
     @State private var animatedProgress: Double = 0
 
@@ -155,6 +156,44 @@ struct SortyGradientCircularProgress: View {
                 )
                 .rotationEffect(.degrees(-90))
                 .shadow(color: accent.opacity(0.28), radius: lineWidth * 0.6, x: 0, y: 1)
+
+            if showsShimmer {
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                    let elapsed = context.date.timeIntervalSinceReferenceDate
+                    let arcSpan = animatedProgress * 360
+                    let phase = (elapsed * 120).truncatingRemainder(dividingBy: arcSpan.isZero ? 360 : arcSpan)
+                    let shimmerCenter = phase / max(arcSpan, 1)
+                    let pulse = (sin(elapsed * 1.8) + 1) * 0.5
+                    let peakOpacity = 0.35 + (pulse * 0.25)
+                    let glowOpacity = 0.10 + (pulse * 0.10)
+                    let highlightWidth: Double = 0.12
+
+                    let trimStart = max(shimmerCenter - highlightWidth, 0) * animatedProgress
+                    let trimEnd = min(shimmerCenter + highlightWidth, 1) * animatedProgress
+
+                    Circle()
+                        .inset(by: lineWidth / 2)
+                        .trim(from: trimStart, to: trimEnd)
+                        .stroke(
+                            .white.opacity(peakOpacity),
+                            style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .blur(radius: 2)
+                        .blendMode(.plusLighter)
+
+                    Circle()
+                        .inset(by: lineWidth / 2)
+                        .trim(from: 0, to: animatedProgress)
+                        .stroke(
+                            accent.opacity(glowOpacity),
+                            style: StrokeStyle(lineWidth: lineWidth + 4, lineCap: .round)
+                        )
+                        .rotationEffect(.degrees(-90))
+                        .blur(radius: lineWidth * 0.8)
+                        .blendMode(.plusLighter)
+                }
+            }
         }
         .frame(width: size, height: size)
         .onAppear {

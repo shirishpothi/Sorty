@@ -13,11 +13,24 @@ struct ResponseParser {
 
     struct AIResponse: Codable {
         let folders: [FolderResponse]
+        let folderAssignments: [FolderResponse]?
         let unorganized: [UnorganizedFileResponse]?
+        let unorganizedIDs: [Int]?
         let notes: String?
 
         enum CodingKeys: String, CodingKey {
             case folders, unorganized, notes
+            case folderAssignments = "folder_assignments"
+            case unorganizedIDs = "unorganized_ids"
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            folders = try container.decodeIfPresent([FolderResponse].self, forKey: .folders) ?? []
+            folderAssignments = try container.decodeIfPresent([FolderResponse].self, forKey: .folderAssignments)
+            unorganized = try container.decodeIfPresent([UnorganizedFileResponse].self, forKey: .unorganized)
+            unorganizedIDs = try container.decodeIfPresent([Int].self, forKey: .unorganizedIDs)
+            notes = try container.decodeIfPresent(String.self, forKey: .notes)
         }
     }
 
@@ -33,6 +46,7 @@ struct ResponseParser {
         let semanticTags: [String]?
         let confidence: Double?
         let ruleId: String?
+        let fileIDs: [Int]?
 
         // Support both array of strings and array of FileEntry objects
         init(from decoder: Decoder) throws {
@@ -46,6 +60,7 @@ struct ResponseParser {
             semanticTags = try container.decodeIfPresent([String].self, forKey: .semanticTags)
             confidence = try container.decodeIfPresent(Double.self, forKey: .confidence)
             ruleId = try container.decodeIfPresent(String.self, forKey: .ruleId)
+            fileIDs = try container.decodeIfPresent([Int].self, forKey: .fileIDs)
 
             // Try to decode files as FileEntry array first
             if let fileEntries = try? container.decode([FileEntry].self, forKey: .files) {
@@ -64,6 +79,7 @@ struct ResponseParser {
             case semanticTags = "semantic_tags"
             case confidence
             case ruleId = "rule_id"
+            case fileIDs = "file_ids"
         }
     }
 
@@ -205,17 +221,51 @@ struct ResponseParser {
             response = try defaultDecoder.decode(AIResponse.self, from: jsonData)
         }
 
-        // Convert response to OrganizationPlan
-        let suggestions = response.folders.map { folder in
-            convertFolderResponse(folder, originalFiles: originalFiles)
-        }
+        let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
+        let folderPayload = response.folders.isEmpty ? (response.folderAssignments ?? []) : response.folders
 
-        let unorganizedDetails = (response.unorganized ?? []).map { unorg in
+        // Convert response to OrganizationPlan
+        let suggestions = folderPayload.map { folder in
+            convertFolderResponse(folder, originalFiles: originalFiles, fileIdIndex: fileIdIndex)
+        }
+        let assignedFileIDs = collectAssignedFileIDs(from: suggestions)
+
+        var unorganizedDetails = (response.unorganized ?? []).map { unorg in
             UnorganizedFile(filename: unorg.filename, reason: unorg.reason)
         }
+        if let unorganizedIDs = response.unorganizedIDs {
+            for id in unorganizedIDs {
+                if let file = fileIdIndex[id] {
+                    unorganizedDetails.append(
+                        UnorganizedFile(
+                            filename: file.displayName,
+                            reason: "Marked as unorganized in compact file_ids response"
+                        )
+                    )
+                }
+            }
+        }
 
-        let unorganizedFiles = unorganizedDetails.compactMap { detail -> FileItem? in
-            findFile(named: detail.filename, in: originalFiles)
+        var unorganizedFiles: [FileItem] = []
+        var seenUnorganizedIDs: Set<UUID> = []
+
+        for detail in unorganizedDetails {
+            guard let file = findFile(named: detail.filename, in: originalFiles) else { continue }
+            guard !assignedFileIDs.contains(file.id) else { continue }
+            guard seenUnorganizedIDs.insert(file.id).inserted else { continue }
+            unorganizedFiles.append(file)
+        }
+
+        // Defensive fallback: if the model omitted/garbled mappings, keep unmatched files visible.
+        for file in originalFiles where !assignedFileIDs.contains(file.id) {
+            guard seenUnorganizedIDs.insert(file.id).inserted else { continue }
+            unorganizedFiles.append(file)
+            unorganizedDetails.append(
+                UnorganizedFile(
+                    filename: file.displayName,
+                    reason: "Could not map this file from AI response; kept unorganized."
+                )
+            )
         }
 
         return OrganizationPlan(
@@ -228,10 +278,41 @@ struct ResponseParser {
         )
     }
 
-    private static func convertFolderResponse(_ folder: FolderResponse, originalFiles: [FileItem]) -> FolderSuggestion {
+    private static func collectAssignedFileIDs(from suggestions: [FolderSuggestion]) -> Set<UUID> {
+        var ids: Set<UUID> = []
+
+        func walk(_ folder: FolderSuggestion) {
+            for file in folder.files {
+                ids.insert(file.id)
+            }
+            for subfolder in folder.subfolders {
+                walk(subfolder)
+            }
+        }
+
+        for suggestion in suggestions {
+            walk(suggestion)
+        }
+
+        return ids
+    }
+
+    private static func convertFolderResponse(
+        _ folder: FolderResponse,
+        originalFiles: [FileItem],
+        fileIdIndex: [Int: FileItem]
+    ) -> FolderSuggestion {
         var files: [FileItem] = []
         var renameMappings: [FileRenameMapping] = []
         var seenFileIds: Set<UUID> = []
+
+        if let fileIDs = folder.fileIDs {
+            for id in fileIDs {
+                guard let file = fileIdIndex[id], !seenFileIds.contains(file.id) else { continue }
+                seenFileIds.insert(file.id)
+                files.append(file)
+            }
+        }
 
         for fileEntry in folder.files {
             if let file = findFile(named: fileEntry.filename, in: originalFiles) {
@@ -273,7 +354,7 @@ struct ResponseParser {
         }
 
         let subfolders = (folder.subfolders ?? []).map { subfolder in
-            convertFolderResponse(subfolder, originalFiles: originalFiles)
+            convertFolderResponse(subfolder, originalFiles: originalFiles, fileIdIndex: fileIdIndex)
         }
 
         return FolderSuggestion(
@@ -294,44 +375,85 @@ struct ResponseParser {
 
     /// Find a file by name with fuzzy matching support
     private static func findFile(named filename: String, in files: [FileItem]) -> FileItem? {
-        let trimmedName = filename.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedName.isEmpty { return nil }
+        let candidates = normalizedFilenameCandidates(from: filename)
+        guard !candidates.isEmpty else { return nil }
 
-        // Exact match on displayName
-        if let exact = files.first(where: { $0.displayName == trimmedName }) {
-            return exact
-        }
-
-        // Exact match on name only
-        if let nameMatch = files.first(where: { $0.name == trimmedName }) {
-            return nameMatch
+        // Exact match on displayName or name
+        for candidate in candidates {
+            if let exact = files.first(where: { $0.displayName == candidate }) {
+                return exact
+            }
+            if let exactName = files.first(where: { $0.name == candidate }) {
+                return exactName
+            }
         }
 
         // Case-insensitive match
-        if let caseInsensitive = files.first(where: {
-            $0.displayName.lowercased() == trimmedName.lowercased()
-        }) {
-            return caseInsensitive
+        for candidate in candidates {
+            let lowered = candidate.lowercased()
+            if let caseInsensitive = files.first(where: {
+                $0.displayName.lowercased() == lowered || $0.name.lowercased() == lowered
+            }) {
+                return caseInsensitive
+            }
         }
 
         // Special case: AI provides extension only (like "sh", "png", "jpg")
-        // Only trigger this if the input is very short (extensions are usually <= 5 chars)
-        if trimmedName.count <= 5 && !trimmedName.contains(".") {
-            if let extMatch = files.first(where: { $0.extension.lowercased() == trimmedName.lowercased() }) {
+        for candidate in candidates where candidate.count <= 5 && !candidate.contains(".") {
+            if let extMatch = files.first(where: { $0.extension.lowercased() == candidate.lowercased() }) {
                 return extMatch
             }
         }
 
         // Partial match (only for names longer than 3 chars to avoid false positives)
-        if trimmedName.count > 3 {
+        for candidate in candidates where candidate.count > 3 {
             if let partial = files.first(where: {
-                $0.displayName.contains(trimmedName) || trimmedName.contains($0.displayName)
+                $0.displayName.contains(candidate) || candidate.contains($0.displayName)
             }) {
                 return partial
             }
         }
 
         return nil
+    }
+
+    private static func normalizedFilenameCandidates(from raw: String) -> [String] {
+        var candidates: [String] = []
+        var seen: Set<String> = []
+
+        func appendCandidate(_ value: String) {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+
+            let key = trimmed.lowercased()
+            guard seen.insert(key).inserted else { return }
+            candidates.append(trimmed)
+        }
+
+        appendCandidate(raw)
+
+        let strippedQuotes = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+        appendCandidate(strippedQuotes)
+
+        let slashNormalized = strippedQuotes.replacingOccurrences(of: "\\", with: "/")
+        appendCandidate(slashNormalized)
+
+        if slashNormalized.hasPrefix("./") {
+            appendCandidate(String(slashNormalized.dropFirst(2)))
+        }
+
+        if let lastPathComponent = slashNormalized.split(separator: "/").last {
+            appendCandidate(String(lastPathComponent))
+        }
+
+        if let decoded = slashNormalized.removingPercentEncoding {
+            appendCandidate(decoded)
+            if let decodedLastPathComponent = decoded.split(separator: "/").last {
+                appendCandidate(String(decodedLastPathComponent))
+            }
+        }
+
+        return candidates
     }
 
     // MARK: - Validation
@@ -460,4 +582,3 @@ enum ParserError: LocalizedError {
         }
     }
 }
-

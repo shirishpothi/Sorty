@@ -61,6 +61,9 @@
 		3353FC612F0124320097CD23 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC3F2F0124320097CD23 /* HistoryView.swift */; };
 		F1A1B001B001B001B001B001 /* SortyFinderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F001 /* SortyFinderSync.swift */; };
 		F1A1B001B001B001B001B002 /* SortyFinderSync.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F004 /* SortyFinderSync.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F1A1B001B001B001B001B006 /* SortyMascotHead.icns in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F006 /* SortyMascotHead.icns */; };
+		F1A1B001B001B001B001B007 /* SortyFinderSyncMenuIcon.svg in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F005 /* SortyFinderSyncMenuIcon.svg */; };
+		F1A1B001B001B001B001B008 /* SortyMascotHead.png in Resources */ = {isa = PBXBuildFile; fileRef = F1A1F001F001F001F001F007 /* SortyMascotHead.png */; };
 		3353FC632F0124320097CD23 /* SortyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC452F0124320097CD23 /* SortyApp.swift */; };
 		3353FC642F0124320097CD23 /* SystemPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC212F0124320097CD23 /* SystemPrompt.swift */; };
 		3353FC652F0124320097CD23 /* PreviewManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3353FC322F0124320097CD23 /* PreviewManager.swift */; };
@@ -242,6 +245,9 @@
 		F1A1F001F001F001F001F002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F1A1F001F001F001F001F003 /* SortyFinderSync.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SortyFinderSync.entitlements; sourceTree = "<group>"; };
 		F1A1F001F001F001F001F001 /* SortyFinderSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/SortyFinderSync/SortyFinderSync.swift; sourceTree = SOURCE_ROOT; };
+		F1A1F001F001F001F001F005 /* SortyFinderSyncMenuIcon.svg */ = {isa = PBXFileReference; lastKnownFileType = "image.svg+xml"; path = SortyFinderSyncMenuIcon.svg; sourceTree = "<group>"; };
+		F1A1F001F001F001F001F006 /* SortyMascotHead.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = SortyMascotHead.icns; sourceTree = "<group>"; };
+		F1A1F001F001F001F001F007 /* SortyMascotHead.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = SortyMascotHead.png; sourceTree = "<group>"; };
 		0C803137980F429E8E946D30 /* LearningsHoningView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsHoningView.swift; sourceTree = "<group>"; };
 		A5A81E48B6924B669F4A879F /* DuplicateSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateSettingsView.swift; sourceTree = "<group>"; };
 		981E7344DFEC4943BA212BED /* LearningsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LearningsView.swift; sourceTree = "<group>"; };
@@ -695,6 +701,9 @@
 			children = (
 				F1A1F001F001F001F001F002 /* Info.plist */,
 				F1A1F001F001F001F001F003 /* SortyFinderSync.entitlements */,
+				F1A1F001F001F001F001F005 /* SortyFinderSyncMenuIcon.svg */,
+				F1A1F001F001F001F001F006 /* SortyMascotHead.icns */,
+				F1A1F001F001F001F001F007 /* SortyMascotHead.png */,
 				F1A1F001F001F001F001F001 /* SortyFinderSync.swift */,
 			);
 			path = SortyFinderSync;
@@ -995,6 +1004,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F1A1B001B001B001B001B006 /* SortyMascotHead.icns in Resources */,
+				F1A1B001B001B001B001B007 /* SortyFinderSyncMenuIcon.svg in Resources */,
+				F1A1B001B001B001B001B008 /* SortyMascotHead.png in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

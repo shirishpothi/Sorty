@@ -19,6 +19,7 @@ struct DuplicatesView: View {
     @State private var showSettings = false
     @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
     @State private var localDirectory: URL?
+    @State private var handoffFilePaths: [String] = []
     @State private var currentScanTask: Task<Void, Never>?
     @State private var capturedDirectory: URL?
     @State private var semanticScanProgress: String?
@@ -140,6 +141,7 @@ struct DuplicatesView: View {
             localDirectory = directory
             appState.selectedDirectory = directory
         }
+        handoffFilePaths = handoff.filePaths
 
         detectionManager.clearResults()
         selectedGroup = nil
@@ -210,6 +212,8 @@ struct DuplicatesView: View {
 
     private func startScan() {
         guard let directory = effectiveDirectory else { return }
+        let handoffPaths = handoffFilePaths
+        handoffFilePaths = []
         HapticFeedbackManager.shared.tap()
 
         // Cancel any in-flight scan
@@ -222,8 +226,11 @@ struct DuplicatesView: View {
         currentScanTask = Task {
             let scanner = DirectoryScanner()
             do {
-                // Pass false for computeHashes because we compute them in detectionManager with progress
-                let files = try await scanner.scanDirectory(at: directory, computeHashes: false)
+                let files = try await resolveFilesForScan(
+                    scanner: scanner,
+                    directory: directory,
+                    handoffPaths: handoffPaths
+                )
 
                 // Verify directory hasn't changed since scan started
                 if capturedDirectory == effectiveDirectory && !Task.isCancelled {
@@ -245,6 +252,36 @@ struct DuplicatesView: View {
                 }
             }
         }
+    }
+
+    private func resolveFilesForScan(
+        scanner: DirectoryScanner,
+        directory: URL,
+        handoffPaths: [String]
+    ) async throws -> [FileItem] {
+        guard !handoffPaths.isEmpty else {
+            // Pass false for computeHashes because we compute them in detectionManager with progress.
+            return try await scanner.scanDirectory(at: directory, computeHashes: false)
+        }
+
+        var targetedFiles: [FileItem] = []
+        for path in handoffPaths {
+            if Task.isCancelled { break }
+
+            let fileURL = URL(fileURLWithPath: path).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
+
+            if let scannedFile = try? await scanner.scanFile(at: fileURL, computeHashes: false), !scannedFile.isDirectory {
+                targetedFiles.append(scannedFile)
+            }
+        }
+
+        if targetedFiles.count >= 2 {
+            return targetedFiles
+        }
+
+        // Fallback when history paths no longer exist or are insufficient.
+        return try await scanner.scanDirectory(at: directory, computeHashes: false)
     }
 
     private func cancelScan() {
@@ -1198,7 +1235,6 @@ struct ScanProgressViewNew: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(isPreparing ? "Preparing to scan for duplicates" : "Computing file hashes to find exact duplicate matches")
         }
-        .shimmer(isLoading: progress >= 0.9 && !isPreparing)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)

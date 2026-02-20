@@ -567,7 +567,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 // Batch all initial state updates together
                 self.withBatchUpdates {
                     self.isStreaming = true
-                    self.organizationStage = "AI is Analysing your files..."
+                    self.organizationStage = "AI is analyzing your files..."
                     self.progress = 0.30
                     self.syncDisplayContentImmediately()
                 }

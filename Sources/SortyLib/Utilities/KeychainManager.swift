@@ -9,7 +9,9 @@ import Foundation
 import Security
 
 struct KeychainManager {
-    private static let primaryService = "com.sorty.app"
+    // Use a fixed service name so credentials persist across app rebuilds
+    // and bundle ID changes during development
+    private static let primaryService = "com.sorty.app.credentials"
 
     private static var fallbackServices: [String] {
         var services: [String] = []
@@ -21,8 +23,10 @@ struct KeychainManager {
         }
 
         services.append(contentsOf: [
+            "com.sorty.app",
             "com.sorty.Sorty",
-            "com.sorty.SortyApp"
+            "com.sorty.SortyApp",
+            "shirishpothi.Sorty"
         ])
 
         var seen = Set<String>()
@@ -40,7 +44,8 @@ struct KeychainManager {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: primaryService,
             kSecAttrAccount as String: key,
-            kSecValueData as String: data
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
 
         let status = SecItemAdd(query as CFDictionary, nil)

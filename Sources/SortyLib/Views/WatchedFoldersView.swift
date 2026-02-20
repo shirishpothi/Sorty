@@ -37,14 +37,23 @@ struct WatchedFoldersView: View {
                     })
                     .transition(TransitionStyles.scaleAndFade)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(Array(watchedFoldersManager.folders.enumerated()), id: \.element.id) { index, folder in
-                                WatchedFolderCard(folder: folder)
-                                    .animatedAppearance(delay: Double(index) * 0.05)
+                    ScrollViewReader { scrollProxy in
+                        ScrollView {
+                            LazyVStack(spacing: 12) {
+                                ForEach(Array(watchedFoldersManager.folders.enumerated()), id: \.element.id) { index, folder in
+                                    WatchedFolderCard(folder: folder)
+                                        .id(folder.id)
+                                        .animatedAppearance(delay: Double(index) * 0.05)
+                                }
+                            }
+                            .padding(20)
+                        }
+                        .onChange(of: appState.highlightedWatchedFolderID) { _, highlightedID in
+                            guard let highlightedID else { return }
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                scrollProxy.scrollTo(highlightedID, anchor: .center)
                             }
                         }
-                        .padding(20)
                     }
                     .transition(TransitionStyles.slideFromRight)
                 }
@@ -225,8 +234,10 @@ struct WatchedFolderCard: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var organizer: FolderOrganizer
+    @EnvironmentObject var appState: AppState
     @State private var showingConfig = false
     @State private var isHovered = false
+    @State private var highlightPulse = false
 
     
     private var isOrganizing: Bool {
@@ -242,6 +253,10 @@ struct WatchedFolderCard: View {
         return false
     }
     
+    private var isHighlighted: Bool {
+        appState.highlightedWatchedFolderID == folder.id
+    }
+
     // Check if AI is available
     private var isAIConfigured: Bool {
         organizer.aiClient != nil
@@ -493,17 +508,29 @@ struct WatchedFolderCard: View {
         }
         .padding(16)
         .contentShape(Rectangle())
-        .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
+        .background(isHighlighted ? Color.accentColor.opacity(highlightPulse ? 0.14 : 0.08) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(folder.exists ? Color.white.opacity(0.1) : Color.red.opacity(0.3), lineWidth: 1)
+                .stroke(
+                    isHighlighted
+                        ? Color.accentColor.opacity(highlightPulse ? 0.9 : 0.45)
+                        : (folder.exists ? Color.white.opacity(0.1) : Color.red.opacity(0.3)),
+                    lineWidth: isHighlighted ? 1.6 : 1
+                )
         )
-        .shadow(color: .black.opacity(0.03), radius: 3, x: 0, y: 1)
+        .shadow(color: isHighlighted ? Color.accentColor.opacity(highlightPulse ? 0.35 : 0.16) : .black.opacity(0.03), radius: isHighlighted ? 10 : 3, x: 0, y: 1)
         .opacity(folder.exists ? 1.0 : 0.8)
+        .scaleEffect(isHighlighted && highlightPulse ? 1.008 : 1.0)
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
+        .onAppear {
+            updateHighlightAnimation(isHighlighted)
+        }
+        .onChange(of: isHighlighted) { _, newValue in
+            updateHighlightAnimation(newValue)
+        }
         .contextMenu {
             Button("Reveal in Finder") {
                 NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
@@ -524,6 +551,17 @@ struct WatchedFolderCard: View {
                 .modalBounce()
         }
 
+    }
+
+    private func updateHighlightAnimation(_ isActive: Bool) {
+        if isActive {
+            highlightPulse = false
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                highlightPulse = true
+            }
+        } else {
+            highlightPulse = false
+        }
     }
 }
 

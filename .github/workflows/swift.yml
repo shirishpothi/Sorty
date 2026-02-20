@@ -81,6 +81,12 @@ jobs:
           swift test --parallel 2>&1 | tee unit_test_output.log
           echo "✅ Unit tests completed"
 
+      - name: Run Finder Integration Regressions
+        run: |
+          set -o pipefail
+          swift test --parallel --filter 'SortyTests\.(WindowSessionTests|FinderIntegrationStatusTests)' 2>&1 | tee finder_regression_output.log
+          echo "✅ Finder integration regressions completed"
+
 
       - name: Build the app (via script)
         run: |
@@ -147,6 +153,7 @@ jobs:
           name: test-results
           path: |
             unit_test_output.log
+            finder_regression_output.log
             build_output.log
             ui_test_output.log
             cli_build_output.log

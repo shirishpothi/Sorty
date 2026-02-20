@@ -318,6 +318,57 @@ struct ShimmerModifier: ViewModifier {
     }
 }
 
+/// Text-specific shimmer that preserves base legibility and adds a subtle moving highlight.
+struct TextShimmerModifier: ViewModifier {
+    let isLoading: Bool
+    private let bandWidthRatio: CGFloat = 0.3
+    private let shimmerAngle = Angle(degrees: 14)
+    private let shimmerSpeed: Double = 0.78
+
+    func body(content: Content) -> some View {
+        if isLoading {
+            content
+                .overlay {
+                    GeometryReader { geometry in
+                        let width = max(geometry.size.width, 1)
+                        let height = max(geometry.size.height, 1)
+                        let bandWidth = width * bandWidthRatio
+                        let travelDistance = width + (bandWidth * 2)
+
+                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 50.0, paused: !isLoading)) { context in
+                            let elapsed = context.date.timeIntervalSinceReferenceDate * shimmerSpeed
+                            let progress = elapsed - floor(elapsed)
+                            let easedProgress = progress * progress * (3 - (2 * progress))
+                            let offsetX = (easedProgress * travelDistance) - bandWidth
+                            let pulse = (sin(elapsed * 1.4) + 1) * 0.5
+                            let accentGlow = 0.1 + (pulse * 0.08)
+                            let whiteGlow = 0.18 + (pulse * 0.12)
+
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    Color.accentColor.opacity(accentGlow),
+                                    .white.opacity(whiteGlow),
+                                    Color.accentColor.opacity(accentGlow),
+                                    .clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: bandWidth, height: height * 2.0)
+                            .rotationEffect(shimmerAngle)
+                            .offset(x: offsetX)
+                        }
+                    }
+                }
+                .mask(content)
+                .compositingGroup()
+        } else {
+            content
+        }
+    }
+}
+
 /// Animated appearance modifier for list items - subtle version
 struct AnimatedAppearanceModifier: ViewModifier {
     let delay: Double
@@ -371,6 +422,11 @@ extension View {
     /// Applies shimmer loading effect
     public func shimmer(isLoading: Bool) -> some View {
         modifier(ShimmerModifier(isLoading: isLoading))
+    }
+
+    /// Applies a subtle shimmer optimized for text legibility.
+    public func textShimmer(isLoading: Bool) -> some View {
+        modifier(TextShimmerModifier(isLoading: isLoading))
     }
 
     /// Applies animated appearance with stagger delay

@@ -46,9 +46,6 @@ public struct MenuBarLabel: View {
 
 public struct MenuBarView: View {
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var organizer: FolderOrganizer
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var loginItemManager: LoginItemManager
     @EnvironmentObject var notificationSettings: NotificationSettingsManager
     @EnvironmentObject var menuBarController: MenuBarController
@@ -57,7 +54,6 @@ public struct MenuBarView: View {
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @State private var isAllPaused: Bool = false
-    @State private var isOrganizing: Bool = false
     @State private var isDropTargeted: Bool = false
     
     public init() {}
@@ -68,10 +64,6 @@ public struct MenuBarView: View {
     
     private var foldersWithIssues: [WatchedFolder] {
         watchedFoldersManager.folders.filter { $0.accessStatus == .lost || $0.accessStatus == .stale }
-    }
-    
-    private var isAIConfigured: Bool {
-        organizer.isAIConfigured
     }
     
     public var body: some View {
@@ -129,15 +121,8 @@ public struct MenuBarView: View {
                 .foregroundStyle(.primary)
             
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Sorty")
-                        .font(.headline)
-                    
-                    Circle()
-                        .fill(isAIConfigured ? Color.green : Color.red)
-                        .frame(width: 7, height: 7)
-                        .help(isAIConfigured ? "AI configured" : "AI not configured")
-                }
+                Text("Sorty")
+                    .font(.headline)
                 
                 if activeWatchedCount > 0 {
                     Text("\(activeWatchedCount) folder\(activeWatchedCount == 1 ? "" : "s") active")
@@ -170,54 +155,24 @@ public struct MenuBarView: View {
                 openMainWindow()
             }
             
-            MenuBarButton(
-                title: "Organize Current Folder",
-                customImage: Image(nsImage: SortyResources.menuBarNSImage()).renderingMode(.template)
-            ) {
-                organizeCurrentFolder()
-            }
-            .disabled(isOrganizing)
-            
-            MenuBarButton(title: "Quick Organize Panel", icon: "uiwindow.split.2x1") {
-                QuickOrganizePanelController.shared.showPanel()
-            }
-            
-            if let lastDir = appState.lastOrganizedDirectory {
-                MenuBarButton(
-                    title: "Organize \(lastDir.lastPathComponent)",
-                    icon: "arrow.clockwise"
-                ) {
-                    organizeDirectory(lastDir)
-                }
-                .disabled(isOrganizing)
-            }
-            
-            MenuBarButton(title: "Organize Desktop", icon: "desktopcomputer") {
-                let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-                if let desktop = desktopURL {
-                    organizeDirectory(desktop)
-                }
-            }
-            .disabled(isOrganizing)
-            
             MenuBarButton(title: "View History", icon: "clock.arrow.circlepath") {
-                openMainWindow()
-                appState.currentView = .history
+                openDestination(.history)
             }
             
             MenuBarButton(title: "Workspace Health", icon: "heart.text.square") {
-                openMainWindow()
-                appState.currentView = .workspaceHealth
+                openDestination(.health)
             }
             
             MenuBarButton(title: "Learnings", icon: "lightbulb.fill") {
-                openMainWindow()
-                appState.currentView = .learnings
+                openDestination(.learnings(action: nil, project: nil))
             }
             
             MenuBarButton(title: "Storage Locations", icon: "externaldrive.fill") {
-                openMainWindow()
-                appState.currentView = .storageLocations
+                openDestination(.storage(action: nil, path: nil))
+            }
+
+            MenuBarButton(title: "Watched Folders", icon: "eye") {
+                openDestination(.watched(action: nil, path: nil))
             }
             
             Divider()
@@ -362,17 +317,11 @@ public struct MenuBarView: View {
     // MARK: - Actions
     
     private func openMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible }) {
-            window.makeKeyAndOrderFront(nil)
-        } else if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
-            window.makeKeyAndOrderFront(nil)
-        }
+        openDestination(.open(path: nil))
     }
     
     private func openSettings() {
-        openMainWindow()
-        appState.currentView = .settings
+        openDestination(.settings(section: nil))
     }
     
     private func togglePauseAll() {
@@ -385,50 +334,9 @@ public struct MenuBarView: View {
         }
     }
     
-    private func organizeDirectory(_ directory: URL) {
-        isOrganizing = true
-        appState.selectedDirectory = directory
-
-        // Capture class references explicitly to survive view teardown
-        let organizer = self.organizer
-        let config = self.settingsViewModel.config
-        let appState = self.appState
-
-        Task { @MainActor in
-            do {
-                try await organizer.configure(with: config)
-                try await organizer.organize(directory: directory)
-            } catch {
-                DebugLogger.log("Menu bar organize failed: \(error.localizedDescription)")
-            }
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible }) {
-                window.makeKeyAndOrderFront(nil)
-            } else if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
-                window.makeKeyAndOrderFront(nil)
-            }
-            appState.currentView = .organize
-            isOrganizing = false
-        }
-    }
-
-    private func organizeCurrentFolder() {
-        // Get frontmost Finder window path via AppleScript
-        let script = """
-        tell application "Finder"
-            if (count of Finder windows) > 0 then
-                set thePath to POSIX path of (target of front Finder window as alias)
-                return thePath
-            end if
-        end tell
-        """
-        
-        var error: NSDictionary?
-        if let appleScript = NSAppleScript(source: script),
-           let result = appleScript.executeAndReturnError(&error).stringValue {
-            let url = URL(fileURLWithPath: result)
-            organizeDirectory(url)
-        }
+    private func openDestination(_ destination: DeeplinkDestination) {
+        guard let url = DeeplinkHandler.url(for: destination) else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
@@ -479,9 +387,6 @@ private struct MenuBarButton: View {
 private struct WatchedFolderMenuItem: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var organizer: FolderOrganizer
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @EnvironmentObject var appState: AppState
 
     @State private var isHovered = false
 
@@ -585,19 +490,6 @@ private struct WatchedFolderMenuItem: View {
             }
 
             Button {
-                organizeFolder()
-            } label: {
-                Label {
-                    Text("Organize Now")
-                } icon: {
-                    MenuBarMascotIcon(size: CGSize(width: 14, height: 14))
-                }
-            }
-            .disabled(organizer.state != .idle)
-
-            Divider()
-
-            Button {
                 var updated = folder
                 updated.isEnabled.toggle()
                 watchedFoldersManager.updateFolder(updated)
@@ -617,35 +509,10 @@ private struct WatchedFolderMenuItem: View {
             }
         }
     }
-
-    private func organizeFolder() {
-        let folderURL = URL(fileURLWithPath: folder.path)
-        appState.selectedDirectory = folderURL
-
-        // Capture class references explicitly to survive view teardown
-        let organizer = self.organizer
-        let config = self.settingsViewModel.config
-        let appState = self.appState
-
-        Task { @MainActor in
-            do {
-                try await organizer.configure(with: config)
-                try await organizer.organize(directory: folderURL)
-            } catch {
-                DebugLogger.log("Menu bar organize failed: \(error.localizedDescription)")
-            }
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
-                window.makeKeyAndOrderFront(nil)
-            }
-            appState.currentView = .organize
-        }
-    }
 }
 
 #Preview {
     MenuBarView()
         .environmentObject(WatchedFoldersManager())
-        .environmentObject(AppState())
         .environmentObject(MenuBarController())
 }

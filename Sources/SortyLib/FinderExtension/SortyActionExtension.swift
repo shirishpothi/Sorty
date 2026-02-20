@@ -42,8 +42,10 @@ class SortyActionExtension: FIFinderSync {
             if let mascotImage = NSImage(named: "SortyMascotTemplate") {
                 mascotImage.isTemplate = true
                 organizeItem.image = mascotImage
+            } else if let mascotImage = NSImage(named: "SortyMascot") {
+                organizeItem.image = mascotImage
             } else {
-                organizeItem.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: nil)
+                organizeItem.image = NSImage(systemSymbolName: "folder.fill.badge.gearshape", accessibilityDescription: nil)
             }
             organizeItem.target = self
             menu.addItem(organizeItem)
@@ -56,6 +58,8 @@ class SortyActionExtension: FIFinderSync {
             )
             if let mascotImage = NSImage(named: "SortyMascotTemplate") {
                 mascotImage.isTemplate = true
+                organizeItem.image = mascotImage
+            } else if let mascotImage = NSImage(named: "SortyMascot") {
                 organizeItem.image = mascotImage
             }
             organizeItem.target = self
@@ -103,6 +107,5 @@ class SortyActionExtension: FIFinderSync {
         }
     }
 }
-
 
 

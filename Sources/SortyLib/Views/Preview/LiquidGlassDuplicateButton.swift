@@ -48,6 +48,19 @@ struct LiquidGlassDuplicateButton: View {
         duplicateInfo.isExactMatch ? .red : .orange
     }
 
+    private var activeFileID: UUID {
+        guard let highlightedFileID else { return duplicateInfo.file.id }
+        if highlightedFileID == duplicateInfo.file.id { return highlightedFileID }
+        if duplicateInfo.duplicates.contains(where: { $0.id == highlightedFileID }) { return highlightedFileID }
+        return duplicateInfo.file.id
+    }
+
+    private var isHighlightedInGroup: Bool {
+        guard let highlightedFileID else { return false }
+        if highlightedFileID == duplicateInfo.file.id { return true }
+        return duplicateInfo.duplicates.contains(where: { $0.id == highlightedFileID })
+    }
+
     var body: some View {
         Button {
             showPopover.toggle()
@@ -74,7 +87,7 @@ struct LiquidGlassDuplicateButton: View {
 
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(showPopover || highlightedFileID == duplicateInfo.file.id ? accentColor : Color.secondary)
+                    .foregroundStyle(showPopover || isHighlightedInGroup ? accentColor : Color.secondary)
             }
         }
         .buttonStyle(.plain)
@@ -150,7 +163,7 @@ struct LiquidGlassDuplicateButton: View {
                     .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
 
-                duplicateFileRow(file: duplicateInfo.file, isCurrent: true)
+                duplicateFileRow(file: duplicateInfo.file)
             }
             .padding(.bottom, 12)
 
@@ -162,7 +175,7 @@ struct LiquidGlassDuplicateButton: View {
                     .textCase(.uppercase)
 
                 ForEach(duplicateInfo.duplicates) { duplicate in
-                    duplicateFileRow(file: duplicate, isCurrent: false)
+                    duplicateFileRow(file: duplicate)
                 }
             }
         }
@@ -171,7 +184,9 @@ struct LiquidGlassDuplicateButton: View {
     }
 
     @ViewBuilder
-    private func duplicateFileRow(file: FileItem, isCurrent: Bool) -> some View {
+    private func duplicateFileRow(file: FileItem) -> some View {
+        let isSelected = activeFileID == file.id
+
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 highlightedFileID = file.id
@@ -184,8 +199,8 @@ struct LiquidGlassDuplicateButton: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.displayName)
                         .font(.callout)
-                        .fontWeight(isCurrent || highlightedFileID == file.id ? .semibold : .regular)
-                        .foregroundStyle(isCurrent || highlightedFileID == file.id ? .primary : .secondary)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                        .foregroundStyle(isSelected ? .primary : .secondary)
                         .lineLimit(1)
 
                     Text(file.formattedSize)
@@ -195,27 +210,24 @@ struct LiquidGlassDuplicateButton: View {
 
                 Spacer()
 
-                if isCurrent {
+                if isSelected {
                     Text("Current")
                         .font(.caption2)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Capsule().fill(Color.accentColor))
-                } else if highlightedFileID == file.id {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.green)
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(highlightedFileID == file.id ? Color.accentColor.opacity(0.12) : (hoveredFileID == file.id ? Color.secondary.opacity(0.1) : Color.clear))
+                    .fill(isSelected ? Color.accentColor.opacity(0.12) : (hoveredFileID == file.id ? Color.secondary.opacity(0.1) : Color.clear))
             )
             .contentShape(RoundedRectangle(cornerRadius: 8))
         }
