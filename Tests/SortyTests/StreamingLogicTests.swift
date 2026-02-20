@@ -46,6 +46,29 @@ final class StreamingLogicTests: XCTestCase {
         
         XCTAssertEqual(organizer.streamingContent, "chunk1 chunk2 chunk3")
     }
+
+    func testLiveInsightsToggleDisablesInsightAndPreviewUpdates() async {
+        organizer.setLiveInsightsEnabled(false)
+        organizer.didReceiveChunk("creating folder: 'Receipts' for report.pdf")
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        XCTAssertTrue(organizer.isStreaming)
+        XCTAssertEqual(organizer.streamingContent, "creating folder: 'Receipts' for report.pdf")
+        XCTAssertTrue(organizer.currentInsight.isEmpty)
+        XCTAssertTrue(organizer.insightHistory.isEmpty)
+        XCTAssertTrue(organizer.truncatedDisplayStreamingContent.isEmpty)
+    }
+
+    func testLiveInsightsToggleReEnablesBackfillFromCurrentStream() async {
+        organizer.setLiveInsightsEnabled(false)
+        organizer.didReceiveChunk("creating folder: 'Receipts' for report.pdf")
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        organizer.setLiveInsightsEnabled(true)
+        try? await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertFalse(organizer.truncatedDisplayStreamingContent.isEmpty)
+    }
     
     func testProgressIncreasesWithContentLength() async {
         organizer.scannedFileCount = 10

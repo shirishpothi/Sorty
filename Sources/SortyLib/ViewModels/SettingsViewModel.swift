@@ -17,6 +17,11 @@ public class SettingsViewModel: ObservableObject {
             let oldProvider = oldValue.provider
             let newProvider = config.provider
 
+            // Persist model changes immediately for the active provider.
+            if oldProvider == newProvider, oldValue.model != config.model {
+                userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
+            }
+
             // Debounce the save operation
             debouncedSave()
 
@@ -35,6 +40,9 @@ public class SettingsViewModel: ObservableObject {
 
             // Provider switched — swap API keys via Keychain
             if oldProvider != newProvider {
+                // Save the old provider's selected model so it can be restored later
+                userDefaults.set(oldValue.model, forKey: modelSelectionKey(for: oldProvider))
+
                 // Save the old provider's API key to its keychain slot
                 // Skip for GitHub Copilot — its token is managed by GitHubCopilotAuthManager
                 if oldProvider != .githubCopilot, let oldKey = oldValue.apiKey, !oldKey.isEmpty {
@@ -53,8 +61,9 @@ public class SettingsViewModel: ObservableObject {
                 config.apiURL = newProvider.defaultAPIURL
                 config.requiresAPIKey = newProvider.typicallyRequiresAPIKey
 
-                // Set default model for the new provider
-                config.model = newProvider.defaultModel
+                // Restore previously selected model for this provider, or fall back to default
+                config.model = userDefaults.string(forKey: modelSelectionKey(for: newProvider)) ?? newProvider.defaultModel
+                userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
 
                 // Invalidate sessions for new provider URL
                 AISessionManager.shared.invalidateAll()
@@ -95,6 +104,10 @@ public class SettingsViewModel: ObservableObject {
     private let userDefaults = UserDefaults.standard
     private let configKey = "aiConfig"
     private var saveTask: Task<Void, Never>?
+
+    private func modelSelectionKey(for provider: AIProvider) -> String {
+        "lastSelectedModel_\(provider.rawValue)"
+    }
     
     public init() {
         loadConfig()
@@ -237,10 +250,13 @@ public class SettingsViewModel: ObservableObject {
     }
 
     public func reset() {
+        // Clear per-provider saved model selections
+        for provider in AIProvider.allCases {
+            userDefaults.removeObject(forKey: modelSelectionKey(for: provider))
+        }
         config = .default
         availableModels = config.provider.recommendedModels
         // No need to save manually here as config.didSet will trigger debouncedSave,
         // but since we want to clear from UserDefaults, we already handled it in AppState.
     }
 }
-

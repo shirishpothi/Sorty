@@ -105,6 +105,13 @@ final class ResourceLoadingTests: XCTestCase {
         let invalidImage = SortyResources.image(named: "NonExistentImage12345")
         XCTAssertNil(invalidImage, "Non-existent image should return nil")
     }
+
+    func testMenuBarLabelImageUsesNonTemplateMascot() {
+        let image = SortyResources.menuBarLabelNSImage()
+        XCTAssertGreaterThan(image.size.width, 0, "Menu bar label image should load with a valid width")
+        XCTAssertGreaterThan(image.size.height, 0, "Menu bar label image should load with a valid height")
+        XCTAssertFalse(image.isTemplate, "Menu bar label image should remain full-color (non-template)")
+    }
     
     // MARK: - Fallback Behavior Tests
 

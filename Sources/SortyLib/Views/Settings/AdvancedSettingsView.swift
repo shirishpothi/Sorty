@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     
     var body: some View {
@@ -21,6 +22,24 @@ struct AdvancedSettingsView: View {
                 )
             }
             .animatedAppearance(delay: 0.0)
+
+            SettingsCard(title: "Finder Workflow", icon: "folder.badge.gearshape", color: .mint) {
+                VStack(alignment: .leading, spacing: 10) {
+                    SettingsToggle(
+                        isOn: $automationManager.autoSelectOrganizedFolders,
+                        title: "Automatically reveal organized folders",
+                        description: "Open Finder and highlight newly organized folders after each completed run"
+                    )
+                    .accessibilityIdentifier("FinderAutoRevealToggle")
+
+                    if !automationManager.autoSelectOrganizedFolders {
+                        Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.03)
             
             SettingsCard(title: "Streaming", icon: "waveform", color: .purple) {
                 SettingsToggle(
@@ -116,5 +135,6 @@ struct AdvancedSettingsView: View {
 #Preview {
     AdvancedSettingsView()
         .environmentObject(SettingsViewModel())
+        .environmentObject(AutomationManager())
         .frame(width: 500, height: 500)
 }

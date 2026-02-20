@@ -283,7 +283,39 @@ public enum SortyResources {
         urlForCopiedResource(named: "Final Onboarding.wav")
     }
 
-    private static func menuBarIconCandidateURLs() -> [URL] {
+    private static func uniqueURLs(_ candidates: [URL]) -> [URL] {
+        var unique: [URL] = []
+        for candidate in candidates where !unique.contains(where: { $0.path == candidate.path }) {
+            unique.append(candidate)
+        }
+        return unique
+    }
+
+    private static func menuBarPNGCandidateURLs() -> [URL] {
+        let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+        let bundleRootCandidates = [bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
+        let extensionResourceURL = Bundle.main.builtInPlugInsURL?
+            .appendingPathComponent("SortyFinderSync.appex/Contents/Resources", isDirectory: true)
+
+        var candidates: [URL] = []
+        if let extensionResourceURL {
+            candidates.append(extensionResourceURL.appendingPathComponent("SortyMascotHead.png"))
+        }
+
+        for root in bundleRootCandidates {
+            candidates.append(root.appendingPathComponent("SortyMascotHead.png"))
+            candidates.append(root.appendingPathComponent("Images/SortyMascotHead.png"))
+            candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/SortyMascotHead.png"))
+            candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/Images/SortyMascotHead.png"))
+        }
+
+        candidates.append(cwd.appendingPathComponent("Assets/AppIcon/Sorty Mascot Head.png"))
+        candidates.append(cwd.appendingPathComponent("Assets/AppIcon/SortyMascotHead.png"))
+
+        return uniqueURLs(candidates)
+    }
+
+    private static func menuBarICNSCandidateURLs() -> [URL] {
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let bundleRootCandidates = [bundle.resourceURL, Bundle.main.resourceURL].compactMap { $0 }
         let extensionResourceURL = Bundle.main.builtInPlugInsURL?
@@ -308,23 +340,39 @@ public enum SortyResources {
         candidates.append(cwd.appendingPathComponent("Assets/AppIcon/Sorty Mascot Head.icns"))
         candidates.append(cwd.appendingPathComponent("Assets/AppIcon/SortyMascotHead.icns"))
 
-        var unique: [URL] = []
-        for candidate in candidates where !unique.contains(where: { $0.path == candidate.path }) {
-            unique.append(candidate)
+        return uniqueURLs(candidates)
+    }
+
+    private static func loadImage(from candidates: [URL], isTemplate: Bool) -> NSImage? {
+        for candidate in candidates where FileManager.default.fileExists(atPath: candidate.path) {
+            if let image = NSImage(contentsOf: candidate) {
+                image.isTemplate = isTemplate
+                return image
+            }
         }
-        return unique
+        return nil
+    }
+
+    /// Loads the full-color mascot head PNG used by Finder actions for menu bar labels.
+    public static func menuBarLabelNSImage() -> NSImage {
+        if let image = loadImage(from: menuBarPNGCandidateURLs(), isTemplate: false) {
+            return image
+        }
+
+        if let image = image(named: "SortyMascotHead", withExtension: "png") {
+            image.isTemplate = false
+            return image
+        }
+
+        return menuBarNSImage()
     }
 
     /// Loads a robust NSImage for the menu bar item, bypassing asset catalog complexity
     /// and providing a guaranteed fallback to an SF Symbol.
     public static func menuBarNSImage() -> NSImage {
         // Prefer the mascot head ICNS so menu bar, Finder integrations, and app branding match.
-        for candidate in menuBarIconCandidateURLs() {
-            if FileManager.default.fileExists(atPath: candidate.path),
-               let img = NSImage(contentsOf: candidate) {
-                img.isTemplate = true
-                return img
-            }
+        if let image = loadImage(from: menuBarICNSCandidateURLs(), isTemplate: true) {
+            return image
         }
 
         if let img = bundle.image(forResource: "SortyMascotHead") ?? Bundle.main.image(forResource: "SortyMascotHead") {

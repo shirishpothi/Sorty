@@ -321,9 +321,19 @@ struct ShimmerModifier: ViewModifier {
 /// Text-specific shimmer that preserves base legibility and adds a subtle moving highlight.
 struct TextShimmerModifier: ViewModifier {
     let isLoading: Bool
-    private let bandWidthRatio: CGFloat = 0.3
-    private let shimmerAngle = Angle(degrees: 14)
-    private let shimmerSpeed: Double = 0.78
+    let phaseOffset: Double
+    let intensity: Double
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+
+    private let bandWidthRatio: CGFloat = 0.46
+    private let shimmerAngle = Angle(degrees: 10)
+    private let shimmerSpeed: Double = 0.72
+
+    private var clampedIntensity: Double {
+        min(max(intensity, 0.5), 2.0)
+    }
 
     func body(content: Content) -> some View {
         if isLoading {
@@ -333,31 +343,73 @@ struct TextShimmerModifier: ViewModifier {
                         let width = max(geometry.size.width, 1)
                         let height = max(geometry.size.height, 1)
                         let bandWidth = width * bandWidthRatio
-                        let travelDistance = width + (bandWidth * 2)
+                        let travelDistance = width + (bandWidth * 2.8)
 
-                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 50.0, paused: !isLoading)) { context in
-                            let elapsed = context.date.timeIntervalSinceReferenceDate * shimmerSpeed
-                            let progress = elapsed - floor(elapsed)
-                            let easedProgress = progress * progress * (3 - (2 * progress))
-                            let offsetX = (easedProgress * travelDistance) - bandWidth
-                            let pulse = (sin(elapsed * 1.4) + 1) * 0.5
-                            let accentGlow = 0.1 + (pulse * 0.08)
-                            let whiteGlow = 0.18 + (pulse * 0.12)
-
+                        if reduceMotion {
                             LinearGradient(
                                 colors: [
                                     .clear,
-                                    Color.accentColor.opacity(accentGlow),
-                                    .white.opacity(whiteGlow),
-                                    Color.accentColor.opacity(accentGlow),
+                                    Color.accentColor.opacity((colorScheme == .dark ? 0.2 : 0.14) * clampedIntensity),
                                     .clear
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
-                            .frame(width: bandWidth, height: height * 2.0)
+                            .frame(width: bandWidth * 1.2, height: height * 1.8)
                             .rotationEffect(shimmerAngle)
-                            .offset(x: offsetX)
+                            .offset(x: (width - bandWidth) * 0.18)
+                        } else {
+                            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isLoading)) { context in
+                                let elapsed = (context.date.timeIntervalSinceReferenceDate + phaseOffset) * shimmerSpeed
+                                let progress = elapsed - floor(elapsed)
+                                let easedProgress = progress * progress * (3 - (2 * progress))
+                                let offsetX = (easedProgress * travelDistance) - (bandWidth * 1.2)
+                                let pulse = (sin(elapsed * 1.3) + 1) * 0.5
+
+                                let accentBase = (colorScheme == .dark ? 0.14 : 0.10) * clampedIntensity
+                                let accentRange = (colorScheme == .dark ? 0.14 : 0.12) * clampedIntensity
+                                let whiteBase = (colorScheme == .dark ? 0.24 : 0.17) * clampedIntensity
+                                let whiteRange = (colorScheme == .dark ? 0.22 : 0.16) * clampedIntensity
+
+                                let accentGlow = min(accentBase + (pulse * accentRange), 0.68)
+                                let whiteGlow = min(whiteBase + (pulse * whiteRange), 0.9)
+
+                                ZStack(alignment: .leading) {
+                                    LinearGradient(
+                                        colors: [
+                                            .clear,
+                                            Color.accentColor.opacity(accentGlow * 0.45),
+                                            .white.opacity(whiteGlow * 0.78),
+                                            .white.opacity(whiteGlow),
+                                            .white.opacity(whiteGlow * 0.72),
+                                            Color.accentColor.opacity(accentGlow * 0.6),
+                                            .clear
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                    .frame(width: bandWidth, height: height * 2.2)
+                                    .rotationEffect(shimmerAngle)
+                                    .offset(x: offsetX)
+                                    .blendMode(.plusLighter)
+
+                                    LinearGradient(
+                                        colors: [
+                                            .clear,
+                                            .white.opacity(min(whiteGlow * 1.15, 1)),
+                                            .white.opacity(min(whiteGlow * 0.82, 1)),
+                                            .clear
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                    .frame(width: bandWidth * 0.58, height: height * 2.2)
+                                    .rotationEffect(shimmerAngle)
+                                    .offset(x: offsetX - (bandWidth * 0.12))
+                                    .blur(radius: 1.1)
+                                    .blendMode(.plusLighter)
+                                }
+                            }
                         }
                     }
                 }
@@ -425,8 +477,8 @@ extension View {
     }
 
     /// Applies a subtle shimmer optimized for text legibility.
-    public func textShimmer(isLoading: Bool) -> some View {
-        modifier(TextShimmerModifier(isLoading: isLoading))
+    public func textShimmer(isLoading: Bool, phaseOffset: Double = 0, intensity: Double = 1.0) -> some View {
+        modifier(TextShimmerModifier(isLoading: isLoading, phaseOffset: phaseOffset, intensity: intensity))
     }
 
     /// Applies animated appearance with stagger delay

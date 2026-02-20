@@ -29,6 +29,14 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             "User-Agent": "GithubCopilot/1.138.0"
         ]
     }
+
+    private func shouldRetryAfterAuthFailure(statusCode: Int) -> Bool {
+        statusCode == 401 || statusCode == 403
+    }
+
+    private func refreshAuthForRetry() async throws {
+        _ = try await GitHubCopilotAuthManager.shared.refreshCopilotTokenAfterCacheInvalidation()
+    }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
@@ -127,63 +135,90 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     public func fetchAvailableModels() async throws -> [String] {
         let url = URL(string: "https://api.githubcopilot.com/models")!
         DebugLogger.log("Fetching available models")
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        
-        let headers = try await getHeaders()
-        for (key, value) in headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-        
         let session = await getSession()
-        do {
-            let (data, response) = try await session.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-                // Fallback models if endpoint fails or not available
+        var didRetryAfterAuthFailure = false
+
+        while true {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+
+            let headers = try await getHeaders()
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+
+            do {
+                let (data, response) = try await session.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    return ["gpt-4", "gpt-3.5-turbo"]
+                }
+
+                if !(200...299).contains(httpResponse.statusCode) {
+                    if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
+                       !didRetryAfterAuthFailure {
+                        didRetryAfterAuthFailure = true
+                        try await refreshAuthForRetry()
+                        continue
+                    }
+                    // Fallback models if endpoint fails or not available
+                    return ["gpt-4", "gpt-3.5-turbo"]
+                }
+
+                struct ModelsResponse: Decodable {
+                    let data: [ModelData]
+                    struct ModelData: Decodable {
+                        let id: String
+                    }
+                }
+
+                let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
+                let models = modelsResponse.data.map { $0.id }
+                return models.isEmpty ? ["gpt-4", "gpt-3.5-turbo"] : models
+
+            } catch {
+                // Fallback on error
+                DebugLogger.log("Failed to fetch models: \(error), using defaults")
                 return ["gpt-4", "gpt-3.5-turbo"]
             }
-            
-            struct ModelsResponse: Decodable {
-                let data: [ModelData]
-                struct ModelData: Decodable {
-                    let id: String
-                }
-            }
-            
-            let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
-            let models = modelsResponse.data.map { $0.id }
-            return models.isEmpty ? ["gpt-4", "gpt-3.5-turbo"] : models
-            
-        } catch {
-             // Fallback on error
-             DebugLogger.log("Failed to fetch models: \(error), using defaults")
-             return ["gpt-4", "gpt-3.5-turbo"]
         }
     }
     
     public func checkHealth() async throws {
         let url = URL(string: "https://api.githubcopilot.com/models")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.timeoutInterval = min(config.requestTimeout, 60)
-
-        let headers = try await getHeaders()
-        for (key, value) in headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-
         let session = await getSession()
-        let (_, response) = try await AIRequestSupport.withTransientRetry {
-            try await session.data(for: request)
-        }
+        var didRetryAfterAuthFailure = false
 
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIClientError.invalidResponse
-        }
+        while true {
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = min(config.requestTimeout, 60)
 
-        if !(200...299).contains(httpResponse.statusCode) {
-             throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
+            let headers = try await getHeaders()
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+
+            let (_, response) = try await AIRequestSupport.withTransientRetry {
+                try await session.data(for: request)
+            }
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AIClientError.invalidResponse
+            }
+
+            if (200...299).contains(httpResponse.statusCode) {
+                return
+            }
+
+            if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
+               !didRetryAfterAuthFailure {
+                didRetryAfterAuthFailure = true
+                try await refreshAuthForRetry()
+                continue
+            }
+
+            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: "Health check failed")
         }
     }
     
@@ -199,109 +234,124 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             "temperature": 0.7
         ]
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        
-        let headers = try await getHeaders()
-        for (key, value) in headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
         let session = await getSession()
-        let (data, response) = try await AIRequestSupport.withTransientRetry {
-            try await session.data(for: request)
-        }
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIClientError.invalidResponse
-        }
-        
-        if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-            // Token might be expired, force refresh next time (basic handling)
-            // Ideally AuthManager handles this, but here we just report error
-             throw GitHubAuthError.accessDenied
-        }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-        }
-        
-        let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        
-        guard let choices = jsonResponse?["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
-            throw AIClientError.invalidResponseFormat
-        }
-        
-        return content
-    }
-    
-    // MARK: - Non-Streaming Implementation
-    
-    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
-        let startTime = Date()
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        
-        let headers = try await getHeaders()
-        for (key, value) in headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let session = await getSession()
-        do {
+        var didRetryAfterAuthFailure = false
+
+        while true {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+
+            let headers = try await getHeaders()
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
             let (data, response) = try await AIRequestSupport.withTransientRetry {
                 try await session.data(for: request)
             }
-            let endTime = Date()
-            let duration = endTime.timeIntervalSince(startTime)
-            
+
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw AIClientError.invalidResponse
             }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
+
+            if !(200...299).contains(httpResponse.statusCode) {
+                if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
+                   !didRetryAfterAuthFailure {
+                    didRetryAfterAuthFailure = true
+                    try await refreshAuthForRetry()
+                    continue
+                }
+
                 let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
                 throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
             }
-            
+
             let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            
+
             guard let choices = jsonResponse?["choices"] as? [[String: Any]],
                   let firstChoice = choices.first,
                   let message = firstChoice["message"] as? [String: Any],
                   let content = message["content"] as? String else {
                 throw AIClientError.invalidResponseFormat
             }
-            
-            // Calculate stats
-            let estimatedTokens = content.count / 4
-            let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
-            
-            let stats = GenerationStats(
-                duration: duration,
-                tps: tps,
-                ttft: duration, // approximate
-                totalTokens: estimatedTokens,
-                model: config.model,
-                filesScanned: files.count,
-                totalFileSize: files.reduce(0) { $0 + $1.size }
-            )
-            
-            var plan = try ResponseParser.parseResponse(content, originalFiles: files)
-            plan.generationStats = stats
-            return plan
-        } catch let error as AIClientError {
-            throw error
-        } catch {
-            throw AIClientError.networkError(error)
+
+            return content
+        }
+    }
+    
+    // MARK: - Non-Streaming Implementation
+    
+    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+        let startTime = Date()
+        let session = await getSession()
+        var didRetryAfterAuthFailure = false
+
+        while true {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+
+            let headers = try await getHeaders()
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+
+            do {
+                let (data, response) = try await AIRequestSupport.withTransientRetry {
+                    try await session.data(for: request)
+                }
+                let endTime = Date()
+                let duration = endTime.timeIntervalSince(startTime)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw AIClientError.invalidResponse
+                }
+
+                if !(200...299).contains(httpResponse.statusCode) {
+                    if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
+                       !didRetryAfterAuthFailure {
+                        didRetryAfterAuthFailure = true
+                        try await refreshAuthForRetry()
+                        continue
+                    }
+                    let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                    throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+                }
+
+                let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+                guard let choices = jsonResponse?["choices"] as? [[String: Any]],
+                      let firstChoice = choices.first,
+                      let message = firstChoice["message"] as? [String: Any],
+                      let content = message["content"] as? String else {
+                    throw AIClientError.invalidResponseFormat
+                }
+
+                // Calculate stats
+                let estimatedTokens = content.count / 4
+                let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
+
+                let stats = GenerationStats(
+                    duration: duration,
+                    tps: tps,
+                    ttft: duration, // approximate
+                    totalTokens: estimatedTokens,
+                    model: config.model,
+                    filesScanned: files.count,
+                    totalFileSize: files.reduce(0) { $0 + $1.size }
+                )
+
+                var plan = try ResponseParser.parseResponse(content, originalFiles: files)
+                plan.generationStats = stats
+                return plan
+            } catch let error as AIClientError {
+                throw error
+            } catch {
+                throw AIClientError.networkError(error)
+            }
         }
     }
     
@@ -310,106 +360,113 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        
-        let headers = try await getHeaders()
-        for (key, value) in headers {
-            request.setValue(value, forHTTPHeaderField: key)
-        }
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: streamingRequestBody)
-        
+
         let startTime = Date()
-        var firstTokenTime: Date?
-        var accumulatedContentBuffer = "" // Local buffer to avoid Sendable capture issues
-        
         let session = await getSession()
-        do {
-            let (bytes, response) = try await session.bytes(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw AIClientError.invalidResponse
+        var didRetryAfterAuthFailure = false
+
+        while true {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+
+            let headers = try await getHeaders()
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
             }
-            
-            guard (200...299).contains(httpResponse.statusCode) else {
-                var errorData = Data()
-                for try await byte in bytes {
-                    errorData.append(byte)
+            request.httpBody = try JSONSerialization.data(withJSONObject: streamingRequestBody)
+
+            var firstTokenTime: Date?
+            var accumulatedContentBuffer = ""
+
+            do {
+                let (bytes, response) = try await session.bytes(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw AIClientError.invalidResponse
                 }
-                let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
-                throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-            }
-            
-            for try await line in bytes.lines {
-                if line.hasPrefix("data: ") {
-                    let jsonString = String(line.dropFirst(6))
-                    
-                    if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
-                        break
+
+                if !(200...299).contains(httpResponse.statusCode) {
+                    var errorData = Data()
+                    for try await byte in bytes {
+                        errorData.append(byte)
                     }
-                    
-                    if let jsonData = jsonString.data(using: .utf8),
-                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                        
-                        let choices = json["choices"] as? [[String: Any]]
-                        let firstChoice = choices?.first
-                        let delta = firstChoice?["delta"] as? [String: Any]
-                        let deltaContent = delta?["content"] as? String
- 
-                        if let content = deltaContent {
-                            if firstTokenTime == nil {
-                                firstTokenTime = Date()
-                            }
-                            
-                            accumulatedContentBuffer += content
-                            
-                            await MainActor.run {
-                                streamingDelegate?.didReceiveChunk(content)
+                    if shouldRetryAfterAuthFailure(statusCode: httpResponse.statusCode),
+                       !didRetryAfterAuthFailure {
+                        didRetryAfterAuthFailure = true
+                        try await refreshAuthForRetry()
+                        continue
+                    }
+                    let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown error"
+                    throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+                }
+
+                for try await line in bytes.lines {
+                    if line.hasPrefix("data: ") {
+                        let jsonString = String(line.dropFirst(6))
+
+                        if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
+                            break
+                        }
+
+                        if let jsonData = jsonString.data(using: .utf8),
+                           let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+
+                            let choices = json["choices"] as? [[String: Any]]
+                            let firstChoice = choices?.first
+                            let delta = firstChoice?["delta"] as? [String: Any]
+                            let deltaContent = delta?["content"] as? String
+
+                            if let content = deltaContent {
+                                if firstTokenTime == nil {
+                                    firstTokenTime = Date()
+                                }
+
+                                accumulatedContentBuffer += content
+
+                                await MainActor.run {
+                                    streamingDelegate?.didReceiveChunk(content)
+                                }
                             }
                         }
                     }
                 }
+
+                let endTime = Date()
+                let duration = endTime.timeIntervalSince(startTime)
+                let ttft = firstTokenTime?.timeIntervalSince(startTime) ?? duration
+                let estimatedTokens = accumulatedContentBuffer.count / 4
+                let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
+
+                let stats = GenerationStats(
+                    duration: duration,
+                    tps: tps,
+                    ttft: ttft,
+                    totalTokens: estimatedTokens,
+                    model: config.model,
+                    filesScanned: files.count,
+                    totalFileSize: files.reduce(0) { $0 + $1.size }
+                )
+
+                let finalContent = accumulatedContentBuffer
+                await MainActor.run {
+                    streamingDelegate?.didComplete(content: finalContent)
+                }
+
+                var plan = try ResponseParser.parseResponse(accumulatedContentBuffer, originalFiles: files)
+                plan.generationStats = stats
+                return plan
+            } catch let error as AIClientError {
+                await MainActor.run {
+                    streamingDelegate?.didFail(error: error)
+                }
+                throw error
+            } catch {
+                let clientError = AIClientError.networkError(error)
+                await MainActor.run {
+                    streamingDelegate?.didFail(error: clientError)
+                }
+                throw clientError
             }
-            
-            let endTime = Date()
-            let duration = endTime.timeIntervalSince(startTime)
-            let ttft = firstTokenTime?.timeIntervalSince(startTime) ?? duration
-            let estimatedTokens = accumulatedContentBuffer.count / 4
-            let tps = duration > 0 ? Double(estimatedTokens) / duration : 0
-            
-            let stats = GenerationStats(
-                duration: duration,
-                tps: tps,
-                ttft: ttft,
-                totalTokens: estimatedTokens,
-                model: config.model,
-                filesScanned: files.count,
-                totalFileSize: files.reduce(0) { $0 + $1.size }
-            )
-            
-            // Capture buffer for closure
-            let finalContent = accumulatedContentBuffer
-            await MainActor.run {
-                streamingDelegate?.didComplete(content: finalContent)
-            }
-            
-            var plan = try ResponseParser.parseResponse(accumulatedContentBuffer, originalFiles: files)
-            plan.generationStats = stats
-            return plan
-            
-        } catch let error as AIClientError {
-            await MainActor.run {
-                streamingDelegate?.didFail(error: error)
-            }
-            throw error
-        } catch {
-            let clientError = AIClientError.networkError(error)
-            await MainActor.run {
-                streamingDelegate?.didFail(error: clientError)
-            }
-            throw clientError
         }
     }
 }

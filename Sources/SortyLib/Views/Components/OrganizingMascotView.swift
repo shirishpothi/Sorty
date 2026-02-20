@@ -54,11 +54,11 @@ struct OrganizingMascotView: View {
     }
     
     private var maxOrbitItems: Int {
-        isOrganizing ? 4 : 2
+        isOrganizing ? 3 : 2
     }
     
     private var frameInterval: TimeInterval {
-        isOrganizing ? 1.0 / 5.0 : 1.0 / 10.0
+        isOrganizing ? 1.0 / 6.0 : 1.0 / 10.0
     }
 
     var body: some View {
@@ -75,11 +75,9 @@ struct OrganizingMascotView: View {
                 ForEach(Array(orbitingURLs.prefix(maxOrbitItems).enumerated()), id: \.offset) { index, url in
                     orbitingIcon(url: url, index: index, time: time)
                 }
-                .drawingGroup()
                 
                 if isOrganizing || isHovered {
                     sparkleParticles(time: time)
-                        .drawingGroup()
                 }
                 
                 mascotView(time: time)
@@ -241,8 +239,8 @@ struct OrganizingMascotView: View {
     
     @ViewBuilder
     private func sparkleParticles(time: TimeInterval) -> some View {
-        ForEach(0..<5, id: \.self) { index in
-            let angle = time * 1.8 + Double(index) * (.pi * 2 / 5)
+        ForEach(0..<4, id: \.self) { index in
+            let angle = time * 1.8 + Double(index) * (.pi * 2 / 4)
             let radius: CGFloat = 20 + CGFloat(sin(time * 2.5 + Double(index))) * 5
             let x = cos(angle) * radius
             let y = sin(angle * 0.7) * radius * 0.5
@@ -443,10 +441,7 @@ struct OrganizingMascotView: View {
             }
             
             Group {
-                // Optimized for high-frequency animation loops - avoid heavy thumbnail logic
-                Image(nsImage: url.hasDirectoryPath ? 
-                    NSWorkspace.shared.icon(for: .folder) : 
-                    (NSWorkspace.shared.icon(forFileType: url.pathExtension)))
+                Image(nsImage: orbitIconImage(for: url))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
             }
@@ -593,6 +588,21 @@ struct OrganizingMascotView: View {
         }
         
         cachedOrbitingURLs = urls
+    }
+
+    private func orbitIconImage(for url: URL) -> NSImage {
+        if url.hasDirectoryPath {
+            return AnalysisIconProvider.icon(for: .folder)
+        }
+
+        let ext = url.pathExtension
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if !ext.isEmpty {
+            return AnalysisIconProvider.icon(forFileExtension: ext)
+        }
+
+        return AnalysisIconProvider.icon(for: .data)
     }
 }
 

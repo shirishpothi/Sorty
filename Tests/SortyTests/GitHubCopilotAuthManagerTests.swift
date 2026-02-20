@@ -71,13 +71,13 @@ final class GitHubCopilotAuthManagerTests: XCTestCase {
         XCTAssertTrue(result)
     }
 
-    func testHasRecoverableAuthStateReturnsTrueWhenCachedCopilotTokenValid() {
+    func testHasRecoverableAuthStateReturnsFalseWhenOnlyCachedCopilotTokenExists() {
         let result = GitHubCopilotAuthManager.hasRecoverableAuthState(
             hasAccessToken: false,
             hasValidCachedCopilotToken: true
         )
 
-        XCTAssertTrue(result)
+        XCTAssertFalse(result)
     }
 
     func testHasRecoverableAuthStateReturnsFalseWhenNoTokenPathExists() {

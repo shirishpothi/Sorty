@@ -14,8 +14,7 @@ private struct MenuBarMascotIcon: View {
     var size: CGSize = CGSize(width: 18, height: 18)
     
     private var mascotImage: Image {
-        Image(nsImage: SortyResources.menuBarNSImage())
-            .renderingMode(.template)
+        Image(nsImage: SortyResources.menuBarLabelNSImage())
     }
     
     var body: some View {
@@ -32,10 +31,11 @@ public struct MenuBarLabel: View {
     public init() {}
     
     private static func menuBarImage() -> NSImage {
-        let img = SortyResources.menuBarNSImage()
-        img.size = NSSize(width: 18, height: 18)
-        img.isTemplate = true
-        return img
+        let source = SortyResources.menuBarLabelNSImage()
+        let image = (source.copy() as? NSImage) ?? source
+        image.size = NSSize(width: 18, height: 18)
+        image.isTemplate = false
+        return image
     }
     
     public var body: some View {
@@ -118,7 +118,6 @@ public struct MenuBarView: View {
     private var statusHeader: some View {
         HStack(spacing: 8) {
             MenuBarMascotIcon(size: CGSize(width: 22, height: 20))
-                .foregroundStyle(.primary)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text("Sorty")

@@ -36,6 +36,7 @@ public final class AutomationManager: ObservableObject {
     
     private let enableSelectionMonitoringKey = "automation.enableSelectionMonitoring"
     private let autoSelectOrganizedFoldersKey = "automation.autoSelectOrganizedFolders"
+    private let autoSelectOptInMigrationKey = "automation.autoSelectOrganizedFoldersMigratedToOptIn"
     
     // MARK: - Settings
     
@@ -62,14 +63,17 @@ public final class AutomationManager: ObservableObject {
     // MARK: - Initialization
     
     public init() {
+        let defaults = UserDefaults.standard
+
         // Load settings from UserDefaults
-        self.enableSelectionMonitoring = UserDefaults.standard.bool(forKey: enableSelectionMonitoringKey)
-        self.autoSelectOrganizedFolders = UserDefaults.standard.bool(forKey: autoSelectOrganizedFoldersKey)
-        
-        // Default autoSelectOrganizedFolders to true if not set
-        if !UserDefaults.standard.bool(forKey: "automation.settingsInitialized") {
-            self.autoSelectOrganizedFolders = true
-            UserDefaults.standard.set(true, forKey: "automation.settingsInitialized")
+        self.enableSelectionMonitoring = defaults.bool(forKey: enableSelectionMonitoringKey)
+        self.autoSelectOrganizedFolders = defaults.object(forKey: autoSelectOrganizedFoldersKey) as? Bool ?? false
+
+        // One-time migration: switch post-organization Finder reveal to opt-in.
+        if !defaults.bool(forKey: autoSelectOptInMigrationKey) {
+            self.autoSelectOrganizedFolders = false
+            defaults.set(false, forKey: autoSelectOrganizedFoldersKey)
+            defaults.set(true, forKey: autoSelectOptInMigrationKey)
         }
         isInitializing = false
     }

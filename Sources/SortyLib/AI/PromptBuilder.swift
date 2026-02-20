@@ -291,6 +291,7 @@ struct PromptBuilder {
         if enableReasoning {
             base += " Add concise reasoning for each folder."
         }
+        base += " Before JSON, emit up to 8 progress lines starting with '>> category: text' (categories: file, folder, pattern, decision, constraint, general). Then output JSON only."
         return base
     }
 
@@ -388,6 +389,8 @@ struct PromptBuilder {
         - Group by type: Documents, Media, Code, Archives
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Suggest better filenames where appropriate" : "")
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
+        
+        Before JSON, emit up to 8 progress lines: ">> category: text" (categories: file, folder, pattern, decision, constraint, general). Then output JSON only.
         
         Return JSON:
         {"folder_assignments":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")"file_ids":[1,2]}],"notes":""}

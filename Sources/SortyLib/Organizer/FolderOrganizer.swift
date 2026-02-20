@@ -170,7 +170,7 @@ public enum OrganizationError: LocalizedError, Equatable {
 }
 
 /// AI reasoning insight extracted from streaming content
-public struct AIInsight: Identifiable, Sendable {
+public struct AIInsight: Identifiable, Equatable, Sendable {
     public let id: String
     public let text: String
     public let category: Category
@@ -317,6 +317,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var truncatedDisplayStreamingContent: String = "" // UI-ready preview text (pre-computed off render path)
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
+    @Published public var liveInsightsEnabled: Bool = true
     
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
@@ -332,9 +333,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var currentInsight: String = ""
     @Published public var insightHistory: [AIInsight] = []
     private var lastInsightExtraction: Date = .distantPast
-    private let insightExtractionInterval: TimeInterval = 0.8 // Throttle to avoid too frequent updates
+    private let insightExtractionInterval: TimeInterval = 0.35 // Keep insights responsive while avoiding thrash
     private let insightExtractor = AIInsightExtractor()
     private var insightExtractionTask: Task<Void, Never>?
+    
+    // Progress line streaming support
+    private var progressLineBuffer: String = ""
+    private var receivedProgressLines: Bool = false
+    private var jsonStartedInStream: Bool = false
+    private var progressLineCount: Int = 0
+    private let progressLineLimit = 12
     
     // MARK: - AI Insights Cache
     
@@ -511,6 +519,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     @MainActor
     private func scheduleDisplayUpdate(for contentSnapshot: String, force: Bool = false) {
+        guard liveInsightsEnabled else { return }
+
         let now = Date()
         if !force && now.timeIntervalSince(lastDisplayUpdate) < displayUpdateInterval {
             return
@@ -529,12 +539,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             self.withBatchUpdates {
                 self.displayStreamingContent = payload.fullContent
                 self.truncatedDisplayStreamingContent = payload.truncatedContent
-
-                let contentProgress = min(0.80, 0.30 + (Double(contentLength) / Double(estimatedTotal)) * 0.50)
-                if self.progress < contentProgress {
-                    self.progress = contentProgress
-                }
+                self.updateProgressFromStreamLength(contentLength, estimatedTotal: estimatedTotal)
             }
+        }
+    }
+
+    @MainActor
+    private func updateProgressFromStreamLength(_ contentLength: Int, estimatedTotal: Int? = nil) {
+        let target = estimatedTotal ?? estimatedStreamingCharacterTarget()
+        let contentProgress = min(0.80, 0.30 + (Double(contentLength) / Double(target)) * 0.50)
+        if progress < contentProgress {
+            progress = contentProgress
         }
     }
 
@@ -553,6 +568,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         displayStreamingContent = ""
         truncatedDisplayStreamingContent = ""
         lastDisplayUpdate = .distantPast
+        progressLineBuffer = ""
+        receivedProgressLines = false
+        jsonStartedInStream = false
+        progressLineCount = 0
     }
 
     public nonisolated func didReceiveChunk(_ chunk: String) {
@@ -569,19 +588,125 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     self.isStreaming = true
                     self.organizationStage = "AI is analyzing your files..."
                     self.progress = 0.30
-                    self.syncDisplayContentImmediately()
+                    if self.liveInsightsEnabled {
+                        self.syncDisplayContentImmediately()
+                    }
                 }
                 
                 // Start steady progress task for smooth animation
                 self.startSteadyProgressTask()
             }
 
-            // Throttle UI-impacting updates to prevent layout thrashing and main actor congestion
-            self.scheduleDisplayUpdate(for: self.streamingContent)
-            
-            // Extract insights from streaming content (throttled and cached)
-            self.extractInsightsIfNeeded()
+            if self.liveInsightsEnabled {
+                // Try to extract progress lines from the stream before JSON starts
+                if !self.jsonStartedInStream {
+                    self.processProgressLines(from: chunk)
+                }
+                
+                // Throttle UI-impacting updates to prevent layout thrashing and main actor congestion
+                self.scheduleDisplayUpdate(for: self.streamingContent)
+                
+                // Fall back to regex extractor only if no progress lines were received
+                if !self.receivedProgressLines {
+                    self.extractInsightsIfNeeded()
+                }
+            } else {
+                let now = Date()
+                if now.timeIntervalSince(self.lastDisplayUpdate) >= self.displayUpdateInterval {
+                    self.lastDisplayUpdate = now
+                    self.updateProgressFromStreamLength(self.streamingContent.count)
+                }
+            }
         }
+    }
+    
+    // MARK: - Progress Line Parsing
+    
+    /// Parse progress lines (>> category: text) from streaming chunks
+    @MainActor
+    private func processProgressLines(from chunk: String) {
+        progressLineBuffer += chunk
+        
+        // Process complete lines from the buffer
+        while let newlineIndex = progressLineBuffer.firstIndex(of: "\n") {
+            let line = String(progressLineBuffer[progressLineBuffer.startIndex..<newlineIndex])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            progressLineBuffer = String(progressLineBuffer[progressLineBuffer.index(after: newlineIndex)...])
+            
+            // Check if JSON has started (line contains opening brace)
+            if line.contains("{") {
+                jsonStartedInStream = true
+                return
+            }
+            
+            // Skip empty lines
+            guard !line.isEmpty else { continue }
+            
+            // Parse progress lines starting with ">> "
+            guard line.hasPrefix(">> "), progressLineCount < progressLineLimit else { continue }
+            
+            let content = String(line.dropFirst(3))
+            guard let insight = parseProgressLine(content) else { continue }
+            
+            progressLineCount += 1
+            receivedProgressLines = true
+            
+            withBatchUpdates {
+                self.currentInsight = insight.text
+                if let existingIndex = self.insightHistory.firstIndex(where: { $0.id == insight.id }) {
+                    self.insightHistory.remove(at: existingIndex)
+                }
+                if self.insightHistory.count >= 12 {
+                    self.insightHistory.removeFirst()
+                }
+                self.insightHistory.append(insight)
+            }
+        }
+        
+        // Check if remaining buffer contains start of JSON (e.g., chunk ended mid-line with "{")
+        if progressLineBuffer.contains("{") {
+            jsonStartedInStream = true
+        }
+    }
+    
+    /// Parse a progress line like "file: Assigning invoice.pdf to Finances" into an AIInsight
+    private func parseProgressLine(_ content: String) -> AIInsight? {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 5 else { return nil }
+        
+        let category: AIInsight.Category
+        let text: String
+        
+        // Try to extract "category: text" format
+        if let colonIndex = trimmed.firstIndex(of: ":") {
+            let prefix = String(trimmed[trimmed.startIndex..<colonIndex])
+                .trimmingCharacters(in: .whitespaces)
+                .lowercased()
+            let remainder = String(trimmed[trimmed.index(after: colonIndex)...])
+                .trimmingCharacters(in: .whitespaces)
+            
+            switch prefix {
+            case "file": category = .file
+            case "folder": category = .folder
+            case "pattern": category = .pattern
+            case "decision": category = .decision
+            case "constraint": category = .constraint
+            case "general": category = .general
+            default:
+                // No recognized category prefix, use entire content
+                category = .general
+                text = trimmed
+                return AIInsight(text: String(text.prefix(120)), category: category, stableSeed: text)
+            }
+            
+            guard !remainder.isEmpty else { return nil }
+            text = remainder
+        } else {
+            category = .general
+            text = trimmed
+        }
+        
+        return AIInsight(text: String(text.prefix(120)), category: category, stableSeed: text)
     }
     
     /// Starts a background task that ensures progress keeps moving even during pauses
@@ -604,14 +729,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Extract meaningful insights from the streaming AI response
     /// This is throttled and uses caching to avoid performance impact
-    private func extractInsightsIfNeeded() {
+    private func extractInsightsIfNeeded(force: Bool = false) {
+        guard liveInsightsEnabled else { return }
+
         let now = Date()
-        guard now.timeIntervalSince(lastInsightExtraction) >= insightExtractionInterval else { return }
+        if !force {
+            guard now.timeIntervalSince(lastInsightExtraction) >= insightExtractionInterval else { return }
+        }
         lastInsightExtraction = now
         
         // Get the last portion of content for analysis
         let content = streamingContent
-        guard content.count > 50 else { return }
+        guard content.count > 20 else { return }
         
         // Check cache first
         let contentHash = content.hashValue
@@ -639,6 +768,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             )
 
             guard !Task.isCancelled,
+                  self.liveInsightsEnabled,
                   let insight,
                   insight.text != self.currentInsight else { return }
 
@@ -665,6 +795,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Get cached insights if available, otherwise returns current insights
     /// Use this from UI to avoid re-parsing during render
     public func getCachedInsights() -> (current: String, history: [AIInsight]) {
+        guard liveInsightsEnabled else { return ("", []) }
         if let cache = insightsCache, cache.isValid {
             return (cache.currentInsight, cache.insights)
         }
@@ -673,6 +804,33 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     /// Invalidate the insights cache (call when streaming content significantly changes)
     public func invalidateInsightsCache() {
+        insightsCache = nil
+    }
+
+    @MainActor
+    public func setLiveInsightsEnabled(_ enabled: Bool) {
+        guard liveInsightsEnabled != enabled else { return }
+        liveInsightsEnabled = enabled
+
+        if enabled {
+            if !streamingContent.isEmpty {
+                syncDisplayContentImmediately()
+                scheduleDisplayUpdate(for: streamingContent, force: true)
+                extractInsightsIfNeeded(force: true)
+            }
+            return
+        }
+
+        displayUpdateTask?.cancel()
+        displayUpdateTask = nil
+        displayStreamingContent = ""
+        truncatedDisplayStreamingContent = ""
+
+        insightExtractionTask?.cancel()
+        insightExtractionTask = nil
+        currentInsight = ""
+        insightHistory = []
+        lastInsightExtraction = .distantPast
         insightsCache = nil
     }
     
@@ -1806,13 +1964,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 learningsObserver.endSession()
             }
 
-            // Use AutomationManager for Finder integration if available
+            // Auto-reveal in Finder is opt-in.
+            let shouldAutoRevealInFinder = automationManager?.autoSelectOrganizedFolders ?? false
+
             if let automationManager = automationManager, automationManager.automationStatus == .granted {
                 automationManager.refreshFinder(at: baseURL)
 
-                let folderURLs = plan.suggestions.map { baseURL.appendingPathComponent($0.folderName) }
-                automationManager.selectOrganizedFolders(folderURLs: folderURLs)
-            } else {
+                if shouldAutoRevealInFinder {
+                    let folderURLs = plan.suggestions.map { baseURL.appendingPathComponent($0.folderName) }
+                    automationManager.selectOrganizedFolders(folderURLs: folderURLs)
+                }
+            } else if shouldAutoRevealInFinder {
                 let folderURLs = plan.suggestions.compactMap { suggestion -> URL? in
                     let url = baseURL.appendingPathComponent(suggestion.folderName)
                     return FileManager.default.fileExists(atPath: url.path) ? url : nil

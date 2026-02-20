@@ -40,8 +40,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userPrompt]
             ],
-            "temperature": temperature ?? config.temperature,
-            "response_format": ["type": "json_object"]
+            "temperature": temperature ?? config.temperature
         ]
         
         // Add max_tokens if specified
@@ -97,8 +96,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": contentArray]
             ],
-            "temperature": temperature ?? config.temperature,
-            "response_format": ["type": "json_object"]
+            "temperature": temperature ?? config.temperature
         ]
         
         if let maxTokens = config.maxTokens {
@@ -251,7 +249,6 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let startTime = Date()
         var firstTokenTime: Date?
         var accumulatedContent = ""
-        var tokenCountEstimate = 0
         
         let session = await AIRequestSupport.session(for: config)
         do {
@@ -273,35 +270,33 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             
             // Process SSE stream
             for try await line in bytes.lines {
-                if line.hasPrefix("data: ") {
-                    let jsonString = String(line.dropFirst(6))
-                    
-                    // Check for stream end
-                    if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
-                        break
-                    }
-                    
-                    // Parse the JSON chunk
-                    if let jsonData = jsonString.data(using: .utf8),
-                       let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-                        
-                        let choices = json["choices"] as? [[String: Any]]
-                        let firstChoice = choices?.first
-                        let delta = firstChoice?["delta"] as? [String: Any]
-                        let deltaContent = delta?["content"] as? String
+                guard let jsonString = Self.sseDataPayload(from: line) else { continue }
 
-                        if let content = deltaContent {
-                            if firstTokenTime == nil {
-                                firstTokenTime = Date()
-                            }
-                            
-                            accumulatedContent += content
-                            tokenCountEstimate += 1
-                            
-                            await MainActor.run {
-                                streamingDelegate?.didReceiveChunk(content)
-                            }
-                        }
+                // Check for stream end
+                if jsonString == "[DONE]" {
+                    break
+                }
+
+                // Parse the JSON chunk
+                guard let jsonData = jsonString.data(using: .utf8),
+                      let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                      let parsedChunk = Self.parseStreamChunk(from: json) else {
+                    continue
+                }
+
+                let hasVisibleChunk = parsedChunk.visibleChunk?.isEmpty == false
+                let hasCompletionChunk = parsedChunk.completionChunk?.isEmpty == false
+                if firstTokenTime == nil, hasVisibleChunk || hasCompletionChunk {
+                    firstTokenTime = Date()
+                }
+
+                if let completionChunk = parsedChunk.completionChunk, !completionChunk.isEmpty {
+                    accumulatedContent += completionChunk
+                }
+
+                if let visibleChunk = parsedChunk.visibleChunk, !visibleChunk.isEmpty {
+                    await MainActor.run {
+                        streamingDelegate?.didReceiveChunk(visibleChunk)
                     }
                 }
             }
@@ -348,6 +343,103 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             throw clientError
         }
     }
-}
 
+    private struct StreamChunk {
+        let completionChunk: String?
+        let visibleChunk: String?
+    }
+
+    private static func sseDataPayload(from line: String) -> String? {
+        guard line.hasPrefix("data:") else { return nil }
+        let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+        return payload.isEmpty ? nil : payload
+    }
+
+    private static func parseStreamChunk(from json: [String: Any]) -> StreamChunk? {
+        guard let choices = json["choices"] as? [[String: Any]],
+              let firstChoice = choices.first else {
+            return nil
+        }
+
+        let delta = firstChoice["delta"] as? [String: Any]
+        let message = firstChoice["message"] as? [String: Any]
+
+        let completionChunk =
+            extractTextChunk(from: delta?["content"]) ??
+            extractTextChunk(from: delta?["text"]) ??
+            extractTextChunk(from: message?["content"])
+
+        let reasoningChunk = extractReasoningChunk(from: delta)
+        let visibleChunk = reasoningChunk ?? completionChunk
+
+        if completionChunk == nil && visibleChunk == nil {
+            return nil
+        }
+
+        return StreamChunk(completionChunk: completionChunk, visibleChunk: visibleChunk)
+    }
+
+    private static func extractReasoningChunk(from delta: [String: Any]?) -> String? {
+        guard let delta else { return nil }
+
+        let keys = ["reasoning", "reasoning_content", "thinking", "analysis"]
+        for key in keys {
+            if let chunk = extractTextChunk(from: delta[key]), !chunk.isEmpty {
+                return chunk
+            }
+        }
+
+        if let details = delta["reasoning_details"] {
+            let combined = extractTextChunk(from: details)
+            if let combined, !combined.isEmpty {
+                return combined
+            }
+        }
+
+        return nil
+    }
+
+    private static func extractTextChunk(from value: Any?) -> String? {
+        guard let value else { return nil }
+
+        if let text = value as? String {
+            return text
+        }
+
+        if let parts = value as? [[String: Any]] {
+            let joined = parts.compactMap { part -> String? in
+                if let text = part["text"] as? String {
+                    return text
+                }
+                if let text = part["content"] as? String {
+                    return text
+                }
+                if let text = part["value"] as? String {
+                    return text
+                }
+                if let nestedText = extractTextChunk(from: part["reasoning"]) {
+                    return nestedText
+                }
+                return nil
+            }.joined()
+
+            return joined.isEmpty ? nil : joined
+        }
+
+        if let array = value as? [Any] {
+            let joined = array.compactMap { extractTextChunk(from: $0) }.joined()
+            return joined.isEmpty ? nil : joined
+        }
+
+        if let dict = value as? [String: Any] {
+            for key in ["text", "content", "value", "reasoning"] {
+                if let nested = extractTextChunk(from: dict[key]), !nested.isEmpty {
+                    return nested
+                }
+            }
+        }
+
+        return nil
+    }
+}
 

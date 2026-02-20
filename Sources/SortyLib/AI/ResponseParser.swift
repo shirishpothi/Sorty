@@ -148,9 +148,31 @@ struct ResponseParser {
 
     // MARK: - Parsing
 
+    /// Strip progress preamble lines (lines starting with ">> ") from before the JSON
+    static func stripProgressPreamble(_ text: String) -> String {
+        let lines = text.components(separatedBy: .newlines)
+        var result: [String] = []
+        var pastPreamble = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if !pastPreamble && trimmed.hasPrefix(">> ") {
+                continue
+            }
+            if !pastPreamble && trimmed.isEmpty {
+                continue
+            }
+            pastPreamble = true
+            result.append(line)
+        }
+        return result.joined(separator: "\n")
+    }
+
     static func parseResponse(_ jsonString: String, originalFiles: [FileItem]) throws -> OrganizationPlan {
+        // Strip progress preamble lines before JSON
+        var cleanedJSON = stripProgressPreamble(jsonString)
+
         // Clean the JSON string - remove markdown code blocks if present
-        var cleanedJSON = jsonString.trimmingCharacters(in: .whitespacesAndNewlines)
+        cleanedJSON = cleanedJSON.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanedJSON.hasPrefix("```json") {
             cleanedJSON = String(cleanedJSON.dropFirst(7))
         }

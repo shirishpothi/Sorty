@@ -34,7 +34,6 @@ struct AIProviderSettingsView: View {
                                     if let defaultURL = provider.defaultAPIURL {
                                         viewModel.config.apiURL = defaultURL
                                     }
-                                    viewModel.config.model = provider.defaultModel
                                     viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
                                     HapticFeedbackManager.shared.selection()
                                 }

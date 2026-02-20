@@ -162,6 +162,7 @@ struct AnalysisView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
     @StateObject private var refreshManager = AnalysisRefreshManager()
     @State private var hasAppeared = false
     @State private var isCancelHovered = false
@@ -256,10 +257,14 @@ struct AnalysisView: View {
             withAnimation {
                 hasAppeared = true
             }
+            organizer.setLiveInsightsEnabled(liveInsightsEnabled)
             refreshManager.start(organizer: organizer)
         }
         .onDisappear {
             refreshManager.stop()
+        }
+        .onChange(of: liveInsightsEnabled) { _, enabled in
+            organizer.setLiveInsightsEnabled(enabled)
         }
     }
     
@@ -367,7 +372,8 @@ struct AnalysisView: View {
             isStreaming: organizer.isStreaming,
             insights: cachedInsights,
             debugModeEnabled: appState.debugMode,
-            streamPreview: organizer.truncatedDisplayStreamingContent
+            streamPreview: organizer.truncatedDisplayStreamingContent,
+            liveInsightsEnabled: $liveInsightsEnabled
         )
     }
 
@@ -461,7 +467,7 @@ private struct AIReasoningStatus: View {
                 Text(organizationStage)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                    .textShimmer(isLoading: isAnalyzingStage)
+                    .textShimmer(isLoading: isAnalyzingStage, phaseOffset: 0.08, intensity: 1.55)
             }
             
             if isEstablishingConnection {
@@ -469,7 +475,7 @@ private struct AIReasoningStatus: View {
                     Text("Connecting to AI provider")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .textShimmer(isLoading: true)
+                        .textShimmer(isLoading: true, phaseOffset: 0.34, intensity: 1.65)
 
                     LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
                 }
@@ -479,7 +485,7 @@ private struct AIReasoningStatus: View {
                     Text(funnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .textShimmer(isLoading: true)
+                        .textShimmer(isLoading: true, phaseOffset: 0.62, intensity: 1.65)
                         .opacity(funnyMessageOpacity)
                         .offset(y: funnyMessageOpacity > 0.5 ? 0 : 2)
                         .blur(radius: funnyMessageOpacity > 0.5 ? 0 : 0.35)
@@ -509,7 +515,6 @@ private struct AIReasoningStatus: View {
                 ZStack {
                     PingRingView()
                     OrganizingMascotView()
-                        .drawingGroup()
                 }
             }
         }
@@ -528,6 +533,7 @@ private struct InsightHistorySection: View {
     let insights: (current: String, history: [AIInsight])
     let debugModeEnabled: Bool
     let streamPreview: String
+    @Binding var liveInsightsEnabled: Bool
     
     @StateObject private var viewState = AnalysisInsightViewState()
 
@@ -581,6 +587,24 @@ private struct InsightHistorySection: View {
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.accentColor))
                     }
+
+                    if isStreaming {
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                liveInsightsEnabled.toggle()
+                                if !liveInsightsEnabled {
+                                    viewState.showDebugStream = false
+                                }
+                            }
+                        } label: {
+                            Image(systemName: liveInsightsEnabled ? "bolt.badge.checkmark" : "bolt.slash")
+                                .font(.caption)
+                                .foregroundStyle(liveInsightsEnabled ? Color.accentColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(liveInsightsEnabled ? "Disable streamed live insights" : "Enable streamed live insights")
+                        .accessibilityIdentifier("LiveInsightsToggle")
+                    }
                     
                     if debugModeEnabled {
                         Button {
@@ -593,7 +617,9 @@ private struct InsightHistorySection: View {
                                 .foregroundStyle(viewState.showDebugStream ? Color.accentColor : .secondary)
                         }
                         .buttonStyle(.plain)
-                        .help("Toggle raw AI stream")
+                        .disabled(!liveInsightsEnabled)
+                        .opacity(liveInsightsEnabled ? 1 : 0.45)
+                        .help(liveInsightsEnabled ? "Toggle raw AI stream" : "Enable live insights to preview raw AI stream")
                     }
                     
                     Image(systemName: "chevron.down")
@@ -624,17 +650,19 @@ private struct InsightHistorySection: View {
             if viewState.isExpanded {
                 LazyVStack(spacing: 16) {
                     let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
-                    if !insights.current.isEmpty {
+                    if liveInsightsEnabled, !insights.current.isEmpty {
                         currentInsightPill(insight: insights.current, detail: currentInsightItem)
+                    } else if liveInsightsEnabled, let fallbackInsight = streamFallbackInsight {
+                        currentInsightPill(insight: fallbackInsight, detail: nil)
                     } else if isStreaming {
                         receivingResponseView
                     }
                     
-                    if insights.history.count > 1 {
+                    if liveInsightsEnabled && insights.history.count > 1 {
                         insightHistoryWrap(history: insights.history)
                     }
                     
-                    if viewState.showDebugStream && debugModeEnabled {
+                    if liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
                         streamingPreview
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -655,6 +683,11 @@ private struct InsightHistorySection: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .frame(maxHeight: 220)
+        .onChange(of: liveInsightsEnabled) { _, enabled in
+            if !enabled {
+                viewState.showDebugStream = false
+            }
+        }
     }
 
     private var receivingResponseView: some View {
@@ -680,6 +713,64 @@ private struct InsightHistorySection: View {
                 )
         )
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
+    }
+
+    private var streamFallbackInsight: String? {
+        let content = streamPreview
+            .replacingOccurrences(of: "...", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+
+        if let assignment = extractJSONAssignmentSnippet(from: content) {
+            return assignment
+        }
+
+        let plainLine = content
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .reversed()
+            .first { line in
+                let lower = line.lowercased()
+                return line.count >= 12 &&
+                    !line.contains("{") &&
+                    !line.contains("}") &&
+                    !lower.hasPrefix("\"folders\"") &&
+                    !lower.hasPrefix("\"files\"")
+            }
+
+        guard let plainLine else { return nil }
+        return plainLine.count > 90 ? String(plainLine.prefix(90)) + "..." : plainLine
+    }
+
+    private func extractJSONAssignmentSnippet(from text: String) -> String? {
+        let folderPattern = #""name"\s*:\s*"([^"\n]{2,80})""#
+        let filePattern = #""([^"\n]{2,140}\.[a-zA-Z0-9]{1,12})""#
+
+        guard let folderRegex = try? NSRegularExpression(pattern: folderPattern, options: [.caseInsensitive]),
+              let fileRegex = try? NSRegularExpression(pattern: filePattern, options: []) else {
+            return nil
+        }
+
+        let folderMatches = folderRegex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
+        let fileMatches = fileRegex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
+
+        guard let folderMatch = folderMatches.last,
+              let folderRange = Range(folderMatch.range(at: 1), in: text) else {
+            return nil
+        }
+
+        let folderName = String(text[folderRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !folderName.isEmpty else { return nil }
+
+        if let fileMatch = fileMatches.last,
+           let fileRange = Range(fileMatch.range(at: 1), in: text) {
+            let fileName = URL(fileURLWithPath: String(text[fileRange])).lastPathComponent
+            if !fileName.isEmpty {
+                return "Assigning \(fileName) to \(folderName)"
+            }
+        }
+
+        return "Preparing folder \(folderName)"
     }
 
     private func currentInsightPill(insight: String, detail: AIInsight?) -> some View {
