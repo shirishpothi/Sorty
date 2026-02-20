@@ -20,7 +20,10 @@ final class SortyFinderSync: FIFinderSync {
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
         let menu = NSMenu()
         let organizeImage = Self.normalizedMenuIcon(Self.finderOrganizeImage(), isTemplate: false)
-        let watchImage = Self.normalizedMenuIcon(Self.finderWatchImage(), isTemplate: true)
+        let watchImage = Self.normalizedMenuIcon(
+            Self.finderWatchImage(for: menu.effectiveAppearance),
+            isTemplate: false
+        )
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer:
@@ -169,16 +172,48 @@ final class SortyFinderSync: FIFinderSync {
         return fallback
     }
 
-    private static func finderWatchImage() -> NSImage {
+    private static func finderWatchImage(for appearance: NSAppearance?) -> NSImage {
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
         if let symbol = NSImage(systemSymbolName: "eye", accessibilityDescription: "Watch") {
             let configured = symbol.withSymbolConfiguration(config) ?? symbol
-            configured.isTemplate = true
-            return configured
+            let color: NSColor = prefersDarkAppearance(appearance) ? .white : .black
+            return tintedImage(configured, color: color)
         }
         let fallback = NSImage(size: NSSize(width: 16, height: 16))
-        fallback.isTemplate = true
+        fallback.isTemplate = false
         return fallback
+    }
+
+    private static func prefersDarkAppearance(_ appearance: NSAppearance?) -> Bool {
+        if appearance?.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+            return true
+        }
+        if NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+            return true
+        }
+        guard let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") else {
+            return false
+        }
+        return style.caseInsensitiveCompare("Dark") == .orderedSame
+    }
+
+    private static func tintedImage(_ image: NSImage, color: NSColor) -> NSImage {
+        let source = (image.copy() as? NSImage) ?? image
+        let size = source.size
+        guard size.width > 0, size.height > 0 else {
+            source.isTemplate = false
+            return source
+        }
+
+        let tinted = NSImage(size: size)
+        tinted.lockFocus()
+        let rect = NSRect(origin: .zero, size: size)
+        source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        color.setFill()
+        rect.fill(using: .sourceIn)
+        tinted.unlockFocus()
+        tinted.isTemplate = false
+        return tinted
     }
 
     private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {
