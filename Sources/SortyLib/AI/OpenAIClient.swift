@@ -147,8 +147,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         
         guard let choices = jsonResponse?["choices"] as? [[String: Any]],
               let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
+              let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
+              !content.isEmpty else {
             throw AIClientError.invalidResponseFormat
         }
         
@@ -201,8 +201,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             
             guard let choices = jsonResponse?["choices"] as? [[String: Any]],
                   let firstChoice = choices.first,
-                  let message = firstChoice["message"] as? [String: Any],
-                  let content = message["content"] as? String else {
+                  let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
+                  !content.isEmpty else {
                 throw AIClientError.invalidResponseFormat
             }
             
@@ -326,7 +326,21 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 streamingDelegate?.didComplete(content: finalContent)
             }
             
-            var plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
+            var plan: OrganizationPlan
+            do {
+                plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
+            } catch {
+                // Try partial extraction before giving up
+                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files) {
+                    plan = partialPlan
+                } else {
+                    let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)
+                    await MainActor.run {
+                        streamingDelegate?.didFail(error: clientError)
+                    }
+                    throw clientError
+                }
+            }
             plan.generationStats = stats
             return plan
             
@@ -362,12 +376,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         }
 
         let delta = firstChoice["delta"] as? [String: Any]
-        let message = firstChoice["message"] as? [String: Any]
-
-        let completionChunk =
-            extractTextChunk(from: delta?["content"]) ??
-            extractTextChunk(from: delta?["text"]) ??
-            extractTextChunk(from: message?["content"])
+        let completionChunk = AIRequestSupport.extractChatDeltaText(from: firstChoice)
 
         let reasoningChunk = extractReasoningChunk(from: delta)
         let visibleChunk = reasoningChunk ?? completionChunk
@@ -384,13 +393,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         let keys = ["reasoning", "reasoning_content", "thinking", "analysis"]
         for key in keys {
-            if let chunk = extractTextChunk(from: delta[key]), !chunk.isEmpty {
+            if let chunk = AIRequestSupport.extractText(from: delta[key]), !chunk.isEmpty {
                 return chunk
             }
         }
 
         if let details = delta["reasoning_details"] {
-            let combined = extractTextChunk(from: details)
+            let combined = AIRequestSupport.extractText(from: details)
             if let combined, !combined.isEmpty {
                 return combined
             }
@@ -398,48 +407,4 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         return nil
     }
-
-    private static func extractTextChunk(from value: Any?) -> String? {
-        guard let value else { return nil }
-
-        if let text = value as? String {
-            return text
-        }
-
-        if let parts = value as? [[String: Any]] {
-            let joined = parts.compactMap { part -> String? in
-                if let text = part["text"] as? String {
-                    return text
-                }
-                if let text = part["content"] as? String {
-                    return text
-                }
-                if let text = part["value"] as? String {
-                    return text
-                }
-                if let nestedText = extractTextChunk(from: part["reasoning"]) {
-                    return nestedText
-                }
-                return nil
-            }.joined()
-
-            return joined.isEmpty ? nil : joined
-        }
-
-        if let array = value as? [Any] {
-            let joined = array.compactMap { extractTextChunk(from: $0) }.joined()
-            return joined.isEmpty ? nil : joined
-        }
-
-        if let dict = value as? [String: Any] {
-            for key in ["text", "content", "value", "reasoning"] {
-                if let nested = extractTextChunk(from: dict[key]), !nested.isEmpty {
-                    return nested
-                }
-            }
-        }
-
-        return nil
-    }
 }
-

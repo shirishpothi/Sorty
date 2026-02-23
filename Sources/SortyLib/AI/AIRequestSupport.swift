@@ -136,6 +136,50 @@ enum AIRequestSupport {
         return url
     }
 
+    /// Extracts textual content from heterogeneous OpenAI-compatible payloads.
+    /// Handles plain strings plus content-part arrays/dictionaries used by newer APIs.
+    static func extractText(from value: Any?) -> String? {
+        guard let value else { return nil }
+
+        if let text = value as? String {
+            return text
+        }
+
+        if let parts = value as? [Any] {
+            let joined = parts.compactMap { extractText(from: $0) }.joined()
+            return joined.isEmpty ? nil : joined
+        }
+
+        if let dict = value as? [String: Any] {
+            let priorityKeys = ["text", "content", "value", "output_text", "reasoning", "thinking", "analysis", "parts"]
+            for key in priorityKeys {
+                if let extracted = extractText(from: dict[key]), !extracted.isEmpty {
+                    return extracted
+                }
+            }
+        }
+
+        return nil
+    }
+
+    /// Best-effort extraction for chat completion message text in non-streaming responses.
+    static func extractChatMessageText(from choice: [String: Any]) -> String? {
+        let message = choice["message"] as? [String: Any]
+        return extractText(from: message?["content"]) ??
+            extractText(from: message?["text"]) ??
+            extractText(from: choice["text"])
+    }
+
+    /// Best-effort extraction for streaming chunk text in OpenAI-compatible responses.
+    static func extractChatDeltaText(from choice: [String: Any]) -> String? {
+        let delta = choice["delta"] as? [String: Any]
+        let message = choice["message"] as? [String: Any]
+        return extractText(from: delta?["content"]) ??
+            extractText(from: delta?["text"]) ??
+            extractText(from: message?["content"]) ??
+            extractText(from: choice["text"])
+    }
+
     /// Retries a network operation once on transient HTTP errors (429, 500, 502, 503, 504).
     /// Cancellation-aware: checks Task.isCancelled before retrying.
     /// - Parameter operation: The async throwing closure to retry

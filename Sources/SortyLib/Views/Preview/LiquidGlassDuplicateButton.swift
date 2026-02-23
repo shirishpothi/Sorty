@@ -36,29 +36,28 @@ public struct DuplicateInfo: Identifiable, Hashable, Sendable {
 
 struct LiquidGlassDuplicateButton: View {
     let duplicateInfo: DuplicateInfo
-    var handoffDirectory: URL? = nil
     var onFileSelected: ((FileItem) -> Void)? = nil
-    @Binding var highlightedFileID: UUID?
-    @EnvironmentObject var appState: AppState
 
     @State private var showPopover = false
     @State private var hoveredFileID: UUID? = nil
 
+    init(duplicateInfo: DuplicateInfo, onFileSelected: ((FileItem) -> Void)? = nil) {
+        self.duplicateInfo = duplicateInfo
+        self.onFileSelected = onFileSelected
+    }
+
+    /// Backward-compatible initializer used by history/preview rows.
+    /// `handoffDirectory` is retained for call-site compatibility.
+    init(duplicateInfo: DuplicateInfo, handoffDirectory: URL?, highlightedFileID: Binding<UUID?>) {
+        self.duplicateInfo = duplicateInfo
+        self.onFileSelected = { selectedFile in
+            highlightedFileID.wrappedValue = selectedFile.id
+            _ = handoffDirectory
+        }
+    }
+
     private var accentColor: Color {
         duplicateInfo.isExactMatch ? .red : .orange
-    }
-
-    private var activeFileID: UUID {
-        guard let highlightedFileID else { return duplicateInfo.file.id }
-        if highlightedFileID == duplicateInfo.file.id { return highlightedFileID }
-        if duplicateInfo.duplicates.contains(where: { $0.id == highlightedFileID }) { return highlightedFileID }
-        return duplicateInfo.file.id
-    }
-
-    private var isHighlightedInGroup: Bool {
-        guard let highlightedFileID else { return false }
-        if highlightedFileID == duplicateInfo.file.id { return true }
-        return duplicateInfo.duplicates.contains(where: { $0.id == highlightedFileID })
     }
 
     var body: some View {
@@ -87,13 +86,16 @@ struct LiquidGlassDuplicateButton: View {
 
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(showPopover || isHighlightedInGroup ? accentColor : Color.secondary)
+                    .foregroundStyle(showPopover ? accentColor : Color.secondary)
             }
         }
         .buttonStyle(.plain)
         .help("\(duplicateInfo.duplicateCount) duplicate\(duplicateInfo.duplicateCount == 1 ? "" : "s") found")
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             duplicatePopoverContent
+        }
+        .contextMenu {
+            contextMenuItems
         }
     }
 
@@ -140,22 +142,6 @@ struct LiquidGlassDuplicateButton: View {
                 .opacity(0.4)
                 .padding(.bottom, 10)
 
-            Button {
-                handoffToDuplicates()
-            } label: {
-                Label("Handle in Duplicates", systemImage: "arrowshape.turn.up.right.circle.fill")
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.accentColor.opacity(0.12))
-                    )
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 10)
-
             // Current file
             VStack(alignment: .leading, spacing: 6) {
                 Text("This File")
@@ -163,7 +149,7 @@ struct LiquidGlassDuplicateButton: View {
                     .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
 
-                duplicateFileRow(file: duplicateInfo.file)
+                duplicateFileRow(file: duplicateInfo.file, isCurrent: true)
             }
             .padding(.bottom, 12)
 
@@ -175,7 +161,7 @@ struct LiquidGlassDuplicateButton: View {
                     .textCase(.uppercase)
 
                 ForEach(duplicateInfo.duplicates) { duplicate in
-                    duplicateFileRow(file: duplicate)
+                    duplicateFileRow(file: duplicate, isCurrent: false)
                 }
             }
         }
@@ -184,14 +170,12 @@ struct LiquidGlassDuplicateButton: View {
     }
 
     @ViewBuilder
-    private func duplicateFileRow(file: FileItem) -> some View {
-        let isSelected = activeFileID == file.id
-
+    private func duplicateFileRow(file: FileItem, isCurrent: Bool) -> some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                highlightedFileID = file.id
+            if !isCurrent {
+                onFileSelected?(file)
             }
-            onFileSelected?(file)
+            showPopover = false
         } label: {
             HStack(spacing: 10) {
                 FileThumbnailView(url: URL(fileURLWithPath: file.path), size: CGSize(width: 24, height: 24))
@@ -199,8 +183,8 @@ struct LiquidGlassDuplicateButton: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.displayName)
                         .font(.callout)
-                        .fontWeight(isSelected ? .semibold : .regular)
-                        .foregroundStyle(isSelected ? .primary : .secondary)
+                        .fontWeight(isCurrent ? .semibold : .regular)
+                        .foregroundStyle(isCurrent ? .primary : .secondary)
                         .lineLimit(1)
 
                     Text(file.formattedSize)
@@ -210,7 +194,7 @@ struct LiquidGlassDuplicateButton: View {
 
                 Spacer()
 
-                if isSelected {
+                if isCurrent {
                     Text("Current")
                         .font(.caption2)
                         .foregroundStyle(.white)
@@ -223,11 +207,10 @@ struct LiquidGlassDuplicateButton: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : (hoveredFileID == file.id ? Color.secondary.opacity(0.1) : Color.clear))
+                    .fill(hoveredFileID == file.id ? Color.secondary.opacity(0.1) : Color.clear)
             )
             .contentShape(RoundedRectangle(cornerRadius: 8))
         }
@@ -243,6 +226,29 @@ struct LiquidGlassDuplicateButton: View {
     // MARK: - Context Menu
 
     @ViewBuilder
+    private var contextMenuItems: some View {
+        Button {
+            NSWorkspace.shared.selectFile(duplicateInfo.file.path, inFileViewerRootedAtPath: "")
+        } label: {
+            Label("Show in Finder", systemImage: "folder")
+        }
+
+        Button {
+            NSWorkspace.shared.open(URL(fileURLWithPath: duplicateInfo.file.path))
+        } label: {
+            Label("Quick Look", systemImage: "eye")
+        }
+
+        Divider()
+
+        Button {
+            showPopover = true
+        } label: {
+            Label("View All Duplicates", systemImage: "doc.on.doc")
+        }
+    }
+
+    @ViewBuilder
     private func fileContextMenu(for file: FileItem) -> some View {
         Button {
             NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: "")
@@ -251,42 +257,20 @@ struct LiquidGlassDuplicateButton: View {
         }
 
         Button {
-            appState.handoffToDuplicates(
-                forFilePaths: [file.path],
-                preferredDirectory: handoffDirectory,
-                autoStart: true
-            )
-        } label: {
-            Label("Handle in Duplicates", systemImage: "arrowshape.turn.up.right.circle")
-        }
-
-        Button {
             NSWorkspace.shared.open(URL(fileURLWithPath: file.path))
         } label: {
             Label("Quick Look", systemImage: "eye")
         }
 
-        Button {
-            do {
-                try FileManager.default.trashItem(at: URL(fileURLWithPath: file.path), resultingItemURL: nil)
-                NotificationManager.shared.show(.info(title: "Success", message: "Moved duplicate to Trash"))
-            } catch {
-                NotificationManager.shared.showError(message: "Could not move to Trash: \(error.localizedDescription)")
-            }
-        } label: {
-            Label("Move to Trash", systemImage: "trash")
-        }
-    }
+        Divider()
 
-    private func handoffToDuplicates() {
-        let allPaths = [duplicateInfo.file.path] + duplicateInfo.duplicates.map(\.path)
-        appState.handoffToDuplicates(
-            forFilePaths: allPaths,
-            preferredDirectory: handoffDirectory,
-            autoStart: true
-        )
-        showPopover = false
-        HapticFeedbackManager.shared.selection()
+        Button {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(file.path, forType: .string)
+        } label: {
+            Label("Copy Path", systemImage: "doc.on.clipboard")
+        }
     }
 }
 
@@ -299,9 +283,8 @@ struct LiquidGlassDuplicateButton: View {
 
     let info = DuplicateInfo(file: file1, duplicates: [file2, file3])
 
-    LiquidGlassDuplicateButton(duplicateInfo: info, highlightedFileID: .constant(nil))
+    LiquidGlassDuplicateButton(duplicateInfo: info)
         .padding()
-        .environmentObject(AppState())
 }
 
 #Preview("Liquid Glass Duplicate - Semantic") {
@@ -310,7 +293,6 @@ struct LiquidGlassDuplicateButton: View {
 
     let info = DuplicateInfo(file: file1, duplicates: [file2], isExactMatch: false, similarity: 0.95)
 
-    LiquidGlassDuplicateButton(duplicateInfo: info, highlightedFileID: .constant(nil))
+    LiquidGlassDuplicateButton(duplicateInfo: info)
         .padding()
-        .environmentObject(AppState())
 }

@@ -41,7 +41,7 @@ public struct PermissionsStepView: View {
                         Text("Why these permissions?")
                             .font(.subheadline.bold())
                         
-                        Text("• **Files & Folders** *(Required)*: To read and move your files\n• **Automation** *(Optional)*: For Finder integration\n• **Notifications** *(Optional)*: To alert you when organization completes")
+                        Text("• **Files & Folders** *(Required)*: To read and move your files\n• **Full Disk Access** *(Recommended)*: To organize files in any folder\n• **Automation** *(Optional)*: For Finder integration\n• **Notifications** *(Optional)*: To alert you when organization completes")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -71,6 +71,12 @@ public struct PermissionsStepView: View {
                         type: .filesAndFolders,
                         state: permissionStates[.filesAndFolders] ?? .unknown,
                         onRequest: { requestPermission(.filesAndFolders) }
+                    )
+                    
+                    PermissionRow(
+                        type: .fullDiskAccess,
+                        state: permissionStates[.fullDiskAccess] ?? .unknown,
+                        onRequest: { requestPermission(.fullDiskAccess) }
                     )
                     
                     PermissionRow(
@@ -105,7 +111,7 @@ public struct PermissionsStepView: View {
                     .foregroundStyle(.secondary)
                 }
                 
-                Text("Automation and Notifications are optional")
+                Text("Full Disk Access is recommended · Automation and Notifications are optional")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -157,6 +163,15 @@ public struct PermissionsStepView: View {
             hasRequiredPermissions = false
         }
         
+        // Check Full Disk Access by probing a protected directory
+        let protectedPath = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Safari")
+        if let _ = try? FileManager.default.contentsOfDirectory(atPath: protectedPath.path) {
+            permissionStates[.fullDiskAccess] = .granted
+        } else {
+            permissionStates[.fullDiskAccess] = .unknown
+        }
+        
         // Check Automation permission using FinderAutomation service
         automationManager.requestAutomationPermissionCheck()
         switch automationManager.automationStatus {
@@ -195,6 +210,13 @@ public struct PermissionsStepView: View {
                 hasRequiredPermissions = false
             }
             
+        case .fullDiskAccess:
+            // Open System Settings to Full Disk Access
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                NSWorkspace.shared.open(url)
+            }
+            permissionStates[.fullDiskAccess] = .pending
+            
         case .automation:
             // Open System Preferences to Automation
             if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
@@ -219,12 +241,14 @@ public struct PermissionsStepView: View {
 
 enum PermissionType: String {
     case filesAndFolders = "Files & Folders"
+    case fullDiskAccess = "Full Disk Access"
     case automation = "Automation"
     case notifications = "Notifications"
     
     var icon: String {
         switch self {
         case .filesAndFolders: return "folder.fill"
+        case .fullDiskAccess: return "lock.open.fill"
         case .automation: return "gearshape.2.fill"
         case .notifications: return "bell.fill"
         }
@@ -233,6 +257,7 @@ enum PermissionType: String {
     var description: String {
         switch self {
         case .filesAndFolders: return "Access to read and organize your files"
+        case .fullDiskAccess: return "Move files to any folder without restrictions"
         case .automation: return "Control Finder for seamless integration"
         case .notifications: return "Get notified when organization completes"
         }
@@ -241,6 +266,7 @@ enum PermissionType: String {
     var color: Color {
         switch self {
         case .filesAndFolders: return .blue
+        case .fullDiskAccess: return .green
         case .automation: return .orange
         case .notifications: return .purple
         }

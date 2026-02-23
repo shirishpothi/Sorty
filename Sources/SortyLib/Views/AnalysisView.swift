@@ -189,7 +189,7 @@ struct AnalysisView: View {
         WorkflowContainer(currentStep: .analyze) {
             Spacer(minLength: 20)
             
-            VStack(spacing: 28) {
+            VStack(spacing: 24) {
                 progressSection
                     .opacity(hasAppeared ? 1 : 0)
                     .scaleEffect(hasAppeared ? 1 : 0.9)
@@ -373,6 +373,8 @@ struct AnalysisView: View {
             insights: cachedInsights,
             debugModeEnabled: appState.debugMode,
             streamPreview: organizer.truncatedDisplayStreamingContent,
+            isReadyForStructureOutput: organizer.isReadyToOutputStructure,
+            liveOrganizationMoves: organizer.liveOrganizationMoves,
             liveInsightsEnabled: $liveInsightsEnabled
         )
     }
@@ -459,42 +461,41 @@ private struct AIReasoningStatus: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                stageIcon
-                    .font(.system(size: 24))
-                
+        HStack(alignment: .center, spacing: 12) {
+            stageIcon
+                .font(.system(size: 24))
+
+            VStack(alignment: .leading, spacing: 2) {
                 Text(organizationStage)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .textShimmer(isLoading: isAnalyzingStage, phaseOffset: 0.08, intensity: 1.55)
-            }
-            
-            if isEstablishingConnection {
-                HStack(spacing: 6) {
-                    Text("Connecting to AI provider")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .textShimmer(isLoading: true, phaseOffset: 0.34, intensity: 1.65)
 
-                    LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
-                }
-                .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
-            } else if isStreaming {
-                VStack(spacing: 5) {
+                if isEstablishingConnection {
+                    HStack(spacing: 6) {
+                        Text("Connecting to AI provider")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .textShimmer(isLoading: true, phaseOffset: 0.34, intensity: 1.65)
+
+                        LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
+                    }
+                    .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
+                } else if isStreaming {
                     Text(funnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .textShimmer(isLoading: true, phaseOffset: 0.62, intensity: 1.65)
                         .opacity(funnyMessageOpacity)
-                        .offset(y: funnyMessageOpacity > 0.5 ? 0 : 2)
-                        .blur(radius: funnyMessageOpacity > 0.5 ? 0 : 0.35)
+                        .offset(y: funnyMessageOpacity > 0.5 ? 0 : 1)
+                        .blur(radius: funnyMessageOpacity > 0.5 ? 0 : 0.3)
                         .animation(.easeInOut(duration: 0.6), value: funnyMessageOpacity)
-                        .frame(height: 20)
+                        .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
                 }
-                .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
             }
         }
+        .padding(.leading, -10) // Move the whole group slightly left to compensate for mascot's orbit padding
+        .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Current organization stage: \(organizationStage)")
         .accessibilityIdentifier("AnalysisStageInfo")
@@ -523,9 +524,9 @@ private struct AIReasoningStatus: View {
 
 @MainActor
 final class AnalysisInsightViewState: ObservableObject {
-    @Published var isHoveringHistory = false
     @Published var showDebugStream = false
     @Published var isExpanded = true
+    @Published var isInsightsExpanded = false
 }
 
 private struct InsightHistorySection: View {
@@ -533,6 +534,8 @@ private struct InsightHistorySection: View {
     let insights: (current: String, history: [AIInsight])
     let debugModeEnabled: Bool
     let streamPreview: String
+    let isReadyForStructureOutput: Bool
+    let liveOrganizationMoves: [LiveOrganizationMove]
     @Binding var liveInsightsEnabled: Bool
     
     @StateObject private var viewState = AnalysisInsightViewState()
@@ -563,7 +566,7 @@ private struct InsightHistorySection: View {
                             .foregroundStyle(.green)
                     }
                     
-                    Text(isStreaming ? "AI is reasoning..." : "Analysis complete")
+                    Text(headerTitle)
                         .font(.callout)
                         .fontWeight(.medium)
                         .foregroundStyle(.primary)
@@ -610,6 +613,9 @@ private struct InsightHistorySection: View {
                         Button {
                             withAnimation(.spring()) {
                                 viewState.showDebugStream.toggle()
+                                if viewState.showDebugStream && isReadyForStructureOutput {
+                                    viewState.isInsightsExpanded = true
+                                }
                             }
                         } label: {
                             Image(systemName: viewState.showDebugStream ? "terminal.fill" : "terminal")
@@ -648,21 +654,21 @@ private struct InsightHistorySection: View {
             .contentShape(RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16))
             
             if viewState.isExpanded {
-                LazyVStack(spacing: 16) {
-                    let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
-                    if liveInsightsEnabled, !insights.current.isEmpty {
-                        currentInsightPill(insight: insights.current, detail: currentInsightItem)
-                    } else if liveInsightsEnabled, let fallbackInsight = streamFallbackInsight {
-                        currentInsightPill(insight: fallbackInsight, detail: nil)
-                    } else if isStreaming {
-                        receivingResponseView
+                LazyVStack(spacing: 14) {
+                    if liveInsightsEnabled && isStreaming && isReadyForStructureOutput {
+                        LiveOrganizationStreamView(
+                            isStreaming: isStreaming,
+                            moves: liveOrganizationMoves
+                        )
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                    } else {
+                        liveInsightsPrimaryContent
                     }
-                    
-                    if liveInsightsEnabled && insights.history.count > 1 {
-                        insightHistoryWrap(history: insights.history)
-                    }
-                    
-                    if liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
+
+                    if liveInsightsEnabled && isStreaming && isReadyForStructureOutput {
+                        liveInsightsDisclosure
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    } else if liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
                         streamingPreview
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -682,12 +688,91 @@ private struct InsightHistorySection: View {
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .frame(maxHeight: 220)
         .onChange(of: liveInsightsEnabled) { _, enabled in
             if !enabled {
                 viewState.showDebugStream = false
+                viewState.isInsightsExpanded = false
             }
         }
+        .onChange(of: isReadyForStructureOutput) { _, ready in
+            if ready {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    viewState.isInsightsExpanded = false
+                }
+            }
+        }
+    }
+
+    private var headerTitle: String {
+        guard isStreaming else { return "Analysis complete" }
+        if isReadyForStructureOutput {
+            return "Live organization in progress"
+        }
+        return "AI is reasoning..."
+    }
+
+    @ViewBuilder
+    private var liveInsightsPrimaryContent: some View {
+        let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
+        if liveInsightsEnabled, !insights.current.isEmpty {
+            currentInsightPill(
+                insight: insights.current,
+                detail: currentInsightItem,
+                fallbackCategory: currentInsightItem?.category
+            )
+        } else if liveInsightsEnabled, let fallbackInsight = streamFallbackInsight {
+            currentInsightPill(
+                insight: fallbackInsight,
+                detail: nil,
+                fallbackCategory: inferredInsightCategory(for: fallbackInsight)
+            )
+        } else if isStreaming {
+            receivingResponseView
+        }
+
+        if liveInsightsEnabled && insights.history.count > 1 {
+            insightHistoryScroller(
+                entries: Array(insights.history.dropLast().reversed()),
+                markFirstAsLatest: false
+            )
+        }
+    }
+
+    private var liveInsightsDisclosure: some View {
+        DisclosureGroup(isExpanded: $viewState.isInsightsExpanded) {
+            VStack(alignment: .leading, spacing: 10) {
+                let timeline = Array(insights.history.reversed())
+                if timeline.isEmpty {
+                    Text("No live insights captured yet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    insightHistoryScroller(entries: timeline, markFirstAsLatest: true)
+                }
+
+                if viewState.showDebugStream && debugModeEnabled {
+                    streamingPreview
+                }
+            }
+            .padding(.top, 8)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "brain.head.profile")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("Live Insights")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(insights.history.count)")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .accessibilityIdentifier("LiveInsightsDisclosure")
     }
 
     private var receivingResponseView: some View {
@@ -760,12 +845,12 @@ private struct InsightHistorySection: View {
         }
 
         let folderName = String(text[folderRange]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !folderName.isEmpty else { return nil }
+        guard isLikelyInsightFolderName(folderName) else { return nil }
 
         if let fileMatch = fileMatches.last,
            let fileRange = Range(fileMatch.range(at: 1), in: text) {
             let fileName = URL(fileURLWithPath: String(text[fileRange])).lastPathComponent
-            if !fileName.isEmpty {
+            if isLikelyFileName(fileName) {
                 return "Assigning \(fileName) to \(folderName)"
             }
         }
@@ -773,9 +858,48 @@ private struct InsightHistorySection: View {
         return "Preparing folder \(folderName)"
     }
 
-    private func currentInsightPill(insight: String, detail: AIInsight?) -> some View {
+    private func isLikelyInsightFolderName(_ candidate: String) -> Bool {
+        let normalized = candidate
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ",.;:!?"))
+            .lowercased()
+        guard normalized.count >= 2, normalized.count <= 80 else { return false }
+        guard !normalized.contains("{"), !normalized.contains("}"), !normalized.contains("/") else { return false }
+        guard URL(fileURLWithPath: normalized).pathExtension.isEmpty else { return false }
+
+        let blocked: Set<String> = [
+            "a", "an", "and", "as", "at", "by", "for", "from", "gets", "in", "is", "it",
+            "name", "of", "on", "or", "that", "the", "this", "to", "with", "folder",
+            "folders", "file", "files", "filename", "json", "reasoning", "notes",
+            "description", "content", "data", "true", "false", "null"
+        ]
+        return !blocked.contains(normalized)
+    }
+
+    private func isLikelyFileName(_ candidate: String) -> Bool {
+        let normalized = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count >= 3, normalized.count <= 220 else { return false }
+        let ext = URL(fileURLWithPath: normalized).pathExtension
+        return !ext.isEmpty
+    }
+
+    private func inferredInsightCategory(for text: String) -> AIInsight.Category {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed.hasPrefix("file:") || mentionedFileExtension(in: text) != nil {
+            return .file
+        }
+        if trimmed.hasPrefix("folder:") || mentionsFolderContext(in: text) {
+            return .folder
+        }
+        if trimmed.hasPrefix("pattern:") { return .pattern }
+        if trimmed.hasPrefix("decision:") { return .decision }
+        if trimmed.hasPrefix("constraint:") { return .constraint }
+        return .general
+    }
+
+    private func currentInsightPill(insight: String, detail: AIInsight?, fallbackCategory: AIInsight.Category?) -> some View {
         HStack(spacing: 12) {
-            insightIcon(for: detail, fallbackText: insight)
+            insightIcon(for: detail, fallbackText: insight, fallbackCategory: fallbackCategory)
                 .frame(width: 24, height: 24)
             
             Text(insight)
@@ -808,7 +932,7 @@ private struct InsightHistorySection: View {
     }
 
     @ViewBuilder
-    private func insightIcon(for insight: AIInsight?, fallbackText: String) -> some View {
+    private func insightIcon(for insight: AIInsight?, fallbackText: String, fallbackCategory: AIInsight.Category?) -> some View {
         if let filePath = insight?.filePath {
             let url = URL(fileURLWithPath: filePath)
             if url.hasDirectoryPath {
@@ -816,44 +940,111 @@ private struct InsightHistorySection: View {
             } else {
                 FileThumbnailView(url: url, size: CGSize(width: 20, height: 20))
             }
-        } else {
-            let iconStyle = fallbackIconStyle(for: fallbackText)
-            if let tint = iconStyle.tint {
-                ZStack {
-                    Circle()
-                        .fill(tint.opacity(0.15))
-                        .frame(width: 24, height: 24)
-                    Image(nsImage: AnalysisIconProvider.icon(for: iconStyle.type))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                }
-            } else {
-                Image(nsImage: AnalysisIconProvider.icon(for: iconStyle.type))
+        } else if let category = insight?.category ?? fallbackCategory {
+            if category == .folder {
+                Image(nsImage: AnalysisIconProvider.icon(for: .folder))
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 20, height: 20)
+            } else if category == .file {
+                if let ext = mentionedFileExtension(in: fallbackText), !ext.isEmpty {
+                    Image(nsImage: AnalysisIconProvider.icon(forFileExtension: ext))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(nsImage: AnalysisIconProvider.icon(for: .data))
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 20, height: 20)
+                }
+            } else {
+                categoryIndicator(for: category)
             }
+        } else if let ext = mentionedFileExtension(in: fallbackText), !ext.isEmpty {
+            Image(nsImage: AnalysisIconProvider.icon(forFileExtension: ext))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 20, height: 20)
+        } else if mentionsFolderContext(in: fallbackText) {
+            Image(nsImage: AnalysisIconProvider.icon(for: .folder))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 20, height: 20)
+        } else {
+            categoryIndicator(for: .general)
         }
     }
 
-    private func insightHistoryWrap(history: [AIInsight]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            FlowLayout(spacing: 8) {
-                ForEach(Array(history.dropLast().reversed().prefix(3))) { insight in
-                    InsightPill(insight: insight)
-                        .opacity(viewState.isHoveringHistory ? 1.0 : 0.4)
-                        .blur(radius: viewState.isHoveringHistory ? 0 : 0.5)
-                        .animation(.spring(response: 0.3), value: viewState.isHoveringHistory)
+    @ViewBuilder
+    private func categoryIndicator(for category: AIInsight.Category) -> some View {
+        Circle()
+            .fill(categoryColor(for: category).opacity(0.28))
+            .overlay(
+                Circle()
+                    .stroke(categoryColor(for: category).opacity(0.55), lineWidth: 1)
+            )
+            .frame(width: 10, height: 10)
+            .padding(6)
+    }
+
+    private func categoryColor(for category: AIInsight.Category) -> Color {
+        switch category {
+        case .file: return .blue
+        case .folder: return .orange
+        case .constraint: return .yellow
+        case .decision: return .green
+        case .pattern: return .purple
+        case .general: return .secondary
+        }
+    }
+
+    private func mentionedFileExtension(in text: String) -> String? {
+        let pattern = #"(?:\"|')?([A-Za-z0-9_\-\(\) ]+\.([A-Za-z0-9]{1,12}))(?:\"|')?"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+              let match = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text)).last,
+              let extRange = Range(match.range(at: 2), in: text) else {
+            return nil
+        }
+        let ext = String(text[extRange]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ext.isEmpty ? nil : ext
+    }
+
+    private func mentionsFolderContext(in text: String) -> Bool {
+        let lowered = text.lowercased()
+        if lowered.contains("folder") || lowered.contains("directory") {
+            return true
+        }
+        return mentionedFileExtension(in: text) != nil && lowered.contains(" to ")
+    }
+
+    private func insightHistoryScroller(entries: [AIInsight], markFirstAsLatest: Bool) -> some View {
+        ScrollView {
+            FlowLayout(spacing: 6) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, insight in
+                    HStack(spacing: 4) {
+                        InsightPill(insight: insight)
+
+                        if markFirstAsLatest, index == 0 {
+                            Text("Latest")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.accentColor.opacity(0.14))
+                                )
+                        }
+                    }
                 }
             }
+            .padding(.vertical, 2)
         }
-        .padding(.horizontal, 4)
-        .onHover { hovering in
-            withAnimation(.spring(response: 0.3)) {
-                viewState.isHoveringHistory = hovering
-            }
-        }
+        .frame(maxHeight: 170)
+        .scrollIndicators(.visible)
+        .accessibilityIdentifier("LiveInsightsHistoryScroll")
     }
 
     private var streamingPreview: some View {
@@ -897,30 +1088,262 @@ private struct InsightHistorySection: View {
         .accessibilityLabel("AI response preview")
     }
 
-    private func fallbackIconStyle(for text: String) -> (type: UTType, tint: Color?) {
-        let lowercased = text.lowercased()
-        if lowercased.contains("folder") || lowercased.contains("directory") || lowercased.contains("organizing") {
-            return (.folder, nil)
+}
+
+private struct LiveOrganizationStreamView: View {
+    let isStreaming: Bool
+    let moves: [LiveOrganizationMove]
+
+    @State private var animatedMove: LiveOrganizationMove?
+    @State private var transferProgress: CGFloat = 0
+
+    private var latestMove: LiveOrganizationMove? { moves.last }
+    private var recentMoves: [LiveOrganizationMove] { Array(moves.suffix(14).reversed()) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header
+
+            transferLane
+                .frame(height: 60)
+                .accessibilityIdentifier("LiveOrganizationTransferLane")
+
+            if !recentMoves.isEmpty {
+                moveHistory
+                    .accessibilityIdentifier("LiveOrganizationMoveHistory")
+            } else if isStreaming {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Waiting for streamed file assignments...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+            }
         }
-        if lowercased.contains("image") || lowercased.contains("photo") || lowercased.contains("picture") || lowercased.contains("screenshot") {
-            return (.image, .pink)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.accentColor.opacity(0.06),
+                            Color(NSColor.controlBackgroundColor)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                )
+        )
+        .onAppear {
+            startTransferAnimation(with: latestMove)
         }
-        if lowercased.contains("document") || lowercased.contains("pdf") || lowercased.contains("file") {
-            return (.pdf, .blue)
+        .onChange(of: latestMove?.id) { _, _ in
+            startTransferAnimation(with: latestMove)
         }
-        if lowercased.contains("video") || lowercased.contains("movie") {
-            return (.movie, .orange)
+        .onChange(of: latestMove?.destinationFolder) { _, _ in
+            startTransferAnimation(with: latestMove)
         }
-        if lowercased.contains("audio") || lowercased.contains("music") || lowercased.contains("sound") {
-            return (.audio, .red)
+    }
+
+    private var header: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Live Organization")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                if let latestMove {
+                    Text("Now mapping into \(latestMove.destinationFolder)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
+                    Text("Waiting for folder assignments from streamed JSON")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(moves.count)")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+                Text(moves.count == 1 ? "file mapped" : "files mapped")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
-        if lowercased.contains("code") || lowercased.contains("script") || lowercased.contains("programming") {
-            return (.sourceCode, .cyan)
+    }
+
+    private var transferLane: some View {
+        GeometryReader { proxy in
+            let destinationWidth = min(180, max(120, proxy.size.width * 0.34))
+            let laneWidth = max(130, proxy.size.width - destinationWidth - 30)
+            let chipWidth = max(120, min(230, laneWidth - 14))
+            let travelWidth = max(0, laneWidth - chipWidth - 14)
+
+            HStack(spacing: 8) {
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.primary.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                        )
+
+                    if let moving = animatedMove {
+                        HStack(spacing: 6) {
+                            fileIcon(for: moving, size: 15)
+                            Text(moving.fileName)
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8)
+                        .frame(width: chipWidth, height: 32, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 9)
+                                .fill(Color(NSColor.windowBackgroundColor))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9)
+                                        .stroke(Color(NSColor.separatorColor).opacity(0.72), lineWidth: 1)
+                                )
+                                .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
+                        )
+                        .offset(x: 7 + (transferProgress * travelWidth))
+                    }
+                }
+                .frame(width: laneWidth, height: 44)
+
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+
+                destinationBadge(for: latestMove?.destinationFolder ?? "—")
+                    .frame(width: destinationWidth, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.easeInOut(duration: 0.2), value: latestMove?.destinationFolder)
         }
-        if lowercased.contains("archive") || lowercased.contains("zip") || lowercased.contains("compress") {
-            return (.archive, .brown)
+    }
+
+    private var moveHistory: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                ForEach(recentMoves) { move in
+                    moveRow(move)
+                }
+            }
+            .padding(.vertical, 2)
         }
-        return (.data, nil)
+        .frame(maxHeight: 190)
+        .scrollIndicators(.visible)
+    }
+
+    private func destinationBadge(for folderName: String) -> some View {
+        HStack(spacing: 6) {
+            folderIcon(size: 13)
+            Text(folderName)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 32)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(Color.accentColor.opacity(0.08))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+                )
+        )
+    }
+
+    private func moveRow(_ move: LiveOrganizationMove) -> some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                fileIcon(for: move, size: 13)
+                Text(move.fileName)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Image(systemName: "arrow.right")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+
+            HStack(spacing: 4) {
+                folderIcon(size: 12)
+                Text(move.destinationFolder)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: 150, alignment: .leading)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.primary.opacity(0.045))
+        )
+    }
+
+    private func startTransferAnimation(with move: LiveOrganizationMove?) {
+        guard let move else {
+            animatedMove = nil
+            transferProgress = 0
+            return
+        }
+        animatedMove = move
+        transferProgress = 0
+        withAnimation(.linear(duration: 0.55)) {
+            transferProgress = 1
+        }
+    }
+
+    private func fileIcon(for move: LiveOrganizationMove, size: CGFloat) -> some View {
+        Image(nsImage: fallbackFileIcon(for: move.fileName))
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
+    }
+
+    private func folderIcon(size: CGFloat) -> some View {
+        Image(nsImage: AnalysisIconProvider.icon(for: .folder))
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: size, height: size)
+    }
+
+    private func fallbackFileIcon(for fileName: String) -> NSImage {
+        let ext = URL(fileURLWithPath: fileName).pathExtension.lowercased()
+        guard !ext.isEmpty else { return AnalysisIconProvider.icon(for: .data) }
+        return AnalysisIconProvider.icon(forFileExtension: ext)
     }
 }
 
@@ -1107,37 +1530,66 @@ struct InlineNotice: View {
 struct InsightPill: View {
     let insight: AIInsight
     
-    private var resolvedIcon: NSImage {
+    private var resolvedFinderIcon: NSImage? {
+        if let filePath = insight.filePath {
+            let fileURL = URL(fileURLWithPath: filePath)
+            if fileURL.hasDirectoryPath {
+                return AnalysisIconProvider.icon(for: .folder)
+            }
+            let ext = fileURL.pathExtension
+            if !ext.isEmpty {
+                return AnalysisIconProvider.icon(forFileExtension: ext)
+            }
+            return AnalysisIconProvider.icon(for: .data)
+        }
+
         if insight.category == .folder {
             return AnalysisIconProvider.icon(for: .folder)
         }
 
-        if let filePath = insight.filePath {
-            let ext = URL(fileURLWithPath: filePath).pathExtension
-            if !ext.isEmpty {
-                return AnalysisIconProvider.icon(forFileExtension: ext)
+        if insight.category == .file {
+            let text = insight.text
+            if let dotIndex = text.lastIndex(of: ".") {
+                let ext = String(text[text.index(after: dotIndex)...])
+                    .trimmingCharacters(in: .whitespaces)
+                    .components(separatedBy: .whitespaces).first ?? ""
+                if !ext.isEmpty {
+                    return AnalysisIconProvider.icon(forFileExtension: ext)
+                }
             }
+            return AnalysisIconProvider.icon(for: .data)
         }
-        
-        let text = insight.text
-        if let dotIndex = text.lastIndex(of: ".") {
-            let ext = String(text[text.index(after: dotIndex)...])
-                .trimmingCharacters(in: .whitespaces)
-                .components(separatedBy: .whitespaces).first ?? ""
-            if !ext.isEmpty {
-                return AnalysisIconProvider.icon(forFileExtension: ext)
-            }
+
+        return nil
+    }
+
+    private var categoryColor: Color {
+        switch insight.category {
+        case .file: return .blue
+        case .folder: return .orange
+        case .constraint: return .yellow
+        case .decision: return .green
+        case .pattern: return .purple
+        case .general: return .secondary
         }
-        
-        return AnalysisIconProvider.icon(for: .data)
     }
     
     var body: some View {
         HStack(spacing: 6) {
-            Image(nsImage: resolvedIcon)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 14, height: 14)
+            if let finderIcon = resolvedFinderIcon {
+                Image(nsImage: finderIcon)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+            } else {
+                Circle()
+                    .fill(categoryColor.opacity(0.3))
+                    .overlay(
+                        Circle().stroke(categoryColor.opacity(0.65), lineWidth: 1)
+                    )
+                    .frame(width: 8, height: 8)
+                    .padding(.horizontal, 3)
+            }
             
             Text(insight.text)
                 .font(.caption2)

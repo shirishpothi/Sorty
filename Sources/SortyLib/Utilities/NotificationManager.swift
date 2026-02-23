@@ -912,6 +912,19 @@ public class NotificationManager: ObservableObject {
         // Send notification and handle response
         let response = await NotifiCLIService.shared.send(config)
 
+        if case .error(let errorMessage) = response {
+            print("NotificationManager: NotifiCLI error: \(errorMessage)")
+            trackAnalytics(.failed, type: type, backend: .notifiCLI, detail: errorMessage)
+            await showNativeNotification(
+                type: type,
+                title: title,
+                message: message,
+                playSound: playSound,
+                actionHandler: actionHandler
+            )
+            return
+        }
+
         print("NotificationManager: NotifiCLI response: \(response)")
         trackAnalytics(.shown, type: type, backend: .notifiCLI, detail: "sent via NotifiCLI")
         
@@ -1006,12 +1019,11 @@ public class NotificationManager: ObservableObject {
         case .reply(let text):
             // Reply text received (not typically used for our notifications)
             print("NotificationManager: Received reply: \(text)")
-            
-        case .error(let error):
-            print("NotificationManager: NotifiCLI error: \(error)")
-            trackAnalytics(.failed, type: .info(title: "notificli", message: "error"), backend: .notifiCLI, detail: error)
-            // Fall back to native notification
-            await showNativeNotification(title: "Notification Error", message: error, playSound: false)
+
+        case .error:
+            // Errors are handled before this method is called so we can
+            // preserve original notification payload for fallback delivery.
+            break
         }
     }
     

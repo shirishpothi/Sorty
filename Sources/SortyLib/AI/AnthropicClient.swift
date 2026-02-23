@@ -126,8 +126,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
         
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let content = json?["content"] as? [[String: Any]],
-              let text = content.first?["text"] as? String else {
+        guard let text = AIRequestSupport.extractText(from: json?["content"]),
+              !text.isEmpty else {
             throw AIClientError.invalidResponseFormat
         }
         
@@ -166,22 +166,31 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         var accumulatedContent = ""
         
         for try await line in bytes.lines {
-            if line.hasPrefix("data: ") {
-                let jsonString = String(line.dropFirst(6))
-                if jsonString == "[DONE]" { break }
-                
-                if let data = jsonString.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                    
-                    if let type = json["type"] as? String, type == "content_block_delta",
-                       let delta = json["delta"] as? [String: Any],
-                       let text = delta["text"] as? String {
-                        
-                        accumulatedContent += text
-                        let chunk = text
-                        await MainActor.run { [weak self] in
-                            self?.streamingDelegate?.didReceiveChunk(chunk)
-                        }
+            guard line.hasPrefix("data:") else { continue }
+            let jsonString = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+            if jsonString == "[DONE]" { break }
+
+            if let data = jsonString.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+
+                let type = json["type"] as? String
+                var chunkText: String?
+
+                if type == "content_block_delta",
+                   let delta = json["delta"] as? [String: Any] {
+                    chunkText =
+                        AIRequestSupport.extractText(from: delta["text"]) ??
+                        AIRequestSupport.extractText(from: delta["partial_json"]) ??
+                        AIRequestSupport.extractText(from: delta["content"])
+                } else if type == "content_block_start",
+                          let contentBlock = json["content_block"] as? [String: Any] {
+                    chunkText = AIRequestSupport.extractText(from: contentBlock["text"])
+                }
+
+                if let chunk = chunkText, !chunk.isEmpty {
+                    accumulatedContent += chunk
+                    await MainActor.run { [weak self] in
+                        self?.streamingDelegate?.didReceiveChunk(chunk)
                     }
                 }
             }
@@ -192,7 +201,14 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             self?.streamingDelegate?.didComplete(content: finalContent)
         }
         
-        return try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
+        do {
+            return try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
+        } catch {
+            if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files) {
+                return partialPlan
+            }
+            throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+        }
     }
     
     public func checkHealth() async throws {
@@ -255,8 +271,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         }
         
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let content = json?["content"] as? [[String: Any]],
-              let text = content.first?["text"] as? String else {
+        guard let text = AIRequestSupport.extractText(from: json?["content"]),
+              !text.isEmpty else {
             throw AIClientError.invalidResponseFormat
         }
         

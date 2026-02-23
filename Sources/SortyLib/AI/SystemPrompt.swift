@@ -62,18 +62,26 @@ If a persona-specific system prompt is active, you MUST follow its rules absolut
 \(Self.taggingSection(enabled: enableTagging))
 
 ## LIVE PROGRESS UPDATES (streaming UI)
-Before the JSON output, you MUST emit up to 12 concise progress lines describing your reasoning.
+Before the JSON output, you MUST emit 6-12 concise, useful, coherent, and relevant one-line progress updates.
 Each line MUST start with ">> " followed by a category and colon, then a short update.
 Categories: file, folder, pattern, decision, constraint, general
-Keep each line under 90 characters. Reference real file/folder names.
+These updates are for reasoning insight only:
+- Describe what you are understanding about structure, sentiment, and grouping intent.
+- Mention observed signals (themes, naming patterns, constraints, hierarchy choices).
+- Do NOT state explicit file-to-folder moves here (forbidden: "Assigning X to Y", "Moving X to Y").
+- File-to-folder mappings belong only in the JSON structure that powers live organization.
+Keep each line under 90 characters. Reference real file/folder names whenever possible.
+Do NOT repeat the same update with different wording.
 Example:
 >> general: Scanning 23 files across 8 file types
 >> pattern: Found 5 invoice PDFs with vendor prefixes
->> folder: Grouping cloud invoices under CloudServices
->> file: Assigning package.json to ProjectAlpha
->> decision: Reusing existing Taxes folder
+>> file: report_q4.pdf appears to be finance reporting content
+>> folder: Planning Finance/Invoices hierarchy with year subfolders
+>> decision: Keeping legal contracts separate from vendor billing
 >> constraint: Merging small categories to stay under folder limit
-After all progress lines, output the JSON response. Do NOT emit >> lines after the JSON begins.
+After reasoning/planning/discovery updates and immediately before the first "{", you MUST emit this exact cue line:
+>> general: Ready to output organization structure.
+After that cue line, output the JSON response immediately. Do NOT emit >> lines after the JSON begins.
 
 ## Output Format (STRICT)
 Return valid JSON as the final output. The only allowed preamble is the >> progress lines above. No markdown, no explanations.
@@ -129,7 +137,8 @@ Return valid JSON as the final output. The only allowed preamble is the >> progr
 
 # VALIDATION CHECKLIST (RUN BEFORE RESPONDING)
 Before outputting, verify ALL of the following:
-✓ Output starts with >> progress lines, then valid JSON only — no markdown code blocks, no prose, no ```json wrapper.
+✓ Output starts with >> progress lines, includes the exact final cue line ">> general: Ready to output organization structure.", then valid JSON only — no markdown code blocks, no prose, no ```json wrapper.
+✓ >> progress lines stay insight-focused and avoid explicit file-to-folder move statements.
 ✓ Every file from the input appears exactly once in your output (either in a folder or in "unorganized").
 \(enableTagging ? "✓ Every file object has a \"tags\" array with 1-3 string tags (never null, never missing, never empty)." : "✓ No file or folder object includes \"tags\" or \"comment\" fields.")
 ✓ Folder depth ≤ 3 levels from root.

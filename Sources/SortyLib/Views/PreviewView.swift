@@ -11,6 +11,7 @@ import SwiftUI
 struct PreviewView: View {
     let plan: OrganizationPlan
     let baseURL: URL
+    @EnvironmentObject var appState: AppState
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var learningsManager: LearningsManager
@@ -98,9 +99,11 @@ struct PreviewView: View {
             }
             Divider()
             PreviewListView(store: previewStore, dragDropManager: dragDropManager, onPlanChanged: { hasEdits = true; editablePlan = previewStore.plan }, emptyStateType: emptyStateType, onFocusInstructions: { instructionsFocused = true }, onRegenerate: regeneratePreview)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             bottomToolbar
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .alert("Apply Organization?", isPresented: $showApplyConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Apply") { applyOrganization() }
@@ -177,7 +180,8 @@ struct PreviewView: View {
     
     private func applyOrganization() {
         isApplying = true; if hasEdits { organizer.currentPlan = editablePlan }
-        Task { @MainActor in do { try await organizer.apply(at: baseURL, dryRun: false, enableTagging: settingsViewModel.config.enableFileTagging); if case .completed = organizer.state { isApplying = false } } catch { organizer.state = .error(error); isApplying = false } }
+        let resolvedURL = appState.resolveSelectedDirectoryWithAccess() ?? baseURL
+        Task { @MainActor in do { try await organizer.apply(at: resolvedURL, dryRun: false, enableTagging: settingsViewModel.config.enableFileTagging); if case .completed = organizer.state { isApplying = false } } catch { organizer.state = .error(error); isApplying = false } }
     }
     
     private func calculateTimeRemaining() -> TimeInterval? {

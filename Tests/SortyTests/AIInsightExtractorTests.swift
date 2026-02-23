@@ -133,4 +133,20 @@ final class AIInsightExtractorTests: XCTestCase {
 
         XCTAssertNil(insight)
     }
+
+    func testSkipsGenericFolderNameAssignments() async {
+        let extractor = AIInsightExtractor()
+        let content = """
+        {"folders":[{"name":"name","files":[{"filename":"assets2.m4a"}]}]}
+        """
+        let lookup = ["assets2.m4a": ["/tmp/assets2.m4a"]]
+
+        let insight = await extractor.extractInsight(
+            from: content,
+            scannedFilePathLookup: lookup,
+            currentDirectoryPath: "/tmp"
+        )
+
+        XCTAssertFalse(insight?.text.contains("to name") ?? false)
+    }
 }

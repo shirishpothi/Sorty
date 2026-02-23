@@ -104,6 +104,24 @@ final class StreamingLogicTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
         XCTAssertFalse(organizer.isStreaming)
     }
+
+    func testChunkAfterCompletedStreamStartsFreshSession() async {
+        organizer.didReceiveChunk("first stream")
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        organizer.didComplete(content: "first stream")
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        organizer.progress = 0.87
+        organizer.organizationStage = "Too many folders, retrying..."
+
+        organizer.didReceiveChunk("retry stream")
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(organizer.isStreaming)
+        XCTAssertEqual(organizer.organizationStage, "AI is analyzing your files...")
+        XCTAssertEqual(organizer.streamingContent, "retry stream")
+        XCTAssertLessThan(organizer.progress, 0.5)
+    }
     
     // MARK: - Insight Extraction via Streaming
     
@@ -230,6 +248,73 @@ final class StreamingLogicTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
         
         XCTAssertEqual(organizer.organizationStage, "AI is analyzing your files...")
+    }
+
+    func testReadyCueActivatesLiveOrganizationMode() async {
+        organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertTrue(organizer.isReadyToOutputStructure)
+    }
+
+    func testLiveOrganizationMovesExtractedFromStreamedJSON() async {
+        organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
+        try? await Task.sleep(nanoseconds: 120_000_000)
+
+        organizer.didReceiveChunk("""
+        {"folders":[{"name":"Receipts","files":[{"filename":"invoice_2025.pdf"}],"subfolders":[]}],"unorganized":[],"notes":""}
+        """)
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        let hasMove = organizer.liveOrganizationMoves.contains {
+            $0.fileName == "invoice_2025.pdf" && $0.destinationFolder == "Receipts"
+        }
+        XCTAssertTrue(hasMove, "Should stream file-to-folder assignment into live organization moves")
+    }
+
+    func testLiveOrganizationMovesHandleLargeFilesArray() async {
+        organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
+        try? await Task.sleep(nanoseconds: 120_000_000)
+
+        let fileObjects = (1...180)
+            .map { #"{"filename":"invoice_\#($0)_archive_copy.pdf"}"# }
+            .joined(separator: ",")
+        organizer.didReceiveChunk("""
+        {"folders":[{"name":"Receipts","files":[\(fileObjects)],"subfolders":[]}],"unorganized":[],"notes":""}
+        """)
+        try? await Task.sleep(nanoseconds: 700_000_000)
+
+        XCTAssertTrue(
+            organizer.liveOrganizationMoves.contains {
+                $0.fileName == "invoice_180_archive_copy.pdf" && $0.destinationFolder == "Receipts"
+            },
+            "Large streamed folder arrays should continue mapping files instead of stalling early"
+        )
+    }
+
+    func testProgressLineSkipsLowSignalAssignmentFolderNames() async {
+        organizer.didReceiveChunk(">> file: Assigning assets2.m4a to name\n")
+        try? await Task.sleep(nanoseconds: 160_000_000)
+
+        XCTAssertFalse(
+            organizer.insightHistory.contains { $0.text.contains("assets2.m4a") && $0.text.contains("to name") }
+        )
+    }
+
+    func testDisablingLiveInsightsClearsLiveOrganizationState() async {
+        organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
+        organizer.didReceiveChunk("""
+        {"folders":[{"name":"Receipts","files":[{"filename":"invoice_2025.pdf"}],"subfolders":[]}],"unorganized":[],"notes":""}
+        """)
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        XCTAssertTrue(organizer.isReadyToOutputStructure)
+        XCTAssertFalse(organizer.liveOrganizationMoves.isEmpty)
+
+        organizer.setLiveInsightsEnabled(false)
+
+        XCTAssertFalse(organizer.isReadyToOutputStructure)
+        XCTAssertTrue(organizer.liveOrganizationMoves.isEmpty)
     }
     
     // MARK: - OrganizationProgress Struct Tests

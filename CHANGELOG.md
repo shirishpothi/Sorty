@@ -1,43 +1,57 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [1.1.1] - 2026-02-13
-
-### Fixed
-- embed entitlements during code signing and fix NotifiCLI arch for release builds
-- Fix completion checkmark artifact and release menu bar mascot loading
-
-### Other
-- bump version to 1.1.1
-- update various components and prepare for v1.1.1 release
-
-## [1.1.0] - 2026-02-12
-
-### Highlights
-
-Sorty v1.1 focuses on scale and usability: multi-folder batch organization, scheduled automation, and a redesigned UI with clearer AI reasoning.
 
 ### Added
 
-- **Batch Organization Workflow** — Added new batch models, manager, and dedicated UI for organizing multiple folders in one run with queue-style control.
-- **Scheduling Controls** — Added scheduler services and editor UI so folder organization can run on recurring schedules.
-- **Global Shortcuts & Login Item Support** — Added app-wide keyboard shortcuts and startup helpers for faster background workflows.
-- **Naming Presets & Steering Prompt Management** — Added reusable naming preset models/managers and steering prompt utilities for more consistent outputs.
-- **Onboarding Audio Experience** — Added onboarding audio resources and playback manager for guided first-run setup.
-- **Richer Preview Components** — Added persona chat, reasoning popovers, and copy actions for easier review of AI decisions.
+- **Delete All Data** — New option in Troubleshooting settings to completely wipe usage history, watched folders, and local caches for a fresh start.
 
 ### Changed
 
-- **UI Refresh Across Core Screens** — Updated onboarding, settings, menu bar, and organization views with the new design system and component set.
-- **Preview Explainability** — Expanded reasoning badges, tag indicators, and formatted rationale text for deeper insight before applying changes.
-- **Finder Integration Path** — Improved quick organize panel, automation handling, and app-extension communication pathways.
-- **Organization Engine Internals** — Refined directory scanning, metadata handling, semantic duplicate analysis, and organizer validation behavior.
-- **Provider/AI Layer** — Updated provider clients and prompt/session management across OpenAI, Anthropic, Apple Foundation Models, and GitHub Copilot integrations.
+- **Improved Reset Flow** — The "Reset All Settings" action now returns you to the onboarding experience immediately, eliminating the need for an app restart.
+- **URL Normalization** — Custom AI provider endpoints now automatically handle missing URI schemes (e.g., prepending `https://` if omitted).
 
 ### Fixed
 
-- **Notification & Learning Reliability** — Addressed persistence and state-handling issues in notification and learning flows.
-- **Parser/Streaming Edge Cases** — Fixed response parsing and streaming behavior around partial or irregular model output.
-- **Conflict & Metadata Stability** — Resolved edge cases in conflict resolution and folder metadata processing during organization runs.
+- **Session Stability** — Fixed a potential `NSGenericException` crash when changing AI configurations rapidly.
+- **Release Integrity** — Resolved issues with code signing entitlements and NotifiCLI architecture in production builds.
+- **Script Permissions** — Fixed a bug where bundled CLI scripts would lose executable permissions in the release package.
+- **UI Polishing** — Fixed a visual artifact with the completion checkmark and resolved an issue where the menu bar mascot would fail to load in release builds.
 
-## [1.0.6] - 2026-02-01
+## [1.1.0] - 2026-02-11
+
+### Highlights
+
+**Sorty v1.1** is a major evolution, featuring a complete visual redesign and powerful new ways to automate your digital life. This release introduces **Batch Organization**, **Automated Scheduling**, and a **Redesigned Workspace Health** engine to keep your machine in peak condition.
+
+### Added
+
+
+- **Naming Presets** — Create reuseable naming schemes for your folders using AI-powered templates.
+- **Conflict Resolution Engine** — New UI for handling filename collisions, letting you choose between overwrite, skip, or keep both.
+- **CLI Installer** — A one-click setup to install the `sorty` tool to your path, enabling powerful scripting integrations.
+- **Sparkle Updates** — Seamless in-app update experience to get the latest features as soon as they drop.
+- **Privacy Mode** — New option to blur sensitive paths and hide API keys, perfect for screensharing or streaming.
+
+### Changed
+
+- **Visual Identity (v2)** — A complete branding overhaul including our new mascot, Sorty! The app now features a modern "Glassmorphism" design system.
+- **Interactive Onboarding** — A redesigned first-run experience with a simulated demo and narrated walkthrough.
+- **Categorized Settings** — A much-needed overhaul of the settings panel, separating AI configuration, automation, and system preferences.
+- **Enhanced AI Preview** — Every suggested move now shows "Reasoning Badges" that explain *why* the AI made its decision.
+- **Semantic Duplicates** — The duplicate detector now uses lightweight content analysis to find matches that have different filenames.
+- **Performance** — Optimized directory scanning engine that is up to 40% faster on large SSDs.
+
+### Fixed
+
+- **Memory Management** — Fixed several leaks in the Folder Watcher during long-running background sessions.
+- **Finder Integration** — Resolved communication delays between the Finder Extension and the main application.
+- **Notification Persistence** — Fixed an issue where background organization notifications would sometimes fail to appear.
 
 ## [1.0.5] - 2026-01-31
 
@@ -69,7 +83,7 @@ Sorty v1.1 focuses on scale and usability: multi-folder batch organization, sche
 
 - **Custom Personas** — Create specialized AI profiles for different workflows. A "Developer" persona organizes differently than a "Photographer" persona.
 
-- **Vision Support** — For AI providers that support it (GPT-5, Claude 4, Gemini), Sorty can analyze image content when deciding where files belong.
+- **Vision Support** — For AI providers that support it, Sorty can analyze image content when deciding where files belong.
 
 - **Finder Extension** — Right-click any folder in Finder to start organizing.
 

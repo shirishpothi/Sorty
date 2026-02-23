@@ -354,6 +354,76 @@ final class NotifiCLIResponseTests: XCTestCase {
     }
 }
 
+// MARK: - NotifiCLIService Process Parsing Tests
+
+final class NotifiCLIServiceProcessParsingTests: XCTestCase {
+
+    func testInterpretProcessResultTreatsInteractiveTimeoutAsTimeout() {
+        let config = NotifiCLIConfig(
+            title: "Test",
+            message: "Message",
+            actions: ["Undo", "Dismiss"],
+            persistent: true
+        )
+
+        let response = NotifiCLIService.interpretProcessResult(
+            terminationStatus: 1,
+            output: "",
+            errorOutput: "Timeout waiting for user interaction.",
+            config: config
+        )
+
+        XCTAssertEqual(response, .timeout)
+    }
+
+    func testInterpretProcessResultParsesExplicitTimeoutOutput() {
+        let config = NotifiCLIConfig(
+            title: "Test",
+            message: "Message",
+            actions: ["Undo", "Dismiss"]
+        )
+
+        let response = NotifiCLIService.interpretProcessResult(
+            terminationStatus: 0,
+            output: "timeout",
+            errorOutput: "",
+            config: config
+        )
+
+        XCTAssertEqual(response, .timeout)
+    }
+
+    func testInterpretProcessResultParsesActionOutputDespiteWarning() {
+        let config = NotifiCLIConfig(
+            title: "Test",
+            message: "Message",
+            actions: ["Undo", "Dismiss"]
+        )
+
+        let response = NotifiCLIService.interpretProcessResult(
+            terminationStatus: 1,
+            output: "Undo",
+            errorOutput: "Warning: temporary image cleanup failed",
+            config: config
+        )
+
+        XCTAssertEqual(response, .action("Undo"))
+    }
+
+    func testInterpretProcessResultReturnsErrorForHardFailures() {
+        let config = NotifiCLIConfig(title: "Test", message: "Message")
+
+        let response = NotifiCLIService.interpretProcessResult(
+            terminationStatus: 2,
+            output: "",
+            errorOutput: "Notification permission not granted.",
+            config: config
+        )
+
+        XCTAssertEqual(response, .error("Notification permission not granted."))
+    }
+}
+
 // MARK: - NotifiCLIConfig Tests
 
 final class NotifiCLIConfigTests: XCTestCase {

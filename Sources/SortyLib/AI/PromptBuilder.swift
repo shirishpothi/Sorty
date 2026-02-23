@@ -99,8 +99,6 @@ struct PromptBuilder {
 
             USER INSTRUCTIONS: \(instructions)
 
-            \(instructions)
-
             ════════════════════════════════════════════════════════════
             
             

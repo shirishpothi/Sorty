@@ -281,6 +281,7 @@ struct ReadyToOrganizeView: View {
     @State private var showStorageLocations = false
     @State private var showingFolderPicker = false
     @State private var suggestedLocationName: String? = nil
+    @State private var addStorageLocationErrorMessage: String?
     @State private var showSavePromptDialog = false
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
@@ -389,12 +390,31 @@ struct ReadyToOrganizeView: View {
                         try storageLocationsManager.addLocation(url: url, customName: suggestedLocationName)
                     } catch {
                         HapticFeedbackManager.shared.error()
+                        addStorageLocationErrorMessage = error.localizedDescription
                     }
                 }
-            case .failure:
+            case .failure(let error):
                 HapticFeedbackManager.shared.error()
+                addStorageLocationErrorMessage = error.localizedDescription
             }
             suggestedLocationName = nil
+        }
+        .alert(
+            "Couldn't Add Storage Location",
+            isPresented: Binding(
+                get: { addStorageLocationErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        addStorageLocationErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                addStorageLocationErrorMessage = nil
+            }
+        } message: {
+            Text(addStorageLocationErrorMessage ?? "Please try selecting the folder again.")
         }
         .onAppear {
             withAnimation {
@@ -514,12 +534,20 @@ struct ReadyToOrganizeView: View {
     private var iconSection: some View {
         ZStack {
             Circle()
-                .fill(Color.purple.opacity(0.1))
+                .fill(Color.teal.opacity(0.12))
                 .frame(width: 80, height: 80)
             
-            Image(systemName: "wand.and.stars")
-                .font(.system(size: 36, weight: .light))
-                .foregroundStyle(.purple)
+            if let mascotHead = SortyResources.image(named: "SortyMascotHead") {
+                Image(nsImage: mascotHead)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 48, height: 48)
+                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+            } else {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 36, weight: .light))
+                    .foregroundStyle(.teal)
+            }
         }
     }
     
@@ -609,7 +637,7 @@ struct ReadyToOrganizeView: View {
                             .font(.caption2)
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(.purple)
+                    .foregroundColor(.teal)
                     .disabled(isImprovingPrompt)
                     .help("Improve instructions with AI")
                     .accessibilityHint("Rewrites your prompt to be clearer and more specific")
@@ -966,7 +994,7 @@ struct CompactStorageLocationRow: View {
         HStack(spacing: 10) {
             Image(systemName: "externaldrive.fill")
                 .font(.system(size: 14))
-                .foregroundStyle(location.isEnabled ? .purple : .secondary)
+                .foregroundStyle(location.isEnabled ? .teal : .secondary)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(location.name)

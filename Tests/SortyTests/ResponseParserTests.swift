@@ -54,6 +54,52 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions.count, 1)
         XCTAssertEqual(plan.suggestions.first?.folderName, "Docs")
     }
+
+    func testParsingWithBraceNoiseBeforeJSONUsesFinalValidObject() throws {
+        let json = """
+        Thinking about {project buckets} before final output.
+        {
+          "folders": [
+            {
+              "name": "Docs",
+              "files": ["report.pdf"]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].folderName, "Docs")
+        XCTAssertEqual(plan.suggestions[0].files.count, 1)
+    }
+
+    func testParsingWithTrailingCommasRecovers() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Docs",
+              "files": ["report.pdf",],
+            },
+          ],
+          "unorganized": [],
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].files.count, 1)
+        XCTAssertEqual(plan.unorganizedFiles.count, 0)
+    }
     
     func testUnorganizedFilesParsing() throws {
         let json = """
@@ -72,6 +118,22 @@ class ResponseParserTests: XCTestCase {
         
         let plan = try ResponseParser.parseResponse(json, originalFiles: files)
         
+        XCTAssertEqual(plan.unorganizedDetails.count, 1)
+        XCTAssertEqual(plan.unorganizedDetails.first?.filename, "unknown.xyz")
+        XCTAssertEqual(plan.unorganizedFiles.count, 1)
+    }
+
+    func testUnorganizedStringEntriesParsing() throws {
+        let json = """
+        {
+          "folders": [],
+          "unorganized": ["unknown.xyz"]
+        }
+        """
+
+        let files = [FileItem(path: "/path/unknown.xyz", name: "unknown", extension: "xyz", size: 100, isDirectory: false)]
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+
         XCTAssertEqual(plan.unorganizedDetails.count, 1)
         XCTAssertEqual(plan.unorganizedDetails.first?.filename, "unknown.xyz")
         XCTAssertEqual(plan.unorganizedFiles.count, 1)
@@ -389,5 +451,37 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions[0].files.count, 0)
         XCTAssertEqual(plan.unorganizedFiles.count, 2)
         XCTAssertEqual(plan.totalFiles, 2)
+    }
+
+    func testProgressCueAndJSONOnSameLineParses() throws {
+        let response = #">> general: Ready to output organization structure. {"folders":[{"name":"Docs","files":["report.pdf"]}],"notes":"ok"}"#
+
+        let files = [
+            FileItem(path: "/path/report.pdf", name: "report", extension: "pdf", size: 100, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(response, originalFiles: files)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].folderName, "Docs")
+        XCTAssertEqual(plan.suggestions[0].files.count, 1)
+    }
+
+    func testExtractPartialResultsSupportsCompactFileIDs() {
+        let response = """
+        >> general: Ready to output organization structure.
+        {"folder_assignments":[{"name":"Media","file_ids":[1, 3
+        """
+
+        let files = [
+            FileItem(path: "/path/bridge.jpg", name: "bridge", extension: "jpg", size: 100, isDirectory: false),
+            FileItem(path: "/path/audio.m4a", name: "audio", extension: "m4a", size: 200, isDirectory: false),
+            FileItem(path: "/path/fountain.jpg", name: "fountain", extension: "jpg", size: 300, isDirectory: false)
+        ]
+
+        let plan = ResponseParser.extractPartialResults(response, originalFiles: files)
+        XCTAssertNotNil(plan)
+        XCTAssertEqual(plan?.suggestions.count, 1)
+        XCTAssertEqual(plan?.suggestions.first?.folderName, "Media")
+        XCTAssertEqual(plan?.suggestions.first?.files.count, 2)
     }
 }

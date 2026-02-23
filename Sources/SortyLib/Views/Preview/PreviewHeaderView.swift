@@ -162,7 +162,7 @@ struct PreviewHeaderView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "hand.draw")
                         .font(.caption)
-                    Text("Drop on a folder")
+                    Text("Drop in a folder")
                         .font(.caption)
                 }
                 .foregroundColor(.secondary)

@@ -242,6 +242,29 @@ public struct AIInsight: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Parsed move event from streamed organization output (file -> folder)
+public struct LiveOrganizationMove: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let fileName: String
+    public let filePath: String?
+    public let destinationFolder: String
+    public let timestamp: Date
+
+    public init(
+        id: String,
+        fileName: String,
+        filePath: String?,
+        destinationFolder: String,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.fileName = fileName
+        self.filePath = filePath
+        self.destinationFolder = destinationFolder
+        self.timestamp = timestamp
+    }
+}
+
 /// Progress update for real-time UI feedback
 public struct OrganizationProgress: Sendable {
     public let phase: Phase
@@ -318,12 +341,56 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
     @Published public var liveInsightsEnabled: Bool = true
+    @Published public var isReadyToOutputStructure: Bool = false
+    @Published public var liveOrganizationMoves: [LiveOrganizationMove] = []
     
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
     private var lastDisplayUpdate: Date = .distantPast
-    private let displayUpdateInterval: TimeInterval = 0.2 // 200ms throttle
+    private let displayUpdateInterval: TimeInterval = 0.3 // 300ms throttle
     nonisolated private static let streamPreviewCharacterLimit = 1000
+    nonisolated private static let structureReadyCueLine = "Ready to output organization structure."
+    nonisolated private static let structureReadyCueRegex =
+        try? NSRegularExpression(pattern: #"ready\s+to\s+output\s+organization\s+structure"#, options: [.caseInsensitive])
+    nonisolated private static let liveMoveJSONScanTailLength = 60_000
+    nonisolated private static let streamedFolderNameRegex =
+        try? NSRegularExpression(
+            pattern: #""name"\s*:\s*"([^"\n]{1,120})""#,
+            options: [.caseInsensitive]
+        )
+    nonisolated private static let streamedFileObjectRegex =
+        try? NSRegularExpression(
+            pattern: #""filename"\s*:\s*"([^"\n]{1,220})""#,
+            options: [.caseInsensitive]
+        )
+    nonisolated private static let streamedFileArrayStringRegex =
+        try? NSRegularExpression(
+            pattern: #"(?:\[\s*|,\s*)"([^"\n]{1,220}\.[a-zA-Z0-9]{1,12})"\s*(?=,|\])"#,
+            options: []
+        )
+    nonisolated private static let assignmentDestinationRegex =
+        try? NSRegularExpression(
+            pattern: #"\b(?:assigning|moving|mapping)\b.+?\bto\b\s+(.+)$"#,
+            options: [.caseInsensitive]
+        )
+    nonisolated private static let blockedLiveFolderNames: Set<String> = [
+        "a", "an", "and", "as", "at", "be", "by", "for", "from", "gets", "in", "into",
+        "is", "it", "name", "of", "on", "or", "that", "the", "this", "to", "value",
+        "with", "folder", "folders", "file", "files", "filename", "json", "reasoning",
+        "notes", "unorganized", "data", "content", "description", "type", "rule_id",
+        "semantic_tags", "suggested_name", "rename_reason", "tags", "comment", "true",
+        "false", "null"
+    ]
+    nonisolated private static let quotedFileMentionRegex =
+        try? NSRegularExpression(
+            pattern: #"(?:\"|')([^\"'\n]{2,220}\.[a-zA-Z0-9]{1,12})(?:\"|')"#,
+            options: []
+        )
+    nonisolated private static let bareFileMentionRegex =
+        try? NSRegularExpression(
+            pattern: #"\b([A-Za-z0-9_\-\(\)]+\.[a-zA-Z0-9]{1,12})\b"#,
+            options: []
+        )
     
     // Steady progress animation during streaming
     private let steadyProgressTimer = SteadyProgressTimer()
@@ -333,7 +400,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var currentInsight: String = ""
     @Published public var insightHistory: [AIInsight] = []
     private var lastInsightExtraction: Date = .distantPast
-    private let insightExtractionInterval: TimeInterval = 0.35 // Keep insights responsive while avoiding thrash
+    private let insightExtractionInterval: TimeInterval = 0.5 // Reduce processing overhead during streaming
     private let insightExtractor = AIInsightExtractor()
     private var insightExtractionTask: Task<Void, Never>?
     
@@ -343,6 +410,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var jsonStartedInStream: Bool = false
     private var progressLineCount: Int = 0
     private let progressLineLimit = 12
+    
+    // Live organization streaming support
+    private var liveMoveExtractionTask: Task<Void, Never>?
+    private var lastLiveMoveExtraction: Date = .distantPast
+    private let liveMoveExtractionInterval: TimeInterval = 0.25
+    private let liveMoveHistoryLimit = 500
+    private var liveMoveIndexByID: [String: Int] = [:]
+    private var liveMoveExtractionGeneration: UInt64 = 0
     
     // MARK: - AI Insights Cache
     
@@ -564,19 +639,42 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private func clearStreamingDisplayState() {
         displayUpdateTask?.cancel()
         displayUpdateTask = nil
+        liveMoveExtractionTask?.cancel()
+        liveMoveExtractionTask = nil
         streamingContent = ""
         displayStreamingContent = ""
         truncatedDisplayStreamingContent = ""
         lastDisplayUpdate = .distantPast
+        lastLiveMoveExtraction = .distantPast
+        liveMoveExtractionGeneration = 0
         progressLineBuffer = ""
         receivedProgressLines = false
         jsonStartedInStream = false
         progressLineCount = 0
+        isReadyToOutputStructure = false
+        liveOrganizationMoves = []
+        liveMoveIndexByID = [:]
+    }
+
+    @MainActor
+    private func restartPlanGenerationForRetry() {
+        clearStreamingDisplayState()
+        withBatchUpdates {
+            isStreaming = false
+            progress = 0.30
+            organizationStage = "AI is analyzing your files..."
+        }
+        startTimeoutTimer()
     }
 
     public nonisolated func didReceiveChunk(_ chunk: String) {
         Task { @MainActor in
             guard !self.isCancellationRequested else { return }
+
+            // If a prior stream already completed, treat this as a brand-new stream session.
+            if !self.isStreaming, !self.streamingContent.isEmpty {
+                self.clearStreamingDisplayState()
+            }
             
             let isFirstChunk = self.streamingContent.isEmpty
             self.streamingContent += chunk
@@ -595,6 +693,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 
                 // Start steady progress task for smooth animation
                 self.startSteadyProgressTask()
+            }
+
+            self.processStructureReadyCueIfNeeded()
+            if self.isReadyToOutputStructure {
+                let likelyContainsStructuredOutput = chunk.contains("{") || chunk.contains("\"files\"") || chunk.contains("\"filename\"")
+                self.extractLiveOrganizationMovesIfNeeded(force: likelyContainsStructuredOutput)
             }
 
             if self.liveInsightsEnabled {
@@ -674,8 +778,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 5 else { return nil }
         
-        let category: AIInsight.Category
-        let text: String
+        var category: AIInsight.Category = .general
+        var text = trimmed
         
         // Try to extract "category: text" format
         if let colonIndex = trimmed.firstIndex(of: ":") {
@@ -686,27 +790,386 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 .trimmingCharacters(in: .whitespaces)
             
             switch prefix {
-            case "file": category = .file
-            case "folder": category = .folder
-            case "pattern": category = .pattern
-            case "decision": category = .decision
-            case "constraint": category = .constraint
-            case "general": category = .general
+            case "file", "folder", "pattern", "decision", "constraint", "general":
+                switch prefix {
+                case "file": category = .file
+                case "folder": category = .folder
+                case "pattern": category = .pattern
+                case "decision": category = .decision
+                case "constraint": category = .constraint
+                default: category = .general
+                }
+                guard !remainder.isEmpty else { return nil }
+                text = remainder
             default:
-                // No recognized category prefix, use entire content
                 category = .general
-                text = trimmed
-                return AIInsight(text: String(text.prefix(120)), category: category, stableSeed: text)
             }
-            
-            guard !remainder.isEmpty else { return nil }
-            text = remainder
-        } else {
-            category = .general
-            text = trimmed
         }
-        
-        return AIInsight(text: String(text.prefix(120)), category: category, stableSeed: text)
+
+        if let destination = Self.extractAssignmentDestination(from: text),
+           !Self.isLikelyLiveFolderName(destination) {
+            return nil
+        }
+        if category == .file && Self.isLowSignalFileProgressInsight(text) {
+            return nil
+        }
+        let clipped = String(text.prefix(120))
+        let resolvedFilePath = (category == .file) ? resolveScannedFilePathForMention(in: text) : nil
+        return AIInsight(text: clipped, category: category, filePath: resolvedFilePath, stableSeed: text)
+    }
+
+    @MainActor
+    private func processStructureReadyCueIfNeeded() {
+        guard !isReadyToOutputStructure else { return }
+        guard containsStructureReadyCue(in: streamingContent) else { return }
+
+        withBatchUpdates {
+            isReadyToOutputStructure = true
+            if organizationStage.lowercased().contains("analyz") || organizationStage.isEmpty {
+                organizationStage = "Streaming organization structure..."
+            }
+
+            guard liveInsightsEnabled else { return }
+            currentInsight = Self.structureReadyCueLine
+            let cueInsight = AIInsight(
+                text: Self.structureReadyCueLine,
+                category: .general,
+                stableSeed: Self.structureReadyCueLine
+            )
+            if let existingIndex = insightHistory.firstIndex(where: { $0.id == cueInsight.id }) {
+                insightHistory.remove(at: existingIndex)
+            }
+            if insightHistory.count >= 12 {
+                insightHistory.removeFirst()
+            }
+            insightHistory.append(cueInsight)
+        }
+
+        extractLiveOrganizationMovesIfNeeded(force: true)
+    }
+
+    private func containsStructureReadyCue(in text: String) -> Bool {
+        guard let regex = Self.structureReadyCueRegex else {
+            return text.localizedCaseInsensitiveContains(Self.structureReadyCueLine)
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.firstMatch(in: text, options: [], range: range) != nil
+    }
+
+    @MainActor
+    private func extractLiveOrganizationMovesIfNeeded(force: Bool = false) {
+        guard liveInsightsEnabled, isReadyToOutputStructure else { return }
+
+        let now = Date()
+        if !force, now.timeIntervalSince(lastLiveMoveExtraction) < liveMoveExtractionInterval {
+            return
+        }
+        lastLiveMoveExtraction = now
+
+        let contentSnapshot = streamingContent
+        let fileLookup = scannedFilePathLookup
+        let currentDirectoryPath = currentDirectory?.path
+        liveMoveExtractionGeneration &+= 1
+        let generation = liveMoveExtractionGeneration
+
+        liveMoveExtractionTask?.cancel()
+        liveMoveExtractionTask = Task.detached(priority: .utility) {
+            let parsedMoves = Self.extractLiveOrganizationMoves(
+                from: contentSnapshot,
+                scannedFilePathLookup: fileLookup,
+                currentDirectoryPath: currentDirectoryPath
+            )
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                guard !Task.isCancelled else { return }
+                guard generation == self.liveMoveExtractionGeneration else { return }
+                guard self.streamingContent.count >= contentSnapshot.count else { return }
+                self.mergeLiveOrganizationMoves(parsedMoves)
+            }
+        }
+    }
+
+    @MainActor
+    private func mergeLiveOrganizationMoves(_ parsedMoves: [LiveOrganizationMove]) {
+        guard !parsedMoves.isEmpty else { return }
+
+        withBatchUpdates {
+            for parsedMove in parsedMoves {
+                if let existingIndex = liveMoveIndexByID[parsedMove.id] {
+                    guard existingIndex < liveOrganizationMoves.count else {
+                        liveMoveIndexByID.removeValue(forKey: parsedMove.id)
+                        continue
+                    }
+                    if liveOrganizationMoves[existingIndex].destinationFolder == parsedMove.destinationFolder {
+                        continue
+                    }
+                    liveOrganizationMoves[existingIndex] = parsedMove
+                    continue
+                }
+                liveMoveIndexByID[parsedMove.id] = liveOrganizationMoves.count
+                liveOrganizationMoves.append(parsedMove)
+            }
+
+            if liveOrganizationMoves.count > liveMoveHistoryLimit {
+                liveOrganizationMoves.removeFirst(liveOrganizationMoves.count - liveMoveHistoryLimit)
+                rebuildLiveMoveIndex()
+            }
+        }
+    }
+
+    @MainActor
+    private func rebuildLiveMoveIndex() {
+        liveMoveIndexByID = Dictionary(
+            uniqueKeysWithValues: liveOrganizationMoves.enumerated().map { ($0.element.id, $0.offset) }
+        )
+    }
+
+    private func resolveScannedFilePathForMention(in text: String) -> String? {
+        guard let fileName = Self.extractMentionedFileName(from: text) else { return nil }
+        return Self.resolveScannedFilePath(
+            for: fileName,
+            scannedFilePathLookup: scannedFilePathLookup,
+            currentDirectoryPath: currentDirectory?.path
+        )
+    }
+
+    nonisolated private static func extractLiveOrganizationMoves(
+        from content: String,
+        scannedFilePathLookup: [String: [String]],
+        currentDirectoryPath: String?
+    ) -> [LiveOrganizationMove] {
+        guard !content.isEmpty else { return [] }
+
+        let relevantContent: String
+        if let cueRegex = structureReadyCueRegex {
+            let fullRange = NSRange(content.startIndex..<content.endIndex, in: content)
+            if let match = cueRegex.firstMatch(in: content, options: [], range: fullRange),
+               let cueRange = Range(match.range, in: content) {
+                relevantContent = String(content[cueRange.upperBound...])
+            } else {
+                relevantContent = content
+            }
+        } else {
+            relevantContent = content
+        }
+
+        guard let firstBraceIndex = relevantContent.firstIndex(of: "{") else { return [] }
+        let jsonSlice = String(relevantContent[firstBraceIndex...].suffix(liveMoveJSONScanTailLength))
+        guard !jsonSlice.isEmpty else { return [] }
+
+        let folderMatches = extractCapturedMatches(
+            using: streamedFolderNameRegex,
+            in: jsonSlice
+        ) { rawName in
+            let normalized = normalizeFolderName(rawName)
+            return isLikelyLiveFolderName(normalized) ? normalized : nil
+        }
+        guard !folderMatches.isEmpty else { return [] }
+
+        let fileObjectMatches = extractCapturedMatches(
+            using: streamedFileObjectRegex,
+            in: jsonSlice
+        ) { rawValue in
+            let normalized = normalizeCandidateFileName(rawValue)
+            guard isLikelyFileName(normalized) else { return nil }
+            let fileName = URL(fileURLWithPath: normalized).lastPathComponent
+            return fileName.isEmpty ? nil : fileName
+        }
+        let fileStringMatches = extractCapturedMatches(
+            using: streamedFileArrayStringRegex,
+            in: jsonSlice
+        ) { rawValue in
+            let normalized = normalizeCandidateFileName(rawValue)
+            guard isLikelyFileName(normalized) else { return nil }
+            let fileName = URL(fileURLWithPath: normalized).lastPathComponent
+            return fileName.isEmpty ? nil : fileName
+        }
+
+        var fileMatches = fileObjectMatches + fileStringMatches
+        fileMatches.sort { lhs, rhs in lhs.location < rhs.location }
+        guard !fileMatches.isEmpty else { return [] }
+
+        var folderIndex = 0
+        var orderedMoveIDs: [String] = []
+        var latestMoveByID: [String: LiveOrganizationMove] = [:]
+
+        for fileMatch in fileMatches {
+            while folderIndex + 1 < folderMatches.count &&
+                    folderMatches[folderIndex + 1].location <= fileMatch.location {
+                folderIndex += 1
+            }
+            guard folderIndex < folderMatches.count else { continue }
+
+            let folderName = folderMatches[folderIndex].value
+            let fileName = fileMatch.value
+            guard !folderName.isEmpty, !fileName.isEmpty else { continue }
+
+            let filePath = resolveScannedFilePath(
+                for: fileName,
+                scannedFilePathLookup: scannedFilePathLookup,
+                currentDirectoryPath: currentDirectoryPath
+            )
+            let moveID = makeLiveMoveID(filePath: filePath, fileName: fileName)
+            if latestMoveByID[moveID] == nil {
+                orderedMoveIDs.append(moveID)
+            }
+            latestMoveByID[moveID] = LiveOrganizationMove(
+                id: moveID,
+                fileName: fileName,
+                filePath: filePath,
+                destinationFolder: folderName
+            )
+        }
+
+        return orderedMoveIDs.compactMap { latestMoveByID[$0] }
+    }
+
+    private struct CapturedMatch {
+        let value: String
+        let location: Int
+    }
+
+    nonisolated private static func extractCapturedMatches(
+        using regex: NSRegularExpression?,
+        in text: String,
+        normalizer: (String) -> String?
+    ) -> [CapturedMatch] {
+        guard let regex else { return [] }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        let matches = regex.matches(in: text, options: [], range: range)
+        guard !matches.isEmpty else { return [] }
+
+        var results: [CapturedMatch] = []
+        for match in matches {
+            guard let valueRange = Range(match.range(at: 1), in: text) else { continue }
+            guard let normalized = normalizer(String(text[valueRange])) else { continue }
+            results.append(CapturedMatch(value: normalized, location: match.range.location))
+        }
+        return results
+    }
+
+    nonisolated private static func extractMentionedFileName(from text: String) -> String? {
+        if let quotedRegex = quotedFileMentionRegex {
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            let matches = quotedRegex.matches(in: text, options: [], range: range)
+            for match in matches.reversed() {
+                guard let fileRange = Range(match.range(at: 1), in: text) else { continue }
+                let fileName = normalizeCandidateFileName(String(text[fileRange]))
+                if isLikelyFileName(fileName) {
+                    return URL(fileURLWithPath: fileName).lastPathComponent
+                }
+            }
+        }
+
+        if let bareRegex = bareFileMentionRegex {
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            let matches = bareRegex.matches(in: text, options: [], range: range)
+            for match in matches.reversed() {
+                guard let fileRange = Range(match.range(at: 1), in: text) else { continue }
+                let fileName = normalizeCandidateFileName(String(text[fileRange]))
+                if isLikelyFileName(fileName) {
+                    return URL(fileURLWithPath: fileName).lastPathComponent
+                }
+            }
+        }
+
+        return nil
+    }
+
+    nonisolated private static func resolveScannedFilePath(
+        for fileName: String,
+        scannedFilePathLookup: [String: [String]],
+        currentDirectoryPath: String?
+    ) -> String? {
+        let key = fileName.lowercased()
+        guard let matches = scannedFilePathLookup[key], !matches.isEmpty else { return nil }
+
+        if matches.count == 1 {
+            return matches[0]
+        }
+
+        if let currentDirectoryPath,
+           let preferredPath = matches.first(where: { $0.hasPrefix(currentDirectoryPath + "/") }) {
+            return preferredPath
+        }
+
+        return matches[0]
+    }
+
+    nonisolated private static func normalizeFolderName(_ input: String) -> String {
+        input
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ",.;:!?"))
+            .replacingOccurrences(of: "\"", with: "")
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+    }
+
+    nonisolated private static func isLikelyLiveFolderName(_ input: String) -> Bool {
+        let candidate = normalizeFolderName(input)
+        guard candidate.count >= 2, candidate.count <= 80 else { return false }
+        guard !candidate.contains("{"), !candidate.contains("}"), !candidate.contains("\"") else { return false }
+        guard !candidate.contains("/"), !candidate.contains("\\") else { return false }
+        guard URL(fileURLWithPath: candidate).pathExtension.isEmpty else { return false }
+
+        let lower = candidate.lowercased()
+        guard !blockedLiveFolderNames.contains(lower) else { return false }
+        guard !lower.contains("top-level"),
+              !lower.contains("top level"),
+              !lower.contains("preferred"),
+              !lower.contains("constraint"),
+              !lower.contains("response format"),
+              !lower.contains("system prompt") else {
+            return false
+        }
+        return true
+    }
+
+    nonisolated private static func normalizeCandidateFileName(_ input: String) -> String {
+        input
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`()[]{}"))
+    }
+
+    nonisolated private static func isLikelyFileName(_ input: String) -> Bool {
+        let candidate = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !candidate.isEmpty, candidate.count <= 220 else { return false }
+        let ext = URL(fileURLWithPath: candidate).pathExtension
+        return !ext.isEmpty
+    }
+
+    nonisolated private static func isLowSignalFileProgressInsight(_ text: String) -> Bool {
+        let lowered = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !lowered.isEmpty else { return true }
+
+        if lowered.contains("response format") || lowered.contains("json schema") || lowered.contains("system prompt") {
+            return true
+        }
+
+        if let destination = extractAssignmentDestination(from: text),
+           !isLikelyLiveFolderName(destination) {
+            return true
+        }
+
+        return false
+    }
+
+    nonisolated private static func extractAssignmentDestination(from text: String) -> String? {
+        guard let regex = assignmentDestinationRegex else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, options: [], range: range),
+              let destinationRange = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        let destination = normalizeFolderName(String(text[destinationRange]))
+        return destination.isEmpty ? nil : destination
+    }
+
+    nonisolated private static func makeLiveMoveID(filePath: String?, fileName: String) -> String {
+        let base = (filePath ?? fileName).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return base.isEmpty ? fileName.lowercased() : base
     }
     
     /// Starts a background task that ensures progress keeps moving even during pauses
@@ -816,7 +1279,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if !streamingContent.isEmpty {
                 syncDisplayContentImmediately()
                 scheduleDisplayUpdate(for: streamingContent, force: true)
+                processStructureReadyCueIfNeeded()
                 extractInsightsIfNeeded(force: true)
+                extractLiveOrganizationMovesIfNeeded(force: true)
             }
             return
         }
@@ -832,6 +1297,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         insightHistory = []
         lastInsightExtraction = .distantPast
         insightsCache = nil
+
+        liveMoveExtractionTask?.cancel()
+        liveMoveExtractionTask = nil
+        lastLiveMoveExtraction = .distantPast
+        liveMoveExtractionGeneration = 0
+        isReadyToOutputStructure = false
+        liveOrganizationMoves = []
+        liveMoveIndexByID = [:]
     }
     
     private func estimatedStreamingCharacterTarget() -> Int {
@@ -864,6 +1337,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     public nonisolated func didComplete(content: String) {
         Task { @MainActor in
+            if self.isReadyToOutputStructure {
+                self.extractLiveOrganizationMovesIfNeeded(force: true)
+            }
             self.isStreaming = false
             self.organizationStage = "Building organization plan..."
             self.stopTimeoutTimer()
@@ -874,7 +1350,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public nonisolated func didFail(error: Error) {
         Task { @MainActor in
             self.isStreaming = false
-            self.errorMessage = error.localizedDescription
+            self.errorMessage = self.userFacingErrorMessage(for: error)
+            self.liveMoveExtractionTask?.cancel()
+            self.liveMoveExtractionTask = nil
+            self.liveMoveExtractionGeneration = 0
+            self.liveMoveIndexByID = [:]
             self.stopTimeoutTimer()
             self.stopSteadyProgressTask()
             
@@ -1095,7 +1575,28 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
-            instructions += "\n\n" + storageContext
+            let sourceDir = StorageLocationPathResolver.canonicalPath(directory.path)
+            let enabledLocations = storageLocationsManager?.enabledLocations ?? []
+
+            var sourceDirClause = """
+            11. The source directory you are organizing is: "\(sourceDir)".
+                CRITICAL: The source directory and storage locations are completely separate filesystem locations.
+                To route a file to storage, copy the EXACT path from VALID_STORAGE_PATHS or KNOWN_STORAGE_SUBFOLDERS.
+                Do NOT build storage paths by appending folder names to the source directory.
+                Non-storage destinations must use short relative names (no leading /).
+            """
+
+            if let firstLocation = enabledLocations.first {
+                let storagePath = StorageLocationPathResolver.canonicalPath(firstLocation.path)
+                let storageName = URL(fileURLWithPath: storagePath).lastPathComponent
+                sourceDirClause += """
+
+                ✗ WRONG: "\(sourceDir)/\(storageName)" — this is inside the source, NOT a storage location.
+                ✓ RIGHT: "\(storagePath)" — copy the exact path from VALID_STORAGE_PATHS.
+                """
+            }
+
+            instructions += "\n\n" + storageContext + "\n" + sourceDirClause
             DebugLogger.log("Injected Storage Locations context into prompt")
         }
 
@@ -1171,10 +1672,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
+        let normalizedInputPlan = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
 
         var validatedPlanFromRetry: OrganizationPlan? = nil
         do {
-            try validator.validate(plan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: maxFolders)
+            try validator.validate(normalizedInputPlan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: maxFolders)
         } catch let validationError as ValidationError {
             if let retryPlan = await retryWithValidationEnhancement(
                 files: files,
@@ -1194,7 +1696,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         }
 
-        let planAfterValidation = validatedPlanFromRetry ?? plan
+        let planAfterValidation = validatedPlanFromRetry ?? normalizedInputPlan
 
         try checkCancellation()
 
@@ -1233,6 +1735,52 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return validatedPlan
     }
 
+    private func normalizeStorageDestinations(
+        in plan: OrganizationPlan,
+        allowedLocations: [StorageLocation],
+        sourceDirectoryURL: URL? = nil
+    ) -> OrganizationPlan {
+        let knownSubfolders = storageLocationsManager?.discoverAllSubfolders() ?? [:]
+
+        if !allowedLocations.isEmpty {
+            let originalFolders = plan.suggestions.map(\.folderName)
+            DebugLogger.log("[StorageNorm] Before normalization — folders: \(originalFolders)")
+            DebugLogger.log("[StorageNorm] Allowed locations: \(allowedLocations.map { "\($0.name) → \($0.path)" })")
+            if let srcDir = sourceDirectoryURL {
+                DebugLogger.log("[StorageNorm] Source directory: \(srcDir.path)")
+            }
+        }
+
+        let normalizedPlan = StorageDestinationNormalizer.normalize(
+            plan: plan,
+            allowedStorageLocations: allowedLocations,
+            knownSubfolders: knownSubfolders,
+            sourceDirectoryURL: sourceDirectoryURL
+        )
+
+        if normalizedPlan != plan {
+            let changedFolders = zip(plan.suggestions, normalizedPlan.suggestions)
+                .filter { $0.0.folderName != $0.1.folderName }
+                .map { "\"\($0.0.folderName)\" → \"\($0.1.folderName)\"" }
+            LogManager.shared.log(
+                "Normalized storage destination aliases: \(changedFolders.joined(separator: ", "))",
+                category: "FolderOrganizer"
+            )
+            DebugLogger.log("[StorageNorm] After normalization — changed: \(changedFolders)")
+        } else if !allowedLocations.isEmpty {
+            DebugLogger.log("[StorageNorm] No changes after normalization")
+        }
+
+        return normalizedPlan
+    }
+
+    private func resolvePlanFolderURL(folderName: String, baseURL: URL) -> URL {
+        if let absoluteURL = StorageLocationPathResolver.absoluteURL(from: folderName) {
+            return absoluteURL
+        }
+        return baseURL.appendingPathComponent(folderName, isDirectory: true)
+    }
+
     // MARK: - Cancellation
 
     /// Cancel any ongoing operation - RELIABLE cancellation
@@ -1248,6 +1796,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentTask = nil
         displayUpdateTask?.cancel()
         displayUpdateTask = nil
+        liveMoveExtractionTask?.cancel()
+        liveMoveExtractionTask = nil
+        liveMoveExtractionGeneration = 0
+        liveMoveIndexByID = [:]
         insightExtractionTask?.cancel()
         insightExtractionTask = nil
         stopTimeoutTimer()
@@ -1341,6 +1893,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     @MainActor
     private func handleOrganizationError(_ error: Error, directory: URL) {
+        let displayMessage = userFacingErrorMessage(for: error)
         let failedEntry = OrganizationHistoryEntry(
             directoryPath: directory.path,
             filesOrganized: 0,
@@ -1348,23 +1901,39 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             plan: nil,
             success: false,
             status: .failed,
-            errorMessage: error.localizedDescription,
+            errorMessage: displayMessage,
             rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
         )
         history.addEntry(failedEntry)
 
         transition(to: .error(error), force: true)
-        errorMessage = error.localizedDescription
+        errorMessage = displayMessage
         
         // Show error notification (unless cancelled)
         if case .cancelled = error as? OrganizationError {
             // Don't show notification for user-initiated cancellation
         } else {
             NotificationManager.shared.showError(
-                message: error.localizedDescription,
+                message: displayMessage,
                 isCritical: true
             )
         }
+    }
+
+    @MainActor
+    private func userFacingErrorMessage(for error: Error) -> String {
+        if let clientError = error as? AIClientError {
+            return clientError.failureReason ?? clientError.errorDescription ?? clientError.localizedDescription
+        }
+        if let localized = error as? LocalizedError {
+            if let reason = localized.failureReason, !reason.isEmpty {
+                return reason
+            }
+            if let description = localized.errorDescription, !description.isEmpty {
+                return description
+            }
+        }
+        return error.localizedDescription
     }
 
     // MARK: - Exclusion Retry
@@ -1382,12 +1951,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         guard let enforcer = exclusionEnforcer else { return nil }
         
         LogManager.shared.log("Retrying with enhanced exclusion prompt", category: "FolderOrganizer")
-        updateProgress(0.87, stage: "Adjusting plan for excluded files...")
+        restartPlanGenerationForRetry()
         
         // Generate enhanced prompt with violation details
         let enhancedPrompt = instructions + enforcer.generateRetryPromptEnhancement(for: violations)
         
         do {
+            defer { stopTimeoutTimer() }
             let retryPlan: OrganizationPlan
             if !imagePayload.isEmpty {
                 retryPlan = try await client.analyzeWithImages(
@@ -1428,7 +1998,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         switch validationError {
         case .tooManyFolders(let count, let max):
             LogManager.shared.log("Retrying: too many folders (\(count) > \(max))", category: "FolderOrganizer")
-            updateProgress(0.87, stage: "Too many folders, retrying...")
             enhancement = """
             
             CRITICAL CORRECTION REQUIRED:
@@ -1439,7 +2008,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         case .pathExists(let path):
             let fileName = URL(fileURLWithPath: path).lastPathComponent
             LogManager.shared.log("Retrying: path exists conflict (\(fileName))", category: "FolderOrganizer")
-            updateProgress(0.87, stage: "Folder name conflict, retrying...")
             enhancement = """
             
             CRITICAL CORRECTION REQUIRED:
@@ -1447,13 +2015,46 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             You MUST NOT use "\(fileName)" as a folder name.
             Choose a different folder name that does not conflict with existing files. For example, add a suffix like "\(fileName) Files" or use a different category name.
             """
+        case .invalidStorageLocation(let path):
+            LogManager.shared.log("Retrying: invalid storage location (\(path))", category: "FolderOrganizer")
+            let allowedList: String
+            if allowedStorageLocations.isEmpty {
+                allowedList = "- No storage locations are currently enabled. Use only relative folder names."
+            } else {
+                allowedList = allowedStorageLocations
+                    .map { "  - \($0.path) (\($0.name))" }
+                    .joined(separator: "\n")
+            }
+
+            enhancement = """
+            
+            CRITICAL CORRECTION REQUIRED:
+            You used an invalid storage location path: "\(path)".
+            If you choose a storage destination, the folder name MUST be an absolute path within one of these approved storage roots:
+            \(allowedList)
+            You may use a root path itself or a subfolder inside that root (for example: /Archive/Excel Sheets).
+            Never use relative placeholders like "storage" or "storage/anything".
+            If none of the approved roots fit, organize files with relative folders under the source directory instead.
+            """
+        case .sourceInStorageLocation(let file, let location):
+            LogManager.shared.log("Retrying: source in storage location (\(file) in \(location))", category: "FolderOrganizer")
+            enhancement = """
+            
+            CRITICAL CORRECTION REQUIRED:
+            "\(file)" is already inside storage location "\(location)".
+            Files already inside storage locations MUST NOT be moved to non-storage destinations.
+            Keep that file inside the same storage location (you may use subfolders there), or leave it unorganized.
+            """
         default:
             return nil
         }
+
+        restartPlanGenerationForRetry()
         
         let enhancedPrompt = instructions + enhancement
         
         do {
+            defer { stopTimeoutTimer() }
             let retryPlan: OrganizationPlan
             if !imagePayload.isEmpty {
                 retryPlan = try await client.analyzeWithImages(
@@ -1472,10 +2073,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 )
             }
             
+            let normalizedRetryPlan = normalizeStorageDestinations(in: retryPlan, allowedLocations: allowedStorageLocations, sourceDirectoryURL: directory)
+
             // Validate the retry plan
-            try validator.validate(retryPlan, at: directory, allowedStorageLocations: allowedStorageLocations, maxTopLevelFolders: maxTopLevelFolders)
+            try validator.validate(
+                normalizedRetryPlan,
+                at: directory,
+                allowedStorageLocations: allowedStorageLocations,
+                maxTopLevelFolders: maxTopLevelFolders
+            )
             LogManager.shared.log("Validation retry succeeded", category: "FolderOrganizer")
-            return retryPlan
+            return normalizedRetryPlan
         } catch {
             LogManager.shared.log("Validation retry failed: \(error.localizedDescription)", category: "FolderOrganizer")
             return nil
@@ -1684,18 +2292,44 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 currentPlan = plan
             }
 
-            // Validate plan before auto-apply
+            // Validate plan before auto-apply (with a targeted retry for common validation failures)
             let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-            try validator.validate(plan, at: directory, allowedStorageLocations: allowedLocations, maxTopLevelFolders: aiConfig?.maxTopLevelFolders ?? 10)
+            let maxTopLevelFolders = aiConfig?.maxTopLevelFolders ?? 10
+            var planAfterValidation = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+            do {
+                try validator.validate(
+                    planAfterValidation,
+                    at: directory,
+                    allowedStorageLocations: allowedLocations,
+                    maxTopLevelFolders: maxTopLevelFolders
+                )
+            } catch let validationError as ValidationError {
+                if let retryPlan = await retryWithValidationEnhancement(
+                    files: files,
+                    client: client,
+                    validationError: validationError,
+                    directory: directory,
+                    instructions: finalPrompt,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature,
+                    imagePayload: [:],
+                    maxTopLevelFolders: maxTopLevelFolders,
+                    allowedStorageLocations: allowedLocations
+                ) {
+                    planAfterValidation = retryPlan
+                } else {
+                    throw validationError
+                }
+            }
 
             // Post-AI exclusion validation
-            var validatedPlan = plan
+            var validatedPlan = planAfterValidation
             if let exclusionRules = exclusionRules {
                 let enforcer = ExclusionEnforcer(exclusionManager: exclusionRules)
-                let validationResult = enforcer.validate(plan)
+                let validationResult = enforcer.validate(planAfterValidation)
                 if validationResult.hasViolations {
                     LogManager.shared.log("Exclusion violations in incremental plan: \(validationResult.violationCount)", category: "FolderOrganizer")
-                    validatedPlan = validationResult.cleanedPlan ?? plan
+                    validatedPlan = validationResult.cleanedPlan ?? planAfterValidation
                 }
             }
 
@@ -1873,6 +2507,43 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 currentPlan = plan
             }
 
+            // Validate selected-files plan before apply.
+            let allowedLocations = storageLocationsManager?.enabledLocations ?? []
+            let maxTopLevelFolders = aiConfig?.maxTopLevelFolders ?? 10
+            var validatedPlan = normalizeStorageDestinations(in: plan, allowedLocations: allowedLocations, sourceDirectoryURL: directory)
+            do {
+                try validator.validate(
+                    validatedPlan,
+                    at: directory,
+                    allowedStorageLocations: allowedLocations,
+                    maxTopLevelFolders: maxTopLevelFolders
+                )
+            } catch let validationError as ValidationError {
+                if let retryPlan = await retryWithValidationEnhancement(
+                    files: files,
+                    client: client,
+                    validationError: validationError,
+                    directory: directory,
+                    instructions: finalPrompt,
+                    personaPrompt: personaPrompt,
+                    temperature: temperature,
+                    imagePayload: [:],
+                    maxTopLevelFolders: maxTopLevelFolders,
+                    allowedStorageLocations: allowedLocations
+                ) {
+                    validatedPlan = retryPlan
+                    await MainActor.run {
+                        currentPlan = retryPlan
+                    }
+                } else {
+                    throw validationError
+                }
+            }
+
+            await MainActor.run {
+                currentPlan = validatedPlan
+            }
+
             // Apply the organization
             try await apply(at: directory, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
 
@@ -1886,11 +2557,23 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // MARK: - Apply Organization
 
     public func apply(at baseURL: URL, dryRun: Bool = false, enableTagging: Bool = true, source: OrganizationEntrySource = .manual) async throws {
-        guard let plan = currentPlan else {
+        guard let currentPlan else {
             throw OrganizationError.noCurrentPlan
         }
 
         try checkCancellation()
+
+        // Re-validate at apply time to protect all entry points, including regenerated previews.
+        let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
+        let allowedLocations = storageLocationsManager?.enabledLocations ?? []
+        let planToApply = normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
+        self.currentPlan = planToApply
+        try validator.validate(
+            planToApply,
+            at: baseURL,
+            allowedStorageLocations: allowedLocations,
+            maxTopLevelFolders: maxFolders
+        )
 
         let activity = ProcessInfo.processInfo.beginActivity(
             options: .userInitiated,
@@ -1907,7 +2590,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         do {
             let operations = try await fileSystemManager.applyOrganization(
-                plan, 
+                planToApply,
                 at: baseURL, 
                 dryRun: dryRun, 
                 enableTagging: enableTagging,
@@ -1927,14 +2610,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let learningsObserver = learningsObserver, !dryRun {
                 // Pre-start the session so rule applications can be recorded
                 learningsObserver.startSession(folderPath: baseURL.path, historyEntryId: nil, operations: operations)
-                recordRuleApplications(for: plan, operations: operations, observer: learningsObserver)
+                recordRuleApplications(for: planToApply, operations: operations, observer: learningsObserver)
             }
 
             let historyEntry = OrganizationHistoryEntry(
                 directoryPath: baseURL.path,
-                filesOrganized: plan.totalFiles,
-                foldersCreated: plan.totalFolders,
-                plan: plan,
+                filesOrganized: planToApply.totalFiles,
+                foldersCreated: planToApply.totalFolders,
+                plan: planToApply,
                 success: true,
                 status: .completed,
                 rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
@@ -1971,12 +2654,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 automationManager.refreshFinder(at: baseURL)
 
                 if shouldAutoRevealInFinder {
-                    let folderURLs = plan.suggestions.map { baseURL.appendingPathComponent($0.folderName) }
+                    let folderURLs = planToApply.suggestions.map { resolvePlanFolderURL(folderName: $0.folderName, baseURL: baseURL) }
                     automationManager.selectOrganizedFolders(folderURLs: folderURLs)
                 }
             } else if shouldAutoRevealInFinder {
-                let folderURLs = plan.suggestions.compactMap { suggestion -> URL? in
-                    let url = baseURL.appendingPathComponent(suggestion.folderName)
+                let folderURLs = planToApply.suggestions.compactMap { suggestion -> URL? in
+                    let url = resolvePlanFolderURL(folderName: suggestion.folderName, baseURL: baseURL)
                     return FileManager.default.fileExists(atPath: url.path) ? url : nil
                 }
                 if !folderURLs.isEmpty {
@@ -1989,7 +2672,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 directoryPath: baseURL.path,
                 filesOrganized: 0,
                 foldersCreated: 0,
-                plan: plan,
+                plan: planToApply,
                 success: false,
                 status: .failed,
                 errorMessage: error.localizedDescription,

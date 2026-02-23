@@ -25,10 +25,8 @@ MVVM with service layers. State injected via `@EnvironmentObject` from `SortyApp
 - Release: push `v*` tag to trigger CI build (e.g., 'git push origin v1.0.5')
 
 ## Finder Integration Notes
-- Quick Action and Finder Sync extension repair should be handled from in-app UI controls.
-- Use Settings → Finder Integration → `Install`/`Reinstall` Quick Action and `Repair Finder Sync` before suggesting external commands.
 - Finder Sync `.appex` registration and stale-registration cleanup are implemented in `ExtensionCommunication.repairFinderSyncExtensionRegistration`.
-- If Finder still shows stale menu/icon state, open Extensions settings from the app and re-enable Sorty there.
+
 
 ## Detailed Guides
 - [Architecture & Patterns](docs/agent-guides/architecture.md)

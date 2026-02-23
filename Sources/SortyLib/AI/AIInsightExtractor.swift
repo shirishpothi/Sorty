@@ -542,7 +542,7 @@ public actor AIInsightExtractor {
 
     private func isLikelyFolderName(_ value: String) -> Bool {
         let candidate = collapseWhitespace(in: value)
-        guard !candidate.isEmpty, candidate.count <= 80 else { return false }
+        guard candidate.count >= 2, candidate.count <= 80 else { return false }
         guard !candidate.contains("{"), !candidate.contains("}") else { return false }
         guard !candidate.contains(":"), !candidate.contains("<"), !candidate.contains(">"), !candidate.contains("=") else { return false }
 
@@ -555,6 +555,28 @@ public actor AIInsightExtractor {
               !lowercased.contains("json"),
               !lowercased.contains("response format"),
               !lowercased.contains("instructions") else {
+            return false
+        }
+
+        // Reject common JSON keys and short English words that are not folder names
+        let blockedExactNames: Set<String> = [
+            "name", "for", "gets", "the", "and", "but", "not", "with",
+            "from", "into", "this", "that", "then", "when", "will",
+            "can", "has", "had", "was", "are", "were", "been", "being",
+            "have", "does", "did", "do", "is", "it", "its", "an", "a",
+            "or", "if", "of", "on", "in", "to", "at", "by", "as", "so",
+            "no", "yes", "all", "any", "each", "few", "more", "most",
+            "other", "some", "such", "than", "too", "very", "just",
+            "also", "now", "here", "there", "where", "how", "what",
+            "which", "who", "whom", "why", "my", "your", "his", "her",
+            "our", "their", "its", "type", "value", "key", "data",
+            "text", "content", "description", "folder", "folders",
+            "files", "filename", "suggested_name", "rename_reason",
+            "tags", "comment", "semantic_tags", "confidence", "rule_id",
+            "file_ids", "folder_assignments", "unorganized", "notes",
+            "reasoning", "subfolders", "true", "false", "null"
+        ]
+        if blockedExactNames.contains(lowercased) {
             return false
         }
 

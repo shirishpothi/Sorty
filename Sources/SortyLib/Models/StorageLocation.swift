@@ -49,9 +49,10 @@ public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
         isEnabled: Bool = true,
         bookmarkData: Data? = nil
     ) {
+        let canonicalPath = StorageLocationPathResolver.canonicalPath(path)
         self.id = id
-        self.path = path
-        self.name = name ?? URL(fileURLWithPath: path).lastPathComponent
+        self.path = canonicalPath
+        self.name = name ?? URL(fileURLWithPath: canonicalPath).lastPathComponent
         self.description = description
         self.isEnabled = isEnabled
         self.bookmarkData = bookmarkData
@@ -67,7 +68,8 @@ public struct StorageLocation: Codable, Identifiable, Hashable, Sendable {
     
     /// Returns the prompt context for AI to understand this storage location
     public var promptContext: String {
-        var context = "- \(name) (\(path))"
+        let canonicalPath = StorageLocationPathResolver.canonicalPath(path)
+        var context = "- \(name) (\(canonicalPath))"
         if let desc = description, !desc.isEmpty {
             context += ": \(desc)"
         }
@@ -94,7 +96,19 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     public var enabledLocations: [StorageLocation] {
-        locations.filter { $0.isEnabled && $0.exists }
+        var deduped: [StorageLocation] = []
+        var seenPaths: Set<String> = []
+
+        for location in locations where location.isEnabled && location.exists && location.accessStatus != .lost {
+            let canonicalPath = StorageLocationPathResolver.canonicalPath(location.path)
+            guard seenPaths.insert(canonicalPath).inserted else { continue }
+
+            var normalizedLocation = location
+            normalizedLocation.path = canonicalPath
+            deduped.append(normalizedLocation)
+        }
+
+        return deduped
     }
 
     public func clearAll() {
@@ -112,19 +126,41 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     public func addLocation(_ location: StorageLocation) {
-        // Avoid duplicates
-        guard !locations.contains(where: { $0.path == location.path }) else { return }
-        locations.append(location)
+        var normalized = location
+        normalized.path = StorageLocationPathResolver.canonicalPath(location.path)
+
+        // Avoid duplicates, even if path formatting differs (e.g. trailing slash)
+        guard !locations.contains(where: { StorageLocationPathResolver.pathsEqual($0.path, normalized.path) }) else { return }
+        locations.append(normalized)
         saveLocations()
     }
     
     public func addLocation(url: URL, description: String? = nil, customName: String? = nil) throws {
-        // Create security-scoped bookmark
+        // For picker URLs, explicitly starting security scope improves bookmark reliability
+        // for folders outside default sandbox access (for example Downloads/Desktop/external volumes).
+        let didStart = url.startAccessingSecurityScopedResource()
+        defer {
+            if didStart {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
         let bookmarkData = try url.bookmarkData(
             options: .withSecurityScope,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
+
+        // Activate the newly created bookmark in this session so the location is immediately usable.
+        var isStale = false
+        if let resolvedURL = try? URL(
+            resolvingBookmarkData: bookmarkData,
+            options: .withSecurityScope,
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ) {
+            _ = resolvedURL.startAccessingSecurityScopedResource()
+        }
         
         let location = StorageLocation(
             path: url.path,
@@ -150,8 +186,15 @@ public class StorageLocationsManager: ObservableObject {
     }
     
     public func updateLocation(_ location: StorageLocation) {
+        let normalizedPath = StorageLocationPathResolver.canonicalPath(location.path)
+        if locations.contains(where: { $0.id != location.id && StorageLocationPathResolver.pathsEqual($0.path, normalizedPath) }) {
+            return
+        }
+
         if let index = locations.firstIndex(where: { $0.id == location.id }) {
-            locations[index] = location
+            var normalized = location
+            normalized.path = normalizedPath
+            locations[index] = normalized
             saveLocations()
         }
     }
@@ -166,32 +209,80 @@ public class StorageLocationsManager: ObservableObject {
     /// Generates prompt context for all enabled storage locations
     public func generatePromptContext() -> String? {
         let enabled = enabledLocations
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         guard !enabled.isEmpty else { return nil }
+        let validPaths = enabled.map(\.path)
+        let existingSubfoldersByRoot = enabled.reduce(into: [String: [String]]()) { result, location in
+            let existingSubfolders = discoverExistingSubfolders(for: location)
+            if !existingSubfolders.isEmpty {
+                result[location.path] = existingSubfolders
+            }
+        }
         
         var prompt = """
         ## STORAGE LOCATIONS (Additional Destinations)
         
-        The following directories are available as destinations for files that match their purpose.
-        Use your judgment to route files to the most appropriate location:
+        The following directories are approved destination bins.
+        Route files there only when the file intent clearly matches the location purpose:
         
         """
         
         for location in enabled {
             prompt += location.promptContext + "\n"
         }
+
+        let quotedPaths = validPaths.map { "\"\($0)\"" }.joined(separator: ", ")
+        prompt += "\nVALID_STORAGE_PATHS = [\(quotedPaths)]\n"
+
+        if !existingSubfoldersByRoot.isEmpty {
+            prompt += "\nKNOWN_STORAGE_SUBFOLDERS (use these EXACT absolute paths as folder names when routing files here):\n"
+            for location in enabled {
+                guard let subfolders = existingSubfoldersByRoot[location.path], !subfolders.isEmpty else { continue }
+                prompt += "- \(location.name):\n"
+                for subfolder in subfolders {
+                    prompt += "  - \(subfolder)\n"
+                }
+            }
+        }
         
+        let examplePath = validPaths.first ?? "/Users/me/Archive"
         prompt += """
         
         STORAGE LOCATION RULES:
-        1. Use the FULL ABSOLUTE PATH as the folder name when routing files to a storage location.
-        2. ONLY use the storage locations listed above — any other absolute path will be rejected.
-        3. Match files to storage locations based on each location's stated purpose/description.
-        4. Files that don't clearly fit any storage location should be organized within the source directory using relative paths.
-        5. Do NOT reorganize or move files that are already inside a storage location.
-        6. It is perfectly fine to use zero, one, or multiple storage locations in a single plan — let the files guide your decision.
+        1. Storage destinations must use absolute paths from VALID_STORAGE_PATHS or their subfolders.
+        2. ONLY use the storage roots listed above. Any absolute path outside those roots will be rejected.
+        3. FIRST check KNOWN_STORAGE_SUBFOLDERS. When an existing subfolder matches the file's purpose, use its EXACT absolute path as the folder "name" in JSON.
+        4. Never use relative placeholders such as "storage", "storage location", "archive", "Spreadsheets", or any other relative name as folder names when targeting storage.
+        5. Match files to storage locations based on each location's stated purpose/description.
+        6. Files that don't clearly fit any storage location should be organized within the source directory using relative paths.
+        7. Do NOT move files that are already inside a storage location to non-storage destinations.
+        8. It is perfectly fine to use zero, one, or multiple storage locations in a single plan — let the files guide your decision.
+        9. Use the FULL absolute path as the folder "name" in JSON (e.g. "name": "/Users/me/Archive/Documents").
+           Do NOT split the path into a nested folder hierarchy. Do NOT use PascalCase variants of folder names.
+        10. Place files directly in the matching storage subfolder. Do NOT create additional sub-categories inside storage locations unless the user explicitly requests it.
+        
+        REQUIRED JSON FORMAT when routing files to storage:
+        {"folders":[{"name":"\(examplePath)","files":[{"filename":"example.xlsx"}]}]}
+        The folder "name" MUST be the absolute path copied from VALID_STORAGE_PATHS above — NOT a relative name.
         """
         
         return prompt
+    }
+
+    /// Returns known subfolders for each enabled storage location.
+    /// Keys are canonical root paths; values are lists of discovered subfolder absolute paths.
+    public func discoverAllSubfolders() -> [String: [String]] {
+        let enabled = enabledLocations
+        return enabled.reduce(into: [String: [String]]()) { result, location in
+            let subfolders = discoverExistingSubfolders(
+                for: location,
+                maxDepth: 3,
+                maxCount: 200
+            )
+            if !subfolders.isEmpty {
+                result[location.path] = subfolders
+            }
+        }
     }
     
     /// Resolves a storage location URL with security-scoped access
@@ -296,10 +387,66 @@ public class StorageLocationsManager: ObservableObject {
         }
     }
 
+    private func discoverExistingSubfolders(
+        for location: StorageLocation,
+        maxDepth: Int = 3,
+        maxCount: Int = 12
+    ) -> [String] {
+        let scopedAccess = resolveURL(for: location)
+        let rootURL = scopedAccess?.url ?? location.url
+        defer { scopedAccess?.cleanup() }
+
+        var discovered: [String] = []
+        let fileManager = FileManager.default
+
+        func scan(_ directoryURL: URL, depth: Int) {
+            guard depth <= maxDepth, discovered.count < maxCount else { return }
+
+            guard let contents = try? fileManager.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                return
+            }
+
+            let subdirectories = contents.compactMap { item -> URL? in
+                guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+                      values.isDirectory == true,
+                      values.isSymbolicLink != true else {
+                    return nil
+                }
+                return item
+            }
+            .sorted { lhs, rhs in
+                lhs.lastPathComponent.localizedCaseInsensitiveCompare(rhs.lastPathComponent) == .orderedAscending
+            }
+
+            for subdirectory in subdirectories {
+                discovered.append(StorageLocationPathResolver.canonicalPath(subdirectory.path))
+                guard discovered.count < maxCount else { break }
+                scan(subdirectory, depth: depth + 1)
+                guard discovered.count < maxCount else { break }
+            }
+        }
+
+        scan(rootURL, depth: 1)
+        return discovered
+    }
+
     private func loadLocations() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([StorageLocation].self, from: data) {
-            locations = decoded
+            var normalized: [StorageLocation] = []
+            var seenPaths: Set<String> = []
+
+            for var location in decoded {
+                location.path = StorageLocationPathResolver.canonicalPath(location.path)
+                guard seenPaths.insert(location.path).inserted else { continue }
+                normalized.append(location)
+            }
+
+            locations = normalized
         }
     }
     

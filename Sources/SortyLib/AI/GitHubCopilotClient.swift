@@ -272,8 +272,8 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
             guard let choices = jsonResponse?["choices"] as? [[String: Any]],
                   let firstChoice = choices.first,
-                  let message = firstChoice["message"] as? [String: Any],
-                  let content = message["content"] as? String else {
+                  let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
+                  !content.isEmpty else {
                 throw AIClientError.invalidResponseFormat
             }
 
@@ -325,8 +325,8 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
                 guard let choices = jsonResponse?["choices"] as? [[String: Any]],
                       let firstChoice = choices.first,
-                      let message = firstChoice["message"] as? [String: Any],
-                      let content = message["content"] as? String else {
+                      let content = AIRequestSupport.extractChatMessageText(from: firstChoice),
+                      !content.isEmpty else {
                     throw AIClientError.invalidResponseFormat
                 }
 
@@ -401,32 +401,31 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 }
 
                 for try await line in bytes.lines {
-                    if line.hasPrefix("data: ") {
-                        let jsonString = String(line.dropFirst(6))
+                    guard let jsonString = Self.sseDataPayload(from: line) else { continue }
 
-                        if jsonString.trimmingCharacters(in: .whitespaces) == "[DONE]" {
-                            break
-                        }
+                    if jsonString == "[DONE]" {
+                        break
+                    }
 
-                        if let jsonData = jsonString.data(using: .utf8),
-                           let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+                    guard let jsonData = jsonString.data(using: .utf8),
+                          let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                          let parsedChunk = Self.parseStreamChunk(from: json) else {
+                        continue
+                    }
 
-                            let choices = json["choices"] as? [[String: Any]]
-                            let firstChoice = choices?.first
-                            let delta = firstChoice?["delta"] as? [String: Any]
-                            let deltaContent = delta?["content"] as? String
+                    let hasVisibleChunk = parsedChunk.visibleChunk?.isEmpty == false
+                    let hasCompletionChunk = parsedChunk.completionChunk?.isEmpty == false
+                    if firstTokenTime == nil, hasVisibleChunk || hasCompletionChunk {
+                        firstTokenTime = Date()
+                    }
 
-                            if let content = deltaContent {
-                                if firstTokenTime == nil {
-                                    firstTokenTime = Date()
-                                }
+                    if let completionChunk = parsedChunk.completionChunk, !completionChunk.isEmpty {
+                        accumulatedContentBuffer += completionChunk
+                    }
 
-                                accumulatedContentBuffer += content
-
-                                await MainActor.run {
-                                    streamingDelegate?.didReceiveChunk(content)
-                                }
-                            }
+                    if let visibleChunk = parsedChunk.visibleChunk, !visibleChunk.isEmpty {
+                        await MainActor.run {
+                            streamingDelegate?.didReceiveChunk(visibleChunk)
                         }
                     }
                 }
@@ -452,7 +451,21 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                     streamingDelegate?.didComplete(content: finalContent)
                 }
 
-                var plan = try ResponseParser.parseResponse(accumulatedContentBuffer, originalFiles: files)
+                var plan: OrganizationPlan
+                do {
+                    plan = try ResponseParser.parseResponse(accumulatedContentBuffer, originalFiles: files)
+                } catch {
+                    // Try partial extraction before giving up
+                    if let partialPlan = ResponseParser.extractPartialResults(accumulatedContentBuffer, originalFiles: files) {
+                        plan = partialPlan
+                    } else {
+                        let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)
+                        await MainActor.run {
+                            streamingDelegate?.didFail(error: clientError)
+                        }
+                        throw clientError
+                    }
+                }
                 plan.generationStats = stats
                 return plan
             } catch let error as AIClientError {
@@ -468,5 +481,53 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 throw clientError
             }
         }
+    }
+
+    private struct StreamChunk {
+        let completionChunk: String?
+        let visibleChunk: String?
+    }
+
+    private static func sseDataPayload(from line: String) -> String? {
+        guard line.hasPrefix("data:") else { return nil }
+        let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+        return payload.isEmpty ? nil : payload
+    }
+
+    private static func parseStreamChunk(from json: [String: Any]) -> StreamChunk? {
+        guard let choices = json["choices"] as? [[String: Any]],
+              let firstChoice = choices.first else {
+            return nil
+        }
+
+        let delta = firstChoice["delta"] as? [String: Any]
+        let completionChunk = AIRequestSupport.extractChatDeltaText(from: firstChoice)
+        let reasoningChunk = extractReasoningChunk(from: delta)
+        let visibleChunk = reasoningChunk ?? completionChunk
+
+        if completionChunk == nil && visibleChunk == nil {
+            return nil
+        }
+
+        return StreamChunk(completionChunk: completionChunk, visibleChunk: visibleChunk)
+    }
+
+    private static func extractReasoningChunk(from delta: [String: Any]?) -> String? {
+        guard let delta else { return nil }
+
+        let keys = ["reasoning", "reasoning_content", "thinking", "analysis"]
+        for key in keys {
+            if let chunk = AIRequestSupport.extractText(from: delta[key]), !chunk.isEmpty {
+                return chunk
+            }
+        }
+
+        if let details = delta["reasoning_details"],
+           let combined = AIRequestSupport.extractText(from: details),
+           !combined.isEmpty {
+            return combined
+        }
+
+        return nil
     }
 }

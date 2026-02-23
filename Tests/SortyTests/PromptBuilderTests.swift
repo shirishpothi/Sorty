@@ -29,6 +29,16 @@ class PromptBuilderTests: XCTestCase {
         
         XCTAssertTrue(prompt.contains("USER INSTRUCTIONS: Sort by date"))
     }
+
+    func testPromptWithCustomInstructionsIsNotDuplicated() {
+        let files = [FileItem(path: "/p/a.txt", name: "a", extension: "txt", size: 10, isDirectory: false)]
+        let customInstructions = "Route tax documents to /Volumes/Archive/Taxes"
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(files: files, customInstructions: customInstructions)
+        let occurrences = prompt.components(separatedBy: customInstructions).count - 1
+
+        XCTAssertEqual(occurrences, 1)
+    }
     
     func testReasoningModePrompt() {
         let systemPrompt = PromptBuilder.buildSystemPrompt(enableReasoning: true, personaInfo: "Test Persona")

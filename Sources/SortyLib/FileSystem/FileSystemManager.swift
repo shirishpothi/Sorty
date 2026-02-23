@@ -91,6 +91,60 @@ public actor FileSystemManager {
         return false
     }
 
+    /// Resolve folder destinations, including absolute storage locations.
+    private func resolveDestinationFolderURL(
+        folderName: String,
+        parentURL: URL,
+        requestSecurityScope: Bool = true
+    ) -> URL {
+        if let absoluteURL = StorageLocationPathResolver.absoluteURL(from: folderName) {
+            if requestSecurityScope {
+                _ = startAccessing(absoluteURL)
+            }
+            return absoluteURL
+        }
+
+        let sanitizedName = folderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let directURL = parentURL.appendingPathComponent(sanitizedName, isDirectory: true)
+
+        // If exact path exists as a directory, use it
+        var isDir: ObjCBool = false
+        if fileManager.fileExists(atPath: directURL.path, isDirectory: &isDir) && isDir.boolValue {
+            return directURL
+        }
+
+        // Fuzzy match: find existing directory with similar name (ignoring spaces/case)
+        if let matchURL = findSimilarDirectory(named: sanitizedName, in: parentURL) {
+            DebugLogger.log("Fuzzy matched folder '\(sanitizedName)' → existing '\(matchURL.lastPathComponent)'")
+            return matchURL
+        }
+
+        return directURL
+    }
+
+    private func findSimilarDirectory(named name: String, in parentURL: URL) -> URL? {
+        let normalized = name.lowercased().filter { $0.isLetter || $0.isNumber }
+        guard !normalized.isEmpty else { return nil }
+
+        guard let items = try? fileManager.contentsOfDirectory(
+            at: parentURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+
+        for item in items {
+            guard let values = try? item.resourceValues(forKeys: [.isDirectoryKey]),
+                  values.isDirectory == true else { continue }
+
+            let itemNormalized = item.lastPathComponent.lowercased().filter { $0.isLetter || $0.isNumber }
+            if itemNormalized == normalized {
+                return item
+            }
+        }
+
+        return nil
+    }
+
     /// Stop accessing all tracked security-scoped resources
     private func stopAccessingAll() {
         for url in activeBookmarks.keys {
@@ -219,16 +273,7 @@ public actor FileSystemManager {
     private func createFolderRecursive(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         
-        // Check if the folder name is an absolute path (storage location)
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            // Absolute path - use directly (likely a storage location)
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-            _ = startAccessing(folderURL)
-        } else {
-            // Relative path - append to parent
-            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-        }
+        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         // Check exclusions
         if let manager = exclusionManager {
@@ -246,8 +291,9 @@ public actor FileSystemManager {
                     // Folder already exists, continue with subfolders
                 } else {
                     // Conflict: File exists where folder should be
+                    let backupBaseName = folderURL.lastPathComponent
                     let backupURL = folderURL.deletingLastPathComponent()
-                        .appendingPathComponent("\(suggestion.folderName)_file_backup_\(UUID().uuidString.prefix(8))")
+                        .appendingPathComponent("\(backupBaseName)_file_backup_\(UUID().uuidString.prefix(8))")
                     try fileManager.moveItem(at: folderURL, to: backupURL)
 
                     // Record this move for undo
@@ -309,16 +355,7 @@ public actor FileSystemManager {
     private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         
-        // Check if the folder name is an absolute path (storage location)
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            // Absolute path - use directly (likely a storage location)
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-            _ = startAccessing(folderURL)
-        } else {
-            // Relative path - append to parent
-            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-        }
+        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         // Process files with potential renaming
         for file in suggestion.files {
@@ -422,12 +459,11 @@ public actor FileSystemManager {
     private func detectConflictsInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) -> [FileConflict] {
         var conflicts: [FileConflict] = []
 
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-        } else {
-            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-        }
+        let folderURL = resolveDestinationFolderURL(
+            folderName: suggestion.folderName,
+            parentURL: parentURL,
+            requestSecurityScope: false
+        )
 
         for file in suggestion.files {
             guard let sourceURL = file.url else { continue }
@@ -615,16 +651,7 @@ public actor FileSystemManager {
     private func tagFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
         
-        // Check if the folder name is an absolute path (storage location)
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            // Absolute path - use directly (likely a storage location)
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-            _ = startAccessing(folderURL)
-        } else {
-            // Relative path - append to parent
-            folderURL = parentURL.appendingPathComponent(suggestion.folderName)
-        }
+        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
             operations.append(folderOp)
@@ -737,9 +764,9 @@ public actor FileSystemManager {
         progress?(0.05, "Creating folder structure...")
         
         for suggestion in plan.suggestions {
-            let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager) { message in
+            let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
                 updateProgress(message)
-            }
+            }, failures: &allFailures)
             allOperations.append(contentsOf: result.operations)
         }
 
@@ -802,19 +829,13 @@ public actor FileSystemManager {
         return allOperations
     }
     
-    private func createFoldersWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void) async throws -> OperationResult {
+    private func createFoldersWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void, failures: inout [OperationFailure]) async throws -> OperationResult {
         var operations: [FileOperation] = []
         var processedCount = 0
         
         try Task.checkCancellation()
         
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-            _ = startAccessing(folderURL)
-        } else {
-            folderURL = currentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-        }
+        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: currentURL)
         
         if let manager = exclusionManager {
             let item = FileItem(path: folderURL.path, name: folderURL.lastPathComponent, extension: folderURL.pathExtension)
@@ -828,32 +849,45 @@ public actor FileSystemManager {
             var isDirectory: ObjCBool = false
             let exists = fileManager.fileExists(atPath: folderURL.path, isDirectory: &isDirectory)
             
-            if exists && !isDirectory.boolValue {
-                let backupName = "\(suggestion.folderName)_backup_\(UUID().uuidString.prefix(8))"
-                let backupURL = currentURL.appendingPathComponent(backupName)
-                try await withRetry {
-                    try fileManager.moveItem(at: folderURL, to: backupURL)
+            do {
+                if exists && !isDirectory.boolValue {
+                    let backupName = "\(folderURL.lastPathComponent)_backup_\(UUID().uuidString.prefix(8))"
+                    let backupURL = currentURL.appendingPathComponent(backupName)
+                    try await withRetry {
+                        try fileManager.moveItem(at: folderURL, to: backupURL)
+                    }
+                    DebugLogger.log("Moved conflicting file to \(backupName)")
                 }
-                DebugLogger.log("Moved conflicting file to \(backupName)")
-            }
-            
-            if !exists || !isDirectory.boolValue {
-                try await withRetry {
-                    try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                
+                if !exists || !isDirectory.boolValue {
+                    try await withRetry {
+                        try fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
+                    }
+                    operations.append(FileOperation(
+                        type: .createFolder,
+                        sourcePath: folderURL.path,
+                        destinationPath: nil,
+                        metadata: .init(wasCreatedDuringOrganization: true)
+                    ))
                 }
-                operations.append(FileOperation(
-                    type: .createFolder,
+            } catch {
+                DebugLogger.log("Failed to create folder \(folderURL.path): \(error.localizedDescription)")
+                failures.append(OperationFailure(
                     sourcePath: folderURL.path,
                     destinationPath: nil,
-                    metadata: .init(wasCreatedDuringOrganization: true)
+                    error: error.localizedDescription,
+                    isRetryable: false
                 ))
+                onProgress("Skipped folder \(suggestion.folderName) (permission denied)...")
+                processedCount += 1
+                return OperationResult(operations: operations, processedCount: processedCount)
             }
         }
         onProgress("Creating folder \(suggestion.folderName)...")
         processedCount += 1
         
         for subfolder in suggestion.subfolders {
-            let subResult = try await createFoldersWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress)
+            let subResult = try await createFoldersWithProgress(subfolder, currentURL: folderURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: onProgress, failures: &failures)
             operations.append(contentsOf: subResult.operations)
             processedCount += subResult.processedCount
         }
@@ -865,13 +899,7 @@ public actor FileSystemManager {
         var operations: [FileOperation] = []
         var processedCount = 0
         
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-            _ = startAccessing(folderURL)
-        } else {
-            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-        }
+        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: parentURL)
 
         for file in suggestion.files {
             try Task.checkCancellation()
@@ -991,13 +1019,7 @@ public actor FileSystemManager {
         
         try Task.checkCancellation()
         
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-            _ = startAccessing(folderURL)
-        } else {
-            folderURL = currentURL.appendingPathComponent(suggestion.folderName)
-        }
+        let folderURL = resolveDestinationFolderURL(folderName: suggestion.folderName, parentURL: currentURL)
 
         if let folderOp = applyTagsAndComment(to: folderURL, tags: suggestion.tags, comment: suggestion.comment, dryRun: dryRun) {
             operations.append(folderOp)
@@ -1035,7 +1057,11 @@ public actor FileSystemManager {
     
     private func collectFolderPaths(_ suggestion: FolderSuggestion, parentURL: URL) -> Set<String> {
         var paths = Set<String>()
-        let folderURL = parentURL.appendingPathComponent(suggestion.folderName)
+        let folderURL = resolveDestinationFolderURL(
+            folderName: suggestion.folderName,
+            parentURL: parentURL,
+            requestSecurityScope: false
+        )
         paths.insert(folderURL.path)
         for subfolder in suggestion.subfolders {
             let subPaths = collectFolderPaths(subfolder, parentURL: folderURL)
@@ -1463,12 +1489,11 @@ public actor FileSystemManager {
     private func preValidateSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) async -> [String] {
         var issues: [String] = []
         
-        let folderURL: URL
-        if suggestion.folderName.hasPrefix("/") {
-            folderURL = URL(fileURLWithPath: suggestion.folderName)
-        } else {
-            folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
-        }
+        let folderURL = resolveDestinationFolderURL(
+            folderName: suggestion.folderName,
+            parentURL: parentURL,
+            requestSecurityScope: false
+        )
         
         for file in suggestion.files {
             guard let sourceURL = file.url else { continue }

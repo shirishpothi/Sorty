@@ -101,7 +101,7 @@ extension AIProvider {
         case .openAI:
             return "GPT-5.2, GPT-5 mini, and more"
         case .anthropic:
-            return "Claude 4.5 Sonnet, Claude 4.6 Opus, and more"
+            return "Claude 4.6 Sonnet, Claude 4.6 Opus, and more"
         case .groq:
             return "Ultra-fast inference provider"
         case .ollama:

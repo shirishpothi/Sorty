@@ -40,19 +40,18 @@ struct FileOrganizationValidator {
     }
 
     private static func validateDestinations(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {
+        let allowedPaths = Set(allowedLocations.map { StorageLocationPathResolver.canonicalPath($0.path) })
+
         func checkSuggestion(_ suggestion: FolderSuggestion, depth: Int) throws {
             // Check depth limit (max 3 levels as per instructions)
             if depth > 3 {
                 throw ValidationError.folderTooDeep(suggestion.folderName)
             }
 
-            // Check if it's an absolute path
-            if suggestion.folderName.hasPrefix("/") {
-                let path = suggestion.folderName
-                let isValidLocation = allowedLocations.contains { $0.path == path }
-                
-                if !isValidLocation {
-                    throw ValidationError.invalidStorageLocation(path)
+            // Check if this destination is an absolute storage location
+            if let absolutePath = StorageLocationPathResolver.normalizedAbsolutePath(from: suggestion.folderName) {
+                if !isAllowedStorageDestination(absolutePath, allowedRoots: allowedPaths) {
+                    throw ValidationError.invalidStorageLocation(absolutePath)
                 }
             }
 
@@ -72,7 +71,12 @@ struct FileOrganizationValidator {
         let fileManager = FileManager.default
         
         func checkSuggestion(_ suggestion: FolderSuggestion, parentURL: URL) throws {
-            let folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+            let folderURL: URL
+            if let absoluteURL = StorageLocationPathResolver.absoluteURL(from: suggestion.folderName) {
+                folderURL = absoluteURL
+            } else {
+                folderURL = parentURL.appendingPathComponent(suggestion.folderName, isDirectory: true)
+            }
             let folderPath = folderURL.path
             
             if existingPaths.contains(folderPath) {
@@ -138,31 +142,45 @@ struct FileOrganizationValidator {
     
     private static func validateSourcePaths(_ plan: OrganizationPlan, allowedLocations: [StorageLocation]) throws {
         guard !allowedLocations.isEmpty else { return }
+
+        let allowedPathSet = Set(allowedLocations.map { StorageLocationPathResolver.canonicalPath($0.path) })
+        let normalizedLocations: [(location: StorageLocation, normalizedPath: String)] = allowedLocations.compactMap { location in
+            let normalized = StorageLocationPathResolver.canonicalPath(location.path)
+            guard allowedPathSet.contains(normalized) else { return nil }
+            return (location, normalized)
+        }
         
         func checkFiles(_ suggestion: FolderSuggestion, destinationIsStorage: Bool) throws {
-            let destIsStorage = suggestion.folderName.hasPrefix("/") && allowedLocations.contains(where: { $0.path == suggestion.folderName })
+            let destinationPath = StorageLocationPathResolver.normalizedAbsolutePath(from: suggestion.folderName)
+            let destinationMatchesStorage = destinationPath.map { isAllowedStorageDestination($0, allowedRoots: allowedPathSet) } ?? false
+            let effectiveDestinationIsStorage = destinationIsStorage || destinationMatchesStorage
             
             for file in suggestion.files {
                 guard let url = file.url else { continue }
-                let filePath = url.path
+                let filePath = StorageLocationPathResolver.canonicalPath(url.path)
                 
-                for location in allowedLocations {
-                    if filePath.hasPrefix(location.path + "/") {
-                        if !destIsStorage {
-                            throw ValidationError.sourceInStorageLocation(file.displayName, location.name)
-                        }
+                for (location, locationPath) in normalizedLocations {
+                    if StorageLocationPathResolver.isPath(filePath, within: locationPath), !effectiveDestinationIsStorage {
+                        throw ValidationError.sourceInStorageLocation(file.displayName, location.name)
                     }
                 }
             }
             
             for subfolder in suggestion.subfolders {
-                try checkFiles(subfolder, destinationIsStorage: destIsStorage)
+                try checkFiles(subfolder, destinationIsStorage: effectiveDestinationIsStorage)
             }
         }
         
         for suggestion in plan.suggestions {
             try checkFiles(suggestion, destinationIsStorage: false)
         }
+    }
+
+    private static func isAllowedStorageDestination(_ absolutePath: String, allowedRoots: Set<String>) -> Bool {
+        for rootPath in allowedRoots where StorageLocationPathResolver.isPath(absolutePath, within: rootPath) {
+            return true
+        }
+        return false
     }
 }
 
@@ -200,6 +218,4 @@ enum ValidationError: LocalizedError {
         }
     }
 }
-
-
 

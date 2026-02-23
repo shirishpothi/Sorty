@@ -92,13 +92,25 @@ center.delegate = delegate
 
 // Request authorization
 let authSemaphore = DispatchSemaphore(value: 0)
+var authorizationGranted = false
+var authorizationErrorMessage: String?
 center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+    authorizationGranted = granted
     if let error = error {
-        print("Error requesting auth: \(error.localizedDescription)")
+        authorizationErrorMessage = error.localizedDescription
     }
     authSemaphore.signal()
 }
 _ = authSemaphore.wait(timeout: .now() + 5.0)
+
+if let errorMessage = authorizationErrorMessage {
+    fputs("Error requesting auth: \(errorMessage)\n", stderr)
+}
+
+if !authorizationGranted {
+    fputs("Notification permission not granted.\n", stderr)
+    exit(2)
+}
 
 // Register action category if needed
 var notificationActions: [UNNotificationAction] = []
@@ -205,16 +217,24 @@ if let imagePath = imagePath {
 let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
 
 let notificationSemaphore = DispatchSemaphore(value: 0)
+var schedulingErrorMessage: String?
 
 center.add(request) { error in
     if let error = error {
-        print("Error scheduling notification: \(error.localizedDescription)")
-        exit(1)
+        schedulingErrorMessage = error.localizedDescription
     }
     notificationSemaphore.signal()
 }
 
-_ = notificationSemaphore.wait(timeout: .now() + 2.0)
+if notificationSemaphore.wait(timeout: .now() + 2.0) == .timedOut {
+    fputs("Error scheduling notification: timeout\n", stderr)
+    exit(3)
+}
+
+if let schedulingErrorMessage {
+    fputs("Error scheduling notification: \(schedulingErrorMessage)\n", stderr)
+    exit(1)
+}
 
 // Play sound after notification is scheduled
 if let soundName = soundName {
@@ -262,7 +282,7 @@ if !actions.isEmpty || replyPlaceholder != nil || openUrl != nil {
     if let action = delegate.selectedAction {
         print(action)
     } else {
-         fputs("Timeout waiting for user interaction.\n", stderr)
-         exit(1)
+        // Timeout is a valid non-error outcome when user does not interact.
+        print("timeout")
     }
 }

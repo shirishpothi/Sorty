@@ -275,7 +275,21 @@ public class AppState: ObservableObject {
     @Published public var currentView: AppView = .organize
     @Published public var showingSidebar: Bool = true
     @Published public var showDirectoryPicker: Bool = false
-    @Published public var selectedDirectory: URL?
+    @Published public var selectedDirectory: URL? {
+        didSet {
+            if let url = selectedDirectory {
+                selectedDirectoryBookmark = try? url.bookmarkData(
+                    options: .withSecurityScope,
+                    includingResourceValuesForKeys: nil,
+                    relativeTo: nil
+                )
+            } else {
+                selectedDirectoryBookmark = nil
+            }
+        }
+    }
+    /// Security-scoped bookmark for the selected directory, ensuring sandbox access persists.
+    public private(set) var selectedDirectoryBookmark: Data?
     @Published public var updateManager = SparkleUpdateManager()
     @Published public var selectedSettingsSection: SettingsCategory?
     @Published public var settingsFocusTarget: SettingsFocusTarget?
@@ -403,6 +417,31 @@ public class AppState: ObservableObject {
         default:
             return false
         }
+    }
+
+    /// Resolve the security-scoped bookmark for the selected directory.
+    /// Returns a URL with active security scope, or falls back to the stored URL.
+    public func resolveSelectedDirectoryWithAccess() -> URL? {
+        if let bookmark = selectedDirectoryBookmark {
+            var isStale = false
+            if let resolved = try? URL(
+                resolvingBookmarkData: bookmark,
+                options: .withSecurityScope,
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            ) {
+                _ = resolved.startAccessingSecurityScopedResource()
+                if isStale {
+                    selectedDirectoryBookmark = try? resolved.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    )
+                }
+                return resolved
+            }
+        }
+        return selectedDirectory
     }
 
     public func resetSession() {

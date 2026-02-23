@@ -16,6 +16,7 @@ struct StorageLocationsView: View {
     @State private var selectedLocationForEdit: StorageLocation?
     @State private var contentOpacity: Double = 0
     @State private var suggestedLocationName: String? = nil
+    @State private var addLocationErrorMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,14 +71,33 @@ struct StorageLocationsView: View {
                         suggestedLocationName = nil
                     } catch {
                         HapticFeedbackManager.shared.error()
+                        addLocationErrorMessage = error.localizedDescription
                         DebugLogger.log("Failed to add storage location: \(error)")
                     }
                 }
             case .failure(let error):
                 HapticFeedbackManager.shared.error()
+                addLocationErrorMessage = error.localizedDescription
                 DebugLogger.log("Failed to select folder: \(error)")
             }
             suggestedLocationName = nil
+        }
+        .alert(
+            "Couldn't Add Storage Location",
+            isPresented: Binding(
+                get: { addLocationErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        addLocationErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                addLocationErrorMessage = nil
+            }
+        } message: {
+            Text(addLocationErrorMessage ?? "Please try selecting the folder again.")
         }
         .opacity(contentOpacity)
         .onAppear {

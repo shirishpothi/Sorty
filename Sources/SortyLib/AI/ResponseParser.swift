@@ -11,7 +11,7 @@ import Foundation
 struct ResponseParser {
     // MARK: - Response Models
 
-    struct AIResponse: Codable {
+    struct AIResponse: Decodable {
         let folders: [FolderResponse]
         let folderAssignments: [FolderResponse]?
         let unorganized: [UnorganizedFileResponse]?
@@ -35,7 +35,7 @@ struct ResponseParser {
     }
 
 
-    struct FolderResponse: Codable {
+    struct FolderResponse: Decodable {
         let name: String
         let description: String?
         let reasoning: String?
@@ -141,9 +141,48 @@ struct ResponseParser {
     }
 
 
-    struct UnorganizedFileResponse: Codable {
+    struct UnorganizedFileResponse: Decodable {
         let filename: String
         let reason: String
+
+        init(filename: String, reason: String) {
+            self.filename = filename
+            self.reason = reason
+        }
+
+        init(from decoder: Decoder) throws {
+            if let container = try? decoder.singleValueContainer(),
+               let simpleFilename = try? container.decode(String.self) {
+                self.filename = simpleFilename
+                self.reason = "Marked as unorganized by AI response"
+                return
+            }
+
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            if let decodedFilename = try? container.decode(String.self, forKey: .filename) {
+                self.filename = decodedFilename
+            } else if let fallbackFilename = try? container.decode(String.self, forKey: .file) {
+                self.filename = fallbackFilename
+            } else {
+                throw DecodingError.keyNotFound(
+                    CodingKeys.filename,
+                    DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Missing filename")
+                )
+            }
+
+            let decodedReason = (try? container.decode(String.self, forKey: .reason))?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let decodedReason, !decodedReason.isEmpty {
+                self.reason = decodedReason
+            } else {
+                self.reason = "Marked as unorganized by AI response"
+            }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case filename
+            case reason
+            case file
+        }
     }
 
     // MARK: - Parsing
@@ -156,6 +195,13 @@ struct ResponseParser {
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if !pastPreamble && trimmed.hasPrefix(">> ") {
+                if let jsonStart = embeddedJSONStart(inProgressLine: line) {
+                    let jsonPortion = String(line[jsonStart...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !jsonPortion.isEmpty {
+                        pastPreamble = true
+                        result.append(jsonPortion)
+                    }
+                }
                 continue
             }
             if !pastPreamble && trimmed.isEmpty {
@@ -165,6 +211,25 @@ struct ResponseParser {
             result.append(line)
         }
         return result.joined(separator: "\n")
+    }
+
+    private static func embeddedJSONStart(inProgressLine line: String) -> String.Index? {
+        let lowered = line.lowercased()
+        guard lowered.contains("ready to output organization structure") else { return nil }
+
+        let objectStart = line.firstIndex(of: "{")
+        let arrayStart = line.firstIndex(of: "[")
+
+        switch (objectStart, arrayStart) {
+        case let (.some(lhs), .some(rhs)):
+            return lhs < rhs ? lhs : rhs
+        case let (.some(lhs), .none):
+            return lhs
+        case let (.none, .some(rhs)):
+            return rhs
+        case (.none, .none):
+            return nil
+        }
     }
 
     static func parseResponse(_ jsonString: String, originalFiles: [FileItem]) throws -> OrganizationPlan {
@@ -183,12 +248,7 @@ struct ResponseParser {
             cleanedJSON = String(cleanedJSON.dropLast(3))
         }
         cleanedJSON = cleanedJSON.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Handle edge case where JSON might be wrapped in extra content
-        if let startIndex = cleanedJSON.firstIndex(of: "{"),
-           let endIndex = cleanedJSON.lastIndex(of: "}") {
-            cleanedJSON = String(cleanedJSON[startIndex...endIndex])
-        }
+        cleanedJSON = sanitizeJSONPayload(cleanedJSON)
 
         guard let jsonData = cleanedJSON.data(using: .utf8) else {
             throw ParserError.invalidJSON
@@ -478,6 +538,88 @@ struct ResponseParser {
         return candidates
     }
 
+    private static func sanitizeJSONPayload(_ payload: String) -> String {
+        let trimmed = payload.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return trimmed }
+
+        let extracted = extractLikelyJSONObject(from: trimmed) ?? trimmed
+        return removeTrailingCommas(in: extracted)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func extractLikelyJSONObject(from text: String) -> String? {
+        let candidates = balancedJSONObjectCandidates(in: text)
+        guard !candidates.isEmpty else { return nil }
+
+        if let preferred = candidates.last(where: { candidate in
+            let lower = candidate.lowercased()
+            return lower.contains("\"folders\"") ||
+                lower.contains("\"folder_assignments\"") ||
+                lower.contains("\"unorganized\"") ||
+                lower.contains("\"f\"")
+        }) {
+            return preferred
+        }
+
+        return candidates.max(by: { $0.count < $1.count })
+    }
+
+    private static func balancedJSONObjectCandidates(in text: String) -> [String] {
+        var candidates: [String] = []
+        var depth = 0
+        var objectStart: String.Index?
+        var inString = false
+        var isEscaping = false
+
+        for index in text.indices {
+            let character = text[index]
+
+            if inString {
+                if isEscaping {
+                    isEscaping = false
+                    continue
+                }
+                if character == "\\" {
+                    isEscaping = true
+                } else if character == "\"" {
+                    inString = false
+                }
+                continue
+            }
+
+            if character == "\"" {
+                inString = true
+                continue
+            }
+
+            if character == "{" {
+                if depth == 0 {
+                    objectStart = index
+                }
+                depth += 1
+                continue
+            }
+
+            if character == "}", depth > 0 {
+                depth -= 1
+                if depth == 0, let startIndex = objectStart {
+                    candidates.append(String(text[startIndex...index]))
+                    objectStart = nil
+                }
+            }
+        }
+
+        return candidates
+    }
+
+    private static func removeTrailingCommas(in json: String) -> String {
+        json.replacingOccurrences(
+            of: #",\s*([\}\]])"#,
+            with: "$1",
+            options: .regularExpression
+        )
+    }
+
     // MARK: - Validation
 
     static func validateStructure(_ jsonString: String) -> Bool {
@@ -493,11 +635,7 @@ struct ResponseParser {
                 cleanedJSON = String(cleanedJSON.dropLast(3))
             }
             cleanedJSON = cleanedJSON.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if let startIndex = cleanedJSON.firstIndex(of: "{"),
-               let endIndex = cleanedJSON.lastIndex(of: "}") {
-                cleanedJSON = String(cleanedJSON[startIndex...endIndex])
-            }
+            cleanedJSON = sanitizeJSONPayload(cleanedJSON)
 
             guard let jsonData = cleanedJSON.data(using: .utf8) else {
                 return false
@@ -515,6 +653,8 @@ struct ResponseParser {
         // Try to extract folder names and file assignments even from malformed JSON
         var suggestions: [FolderSuggestion] = []
         var assignedFiles: Set<UUID> = []
+        let workingJSON = sanitizeJSONPayload(stripProgressPreamble(jsonString))
+        let fileIdIndex = Dictionary(uniqueKeysWithValues: originalFiles.enumerated().map { ($0.offset + 1, $0.element) })
 
         // Simple regex-based extraction as fallback
         let folderPattern = #"\"name\"\s*:\s*\"([^\"]+)\""#
@@ -523,20 +663,20 @@ struct ResponseParser {
         if let folderRegex = try? NSRegularExpression(pattern: folderPattern),
            let filesRegex = try? NSRegularExpression(pattern: filesPattern) {
 
-            let range = NSRange(jsonString.startIndex..., in: jsonString)
-            let folderMatches = folderRegex.matches(in: jsonString, range: range)
-            let filesMatches = filesRegex.matches(in: jsonString, range: range)
+            let range = NSRange(workingJSON.startIndex..., in: workingJSON)
+            let folderMatches = folderRegex.matches(in: workingJSON, range: range)
+            let filesMatches = filesRegex.matches(in: workingJSON, range: range)
 
             for (index, folderMatch) in folderMatches.enumerated() {
-                if let folderRange = Range(folderMatch.range(at: 1), in: jsonString) {
-                    let folderName = String(jsonString[folderRange])
+                if let folderRange = Range(folderMatch.range(at: 1), in: workingJSON) {
+                    let folderName = String(workingJSON[folderRange])
 
                     var folderFiles: [FileItem] = []
 
                     // Try to find corresponding files
                     if index < filesMatches.count {
-                        if let filesRange = Range(filesMatches[index].range(at: 1), in: jsonString) {
-                            let filesContent = String(jsonString[filesRange])
+                        if let filesRange = Range(filesMatches[index].range(at: 1), in: workingJSON) {
+                            let filesContent = String(workingJSON[filesRange])
 
                             // Extract quoted strings
                             let fileNamePattern = #"\"([^\"]+)\""#
@@ -564,6 +704,39 @@ struct ResponseParser {
                             reasoning: "Extracted from partial response"
                         ))
                     }
+                }
+            }
+        }
+
+        // Compact file ID extraction fallback for truncated compact responses.
+        let compactPattern = #"\"name\"\s*:\s*\"([^\"]+)\"[\s\S]{0,260}?\"file_ids\"\s*:\s*\[([0-9,\s]+)"#
+        if let compactRegex = try? NSRegularExpression(pattern: compactPattern) {
+            let range = NSRange(workingJSON.startIndex..., in: workingJSON)
+            let compactMatches = compactRegex.matches(in: workingJSON, range: range)
+
+            for compactMatch in compactMatches {
+                guard let folderRange = Range(compactMatch.range(at: 1), in: workingJSON),
+                      let idsRange = Range(compactMatch.range(at: 2), in: workingJSON) else { continue }
+
+                let folderName = String(workingJSON[folderRange])
+                let rawIDs = String(workingJSON[idsRange])
+                var folderFiles: [FileItem] = []
+
+                for token in rawIDs.split(separator: ",") {
+                    let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let id = Int(trimmed),
+                          let file = fileIdIndex[id],
+                          !assignedFiles.contains(file.id) else { continue }
+                    folderFiles.append(file)
+                    assignedFiles.insert(file.id)
+                }
+
+                if !folderFiles.isEmpty {
+                    suggestions.append(FolderSuggestion(
+                        folderName: folderName,
+                        files: folderFiles,
+                        reasoning: "Extracted from partial compact response"
+                    ))
                 }
             }
         }

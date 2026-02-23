@@ -110,6 +110,8 @@ public actor NotifiCLIService {
     private var setupStatus: NotifiCLISetupStatus = .notSetup
     private var isAvailable: Bool = false
     private var permissionsGranted: Bool = false
+    private var setupInProgress = false
+    private var setupWaiters: [CheckedContinuation<Bool, Never>] = []
     
     private init() {
         // Setup in Application Support
@@ -117,6 +119,62 @@ public actor NotifiCLIService {
         appSupportDir = appSupport.appendingPathComponent("Sorty/NotifiCLI")
         notifiCLIAppPath = appSupportDir.appendingPathComponent("SortyNotifications.app")
         notifiPersistentAppPath = appSupportDir.appendingPathComponent("SortyNotificationsPersistent.app")
+    }
+
+    private var standardBinaryPath: String {
+        notifiCLIAppPath.appendingPathComponent("Contents/MacOS/SortyNotifications").path
+    }
+
+    private var persistentBinaryPath: String {
+        notifiPersistentAppPath.appendingPathComponent("Contents/MacOS/SortyNotificationsPersistent").path
+    }
+
+    private func hasValidInstallation() -> Bool {
+        let fm = FileManager.default
+        return fm.isExecutableFile(atPath: standardBinaryPath) &&
+            fm.isExecutableFile(atPath: persistentBinaryPath)
+    }
+
+    private func refreshCachedInstallationState() {
+        guard hasValidInstallation() else {
+            isAvailable = false
+            notificliPath = nil
+            notifiPersistentPath = nil
+            if case .building = setupStatus {
+                // Keep "building" while active setup is still running.
+            } else if case .failed = setupStatus {
+                // Keep explicit failure status until a rebuild/setup is attempted.
+            } else {
+                setupStatus = .notSetup
+            }
+            return
+        }
+
+        notificliPath = standardBinaryPath
+        notifiPersistentPath = persistentBinaryPath
+        isAvailable = true
+        setupStatus = .ready
+    }
+
+    private func notifySetupWaiters(with result: Bool) {
+        let waiters = setupWaiters
+        setupWaiters.removeAll()
+        waiters.forEach { $0.resume(returning: result) }
+    }
+
+    private func resolveExecutablePath(for config: NotifiCLIConfig) -> String? {
+        let fm = FileManager.default
+
+        if config.persistent, let persistentPath = notifiPersistentPath,
+           fm.isExecutableFile(atPath: persistentPath) {
+            return persistentPath
+        }
+
+        if let standardPath = notificliPath, fm.isExecutableFile(atPath: standardPath) {
+            return standardPath
+        }
+
+        return nil
     }
     
     // MARK: - Public API
@@ -128,6 +186,7 @@ public actor NotifiCLIService {
     
     /// Check if NotifiCLI is available and ready
     public func checkAvailability() async -> Bool {
+        refreshCachedInstallationState()
         if isAvailable && notificliPath != nil {
             return true
         }
@@ -136,6 +195,7 @@ public actor NotifiCLIService {
     
     /// Get the installation status and path
     public func getInstallationInfo() -> (installed: Bool, path: String?) {
+        refreshCachedInstallationState()
         return (isAvailable, notificliPath)
     }
     
@@ -143,45 +203,47 @@ public actor NotifiCLIService {
     /// This will build from bundled sources if needed
     @discardableResult
     public func ensureSetup() async -> Bool {
+        refreshCachedInstallationState()
+
         // Already ready?
         if isAvailable && notificliPath != nil {
             return true
         }
-        
-        // Check if already built
-        let binaryPath = notifiCLIAppPath.appendingPathComponent("Contents/MacOS/SortyNotifications").path
-        let persistentBinaryPath = notifiPersistentAppPath.appendingPathComponent("Contents/MacOS/SortyNotificationsPersistent").path
-        
-        if FileManager.default.isExecutableFile(atPath: binaryPath) && FileManager.default.isExecutableFile(atPath: persistentBinaryPath) {
-            notificliPath = binaryPath
-            notifiPersistentPath = persistentBinaryPath
-            isAvailable = true
-            setupStatus = .ready
-            print("NotifiCLIService: Found existing build at \(binaryPath)")
-            return true
+
+        if setupInProgress {
+            return await withCheckedContinuation { continuation in
+                setupWaiters.append(continuation)
+            }
         }
-        
+
+        setupInProgress = true
+
         // Need to build
         setupStatus = .building
         print("NotifiCLIService: Building NotifiCLI from bundled sources...")
-        
+
+        let result: Bool
         do {
             try await buildNotifiCLI()
-            notificliPath = binaryPath
-            notifiPersistentPath = persistentBinaryPath
-            isAvailable = true
-            setupStatus = .ready
-            
+            refreshCachedInstallationState()
+
             // Grant permissions by opening the app once
             await grantPermissions()
-            
+
             print("NotifiCLIService: Build complete, ready to use")
-            return true
+            result = true
         } catch {
             print("NotifiCLIService: Build failed: \(error)")
             setupStatus = .failed(error.localizedDescription)
-            return false
+            isAvailable = false
+            notificliPath = nil
+            notifiPersistentPath = nil
+            result = false
         }
+
+        setupInProgress = false
+        notifySetupWaiters(with: result)
+        return result
     }
     
     /// Force rebuild of NotifiCLI
@@ -191,6 +253,8 @@ public actor NotifiCLIService {
         try? FileManager.default.removeItem(at: notifiPersistentAppPath)
         isAvailable = false
         notificliPath = nil
+        notifiPersistentPath = nil
+        permissionsGranted = false
         setupStatus = .notSetup
         
         return await ensureSetup()
@@ -400,19 +464,23 @@ public actor NotifiCLIService {
         guard await ensureSetup() else {
             return .error("NotifiCLI setup failed")
         }
-        
-        // Choose binary based on persistent flag
-        let binaryPath: String
-        if config.persistent, let persistentPath = notifiPersistentPath,
-           FileManager.default.isExecutableFile(atPath: persistentPath) {
-            binaryPath = persistentPath
-        } else if let path = notificliPath {
-            binaryPath = path
-        } else {
+
+        if let binaryPath = resolveExecutablePath(for: config) {
+            return await sendWithPath(config, path: binaryPath)
+        }
+
+        // Cached paths can become stale when users move/delete app support artifacts.
+        // Clear cache and attempt one repair/setup pass before failing.
+        isAvailable = false
+        notificliPath = nil
+        notifiPersistentPath = nil
+        setupStatus = .notSetup
+
+        guard await ensureSetup(), let repairedPath = resolveExecutablePath(for: config) else {
             return .error("NotifiCLI binary not found")
         }
-        
-        return await sendWithPath(config, path: binaryPath)
+
+        return await sendWithPath(config, path: repairedPath)
     }
     
     private func sendWithPath(_ config: NotifiCLIConfig, path: String) async -> NotifiCLIResponse {
@@ -477,15 +545,17 @@ public actor NotifiCLIService {
                     let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
                     let errorOutput = String(data: errorData, encoding: .utf8)?
                         .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    
-                    if process.terminationStatus != 0 && !errorOutput.isEmpty && !errorOutput.contains("Downloaded") {
-                        print("NotifiCLIService: Error output: \(errorOutput)")
-                        continuation.resume(returning: .error(errorOutput))
-                        return
+
+                    // Parse result (including timeout/dismissal semantics for non-zero exits).
+                    let response = Self.interpretProcessResult(
+                        terminationStatus: process.terminationStatus,
+                        output: output,
+                        errorOutput: errorOutput,
+                        config: config
+                    )
+                    if case .error(let message) = response {
+                        print("NotifiCLIService: Error output: \(message)")
                     }
-                    
-                    // Parse the response
-                    let response = self.parseResponse(output, config: config)
                     continuation.resume(returning: response)
                     
                 } catch {
@@ -495,11 +565,49 @@ public actor NotifiCLIService {
             }
         }
     }
-    
-    private nonisolated func parseResponse(_ output: String, config: NotifiCLIConfig) -> NotifiCLIResponse {
+
+    nonisolated static func interpretProcessResult(
+        terminationStatus: Int32,
+        output: String,
+        errorOutput: String,
+        config: NotifiCLIConfig
+    ) -> NotifiCLIResponse {
+        let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedError = errorOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowerError = trimmedError.lowercased()
+
+        if terminationStatus == 0 {
+            return parseResponseOutput(trimmedOutput, config: config)
+        }
+
+        if trimmedOutput == "timeout" || lowerError.contains("timeout waiting for user interaction") {
+            return .timeout
+        }
+
+        if trimmedOutput == "dismissed" {
+            return .dismissed
+        }
+
+        // Some process invocations can return warnings on stderr while still delivering action output.
+        if !trimmedOutput.isEmpty {
+            return parseResponseOutput(trimmedOutput, config: config)
+        }
+
+        if trimmedError.isEmpty || lowerError.hasPrefix("warning:") || trimmedError.contains("Downloaded") {
+            return parseResponseOutput(trimmedOutput, config: config)
+        }
+
+        return .error(trimmedError)
+    }
+
+    nonisolated static func parseResponseOutput(_ output: String, config: NotifiCLIConfig) -> NotifiCLIResponse {
         let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
         
         if trimmed.isEmpty {
+            return .timeout
+        }
+
+        if trimmed == "timeout" {
             return .timeout
         }
         
