@@ -11,6 +11,7 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @State private var showFinderRecommendationInfo = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -33,9 +34,22 @@ struct AdvancedSettingsView: View {
                     .accessibilityIdentifier("FinderAutoRevealToggle")
 
                     if !automationManager.autoSelectOrganizedFolders {
-                        Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Button {
+                            showFinderRecommendationInfo.toggle()
+                        } label: {
+                            Label("Recommendation", systemImage: "info.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("FinderAutoRevealRecommendationInfo")
+                        .popover(isPresented: $showFinderRecommendationInfo, arrowEdge: .top) {
+                            Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding()
+                                .frame(width: 300, alignment: .leading)
+                        }
                     }
                 }
             }

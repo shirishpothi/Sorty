@@ -32,7 +32,11 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             files: files,
             mode: config.mode,
             namingStyle: config.namingStyle,
+            customNamingInstructions: config.customNamingInstructions,
+            renameRules: config.renameRules,
+            renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
+            enableSmartRename: config.enableSmartRename,
             includeContentMetadata: true,
             customInstructions: customInstructions
         )
@@ -60,6 +64,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         }
 
         let url = Self.messagesURL
+        let orderedImageNames = Self.orderedImageFilenames(from: imageData)
 
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let fullSystemPrompt = personaPrompt != nil ? "\(systemPrompt)\n\nPERSONA INSTRUCTIONS:\n\(personaPrompt!)" : systemPrompt
@@ -68,9 +73,14 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             files: files, 
             mode: config.mode,
             namingStyle: config.namingStyle,
+            customNamingInstructions: config.customNamingInstructions,
+            renameRules: config.renameRules,
+            renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning, 
+            enableSmartRename: config.enableSmartRename,
             includeContentMetadata: true,
-            customInstructions: customInstructions
+            customInstructions: customInstructions,
+            analyzedImageFilenames: orderedImageNames
         )
         
         // Build multimodal content for Claude Vision
@@ -79,7 +89,8 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         ]
         
         // Add images in Claude's format
-        for (_, data) in imageData {
+        for name in orderedImageNames {
+            guard let data = imageData[name] else { continue }
             let base64 = data.base64EncodedString()
             contentArray.append([
                 "type": "image",
@@ -107,6 +118,10 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
             return try await analyzeStandard(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
         }
     }
+
+    static func orderedImageFilenames(from imageData: [String: Data]) -> [String] {
+        imageData.keys.sorted()
+    }
     
     private func analyzeStandard(url: URL, requestBody: [String: Any], apiKey: String, files: [FileItem]) async throws -> OrganizationPlan {
         let request = try AIRequestSupport.makeJSONRequest(
@@ -119,19 +134,25 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         )
 
         let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientRetry {
-            try await session.data(for: request)
-        }
+        do {
+            let (data, response) = try await AIRequestSupport.withTransientRetry {
+                try await session.data(for: request)
+            }
 
-        _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
-        
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        guard let text = AIRequestSupport.extractText(from: json?["content"]),
-              !text.isEmpty else {
-            throw AIClientError.invalidResponseFormat
+            _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
+            
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard let text = AIRequestSupport.extractText(from: json?["content"]),
+                  !text.isEmpty else {
+                throw AIClientError.invalidResponseFormat
+            }
+            
+            return try ResponseParser.parseResponse(text, originalFiles: files, mode: config.mode)
+        } catch let error as AIClientError {
+            throw error
+        } catch {
+            throw AIClientError.networkError(error)
         }
-        
-        return try ResponseParser.parseResponse(text, originalFiles: files)
     }
     
     private func analyzeWithStreaming(url: URL, requestBody: [String: Any], apiKey: String, files: [FileItem]) async throws -> OrganizationPlan {
@@ -148,66 +169,79 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         )
 
         let session = await AIRequestSupport.session(for: config)
-        let (bytes, response) = try await session.bytes(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIClientError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 200 {
-            var errorData = Data()
-            for try await byte in bytes {
-                errorData.append(byte)
+        do {
+            let (bytes, response) = try await session.bytes(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw AIClientError.invalidResponse
             }
-            let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown streaming error"
-            throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-        }
-        
-        var accumulatedContent = ""
-        
-        for try await line in bytes.lines {
-            guard line.hasPrefix("data:") else { continue }
-            let jsonString = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-            if jsonString == "[DONE]" { break }
-
-            if let data = jsonString.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-
-                let type = json["type"] as? String
-                var chunkText: String?
-
-                if type == "content_block_delta",
-                   let delta = json["delta"] as? [String: Any] {
-                    chunkText =
-                        AIRequestSupport.extractText(from: delta["text"]) ??
-                        AIRequestSupport.extractText(from: delta["partial_json"]) ??
-                        AIRequestSupport.extractText(from: delta["content"])
-                } else if type == "content_block_start",
-                          let contentBlock = json["content_block"] as? [String: Any] {
-                    chunkText = AIRequestSupport.extractText(from: contentBlock["text"])
+            
+            if httpResponse.statusCode != 200 {
+                var errorData = Data()
+                for try await byte in bytes {
+                    errorData.append(byte)
                 }
+                let errorMessage = String(data: errorData, encoding: .utf8) ?? "Unknown streaming error"
+                throw AIClientError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+            }
+            
+            var accumulatedContent = ""
+            
+            for try await line in bytes.lines {
+                guard line.hasPrefix("data:") else { continue }
+                let jsonString = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                if jsonString == "[DONE]" { break }
 
-                if let chunk = chunkText, !chunk.isEmpty {
-                    accumulatedContent += chunk
-                    await MainActor.run { [weak self] in
-                        self?.streamingDelegate?.didReceiveChunk(chunk)
+                if let data = jsonString.data(using: .utf8),
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+
+                    let type = json["type"] as? String
+                    var chunkText: String?
+
+                    if type == "content_block_delta",
+                    let delta = json["delta"] as? [String: Any] {
+                        chunkText =
+                            AIRequestSupport.extractText(from: delta["text"]) ??
+                            AIRequestSupport.extractText(from: delta["partial_json"]) ??
+                            AIRequestSupport.extractText(from: delta["content"])
+                    } else if type == "content_block_start",
+                            let contentBlock = json["content_block"] as? [String: Any] {
+                        chunkText = AIRequestSupport.extractText(from: contentBlock["text"])
+                    }
+
+                    if let chunk = chunkText, !chunk.isEmpty {
+                        accumulatedContent += chunk
+                        await MainActor.run { [weak self] in
+                            self?.streamingDelegate?.didReceiveChunk(chunk)
+                        }
                     }
                 }
             }
-        }
-        
-        let finalContent = accumulatedContent
-        await MainActor.run { [weak self] in
-            self?.streamingDelegate?.didComplete(content: finalContent)
-        }
-        
-        do {
-            return try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
-        } catch {
-            if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files) {
-                return partialPlan
+            
+            let finalContent = accumulatedContent
+            await MainActor.run { [weak self] in
+                self?.streamingDelegate?.didComplete(content: finalContent)
             }
-            throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+            
+            do {
+                return try ResponseParser.parseResponse(accumulatedContent, originalFiles: files, mode: config.mode)
+            } catch {
+                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files, mode: config.mode) {
+                    return partialPlan
+                }
+                throw AIClientError.jsonDecodingError(context: error.localizedDescription)
+            }
+        } catch let error as AIClientError {
+            await MainActor.run { [weak self] in
+                self?.streamingDelegate?.didFail(error: error)
+            }
+            throw error
+        } catch {
+            let clientError = AIClientError.networkError(error)
+            await MainActor.run { [weak self] in
+                self?.streamingDelegate?.didFail(error: clientError)
+            }
+            throw clientError
         }
     }
     

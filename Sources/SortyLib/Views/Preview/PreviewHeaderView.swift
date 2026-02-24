@@ -20,6 +20,12 @@ struct PreviewHeaderView: View {
     var isViewingHistory: Bool = false
     var onPreviousVersion: (() -> Void)? = nil
     var onNextVersion: (() -> Void)? = nil
+    var isRenameSummaryExpanded: Bool = false
+    var onToggleRenameSummary: (() -> Void)? = nil
+    var onAcceptAllRenames: (() -> Void)? = nil
+    var onRejectAllRenames: (() -> Void)? = nil
+    var isManualRenameEnabled: Bool = false
+    var onToggleManualRename: (() -> Void)? = nil
 
     @State private var showNotesPopover = false
 
@@ -182,21 +188,68 @@ struct PreviewHeaderView: View {
                 .foregroundColor(.secondary)
 
             if renameCount > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "wand.and.stars")
-                    Text("\(renameCount) renames")
+                if let onAcceptAllRenames, let onRejectAllRenames {
+                    Button("Accept All Renames") {
+                        onAcceptAllRenames()
+                    }
+                    .buttonStyle(.sortySecondary(size: .small))
+                    .accessibilityIdentifier("PreviewAcceptAllRenamesButton")
+
+                    Button("Reject All Renames") {
+                        onRejectAllRenames()
+                    }
+                    .buttonStyle(.sortySecondary(size: .small, color: .orange))
+                    .accessibilityIdentifier("PreviewRejectAllRenamesButton")
                 }
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(.ultraThinMaterial)
-                .cornerRadius(4)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-                )
+
+                Button {
+                    onToggleRenameSummary?()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "wand.and.stars")
+                        Text("\(renameCount) renames")
+                        Image(systemName: isRenameSummaryExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.ultraThinMaterial)
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("PreviewRenameSummaryToggle")
+            }
+
+            if let onToggleManualRename {
+                Button {
+                    onToggleManualRename()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: isManualRenameEnabled ? "pencil.circle.fill" : "pencil.circle")
+                        Text(isManualRenameEnabled ? "Manual Rename On" : "Manual Rename")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(isManualRenameEnabled ? .accentColor : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(isManualRenameEnabled ? Color.accentColor.opacity(0.35) : Color.white.opacity(0.2), lineWidth: 0.6)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("PreviewManualRenameToggle")
+                .help("Toggle manual rename controls for all files")
             }
         }
         .padding()

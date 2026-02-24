@@ -12,7 +12,7 @@ import SwiftUI
 // MARK: - Deeplink Types
 
 public enum DeeplinkDestination: Equatable {
-    case organize(path: String?, persona: String?, autostart: Bool)
+    case organize(path: String?, persona: String?, mode: OrganizationMode?, autostart: Bool)
     case duplicates(path: String?, autostart: Bool)
     case learnings(action: LearningsAction?, project: String?)
     case settings(section: String?)
@@ -75,7 +75,7 @@ public class DeeplinkHandler: ObservableObject {
         if normalizedHost.isEmpty {
             let legacyPath = url.path.removingPercentEncoding ?? url.path
             if !legacyPath.isEmpty && legacyPath != "/" {
-                pendingDestination = .organize(path: legacyPath, persona: nil, autostart: false)
+                pendingDestination = .organize(path: legacyPath, persona: nil, mode: nil, autostart: false)
                 return
             }
         }
@@ -84,8 +84,9 @@ public class DeeplinkHandler: ObservableObject {
         case "organize":
             let path = queryValue(for: "path")
             let persona = queryValue(for: "persona")
+            let mode = queryValue(for: "mode").flatMap { OrganizationMode(rawValue: $0) }
             let autostart = queryValue(for: "autostart") == "true"
-            pendingDestination = .organize(path: path, persona: persona, autostart: autostart)
+            pendingDestination = .organize(path: path, persona: persona, mode: mode, autostart: autostart)
             
         case "duplicates":
             let path = queryValue(for: "path")
@@ -159,7 +160,7 @@ public class DeeplinkHandler: ObservableObject {
         components.scheme = "sorty"
         
         switch destination {
-        case .organize(let path, let persona, let autostart):
+        case .organize(let path, let persona, let mode, let autostart):
             components.host = "organize"
             var items: [URLQueryItem] = []
             if let path = path {
@@ -167,6 +168,9 @@ public class DeeplinkHandler: ObservableObject {
             }
             if let persona = persona {
                 items.append(URLQueryItem(name: "persona", value: persona))
+            }
+            if let mode {
+                items.append(URLQueryItem(name: "mode", value: mode.rawValue))
             }
             if autostart {
                 items.append(URLQueryItem(name: "autostart", value: "true"))

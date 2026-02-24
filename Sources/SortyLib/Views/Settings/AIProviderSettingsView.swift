@@ -100,7 +100,11 @@ struct AIProviderSettingsView: View {
                     if !viewModel.availableModels.isEmpty {
                         Picker("", selection: $viewModel.config.model) {
                             ForEach(viewModel.availableModels, id: \.self) { model in
-                                Text(model).tag(model)
+                                if ModelCatalog.shared.supportsVision(modelId: model, provider: .githubCopilot) {
+                                    Label(model, systemImage: "camera.fill").tag(model)
+                                } else {
+                                    Text(model).tag(model)
+                                }
                             }
                         }
                         .pickerStyle(.menu)

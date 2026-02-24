@@ -38,21 +38,30 @@ public struct OCRResult: Sendable {
         return trimmed
     }
 
+    /// Default keywords for document type detection
+    public static let defaultKeywords: [String] = [
+        "invoice", "receipt", "tax", "irs", "statement", "bill",
+        "contract", "agreement", "report", "memo", "letter",
+        "certificate", "license", "passport", "id", "identification",
+        "resume", "cv", "application", "form", "prescription",
+        "medical", "insurance", "bank", "account", "payment",
+        "internal", "revenue", "service"
+    ]
+
     /// Extract key phrases that might indicate document type
     public var detectedKeywords: [String] {
-        let keywords = [
-            "invoice", "receipt", "tax", "irs", "statement", "bill",
-            "contract", "agreement", "report", "memo", "letter",
-            "certificate", "license", "passport", "id", "identification",
-            "resume", "cv", "application", "form", "prescription",
-            "medical", "insurance", "bank", "account", "payment",
-            "internal", "revenue", "service"
-        ]
+        return detectKeywords(using: [])
+    }
+
+    /// Detect keywords using a combined list of default + custom keywords
+    public func detectKeywords(using additionalKeywords: [String] = []) -> [String] {
+        var allKeywords = Self.defaultKeywords
+        for kw in additionalKeywords where !allKeywords.contains(kw.lowercased()) {
+            allKeywords.append(kw.lowercased())
+        }
 
         let lowercased = text.lowercased()
-        return keywords.filter { lowercased.contains($0) }
-
-
+        return allKeywords.filter { lowercased.contains($0) }
     }
 }
 
@@ -60,8 +69,32 @@ public struct OCRResult: Sendable {
 public actor VisionAnalyzer {
     private let maxTextLength = 2000
     private let minimumConfidence: Float = 0.3
+    private var recognitionLanguages: [String] = ["en-US"]
+
+    private struct OCRCacheEntry {
+        let modificationDate: Date
+        let fileSize: Int
+        let result: OCRResult
+    }
+
+    private var ocrCache: [String: OCRCacheEntry] = [:]
 
     public init() {}
+
+    public func setRecognitionLanguages(_ languages: [String]) {
+        let cleaned = languages
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        recognitionLanguages = cleaned.isEmpty ? ["en-US"] : Array(Set(cleaned)).sorted()
+    }
+
+    public func getRecognitionLanguages() -> [String] {
+        recognitionLanguages
+    }
+
+    public func clearCache() {
+        ocrCache.removeAll()
+    }
 
     /// Perform OCR on an image file
     public func analyzeImage(at url: URL) async -> OCRResult? {
@@ -75,12 +108,20 @@ public actor VisionAnalyzer {
             return nil
         }
 
+        if let cached = lookupCachedResult(for: url) {
+            return cached
+        }
+
         // Load image
         guard let cgImage = loadCGImage(from: url) else {
             return nil
         }
 
-        return await performOCR(on: cgImage)
+        let result = await performOCR(on: cgImage)
+        if let result {
+            cacheResult(result, for: url)
+        }
+        return result
     }
 
     /// Perform OCR on CGImage data
@@ -168,7 +209,7 @@ public actor VisionAnalyzer {
             // Configure the request for better accuracy
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.recognitionLanguages = ["en-US", "en-GB"] // Can be expanded
+            request.recognitionLanguages = self.recognitionLanguages
 
             // Perform the request
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -307,6 +348,34 @@ public actor VisionAnalyzer {
         }
 
         return hex
+    }
+
+    private func lookupCachedResult(for url: URL) -> OCRResult? {
+        guard let entry = ocrCache[url.path] else { return nil }
+        do {
+            let values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            let modDate = values.contentModificationDate ?? .distantPast
+            let fileSize = values.fileSize ?? 0
+            guard entry.modificationDate == modDate, entry.fileSize == fileSize else {
+                ocrCache.removeValue(forKey: url.path)
+                return nil
+            }
+            return entry.result
+        } catch {
+            ocrCache.removeValue(forKey: url.path)
+            return nil
+        }
+    }
+
+    private func cacheResult(_ result: OCRResult, for url: URL) {
+        do {
+            let values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            let modDate = values.contentModificationDate ?? .distantPast
+            let fileSize = values.fileSize ?? 0
+            ocrCache[url.path] = OCRCacheEntry(modificationDate: modDate, fileSize: fileSize, result: result)
+        } catch {
+            DebugLogger.log("VisionAnalyzer: failed to cache OCR result for \(url.lastPathComponent): \(error.localizedDescription)")
+        }
     }
 }
 

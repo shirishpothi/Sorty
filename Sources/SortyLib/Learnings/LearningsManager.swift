@@ -329,6 +329,37 @@ public class LearningsManager: ObservableObject {
         // Trigger auto-inference check after recording change
         Task { await checkAndTriggerAutoInference() }
     }
+
+    public func recordRenameFeedback(
+        originalName: String,
+        suggestedName: String?,
+        finalName: String?,
+        folderPath: String?,
+        action: ExampleAction,
+        confidence: Double?
+    ) {
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
+
+        let event = RenameFeedbackEvent(
+            originalName: originalName,
+            suggestedName: suggestedName,
+            finalName: finalName,
+            folderPath: folderPath,
+            action: action,
+            confidence: confidence
+        )
+        profile.renameFeedbackHistory.append(event)
+        currentProfile = profile
+
+        // Feed rename outcomes into the existing example pipeline.
+        let folder = folderPath ?? ""
+        let src = folder.isEmpty ? originalName : "\(folder)/\(originalName)"
+        let destinationName = finalName ?? originalName
+        let dst = folder.isEmpty ? destinationName : "\(folder)/\(destinationName)"
+        addLabeledExample(srcPath: src, dstPath: dst, action: action)
+    }
     
     /// Record a history revert event
     public func recordHistoryRevert(entryId: String, operationCount: Int, folderPath: String? = nil, revertReason: String? = nil) {
@@ -405,6 +436,9 @@ public class LearningsManager: ObservableObject {
         }
         if profile.postOrganizationChanges.count > cap {
             profile.postOrganizationChanges = Array(profile.postOrganizationChanges.suffix(cap))
+        }
+        if profile.renameFeedbackHistory.count > cap {
+            profile.renameFeedbackHistory = Array(profile.renameFeedbackHistory.suffix(cap))
         }
         if profile.historyReverts.count > cap {
             profile.historyReverts = Array(profile.historyReverts.suffix(cap))
@@ -955,6 +989,64 @@ public class LearningsManager: ObservableObject {
                     instruction: "User corrected these placements - avoid repeating the same mistakes",
                     items: items
                 ))
+            }
+        }
+
+        // SECTION 4B: RENAME PATTERNS
+        let recentRenameFeedback = profile.renameFeedbackHistory
+            .sorted(by: { $0.timestamp > $1.timestamp })
+            .prefix(20)
+        if !recentRenameFeedback.isEmpty {
+            var items: [LearningsItem] = []
+
+            let accepted = recentRenameFeedback.filter { $0.action == .accept }
+            let edited = recentRenameFeedback.filter { $0.action == .edit }
+            let rejected = recentRenameFeedback.filter { $0.action == .reject }
+
+            if !accepted.isEmpty {
+                items.append(
+                    LearningsItem(
+                        content: "Accepted rename patterns: \(accepted.prefix(3).compactMap { $0.suggestedName }.joined(separator: ", "))",
+                        weight: 72,
+                        occurrences: accepted.count
+                    )
+                )
+            }
+
+            if !edited.isEmpty {
+                let edits = edited.prefix(3).map { event in
+                    let source = event.suggestedName ?? event.originalName
+                    return "\(source) -> \(event.finalName ?? event.originalName)"
+                }
+                items.append(
+                    LearningsItem(
+                        content: "User-edited rename preferences: \(edits.joined(separator: " ; "))",
+                        weight: 82,
+                        occurrences: edited.count
+                    )
+                )
+            }
+
+            if !rejected.isEmpty {
+                items.append(
+                    LearningsItem(
+                        content: "Avoid low-value rename styles. \(rejected.count) rename suggestions were rejected recently.",
+                        weight: 88,
+                        occurrences: rejected.count
+                    )
+                )
+            }
+
+            if !items.isEmpty {
+                sections.append(
+                    LearningsSection(
+                        id: "rename_patterns",
+                        title: "RENAME PREFERENCES",
+                        priority: "HIGH",
+                        instruction: "Apply these learned rename tendencies to improve filename suggestions.",
+                        items: items
+                    )
+                )
             }
         }
         

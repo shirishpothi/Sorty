@@ -55,6 +55,9 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         // AFM doesn't yet support multimodal analysis via this private API.
         // Fallback to text analysis.
+        if config.enableVision, !imageData.isEmpty {
+            DebugLogger.log("AppleFoundationModelClient: Vision is enabled but multimodal analysis is unavailable; falling back to text-only.")
+        }
         return try await analyze(files: files, customInstructions: customInstructions, personaPrompt: personaPrompt, temperature: temperature)
     }
     
@@ -151,7 +154,7 @@ public final class AppleFoundationModelClient: AIClientProtocol, @unchecked Send
 
                 await streamContent(content)
 
-                var plan = try ResponseParser.parseResponse(content, originalFiles: files)
+                var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
                 plan.generationStats = makeStats(
                     from: content,
                     files: files,

@@ -91,6 +91,116 @@ class FileSystemManagerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("NewDir/to_move.txt").path))
     }
 
+    @MainActor
+    func testRenameFlowParseApplyAndUndo() async throws {
+        let sourceA = tempDirectory.appendingPathComponent("doc1.pdf")
+        let sourceB = tempDirectory.appendingPathComponent("doc2.pdf")
+        try "A".write(to: sourceA, atomically: true, encoding: .utf8)
+        try "B".write(to: sourceB, atomically: true, encoding: .utf8)
+
+        let originalFiles = [
+            FileItem(path: sourceA.path, name: "doc1", extension: "pdf", size: 1, isDirectory: false),
+            FileItem(path: sourceB.path, name: "doc2", extension: "pdf", size: 1, isDirectory: false)
+        ]
+
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Invoices",
+              "files": [
+                {"filename": "doc1.pdf", "suggested_name": "2026-01_Invoice_Acme.pdf", "rename_reason": "Descriptive"},
+                {"filename": "doc2.pdf", "suggested_name": "2026-01_Invoice_Beta.pdf", "rename_reason": "Descriptive"}
+              ]
+            }
+          ],
+          "unorganized": []
+        }
+        """
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: originalFiles, mode: .organizeAndRename)
+        let operations = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Invoices/2026-01_Invoice_Acme.pdf").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("Invoices/2026-01_Invoice_Beta.pdf").path))
+        XCTAssertTrue(operations.contains { $0.type == .renameFile })
+
+        _ = try await fileSystemManager.reverseOperations(operations)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceA.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceB.path))
+    }
+
+    @MainActor
+    func testConflictingRenameTargetsBecomeUnique() async throws {
+        let sourceA = tempDirectory.appendingPathComponent("a.txt")
+        let sourceB = tempDirectory.appendingPathComponent("b.txt")
+        try "A".write(to: sourceA, atomically: true, encoding: .utf8)
+        try "B".write(to: sourceB, atomically: true, encoding: .utf8)
+
+        let fileA = FileItem(path: sourceA.path, name: "a", extension: "txt", size: 1, isDirectory: false)
+        let fileB = FileItem(path: sourceB.path, name: "b", extension: "txt", size: 1, isDirectory: false)
+
+        var folder = FolderSuggestion(folderName: "Renamed", files: [fileA, fileB])
+        folder.updateRename(for: fileA, newName: "shared.txt")
+        folder.updateRename(for: fileB, newName: "shared.txt")
+
+        let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
+        let operations = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+
+        let renamedDir = tempDirectory.appendingPathComponent("Renamed")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: renamedDir.appendingPathComponent("shared.txt").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: renamedDir.appendingPathComponent("shared_1.txt").path))
+        XCTAssertEqual(operations.filter { $0.type == .renameFile }.count, 2)
+    }
+
+    @MainActor
+    func testCrossVolumeRenamePathWithNameChange() async throws {
+        final class ProgressRecorder: @unchecked Sendable {
+            private let lock = NSLock()
+            private var values: [Double] = []
+
+            func append(_ value: Double) {
+                lock.lock()
+                values.append(value)
+                lock.unlock()
+            }
+
+            func snapshot() -> [Double] {
+                lock.lock()
+                let copy = values
+                lock.unlock()
+                return copy
+            }
+        }
+
+        let source = tempDirectory.appendingPathComponent("camera.jpg")
+        try "image".write(to: source, atomically: true, encoding: .utf8)
+
+        let file = FileItem(path: source.path, name: "camera", extension: "jpg", size: 5, isDirectory: false)
+        var folder = FolderSuggestion(folderName: "Photos", files: [file])
+        folder.updateRename(for: file, newName: "Sunset.png") // extension must be preserved as .jpg
+        let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
+
+        let recorder = ProgressRecorder()
+        await fileSystemManager.setCrossVolumeProgressHandler { _, progress in
+            recorder.append(progress)
+        }
+        await fileSystemManager.setCrossVolumeDetectorForTesting { _, _ in true }
+
+        let operations = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+        let destination = tempDirectory.appendingPathComponent("Photos/Sunset.jpg")
+        let progressEvents = recorder.snapshot()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertTrue(progressEvents.contains { $0 >= 1.0 })
+        XCTAssertTrue(operations.contains { $0.type == .renameFile && $0.destinationPath == destination.path })
+
+        await fileSystemManager.setCrossVolumeProgressHandler(nil)
+        await fileSystemManager.setCrossVolumeDetectorForTesting(nil)
+    }
+
 
     // MARK: - File Tagging Tests
     

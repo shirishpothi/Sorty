@@ -14,6 +14,7 @@ struct PreviewListView: View {
     let emptyStateType: EmptyStateType
     var onFocusInstructions: (() -> Void)? = nil
     var onRegenerate: (() -> Void)? = nil
+    var enableManualRenameTools: Bool = false
     
     enum EmptyStateType {
         case allUnorganized(Int)  // Int is the file count
@@ -36,7 +37,9 @@ struct PreviewListView: View {
                 OptimizedPreviewTree(
                     store: store,
                     dragDropManager: dragDropManager,
-                    onPlanChanged: onPlanChanged
+                    onPlanChanged: onPlanChanged,
+                    onFocusInstructions: onFocusInstructions,
+                    enableManualRenameTools: enableManualRenameTools
                 )
             }
         }

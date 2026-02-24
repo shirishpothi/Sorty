@@ -130,7 +130,7 @@ struct BatchOrganizationView: View {
                     .foregroundStyle(.green)
                     .accessibilityIdentifier("BatchPrewarmStatusConnected")
             } else if let error = sessionManager.prewarmError {
-                Label("\(String(error.prefix(28)))…", systemImage: "exclamationmark.triangle.fill")
+                Label("Connection Warning", systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .help(error)

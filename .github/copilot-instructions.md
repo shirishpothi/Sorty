@@ -19,8 +19,8 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
                                       OrganizationPlan → Preview → Apply
 ```
 
-- **`FolderOrganizer`** ([FolderOrganizer.swift](Sources/SortyLib/Organizer/FolderOrganizer.swift)) - Main orchestrator with state machine (`idle → scanning → organizing → ready → applying → completed`)
-- **`AppState`** ([AppCommands.swift](Sources/SortyLib/Views/AppCommands.swift#L229)) - Global navigation and UI state
+- **`FolderOrganizer`** (`Sources/SortyLib/Organizer/FolderOrganizer.swift`) - Main orchestrator with state machine (`idle → scanning → organizing → ready → applying → completed`)
+- **`AppState`** (`Sources/SortyLib/Views/AppCommands.swift`) - Global navigation and UI state
 - **AI Clients** use `AIClientProtocol` with factory pattern in `AIClientFactory`
 
 ## Build & Test Commands
@@ -62,7 +62,7 @@ public protocol AIClientProtocol: Sendable {
 ```
 
 ### Testing Patterns
-- **Unit tests**: Use mock AI clients (see `MockAIClient` in [SortyLibTests.swift](Tests/SortyTests/SortyLibTests.swift))
+- **Unit tests**: Use mock AI clients (see `MockAIClient` in `Tests/SortyTests/SortyLibTests.swift`)
 - **UI tests**: Navigate via sidebar identifiers (e.g., `"OrganizeSidebarItem"`, `"SettingsSidebarItem"`)
 - **Temporary directories**: Always create in `setUp()` and clean in `tearDown()`
 ```swift

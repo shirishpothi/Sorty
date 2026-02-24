@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Vision
 
 struct OrganizationStrategySettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
@@ -18,6 +19,11 @@ struct OrganizationStrategySettingsView: View {
     @State private var pendingPresetInstructions: String = ""
     @State private var editingPreset: NamingPreset? = nil
     @State private var showEditSheet: Bool = false
+    @State private var showVisionModelInfo = false
+    @State private var supportedOCRLanguages: [String] = []
+    @State private var renameRulePatternInput = ""
+    @State private var renameRuleReplacementInput = ""
+    @State private var renameRuleIsRegex = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -82,6 +88,31 @@ struct OrganizationStrategySettingsView: View {
                             step: 1
                         )
 
+                        Text("Only the first selected N images are sent for visual analysis. Other images still use OCR text extraction during deep scan.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        HStack {
+                            Text("Batch Strategy")
+                                .font(.subheadline)
+                            Spacer()
+                            Picker("", selection: $viewModel.config.visionBatchStrategy) {
+                                ForEach(VisionBatchStrategy.allCases, id: \.self) { strategy in
+                                    Text(strategy.displayName).tag(strategy)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+
+                        Picker("Vision Detail", selection: $viewModel.config.visionDetailLevel) {
+                            ForEach(VisionDetailLevel.allCases, id: \.self) { detail in
+                                Text(detail.displayName).tag(detail)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.caption2)
@@ -91,16 +122,90 @@ struct OrganizationStrategySettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                         .padding(.top, 4)
+
+                        Text("Estimated image tokens/request: ~\(estimatedImageTokensPerRequest())")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text("OCR Languages")
+                                .font(.subheadline)
+                            Spacer()
+                            if !supportedOCRLanguages.isEmpty {
+                                Menu {
+                                    ForEach(supportedOCRLanguages, id: \.self) { language in
+                                        Button {
+                                            if viewModel.config.ocrLanguages.contains(language) {
+                                                viewModel.config.ocrLanguages.removeAll { $0 == language }
+                                            } else {
+                                                viewModel.config.ocrLanguages.append(language)
+                                            }
+                                            if viewModel.config.ocrLanguages.isEmpty {
+                                                viewModel.config.ocrLanguages = ["en-US"]
+                                            }
+                                            viewModel.config.ocrLanguages = Array(Set(viewModel.config.ocrLanguages)).sorted()
+                                        } label: {
+                                            HStack {
+                                                if viewModel.config.ocrLanguages.contains(language) {
+                                                    Image(systemName: "checkmark")
+                                                }
+                                                Text(languageDisplayName(language))
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text(ocrLanguagesLabel)
+                                            .font(.caption)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.system(size: 8, weight: .semibold))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                                }
+                                .menuStyle(.borderlessButton)
+                                .fixedSize()
+                            }
+                        }
+
+                        if supportedOCRLanguages.isEmpty {
+                            Text("Loading supported OCR languages...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else if viewModel.config.ocrLanguages.count > 1 {
+                            Text("Selected: \(viewModel.config.ocrLanguages.joined(separator: ", "))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     if !ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "info.circle")
-                                .font(.caption2)
-                                .foregroundColor(.blue)
+                        Button {
+                            showVisionModelInfo.toggle()
+                        } label: {
+                            Label("Vision model required", systemImage: "info.circle")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("VisionModelRequiredInfoButton")
+                        .popover(isPresented: $showVisionModelInfo, arrowEdge: .top) {
                             Text("Switch to a vision model (e.g., gpt-4o, claude-3-5-sonnet) to enable.")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
+                                .padding()
+                                .frame(width: 300, alignment: .leading)
                         }
                     }
                 }
@@ -301,6 +406,89 @@ struct OrganizationStrategySettingsView: View {
                              : "Extra rules for the AI (e.g., 'Use camelCase for subjects')")
                             .font(.caption2)
                             .foregroundColor(.secondary)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Template variables: `{date}` `{ext}` `{size}` `{counter}`")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Text("Example: `{date}_{counter}_{size}.{ext}`")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Custom Rename Rules")
+                            .font(.subheadline.weight(.medium))
+
+                        Picker("Rule Application", selection: $viewModel.config.renameRuleMode) {
+                            ForEach(RenameRuleApplicationMode.allCases, id: \.self) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        if viewModel.config.renameRules.isEmpty {
+                            Text("No custom rename rules configured.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            ForEach($viewModel.config.renameRules) { $rule in
+                                HStack(spacing: 8) {
+                                    TextField("Pattern", text: $rule.pattern)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.caption)
+                                    Text("→")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    TextField("Replacement", text: $rule.replacement)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.caption)
+                                    Toggle("Regex", isOn: $rule.isRegex)
+                                        .toggleStyle(.checkbox)
+                                        .font(.caption2)
+                                        .frame(width: 70)
+                                    Button(role: .destructive) {
+                                        viewModel.config.renameRules.removeAll { $0.id == rule.id }
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack(spacing: 8) {
+                            TextField("Pattern", text: $renameRulePatternInput)
+                                .textFieldStyle(.roundedBorder)
+                            TextField("Replacement", text: $renameRuleReplacementInput)
+                                .textFieldStyle(.roundedBorder)
+                            Toggle("Regex", isOn: $renameRuleIsRegex)
+                                .toggleStyle(.checkbox)
+                                .frame(width: 72)
+
+                            Button("Add Rule") {
+                                let pattern = renameRulePatternInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !pattern.isEmpty else { return }
+                                let rule = RenameRule(
+                                    pattern: pattern,
+                                    replacement: renameRuleReplacementInput,
+                                    isRegex: renameRuleIsRegex
+                                )
+                                viewModel.config.renameRules.append(rule)
+                                renameRulePatternInput = ""
+                                renameRuleReplacementInput = ""
+                                renameRuleIsRegex = true
+                            }
+                            .buttonStyle(.onboardingPill(size: .small))
+                            .disabled(renameRulePatternInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+
+                        Text(viewModel.config.renameRuleMode.description)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -338,6 +526,47 @@ struct OrganizationStrategySettingsView: View {
                     )
                 }
             }
+        }
+        .onAppear {
+            loadSupportedOCRLanguagesIfNeeded()
+        }
+    }
+
+    private func estimatedImageTokensPerRequest() -> Int {
+        let perImage: Int
+        switch viewModel.config.effectiveVisionDetailLevel {
+        case .low:
+            perImage = 120
+        case .auto:
+            perImage = 280
+        case .high:
+            perImage = 520
+        }
+        return perImage * max(1, viewModel.config.visionBatchSize)
+    }
+
+    private var ocrLanguagesLabel: String {
+        let count = viewModel.config.ocrLanguages.count
+        if count == 1, let lang = viewModel.config.ocrLanguages.first {
+            return languageDisplayName(lang)
+        }
+        return "\(count) languages selected"
+    }
+
+    private func languageDisplayName(_ languageCode: String) -> String {
+        let localized = Locale.current.localizedString(forIdentifier: languageCode) ?? languageCode
+        return "\(localized) (\(languageCode))"
+    }
+
+    private func loadSupportedOCRLanguagesIfNeeded() {
+        guard supportedOCRLanguages.isEmpty else { return }
+
+        let request = VNRecognizeTextRequest()
+        let languages = (try? request.supportedRecognitionLanguages()) ?? ["en-US"]
+        supportedOCRLanguages = languages.sorted()
+
+        if viewModel.config.ocrLanguages.isEmpty {
+            viewModel.config.ocrLanguages = ["en-US"]
         }
     }
 }

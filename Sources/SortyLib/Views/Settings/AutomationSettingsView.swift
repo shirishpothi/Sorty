@@ -20,6 +20,7 @@ struct AutomationSettingsView: View {
     @State private var useSeparateModel = false
     @State private var selectedProvider: AIProvider = .openAI
     @State private var selectedModel: String = ""
+    @State private var showBackgroundActivityInfo = false
     @State private var showModelPicker = false
     
     private var activeFoldersCount: Int {
@@ -243,17 +244,22 @@ struct AutomationSettingsView: View {
 
                 Divider()
 
-                HStack(spacing: 8) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.purple)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("App Background Activity")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                Button {
+                    showBackgroundActivityInfo.toggle()
+                } label: {
+                    Label("App Background Activity", systemImage: "info.circle")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.primary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("BackgroundActivityInfoButton")
+                .popover(isPresented: $showBackgroundActivityInfo, arrowEdge: .top) {
+                    Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding()
+                        .frame(width: 360, alignment: .leading)
                 }
 
                 if launchAtLogin || keepInBackground {

@@ -26,13 +26,22 @@ actor DirectoryScanner {
     private var pressureBatchSize = 10
     private let pauseTimeout: Duration = .seconds(30)
     
+    /// Whether the last scan was degraded due to memory pressure
+    private(set) var lastScanWasDegraded = false
+    /// Description of degradation that occurred
+    private(set) var degradationReason: String?
+    
+    /// Callback for deep scan progress updates
+    private var deepScanProgressCallback: (@Sendable (_ current: Int, _ total: Int) -> Void)?
+    private var deepScanAnalyzedCount = 0
+    
     deinit {
         pressureSource?.cancel()
         pauseTimeoutTask?.cancel()
     }
     
     /// Memory pressure states for graceful degradation
-    enum MemoryPressureState: String {
+    public enum MemoryPressureState: String, Sendable {
         case normal = "normal"
         case warning = "warning"
         case critical = "critical"
@@ -41,6 +50,14 @@ actor DirectoryScanner {
     /// Initialize and set up memory pressure monitoring
     init() {
         // Setup happens lazily on first scan to avoid actor isolation issues
+    }
+    
+    func setCustomOCRKeywords(_ keywords: [String]) async {
+        await contentAnalyzer.setCustomOCRKeywords(keywords)
+    }
+
+    func setOCRLanguages(_ languages: [String]) async {
+        await contentAnalyzer.setOCRLanguages(languages)
     }
     
     /// Scan directory with optional deep content analysis and hash computation
@@ -59,6 +76,9 @@ actor DirectoryScanner {
         scannedCount = 0
         cloudPlaceholdersSkipped = 0
         isPaused = false
+        lastScanWasDegraded = false
+        degradationReason = nil
+        deepScanAnalyzedCount = 0
         
         // Lazy initialization of memory pressure monitoring
         if !isMonitoringSetup {
@@ -116,15 +136,24 @@ actor DirectoryScanner {
             throw ScannerError.pathNotFound
         }
         
-        let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey]
+        let resourceKeys: [URLResourceKey] = [
+            .isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey,
+            .contentModificationDateKey, .contentAccessDateKey, .tagNamesKey
+        ]
         let resourceValues = try? url.resourceValues(forKeys: Set(resourceKeys))
         
         let isDirectory = resourceValues?.isDirectory ?? false
         let size = resourceValues?.fileSize ?? 0
         let creationDate = resourceValues?.creationDate
+        let modificationDate = resourceValues?.contentModificationDate
+        let lastAccessDate = resourceValues?.contentAccessDate
+        let finderTags = resourceValues?.tagNames
         
         let pathExtension = url.pathExtension
         let fileName = url.deletingPathExtension().lastPathComponent
+        
+        // Read Finder comment via extended attribute
+        let finderComment = Self.readFinderComment(at: url)
         
         // Deep scan: extract content metadata
         var contentMetadata: ContentMetadata?
@@ -145,8 +174,12 @@ actor DirectoryScanner {
             size: Int64(size),
             isDirectory: isDirectory,
             creationDate: creationDate,
+            modificationDate: modificationDate,
+            lastAccessDate: lastAccessDate,
             contentMetadata: contentMetadata,
-            sha256Hash: sha256Hash
+            sha256Hash: sha256Hash,
+            finderComment: finderComment,
+            finderTags: finderTags
         )
     }
     
@@ -163,7 +196,10 @@ actor DirectoryScanner {
             .ubiquitousItemIsDownloadingKey,
             .ubiquitousItemDownloadingStatusKey
         ]
-        let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey] + cloudResourceKeys
+        let resourceKeys: [URLResourceKey] = [
+            .isDirectoryKey, .fileSizeKey, .creationDateKey, .isHiddenKey,
+            .contentModificationDateKey, .contentAccessDateKey, .tagNamesKey
+        ] + cloudResourceKeys
         
         var options: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
         if !includeHidden {
@@ -185,9 +221,15 @@ actor DirectoryScanner {
         let effectiveComputeHashes = computeHashes && !shouldSkipNonEssentialWork()
         
         if deepScan && !effectiveDeepScan {
+            lastScanWasDegraded = true
+            degradationReason = "Deep content analysis was skipped due to high memory usage"
             logger.info("Deep scan disabled due to memory pressure")
         }
         if computeHashes && !effectiveComputeHashes {
+            lastScanWasDegraded = true
+            if degradationReason == nil {
+                degradationReason = "File hash computation was skipped due to high memory usage"
+            }
             logger.info("Hash computation disabled due to memory pressure")
         }
         
@@ -212,6 +254,9 @@ actor DirectoryScanner {
             let isDirectory = resourceValues?.isDirectory ?? false
             let size = resourceValues?.fileSize ?? 0
             let creationDate = resourceValues?.creationDate
+            let modificationDate = resourceValues?.contentModificationDate
+            let lastAccessDate = resourceValues?.contentAccessDate
+            let finderTags = resourceValues?.tagNames
             
             // Skip if it's a directory (we only want files)
             if isDirectory {
@@ -232,10 +277,15 @@ actor DirectoryScanner {
             // Determine cloud status for the file
             let cloudStatus = detectCloudStatus(at: fileURL)
             
+            // Read Finder comment via extended attribute
+            let finderComment = Self.readFinderComment(at: fileURL)
+            
             // Deep scan: extract content metadata (skipped under memory pressure)
             var contentMetadata: ContentMetadata?
             if effectiveDeepScan {
                 contentMetadata = await contentAnalyzer.analyze(fileURL: fileURL)
+                deepScanAnalyzedCount += 1
+                deepScanProgressCallback?(deepScanAnalyzedCount, 0)
             }
             
             // Hash computation for duplicate detection (skipped under memory pressure)
@@ -251,9 +301,13 @@ actor DirectoryScanner {
                 size: Int64(size),
                 isDirectory: false,
                 creationDate: creationDate,
+                modificationDate: modificationDate,
+                lastAccessDate: lastAccessDate,
                 contentMetadata: contentMetadata,
                 sha256Hash: sha256Hash,
-                cloudStatus: cloudStatus
+                cloudStatus: cloudStatus,
+                finderComment: finderComment,
+                finderTags: finderTags
             )
             
             files.append(fileItem)
@@ -287,6 +341,28 @@ actor DirectoryScanner {
     
     func getCloudPlaceholderCount() -> Int {
         cloudPlaceholdersSkipped
+    }
+    
+    func setDeepScanProgressCallback(_ callback: (@Sendable (_ current: Int, _ total: Int) -> Void)?) {
+        deepScanProgressCallback = callback
+    }
+    
+    // MARK: - Finder Metadata
+    
+    private static func readFinderComment(at url: URL) -> String? {
+        let path = url.path
+        let key = "com.apple.metadata:kMDItemFinderComment"
+        
+        let size = getxattr(path, key, nil, 0, 0, 0)
+        guard size > 0 else { return nil }
+        
+        var data = Data(count: size)
+        let result = data.withUnsafeMutableBytes { buf in
+            getxattr(path, key, buf.baseAddress, size, 0, 0)
+        }
+        guard result > 0 else { return nil }
+        
+        return try? PropertyListSerialization.propertyList(from: data, format: nil) as? String
     }
     
     // MARK: - Cloud Storage Detection
@@ -557,6 +633,5 @@ enum ScannerError: LocalizedError {
         }
     }
 }
-
 
 

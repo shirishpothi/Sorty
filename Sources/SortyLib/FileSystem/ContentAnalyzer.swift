@@ -9,6 +9,10 @@ import Foundation
 import PDFKit
 import ImageIO
 import UniformTypeIdentifiers
+import Compression
+import AVFoundation
+import CoreServices
+import CoreMedia
 
 /// Metadata extracted from file content
 public struct ContentMetadata: Codable, Hashable, Sendable {
@@ -22,6 +26,8 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
     public var ocrText: String?              // OCR extracted text from images
     public var ocrConfidence: Float?         // OCR confidence score
     public var detectedKeywords: [String]?   // Keywords detected in OCR text
+    public var duration: TimeInterval?       // Duration in seconds for audio/video
+    public var mediaInfo: [String: String]?  // Codec, bitrate, title, artist, album, genre
 
     public init(
         textPreview: String? = nil,
@@ -33,7 +39,9 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
         keywords: [String]? = nil,
         ocrText: String? = nil,
         ocrConfidence: Float? = nil,
-        detectedKeywords: [String]? = nil
+        detectedKeywords: [String]? = nil,
+        duration: TimeInterval? = nil,
+        mediaInfo: [String: String]? = nil
     ) {
         self.textPreview = textPreview
         self.documentTitle = documentTitle
@@ -45,10 +53,12 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
         self.ocrText = ocrText
         self.ocrConfidence = ocrConfidence
         self.detectedKeywords = detectedKeywords
+        self.duration = duration
+        self.mediaInfo = mediaInfo
     }
 
     public var isEmpty: Bool {
-        textPreview == nil && documentTitle == nil && exifData == nil && ocrText == nil
+        textPreview == nil && documentTitle == nil && exifData == nil && ocrText == nil && mediaInfo == nil
     }
 
     /// All available text content (document text + OCR)
@@ -88,6 +98,19 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
         if let pages = pageCount {
             parts.append("\(pages) pages")
         }
+        if let duration = duration {
+            let minutes = Int(duration) / 60
+            let seconds = Int(duration) % 60
+            parts.append("Duration: \(minutes)m \(seconds)s")
+        }
+        if let info = mediaInfo {
+            if let artist = info["artist"] {
+                parts.append("Artist: \(artist)")
+            }
+            if let title = info["title"] {
+                parts.append("Track: \(title)")
+            }
+        }
 
         return parts.isEmpty ? "" : "[\(parts.joined(separator: ", "))]"
     }
@@ -102,13 +125,112 @@ public actor ContentAnalyzer {
     // Configuration
     public var enableOCR: Bool = true
     public var enableDeepDocumentScan: Bool = true
+    public var customOCRKeywords: [String] = []
+    public var ocrLanguages: [String] = ["en-US"]
+    
+    public func setCustomOCRKeywords(_ keywords: [String]) {
+        self.customOCRKeywords = keywords
+    }
+
+    public func setOCRLanguages(_ languages: [String]) async {
+        let cleaned = languages
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        self.ocrLanguages = cleaned.isEmpty ? ["en-US"] : cleaned
+        await visionAnalyzer.setRecognitionLanguages(self.ocrLanguages)
+    }
+
+    // MARK: - Content Metadata Cache
+
+    /// Cache entry for content metadata
+    private struct CacheEntry: Codable {
+        let filePath: String
+        let modificationDate: Date
+        let fileSize: Int64
+        let metadata: ContentMetadata
+    }
+
+    private var memoryCache: [String: CacheEntry] = [:]
+    private var cacheLoaded = false
+    private var diskCacheURL: URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("com.sorty.app")
+            .appendingPathComponent("content-metadata-cache.json")
+    }
 
     public init() {}
     
     /// Clear any cached data to free memory
-    public func clearCache() {
-        // Currently no internal cache, but reserved for future use
-        // VisionAnalyzer caches would be cleared here if implemented
+    public func clearCache() async {
+        memoryCache.removeAll()
+        if let cacheURL = diskCacheURL {
+            try? FileManager.default.removeItem(at: cacheURL)
+        }
+        await visionAnalyzer.clearCache()
+        ImageVisionAnalyzer.clearSharedCache()
+    }
+
+    private func ensureCacheLoaded() {
+        if !cacheLoaded {
+            cacheLoaded = true
+            loadCacheFromDisk()
+        }
+    }
+
+    private func lookupCache(for url: URL) -> ContentMetadata? {
+        ensureCacheLoaded()
+        let key = url.path
+        guard let entry = memoryCache[key] else { return nil }
+
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let modDate = attrs[.modificationDate] as? Date,
+              let size = attrs[.size] as? Int64 else {
+            memoryCache.removeValue(forKey: key)
+            return nil
+        }
+
+        if entry.modificationDate == modDate && entry.fileSize == size {
+            return entry.metadata
+        }
+
+        memoryCache.removeValue(forKey: key)
+        return nil
+    }
+
+    private func cacheResult(_ metadata: ContentMetadata, for url: URL) {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let modDate = attrs[.modificationDate] as? Date,
+              let size = attrs[.size] as? Int64 else { return }
+
+        let entry = CacheEntry(
+            filePath: url.path,
+            modificationDate: modDate,
+            fileSize: size,
+            metadata: metadata
+        )
+        memoryCache[url.path] = entry
+    }
+
+    private func saveCacheToDisk() {
+        guard let cacheURL = diskCacheURL else { return }
+        do {
+            let dir = cacheURL.deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(Array(memoryCache.values))
+            try data.write(to: cacheURL)
+        } catch {
+            DebugLogger.log("Failed to save content cache: \(error)")
+        }
+    }
+
+    private func loadCacheFromDisk() {
+        guard let cacheURL = diskCacheURL,
+              let data = try? Data(contentsOf: cacheURL),
+              let entries = try? JSONDecoder().decode([CacheEntry].self, from: data) else { return }
+
+        for entry in entries {
+            memoryCache[entry.filePath] = entry
+        }
     }
 
     /// Analyze a file and extract relevant metadata
@@ -117,20 +239,47 @@ public actor ContentAnalyzer {
             return nil
         }
 
+        // Check cache first
+        if let cached = lookupCache(for: fileURL) {
+            return cached
+        }
+
         let ext = fileURL.pathExtension.lowercased()
 
+        let result: ContentMetadata?
         switch ext {
         case "pdf":
-            return await extractPDFContent(from: fileURL)
+            if enableDeepDocumentScan {
+                result = await extractPDFContent(from: fileURL)
+            } else {
+                result = extractPDFMetadataOnly(from: fileURL)
+            }
         case "jpg", "jpeg", "heic", "png", "tiff", "tif", "bmp", "gif":
-            return await extractImageContent(from: fileURL, performOCR: enableOCR)
+            result = await extractImageContent(from: fileURL, performOCR: enableOCR)
         case "docx":
-            return await extractDOCXContent(from: fileURL)
-        case "txt", "md", "rtf":
-            return extractTextContent(from: fileURL)
+            result = enableDeepDocumentScan ? await extractDOCXContent(from: fileURL) : nil
+        case "txt", "md":
+            result = enableDeepDocumentScan ? extractTextContent(from: fileURL) : nil
+        case "rtf":
+            result = enableDeepDocumentScan ? extractRTFContent(from: fileURL) : nil
+        case "mp3", "mp4", "m4a", "mov", "avi", "mkv", "wav", "aac", "flac", "m4v", "webm":
+            result = await extractMediaContent(from: fileURL)
+        case "pages", "numbers", "key":
+            result = enableDeepDocumentScan ? extractIWorkContent(from: fileURL) : nil
+        case "xlsx":
+            result = enableDeepDocumentScan ? await extractXLSXContent(from: fileURL) : nil
+        case "pptx":
+            result = enableDeepDocumentScan ? await extractPPTXContent(from: fileURL) : nil
         default:
-            return nil
+            result = nil
         }
+
+        // Cache the result
+        if let result = result {
+            cacheResult(result, for: fileURL)
+        }
+
+        return result
     }
 
     /// Batch analyze multiple files
@@ -140,18 +289,40 @@ public actor ContentAnalyzer {
         progressHandler: (@Sendable (Int, Int) -> Void)? = nil
     ) async -> [URL: ContentMetadata] {
         var results: [URL: ContentMetadata] = [:]
+        let total = urls.count
 
-        for (index, url) in urls.enumerated() {
-            if let metadata = await analyze(fileURL: url, enableOCR: enableOCR) {
-                results[url] = metadata
-            }
-            progressHandler?(index + 1, urls.count)
+        // Process in batches to limit concurrency
+        let batchSize = 4
+        for batchStart in stride(from: 0, to: urls.count, by: batchSize) {
+            let batchEnd = min(batchStart + batchSize, urls.count)
+            let batch = Array(urls[batchStart..<batchEnd])
 
-            // Yield periodically for UI updates
-            if index % 10 == 0 {
-                await Task.yield()
+            let batchResults = await withTaskGroup(of: (URL, ContentMetadata?).self) { group in
+                for url in batch {
+                    group.addTask {
+                        let metadata = await self.analyze(fileURL: url, enableOCR: enableOCR)
+                        return (url, metadata)
+                    }
+                }
+
+                var batchDict: [URL: ContentMetadata] = [:]
+                for await (url, metadata) in group {
+                    if let metadata = metadata {
+                        batchDict[url] = metadata
+                    }
+                }
+                return batchDict
             }
+
+            results.merge(batchResults) { _, new in new }
+            progressHandler?(batchEnd, total)
+
+            // Yield for UI updates between batches
+            await Task.yield()
         }
+
+        // Save cache after batch analysis
+        saveCacheToDisk()
 
         return results
     }
@@ -200,9 +371,28 @@ public actor ContentAnalyzer {
             if let ocrResult = await performOCROnPDFPage(firstPage) {
                 metadata.ocrText = ocrResult.text
                 metadata.ocrConfidence = ocrResult.confidence
-                metadata.detectedKeywords = ocrResult.detectedKeywords
+                metadata.detectedKeywords = ocrResult.detectKeywords(using: customOCRKeywords)
             }
         }
+
+        return metadata.isEmpty ? nil : metadata
+    }
+
+    /// Light PDF extraction: only metadata (title, author, page count), no text extraction
+    private func extractPDFMetadataOnly(from url: URL) -> ContentMetadata? {
+        guard let document = PDFDocument(url: url) else { return nil }
+
+        var metadata = ContentMetadata()
+
+        if let attributes = document.documentAttributes {
+            metadata.documentTitle = attributes[PDFDocumentAttribute.titleAttribute] as? String
+            metadata.author = attributes[PDFDocumentAttribute.authorAttribute] as? String
+            if let keywordsString = attributes[PDFDocumentAttribute.keywordsAttribute] as? String {
+                metadata.keywords = keywordsString.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            }
+        }
+
+        metadata.pageCount = document.pageCount
 
         return metadata.isEmpty ? nil : metadata
     }
@@ -249,7 +439,7 @@ public actor ContentAnalyzer {
             if let ocrResult = await visionAnalyzer.analyzeImage(at: url) {
                 metadata.ocrText = ocrResult.text
                 metadata.ocrConfidence = ocrResult.confidence
-                metadata.detectedKeywords = ocrResult.detectedKeywords
+                metadata.detectedKeywords = ocrResult.detectKeywords(using: customOCRKeywords)
             }
         }
 
@@ -320,47 +510,30 @@ public actor ContentAnalyzer {
     // MARK: - DOCX Extraction
 
     private func extractDOCXContent(from url: URL) async -> ContentMetadata? {
-        // DOCX files are ZIP archives containing XML
-        let coordinator = NSFileCoordinator()
-        var extractedText: String?
-        var error: NSError?
-
-        coordinator.coordinate(readingItemAt: url, options: .withoutChanges, error: &error) { accessedURL in
-            do {
-                // Create temporary directory for extraction
-                let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-                try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-                defer {
-                    try? FileManager.default.removeItem(at: tempDir)
-                }
-
-                // Unzip using Process
-                let unzipProcess = Process()
-                unzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-                unzipProcess.arguments = ["-o", "-q", accessedURL.path, "word/document.xml", "-d", tempDir.path]
-                unzipProcess.standardOutput = FileHandle.nullDevice
-                unzipProcess.standardError = FileHandle.nullDevice
-
-                try unzipProcess.run()
-                unzipProcess.waitUntilExit()
-
-                // Read the document.xml
-                let documentPath = tempDir.appendingPathComponent("word/document.xml")
-                if let xmlData = try? Data(contentsOf: documentPath),
-                   let xmlString = String(data: xmlData, encoding: .utf8) {
-                    // Simple extraction of text content from XML (strips tags)
-                    extractedText = extractTextFromXML(xmlString)
-                }
-            } catch {
-                DebugLogger.log("DOCX extraction failed: \(error)")
-            }
-        }
-
-        guard let text = extractedText, !text.isEmpty else {
+        guard let zipData = try? Data(contentsOf: url, options: .mappedIfSafe) else {
             return nil
         }
 
-        return ContentMetadata(textPreview: String(text.prefix(maxPreviewLength)))
+        guard let xmlString = extractFileFromZip(data: zipData, fileName: "word/document.xml") else {
+            return nil
+        }
+
+        let text = extractTextFromXML(xmlString)
+        guard !text.isEmpty else { return nil }
+
+        var metadata = ContentMetadata(textPreview: String(text.prefix(maxPreviewLength)))
+
+        // Also try to extract core.xml for metadata
+        if let coreXML = extractFileFromZip(data: zipData, fileName: "docProps/core.xml") {
+            if let title = extractXMLValue(coreXML, tag: "dc:title") {
+                metadata.documentTitle = title
+            }
+            if let author = extractXMLValue(coreXML, tag: "dc:creator") {
+                metadata.author = author
+            }
+        }
+
+        return metadata
     }
 
     private func extractTextFromXML(_ xml: String) -> String {
@@ -401,6 +574,275 @@ public actor ContentAnalyzer {
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         return ContentMetadata(textPreview: preview)
+    }
+
+    // MARK: - RTF Extraction
+
+    private func extractRTFContent(from url: URL) -> ContentMetadata? {
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
+            return nil
+        }
+
+        guard let attributedString = NSAttributedString(rtf: data, documentAttributes: nil) else {
+            return extractTextContent(from: url)
+        }
+
+        let text = attributedString.string
+        let preview = String(text.prefix(maxPreviewLength))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !preview.isEmpty else { return nil }
+        return ContentMetadata(textPreview: preview)
+    }
+
+    // MARK: - Audio/Video Extraction
+
+    private func extractMediaContent(from url: URL) async -> ContentMetadata? {
+        let asset = AVURLAsset(url: url)
+        var metadata = ContentMetadata()
+        var mediaDict: [String: String] = [:]
+
+        if let duration = try? await asset.load(.duration) {
+            let seconds = CMTimeGetSeconds(duration)
+            if seconds.isFinite && seconds > 0 {
+                metadata.duration = seconds
+            }
+        }
+
+        if let metadataItems = try? await asset.load(.commonMetadata) {
+            for item in metadataItems {
+                guard let key = item.commonKey?.rawValue,
+                      let value = try? await item.load(.stringValue) else { continue }
+                switch key {
+                case AVMetadataKey.commonKeyTitle.rawValue:
+                    metadata.documentTitle = value
+                    mediaDict["title"] = value
+                case AVMetadataKey.commonKeyArtist.rawValue:
+                    metadata.author = value
+                    mediaDict["artist"] = value
+                case AVMetadataKey.commonKeyAlbumName.rawValue:
+                    mediaDict["album"] = value
+                case AVMetadataKey.commonKeyType.rawValue:
+                    mediaDict["genre"] = value
+                case AVMetadataKey.commonKeyCreationDate.rawValue:
+                    mediaDict["creationDate"] = value
+                default:
+                    break
+                }
+            }
+        }
+
+        if let audioTracks = try? await asset.loadTracks(withMediaType: .audio),
+           let firstAudio = audioTracks.first {
+            if let formatDescriptions = try? await firstAudio.load(.formatDescriptions),
+               let desc = formatDescriptions.first {
+                let audioDesc = CMAudioFormatDescriptionGetStreamBasicDescription(desc)
+                if let sampleRate = audioDesc?.pointee.mSampleRate {
+                    mediaDict["sampleRate"] = "\(Int(sampleRate)) Hz"
+                }
+            }
+        }
+
+        if let videoTracks = try? await asset.loadTracks(withMediaType: .video),
+           let firstVideo = videoTracks.first {
+            if let naturalSize = try? await firstVideo.load(.naturalSize) {
+                mediaDict["resolution"] = "\(Int(naturalSize.width))x\(Int(naturalSize.height))"
+            }
+        }
+
+        if !mediaDict.isEmpty {
+            metadata.mediaInfo = mediaDict
+        }
+
+        return metadata.isEmpty ? nil : metadata
+    }
+
+    // MARK: - iWork Extraction (Pages, Numbers, Keynote)
+
+    private func extractIWorkContent(from url: URL) -> ContentMetadata? {
+        return extractSpotlightMetadata(from: url)
+    }
+
+    // MARK: - XLSX/PPTX Extraction
+
+    private func extractXLSXContent(from url: URL) async -> ContentMetadata? {
+        if let metadata = extractSpotlightMetadata(from: url) {
+            return metadata
+        }
+
+        return await extractZipXMLContent(from: url, xmlPath: "xl/workbook.xml")
+    }
+
+    private func extractPPTXContent(from url: URL) async -> ContentMetadata? {
+        if let metadata = extractSpotlightMetadata(from: url) {
+            return metadata
+        }
+
+        return await extractZipXMLContent(from: url, xmlPath: "ppt/presentation.xml")
+    }
+
+    // MARK: - Shared Helpers
+
+    private func extractSpotlightMetadata(from url: URL) -> ContentMetadata? {
+        guard let mdItem = MDItemCreateWithURL(kCFAllocatorDefault, url as CFURL) else {
+            return nil
+        }
+
+        var metadata = ContentMetadata()
+
+        let attributes = [
+            kMDItemTitle,
+            kMDItemAuthors,
+            kMDItemNumberOfPages,
+            kMDItemTextContent,
+            kMDItemKeywords
+        ] as [CFString]
+
+        if let attrDict = MDItemCopyAttributes(mdItem, attributes as CFArray) as? [String: Any] {
+            if let title = attrDict[kMDItemTitle as String] as? String {
+                metadata.documentTitle = title
+            }
+            if let authors = attrDict[kMDItemAuthors as String] as? [String], let firstAuthor = authors.first {
+                metadata.author = firstAuthor
+            }
+            if let pages = attrDict[kMDItemNumberOfPages as String] as? Int {
+                metadata.pageCount = pages
+            }
+            if let text = attrDict[kMDItemTextContent as String] as? String, !text.isEmpty {
+                metadata.textPreview = String(text.prefix(maxPreviewLength))
+            }
+            if let keywords = attrDict[kMDItemKeywords as String] as? [String] {
+                metadata.keywords = keywords
+            }
+        }
+
+        return metadata.isEmpty ? nil : metadata
+    }
+
+    private func extractZipXMLContent(from url: URL, xmlPath: String) async -> ContentMetadata? {
+        guard let zipData = try? Data(contentsOf: url, options: .mappedIfSafe),
+              let xmlString = extractFileFromZip(data: zipData, fileName: xmlPath) else {
+            return nil
+        }
+
+        let text = extractTextFromXML(xmlString)
+        guard !text.isEmpty else { return nil }
+        return ContentMetadata(textPreview: String(text.prefix(maxPreviewLength)))
+    }
+
+    // MARK: - Native ZIP Reading
+
+    /// Extract a single file from a ZIP archive by name
+    private func extractFileFromZip(data: Data, fileName: String) -> String? {
+        // ZIP end of central directory signature
+        let eocdSignature: [UInt8] = [0x50, 0x4B, 0x05, 0x06]
+
+        guard data.count > 22 else { return nil }
+        var eocdOffset = -1
+        let searchStart = max(0, data.count - 65557)
+
+        for i in stride(from: data.count - 22, through: searchStart, by: -1) {
+            if data[i] == eocdSignature[0] && data[i+1] == eocdSignature[1] &&
+               data[i+2] == eocdSignature[2] && data[i+3] == eocdSignature[3] {
+                eocdOffset = i
+                break
+            }
+        }
+
+        guard eocdOffset >= 0 else { return nil }
+
+        // Read central directory offset from EOCD
+        let cdOffset = Int(data[eocdOffset + 16]) | (Int(data[eocdOffset + 17]) << 8) |
+                       (Int(data[eocdOffset + 18]) << 16) | (Int(data[eocdOffset + 19]) << 24)
+
+        // Iterate through central directory entries
+        var pos = cdOffset
+        let cdSignature: [UInt8] = [0x50, 0x4B, 0x01, 0x02]
+
+        while pos + 46 < data.count {
+            guard data[pos] == cdSignature[0] && data[pos+1] == cdSignature[1] &&
+                  data[pos+2] == cdSignature[2] && data[pos+3] == cdSignature[3] else { break }
+
+            let compressionMethod = UInt16(data[pos + 10]) | (UInt16(data[pos + 11]) << 8)
+            let compressedSize = Int(data[pos + 20]) | (Int(data[pos + 21]) << 8) |
+                                 (Int(data[pos + 22]) << 16) | (Int(data[pos + 23]) << 24)
+            let uncompressedSize = Int(data[pos + 24]) | (Int(data[pos + 25]) << 8) |
+                                   (Int(data[pos + 26]) << 16) | (Int(data[pos + 27]) << 24)
+            let fileNameLength = Int(data[pos + 28]) | (Int(data[pos + 29]) << 8)
+            let extraFieldLength = Int(data[pos + 30]) | (Int(data[pos + 31]) << 8)
+            let commentLength = Int(data[pos + 32]) | (Int(data[pos + 33]) << 8)
+            let localHeaderOffset = Int(data[pos + 42]) | (Int(data[pos + 43]) << 8) |
+                                    (Int(data[pos + 44]) << 16) | (Int(data[pos + 45]) << 24)
+
+            let nameStart = pos + 46
+            let nameEnd = nameStart + fileNameLength
+            guard nameEnd <= data.count else { break }
+
+            let entryName = String(data: data[nameStart..<nameEnd], encoding: .utf8) ?? ""
+
+            if entryName == fileName {
+                // Found it — read from local file header
+                let localPos = localHeaderOffset
+                guard localPos + 30 < data.count else { return nil }
+
+                let localNameLen = Int(data[localPos + 26]) | (Int(data[localPos + 27]) << 8)
+                let localExtraLen = Int(data[localPos + 28]) | (Int(data[localPos + 29]) << 8)
+                let dataStart = localPos + 30 + localNameLen + localExtraLen
+                let dataEnd = dataStart + compressedSize
+
+                guard dataEnd <= data.count else { return nil }
+
+                let fileData = data[dataStart..<dataEnd]
+
+                if compressionMethod == 0 {
+                    // Stored (no compression)
+                    return String(data: fileData, encoding: .utf8)
+                } else if compressionMethod == 8 {
+                    // Deflate — use Compression framework
+                    let decompressed = decompressDeflate(Data(fileData), uncompressedSize: uncompressedSize)
+                    return decompressed.flatMap { String(data: $0, encoding: .utf8) }
+                }
+
+                return nil
+            }
+
+            pos = nameEnd + extraFieldLength + commentLength
+        }
+
+        return nil
+    }
+
+    private func decompressDeflate(_ data: Data, uncompressedSize: Int) -> Data? {
+        let bufferSize = max(uncompressedSize, 4096)
+        var decompressed = Data(count: bufferSize)
+
+        let result = decompressed.withUnsafeMutableBytes { destBuffer in
+            data.withUnsafeBytes { srcBuffer in
+                guard let destPtr = destBuffer.baseAddress,
+                      let srcPtr = srcBuffer.baseAddress else { return 0 }
+                return compression_decode_buffer(
+                    destPtr.assumingMemoryBound(to: UInt8.self),
+                    bufferSize,
+                    srcPtr.assumingMemoryBound(to: UInt8.self),
+                    data.count,
+                    nil,
+                    COMPRESSION_ZLIB
+                )
+            }
+        }
+
+        guard result > 0 else { return nil }
+        return decompressed.prefix(result)
+    }
+
+    private func extractXMLValue(_ xml: String, tag: String) -> String? {
+        let pattern = "<\(NSRegularExpression.escapedPattern(for: tag))[^>]*>([^<]+)</\(NSRegularExpression.escapedPattern(for: tag))>"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
+              let match = regex.firstMatch(in: xml, options: [], range: NSRange(xml.startIndex..., in: xml)),
+              let range = Range(match.range(at: 1), in: xml) else {
+            return nil
+        }
+        return String(xml[range])
     }
 }
 

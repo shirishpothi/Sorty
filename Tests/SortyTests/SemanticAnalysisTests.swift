@@ -368,7 +368,7 @@ class ResponseParserSmartRenamingTests: XCTestCase {
             FileItem(path: "/test/doc2.pdf", name: "doc2", extension: "pdf")
         ]
 
-        let plan = try ResponseParser.parseResponse(jsonString, originalFiles: originalFiles)
+        let plan = try ResponseParser.parseResponse(jsonString, originalFiles: originalFiles, mode: .organizeAndRename)
 
         XCTAssertEqual(plan.suggestions.count, 1)
 

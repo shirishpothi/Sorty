@@ -74,7 +74,21 @@ struct PromptBuilder {
         return prompt
     }
     
-    static func buildOrganizationPrompt(files: [FileItem], mode: OrganizationMode = .organize, namingStyle: NamingStyle = .descriptive, customNamingInstructions: String? = nil, enableReasoning: Bool = false, enableSmartRename: Bool = false, includeContentMetadata: Bool = false, customInstructions: String? = nil, storageLocationsContext: String? = nil, existingFoldersContext: String? = nil) -> String {
+    static func buildOrganizationPrompt(
+        files: [FileItem],
+        mode: OrganizationMode = .organize,
+        namingStyle: NamingStyle = .descriptive,
+        customNamingInstructions: String? = nil,
+        renameRules: [RenameRule] = [],
+        renameRuleMode: RenameRuleApplicationMode = .beforeAI,
+        enableReasoning: Bool = false,
+        enableSmartRename: Bool = false,
+        includeContentMetadata: Bool = false,
+        customInstructions: String? = nil,
+        storageLocationsContext: String? = nil,
+        existingFoldersContext: String? = nil,
+        analyzedImageFilenames: [String] = []
+    ) -> String {
         var prompt: String
         
         if mode == .renameOnly {
@@ -122,10 +136,33 @@ struct PromptBuilder {
             ## INTELLIGENT RENAMING
             Suggest meaningful, descriptive filenames that help users understand file contents at a glance.
             - \(namingStyle.promptInstructions)
+            - When renaming multiple files in the same folder, keep one consistent naming pattern.
+            - Return a `rename_confidence` score between 0.0 and 1.0 for each rename.
+            - Renaming is optional per file. If the existing name is already clear and specific, keep it unchanged.
+            - Only include `suggested_name` and `rename_reason` for files that truly need a better name.
+            - `rename_reason` must be concrete and evidence-based (cite content cues, date, project, or ambiguity being resolved). Avoid vague reasons like "more descriptive".
             """
-            
+
             if let customNaming = customNamingInstructions, !customNaming.isEmpty {
-                prompt += "\n- CUSTOM NAMING PREFERENCE: \(customNaming)"
+                let expanded = expandedCustomNamingInstructions(
+                    customNaming,
+                    files: files,
+                    maxExamples: 5
+                )
+                prompt += "\n- CUSTOM NAMING PREFERENCE: \(expanded)"
+            }
+
+            if !renameRules.isEmpty {
+                prompt += "\n- CUSTOM RENAME RULES (\(renameRuleMode.displayName)):"
+                for rule in renameRules.prefix(10) {
+                    let modeLabel = rule.isRegex ? "regex" : "text"
+                    prompt += "\n  • [\(modeLabel)] \(rule.pattern) -> \(rule.replacement)"
+                }
+                if renameRuleMode == .rulesOnly {
+                    prompt += "\n  • RULE MODE: Use only these custom rules for renaming and avoid AI creativity."
+                } else {
+                    prompt += "\n  • RULE MODE: Apply these rules first, then refine with AI when useful."
+                }
             }
             
             prompt += """
@@ -133,7 +170,25 @@ struct PromptBuilder {
             - Remove redundant prefixes like "IMG_", "DSC_", "Screenshot ", "Document (1)".
             - Keep filenames concise (max 60 chars) but highly informative.
             - Ensure names are valid for macOS filesystem and keep extensions unchanged.
+            - Do NOT rename dotfiles/config files (e.g., .gitignore, .env, Makefile).
+            - Do NOT rename files that already follow clear semantic version patterns (e.g., v1.2.3).
             
+            """
+        }
+
+        if !analyzedImageFilenames.isEmpty {
+            let orderedNames = analyzedImageFilenames
+                .enumerated()
+                .map { "\($0.offset + 1). \($0.element)" }
+                .joined(separator: "\n")
+
+            prompt += """
+            ## AI VISION ATTACHMENTS
+            I've attached \(analyzedImageFilenames.count) images from this folder.
+            For each attached image, briefly describe what you see and use that visual context to improve folder categorization.
+            The following images are attached in order:
+            \(orderedNames)
+
             """
         }
         
@@ -145,12 +200,53 @@ struct PromptBuilder {
         for (ext, fileList) in groupedByExtension.sorted(by: { $0.key < $1.key }) {
             let extLabel = ext.isEmpty ? "no extension" : ".\(ext)"
             prompt += "\(extLabel.uppercased()) files (\(fileList.count)):\n"
-            for file in fileList.prefix(50) {
+            
+            // Prioritize files with content metadata (deep-scanned) before applying the cap
+            let sortedFiles: [FileItem]
+            if includeContentMetadata {
+                sortedFiles = fileList.sorted { a, b in
+                    let aHasMetadata = a.contentMetadata != nil && !a.contentMetadata!.isEmpty
+                    let bHasMetadata = b.contentMetadata != nil && !b.contentMetadata!.isEmpty
+                    if aHasMetadata != bHasMetadata { return aHasMetadata }
+                    return false
+                }
+            } else {
+                sortedFiles = fileList
+            }
+            
+            for file in sortedFiles.prefix(50) {
                 var fileDesc = "  - \(file.displayName) (\(file.formattedSize))"
+                
+                // Include file dates
+                let dateFormatter = ISO8601DateFormatter()
+                dateFormatter.formatOptions = [.withFullDate]
+                if let created = file.creationDate {
+                    fileDesc += ", created: \(dateFormatter.string(from: created))"
+                }
+                if let modified = file.modificationDate {
+                    fileDesc += ", modified: \(dateFormatter.string(from: modified))"
+                }
+                
+                // Include Finder tags
+                if let tags = file.finderTags, !tags.isEmpty {
+                    fileDesc += "\n    [Tags] \(tags.joined(separator: ", "))"
+                }
+                
+                // Include Finder comment
+                if let comment = file.finderComment, !comment.isEmpty {
+                    fileDesc += "\n    [Finder Comment] \(truncateForPrompt(comment, maxLength: 200))"
+                }
                 
                 // Include content metadata if available and requested
                 if includeContentMetadata, let metadata = file.contentMetadata, !metadata.isEmpty {
-                    fileDesc += "\n    [Content Analysis] \(metadata.summary)"
+                    if mode == .renameOnly || mode == .organizeAndRename {
+                        let snippet = renameMetadataSnippet(for: file, maxLength: 50)
+                        if !snippet.isEmpty {
+                            fileDesc += "\n    [Rename Context] \(snippet)"
+                        }
+                    } else {
+                        fileDesc += "\n    [Content Analysis] \(metadata.summary)"
+                    }
                 }
                 
                 prompt += "\(fileDesc)\n"
@@ -167,6 +263,12 @@ struct PromptBuilder {
             prompt += "- Document text: Group related documents by their actual content, not just filenames\n"
             prompt += "- OCR results: Use text found in images/screenshots for more accurate categorization\n\n"
         }
+        
+        prompt += "## FILE METADATA\n"
+        prompt += "Files include metadata when available — use it for smarter organization:\n"
+        prompt += "- Dates (created/modified): Group by time period or project phase when relevant\n"
+        prompt += "- Finder Tags: Respect existing user categorization; group tagged files together when appropriate\n"
+        prompt += "- Finder Comments: User annotations that provide context about the file's purpose or content\n\n"
 
         if mode == .renameOnly {
             prompt += "\nReturn the suggestions in JSON format. Use a single folder named '.' to represent the current location for all files."
@@ -240,7 +342,20 @@ struct PromptBuilder {
         let ext = file.extension.isEmpty ? "-" : file.extension.lowercased()
         let displayName = file.displayName.isEmpty ? file.name : file.displayName
         let clippedName = String(displayName.prefix(maxNameLength))
-        return "\(id)|\(ext)|\(clippedName)"
+        var line = "\(id)|\(ext)|\(clippedName)"
+        
+        // Append Finder metadata compactly when present
+        var extras: [String] = []
+        if let tags = file.finderTags, !tags.isEmpty {
+            extras.append("tags:\(tags.joined(separator: ","))")
+        }
+        if let comment = file.finderComment, !comment.isEmpty {
+            extras.append("comment:\(String(comment.prefix(40)))")
+        }
+        if !extras.isEmpty {
+            line += "|\(extras.joined(separator: "|"))"
+        }
+        return line
     }
 
     private static func compactFileIdTable(files: [FileItem], maxNameLength: Int) -> String {
@@ -268,7 +383,7 @@ struct PromptBuilder {
         let reasoning = enableReasoning ? ",\"reasoning\":\"\"" : ""
         let filePayload: String
         if mode == .renameOnly || mode == .organizeAndRename {
-            filePayload = "\"files\":[{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\"}]"
+            filePayload = "\"files\":[{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}]"
         } else {
             filePayload = "\"files\":[\"filename\"]"
         }
@@ -284,6 +399,9 @@ struct PromptBuilder {
         var base = "You organize files into practical folders."
         if mode == .renameOnly {
             base += " Keep all files in '.' and only suggest better names."
+        }
+        if mode == .renameOnly || mode == .organizeAndRename {
+            base += " Rename only when there is a material clarity improvement; keep already-good names unchanged."
         }
         base += " Use file_ids from the user list. Include every file exactly once unless unorganized."
         if enableReasoning {
@@ -386,6 +504,8 @@ struct PromptBuilder {
         - Prefer using file_ids in compact responses when IDs are provided.
         - Group by type: Documents, Media, Code, Archives
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Suggest better filenames where appropriate" : "")
+        \(mode == .renameOnly || mode == .organizeAndRename ? "- Rename is optional per file; keep already-clear names unchanged." : "")
+        \(mode == .renameOnly || mode == .organizeAndRename ? "- For each rename_reason, cite concrete evidence and avoid generic wording." : "")
         \(enableTagging ? "" : "- Do NOT include tags or comments. Omit \"tags\" and \"comment\" fields.")
         
         Before JSON, emit up to 8 progress lines: ">> category: text" (categories: file, folder, pattern, decision, constraint, general). Then output JSON only.
@@ -393,7 +513,7 @@ struct PromptBuilder {
         Return JSON:
         {"folder_assignments":[{"name":"",\(enableReasoning ? "\"reasoning\":\"\"," : "")"file_ids":[1,2]}],"notes":""}
         or legacy:
-        {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\"}" : "\"\"")],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
+        {"folders":[{"name":"","description":"",\(enableReasoning ? "\"reasoning\":\"\",": "")\(enableTagging ? "\"tags\":[\"\"]," : "")"files":[\(mode == .renameOnly || mode == .organizeAndRename ? "{\"filename\":\"\",\"suggested_name\":\"\",\"rename_reason\":\"\",\"rename_confidence\":0.0}" : "\"\"")],"subfolders":[]}],"unorganized":[{"filename":"","reason":""}]}
         """
         
         return prompt
@@ -426,7 +546,20 @@ struct PromptBuilder {
         return buildOrganizationPrompt(files: files, enableReasoning: false)
     }
     
-    static func buildPromptForProvider(_ provider: AIProvider, files: [FileItem], mode: OrganizationMode = .organize, namingStyle: NamingStyle = .descriptive, customNamingInstructions: String? = nil, enableReasoning: Bool = false, enableSmartRename: Bool = false, customInstructions: String? = nil, storageLocationsContext: String? = nil, existingFoldersContext: String? = nil) -> String {
+    static func buildPromptForProvider(
+        _ provider: AIProvider,
+        files: [FileItem],
+        mode: OrganizationMode = .organize,
+        namingStyle: NamingStyle = .descriptive,
+        customNamingInstructions: String? = nil,
+        renameRules: [RenameRule] = [],
+        renameRuleMode: RenameRuleApplicationMode = .beforeAI,
+        enableReasoning: Bool = false,
+        enableSmartRename: Bool = false,
+        customInstructions: String? = nil,
+        storageLocationsContext: String? = nil,
+        existingFoldersContext: String? = nil
+    ) -> String {
         switch provider {
         case .appleFoundationModel:
             // Append instructions
@@ -449,10 +582,84 @@ struct PromptBuilder {
             return prompt
         case .anthropic:
             // Anthropic handles system prompts separately but we ensure the user prompt is robust
-            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
+            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
         case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
-            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
+            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
         }
+    }
+
+    private static func expandedCustomNamingInstructions(
+        _ instructions: String,
+        files: [FileItem],
+        maxExamples: Int
+    ) -> String {
+        guard instructions.contains("{") else { return instructions }
+
+        let examples = files.prefix(maxExamples).enumerated().map { index, file in
+            let expanded = expandTemplateVariables(instructions, for: file, counter: index + 1)
+            return "\(file.displayName) -> \(expanded)"
+        }
+
+        guard !examples.isEmpty else { return instructions }
+        return "\(instructions) | Examples: \(examples.joined(separator: " ; "))"
+    }
+
+    private static func expandTemplateVariables(_ template: String, for file: FileItem, counter: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let relevantDate = file.modificationDate ?? file.creationDate ?? Date()
+
+        let replacements: [String: String] = [
+            "{date}": formatter.string(from: relevantDate),
+            "{ext}": file.extension.lowercased(),
+            "{size}": file.formattedSize,
+            "{counter}": String(format: "%02d", counter)
+        ]
+
+        var output = template
+        for (token, value) in replacements {
+            output = output.replacingOccurrences(of: token, with: value)
+        }
+        return output
+    }
+
+    private static func renameMetadataSnippet(for file: FileItem, maxLength: Int) -> String {
+        var parts: [String] = []
+
+        if let metadata = file.contentMetadata {
+            if let title = metadata.documentTitle, !title.isEmpty {
+                parts.append("Title: \(truncateForPrompt(title, maxLength: maxLength))")
+            }
+            if let ocr = metadata.ocrText, !ocr.isEmpty {
+                parts.append("OCR: \(truncateForPrompt(ocr, maxLength: maxLength))")
+            }
+            if let preview = metadata.textPreview, !preview.isEmpty {
+                parts.append("Text: \(truncateForPrompt(preview, maxLength: maxLength))")
+            }
+            if let keywords = metadata.keywords, !keywords.isEmpty {
+                parts.append("Keywords: \(truncateForPrompt(keywords.joined(separator: ", "), maxLength: maxLength))")
+            }
+        }
+
+        if let comment = file.finderComment, !comment.isEmpty {
+            parts.append("Comment: \(truncateForPrompt(comment, maxLength: maxLength))")
+        }
+
+        if let tags = file.finderTags, !tags.isEmpty {
+            parts.append("Tags: \(tags.joined(separator: ", "))")
+        }
+
+        if parts.isEmpty, let semantic = file.semanticTextContent, !semantic.isEmpty {
+            parts.append(truncateForPrompt(semantic, maxLength: maxLength))
+        }
+
+        return parts.joined(separator: " | ")
+    }
+
+    private static func truncateForPrompt(_ text: String, maxLength: Int) -> String {
+        let normalized = text.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > maxLength else { return normalized }
+        return String(normalized.prefix(maxLength)) + "..."
     }
     
     /// Scan a directory for existing folders (1-2 levels deep) to include in the prompt

@@ -10,6 +10,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
+import AppKit
 
 // MARK: - Flattened Row Model
 
@@ -31,6 +32,32 @@ struct FlattenedRow: Identifiable, Equatable {
     }
 }
 
+struct RenameValidationResult: Sendable, Equatable {
+    let inputName: String
+    let sanitizedName: String?
+    let errors: [String]
+    let warnings: [String]
+    let hasInvalidCharacters: Bool
+    let exceedsRecommendedLength: Bool
+    let hasConflict: Bool
+
+    var isValid: Bool {
+        sanitizedName != nil && errors.isEmpty && !hasConflict
+    }
+}
+
+struct RenameSummaryEntry: Identifiable, Equatable {
+    let id: UUID
+    let fileID: UUID
+    let folderID: UUID
+    let folderName: String
+    let originalName: String
+    let newName: String
+    let reason: String
+    let confidence: Double?
+    let isLowConfidenceSkip: Bool
+}
+
 // MARK: - Preview Store
 
 @MainActor
@@ -50,6 +77,7 @@ class PreviewStore: ObservableObject {
 
     /// Duplicate file mappings - maps file ID to its duplicate info
     @Published private(set) var duplicateMappings: [UUID: DuplicateInfo] = [:]
+    @Published private(set) var initialRenameSuggestions: [UUID: FileRenameMapping] = [:]
     
     /// Cached folder counts to avoid recalculation during scrolling
     private var folderCountCache: [UUID: Int] = [:]
@@ -73,6 +101,7 @@ class PreviewStore: ObservableObject {
     
     init(plan: OrganizationPlan) {
         self.plan = plan
+        captureInitialRenameSuggestions(from: plan)
         expandAllFolders()
         rebuildFlattenedRows()
         cachedPlanVersion = plan.version
@@ -81,10 +110,14 @@ class PreviewStore: ObservableObject {
     
     func updatePlan(_ newPlan: OrganizationPlan) {
         // Only invalidate caches if plan actually changed (by version or content)
+        let previousPlanID = plan.id
         let planChanged = newPlan.version != cachedPlanVersion || newPlan.id != plan.id
         self.plan = newPlan
         
         if planChanged {
+            if newPlan.id != previousPlanID {
+                captureInitialRenameSuggestions(from: newPlan)
+            }
             refreshExpandedFolders(for: newPlan)
             // Clear caches when plan changes
             folderCountCache.removeAll()
@@ -97,6 +130,25 @@ class PreviewStore: ObservableObject {
         
         rebuildFlattenedRows()
         cachedPlanVersion = newPlan.version
+    }
+
+    private func captureInitialRenameSuggestions(from plan: OrganizationPlan) {
+        var captured: [UUID: FileRenameMapping] = [:]
+
+        func walk(_ folder: FolderSuggestion) {
+            for mapping in folder.fileRenameMappings {
+                captured[mapping.originalFile.id] = mapping
+            }
+            for subfolder in folder.subfolders {
+                walk(subfolder)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            walk(suggestion)
+        }
+
+        initialRenameSuggestions = captured
     }
     
     /// Get cached file count for a folder (avoids recalculation during scrolling)
@@ -464,15 +516,30 @@ class PreviewStore: ObservableObject {
         updateInternalPlan(updatedPlan)
     }
     
-    func updateRename(fileID: UUID, folderID: UUID, newName: String) {
+    @discardableResult
+    func updateRename(fileID: UUID, folderID: UUID, newName: String) -> Bool {
+        let validation = renameValidation(for: fileID, folderID: folderID, proposedName: newName)
+        guard validation.isValid, let safeName = validation.sanitizedName else {
+            return false
+        }
+
+        if let originalFile = findFile(by: fileID), safeName == originalFile.displayName {
+            if renameMappings[fileID]?.hasRename == true {
+                rejectRename(fileID: fileID, folderID: folderID)
+                return true
+            }
+            return false
+        }
+
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
-            if let updated = updateRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID, newName: newName) {
+            if let updated = updateRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID, newName: safeName) {
                 updatedPlan.suggestions[i] = updated
                 updateInternalPlan(updatedPlan)
-                return
+                return true
             }
         }
+        return false
     }
     
     func rejectRename(fileID: UUID, folderID: UUID) {
@@ -484,6 +551,114 @@ class PreviewStore: ObservableObject {
                 return
             }
         }
+    }
+
+    func acceptAllRenames() {
+        var updatedPlan = plan
+        updatedPlan.suggestions = updatedPlan.suggestions.map { acceptRenamesInFolder($0) }
+        updateInternalPlan(updatedPlan)
+    }
+
+    func rejectAllRenames() {
+        var updatedPlan = plan
+        updatedPlan.suggestions = updatedPlan.suggestions.map { rejectRenamesInFolder($0) }
+        updateInternalPlan(updatedPlan)
+    }
+
+    func acceptRenames(in folderID: UUID) {
+        var updatedPlan = plan
+        for index in 0..<updatedPlan.suggestions.count {
+            updatedPlan.suggestions[index] = acceptRenamesInFolder(updatedPlan.suggestions[index], targetID: folderID)
+        }
+        updateInternalPlan(updatedPlan)
+    }
+
+    func rejectRenames(in folderID: UUID) {
+        var updatedPlan = plan
+        for index in 0..<updatedPlan.suggestions.count {
+            updatedPlan.suggestions[index] = rejectRenamesInFolder(updatedPlan.suggestions[index], targetID: folderID)
+        }
+        updateInternalPlan(updatedPlan)
+    }
+
+    func renameValidation(for fileID: UUID, folderID: UUID, proposedName: String) -> RenameValidationResult {
+        guard let file = findFile(by: fileID) else {
+            return RenameValidationResult(
+                inputName: proposedName,
+                sanitizedName: nil,
+                errors: ["File not found."],
+                warnings: [],
+                hasInvalidCharacters: false,
+                exceedsRecommendedLength: false,
+                hasConflict: false
+            )
+        }
+
+        let sanitization = FilenameSanitizer.sanitize(
+            proposedName,
+            preservingExtension: file.extension,
+            enforceExtension: true
+        )
+
+        let conflict = sanitization.sanitizedName.map {
+            hasFilenameConflict(in: folderID, candidateName: $0, excluding: fileID)
+        } ?? false
+
+        var errors = sanitization.errors
+        if conflict {
+            errors.append("A file with this name already exists in this folder.")
+        }
+
+        return RenameValidationResult(
+            inputName: proposedName,
+            sanitizedName: sanitization.sanitizedName,
+            errors: errors,
+            warnings: sanitization.warnings,
+            hasInvalidCharacters: sanitization.hadInvalidCharacters,
+            exceedsRecommendedLength: sanitization.exceededRecommendedLength,
+            hasConflict: conflict
+        )
+    }
+
+    func renameSummaryEntries() -> [RenameSummaryEntry] {
+        var entries: [RenameSummaryEntry] = []
+
+        func walk(_ folder: FolderSuggestion) {
+            for file in folder.files {
+                guard let mapping = folder.renameMapping(for: file) else { continue }
+                let hasRename = mapping.hasRename
+                let isSkip = mapping.isAutoSkippedForLowConfidence
+                guard hasRename || isSkip else { continue }
+
+                let folderDisplayName = folder.folderName.hasPrefix("/")
+                    ? URL(fileURLWithPath: folder.folderName).lastPathComponent
+                    : folder.folderName
+
+                entries.append(
+                    RenameSummaryEntry(
+                        id: file.id,
+                        fileID: file.id,
+                        folderID: folder.id,
+                        folderName: folderDisplayName,
+                        originalName: file.displayName,
+                        newName: mapping.suggestedName ?? file.displayName,
+                        reason: mapping.renameReason ?? (isSkip ? "AI unsure" : "AI suggested rename"),
+                        confidence: mapping.renameConfidence,
+                        isLowConfidenceSkip: isSkip
+                    )
+                )
+            }
+
+            for subfolder in folder.subfolders {
+                walk(subfolder)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            walk(suggestion)
+        }
+
+        return entries
     }
     
     func revertFolderOrganization(folderID: UUID) {
@@ -514,6 +689,19 @@ class PreviewStore: ObservableObject {
         }
         
         updateInternalPlan(updatedPlan)
+    }
+
+    func updateFolderDestination(folderID: UUID, newDestinationPath: String) {
+        let canonicalPath = StorageLocationPathResolver.canonicalPath(newDestinationPath)
+        var updatedPlan = plan
+
+        for i in 0..<updatedPlan.suggestions.count {
+            if let updated = updateDestinationInFolder(updatedPlan.suggestions[i], targetID: folderID, newDestinationPath: canonicalPath) {
+                updatedPlan.suggestions[i] = updated
+                updateInternalPlan(updatedPlan)
+                return
+            }
+        }
     }
     
     private func findFolderByID(_ id: UUID, in folder: FolderSuggestion) -> FolderSuggestion? {
@@ -548,6 +736,23 @@ class PreviewStore: ObservableObject {
         }
         return nil
     }
+
+    private func updateDestinationInFolder(_ folder: FolderSuggestion, targetID: UUID, newDestinationPath: String) -> FolderSuggestion? {
+        var updatedFolder = folder
+        if folder.id == targetID {
+            updatedFolder.folderName = newDestinationPath
+            return updatedFolder
+        }
+
+        for i in 0..<updatedFolder.subfolders.count {
+            if let updated = updateDestinationInFolder(updatedFolder.subfolders[i], targetID: targetID, newDestinationPath: newDestinationPath) {
+                updatedFolder.subfolders[i] = updated
+                return updatedFolder
+            }
+        }
+
+        return nil
+    }
     
     private func rejectRenameInFolder(_ folder: FolderSuggestion, targetID: UUID, fileID: UUID) -> FolderSuggestion? {
         var updatedFolder = folder
@@ -565,6 +770,49 @@ class PreviewStore: ObservableObject {
             }
         }
         return nil
+    }
+
+    private func acceptRenamesInFolder(_ folder: FolderSuggestion, targetID: UUID? = nil) -> FolderSuggestion {
+        var updatedFolder = folder
+        let shouldApplyHere = targetID == nil || folder.id == targetID
+
+        if shouldApplyHere {
+            for file in updatedFolder.files {
+                guard let initial = initialRenameSuggestions[file.id], initial.hasRename, let suggested = initial.suggestedName else {
+                    continue
+                }
+                updatedFolder.updateRename(
+                    for: file,
+                    newName: suggested,
+                    reason: initial.renameReason,
+                    confidence: initial.renameConfidence
+                )
+            }
+        }
+
+        updatedFolder.subfolders = updatedFolder.subfolders.map {
+            acceptRenamesInFolder($0, targetID: targetID)
+        }
+        return updatedFolder
+    }
+
+    private func rejectRenamesInFolder(_ folder: FolderSuggestion, targetID: UUID? = nil) -> FolderSuggestion {
+        var updatedFolder = folder
+        let shouldApplyHere = targetID == nil || folder.id == targetID
+
+        if shouldApplyHere {
+            for file in updatedFolder.files {
+                guard initialRenameSuggestions[file.id] != nil || updatedFolder.renameMapping(for: file)?.hasRename == true else {
+                    continue
+                }
+                updatedFolder.updateRename(for: file, newName: nil)
+            }
+        }
+
+        updatedFolder.subfolders = updatedFolder.subfolders.map {
+            rejectRenamesInFolder($0, targetID: targetID)
+        }
+        return updatedFolder
     }
     
     private func updateInternalPlan(_ updatedPlan: OrganizationPlan) {
@@ -687,6 +935,19 @@ class PreviewStore: ObservableObject {
         
         return updatedFolder
     }
+
+    private func hasFilenameConflict(in folderID: UUID, candidateName: String, excluding fileID: UUID) -> Bool {
+        guard let folder = folderSuggestion(for: folderID) else { return false }
+
+        let normalizedCandidate = candidateName.lowercased()
+        for file in folder.files where file.id != fileID {
+            let existingName = folder.renameMapping(for: file)?.suggestedName ?? file.displayName
+            if existingName.lowercased() == normalizedCandidate {
+                return true
+            }
+        }
+        return false
+    }
 }
 
 // MARK: - Optimized Preview Tree View
@@ -695,6 +956,8 @@ struct OptimizedPreviewTree: View {
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
+    var onFocusInstructions: (() -> Void)? = nil
+    var enableManualRenameTools: Bool = false
     
     var body: some View {
         ScrollViewReader { scrollProxy in
@@ -705,7 +968,9 @@ struct OptimizedPreviewTree: View {
                             row: row,
                             store: store,
                             dragDropManager: dragDropManager,
-                            onPlanChanged: onPlanChanged
+                            onPlanChanged: onPlanChanged,
+                            onFocusInstructions: onFocusInstructions,
+                            enableManualRenameTools: enableManualRenameTools
                         )
                     }
                 }
@@ -738,6 +1003,8 @@ struct FlattenedRowView: View {
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
+    var onFocusInstructions: (() -> Void)? = nil
+    var enableManualRenameTools: Bool = false
     
     var body: some View {
         switch row.type {
@@ -758,7 +1025,9 @@ struct FlattenedRowView: View {
                 parentFolderID: parentFolderID,
                 store: store,
                 dragDropManager: dragDropManager,
-                onPlanChanged: onPlanChanged
+                onPlanChanged: onPlanChanged,
+                onFocusInstructions: onFocusInstructions,
+                enableManualRenameTools: enableManualRenameTools
             )
         case .unorganizedHeader:
             FlatUnorganizedHeaderView(
@@ -788,8 +1057,11 @@ struct FlatFolderRowView: View {
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
     @EnvironmentObject var learningsManager: LearningsManager
+    @EnvironmentObject var storageLocationsManager: StorageLocationsManager
     
     @State private var isDropTarget = false
+    @State private var showStorageLocationPicker = false
+    @State private var storageLocationPickerErrorMessage: String?
 
     private var folderTags: [String] {
         store.folderTagMappings[suggestion.id] ?? []
@@ -797,6 +1069,43 @@ struct FlatFolderRowView: View {
 
     private var folderComment: String? {
         store.folderCommentMappings[suggestion.id]
+    }
+
+    private var isStorageDestination: Bool {
+        suggestion.folderName.hasPrefix("/")
+    }
+
+    private var matchedStorageLocation: StorageLocation? {
+        guard isStorageDestination else { return nil }
+        return storageLocationsManager.locations
+            .filter { StorageLocationPathResolver.isPath(suggestion.folderName, within: $0.path) }
+            .sorted { $0.path.count > $1.path.count }
+            .first
+    }
+
+    private var usedStorageURL: URL? {
+        if let matchedStorageLocation {
+            return URL(fileURLWithPath: matchedStorageLocation.path, isDirectory: true)
+        }
+        return StorageLocationPathResolver.absoluteURL(from: suggestion.folderName)
+    }
+
+    private var usedStorageDisplayName: String {
+        if let matchedStorageLocation {
+            return matchedStorageLocation.name
+        }
+        return usedStorageURL?.lastPathComponent ?? "Storage"
+    }
+
+    private var usedStoragePath: String {
+        if let matchedStorageLocation {
+            return matchedStorageLocation.path
+        }
+        return usedStorageURL?.path ?? suggestion.folderName
+    }
+
+    private var folderRenameCount: Int {
+        suggestion.allFileRenameMappings.filter { $0.hasRename }.count
     }
     
     var body: some View {
@@ -824,14 +1133,8 @@ struct FlatFolderRowView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                if suggestion.folderName.hasPrefix("/") {
-                    Label("Storage", systemImage: "externaldrive")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.1))
-                        .clipShape(Capsule())
+                if isStorageDestination {
+                    storageLocationDropdown
                 }
 
                 if !folderTags.isEmpty {
@@ -859,15 +1162,45 @@ struct FlatFolderRowView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isDropTarget ? Color.purple.opacity(0.1) : Color.clear)
-                    .strokeBorder(isDropTarget ? Color.purple : Color.clear, lineWidth: 2)
+                    .fill(isDropTarget ? Color.accentColor.opacity(0.1) : Color.clear)
+                    .strokeBorder(isDropTarget ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1.5)
             )
             .contextMenu {
+                if folderRenameCount > 0 {
+                    Button {
+                        store.acceptRenames(in: suggestion.id)
+                        onPlanChanged()
+                    } label: {
+                        Label("Accept Renames in Folder", systemImage: "checkmark.circle")
+                    }
+
+                    Button {
+                        store.rejectRenames(in: suggestion.id)
+                        onPlanChanged()
+                    } label: {
+                        Label("Reject Renames in Folder", systemImage: "xmark.circle")
+                    }
+
+                    Divider()
+                }
+
                 Button(role: .destructive) {
                     store.revertFolderOrganization(folderID: suggestion.id)
                     onPlanChanged()
                 } label: {
                     Label("Revert Organization", systemImage: "arrow.uturn.backward")
+                }
+
+                if isStorageDestination {
+                    Divider()
+
+                    Button("Change Storage Location…") {
+                        showStorageLocationPicker = true
+                    }
+
+                    Button("Show in Finder") {
+                        revealStorageLocationInFinder()
+                    }
                 }
             }
             .onDrop(of: [.text], delegate: OptimizedFileDropDelegate(
@@ -877,8 +1210,115 @@ struct FlatFolderRowView: View {
                 isTargeted: $isDropTarget,
                 onPlanChanged: onPlanChanged
             ))
+            .fileImporter(
+                isPresented: $showStorageLocationPicker,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let selectedURL = urls.first else { return }
+                    do {
+                        try storageLocationsManager.addLocation(url: selectedURL, customName: nil)
+                    } catch {
+                        DebugLogger.log("Could not add selected storage location during preview destination change: \(error)")
+                    }
+                    store.updateFolderDestination(folderID: suggestion.id, newDestinationPath: selectedURL.path)
+                    onPlanChanged()
+                case .failure(let error):
+                    storageLocationPickerErrorMessage = error.localizedDescription
+                }
+            }
+            .alert(
+                "Couldn’t Change Storage Location",
+                isPresented: Binding(
+                    get: { storageLocationPickerErrorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            storageLocationPickerErrorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    storageLocationPickerErrorMessage = nil
+                }
+            } message: {
+                Text(storageLocationPickerErrorMessage ?? "Please try selecting the folder again.")
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+    }
+
+    private var storageLocationDropdown: some View {
+        Menu {
+            Button {
+            } label: {
+                HStack(spacing: 8) {
+                    finderIcon(for: usedStoragePath)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(usedStorageDisplayName)
+                            .font(.caption)
+                        Text(usedStoragePath)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .disabled(true)
+
+            Divider()
+
+            Button("Change Storage Location…") {
+                showStorageLocationPicker = true
+            }
+
+            Button("Show in Finder") {
+                revealStorageLocationInFinder()
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 22, height: 22)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.3),
+                                        Color.white.opacity(0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+
+                Image(systemName: "externaldrive")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Storage location: \(usedStorageDisplayName)")
+    }
+
+    private func finderIcon(for path: String) -> some View {
+        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+            .resizable()
+            .interpolation(.high)
+            .frame(width: 12, height: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 2))
+    }
+
+    private func revealStorageLocationInFinder() {
+        guard let usedStorageURL else { return }
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: usedStorageURL.path)
     }
 }
 
@@ -891,12 +1331,18 @@ struct FlatFileRowView: View {
     @ObservedObject var store: PreviewStore
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
+    var onFocusInstructions: (() -> Void)? = nil
+    var enableManualRenameTools: Bool = false
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
+    @EnvironmentObject var organizer: FolderOrganizer
     
     @State private var isDragging = false
     @State private var isEditingName = false
     @State private var editedName = ""
+    @State private var showRenamePopover = false
+    @State private var showManualRenamePopover = false
+    @State private var steeringInstructionDraft = ""
     @FocusState private var isFocused: Bool
     
     private var renameMapping: FileRenameMapping? {
@@ -924,6 +1370,14 @@ struct FlatFileRowView: View {
     private var isHighlighted: Bool {
         store.highlightedFileID == file.id
     }
+
+    private var renameValidation: RenameValidationResult {
+        store.renameValidation(for: file.id, folderID: parentFolderID, proposedName: editedName)
+    }
+
+    private var activeFilenameForEditing: String {
+        renameMapping?.suggestedName ?? file.displayName
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -941,6 +1395,16 @@ struct FlatFileRowView: View {
                             cancelRename()
                         }
                         .font(.body)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(.thinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(renameFieldBorderColor, lineWidth: 1)
+                                )
+                        )
                 } else {
                     Text(file.displayName)
                         .lineLimit(1)
@@ -950,11 +1414,49 @@ struct FlatFileRowView: View {
                 
                 Spacer()
                 
-                if let mapping = renameMapping, mapping.hasRename {
-                    Image(systemName: "wand.and.stars")
-                        .font(.caption)
-                        .foregroundColor(.purple)
-                        .help(mapping.renameReason ?? "AI suggested rename")
+                if let mapping = renameMapping, mapping.hasRename || mapping.isAutoSkippedForLowConfidence {
+                    Button {
+                        showRenamePopover.toggle()
+                    } label: {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(mapping.isLowConfidence ? Color.orange : Color.accentColor)
+                            .padding(6)
+                            .background(
+                                Circle()
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("PreviewRenameInsightButton-\(file.id.uuidString)")
+                    .help("View rename reason")
+                    .popover(isPresented: $showRenamePopover) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Rename Insight")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+
+                            Text(mapping.renameReason ?? "AI suggested rename")
+                                .font(.callout)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if let confidence = mapping.renameConfidence {
+                                Text("Confidence: \(Int(confidence * 100))%")
+                                    .font(.caption)
+                                    .foregroundStyle(confidence < FileRenameMapping.lowConfidenceThreshold ? .orange : .secondary)
+                            }
+                        }
+                        .padding(12)
+                        .frame(minWidth: 220, maxWidth: 320)
+                    }
+                }
+
+                if enableManualRenameTools {
+                    manualRenameControl
                 }
 
                 if !fileTags.isEmpty {
@@ -990,38 +1492,78 @@ struct FlatFileRowView: View {
                     .foregroundColor(.secondary.opacity(0.6))
             }
             
-            if let mapping = renameMapping, mapping.hasRename, !isEditingName {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                        .foregroundColor(.purple)
-                    
-                    Text(mapping.suggestedName ?? "")
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(.purple)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
-                    Button {
-                        startEditing(initialValue: mapping.suggestedName ?? "")
-                    } label: {
-                        Image(systemName: "pencil")
+            if let mapping = renameMapping, !isEditingName {
+                if mapping.hasRename {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundStyle(Color.accentColor)
+                        
+                        Text(mapping.suggestedName ?? "")
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.accentColor)
+                            .lineLimit(1)
+                        
+                        Spacer()
+                        
+                        Button {
+                            startEditing(initialValue: mapping.suggestedName ?? "")
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.caption2)
+                                .foregroundStyle(Color.accentColor)
+                                .padding(4)
+                                .background(Circle().fill(Color.accentColor.opacity(0.12)))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("PreviewRenameEditButton-\(file.id.uuidString)")
+                        .help("Edit suggested name")
+                        
+                        Button {
+                            store.rejectRename(fileID: file.id, folderID: parentFolderID)
+                            onPlanChanged()
+                        } label: {
+                            Image(systemName: "xmark.circle")
+                                .font(.caption2)
+                                .foregroundStyle(.red.opacity(0.85))
+                                .padding(4)
+                                .background(Circle().fill(Color.red.opacity(0.1)))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("PreviewRenameRejectButton-\(file.id.uuidString)")
+                        .help("Keep original name")
                     }
-                    .buttonStyle(.plain)
-                    .help("Edit suggested name")
-                    
-                    Button {
-                        store.rejectRename(fileID: file.id, folderID: parentFolderID)
-                        onPlanChanged()
-                    } label: {
-                        Image(systemName: "xmark.circle")
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
+                            )
+                    )
+                    .padding(.leading, 20)
+                } else if mapping.isAutoSkippedForLowConfidence {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                        Text("AI unsure - kept original name")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        Spacer()
                     }
-                    .buttonStyle(.plain)
-                    .help("Keep original name")
+                    .padding(.leading, 20)
                 }
-                .padding(.leading, 20)
+            }
+
+            if isEditingName && (!renameValidation.errors.isEmpty || !renameValidation.warnings.isEmpty || renameValidation.hasConflict) {
+                Text(renameValidationMessage)
+                    .font(.caption2)
+                    .foregroundStyle(renameValidation.errors.isEmpty && !renameValidation.hasConflict ? .orange : .red)
+                    .padding(.leading, 20)
             }
         }
         .padding(.leading, CGFloat(depth * 16))
@@ -1101,6 +1643,35 @@ struct FlatFileRowView: View {
         default: return "doc"
         }
     }
+
+    private var renameFieldBorderColor: Color {
+        if renameValidation.hasConflict || !renameValidation.errors.isEmpty || renameValidation.hasInvalidCharacters {
+            return .red.opacity(0.8)
+        }
+        if renameValidation.exceedsRecommendedLength || !renameValidation.warnings.isEmpty {
+            return .orange.opacity(0.8)
+        }
+        return .accentColor.opacity(0.45)
+    }
+
+    private var renameValidationMessage: String {
+        if renameValidation.hasConflict {
+            return "Name conflicts with another file in this folder."
+        }
+        if let firstError = renameValidation.errors.first {
+            return firstError
+        }
+        if renameValidation.hasInvalidCharacters {
+            return "Contains invalid macOS filename characters."
+        }
+        if renameValidation.exceedsRecommendedLength {
+            return "Name exceeds the recommended 60 characters."
+        }
+        if let firstWarning = renameValidation.warnings.first {
+            return firstWarning
+        }
+        return ""
+    }
     
     private func startEditing(initialValue: String) {
         editedName = initialValue
@@ -1109,15 +1680,161 @@ struct FlatFileRowView: View {
     }
     
     private func saveRename() {
-        if !editedName.isEmpty {
-            store.updateRename(fileID: file.id, folderID: parentFolderID, newName: editedName)
-            onPlanChanged()
+        let validation = renameValidation
+        guard validation.isValid, let sanitizedName = validation.sanitizedName else {
+            HapticFeedbackManager.shared.error()
+            return
+        }
+
+        if sanitizedName == file.displayName {
+            if renameMapping?.hasRename == true {
+                store.rejectRename(fileID: file.id, folderID: parentFolderID)
+                onPlanChanged()
+            }
+            isEditingName = false
+            return
+        }
+
+        if !sanitizedName.isEmpty {
+            if store.updateRename(fileID: file.id, folderID: parentFolderID, newName: sanitizedName) {
+                onPlanChanged()
+            }
         }
         isEditingName = false
     }
     
     private func cancelRename() {
         isEditingName = false
+    }
+
+    private var manualRenameControl: some View {
+        Button {
+            showManualRenamePopover.toggle()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 22, height: 22)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(showManualRenamePopover ? 0.5 : 0.3),
+                                        Color.white.opacity(0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 0.5
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+
+                Image(systemName: "pencil")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(showManualRenamePopover ? Color.accentColor : Color.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("PreviewManualRenameButton-\(file.id.uuidString)")
+        .help("Open manual rename options")
+        .popover(isPresented: $showManualRenamePopover, arrowEdge: .bottom) {
+            manualRenamePopover
+        }
+    }
+
+    private var manualRenamePopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.12))
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: "pencil.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Manual Rename")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                    Text(file.displayName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+            }
+
+            Button {
+                startEditing(initialValue: activeFilenameForEditing)
+                showManualRenamePopover = false
+            } label: {
+                Text("Start Rename")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.14))
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("PreviewManualRenameStart-\(file.id.uuidString)")
+
+            Divider()
+                .opacity(0.5)
+
+            Text("Add steering for next regenerate (optional)")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            TextField("e.g. Use YYYY-MM-DD format for screenshots", text: $steeringInstructionDraft, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(2...4)
+                .accessibilityIdentifier("PreviewManualRenameSteeringField-\(file.id.uuidString)")
+
+            Button("Add Steering") {
+                addSteeringInstruction()
+            }
+            .buttonStyle(.sortySecondary(size: .small))
+            .disabled(steeringInstructionDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("PreviewManualRenameAddSteering-\(file.id.uuidString)")
+        }
+        .padding(14)
+        .frame(minWidth: 280, maxWidth: 360)
+    }
+
+    private func addSteeringInstruction() {
+        let trimmed = steeringInstructionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let existing = organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        if existing.isEmpty {
+            organizer.customInstructions = trimmed
+        } else {
+            organizer.customInstructions = existing + "\n" + trimmed
+        }
+
+        if learningsManager.consentManager.canCollectData {
+            let folderPath = appState.selectedDirectory?.path
+                ?? URL(fileURLWithPath: file.path).deletingLastPathComponent().path
+            NotificationCenter.default.post(
+                name: .steeringPromptProvided,
+                object: nil,
+                userInfo: ["prompt": trimmed, "folderPath": folderPath]
+            )
+        }
+
+        onFocusInstructions?()
+        steeringInstructionDraft = ""
+        HapticFeedbackManager.shared.success()
     }
 }
 

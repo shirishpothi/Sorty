@@ -715,6 +715,16 @@ public final class ModelCatalog: ObservableObject {
     private static let visionKeywords: [String] = [
         "vision", "image", "multimodal", "omni", "vl", "mm"
     ]
+
+    /// Models known to be text-only despite matching weak heuristics.
+    private static let knownNonVisionModels: Set<String> = [
+        "gemma-flash",
+        "gemma-2-flash",
+        "gemma3",
+        "gemma3:latest",
+        "llama-3.3-70b-versatile",
+        "llama-4-70b-versatile"
+    ]
     
     /// Known vision-capable model families for GitHub Copilot
     private static let copilotVisionFamilies: [String] = [
@@ -751,6 +761,10 @@ public final class ModelCatalog: ObservableObject {
         }
         
         let lowercaseId = modelId.lowercased()
+
+        if Self.knownNonVisionModels.contains(lowercaseId) {
+            return false
+        }
         
         // Check against known prefixes
         for prefix in Self.visionModelPrefixes {
@@ -775,12 +789,15 @@ public final class ModelCatalog: ObservableObject {
             // Ollama often uses models like 'llava', 'bakllava' for vision
             let ollamaVisionKeywords = ["llava", "vision", "moondream", "minicpm", "bakllava", "phi-3-vision", "glm-4v"]
             return ollamaVisionKeywords.contains { lowercaseId.contains($0) }
+        case .gemini:
+            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) }) ||
+                   lowercaseId.contains("gemini") ||
+                   lowercaseId.contains("flash")
         case .openRouter:
             // OpenRouter often includes vision in the name or we can check the ID
             return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         default:
-            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) }) ||
-                   lowercaseId.contains("flash")
+            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         }
     }
 }

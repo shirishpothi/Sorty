@@ -89,13 +89,22 @@ struct ResponseParser {
         let filename: String
         let suggestedName: String?
         let renameReason: String?
+        let renameConfidence: Double?
         let tags: [String]?
         let comment: String?
 
-        init(filename: String, suggestedName: String? = nil, renameReason: String? = nil, tags: [String]? = nil, comment: String? = nil) {
+        init(
+            filename: String,
+            suggestedName: String? = nil,
+            renameReason: String? = nil,
+            renameConfidence: Double? = nil,
+            tags: [String]? = nil,
+            comment: String? = nil
+        ) {
             self.filename = filename
             self.suggestedName = suggestedName
             self.renameReason = renameReason
+            self.renameConfidence = renameConfidence
             self.tags = tags
             self.comment = comment
         }
@@ -105,6 +114,7 @@ struct ResponseParser {
             try container.encode(filename, forKey: .filename)
             try container.encodeIfPresent(suggestedName, forKey: .suggestedName)
             try container.encodeIfPresent(renameReason, forKey: .renameReason)
+            try container.encodeIfPresent(renameConfidence, forKey: .renameConfidence)
             try container.encodeIfPresent(tags, forKey: .tags)
             try container.encodeIfPresent(comment, forKey: .comment)
         }
@@ -117,6 +127,7 @@ struct ResponseParser {
                 self.filename = simpleFilename
                 self.suggestedName = nil
                 self.renameReason = nil
+                self.renameConfidence = nil
                 self.tags = nil
                 self.comment = nil
                 return
@@ -127,6 +138,7 @@ struct ResponseParser {
             filename = try container.decode(String.self, forKey: .filename)
             suggestedName = try container.decodeIfPresent(String.self, forKey: .suggestedName)
             renameReason = try container.decodeIfPresent(String.self, forKey: .renameReason)
+            renameConfidence = try container.decodeIfPresent(Double.self, forKey: .renameConfidence)
             tags = try container.decodeIfPresent([String].self, forKey: .tags)
             comment = try container.decodeIfPresent(String.self, forKey: .comment)
         }
@@ -135,6 +147,7 @@ struct ResponseParser {
             case filename
             case suggestedName = "suggested_name"
             case renameReason = "rename_reason"
+            case renameConfidence = "rename_confidence"
             case tags
             case comment
         }
@@ -232,7 +245,11 @@ struct ResponseParser {
         }
     }
 
-    static func parseResponse(_ jsonString: String, originalFiles: [FileItem]) throws -> OrganizationPlan {
+    static func parseResponse(
+        _ jsonString: String,
+        originalFiles: [FileItem],
+        mode: OrganizationMode = .organize
+    ) throws -> OrganizationPlan {
         // Strip progress preamble lines before JSON
         var cleanedJSON = stripProgressPreamble(jsonString)
 
@@ -308,7 +325,7 @@ struct ResponseParser {
 
         // Convert response to OrganizationPlan
         let suggestions = folderPayload.map { folder in
-            convertFolderResponse(folder, originalFiles: originalFiles, fileIdIndex: fileIdIndex)
+            convertFolderResponse(folder, originalFiles: originalFiles, fileIdIndex: fileIdIndex, mode: mode)
         }
         let assignedFileIDs = collectAssignedFileIDs(from: suggestions)
 
@@ -382,7 +399,8 @@ struct ResponseParser {
     private static func convertFolderResponse(
         _ folder: FolderResponse,
         originalFiles: [FileItem],
-        fileIdIndex: [Int: FileItem]
+        fileIdIndex: [Int: FileItem],
+        mode: OrganizationMode
     ) -> FolderSuggestion {
         var files: [FileItem] = []
         var renameMappings: [FileRenameMapping] = []
@@ -404,12 +422,25 @@ struct ResponseParser {
 
                 files.append(file)
 
-                // Create rename mapping if suggested
-                if let suggestedName = fileEntry.suggestedName, !suggestedName.isEmpty {
+                // Parse-level safeguard: strip all rename fields in organize-only mode.
+                if mode != .organize, let suggestedName = fileEntry.suggestedName, !suggestedName.isEmpty {
+                    let clampedConfidence = fileEntry.renameConfidence.map { min(max($0, 0.0), 1.0) }
+                    if let confidence = clampedConfidence, confidence < FileRenameMapping.lowConfidenceThreshold {
+                        let mapping = FileRenameMapping(
+                            originalFile: file,
+                            suggestedName: nil,
+                            renameReason: "AI unsure (confidence: \(String(format: "%.2f", confidence)))",
+                            renameConfidence: confidence
+                        )
+                        renameMappings.append(mapping)
+                        continue
+                    }
+
                     let mapping = FileRenameMapping(
                         originalFile: file,
                         suggestedName: suggestedName,
-                        renameReason: fileEntry.renameReason
+                        renameReason: fileEntry.renameReason,
+                        renameConfidence: clampedConfidence
                     )
                     renameMappings.append(mapping)
                 }
@@ -436,7 +467,7 @@ struct ResponseParser {
         }
 
         let subfolders = (folder.subfolders ?? []).map { subfolder in
-            convertFolderResponse(subfolder, originalFiles: originalFiles, fileIdIndex: fileIdIndex)
+            convertFolderResponse(subfolder, originalFiles: originalFiles, fileIdIndex: fileIdIndex, mode: mode)
         }
 
         return FolderSuggestion(
@@ -649,7 +680,12 @@ struct ResponseParser {
     }
 
     /// Extract partial results even if parsing fails
-    static func extractPartialResults(_ jsonString: String, originalFiles: [FileItem]) -> OrganizationPlan? {
+    static func extractPartialResults(
+        _ jsonString: String,
+        originalFiles: [FileItem],
+        mode: OrganizationMode = .organize
+    ) -> OrganizationPlan? {
+        _ = mode
         // Try to extract folder names and file assignments even from malformed JSON
         var suggestions: [FolderSuggestion] = []
         var assignedFiles: Set<UUID> = []

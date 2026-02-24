@@ -33,6 +33,9 @@ public struct LearningsProfile: Codable, Sendable {
     
     /// Directory changes user made after AI organization
     public var postOrganizationChanges: [DirectoryChange]
+
+    /// Rename outcomes the user accepted/edited/rejected from AI suggestions
+    public var renameFeedbackHistory: [RenameFeedbackEvent]
     
     /// History reverts the user has performed
     public var historyReverts: [RevertEvent]
@@ -80,6 +83,7 @@ public struct LearningsProfile: Codable, Sendable {
         guidingInstructionsHistory: [UserInstruction] = [],
         steeringPrompts: [SteeringPrompt] = [],
         postOrganizationChanges: [DirectoryChange] = [],
+        renameFeedbackHistory: [RenameFeedbackEvent] = [],
         historyReverts: [RevertEvent] = [],
         cancelledOrganizations: [CancelledOrganization] = [],
         regeneratedOrganizations: [RegeneratedOrganization] = [],
@@ -100,6 +104,7 @@ public struct LearningsProfile: Codable, Sendable {
         self.guidingInstructionsHistory = guidingInstructionsHistory
         self.steeringPrompts = steeringPrompts
         self.postOrganizationChanges = postOrganizationChanges
+        self.renameFeedbackHistory = renameFeedbackHistory
         self.historyReverts = historyReverts
         self.cancelledOrganizations = cancelledOrganizations
         self.regeneratedOrganizations = regeneratedOrganizations
@@ -244,6 +249,37 @@ public struct DirectoryChange: Codable, Sendable, Identifiable {
         self.newPath = newPath
         self.wasAIOrganized = wasAIOrganized
         self.aiSessionId = aiSessionId
+    }
+}
+
+public struct RenameFeedbackEvent: Codable, Sendable, Identifiable {
+    public let id: String
+    public let timestamp: Date
+    public let originalName: String
+    public let suggestedName: String?
+    public let finalName: String?
+    public let folderPath: String?
+    public let action: ExampleAction
+    public let confidence: Double?
+
+    public init(
+        id: String = UUID().uuidString,
+        timestamp: Date = Date(),
+        originalName: String,
+        suggestedName: String?,
+        finalName: String?,
+        folderPath: String? = nil,
+        action: ExampleAction,
+        confidence: Double? = nil
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.originalName = originalName
+        self.suggestedName = suggestedName
+        self.finalName = finalName
+        self.folderPath = folderPath
+        self.action = action
+        self.confidence = confidence
     }
 }
 
@@ -407,5 +443,4 @@ public enum EntryStatus: String, Codable, Sendable {
     case skipped
     case rolledBack
 }
-
 

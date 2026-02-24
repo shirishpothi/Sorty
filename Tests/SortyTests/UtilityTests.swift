@@ -14,4 +14,14 @@ final class UtilityTests: XCTestCase {
         let range = NSRange(location: 0, length: timestamp.utf16.count)
         XCTAssertNotNil(regex.firstMatch(in: timestamp, options: [], range: range))
     }
+
+    func testRenameRuleEngineAppliesRegexAndLiteralRules() {
+        let rules = [
+            RenameRule(pattern: "^IMG\\s+", replacement: "", isRegex: true),
+            RenameRule(pattern: " ", replacement: "_", isRegex: false)
+        ]
+
+        let output = RenameRuleEngine.applyRules(to: "IMG 123 Summer Photo.jpg", rules: rules)
+        XCTAssertEqual(output, "123_Summer_Photo.jpg")
+    }
 }

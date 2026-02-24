@@ -11,22 +11,42 @@ import AppKit
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
+import CryptoKit
 
 public final class ImageVisionAnalyzer: Sendable {
     private let maxDimension: CGFloat = 1024.0
     private let compressionQuality: CGFloat = 0.8
-    
+
+    private static var visionCacheDirectory: URL? {
+        FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Sorty")
+            .appendingPathComponent("VisionCache", isDirectory: true)
+    }
+
     public init() {}
     
     /// Prepares an image for AI Vision analysis
     /// - Parameter url: Local URL of the image
     /// - Returns: Base64 encoded JPEG data if successful
     public func prepareImageForVision(at url: URL) async -> Data? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            DebugLogger.log("ImageVisionAnalyzer: file not found at \(url.path)")
+            return nil
+        }
+
+        if let cached = cachedImageData(for: url) {
+            return cached
+        }
+
         return await Task.detached(priority: .userInitiated) {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+                DebugLogger.log("ImageVisionAnalyzer: failed to create image source for \(url.lastPathComponent)")
+                return nil
+            }
+            guard let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                DebugLogger.log("ImageVisionAnalyzer: failed to decode CGImage for \(url.lastPathComponent)")
                 return nil
             }
             
@@ -44,8 +64,17 @@ public final class ImageVisionAnalyzer: Sendable {
             }
             
             // Resize and compress
-            guard let resizedImage = self.resize(cgImage, to: targetSize) else { return nil }
-            return self.convertToJPEG(resizedImage)
+            guard let resizedImage = self.resize(cgImage, to: targetSize) else {
+                DebugLogger.log("ImageVisionAnalyzer: failed to resize image \(url.lastPathComponent)")
+                return nil
+            }
+            guard let jpegData = self.convertToJPEG(resizedImage) else {
+                DebugLogger.log("ImageVisionAnalyzer: failed to convert image to JPEG \(url.lastPathComponent)")
+                return nil
+            }
+
+            self.persistCache(jpegData, for: url)
+            return jpegData
         }.value
     }
     
@@ -67,6 +96,15 @@ public final class ImageVisionAnalyzer: Sendable {
             }
             return results
         }
+    }
+
+    public func clearVisionCache() {
+        Self.clearSharedCache()
+    }
+
+    public static func clearSharedCache() {
+        guard let directory = visionCacheDirectory else { return }
+        try? FileManager.default.removeItem(at: directory)
     }
     
     private func resize(_ image: CGImage, to size: CGSize) -> CGImage? {
@@ -100,5 +138,52 @@ public final class ImageVisionAnalyzer: Sendable {
         guard CGImageDestinationFinalize(destination) else { return nil }
         
         return data as Data
+    }
+
+    private func cachedImageData(for url: URL) -> Data? {
+        guard let cacheURL = cacheFileURL(for: url),
+              FileManager.default.fileExists(atPath: cacheURL.path),
+              let data = try? Data(contentsOf: cacheURL) else {
+            return nil
+        }
+        return data
+    }
+
+    private func persistCache(_ data: Data, for url: URL) {
+        guard let cacheURL = cacheFileURL(for: url),
+              let cacheDirectory = Self.visionCacheDirectory else {
+            return
+        }
+
+        do {
+            if !FileManager.default.fileExists(atPath: cacheDirectory.path) {
+                try FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+            }
+            try data.write(to: cacheURL, options: .atomic)
+        } catch {
+            DebugLogger.log("ImageVisionAnalyzer: failed to write cache for \(url.lastPathComponent) (\(error.localizedDescription))")
+        }
+    }
+
+    private func cacheFileURL(for url: URL) -> URL? {
+        guard let key = cacheKey(for: url),
+              let directory = Self.visionCacheDirectory else {
+            return nil
+        }
+        return directory.appendingPathComponent("\(key).jpg")
+    }
+
+    private func cacheKey(for url: URL) -> String? {
+        do {
+            let values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            let modTime = values.contentModificationDate?.timeIntervalSince1970 ?? 0
+            let fileSize = values.fileSize ?? 0
+            let input = "\(url.path)|\(modTime)|\(fileSize)"
+            let digest = SHA256.hash(data: Data(input.utf8))
+            return digest.compactMap { String(format: "%02x", $0) }.joined()
+        } catch {
+            DebugLogger.log("ImageVisionAnalyzer: failed to compute cache key for \(url.lastPathComponent) (\(error.localizedDescription))")
+            return nil
+        }
     }
 }

@@ -1,8 +1,13 @@
 import Foundation
 
 enum AIRequestSupport {
+    nonisolated(unsafe) static var sessionOverride: (@Sendable (AIConfig) async -> URLSession)?
+
     static func session(for config: AIConfig) async -> URLSession {
-        await AISessionManager.shared.session(for: config.provider, config: config)
+        if let sessionOverride {
+            return await sessionOverride(config)
+        }
+        return await AISessionManager.shared.session(for: config.provider, config: config)
     }
 
     static func requireAPIURL(from config: AIConfig) throws -> String {

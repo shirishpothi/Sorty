@@ -414,6 +414,60 @@ public enum DuplicateHandlingMode: String, CaseIterable, Identifiable, Sendable 
     }
 }
 
+public enum VisionDetailLevel: String, Codable, CaseIterable, Sendable {
+    case low
+    case auto
+    case high
+
+    public var displayName: String {
+        switch self {
+        case .low:
+            return "Low"
+        case .auto:
+            return "Auto"
+        case .high:
+            return "High"
+        }
+    }
+
+    public static func defaultFor(provider: AIProvider) -> VisionDetailLevel {
+        switch provider {
+        case .githubCopilot:
+            return .low
+        default:
+            return .auto
+        }
+    }
+}
+
+public enum VisionBatchStrategy: String, Codable, CaseIterable, Sendable {
+    case firstN
+    case random
+    case noText
+
+    public var displayName: String {
+        switch self {
+        case .firstN:
+            return "First N"
+        case .random:
+            return "Random"
+        case .noText:
+            return "Prioritize No OCR Text"
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .firstN:
+            return "Analyze the first N images in scan order."
+        case .random:
+            return "Analyze a random sample of images."
+        case .noText:
+            return "Prioritize images without OCR text before other images."
+        }
+    }
+}
+
 public struct AIConfig: Codable, Sendable, Equatable {
     public var provider: AIProvider
     public var apiURL: String?
@@ -449,8 +503,14 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var enableVision: Bool // Use AI vision to analyze image content
     public var namingStyle: NamingStyle // Preferred naming convention
     public var customNamingInstructions: String? // Custom naming preferences
+    public var renameRules: [RenameRule] // Custom find/replace rename rules
+    public var renameRuleMode: RenameRuleApplicationMode // How custom rules interact with AI renaming
     public var selectedNamingPresetId: UUID? // Selected naming preset ID
     public var visionBatchSize: Int // Number of images to process in one AI call
+    public var visionBatchStrategy: VisionBatchStrategy = .firstN // How images are selected for vision analysis
+    public var visionDetailLevel: VisionDetailLevel = .auto // Provider image detail hint for multimodal APIs
+    public var ocrLanguages: [String] = ["en-US"] // Apple Vision OCR language hints (BCP-47 codes)
+    public var customOCRKeywords: [String]? // Custom keywords for OCR document type detection
     
     // Automation-specific settings (for background/watched folder operations)
     public var automationProvider: AIProvider?  // nil = use main provider
@@ -481,8 +541,14 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableVision: Bool = false,
         namingStyle: NamingStyle = .descriptive,
         customNamingInstructions: String? = nil,
+        renameRules: [RenameRule] = [],
+        renameRuleMode: RenameRuleApplicationMode = .beforeAI,
         selectedNamingPresetId: UUID? = nil,
         visionBatchSize: Int = 5,
+        visionBatchStrategy: VisionBatchStrategy = .firstN,
+        visionDetailLevel: VisionDetailLevel? = nil,
+        ocrLanguages: [String] = ["en-US"],
+        customOCRKeywords: [String]? = nil,
         automationProvider: AIProvider? = nil,
         automationModel: String? = nil
     ) {
@@ -510,10 +576,131 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.enableVision = enableVision
         self.namingStyle = namingStyle
         self.customNamingInstructions = customNamingInstructions
+        self.renameRules = renameRules
+        self.renameRuleMode = renameRuleMode
         self.selectedNamingPresetId = selectedNamingPresetId
         self.visionBatchSize = visionBatchSize
+        self.visionBatchStrategy = visionBatchStrategy
+        self.visionDetailLevel = visionDetailLevel ?? VisionDetailLevel.defaultFor(provider: provider)
+        self.ocrLanguages = ocrLanguages
+        self.customOCRKeywords = customOCRKeywords
         self.automationProvider = automationProvider
         self.automationModel = automationModel
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case provider
+        case apiURL
+        case apiKey
+        case model
+        case temperature
+        case requestTimeout
+        case resourceTimeout
+        case systemPromptOverride
+        case maxTokens
+        case enableStreaming
+        case requiresAPIKey
+        case enableReasoning
+        case mode
+        case enableDeepScan
+        case enableSmartRename
+        case detectDuplicates
+        case enableFileTagging
+        case showStatsForNerds
+        case storeDuplicateMetadata
+        case strictExclusions
+        case maxTopLevelFolders
+        case enableVision
+        case namingStyle
+        case customNamingInstructions
+        case renameRules
+        case renameRuleMode
+        case selectedNamingPresetId
+        case visionBatchSize
+        case visionBatchStrategy
+        case visionDetailLevel
+        case ocrLanguages
+        case customOCRKeywords
+        case automationProvider
+        case automationModel
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        let decodedProvider = try container.decodeIfPresent(AIProvider.self, forKey: .provider) ?? .openAICompatible
+        provider = decodedProvider
+        apiURL = try container.decodeIfPresent(String.self, forKey: .apiURL)
+        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey)
+        model = try container.decodeIfPresent(String.self, forKey: .model) ?? decodedProvider.defaultModel
+        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.7
+        requestTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .requestTimeout) ?? 120
+        resourceTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .resourceTimeout) ?? 600
+        systemPromptOverride = try container.decodeIfPresent(String.self, forKey: .systemPromptOverride)
+        maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
+        enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
+        requiresAPIKey = try container.decodeIfPresent(Bool.self, forKey: .requiresAPIKey) ?? decodedProvider.typicallyRequiresAPIKey
+        enableReasoning = try container.decodeIfPresent(Bool.self, forKey: .enableReasoning) ?? false
+        mode = try container.decodeIfPresent(OrganizationMode.self, forKey: .mode) ?? .organize
+        enableDeepScan = try container.decodeIfPresent(Bool.self, forKey: .enableDeepScan) ?? false
+        enableSmartRename = try container.decodeIfPresent(Bool.self, forKey: .enableSmartRename) ?? false
+        detectDuplicates = try container.decodeIfPresent(Bool.self, forKey: .detectDuplicates) ?? false
+        enableFileTagging = try container.decodeIfPresent(Bool.self, forKey: .enableFileTagging) ?? true
+        showStatsForNerds = try container.decodeIfPresent(Bool.self, forKey: .showStatsForNerds) ?? false
+        storeDuplicateMetadata = try container.decodeIfPresent(Bool.self, forKey: .storeDuplicateMetadata) ?? true
+        strictExclusions = try container.decodeIfPresent(Bool.self, forKey: .strictExclusions) ?? true
+        maxTopLevelFolders = try container.decodeIfPresent(Int.self, forKey: .maxTopLevelFolders) ?? 10
+        enableVision = try container.decodeIfPresent(Bool.self, forKey: .enableVision) ?? false
+        namingStyle = try container.decodeIfPresent(NamingStyle.self, forKey: .namingStyle) ?? .descriptive
+        customNamingInstructions = try container.decodeIfPresent(String.self, forKey: .customNamingInstructions)
+        renameRules = try container.decodeIfPresent([RenameRule].self, forKey: .renameRules) ?? []
+        renameRuleMode = try container.decodeIfPresent(RenameRuleApplicationMode.self, forKey: .renameRuleMode) ?? .beforeAI
+        selectedNamingPresetId = try container.decodeIfPresent(UUID.self, forKey: .selectedNamingPresetId)
+        visionBatchSize = try container.decodeIfPresent(Int.self, forKey: .visionBatchSize) ?? 5
+        visionBatchStrategy = try container.decodeIfPresent(VisionBatchStrategy.self, forKey: .visionBatchStrategy) ?? .firstN
+        visionDetailLevel = try container.decodeIfPresent(VisionDetailLevel.self, forKey: .visionDetailLevel) ?? VisionDetailLevel.defaultFor(provider: decodedProvider)
+        ocrLanguages = try container.decodeIfPresent([String].self, forKey: .ocrLanguages) ?? ["en-US"]
+        customOCRKeywords = try container.decodeIfPresent([String].self, forKey: .customOCRKeywords)
+        automationProvider = try container.decodeIfPresent(AIProvider.self, forKey: .automationProvider)
+        automationModel = try container.decodeIfPresent(String.self, forKey: .automationModel)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(provider, forKey: .provider)
+        try container.encodeIfPresent(apiURL, forKey: .apiURL)
+        try container.encodeIfPresent(apiKey, forKey: .apiKey)
+        try container.encode(model, forKey: .model)
+        try container.encode(temperature, forKey: .temperature)
+        try container.encode(requestTimeout, forKey: .requestTimeout)
+        try container.encode(resourceTimeout, forKey: .resourceTimeout)
+        try container.encodeIfPresent(systemPromptOverride, forKey: .systemPromptOverride)
+        try container.encodeIfPresent(maxTokens, forKey: .maxTokens)
+        try container.encode(enableStreaming, forKey: .enableStreaming)
+        try container.encode(requiresAPIKey, forKey: .requiresAPIKey)
+        try container.encode(enableReasoning, forKey: .enableReasoning)
+        try container.encode(mode, forKey: .mode)
+        try container.encode(enableDeepScan, forKey: .enableDeepScan)
+        try container.encode(enableSmartRename, forKey: .enableSmartRename)
+        try container.encode(detectDuplicates, forKey: .detectDuplicates)
+        try container.encode(enableFileTagging, forKey: .enableFileTagging)
+        try container.encode(showStatsForNerds, forKey: .showStatsForNerds)
+        try container.encode(storeDuplicateMetadata, forKey: .storeDuplicateMetadata)
+        try container.encode(strictExclusions, forKey: .strictExclusions)
+        try container.encode(maxTopLevelFolders, forKey: .maxTopLevelFolders)
+        try container.encode(enableVision, forKey: .enableVision)
+        try container.encode(namingStyle, forKey: .namingStyle)
+        try container.encodeIfPresent(customNamingInstructions, forKey: .customNamingInstructions)
+        try container.encode(renameRules, forKey: .renameRules)
+        try container.encode(renameRuleMode, forKey: .renameRuleMode)
+        try container.encodeIfPresent(selectedNamingPresetId, forKey: .selectedNamingPresetId)
+        try container.encode(visionBatchSize, forKey: .visionBatchSize)
+        try container.encode(visionBatchStrategy, forKey: .visionBatchStrategy)
+        try container.encode(visionDetailLevel, forKey: .visionDetailLevel)
+        try container.encode(ocrLanguages, forKey: .ocrLanguages)
+        try container.encodeIfPresent(customOCRKeywords, forKey: .customOCRKeywords)
+        try container.encodeIfPresent(automationProvider, forKey: .automationProvider)
+        try container.encodeIfPresent(automationModel, forKey: .automationModel)
     }
     
     public static let `default` = AIConfig(
@@ -540,14 +727,27 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableVision: false,
         namingStyle: .descriptive,
         customNamingInstructions: nil,
+        renameRules: [],
+        renameRuleMode: .beforeAI,
         selectedNamingPresetId: nil,
         visionBatchSize: 5,
+        visionBatchStrategy: .firstN,
+        visionDetailLevel: .auto,
+        ocrLanguages: ["en-US"],
+        customOCRKeywords: nil,
         automationProvider: nil,
         automationModel: nil
     )
 }
 
 public extension AIConfig {
+    var effectiveVisionDetailLevel: VisionDetailLevel {
+        if provider == .githubCopilot && visionDetailLevel == .auto {
+            return .low
+        }
+        return visionDetailLevel
+    }
+
     var duplicateHandlingMode: DuplicateHandlingMode {
         get {
             guard detectDuplicates else { return .off }
@@ -577,7 +777,7 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
     
     public var displayName: String {
         switch self {
-        case .descriptive: return "Descriptive (Date_Subject_Type)"
+        case .descriptive: return "Descriptive (Date Subject Type)"
         case .minimalist: return "Minimalist (Subject Only)"
         case .technical: return "Technical (Type_Date_ID)"
         case .datePrefix: return "Date First (YYYY-MM-DD - Subject)"
@@ -588,7 +788,7 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
     public var promptInstructions: String {
         switch self {
         case .descriptive:
-            return "Use a descriptive style: [Date]_[Subject]_[Type].[ext] (e.g., 2024-01-15_TaxReturn_Invoice.pdf). Focus on extracting dates and subjects."
+            return "Use a descriptive style with spaces: [Date] [Subject] [Type].[ext] (e.g., 2024-01-15 Tax Return Invoice.pdf). Focus on extracting dates and subjects."
         case .minimalist:
             return "Use a minimalist style: [Subject].[ext] (e.g., TaxReturn.pdf). Keep it very short and remove all dates or technical codes."
         case .technical:
@@ -600,5 +800,3 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
         }
     }
 }
-
-

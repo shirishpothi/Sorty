@@ -197,7 +197,7 @@ class ResponseParserTests: XCTestCase {
             FileItem(path: "/path/old_name.pdf", name: "old_name", extension: "pdf", size: 1000, isDirectory: false)
         ]
         
-        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files, mode: .organizeAndRename)
         
         XCTAssertEqual(plan.suggestions.count, 1)
         let suggestion = plan.suggestions.first!
@@ -207,6 +207,68 @@ class ResponseParserTests: XCTestCase {
         let mapping = suggestion.fileRenameMappings.first!
         XCTAssertEqual(mapping.suggestedName, "Invoice_2024_Jan.pdf")
         XCTAssertEqual(mapping.renameReason, "More descriptive name with date")
+    }
+
+    func testOrganizeModeStripsRenameFields() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Documents",
+              "files": [
+                {
+                  "filename": "old_name.pdf",
+                  "suggested_name": "Invoice_2024_Jan.pdf",
+                  "rename_reason": "More descriptive name with date",
+                  "rename_confidence": 0.92
+                }
+              ]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/old_name.pdf", name: "old_name", extension: "pdf", size: 1000, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files, mode: .organize)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].fileRenameMappings.count, 0)
+        XCTAssertEqual(plan.suggestions[0].renameCount, 0)
+    }
+
+    func testLowConfidenceRenameIsAutoSkipped() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Documents",
+              "files": [
+                {
+                  "filename": "old_name.pdf",
+                  "suggested_name": "Invoice_2024_Jan.pdf",
+                  "rename_reason": "More descriptive name with date",
+                  "rename_confidence": 0.2
+                }
+              ]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/old_name.pdf", name: "old_name", extension: "pdf", size: 1000, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files, mode: .organizeAndRename)
+        XCTAssertEqual(plan.suggestions.count, 1)
+        XCTAssertEqual(plan.suggestions[0].fileRenameMappings.count, 1)
+
+        let mapping = try XCTUnwrap(plan.suggestions[0].fileRenameMappings.first)
+        XCTAssertFalse(mapping.hasRename)
+        XCTAssertTrue(mapping.isAutoSkippedForLowConfidence)
+        XCTAssertEqual(mapping.renameConfidence, 0.2)
     }
     
     func testParsingWithMultipleTagsPerFile() throws {
@@ -263,7 +325,7 @@ class ResponseParserTests: XCTestCase {
             FileItem(path: "/path/scan.pdf", name: "scan", extension: "pdf", size: 800, isDirectory: false)
         ]
         
-        let plan = try ResponseParser.parseResponse(json, originalFiles: files)
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files, mode: .organizeAndRename)
         
         let suggestion = plan.suggestions.first!
         

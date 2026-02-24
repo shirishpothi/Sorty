@@ -56,9 +56,15 @@ final class WindowSession: ObservableObject {
                 storageLocationsManager: StorageLocationsManager,
                 learningsManager: LearningsManager) {
         switch destination {
-        case .organize(let path, let personaId, let autostart):
+        case .organize(let path, let personaId, let mode, let autostart):
             if let path {
                 appState.selectedDirectory = URL(fileURLWithPath: path)
+            }
+            if let mode {
+                settingsViewModel.config.mode = mode
+                Task { @MainActor in
+                    await applyConfiguration(settingsViewModel.config, learningsManager: learningsManager)
+                }
             }
             if let personaId {
                 if let persona = PersonaType(rawValue: personaId) {

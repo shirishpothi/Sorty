@@ -319,4 +319,24 @@ final class FolderSuggestionTests: XCTestCase {
         XCTAssertEqual(suggestion.fileRenameMappings.count, 1)
         XCTAssertEqual(suggestion.fileRenameMappings.first?.suggestedName, "new_name.txt")
     }
+
+    func testFileRenameMappingPreservesOriginalExtension() {
+        let file = FileItem(path: "/test/photo.jpg", name: "photo", extension: "jpg", size: 100, isDirectory: false)
+        let mapping = FileRenameMapping(originalFile: file, suggestedName: "renamed.png")
+
+        XCTAssertEqual(mapping.suggestedName, "renamed.jpg")
+        XCTAssertTrue(mapping.preservesOriginalExtension)
+    }
+
+    func testFileRenameMappingConfidenceClampsAndFlagsLowConfidence() {
+        let file = FileItem(path: "/test/file.txt", name: "file", extension: "txt", size: 100, isDirectory: false)
+
+        let low = FileRenameMapping(originalFile: file, suggestedName: nil, renameConfidence: 0.1)
+        XCTAssertTrue(low.isLowConfidence)
+        XCTAssertTrue(low.isAutoSkippedForLowConfidence)
+
+        let high = FileRenameMapping(originalFile: file, suggestedName: "renamed.txt", renameConfidence: 1.4)
+        XCTAssertEqual(high.renameConfidence, 1.0)
+        XCTAssertFalse(high.isLowConfidence)
+    }
 }

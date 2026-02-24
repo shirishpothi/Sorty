@@ -27,6 +27,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             mode: config.mode,
             namingStyle: config.namingStyle,
             customNamingInstructions: config.customNamingInstructions,
+            renameRules: config.renameRules,
+            renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning, 
             enableSmartRename: config.enableSmartRename,
             includeContentMetadata: true,
@@ -60,6 +62,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         let apiURL = try AIRequestSupport.requireAPIURL(from: config)
         try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
         let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
+
+        let orderedImageNames = Self.orderedImageFilenames(from: imageData)
         
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
@@ -67,10 +71,13 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             mode: config.mode,
             namingStyle: config.namingStyle,
             customNamingInstructions: config.customNamingInstructions,
+            renameRules: config.renameRules,
+            renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning, 
             enableSmartRename: config.enableSmartRename,
             includeContentMetadata: true,
-            customInstructions: customInstructions
+            customInstructions: customInstructions,
+            analyzedImageFilenames: orderedImageNames
         )
         
         // Build multimodal content
@@ -79,13 +86,14 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         ]
         
         // Add images as base64
-        for (_, data) in imageData {
+        for name in orderedImageNames {
+            guard let data = imageData[name] else { continue }
             let base64 = data.base64EncodedString()
             contentArray.append([
                 "type": "image_url",
                 "image_url": [
                     "url": "data:image/jpeg;base64,\(base64)",
-                    "detail": "auto"
+                    "detail": config.effectiveVisionDetailLevel.rawValue
                 ]
             ])
         }
@@ -110,6 +118,10 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         } else {
             return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, systemPrompt: systemPrompt, userPrompt: userPrompt)
         }
+    }
+
+    static func orderedImageFilenames(from imageData: [String: Data]) -> [String] {
+        imageData.keys.sorted()
     }
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
@@ -223,7 +235,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 promptTokens: PromptBuilder.estimateTokens(systemPrompt + userPrompt)
             )
             
-            var plan = try ResponseParser.parseResponse(content, originalFiles: files)
+            var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
             plan.generationStats = stats
             return plan
         } catch let error as AIClientError {
@@ -328,10 +340,10 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             
             var plan: OrganizationPlan
             do {
-                plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files)
+                plan = try ResponseParser.parseResponse(accumulatedContent, originalFiles: files, mode: config.mode)
             } catch {
                 // Try partial extraction before giving up
-                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files) {
+                if let partialPlan = ResponseParser.extractPartialResults(accumulatedContent, originalFiles: files, mode: config.mode) {
                     plan = partialPlan
                 } else {
                     let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)

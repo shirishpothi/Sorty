@@ -19,9 +19,10 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty://organize?path=/Users/test/Downloads&persona=developer")!
         handler.handle(url: url)
         
-        if case .organize(let path, let persona, let autostart) = handler.pendingDestination {
+        if case .organize(let path, let persona, let mode, let autostart) = handler.pendingDestination {
             XCTAssertEqual(path, "/Users/test/Downloads")
             XCTAssertEqual(persona, "developer")
+            XCTAssertNil(mode)
             XCTAssertFalse(autostart)
         } else {
             XCTFail("Expected organize destination")
@@ -38,8 +39,9 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty://organize?path=/tmp&autostart=true")!
         handler.handle(url: url)
         
-        if case let .organize(path, _, autostart) = handler.pendingDestination {
+        if case let .organize(path, _, mode, autostart) = handler.pendingDestination {
             XCTAssertEqual(path, "/tmp")
+            XCTAssertNil(mode)
             XCTAssertTrue(autostart)
         } else {
             XCTFail("Expected .organize destination with autostart")
@@ -55,7 +57,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty://organize")!
         handler.handle(url: url)
         
-        if case .organize(let path, _, _) = handler.pendingDestination {
+        if case .organize(let path, _, _, _) = handler.pendingDestination {
             XCTAssertNil(path)
         } else {
             XCTFail("Expected organize destination")
@@ -329,7 +331,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty://organize?path=/Users/test/My%20Documents")!
         handler.handle(url: url)
         
-        if case .organize(let path, _, _) = handler.pendingDestination {
+        if case .organize(let path, _, _, _) = handler.pendingDestination {
             XCTAssertEqual(path, "/Users/test/My Documents", "Should decode URL-encoded spaces")
         } else {
             XCTFail("Expected organize destination")
@@ -346,7 +348,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty://organize?path=/tmp/%E6%96%87%E4%BB%B6")!
         handler.handle(url: url)
         
-        if case .organize(let path, _, _) = handler.pendingDestination {
+        if case .organize(let path, _, _, _) = handler.pendingDestination {
             XCTAssertEqual(path, "/tmp/文件", "Should decode URL-encoded unicode")
         } else {
             XCTFail("Expected organize destination")
@@ -362,7 +364,7 @@ final class DeeplinkTests: XCTestCase {
         let url = URL(string: "sorty:///Users/test/Downloads")!
         handler.handle(url: url)
         
-        XCTAssertEqual(handler.pendingDestination, .organize(path: "/Users/test/Downloads", persona: nil, autostart: false))
+        XCTAssertEqual(handler.pendingDestination, .organize(path: "/Users/test/Downloads", persona: nil, mode: nil, autostart: false))
         handler.clearPending()
     }
     
@@ -370,8 +372,32 @@ final class DeeplinkTests: XCTestCase {
     
     @MainActor
     func testGenerateOrganizeURL() {
-        let url = DeeplinkHandler.url(for: .organize(path: "/test/path", persona: nil, autostart: false))
+        let url = DeeplinkHandler.url(for: .organize(path: "/test/path", persona: nil, mode: nil, autostart: false))
         XCTAssertEqual(url?.absoluteString, "sorty://organize?path=/test/path")
+    }
+
+    @MainActor
+    func testOrganizeDeeplinkWithMode() {
+        let handler = DeeplinkHandler.shared
+
+        let url = URL(string: "sorty://organize?path=/tmp&mode=renameOnly&autostart=true")!
+        handler.handle(url: url)
+
+        if case let .organize(path, _, mode, autostart) = handler.pendingDestination {
+            XCTAssertEqual(path, "/tmp")
+            XCTAssertEqual(mode, .renameOnly)
+            XCTAssertTrue(autostart)
+        } else {
+            XCTFail("Expected organize destination with mode")
+        }
+
+        handler.clearPending()
+    }
+
+    @MainActor
+    func testGenerateOrganizeURLWithMode() {
+        let url = DeeplinkHandler.url(for: .organize(path: "/test/path", persona: nil, mode: .renameOnly, autostart: true))
+        XCTAssertEqual(url?.absoluteString, "sorty://organize?path=/test/path&mode=renameOnly&autostart=true")
     }
     
     @MainActor

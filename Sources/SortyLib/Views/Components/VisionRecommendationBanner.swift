@@ -7,6 +7,37 @@
 
 import SwiftUI
 
+enum VisionRecommendationAction: Equatable {
+    case enableVision
+    case switchModel
+}
+
+struct VisionRecommendationBannerState: Equatable {
+    let imageCount: Int
+    let isVisionEnabled: Bool
+    let supportsVision: Bool
+    var isDismissed: Bool
+
+    var isVisible: Bool {
+        !isDismissed && imageCount > 0 && (!isVisionEnabled || !supportsVision)
+    }
+
+    var recommendedAction: VisionRecommendationAction? {
+        guard isVisible else { return nil }
+        if supportsVision && !isVisionEnabled {
+            return .enableVision
+        }
+        if !supportsVision {
+            return .switchModel
+        }
+        return nil
+    }
+
+    mutating func dismiss() {
+        isDismissed = true
+    }
+}
+
 struct VisionRecommendationBanner: View {
     let imageCount: Int
     let currentModel: String
@@ -18,12 +49,17 @@ struct VisionRecommendationBanner: View {
     
     @State private var isDismissed = false
     
-    private var supportsVision: Bool {
-        ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider)
+    private var bannerState: VisionRecommendationBannerState {
+        VisionRecommendationBannerState(
+            imageCount: imageCount,
+            isVisionEnabled: isVisionEnabled,
+            supportsVision: ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider),
+            isDismissed: isDismissed
+        )
     }
     
     var body: some View {
-        if !isDismissed && imageCount > 0 && (!isVisionEnabled || !supportsVision) {
+        if bannerState.isVisible {
             HStack(spacing: 12) {
                 Image(systemName: "camera.aperture")
                     .font(.title2)
@@ -34,11 +70,11 @@ struct VisionRecommendationBanner: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                     
-                    if supportsVision && !isVisionEnabled {
+                    if bannerState.recommendedAction == .enableVision {
                         Text("Enable AI Vision for content-aware organization")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    } else if !supportsVision {
+                    } else if bannerState.recommendedAction == .switchModel {
                         Text("Use a vision model like gpt-4o or claude-3-5-sonnet for better results")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -47,13 +83,13 @@ struct VisionRecommendationBanner: View {
                 
                 Spacer()
                 
-                if supportsVision && !isVisionEnabled {
+                if bannerState.recommendedAction == .enableVision {
                     Button("Enable Vision") {
                         onEnableVision()
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                } else if !supportsVision {
+                } else if bannerState.recommendedAction == .switchModel {
                     Button("Switch Model") {
                         onSwitchModel()
                     }
@@ -83,6 +119,7 @@ struct VisionRecommendationBanner: View {
                     )
             )
             .transition(.move(edge: .top).combined(with: .opacity))
+            .accessibilityIdentifier("VisionRecommendationBanner")
         }
     }
 }

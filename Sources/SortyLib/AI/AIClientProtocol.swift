@@ -34,6 +34,19 @@ public enum AIClientError: LocalizedError, Sendable {
     case networkError(any Error & Sendable)
     case jsonDecodingError(context: String)
     
+    public var isCancellation: Bool {
+        switch self {
+        case .networkError(let error):
+            if error is CancellationError { return true }
+            let nsError = error as NSError
+            if (nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled) || nsError.code == -999 { return true }
+            let description = error.localizedDescription.lowercased()
+            return description.contains("cancelled") || description.contains("canceled")
+        default:
+            return false
+        }
+    }
+    
     public var errorDescription: String? {
         switch self {
         case .missingAPIURL:

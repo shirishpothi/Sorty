@@ -76,10 +76,16 @@ struct OrganizationRulesSettingsView: View {
                         Text("Max Top-Level Folders")
                             .font(.subheadline)
                         Spacer()
-                        Text("\(viewModel.config.maxTopLevelFolders)")
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                            .contentTransition(.numericText())
+                        TextField(
+                            "",
+                            value: $viewModel.config.maxTopLevelFolders,
+                            format: .number
+                        )
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 44)
+                        .textFieldStyle(.plain)
                     }
                     
                     Slider(
@@ -87,10 +93,15 @@ struct OrganizationRulesSettingsView: View {
                             get: { Double(viewModel.config.maxTopLevelFolders) },
                             set: { viewModel.config.maxTopLevelFolders = Int($0) }
                         ),
-                        in: 3...20,
+                        in: 3...50,
                         step: 1
                     )
-                    .onChange(of: viewModel.config.maxTopLevelFolders) { _, _ in
+                    .onChange(of: viewModel.config.maxTopLevelFolders) { _, newValue in
+                        if newValue < 3 {
+                            viewModel.config.maxTopLevelFolders = 3
+                        } else if newValue > 50 {
+                            viewModel.config.maxTopLevelFolders = 50
+                        }
                         HapticFeedbackManager.shared.selection()
                     }
                     
@@ -99,12 +110,12 @@ struct OrganizationRulesSettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Spacer()
-                        Text("Detailed (20)")
+                        Text("Detailed (50)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                     
-                    Text("Limits how many main folders the AI creates. Subfolders are not limited.")
+                    Text("Limits how many main folders the AI creates (3–50). Subfolders are not limited.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.top, 4)

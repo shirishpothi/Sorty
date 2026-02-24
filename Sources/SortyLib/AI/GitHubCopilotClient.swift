@@ -10,16 +10,24 @@ import Foundation
 public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     public let config: AIConfig
     @MainActor public weak var streamingDelegate: StreamingDelegate?
+    private let testHeadersProvider: (@Sendable () async throws -> [String: String])?
     
-    public init(config: AIConfig) {
+    public init(
+        config: AIConfig,
+        testHeadersProvider: (@Sendable () async throws -> [String: String])? = nil
+    ) {
         self.config = config
+        self.testHeadersProvider = testHeadersProvider
     }
     
     private func getSession() async -> URLSession {
-        return await AISessionManager.shared.session(for: config.provider, config: config)
+        return await AIRequestSupport.session(for: config)
     }
     
     private func getHeaders() async throws -> [String: String] {
+        if let testHeadersProvider {
+            return try await testHeadersProvider()
+        }
         let token = try await GitHubCopilotAuthManager.shared.getCopilotToken()
         return [
             "Authorization": "Bearer \(token)",
@@ -46,7 +54,11 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
             files: files,
             mode: config.mode,
             namingStyle: config.namingStyle,
+            customNamingInstructions: config.customNamingInstructions,
+            renameRules: config.renameRules,
+            renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
+            enableSmartRename: config.enableSmartRename,
             includeContentMetadata: true,
             customInstructions: customInstructions
         )
@@ -83,15 +95,21 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
         
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
+        let orderedImageNames = Self.orderedImageFilenames(from: imageData)
         
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
             files: files,
             mode: config.mode,
             namingStyle: config.namingStyle,
+            customNamingInstructions: config.customNamingInstructions,
+            renameRules: config.renameRules,
+            renameRuleMode: config.renameRuleMode,
             enableReasoning: config.enableReasoning,
+            enableSmartRename: config.enableSmartRename,
             includeContentMetadata: true,
-            customInstructions: customInstructions
+            customInstructions: customInstructions,
+            analyzedImageFilenames: Array(orderedImageNames.prefix(5))
         )
         
         // Build multimodal content array (OpenAI-compatible format)
@@ -100,14 +118,15 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         ]
         
         // Add images (limit to first 5 to avoid token limits)
-        for (filename, data) in imageData.prefix(5) {
+        for filename in orderedImageNames.prefix(5) {
+            guard let data = imageData[filename] else { continue }
             let base64 = data.base64EncodedString()
             let mimeType = filename.lowercased().hasSuffix(".png") ? "image/png" : "image/jpeg"
             userContent.append([
                 "type": "image_url",
                 "image_url": [
                     "url": "data:\(mimeType);base64,\(base64)",
-                    "detail": "low"
+                    "detail": config.effectiveVisionDetailLevel.rawValue
                 ]
             ])
         }
@@ -130,6 +149,10 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         } else {
             return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files)
         }
+    }
+
+    static func orderedImageFilenames(from imageData: [String: Data]) -> [String] {
+        imageData.keys.sorted()
     }
     
     public func fetchAvailableModels() async throws -> [String] {
@@ -344,7 +367,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                     totalFileSize: files.reduce(0) { $0 + $1.size }
                 )
 
-                var plan = try ResponseParser.parseResponse(content, originalFiles: files)
+                var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
                 plan.generationStats = stats
                 return plan
             } catch let error as AIClientError {
@@ -453,10 +476,10 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
                 var plan: OrganizationPlan
                 do {
-                    plan = try ResponseParser.parseResponse(accumulatedContentBuffer, originalFiles: files)
+                    plan = try ResponseParser.parseResponse(accumulatedContentBuffer, originalFiles: files, mode: config.mode)
                 } catch {
                     // Try partial extraction before giving up
-                    if let partialPlan = ResponseParser.extractPartialResults(accumulatedContentBuffer, originalFiles: files) {
+                    if let partialPlan = ResponseParser.extractPartialResults(accumulatedContentBuffer, originalFiles: files, mode: config.mode) {
                         plan = partialPlan
                     } else {
                         let clientError = AIClientError.jsonDecodingError(context: error.localizedDescription)

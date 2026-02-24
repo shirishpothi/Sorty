@@ -40,6 +40,11 @@ public class AISessionManager: ObservableObject {
     @Published public private(set) var isPrewarmed: Bool = false
     @Published public private(set) var prewarmError: String?
 
+    /// Clear current prewarm errors
+    public func clearErrors() {
+        prewarmError = nil
+    }
+
     public var prewarmingProvider: AIProvider? {
         prewarmingProviders.first
     }

@@ -21,6 +21,9 @@ public actor FileSystemManager {
     // MARK: - Cross-Volume Move Optimization
 
     private var crossVolumeProgressHandler: (@Sendable (String, Double) -> Void)?
+    #if DEBUG
+    private var crossVolumeDetectorOverride: (@Sendable (URL, URL) -> Bool)?
+    #endif
 
     private static let crossVolumeChunkSize: Int = 1_024 * 1_024 * 4 // 4 MB
     private static let largeFileThreshold: UInt64 = 50 * 1_024 * 1_024 // 50 MB
@@ -29,7 +32,19 @@ public actor FileSystemManager {
         crossVolumeProgressHandler = handler
     }
 
+    #if DEBUG
+    func setCrossVolumeDetectorForTesting(_ detector: (@Sendable (URL, URL) -> Bool)?) {
+        crossVolumeDetectorOverride = detector
+    }
+    #endif
+
     private func isCrossVolume(from source: URL, to destination: URL) -> Bool {
+        #if DEBUG
+        if let crossVolumeDetectorOverride {
+            return crossVolumeDetectorOverride(source, destination)
+        }
+        #endif
+
         let sourceValues = try? source.resourceValues(forKeys: [.volumeIdentifierKey])
         let destinationParent = destination.deletingLastPathComponent()
         let destValues = try? destinationParent.resourceValues(forKeys: [.volumeIdentifierKey])
@@ -351,6 +366,37 @@ public actor FileSystemManager {
 
         return operations
     }
+
+    private func resolvedFinalFilename(
+        for file: FileItem,
+        in suggestion: FolderSuggestion,
+        sourceURL: URL,
+        destinationFolderURL: URL
+    ) -> (name: String, metadata: FileOperation.OperationMetadata?) {
+        guard let mapping = suggestion.renameMapping(for: file),
+              mapping.hasRename,
+              let proposedName = mapping.suggestedName else {
+            return (sourceURL.lastPathComponent, nil)
+        }
+
+        let sanitization = FilenameSanitizer.sanitize(
+            proposedName,
+            preservingExtension: sourceURL.pathExtension,
+            enforceExtension: true
+        )
+
+        guard let safeName = sanitization.sanitizedName, !safeName.isEmpty else {
+            return (sourceURL.lastPathComponent, nil)
+        }
+
+        let metadata = FileOperation.OperationMetadata(
+            originalFilename: sourceURL.lastPathComponent,
+            newFilename: safeName,
+            wasCreatedDuringOrganization: false,
+            parentFolderPath: destinationFolderURL.path
+        )
+        return (safeName, metadata)
+    }
     
     private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
@@ -369,21 +415,14 @@ public actor FileSystemManager {
                 }
             }
 
-            // Check for rename mapping
-            let finalFilename: String
-            var renameMetadata: FileOperation.OperationMetadata? = nil
-
-            if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
-                finalFilename = newName
-                renameMetadata = FileOperation.OperationMetadata(
-                    originalFilename: sourceURL.lastPathComponent,
-                    newFilename: newName,
-                    wasCreatedDuringOrganization: false,
-                    parentFolderPath: folderURL.path
-                )
-            } else {
-                finalFilename = sourceURL.lastPathComponent
-            }
+            let resolvedName = resolvedFinalFilename(
+                for: file,
+                in: suggestion,
+                sourceURL: sourceURL,
+                destinationFolderURL: folderURL
+            )
+            let finalFilename = resolvedName.name
+            let renameMetadata = resolvedName.metadata
 
             var destinationURL = folderURL.appendingPathComponent(finalFilename)
 
@@ -468,12 +507,12 @@ public actor FileSystemManager {
         for file in suggestion.files {
             guard let sourceURL = file.url else { continue }
 
-            let finalFilename: String
-            if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
-                finalFilename = newName
-            } else {
-                finalFilename = sourceURL.lastPathComponent
-            }
+            let finalFilename = resolvedFinalFilename(
+                for: file,
+                in: suggestion,
+                sourceURL: sourceURL,
+                destinationFolderURL: folderURL
+            ).name
 
             let destinationURL = folderURL.appendingPathComponent(finalFilename)
 
@@ -914,20 +953,14 @@ public actor FileSystemManager {
                 }
             }
             
-            let finalFilename: String
-            var renameMetadata: FileOperation.OperationMetadata? = nil
-
-            if let mapping = suggestion.renameMapping(for: file), mapping.hasRename, let newName = mapping.suggestedName {
-                finalFilename = newName
-                renameMetadata = FileOperation.OperationMetadata(
-                    originalFilename: sourceURL.lastPathComponent,
-                    newFilename: newName,
-                    wasCreatedDuringOrganization: false,
-                    parentFolderPath: folderURL.path
-                )
-            } else {
-                finalFilename = sourceURL.lastPathComponent
-            }
+            let resolvedName = resolvedFinalFilename(
+                for: file,
+                in: suggestion,
+                sourceURL: sourceURL,
+                destinationFolderURL: folderURL
+            )
+            let finalFilename = resolvedName.name
+            let renameMetadata = resolvedName.metadata
 
             var destinationURL = folderURL.appendingPathComponent(finalFilename)
             

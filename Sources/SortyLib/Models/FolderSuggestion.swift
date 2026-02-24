@@ -9,21 +9,39 @@ import Foundation
 
 /// Represents a file with its suggested rename
 public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
+    public static let lowConfidenceThreshold = 0.3
+
     public var id: UUID
     public var originalFile: FileItem
     public var suggestedName: String?
     public var renameReason: String?
+    public var renameConfidence: Double?
 
     public init(
         id: UUID = UUID(),
         originalFile: FileItem,
         suggestedName: String? = nil,
-        renameReason: String? = nil
+        renameReason: String? = nil,
+        renameConfidence: Double? = nil
     ) {
         self.id = id
         self.originalFile = originalFile
-        self.suggestedName = suggestedName
+        if let suggestedName, !suggestedName.isEmpty {
+            let sanitized = FilenameSanitizer.sanitize(
+                suggestedName,
+                preservingExtension: originalFile.extension,
+                enforceExtension: true
+            )
+            self.suggestedName = sanitized.sanitizedName
+        } else {
+            self.suggestedName = nil
+        }
         self.renameReason = renameReason
+        if let renameConfidence {
+            self.renameConfidence = min(max(renameConfidence, 0.0), 1.0)
+        } else {
+            self.renameConfidence = nil
+        }
     }
 
     /// Returns the final filename (suggested or original)
@@ -37,6 +55,21 @@ public struct FileRenameMapping: Codable, Identifiable, Hashable, Sendable {
     /// Check if this file has a rename suggestion
     public var hasRename: Bool {
         suggestedName != nil && suggestedName != originalFile.displayName
+    }
+
+    public var preservesOriginalExtension: Bool {
+        let originalExtension = originalFile.extension.lowercased()
+        let suggestedExtension = (suggestedName as NSString?)?.pathExtension.lowercased() ?? ""
+        return originalExtension == suggestedExtension
+    }
+
+    public var isLowConfidence: Bool {
+        guard let renameConfidence else { return false }
+        return renameConfidence < Self.lowConfidenceThreshold
+    }
+
+    public var isAutoSkippedForLowConfidence: Bool {
+        isLowConfidence && !hasRename
     }
 }
 
@@ -165,13 +198,19 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
     // MARK: - Mutating Helpers
 
     /// Add a file to this folder
-    public mutating func addFile(_ file: FileItem, suggestedName: String? = nil, renameReason: String? = nil) {
+    public mutating func addFile(
+        _ file: FileItem,
+        suggestedName: String? = nil,
+        renameReason: String? = nil,
+        renameConfidence: Double? = nil
+    ) {
         files.append(file)
         if suggestedName != nil {
             let mapping = FileRenameMapping(
                 originalFile: file,
                 suggestedName: suggestedName,
-                renameReason: renameReason
+                renameReason: renameReason,
+                renameConfidence: renameConfidence
             )
             fileRenameMappings.append(mapping)
         }
@@ -184,15 +223,41 @@ public struct FolderSuggestion: Codable, Identifiable, Hashable, Sendable {
     }
 
     /// Update rename suggestion for a file
-    public mutating func updateRename(for file: FileItem, newName: String?, reason: String? = nil) {
+    public mutating func updateRename(
+        for file: FileItem,
+        newName: String?,
+        reason: String? = nil,
+        confidence: Double? = nil
+    ) {
+        var sanitizedName: String?
+        if let newName, !newName.isEmpty {
+            let result = FilenameSanitizer.sanitize(
+                newName,
+                preservingExtension: file.extension,
+                enforceExtension: true
+            )
+            sanitizedName = result.sanitizedName
+        } else {
+            sanitizedName = nil
+        }
+
+        // Treat no-op rename as "no rename" to avoid forcing unchanged mappings.
+        if sanitizedName == file.displayName {
+            sanitizedName = nil
+        }
+
         if let index = fileRenameMappings.firstIndex(where: { $0.originalFile.id == file.id }) {
-            fileRenameMappings[index].suggestedName = newName
-            fileRenameMappings[index].renameReason = reason
-        } else if newName != nil {
+            fileRenameMappings[index].suggestedName = sanitizedName
+            fileRenameMappings[index].renameReason = reason ?? fileRenameMappings[index].renameReason
+            if let confidence {
+                fileRenameMappings[index].renameConfidence = min(max(confidence, 0.0), 1.0)
+            }
+        } else if sanitizedName != nil {
             let mapping = FileRenameMapping(
                 originalFile: file,
-                suggestedName: newName,
-                renameReason: reason
+                suggestedName: sanitizedName,
+                renameReason: reason,
+                renameConfidence: confidence
             )
             fileRenameMappings.append(mapping)
         }
@@ -234,4 +299,3 @@ public extension FolderSuggestion {
         }
     }
 }
-

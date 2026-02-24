@@ -314,6 +314,29 @@ public struct OrganizationProgress: Sendable {
     }
 }
 
+public struct VisionAnalysisSummary: Equatable, Sendable {
+    public let analyzedCount: Int
+    public let totalImageCount: Int
+    public let skippedCount: Int
+    public let failedCount: Int
+    public let warningMessage: String?
+
+    public var hasWarning: Bool {
+        warningMessage != nil
+    }
+
+    public var summaryText: String {
+        var text = "Analyzed \(analyzedCount) of \(totalImageCount) images with AI Vision"
+        if skippedCount > 0 {
+            text += " (\(skippedCount) skipped)"
+        }
+        if failedCount > 0 {
+            text += " (\(failedCount) failed to preprocess)"
+        }
+        return text
+    }
+}
+
 @MainActor
 public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var state: OrganizationState = .idle {
@@ -343,6 +366,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var liveInsightsEnabled: Bool = true
     @Published public var isReadyToOutputStructure: Bool = false
     @Published public var liveOrganizationMoves: [LiveOrganizationMove] = []
+    @Published public var deepScanProgress: (current: Int, total: Int)?
+    @Published public var visionAnalysisSummary: VisionAnalysisSummary?
     
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
@@ -538,6 +563,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var learningsObserver: ContinuousLearningObserver?
     
     private let visionAnalyzer = ImageVisionAnalyzer()
+    private let visionImageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "webp"]
     
     public init() {}
 
@@ -560,6 +586,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             self.aiClient = client
             self.aiConfig = config
+            await scanner.setOCRLanguages(config.ocrLanguages)
             
             await MainActor.run {
                 self.isAIConfigured = true
@@ -1409,6 +1436,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Reset cancellation flag
         isCancellationRequested = false
         userInitiatedAction = true
+        visionAnalysisSummary = nil
 
         currentTask = Task {
             try await performOrganization(directory: directory, customPrompt: customPrompt, temperature: temperature)
@@ -1480,6 +1508,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             stopTimeoutTimer()
             resetToIdle()
             throw CancellationError()
+        } catch let error as AIClientError where error.isCancellation {
+            stopTimeoutTimer()
+            resetToIdle()
+            throw CancellationError()
+        } catch where (error as NSError).code == NSURLErrorCancelled || 
+                      error.localizedDescription.lowercased().contains("cancelled") ||
+                      error.localizedDescription.lowercased().contains("canceled") {
+            stopTimeoutTimer()
+            resetToIdle()
+            throw CancellationError()
         } catch {
             stopTimeoutTimer()
             handleOrganizationError(error, directory: directory)
@@ -1494,12 +1532,35 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         try checkCancellation()
 
+        // Set up deep scan progress reporting
+        await scanner.setDeepScanProgressCallback { [weak self] current, _ in
+            Task { @MainActor in
+                self?.deepScanProgress = (current: current, total: 0)
+                if current % 5 == 0 {
+                    self?.organizationStage = "Analyzing file content: \(current) files..."
+                }
+            }
+        }
+
+        if let keywords = aiConfig?.customOCRKeywords {
+            await scanner.setCustomOCRKeywords(keywords)
+        }
+        await scanner.setOCRLanguages(aiConfig?.ocrLanguages ?? ["en-US"])
+
         let filesFound = try await scanner.scanDirectory(
             at: directory,
             deepScan: (aiConfig?.enableDeepScan ?? false) && (aiConfig?.provider.supportsDeepScan ?? true)
         )
         scannedFileCount = filesFound.count
         setScannedFiles(filesFound)
+
+        deepScanProgress = nil
+
+        // Check if scan was degraded due to memory pressure
+        if await scanner.lastScanWasDegraded, let reason = await scanner.degradationReason {
+            updateProgress(0.12, stage: "⚠️ \(reason)")
+            try? await Task.sleep(for: .seconds(1.5))
+        }
 
         updateProgress(0.15, stage: "Found \(filesFound.count) files")
 
@@ -1605,22 +1666,56 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Existing Folders context into prompt")
         }
 
+        let imageFiles = files.filter { visionImageExtensions.contains($0.extension.lowercased()) }
         var imagePayload: [String: Data] = [:]
-        if aiConfig?.enableVision ?? false,
-           let modelId = aiConfig?.model,
-           let provider = aiConfig?.provider,
-           ModelCatalog.shared.supportsVision(modelId: modelId, provider: provider) {
 
-            let imageFiles = files.filter { ["jpg", "jpeg", "png", "heic", "webp"].contains($0.extension.lowercased()) }
-            if !imageFiles.isEmpty {
-                updateProgress(0.25, stage: "Analyzing \(imageFiles.count) images with Vision AI...")
-                let batch = Array(imageFiles.prefix(aiConfig?.visionBatchSize ?? 5))
-                let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: batch.compactMap { $0.url })
-                for (url, data) in urlPayload {
-                    imagePayload[url.lastPathComponent] = data
+        let visionEnabled = aiConfig?.enableVision ?? false
+        let currentModel = aiConfig?.model ?? ""
+        let currentProvider = aiConfig?.provider ?? .openAICompatible
+        let modelSupportsVision = ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider)
+
+        if !imageFiles.isEmpty && visionEnabled && modelSupportsVision {
+            let configuredBatchSize = max(1, aiConfig?.visionBatchSize ?? 5)
+            let strategy = aiConfig?.visionBatchStrategy ?? .firstN
+            let selectedBatch = selectVisionBatch(from: imageFiles, batchSize: configuredBatchSize, strategy: strategy)
+            updateProgress(0.25, stage: "Analyzing \(selectedBatch.count) of \(imageFiles.count) images with Vision AI...")
+
+            let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: selectedBatch.compactMap { $0.url })
+            var analyzedNames: [String] = []
+            for file in selectedBatch {
+                guard let fileURL = file.url else { continue }
+                if let data = urlPayload[fileURL] {
+                    imagePayload[file.displayName] = data
+                    analyzedNames.append(file.displayName)
                 }
-                DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis")
             }
+
+            let failedCount = max(0, selectedBatch.count - analyzedNames.count)
+            let skippedCount = max(0, imageFiles.count - analyzedNames.count)
+            visionAnalysisSummary = VisionAnalysisSummary(
+                analyzedCount: analyzedNames.count,
+                totalImageCount: imageFiles.count,
+                skippedCount: skippedCount,
+                failedCount: failedCount,
+                warningMessage: nil
+            )
+
+            if !analyzedNames.isEmpty {
+                instructions += visionPromptInstructions(for: analyzedNames)
+            }
+            DebugLogger.log("Prepared \(imagePayload.count) images for multimodal analysis (total: \(imageFiles.count), failed preprocess: \(failedCount))")
+        } else if !imageFiles.isEmpty && visionEnabled && !modelSupportsVision {
+            let warning = "Vision is enabled but \(currentProvider.displayName) (\(currentModel)) doesn't support multimodal analysis. Results will use text-only analysis."
+            visionAnalysisSummary = VisionAnalysisSummary(
+                analyzedCount: 0,
+                totalImageCount: imageFiles.count,
+                skippedCount: imageFiles.count,
+                failedCount: 0,
+                warningMessage: warning
+            )
+            DebugLogger.log(warning)
+        } else {
+            visionAnalysisSummary = nil
         }
 
         guard let client = aiClient else {
@@ -1650,6 +1745,44 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         stopTimeoutTimer()
 
         return (plan, instructions, personaPrompt, imagePayload)
+    }
+
+    private func selectVisionBatch(from imageFiles: [FileItem], batchSize: Int, strategy: VisionBatchStrategy) -> [FileItem] {
+        let safeBatchSize = max(1, batchSize)
+        switch strategy {
+        case .firstN:
+            return Array(imageFiles.prefix(safeBatchSize))
+        case .random:
+            return Array(imageFiles.shuffled().prefix(safeBatchSize))
+        case .noText:
+            let prioritized = imageFiles.sorted { lhs, rhs in
+                let lhsHasOCR = !(lhs.contentMetadata?.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                let rhsHasOCR = !(rhs.contentMetadata?.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+                if lhsHasOCR != rhsHasOCR {
+                    return !lhsHasOCR
+                }
+                let lhsDate = lhs.modificationDate ?? lhs.creationDate ?? .distantPast
+                let rhsDate = rhs.modificationDate ?? rhs.creationDate ?? .distantPast
+                return lhsDate > rhsDate
+            }
+            return Array(prioritized.prefix(safeBatchSize))
+        }
+    }
+
+    private func visionPromptInstructions(for analyzedImageFilenames: [String]) -> String {
+        let fileList = analyzedImageFilenames
+            .enumerated()
+            .map { "\($0.offset + 1). \($0.element)" }
+            .joined(separator: "\n")
+
+        return """
+
+        ## AI VISION CONTEXT
+        I've attached \(analyzedImageFilenames.count) images from this folder.
+        For each image, describe what you see and use that context to determine the best folder categorization.
+        Attached image order:
+        \(fileList)
+        """
     }
 
     private func validationPhase(
@@ -1732,7 +1865,60 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         }
 
-        return validatedPlan
+        return applyRenameRuleConfiguration(to: validatedPlan)
+    }
+
+    private func applyRenameRuleConfiguration(to plan: OrganizationPlan) -> OrganizationPlan {
+        guard let config = aiConfig else { return plan }
+        guard config.mode == .renameOnly || config.mode == .organizeAndRename else { return plan }
+        guard !config.renameRules.isEmpty else { return plan }
+
+        var updatedPlan = plan
+        updatedPlan.suggestions = updatedPlan.suggestions.map {
+            applyRenameRules(in: $0, rules: config.renameRules, mode: config.renameRuleMode)
+        }
+        return updatedPlan
+    }
+
+    private func applyRenameRules(
+        in folder: FolderSuggestion,
+        rules: [RenameRule],
+        mode: RenameRuleApplicationMode
+    ) -> FolderSuggestion {
+        var updated = folder
+
+        for file in updated.files {
+            let existing = updated.renameMapping(for: file)
+            let transformed = RenameRuleEngine.applyRules(to: file.displayName, rules: rules)
+            let sanitization = FilenameSanitizer.sanitize(
+                transformed,
+                preservingExtension: file.extension,
+                enforceExtension: true
+            )
+            let ruleCandidate = sanitization.sanitizedName
+            let shouldUseRule = ruleCandidate != nil && ruleCandidate != file.displayName
+
+            switch mode {
+            case .rulesOnly:
+                if let ruleCandidate, shouldUseRule {
+                    updated.updateRename(for: file, newName: ruleCandidate, reason: "Applied custom rename rule")
+                } else {
+                    updated.updateRename(for: file, newName: nil)
+                }
+            case .beforeAI:
+                if existing?.hasRename == true {
+                    continue
+                }
+                if let ruleCandidate, shouldUseRule {
+                    updated.updateRename(for: file, newName: ruleCandidate, reason: "Applied custom rename rule")
+                }
+            }
+        }
+
+        updated.subfolders = updated.subfolders.map {
+            applyRenameRules(in: $0, rules: rules, mode: mode)
+        }
+        return updated
     }
 
     private func normalizeStorageDestinations(
@@ -1786,6 +1972,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Cancel any ongoing operation - RELIABLE cancellation
     public func cancel() {
         DebugLogger.log("Cancel requested by user")
+        AISessionManager.shared.clearErrors()
         cancelInternal()
         resetToIdle()
     }
@@ -1835,46 +2022,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
                 )
                 history.addEntry(cancelledEntry)
-                DebugLogger.log("Saved cancelled operation to history")
 
-                // Record to learnings with rich context
-                let fileCount = (try? FileManager.default.contentsOfDirectory(atPath: directory.path).count) ?? 0
+                // Record to learnings with available context (avoiding expensive directory re-scans)
+                let fileCount = max(scannedFileCount, currentPlan?.totalFiles ?? 0)
                 let proposedFolders = currentPlan?.suggestions.count ?? 0
-                
-                // Extract folder names from current plan
                 let folderNames = currentPlan?.suggestions.map { $0.folderName }
-                
-                // Build a compressed structure summary
-                let structureSummary = currentPlan.map { plan -> String in
-                    let summary = plan.suggestions.prefix(10).map { folder -> String in
-                        let fileCount = folder.files.count
-                        let subfolderCount = folder.subfolders.count
-                        return "\(folder.folderName)(\(fileCount)f\(subfolderCount > 0 ? ",\(subfolderCount)sf" : ""))"
-                    }.joined(separator: ";")
-                    return plan.suggestions.count > 10 ? "\(summary);+\(plan.suggestions.count - 10)more" : summary
-                }
-                
-                // Extract file extension counts from directory
-                var extensionCounts: [String: Int]?
-                if let contents = try? FileManager.default.contentsOfDirectory(atPath: directory.path) {
-                    var counts: [String: Int] = [:]
-                    for item in contents {
-                        let ext = (item as NSString).pathExtension.lowercased()
-                        let key = ext.isEmpty ? "other" : ext
-                        counts[key, default: 0] += 1
-                    }
-                    extensionCounts = counts
-                }
                 
                 learningsManager?.recordCancelledOrganization(
                     folderPath: directory.path,
                     fileCount: fileCount,
                     proposedFolderCount: proposedFolders,
                     instructions: customInstructions.isEmpty ? nil : customInstructions,
-                    stage: organizationStage,
+                    stage: organizationStage.isEmpty ? "analysis" : organizationStage,
                     proposedFolderNames: folderNames,
-                    proposedStructureSummary: structureSummary,
-                    fileExtensionCounts: extensionCounts,
+                    proposedStructureSummary: nil,
+                    fileExtensionCounts: nil,
                     regenerationCount: currentPlan?.version ?? 0,
                     regenerationInstructions: nil,
                     aiModel: aiConfig?.model
@@ -1883,11 +2045,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
 
         transition(to: .idle, force: true)
-        organizationStage = "Organization cancelled"
+        organizationStage = "" // Clear instead of "Organization cancelled" to avoid "doing too much"
         isStreaming = false
-        syncDisplayContentImmediately()
-        isCancellationRequested = false
-        userInitiatedAction = false
+        
         stopSteadyProgressTask()
     }
 
@@ -1906,18 +2066,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         )
         history.addEntry(failedEntry)
 
+        // Don't show anything for cancellation errors
+        let isCancellation = (error is CancellationError) ||
+                             ((error as? OrganizationError) == .cancelled) ||
+                             ((error as? AIClientError)?.isCancellation ?? false) ||
+                             (error as NSError).code == NSURLErrorCancelled ||
+                             error.localizedDescription.lowercased().contains("cancelled") ||
+                             error.localizedDescription.lowercased().contains("canceled")
+        
+        if isCancellation {
+            resetToIdle()
+            return
+        }
+
         transition(to: .error(error), force: true)
         errorMessage = displayMessage
         
-        // Show error notification (unless cancelled)
-        if case .cancelled = error as? OrganizationError {
-            // Don't show notification for user-initiated cancellation
-        } else {
-            NotificationManager.shared.showError(
-                message: displayMessage,
-                isCritical: true
-            )
-        }
+        // Show error notification
+        NotificationManager.shared.showError(
+            message: displayMessage,
+            isCritical: true
+        )
     }
 
     @MainActor
@@ -2194,6 +2363,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             updateState(.scanning, stage: "Scanning \(specificFiles.count) new files...", progress: 0.1)
             try checkCancellation()
             
+            // Enable deep scan for small batches
+            let shouldDeepScan = (aiConfig?.enableDeepScan ?? false) && specificFiles.count <= 20
+            
             // map file names to FileItems
             // We assume specificFiles are filenames or relative paths
             for filename in specificFiles {
@@ -2204,10 +2376,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
 
                 if isDirectory.boolValue {
-                    if let nestedFiles = try? await scanner.scanDirectory(at: fileURL) {
+                    if let nestedFiles = try? await scanner.scanDirectory(at: fileURL, deepScan: shouldDeepScan) {
                         files.append(contentsOf: nestedFiles)
                     }
-                } else if let item = try? await scanner.scanFile(at: fileURL) {
+                } else if let item = try? await scanner.scanFile(at: fileURL, deepScan: shouldDeepScan) {
                     files.append(item)
                 }
             }
@@ -2289,7 +2461,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 isStreaming = false
-                currentPlan = plan
+                currentPlan = applyRenameRuleConfiguration(to: plan)
             }
 
             // Validate plan before auto-apply (with a targeted retry for common validation failures)
@@ -2334,7 +2506,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             await MainActor.run {
-                currentPlan = validatedPlan
+                currentPlan = applyRenameRuleConfiguration(to: validatedPlan)
             }
 
             // Auto-apply for incremental
@@ -2504,7 +2676,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 isStreaming = false
-                currentPlan = plan
+                currentPlan = applyRenameRuleConfiguration(to: plan)
             }
 
             // Validate selected-files plan before apply.
@@ -2533,7 +2705,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 ) {
                     validatedPlan = retryPlan
                     await MainActor.run {
-                        currentPlan = retryPlan
+                        currentPlan = applyRenameRuleConfiguration(to: retryPlan)
                     }
                 } else {
                     throw validationError
@@ -2541,7 +2713,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             await MainActor.run {
-                currentPlan = validatedPlan
+                currentPlan = applyRenameRuleConfiguration(to: validatedPlan)
             }
 
             // Apply the organization
@@ -2561,12 +2733,16 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             throw OrganizationError.noCurrentPlan
         }
 
+        // Reset cancellation flag for new apply operation
+        isCancellationRequested = false
+
         try checkCancellation()
 
         // Re-validate at apply time to protect all entry points, including regenerated previews.
         let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
-        let planToApply = normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
+        let normalizedPlan = normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
+        let planToApply = applyRenameRuleConfiguration(to: normalizedPlan)
         self.currentPlan = planToApply
         try validator.validate(
             planToApply,
@@ -2886,7 +3062,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         self.planHistory.removeFirst()
                     }
                 }
-                self.currentPlan = newPlan
+                self.currentPlan = applyRenameRuleConfiguration(to: newPlan)
                 transition(to: .ready)
             }
         } catch {
@@ -2964,7 +3140,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         self.planHistory.removeFirst()
                     }
                 }
-                self.currentPlan = newPlan
+                self.currentPlan = applyRenameRuleConfiguration(to: newPlan)
                 transition(to: .ready)
             }
         } catch {
@@ -3107,7 +3283,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         self.planHistory.removeFirst()
                     }
                 }
-                self.currentPlan = newPlan
+                self.currentPlan = applyRenameRuleConfiguration(to: newPlan)
                 transition(to: .ready)
             }
 
@@ -3285,6 +3461,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     public func reset() {
         cancelInternal()
+        
+        // Clear transient AI session errors on manual reset
+        AISessionManager.shared.clearErrors()
 
         // Batch all reset operations into a single UI update cycle
         withBatchUpdates {
@@ -3300,6 +3479,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             elapsedTime = 0
             currentDirectory = nil
             scannedFileCount = 0
+            scannedFiles = []
+            detectedDuplicates = []
+            visionAnalysisSummary = nil
             isCancellationRequested = false
             userInitiatedAction = false
             lastChunkTime = .distantPast

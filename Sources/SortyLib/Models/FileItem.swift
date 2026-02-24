@@ -47,6 +47,10 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
     // Cloud storage status
     public var cloudStatus: CloudFileStatus?
 
+    // macOS Finder metadata
+    public var finderComment: String?
+    public var finderTags: [String]?
+
     public init(
         id: UUID = UUID(),
         path: String,
@@ -64,7 +68,9 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         contentFingerprint: String? = nil,
         imageWidth: Int? = nil,
         imageHeight: Int? = nil,
-        cloudStatus: CloudFileStatus? = nil
+        cloudStatus: CloudFileStatus? = nil,
+        finderComment: String? = nil,
+        finderTags: [String]? = nil
     ) {
         self.id = id
         self.path = path
@@ -83,6 +89,8 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
         self.imageWidth = imageWidth
         self.imageHeight = imageHeight
         self.cloudStatus = cloudStatus
+        self.finderComment = finderComment
+        self.finderTags = finderTags
     }
 
     public var url: URL? {
@@ -142,6 +150,14 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
             if let keywords = metadata.keywords {
                 parts.append("Keywords: \(keywords.joined(separator: ", "))")
             }
+        }
+
+        if let comment = finderComment, !comment.isEmpty {
+            parts.append("Finder Comment: \(comment)")
+        }
+
+        if let tags = finderTags, !tags.isEmpty {
+            parts.append("Tags: \(tags.joined(separator: ", "))")
         }
 
         return parts.isEmpty ? nil : parts.joined(separator: " | ")

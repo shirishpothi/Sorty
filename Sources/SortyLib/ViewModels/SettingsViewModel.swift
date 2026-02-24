@@ -60,6 +60,7 @@ public class SettingsViewModel: ObservableObject {
                 // Update API URL and requiresAPIKey for the new provider
                 config.apiURL = newProvider.defaultAPIURL
                 config.requiresAPIKey = newProvider.typicallyRequiresAPIKey
+                config.visionDetailLevel = VisionDetailLevel.defaultFor(provider: newProvider)
 
                 // Restore previously selected model for this provider, or fall back to default
                 config.model = userDefaults.string(forKey: modelSelectionKey(for: newProvider)) ?? newProvider.defaultModel

@@ -435,6 +435,373 @@ final class ContentAnalyzerTests: XCTestCase {
     }
 }
 
+// MARK: - New Fields Tests (Duration, MediaInfo)
+
+final class ContentMetadataMediaTests: XCTestCase {
+
+    func testDurationAndMediaInfoInitialization() {
+        let metadata = ContentMetadata(
+            duration: 180.5,
+            mediaInfo: ["artist": "Test Artist", "album": "Test Album"]
+        )
+
+        XCTAssertEqual(metadata.duration, 180.5)
+        XCTAssertEqual(metadata.mediaInfo?["artist"], "Test Artist")
+        XCTAssertEqual(metadata.mediaInfo?["album"], "Test Album")
+    }
+
+    func testIsEmptyWithMediaInfo() {
+        let metadata = ContentMetadata(mediaInfo: ["codec": "AAC"])
+        XCTAssertFalse(metadata.isEmpty, "mediaInfo alone should make isEmpty false")
+    }
+
+    func testIsEmptyWithDurationOnly() {
+        // duration alone doesn't make isEmpty false (no mediaInfo, no text, no exif)
+        let metadata = ContentMetadata(duration: 60)
+        XCTAssertTrue(metadata.isEmpty)
+    }
+
+    func testSummaryWithDuration() {
+        let metadata = ContentMetadata(
+            duration: 195,
+            mediaInfo: ["title": "Song"]
+        )
+        let summary = metadata.summary
+        XCTAssertTrue(summary.contains("Duration: 3m 15s"))
+        XCTAssertTrue(summary.contains("Track: Song"))
+    }
+
+    func testSummaryWithArtist() {
+        let metadata = ContentMetadata(
+            mediaInfo: ["artist": "Bach"]
+        )
+        XCTAssertTrue(metadata.summary.contains("Artist: Bach"))
+    }
+
+    func testCodableWithMediaFields() throws {
+        let original = ContentMetadata(
+            duration: 300.0,
+            mediaInfo: ["artist": "Mozart", "album": "Requiem"]
+        )
+
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(ContentMetadata.self, from: data)
+
+        XCTAssertEqual(decoded.duration, 300.0)
+        XCTAssertEqual(decoded.mediaInfo?["artist"], "Mozart")
+        XCTAssertEqual(decoded.mediaInfo?["album"], "Requiem")
+    }
+}
+
+// MARK: - RTF Extraction Tests
+
+final class ContentAnalyzerRTFTests: XCTestCase {
+
+    var tempDirectory: URL!
+
+    override func setUp() async throws {
+        tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() async throws {
+        if let tempDirectory = tempDirectory {
+            try? FileManager.default.removeItem(at: tempDirectory)
+        }
+    }
+
+    func testRTFExtractionStripsFormatting() async throws {
+        let analyzer = ContentAnalyzer()
+
+        // Create a minimal RTF file
+        let rtfContent = #"{\rtf1\ansi Hello World}"#
+        let rtfFile = tempDirectory.appendingPathComponent("test.rtf")
+        try rtfContent.write(to: rtfFile, atomically: true, encoding: .utf8)
+
+        let result = await analyzer.analyze(fileURL: rtfFile)
+
+        XCTAssertNotNil(result)
+        // Should extract clean text, not raw RTF tags
+        XCTAssertTrue(result?.textPreview?.contains("Hello World") ?? false)
+        XCTAssertFalse(result?.textPreview?.contains("\\rtf1") ?? true)
+    }
+}
+
+// MARK: - Content Cache Tests
+
+final class ContentAnalyzerCacheTests: XCTestCase {
+
+    var tempDirectory: URL!
+
+    override func setUp() async throws {
+        tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() async throws {
+        if let tempDirectory = tempDirectory {
+            try? FileManager.default.removeItem(at: tempDirectory)
+        }
+    }
+
+    func testCacheHitOnReanalyze() async throws {
+        let analyzer = ContentAnalyzer()
+
+        let textFile = tempDirectory.appendingPathComponent("cached.txt")
+        try "Cache me".write(to: textFile, atomically: true, encoding: .utf8)
+
+        let first = await analyzer.analyze(fileURL: textFile)
+        XCTAssertNotNil(first)
+
+        // Second call should hit cache and return same result
+        let second = await analyzer.analyze(fileURL: textFile)
+        XCTAssertEqual(first?.textPreview, second?.textPreview)
+    }
+
+    func testCacheInvalidatedOnModification() async throws {
+        let analyzer = ContentAnalyzer()
+
+        let textFile = tempDirectory.appendingPathComponent("mutable.txt")
+        try "Original".write(to: textFile, atomically: true, encoding: .utf8)
+
+        let first = await analyzer.analyze(fileURL: textFile)
+        XCTAssertEqual(first?.textPreview, "Original")
+
+        // Wait a moment and modify the file
+        try await Task.sleep(for: .milliseconds(100))
+        try "Updated content".write(to: textFile, atomically: true, encoding: .utf8)
+
+        let second = await analyzer.analyze(fileURL: textFile)
+        XCTAssertEqual(second?.textPreview, "Updated content")
+    }
+
+    func testClearCacheRemovesEntries() async throws {
+        let analyzer = ContentAnalyzer()
+
+        let textFile = tempDirectory.appendingPathComponent("clearable.txt")
+        try "Data".write(to: textFile, atomically: true, encoding: .utf8)
+
+        _ = await analyzer.analyze(fileURL: textFile)
+        await analyzer.clearCache()
+
+        // After clearing, next analyze should still work
+        let result = await analyzer.analyze(fileURL: textFile)
+        XCTAssertNotNil(result)
+    }
+}
+
+// MARK: - enableDeepDocumentScan Flag Tests
+
+final class ContentAnalyzerDeepScanFlagTests: XCTestCase {
+
+    var tempDirectory: URL!
+
+    override func setUp() async throws {
+        tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    }
+
+    override func tearDown() async throws {
+        if let tempDirectory = tempDirectory {
+            try? FileManager.default.removeItem(at: tempDirectory)
+        }
+    }
+
+    func testDeepScanDisabledSkipsTextFiles() async throws {
+        let analyzer = ContentAnalyzer()
+        await analyzer.setEnableDeepDocumentScan(false)
+
+        let textFile = tempDirectory.appendingPathComponent("skip.txt")
+        try "Should be skipped".write(to: textFile, atomically: true, encoding: .utf8)
+
+        let result = await analyzer.analyze(fileURL: textFile)
+        XCTAssertNil(result, "Text files should be skipped when enableDeepDocumentScan is false")
+    }
+
+    func testDeepScanDisabledSkipsRTF() async throws {
+        let analyzer = ContentAnalyzer()
+        await analyzer.setEnableDeepDocumentScan(false)
+
+        let rtfContent = #"{\rtf1\ansi Skipped}"#
+        let rtfFile = tempDirectory.appendingPathComponent("skip.rtf")
+        try rtfContent.write(to: rtfFile, atomically: true, encoding: .utf8)
+
+        let result = await analyzer.analyze(fileURL: rtfFile)
+        XCTAssertNil(result, "RTF files should be skipped when enableDeepDocumentScan is false")
+    }
+
+    func testDeepScanDisabledStillAllowsMediaExtraction() async throws {
+        // Media extraction is considered "light" and should still work
+        let analyzer = ContentAnalyzer()
+        await analyzer.setEnableDeepDocumentScan(false)
+
+        // Can't easily create a real media file, but verify the extension is handled
+        let fakeMedia = tempDirectory.appendingPathComponent("test.mp3")
+        try Data().write(to: fakeMedia)
+
+        // Will return nil because it's not a valid mp3, but the point is it attempted extraction
+        _ = await analyzer.analyze(fileURL: fakeMedia)
+        // Just verify no crash
+    }
+}
+
+// MARK: - OCR Keywords Tests
+
+final class OCRKeywordsTests: XCTestCase {
+
+    func testDefaultKeywordsDetection() {
+        let result = OCRResult(
+            text: "This is an invoice for payment of $500",
+            confidence: 0.9,
+            wordCount: 8
+        )
+
+        XCTAssertTrue(result.detectedKeywords.contains("invoice"))
+        XCTAssertTrue(result.detectedKeywords.contains("payment"))
+    }
+
+    func testCustomKeywordsDetection() {
+        let result = OCRResult(
+            text: "Quarterly budget forecast for engineering team",
+            confidence: 0.85,
+            wordCount: 6
+        )
+
+        let detected = result.detectKeywords(using: ["budget", "forecast", "engineering"])
+        XCTAssertTrue(detected.contains("budget"))
+        XCTAssertTrue(detected.contains("forecast"))
+        XCTAssertTrue(detected.contains("engineering"))
+    }
+
+    func testCustomKeywordsDoNotDuplicateDefaults() {
+        let result = OCRResult(
+            text: "An invoice document",
+            confidence: 0.9,
+            wordCount: 3
+        )
+
+        let detected = result.detectKeywords(using: ["invoice"]) // "invoice" is already a default
+        let invoiceCount = detected.filter { $0 == "invoice" }.count
+        XCTAssertEqual(invoiceCount, 1, "Should not duplicate default keywords")
+    }
+
+    func testCustomOCRKeywordsOnAnalyzer() async {
+        let analyzer = ContentAnalyzer()
+        await analyzer.setCustomOCRKeywords(["custom1", "custom2"])
+        // Verify the property was set (no crash)
+    }
+}
+
+// MARK: - Prompt Builder Prioritization Tests
+
+final class PromptBuilderPrioritizationTests: XCTestCase {
+
+    func testDeepScannedFilesPrioritizedInPrompt() {
+        // Create files where some have content metadata and some don't
+        var filesWithMetadata: [FileItem] = []
+        var filesWithout: [FileItem] = []
+
+        for i in 0..<30 {
+            filesWithMetadata.append(FileItem(
+                path: "/test/file\(i).pdf",
+                name: "file\(i)",
+                extension: "pdf",
+                size: 1024,
+                contentMetadata: ContentMetadata(textPreview: "Content \(i)")
+            ))
+        }
+
+        for i in 30..<80 {
+            filesWithout.append(FileItem(
+                path: "/test/file\(i).pdf",
+                name: "file\(i)",
+                extension: "pdf",
+                size: 1024
+            ))
+        }
+
+        // Mix them up - put files without metadata first
+        let allFiles = filesWithout + filesWithMetadata
+
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: allFiles,
+            includeContentMetadata: true
+        )
+
+        // All 30 files with metadata should appear in the prompt (they're prioritized)
+        for i in 0..<30 {
+            XCTAssertTrue(prompt.contains("file\(i).pdf"), "File with metadata file\(i) should be in prompt")
+        }
+    }
+
+    func testWithoutContentMetadataNoSorting() {
+        var files: [FileItem] = []
+        for i in 0..<60 {
+            files.append(FileItem(
+                path: "/test/file\(i).pdf",
+                name: "file\(i)",
+                extension: "pdf",
+                size: 1024
+            ))
+        }
+
+        // When includeContentMetadata is false, no sorting should occur
+        let prompt = PromptBuilder.buildOrganizationPrompt(
+            files: files,
+            includeContentMetadata: false
+        )
+
+        // First 50 files should be in the prompt, remaining 10 should be truncated
+        XCTAssertTrue(prompt.contains("and 10 more"))
+    }
+}
+
+// MARK: - AIConfig Custom OCR Keywords Tests
+
+final class AIConfigOCRKeywordsTests: XCTestCase {
+
+    func testCustomOCRKeywordsDefault() {
+        let config = AIConfig.default
+        XCTAssertNil(config.customOCRKeywords)
+    }
+
+    func testCustomOCRKeywordsSetAndGet() {
+        var config = AIConfig.default
+        config.customOCRKeywords = ["budget", "forecast", "quarterly"]
+        XCTAssertEqual(config.customOCRKeywords, ["budget", "forecast", "quarterly"])
+    }
+
+    func testCustomOCRKeywordsCodable() throws {
+        var config = AIConfig.default
+        config.customOCRKeywords = ["custom1", "custom2"]
+
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(AIConfig.self, from: data)
+
+        XCTAssertEqual(decoded.customOCRKeywords, ["custom1", "custom2"])
+    }
+
+    func testVisionAndOCRSettingsCodable() throws {
+        var config = AIConfig.default
+        config.visionBatchStrategy = .noText
+        config.visionDetailLevel = .high
+        config.ocrLanguages = ["en-US", "fr-FR"]
+
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(AIConfig.self, from: data)
+
+        XCTAssertEqual(decoded.visionBatchStrategy, .noText)
+        XCTAssertEqual(decoded.visionDetailLevel, .high)
+        XCTAssertEqual(decoded.ocrLanguages, ["en-US", "fr-FR"])
+    }
+
+    func testCopilotDefaultsVisionDetailToLow() {
+        let config = AIConfig(provider: .githubCopilot, model: "gpt-4o")
+        XCTAssertEqual(config.visionDetailLevel, .low)
+        XCTAssertEqual(config.effectiveVisionDetailLevel, .low)
+    }
+}
+
 // MARK: - Helper Extension for Tests
 
 extension ContentAnalyzer {

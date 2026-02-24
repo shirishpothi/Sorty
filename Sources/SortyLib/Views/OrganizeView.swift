@@ -74,6 +74,18 @@ struct OrganizeView: View {
         .navigationTitle("Organize Files")
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                if appState.selectedDirectory != nil && (organizer.state == .idle || organizer.state == .completed) {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        startQuickRename()
+                    } label: {
+                        Label("Quick Rename", systemImage: "character.cursor.ibeam")
+                    }
+                    .keyboardShortcut("e", modifiers: [.command, .shift])
+                    .help("Run rename-only mode for the selected folder")
+                    .accessibilityIdentifier("QuickRenameToolbarButton")
+                }
+
                 if organizer.state == .ready {
                     Button {
                         HapticFeedbackManager.shared.tap()
@@ -215,6 +227,25 @@ struct OrganizeView: View {
             do {
                 try await organizer.organize(directory: directory)
             } catch {
+                organizer.state = .error(error)
+            }
+        }
+    }
+
+    private func startQuickRename() {
+        guard let directory = appState.selectedDirectory else { return }
+
+        let previousConfig = settingsViewModel.config
+        var quickConfig = previousConfig
+        quickConfig.mode = .renameOnly
+
+        Task {
+            do {
+                try await organizer.configure(with: quickConfig)
+                try await organizer.organize(directory: directory)
+                try? await organizer.configure(with: previousConfig)
+            } catch {
+                try? await organizer.configure(with: previousConfig)
                 organizer.state = .error(error)
             }
         }
@@ -571,10 +602,10 @@ struct ReadyToOrganizeView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
                     .foregroundStyle(.orange)
-                Text("Connection warning: \(error.prefix(40))...")
+                Text("Connection warning: \(error)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
             }
         }
         .frame(height: 16)
@@ -1048,6 +1079,12 @@ struct ErrorView: View {
     
     private var category: ErrorCategory {
         let description = error.localizedDescription.lowercased()
+        
+        // Handle cancellation
+        if description.contains("cancelled") || (error as? AIClientError)?.isCancellation == true || error is CancellationError {
+            return .network // We'll handle this specially if needed, but for now we'll categorize it as network and maybe suppress if it's truly cancellation
+        }
+
         if description.contains("api key") || description.contains("unauthorized") || description.contains("authentication") {
             return .apiKey
         }
