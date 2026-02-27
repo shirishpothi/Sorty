@@ -64,6 +64,15 @@ public class SettingsViewModel: ObservableObject {
 
                 // Restore previously selected model for this provider, or fall back to default
                 config.model = userDefaults.string(forKey: modelSelectionKey(for: newProvider)) ?? newProvider.defaultModel
+                if newProvider == .appleFoundationModel,
+                   config.model == AIProvider.appleFoundationModelName,
+                   shouldPreferPCCForAppleFoundation() {
+                    config.model = AIProvider.applePrivateCloudComputeModelName
+                } else if newProvider == .appleFoundationModel,
+                          !FeatureFlags.applePrivateCloudComputeModelEnabled,
+                          config.model == AIProvider.applePrivateCloudComputeModelName {
+                    config.model = AIProvider.appleFoundationModelName
+                }
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
 
                 // Invalidate sessions for new provider URL
@@ -76,7 +85,7 @@ public class SettingsViewModel: ObservableObject {
                 // For GitHub Copilot, skip apiKey check since auth is token-based
                 Task {
                     try? await Task.sleep(nanoseconds: 300_000_000)
-                    if newProvider == .githubCopilot || config.apiKey != nil {
+                    if newProvider == .githubCopilot || newProvider == .appleFoundationModel || config.apiKey != nil {
                         try? await testConnection()
                     }
                     await AISessionManager.shared.prewarm(provider: newProvider, config: config)
@@ -125,6 +134,37 @@ public class SettingsViewModel: ObservableObject {
     private func loadConfig() {
         if let data = userDefaults.data(forKey: configKey),
            var decoded = try? JSONDecoder().decode(AIConfig.self, from: data) {
+
+            if decoded.provider == .applePrivateCloudCompute {
+                decoded.provider = .appleFoundationModel
+                decoded.model = FeatureFlags.applePrivateCloudComputeModelEnabled
+                    ? AIProvider.applePrivateCloudComputeModelName
+                    : AIProvider.appleFoundationModelName
+                decoded.requiresAPIKey = false
+            }
+
+            if !FeatureFlags.applePrivateCloudComputeModelEnabled,
+               decoded.model == AIProvider.applePrivateCloudComputeModelName {
+                decoded.model = AIProvider.appleFoundationModelName
+            }
+
+            if decoded.provider == .appleFoundationModel,
+               decoded.model == AIProvider.appleFoundationModelName,
+               shouldPreferPCCForAppleFoundation() {
+                decoded.model = AIProvider.applePrivateCloudComputeModelName
+            }
+
+            if decoded.automationProvider == .applePrivateCloudCompute {
+                decoded.automationProvider = .appleFoundationModel
+                decoded.automationModel = FeatureFlags.applePrivateCloudComputeModelEnabled
+                    ? (decoded.automationModel ?? AIProvider.applePrivateCloudComputeModelName)
+                    : AIProvider.appleFoundationModelName
+            }
+
+            if !FeatureFlags.applePrivateCloudComputeModelEnabled,
+               decoded.automationModel == AIProvider.applePrivateCloudComputeModelName {
+                decoded.automationModel = AIProvider.appleFoundationModelName
+            }
             
             // 1. Check for legacy generic key
             if let oldApiKey = KeychainManager.get(key: "apiKey") {
@@ -213,6 +253,25 @@ public class SettingsViewModel: ObservableObject {
         appleModelStatus = "Apple Intelligence is not supported on this version of macOS."
         #endif
     }
+
+    private func shouldPreferPCCForAppleFoundation() -> Bool {
+        guard FeatureFlags.applePrivateCloudComputeModelEnabled else {
+            return false
+        }
+
+        #if canImport(FoundationModels) && os(macOS)
+        let onDeviceAvailable: Bool
+        if #available(macOS 26.0, *) {
+            onDeviceAvailable = AppleFoundationModelClient.isAvailable()
+        } else {
+            onDeviceAvailable = false
+        }
+        #else
+        let onDeviceAvailable = false
+        #endif
+
+        return !onDeviceAvailable && ApplePrivateCloudComputeClient.isShortcutInstalled()
+    }
     
     public func refreshAppleModelStatus() {
         checkAppleModelAvailability()
@@ -221,9 +280,13 @@ public class SettingsViewModel: ObservableObject {
     public func testConnection() async throws {
         let clientConfig = config
         let client = try AIClientFactory.createClient(config: clientConfig)
-        // Use lightweight health check endpoint (e.g., /models) instead of inference
-        // This avoids unnecessary token usage and is faster
-        try await client.checkHealth()
+        if clientConfig.usesApplePrivateCloudCompute {
+            _ = try await client.generateText(prompt: "Reply with exactly OK.", systemPrompt: nil)
+        } else {
+            // Use lightweight health check endpoint (e.g., /models) instead of inference
+            // This avoids unnecessary token usage and is faster
+            try await client.checkHealth()
+        }
     }
     
     public func updateAvailableModels(force: Bool = false) {

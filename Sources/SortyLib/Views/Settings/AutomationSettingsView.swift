@@ -20,7 +20,6 @@ struct AutomationSettingsView: View {
     @State private var useSeparateModel = false
     @State private var selectedProvider: AIProvider = .openAI
     @State private var selectedModel: String = ""
-    @State private var showBackgroundActivityInfo = false
     @State private var showModelPicker = false
     
     private var activeFoldersCount: Int {
@@ -79,7 +78,7 @@ struct AutomationSettingsView: View {
                             .fontWeight(.medium)
                         
                         Picker("", selection: $selectedProvider) {
-                            ForEach(AIProvider.allCases.filter { $0.isAvailable }, id: \.self) { provider in
+                            ForEach(AIProvider.userSelectableProviders.filter { $0.isAvailable }, id: \.self) { provider in
                                 Text(provider.displayName).tag(provider)
                             }
                         }
@@ -244,22 +243,17 @@ struct AutomationSettingsView: View {
 
                 Divider()
 
-                Button {
-                    showBackgroundActivityInfo.toggle()
-                } label: {
-                    Label("App Background Activity", systemImage: "info.circle")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("BackgroundActivityInfoButton")
-                .popover(isPresented: $showBackgroundActivityInfo, arrowEdge: .top) {
-                    Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding()
-                        .frame(width: 360, alignment: .leading)
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.purple)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("App Background Activity")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 if launchAtLogin || keepInBackground {

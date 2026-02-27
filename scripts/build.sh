@@ -131,25 +131,54 @@ bundle_finder_extension() {
     local plugins_dir="${app_path}/Contents/PlugIns"
     local appex_name="SortyFinderSync.appex"
     local xcode_config="Release"
+    local arch_setting="ONLY_ACTIVE_ARCH=NO"
     if [ "$build_config" = "debug" ]; then
         xcode_config="Debug"
+        arch_setting="ONLY_ACTIVE_ARCH=YES"
+    fi
+
+    local derived_data="${BUILD_DIR}/FinderSyncDerivedData"
+    local cached_appex="${derived_data}/Build/Products/${xcode_config}/${appex_name}"
+
+    # Skip rebuild if cached appex is newer than all source files
+    if [ -d "${cached_appex}" ]; then
+        local needs_rebuild=false
+        for src_file in \
+            "${PROJECT_DIR}/Sources/SortyFinderSync/SortyFinderSync.swift" \
+            "${PROJECT_DIR}/SortyFinderSync/Info.plist" \
+            "${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"; do
+            if [ -f "${src_file}" ] && [ "${src_file}" -nt "${cached_appex}" ]; then
+                needs_rebuild=true
+                break
+            fi
+        done
+        if [ "${needs_rebuild}" = "false" ]; then
+            mkdir -p "${plugins_dir}"
+            rm -rf "${plugins_dir}/${appex_name}"
+            cp -R "${cached_appex}" "${plugins_dir}/${appex_name}"
+            codesign --force --sign - "${plugins_dir}/${appex_name}" 2>/dev/null || true
+            log_item "SortyFinderSync.appex unchanged, using cache"
+            return
+        fi
     fi
 
     log_item "Building SortyFinderSync extension..."
-
-    local derived_data="${BUILD_DIR}/FinderSyncDerivedData"
+    start_step_timer "finder_ext"
 
     if xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
         -target "SortyFinderSync" \
         -configuration "${xcode_config}" \
+        -parallelizeTargets \
+        -jobs "${XCODE_BUILD_JOBS}" \
         SYMROOT="${derived_data}/Build/Products" \
         OBJROOT="${derived_data}/Build/Intermediates" \
         PRODUCT_BUNDLE_IDENTIFIER="${APP_BUNDLE_ID}.SortyFinderSync" \
+        COMPILER_INDEX_STORE_ENABLE=NO \
         CODE_SIGN_IDENTITY="-" \
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGNING_REQUIRED=NO \
         ENABLE_APP_SANDBOX=NO \
-        ONLY_ACTIVE_ARCH=NO \
+        ${arch_setting} \
         build 2>&1 | tail -5; then
 
         local built_appex
@@ -163,12 +192,12 @@ bundle_finder_extension() {
             rm -rf "${plugins_dir}/${appex_name}"
             cp -R "${built_appex}" "${plugins_dir}/${appex_name}"
             codesign --force --sign - "${plugins_dir}/${appex_name}" 2>/dev/null || true
-            log_item "Embedded SortyFinderSync.appex in PlugIns"
+            log_item "Embedded SortyFinderSync.appex in PlugIns ($(get_step_duration "finder_ext"))"
         else
             log_item "Warning: SortyFinderSync.appex not found after build"
         fi
     else
-        log_item "Warning: SortyFinderSync extension build failed (non-fatal)"
+        log_item "Warning: SortyFinderSync extension build failed (non-fatal, $(get_step_duration "finder_ext"))"
     fi
 }
 
@@ -183,6 +212,10 @@ BUILD_ARCHS="${BUILD_ARCHS:-arm64 x86_64}"
 XCODE_EXTRA_FLAGS="${XCODE_EXTRA_FLAGS:-COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO}"
 XCODE_BUILD_JOBS="${XCODE_BUILD_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 8)}"
 ENABLE_CLI_BUNDLE="${ENABLE_CLI_BUNDLE:-true}"
+ENABLE_FINDER_EXTENSION="${ENABLE_FINDER_EXTENSION:-true}"
+ENABLE_ADHOC_SIGNING="${ENABLE_ADHOC_SIGNING:-true}"
+ENABLE_SPARKLE_SIGNING="${ENABLE_SPARKLE_SIGNING:-true}"
+PRESERVE_APP_BUNDLE="${PRESERVE_APP_BUNDLE:-false}"
 
 print_summary "Build Configuration" \
     "Version" "${VERSION}" \
@@ -192,6 +225,10 @@ print_summary "Build Configuration" \
     "Archs" "${BUILD_ARCHS}" \
     "Xcode Jobs" "${XCODE_BUILD_JOBS}" \
     "Bundle CLI" "${ENABLE_CLI_BUNDLE}" \
+    "Finder Extension" "${ENABLE_FINDER_EXTENSION}" \
+    "Ad-hoc Signing" "${ENABLE_ADHOC_SIGNING}" \
+    "Sparkle Signing" "${ENABLE_SPARKLE_SIGNING}" \
+    "Preserve Bundle" "${PRESERVE_APP_BUNDLE}" \
     "Output" "${BUILD_DIR}"
 
 if [ "${BUILD_METHOD}" = "xcodebuild" ]; then
@@ -216,13 +253,12 @@ log_item "Configuration: ${BUILD_CONFIG}"
 if [ "$SKIP_TESTS" != "true" ]; then
     print_step 1 $TOTAL_STEPS "Running Unit Tests"
     start_step_timer "test"
-    # Use parallel execution for faster tests
     TEST_FLAGS="${BUILD_FLAGS:-}"
-    if ! swift test $TEST_FLAGS; then
-        log_failure "Tests failed. Set SKIP_TESTS=true to bypass."
+    if ! swift test $TEST_FLAGS --disable-sandbox; then
+        log_failure "Tests failed ($(get_step_duration "test")). Set SKIP_TESTS=true to bypass."
         exit 1
     fi
-    log_success "Tests passed."
+    log_success "Tests passed ($(get_step_duration "test"))"
 else
     print_step 1 $TOTAL_STEPS "Skipping Unit Tests"
     log_item "SKIP_TESTS is set."
@@ -319,7 +355,11 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "" "${CLI_BUILD_ARCH}"
 
     # Embed Finder Sync extension
-    bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
+    if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then
+        bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
+    else
+        log_item "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
+    fi
 
     log_success "xcodebuild succeeded ($(get_step_duration "build"))"
 
@@ -336,19 +376,23 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
             cp -R "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/"
             
-            # Deep sign the framework and its internal helpers for Sandbox compatibility
-            log_item "Deep signing Sparkle.framework for Sandbox compatibility"
-            codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
-            
-            # Specifically sign helpers if they exist (Sparkle 2)
-            for helper in "Autoupdate.app" "Updater.app"; do
-                HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
-                if [ -d "${HELPER_PATH}" ]; then
-                    codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
-                fi
-            done
-            
-            log_item "Embedded and signed Sparkle.framework"
+            if [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
+                # Deep sign the framework and its internal helpers for Sandbox compatibility
+                log_item "Deep signing Sparkle.framework for Sandbox compatibility"
+                codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
+                
+                # Specifically sign helpers if they exist (Sparkle 2)
+                for helper in "Autoupdate.app" "Updater.app"; do
+                    HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
+                    if [ -d "${HELPER_PATH}" ]; then
+                        codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
+                    fi
+                done
+                
+                log_item "Embedded and signed Sparkle.framework"
+            else
+                log_item "Embedded Sparkle.framework without signing"
+            fi
         else
             log_item "Warning: Sparkle.framework not found, skipping embed"
         fi
@@ -393,7 +437,9 @@ else
     MACOS_DIR="${APP_PATH}/Contents/MacOS"
     RESOURCES_DIR="${APP_PATH}/Contents/Resources"
 
-    rm -rf "${APP_PATH}"
+    if [ "${PRESERVE_APP_BUNDLE}" != "true" ]; then
+        rm -rf "${APP_PATH}"
+    fi
     mkdir -p "${MACOS_DIR}"
     mkdir -p "${RESOURCES_DIR}"
 
@@ -457,20 +503,32 @@ else
     fi
     
     if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
-        cp -R "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/"
-        # Deep sign the framework and its internal helpers for Sandbox compatibility
-        log_item "Deep signing Sparkle.framework for Sandbox compatibility"
-        codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
-        
-        # Specifically sign helpers if they exist (Sparkle 2)
-        for helper in "Autoupdate.app" "Updater.app"; do
-            HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
-            if [ -d "${HELPER_PATH}" ]; then
-                codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
-            fi
-        done
-        
-        log_item "Embedded and signed Sparkle.framework"
+        TARGET_SPARKLE_FRAMEWORK="${FRAMEWORKS_DIR}/Sparkle.framework"
+        if [ "${PRESERVE_APP_BUNDLE}" = "true" ] && [ -d "${TARGET_SPARKLE_FRAMEWORK}" ]; then
+            log_item "Sparkle.framework already present, skipping copy"
+        else
+            rm -rf "${TARGET_SPARKLE_FRAMEWORK}"
+            cp -R "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/"
+            log_item "Embedded Sparkle.framework"
+        fi
+
+        if [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
+            # Deep sign the framework and its internal helpers for Sandbox compatibility
+            log_item "Deep signing Sparkle.framework for Sandbox compatibility"
+            codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
+            
+            # Specifically sign helpers if they exist (Sparkle 2)
+            for helper in "Autoupdate.app" "Updater.app"; do
+                HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
+                if [ -d "${HELPER_PATH}" ]; then
+                    codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
+                fi
+            done
+            
+            log_item "Signed Sparkle.framework"
+        else
+            log_item "Skipping Sparkle.framework signing (ENABLE_SPARKLE_SIGNING=${ENABLE_SPARKLE_SIGNING})"
+        fi
     else
         log_failure "Required Sparkle.framework not found!"
         exit 1
@@ -485,34 +543,43 @@ else
     bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "${BUILD_FLAGS_EXTRA}" ""
 
     # Embed Finder Sync extension
-    bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
+    if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then
+        bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
+    else
+        log_item "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
+    fi
 
     log_success "App bundle assembled ($(get_step_duration "assemble"))"
 fi
 
 # Step 4: Signing (common for both build methods)
-print_step 4 $TOTAL_STEPS "Ad-hoc Signing"
-start_step_timer "sign"
+if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
+    print_step 4 $TOTAL_STEPS "Ad-hoc Signing"
+    start_step_timer "sign"
 
-ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
-FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
+    ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
+    FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
 
-# Sign the Finder Sync extension first (inner-to-outer signing order)
-if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
-    if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
-        codesign --force --sign - --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
-    else
-        codesign --force --sign - "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
+    # Sign the Finder Sync extension first (inner-to-outer signing order)
+    if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
+        if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
+            codesign --force --sign - --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
+        else
+            codesign --force --sign - "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
+        fi
+        log_item "Signed SortyFinderSync.appex"
     fi
-    log_item "Signed SortyFinderSync.appex"
-fi
 
-if [ -f "${ENTITLEMENTS_FILE}" ]; then
-    codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}" 2>/dev/null || true
+    if [ -f "${ENTITLEMENTS_FILE}" ]; then
+        codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}" 2>/dev/null || true
+    else
+        codesign --force --deep --sign - "${APP_PATH}" 2>/dev/null || true
+    fi
+    log_success "App signed ($(get_step_duration "sign"))"
 else
-    codesign --force --deep --sign - "${APP_PATH}" 2>/dev/null || true
+    print_step 4 $TOTAL_STEPS "Skipping Ad-hoc Signing"
+    log_item "ENABLE_ADHOC_SIGNING is set to false."
 fi
-log_success "App signed ($(get_step_duration "sign"))"
 
 APP_SIZE=$(get_file_size "${APP_PATH}")
 

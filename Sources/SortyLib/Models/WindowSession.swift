@@ -1,19 +1,18 @@
 import Foundation
 import AppKit
-#if canImport(SortyLib)
-import SortyLib
-#endif
 
 @MainActor
-final class WindowSession: ObservableObject {
-    @Published var appState = AppState()
-    @Published var organizer = FolderOrganizer()
-    @Published var healthManager = WorkspaceHealthManager()
-    @Published var batchManager = BatchOrganizationManager()
+public final class WindowSession: ObservableObject {
+    @Published public var appState = AppState()
+    @Published public var organizer = FolderOrganizer()
+    @Published public var healthManager = WorkspaceHealthManager()
+    @Published public var batchManager = BatchOrganizationManager()
 
     private var didConfigure = false
 
-    func configureIfNeeded(
+    public init() {}
+
+    public func configureIfNeeded(
         settingsViewModel: SettingsViewModel,
         personaManager: PersonaManager,
         customPersonaStore: CustomPersonaStore,
@@ -21,7 +20,7 @@ final class WindowSession: ObservableObject {
         storageLocationsManager: StorageLocationsManager,
         learningsManager: LearningsManager,
         automationManager: AutomationManager,
-        coordinator: AppCoordinator?
+        calibrateAction: ((WatchedFolder) -> Void)?
     ) async {
         guard !didConfigure else { return }
         didConfigure = true
@@ -34,20 +33,18 @@ final class WindowSession: ObservableObject {
         organizer.automationManager = automationManager
 
         appState.organizer = organizer
-        appState.calibrateAction = { folder in
-            coordinator?.calibrateFolder(folder)
-        }
+        appState.calibrateAction = calibrateAction
 
         await applyConfiguration(settingsViewModel.config, learningsManager: learningsManager)
         appState.updateManager.checkOnLaunchIfNeeded()
     }
 
-    func applyConfiguration(_ config: AIConfig, learningsManager: LearningsManager) async {
+    public func applyConfiguration(_ config: AIConfig, learningsManager: LearningsManager) async {
         try? await organizer.configure(with: config)
         learningsManager.configure(with: config)
     }
 
-    func handle(destination: DeeplinkDestination,
+    public func handle(destination: DeeplinkDestination,
                 settingsViewModel: SettingsViewModel,
                 personaManager: PersonaManager,
                 customPersonaStore: CustomPersonaStore,
@@ -56,15 +53,9 @@ final class WindowSession: ObservableObject {
                 storageLocationsManager: StorageLocationsManager,
                 learningsManager: LearningsManager) {
         switch destination {
-        case .organize(let path, let personaId, let mode, let autostart):
+        case .organize(let path, let personaId, _, let autostart):
             if let path {
                 appState.selectedDirectory = URL(fileURLWithPath: path)
-            }
-            if let mode {
-                settingsViewModel.config.mode = mode
-                Task { @MainActor in
-                    await applyConfiguration(settingsViewModel.config, learningsManager: learningsManager)
-                }
             }
             if let personaId {
                 if let persona = PersonaType(rawValue: personaId) {

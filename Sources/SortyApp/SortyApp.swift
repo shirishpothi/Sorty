@@ -135,6 +135,41 @@ struct SortyApp: App {
 
     @ViewBuilder
     private func mainWindowContent(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
+        mainWindowRootView(launchRequest: launchRequest)
+            .task {
+                configureGlobalsIfNeeded()
+            }
+            .onChange(of: settingsViewModel.config) { _, newConfig in
+                Task { @MainActor in
+                    try? await automationOrganizer.configure(with: newConfig)
+                    learningsManager.configure(with: newConfig)
+                }
+            }
+            .onChange(of: hideDockIcon) { _, newValue in
+                appDelegate.updateActivationPolicy(hideDockIcon: newValue)
+            }
+            .onChange(of: launchAtLogin) { _, _ in
+                syncLoginItemState()
+            }
+            .onChange(of: keepInBackground) { _, _ in
+                syncLoginItemState()
+            }
+            .onChange(of: showMenuBarExtra) { _, _ in
+                syncLoginItemState()
+            }
+            .onChange(of: finderIntegrationEnabled) { _, newValue in
+                if newValue {
+                    Task {
+                        _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                    }
+                }
+            }
+            .onChange(of: watchedFoldersManager.folders) { _, _ in
+                coordinator?.syncWatchedFolders()
+            }
+    }
+
+    private func mainWindowRootView(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
         MainWindowRootView(
             launchRequest: launchRequest.wrappedValue,
             coordinator: coordinator
@@ -155,43 +190,18 @@ struct SortyApp: App {
         .environmentObject(globalShortcutManager)
         .environmentObject(steeringPromptManager)
         .environmentObject(menuBarController)
-        .task {
-            configureGlobalsIfNeeded()
-        }
-        .onChange(of: settingsViewModel.config) { _, newConfig in
-            Task { @MainActor in
-                try? await automationOrganizer.configure(with: newConfig)
-                learningsManager.configure(with: newConfig)
-            }
-        }
-        .onChange(of: hideDockIcon) { _, newValue in
-            appDelegate.updateActivationPolicy(hideDockIcon: newValue)
-        }
-        .onChange(of: launchAtLogin) { _, _ in
-            syncLoginItemState()
-        }
-        .onChange(of: keepInBackground) { _, _ in
-            syncLoginItemState()
-        }
-        .onChange(of: showMenuBarExtra) { _, _ in
-            syncLoginItemState()
-        }
-        .onChange(of: finderIntegrationEnabled) { _, newValue in
-            if newValue {
-                Task {
-                    _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                }
-            }
-        }
-        .onChange(of: watchedFoldersManager.folders) { _, _ in
-            coordinator?.syncWatchedFolders()
-        }
     }
 
     @MainActor
     private func configureGlobalsIfNeeded() {
         guard !hasConfiguredGlobals else { return }
         hasConfiguredGlobals = true
+
+        // Harness mode: skip heavy initialization for fast iteration
+        if FeatureFlags.harnessMode {
+            configureHarnessMode()
+            return
+        }
 
         appDelegate.updateActivationPolicy(hideDockIcon: hideDockIcon)
         syncLoginItemState()
@@ -234,6 +244,11 @@ struct SortyApp: App {
                 NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
             }
         }
+    }
+
+    @MainActor
+    private func configureHarnessMode() {
+        appDelegate.updateActivationPolicy(hideDockIcon: false)
     }
 
     @MainActor

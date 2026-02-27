@@ -38,12 +38,17 @@ make test
 |---------|---------|
 | `make build` | Full build with tests |
 | `make run` | Build and launch app |
+| `make now` | Fast debug build + launch (recommended for dev) |
+| `make dev` | Fastest build (debug, no tests, no launch) |
 | `make test` | Run unit tests |
-| `make test-ui` | Run UI tests via Xcode |
+| `make test-fast` | Run fast unit tests only |
 | `make quick` | Compile only, skip tests |
-| `make now` | Fast debug build + launch |
 | `make cli` | Build the `learnings` CLI tool |
 | `make install` | Install app to /Applications |
+| `make harness` | Preview harness for rapid UI iteration |
+| `make benchmark` | Measure build times |
+
+For the full fast development loop guide, see [docs/agent-guides/fast-loop.md](docs/agent-guides/fast-loop.md).
 
 ## Architecture Overview
 

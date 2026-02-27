@@ -15,6 +15,9 @@ RUN_BUILD_SCRIPT_PHASES_IN_PARALLEL = YES
 ENABLE_EAGER_LINKING = YES
 
 // MARK: - Debug Build Optimization (Speed)
+// Disable index store for debug builds to reduce compile/index overhead
+COMPILER_INDEX_STORE_ENABLE[config=Debug] = NO
+
 // Build only active architecture for faster debug builds
 ONLY_ACTIVE_ARCH[config=Debug] = YES
 ONLY_ACTIVE_ARCH[config=Release] = NO

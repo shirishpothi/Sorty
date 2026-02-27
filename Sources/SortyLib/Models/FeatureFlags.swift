@@ -9,6 +9,8 @@ import Foundation
 
 @MainActor
 public enum FeatureFlags {
+    public nonisolated static let applePCCEnabledKey = "applePCCEnabled"
+
     /// Controls whether the Finder Integration section is visible in Settings and the Finder Integration view.
     ///
     /// Disabled by default. Enable via Terminal:
@@ -123,5 +125,44 @@ public enum FeatureFlags {
             return false
         }
         return UserDefaults.standard.bool(forKey: "featureDemoEnabled")
+    }
+
+    /// Controls whether the Apple Private Cloud Compute model is exposed in model selection.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app applePCCEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app applePCCEnabled -bool false
+    /// ```
+    public nonisolated static var applePrivateCloudComputeModelEnabled: Bool {
+        if UserDefaults.standard.object(forKey: applePCCEnabledKey) == nil {
+            return false
+        }
+        return UserDefaults.standard.bool(forKey: applePCCEnabledKey)
+    }
+
+    /// Preview harness mode for rapid development iteration.
+    /// When enabled, the app boots with minimal dependencies and mock services.
+    ///
+    /// Enable via environment variable (set by `make harness`):
+    /// ```
+    /// SORTY_HARNESS_MODE=1 open Sorty.app
+    /// ```
+    ///
+    /// Target a specific view:
+    /// ```
+    /// SORTY_HARNESS_VIEW=settings SORTY_HARNESS_MODE=1 open Sorty.app
+    /// ```
+    public static var harnessMode: Bool {
+        ProcessInfo.processInfo.environment["SORTY_HARNESS_MODE"] == "1"
+    }
+
+    /// The target view to show in harness mode.
+    /// Supported values: "settings", "organize", "learnings", "history", "health"
+    public static var harnessView: String? {
+        ProcessInfo.processInfo.environment["SORTY_HARNESS_VIEW"]
     }
 }

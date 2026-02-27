@@ -85,6 +85,8 @@ extension AIProvider {
             return "person.badge.key.fill"
         case .appleFoundationModel:
             return "apple.logo"
+        case .applePrivateCloudCompute:
+            return "cloud.fill"
         case .openAICompatible:
             return "network"
         case .openRouter:
@@ -109,7 +111,9 @@ extension AIProvider {
         case .githubCopilot:
             return "Use your Copilot subscription"
         case .appleFoundationModel:
-            return "On-device Apple Intelligence"
+            return "On-device + Private Cloud Compute"
+        case .applePrivateCloudCompute:
+            return "Legacy provider (moved under Apple models)"
         case .openAICompatible:
             return "Any OpenAI-compatible API"
         case .openRouter:

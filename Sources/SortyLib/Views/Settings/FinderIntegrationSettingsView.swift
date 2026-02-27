@@ -8,9 +8,7 @@
 import SwiftUI
 
 struct FinderIntegrationSettingsView: View {
-    @State private var isQuickActionInstalled = false
     @State private var isWatchActionInstalled = false
-    @State private var quickActionMessage: String?
     @State private var watchActionMessage: String?
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
@@ -18,39 +16,19 @@ struct FinderIntegrationSettingsView: View {
     @EnvironmentObject var automationManager: AutomationManager
     
     var body: some View {
-        VStack(spacing: 16) {            // Quick Actions
+        VStack(spacing: 16) {
+            // Quick Actions
             SettingsCard(title: "Quick Actions", icon: "cursorarrow.click.badge.clock", color: .cyan) {
                 VStack(alignment: .leading, spacing: 14) {
-                    // Organize with Sorty
-                    quickActionRow(
-                        title: "Organize with Sorty",
-                        description: "Right-click folders in Finder to organize with Sorty",
-                        isInstalled: isQuickActionInstalled,
-                        message: quickActionMessage,
-                        installAction: {
-                            Task {
-                                let result = await ExtensionCommunication.installQuickActionAsync()
-                                isQuickActionInstalled = result.success
-                                quickActionMessage = result.message
-                                if result.success {
-                                    HapticFeedbackManager.shared.success()
-                                } else {
-                                    HapticFeedbackManager.shared.error()
-                                }
-                            }
-                        },
-                        uninstallAction: {
-                            Task {
-                                if await ExtensionCommunication.uninstallQuickActionAsync() {
-                                    isQuickActionInstalled = false
-                                    quickActionMessage = "Quick Action removed"
-                                    HapticFeedbackManager.shared.success()
-                                }
-                            }
-                        }
-                    )
-
-                    Divider()
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                            .font(.caption)
+                        Text("'Organize with Sorty' now appears only in Finder's main right-click menu (via Finder Sync), not under Quick Actions.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
                     // Watch with Sorty
                     quickActionRow(
@@ -141,7 +119,6 @@ struct FinderIntegrationSettingsView: View {
                     
                     VStack(alignment: .leading, spacing: 6) {
                         URLSchemeRow(scheme: "sorty://organize?path=/path/to/folder", description: "Organize a folder")
-                        URLSchemeRow(scheme: "sorty://organize?path=/path/to/folder&mode=renameOnly&autostart=true", description: "Quick rename a folder")
                         URLSchemeRow(scheme: "sorty://duplicates?path=/path", description: "Find duplicates")
                         URLSchemeRow(scheme: "sorty://settings", description: "Open settings")
                         URLSchemeRow(scheme: "sorty://settings?section=provider", description: "Open AI Provider settings")
@@ -193,9 +170,7 @@ struct FinderIntegrationSettingsView: View {
             .frame(minWidth: 700, minHeight: 600)
         }
         .task {
-            let quickActionStatus = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-            isQuickActionInstalled = quickActionStatus.installed
-            quickActionMessage = quickActionStatus.message
+            _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
             isWatchActionInstalled = await ExtensionCommunication.isQuickWatchActionInstalledAsync()
             finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
         }

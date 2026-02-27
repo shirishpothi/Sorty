@@ -23,6 +23,14 @@ struct ExperimentalSettingsView: View {
     private var experimentalFlags: [ExperimentalFlag] {
         [
             ExperimentalFlag(
+                name: "Finder Integration",
+                description: "Enable Finder context menus and Quick Actions for manual organization.",
+                defaultsKey: "finderIntegrationEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app finderIntegrationEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app finderIntegrationEnabled -bool false"
+            ),
+            ExperimentalFlag(
                 name: "Batch Organization",
                 description: "Organize multiple folders at once with concurrent processing and batch preview/apply.",
                 defaultsKey: "batchOrganizationEnabled",
@@ -45,6 +53,14 @@ struct ExperimentalSettingsView: View {
                 defaultValue: false,
                 enableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true",
                 disableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false"
+            ),
+            ExperimentalFlag(
+                name: "Apple Cloud Model (PCC)",
+                description: "Expose the Apple Private Cloud Compute model in Apple model selection.",
+                defaultsKey: "applePCCEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app applePCCEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app applePCCEnabled -bool false"
             ),
         ]
     }

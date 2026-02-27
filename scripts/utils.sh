@@ -20,24 +20,35 @@ BUILD_START=0
 EXTRACT_START=0
 ASSEMBLE_START=0
 SIGN_START=0
+TEST_START=0
+FINDER_EXT_START=0
 
 start_step_timer() {
     local step_name=$1
-    if [[ "$step_name" == "archive" ]]; then ARCHIVE_START=$(date +%s); fi
-    if [[ "$step_name" == "build" ]]; then BUILD_START=$(date +%s); fi
-    if [[ "$step_name" == "extract" ]]; then EXTRACT_START=$(date +%s); fi
-    if [[ "$step_name" == "assemble" ]]; then ASSEMBLE_START=$(date +%s); fi
-    if [[ "$step_name" == "sign" ]]; then SIGN_START=$(date +%s); fi
+    local now=$(date +%s)
+    case "$step_name" in
+        archive) ARCHIVE_START=$now ;;
+        build) BUILD_START=$now ;;
+        extract) EXTRACT_START=$now ;;
+        assemble) ASSEMBLE_START=$now ;;
+        sign) SIGN_START=$now ;;
+        test) TEST_START=$now ;;
+        finder_ext) FINDER_EXT_START=$now ;;
+    esac
 }
 
 get_step_duration() {
     local step_name=$1
     local start_time=0
-    if [[ "$step_name" == "archive" ]]; then start_time=$ARCHIVE_START; fi
-    if [[ "$step_name" == "build" ]]; then start_time=$BUILD_START; fi
-    if [[ "$step_name" == "extract" ]]; then start_time=$EXTRACT_START; fi
-    if [[ "$step_name" == "assemble" ]]; then start_time=$ASSEMBLE_START; fi
-    if [[ "$step_name" == "sign" ]]; then start_time=$SIGN_START; fi
+    case "$step_name" in
+        archive) start_time=$ARCHIVE_START ;;
+        build) start_time=$BUILD_START ;;
+        extract) start_time=$EXTRACT_START ;;
+        assemble) start_time=$ASSEMBLE_START ;;
+        sign) start_time=$SIGN_START ;;
+        test) start_time=$TEST_START ;;
+        finder_ext) start_time=$FINDER_EXT_START ;;
+    esac
     
     if [[ $start_time -eq 0 ]]; then
         echo "0s"

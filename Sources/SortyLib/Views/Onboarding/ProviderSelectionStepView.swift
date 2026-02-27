@@ -27,7 +27,7 @@ public struct ProviderSelectionStepView: View {
         case failed
     }
     
-    let providers = AIProvider.allCases
+    let providers = AIProvider.userSelectableProviders
     
     public init() {}
     

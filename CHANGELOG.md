@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+- **Sorting Lab and AI Console** — Removed immersive spatial visualization and live console logging to focus on the streamlined workflow.
+- **Manual Rename and Rename Summary** — Simplified the preview experience by removing manual steering and batch rename review panels.
+- **Quick Rename Mode** — Removed the specialized rename-only mode in favor of a unified organization flow.
+
+### Changed
+- **Streamlined Analysis View** — Consolidated the analysis stage into a clean, distraction-free interface.
+- **Simplified Preview Tree** — Refined the folder and file preview with a cleaner UI and removed legacy destination picker and validation overlays.
+- **Cleaned Up Settings** — Removed redundant vision-specific batching and OCR language options from organization strategy.
+
 ## [1.1.1] - 2026-02-13
 
 ### Added

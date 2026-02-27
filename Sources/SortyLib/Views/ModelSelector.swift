@@ -24,17 +24,10 @@ struct ModelSelectorRow: View {
                     Text(provider.displayName)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    HStack(spacing: 6) {
-                        Text(model.isEmpty ? provider.defaultModel : model)
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                            .lineLimit(1)
-                        if ModelCatalog.shared.supportsVision(modelId: model.isEmpty ? provider.defaultModel : model, provider: provider) {
-                            Image(systemName: "camera.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.teal)
-                        }
-                    }
+                    Text(model.isEmpty ? provider.defaultModel : model)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
                 }
                 
                 Spacer()
@@ -76,7 +69,7 @@ struct ModelSelectionPopover: View {
     @State private var showFreeOnly: Bool = false
     
     private var availableProviders: [AIProvider] {
-        AIProvider.allCases.filter { $0.isAvailable }
+        AIProvider.userSelectableProviders.filter { $0.isAvailable }
     }
     
     private var filteredProviders: [AIProvider] {
@@ -331,8 +324,7 @@ struct ModelSelectionPopover: View {
     }
     
     private func modelRow(_ model: String) -> some View {
-        let supportsVision = ModelCatalog.shared.supportsVision(modelId: model, provider: selectedProvider)
-        return Button {
+        Button {
             withAnimation(.easeInOut(duration: 0.1)) {
                 selectedModel = model
                 showCustomInput = false
@@ -343,13 +335,6 @@ struct ModelSelectionPopover: View {
                     .font(.system(size: 12))
                     .foregroundColor(selectedModel == model ? .white : .primary)
                     .lineLimit(1)
-
-                if supportsVision {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(selectedModel == model ? .white.opacity(0.9) : .teal)
-                        .help("Vision-capable model")
-                }
 
                 if selectedProvider == .openRouter && isModelFree(model) {
                     Text("Free")

@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize
 
 # Default target
 all: build
@@ -11,8 +11,12 @@ CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS := -j $(CORES)
 
 # Swift build flags for optimization
-SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode -Xswiftc -incremental --disable-sandbox
+SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox
 SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=false ENABLE_ADHOC_SIGNING=false ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true
+
+# Disable index store for local debug builds (saves ~10-15% compile time)
+export SWIFTPM_DISABLE_INDEXING ?= 1
 
 build:
 	@chmod +x scripts/build.sh
@@ -86,7 +90,7 @@ quick:
 # skips all checks and builds/runs immediately
 now:
 	@echo "🏎️  Immediate build and run (DEBUG mode, $(CORES) parallel jobs)..."
-	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@open releases/Sorty.app
 
 clean:
@@ -158,6 +162,42 @@ prerelease-full:
 	@chmod +x scripts/prerelease_check.sh
 	@./scripts/prerelease_check.sh
 
+# Benchmark build times and save results
+benchmark:
+	@echo "📊 Running build benchmarks..."
+	@chmod +x scripts/benchmark.sh
+	@./scripts/benchmark.sh
+
+# Compare benchmarks against a saved baseline
+benchmark-compare:
+	@echo "📊 Comparing against baseline..."
+	@chmod +x scripts/benchmark.sh
+	@./scripts/benchmark.sh --compare .build/benchmark-baseline.json
+
+# Save current benchmark as baseline
+benchmark-save:
+	@echo "📊 Saving current results as baseline..."
+	@chmod +x scripts/benchmark.sh
+	@./scripts/benchmark.sh
+	@cp .build/benchmark-results.json .build/benchmark-baseline.json
+	@echo "✅ Baseline saved to .build/benchmark-baseline.json"
+
+# Preview harness — launches a targeted view for rapid iteration
+harness:
+	@echo "🔬 Building preview harness ($(CORES) parallel jobs)..."
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@SORTY_HARNESS_MODE=1 open releases/Sorty.app
+
+harness-settings:
+	@echo "🔬 Harness → Settings..."
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=settings open releases/Sorty.app
+
+harness-organize:
+	@echo "🔬 Harness → Organize..."
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=organize open releases/Sorty.app
+
 help:
 	@echo "Sorty Build System (Optimized)"
 	@echo "=============================="
@@ -188,6 +228,16 @@ help:
 	@echo "  make release         - Create release zip (no version bump)"
 	@echo "  make prerelease      - Run comprehensive pre-release validation"
 	@echo "  make prerelease-full - Full pre-release validation"
+	@echo ""
+	@echo "Preview Harness (fast iteration):"
+	@echo "  make harness          - Build and launch harness mode"
+	@echo "  make harness-settings - Harness targeting Settings view"
+	@echo "  make harness-organize - Harness targeting Organize view"
+	@echo ""
+	@echo "Benchmarking:"
+	@echo "  make benchmark         - Measure all build times"
+	@echo "  make benchmark-save    - Save benchmark as baseline"
+	@echo "  make benchmark-compare - Compare against saved baseline"
 	@echo ""
 	@echo "Utility:"
 	@echo "  make clean       - Remove all build artifacts and releases"

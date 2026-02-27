@@ -36,17 +36,14 @@ let package = Package(
                 .process("Resources/Final Onboarding.wav")
             ],
             swiftSettings: [
-                // Debug: Fast incremental build
-                .unsafeFlags(["-Onone", "-enable-batch-mode", "-incremental"], .when(configuration: .debug)),
+                // Debug: Fast incremental build (SPM manages incremental builds internally)
+                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 // Release: Full optimization with whole-module
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
-                // Common settings for both
+                // Suppress warnings to reduce compile output
                 .unsafeFlags(["-suppress-warnings"]),
-                // Swift 6 strict concurrency - use minimal checking to suppress Sendable warnings
-                .enableExperimentalFeature("StrictConcurrency", .when(configuration: .debug)),
+                // Swift 6 strict concurrency - minimal checking to reduce type-check cost
                 .unsafeFlags(["-strict-concurrency=minimal"]),
-                // Warn about slow-compiling expressions (helps identify bottlenecks)
-                .unsafeFlags(["-Xfrontend", "-warn-long-function-bodies=100", "-Xfrontend", "-warn-long-expression-type-checking=100"], .when(configuration: .debug)),
             ],
             linkerSettings: []
         ),
@@ -55,14 +52,14 @@ let package = Package(
             dependencies: ["SortyLib"],
             path: "Sources/SortyApp",
             swiftSettings: [
-                .unsafeFlags(["-Onone", "-enable-batch-mode", "-incremental"], .when(configuration: .debug)),
+                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
             linkerSettings: []
         ),
         .testTarget(
             name: "SortyTests",
-            dependencies: ["SortyLib", "SortyApp"],
+            dependencies: ["SortyLib"],
             path: "Tests/SortyTests",
             swiftSettings: [
                 // Tests: Fast build with debug info
@@ -75,7 +72,7 @@ let package = Package(
             dependencies: ["SortyLib"],
             path: "Sources/LearningsCLI",
             swiftSettings: [
-                .unsafeFlags(["-Onone", "-enable-batch-mode", "-incremental"], .when(configuration: .debug)),
+                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
             linkerSettings: []

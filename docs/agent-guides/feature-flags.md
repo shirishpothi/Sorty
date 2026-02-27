@@ -22,6 +22,7 @@ defaults write com.sorty.app <key> -bool false
 | Batch Organization | `batchOrganizationEnabled` | `false` | Multi-folder batch organization in the sidebar |
 | Advanced Notification Controls | `advancedNotificationSettingsEnabled` | `false` | Technical notification controls in Settings |
 | Feature Demo | `featureDemoEnabled` | `false` | Interactive demo step during onboarding |
+| Apple Cloud Model (PCC) | `applePCCEnabled` | `false` | Exposes Apple Private Cloud Compute model in Apple model selection |
 
 ## Finder Integration Repair
 

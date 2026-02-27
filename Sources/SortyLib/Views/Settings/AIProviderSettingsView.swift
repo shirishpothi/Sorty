@@ -24,7 +24,7 @@ struct AIProviderSettingsView: View {
             // Provider Selection
             SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
                 VStack(spacing: 8) {
-                    ForEach(Array(AIProvider.allCases), id: \.self) { provider in
+                    ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
                         AIProviderRow(
                             provider: provider,
                             isSelected: viewModel.config.provider == provider,
@@ -47,6 +47,9 @@ struct AIProviderSettingsView: View {
             // Provider-specific configuration
             if viewModel.config.provider == .githubCopilot {
                 copilotConfigSection
+                    .animatedAppearance(delay: 0.1)
+            } else if viewModel.config.provider == .appleFoundationModel {
+                appleConfigSection
                     .animatedAppearance(delay: 0.1)
             } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
                 apiConfigSection
@@ -100,11 +103,7 @@ struct AIProviderSettingsView: View {
                     if !viewModel.availableModels.isEmpty {
                         Picker("", selection: $viewModel.config.model) {
                             ForEach(viewModel.availableModels, id: \.self) { model in
-                                if ModelCatalog.shared.supportsVision(modelId: model, provider: .githubCopilot) {
-                                    Label(model, systemImage: "camera.fill").tag(model)
-                                } else {
-                                    Text(model).tag(model)
-                                }
+                                Text(model).tag(model)
                             }
                         }
                         .pickerStyle(.menu)
@@ -268,6 +267,84 @@ struct AIProviderSettingsView: View {
             )
         }
     }
+
+    private var appleConfigSection: some View {
+        let pccEnabled = FeatureFlags.applePrivateCloudComputeModelEnabled
+
+        return SettingsCard(title: "Apple Models", icon: "apple.logo", color: .gray) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Model")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+
+                    ModelSelectorRow(
+                        provider: .appleFoundationModel,
+                        model: viewModel.config.model,
+                        onTap: { showModelPicker = true }
+                    )
+                }
+
+                if pccEnabled && viewModel.config.model == AIProvider.applePrivateCloudComputeModelName {
+                    Divider()
+
+                    HStack(spacing: 8) {
+                        Image(systemName: ApplePrivateCloudComputeClient.isShortcutInstalled() ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(ApplePrivateCloudComputeClient.isShortcutInstalled() ? .green : .orange)
+                        Text(ApplePrivateCloudComputeClient.isShortcutInstalled() ? "Apple Intelligence shortcut ready" : "Apple Intelligence shortcut unavailable")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                    }
+
+                    Text("No API key needed. Sorty automatically detects \"\(ApplePrivateCloudComputeClient.legacyShortcutName)\" or \"\(ApplePrivateCloudComputeClient.shortcutName)\" and uses whichever is available.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !ApplePrivateCloudComputeClient.isShortcutInstalled() {
+                        Button("Open Shortcuts") {
+                            openShortcutsApp()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                } else if !viewModel.isAppleModelAvailable {
+                    Divider()
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.blue)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("On-device model unavailable")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                            Text(viewModel.appleModelStatus)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if pccEnabled {
+                                Button("Use Apple Private Cloud Compute") {
+                                    viewModel.config.model = AIProvider.applePrivateCloudComputeModelName
+                                }
+                                .buttonStyle(.link)
+                            } else {
+                                Text("Apple Private Cloud Compute is disabled by feature flag.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showModelPicker) {
+            ModelSelectionPopover(
+                isPresented: $showModelPicker,
+                currentProvider: .appleFoundationModel,
+                currentModel: viewModel.config.model,
+                onSelect: { provider, model in
+                    viewModel.config.provider = provider
+                    viewModel.config.model = model
+                }
+            )
+        }
+    }
     
     private var connectionSection: some View {
         SettingsCard(title: "Connection", icon: "network", color: .blue) {
@@ -422,6 +499,13 @@ struct AIProviderSettingsView: View {
                 }
             }
             isTestingConnection = false
+        }
+    }
+
+    private func openShortcutsApp() {
+        HapticFeedbackManager.shared.tap()
+        if let shortcutsURL = URL(string: "shortcuts://") {
+            NSWorkspace.shared.open(shortcutsURL)
         }
     }
 }

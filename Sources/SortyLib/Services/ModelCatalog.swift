@@ -68,7 +68,7 @@ public final class ModelCatalog: ObservableObject {
         if cached.isEmpty {
             return fallbackModels(for: provider)
         }
-        return cached
+        return filteredModels(cached, for: provider)
     }
     
     public func refresh(provider: AIProvider, force: Bool = false) async {
@@ -84,7 +84,10 @@ public final class ModelCatalog: ObservableObject {
         
         do {
             let result = try await fetchModels(for: provider)
-            let sortedModels = result.models.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            let sortedModels = filteredModels(
+                result.models.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending },
+                for: provider
+            )
             modelsByProvider[provider] = sortedModels
             usingFallback[provider] = result.isFallback
             
@@ -186,6 +189,11 @@ public final class ModelCatalog: ObservableObject {
             return try await fetchGitHubCopilotModels()
         case .appleFoundationModel:
             return (appleFoundationModels(), false)
+        case .applePrivateCloudCompute:
+            guard FeatureFlags.applePrivateCloudComputeModelEnabled else {
+                return ([], false)
+            }
+            return ([ModelInfo(id: AIProvider.applePrivateCloudComputeModelName, displayName: AIProvider.applePrivateCloudComputeModelName, provider: .appleFoundationModel)], false)
         case .openAICompatible:
             return try await fetchOpenAICompatibleModels()
         }
@@ -625,7 +633,14 @@ public final class ModelCatalog: ObservableObject {
     }
     
     private func appleFoundationModels() -> [ModelInfo] {
-        [ModelInfo(id: "Apple Foundation Model", displayName: "Apple Foundation Model", provider: .appleFoundationModel)]
+        var models = [
+            ModelInfo(id: AIProvider.appleFoundationModelName, displayName: AIProvider.appleFoundationModelName, provider: .appleFoundationModel),
+            ModelInfo(id: AIProvider.applePrivateCloudComputeModelName, displayName: AIProvider.applePrivateCloudComputeModelName, provider: .appleFoundationModel)
+        ]
+        if !FeatureFlags.applePrivateCloudComputeModelEnabled {
+            models.removeAll { $0.id == AIProvider.applePrivateCloudComputeModelName }
+        }
+        return models
     }
     
     private func openAICompatibleFallback() -> [ModelInfo] {
@@ -633,7 +648,25 @@ public final class ModelCatalog: ObservableObject {
     }
     
     private func fallbackModels(for provider: AIProvider) -> [ModelInfo] {
-        provider.recommendedModels.map { ModelInfo(id: $0, displayName: $0, provider: provider) }
+        filteredModels(
+            provider.recommendedModels.map { ModelInfo(id: $0, displayName: $0, provider: provider) },
+            for: provider
+        )
+    }
+
+    private func filteredModels(_ models: [ModelInfo], for provider: AIProvider) -> [ModelInfo] {
+        guard !FeatureFlags.applePrivateCloudComputeModelEnabled else {
+            return models
+        }
+
+        switch provider {
+        case .appleFoundationModel:
+            return models.filter { $0.id != AIProvider.applePrivateCloudComputeModelName }
+        case .applePrivateCloudCompute:
+            return []
+        default:
+            return models
+        }
     }
     
     private func loadCacheFromDisk() {

@@ -561,7 +561,7 @@ struct PromptBuilder {
         existingFoldersContext: String? = nil
     ) -> String {
         switch provider {
-        case .appleFoundationModel:
+        case .appleFoundationModel, .applePrivateCloudCompute:
             // Append instructions
             var prompt = buildCompactPrompt(files: files, mode: mode, enableReasoning: enableReasoning)
             if mode == .renameOnly || enableSmartRename {

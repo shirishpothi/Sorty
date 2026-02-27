@@ -778,7 +778,7 @@ struct WatchedFolderConfigView: View {
                             
                             if useCustomModel {
                                 Picker("Provider", selection: $selectedProvider) {
-                                    ForEach(AIProvider.allCases.filter { $0.isAvailable }, id: \.self) { provider in
+                                    ForEach(AIProvider.userSelectableProviders.filter { $0.isAvailable }, id: \.self) { provider in
                                         Text(provider.displayName).tag(provider)
                                     }
                                 }

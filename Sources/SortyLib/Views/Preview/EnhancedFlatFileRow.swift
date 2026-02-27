@@ -22,7 +22,6 @@ struct EnhancedFlatFileRow: View {
     @State private var isDragging = false
     @State private var isEditingName = false
     @State private var editedName = ""
-    @State private var showRenamePopover = false
     @FocusState private var isFocused: Bool
     
     private var renameMapping: FileRenameMapping? {
@@ -31,10 +30,6 @@ struct EnhancedFlatFileRow: View {
 
     private var fileTags: [String] {
         store.tagMappings[file.id] ?? []
-    }
-
-    private var renameValidation: RenameValidationResult {
-        store.renameValidation(for: file.id, folderID: parentFolderID, proposedName: editedName)
     }
     
     var body: some View {
@@ -65,22 +60,8 @@ struct EnhancedFlatFileRow: View {
                     .foregroundColor(.secondary.opacity(0.6))
             }
             
-            if let mapping = renameMapping, !isEditingName {
-                if mapping.hasRename {
-                    renamePill(mapping: mapping)
-                } else if mapping.isAutoSkippedForLowConfidence {
-                    Text("AI unsure - kept original name")
-                        .font(.caption2)
-                        .foregroundColor(.orange)
-                        .padding(.leading, 20)
-                }
-            }
-
-            if isEditingName && (!renameValidation.errors.isEmpty || renameValidation.hasConflict || !renameValidation.warnings.isEmpty) {
-                Text(renameValidationMessage)
-                    .font(.caption2)
-                    .foregroundStyle(renameValidation.errors.isEmpty && !renameValidation.hasConflict ? .orange : .red)
-                    .padding(.leading, 20)
+            if let mapping = renameMapping, mapping.hasRename, !isEditingName {
+                renamePill(mapping: mapping)
             }
         }
         .padding(.leading, CGFloat(depth * 20))
@@ -129,16 +110,6 @@ struct EnhancedFlatFileRow: View {
             .onAppear {
                 isFocused = true
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.thinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(renameFieldBorderColor, lineWidth: 1)
-                    )
-            )
             // Note: Tab/Shift+Tab navigation would require focus management
             // via a coordinator pattern for proper implementation
     }
@@ -152,42 +123,11 @@ struct EnhancedFlatFileRow: View {
     
     private var renameIndicator: some View {
         Group {
-            if let mapping = renameMapping, mapping.hasRename || mapping.isAutoSkippedForLowConfidence {
-                Button {
-                    showRenamePopover.toggle()
-                } label: {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(mapping.isLowConfidence ? Color.orange : Color.accentColor)
-                        .padding(6)
-                        .background(
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.25), lineWidth: 0.8)
-                                )
-                        )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("EnhancedRenameInsightButton-\(file.id.uuidString)")
-                .popover(isPresented: $showRenamePopover) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Rename Insight")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                        Text(mapping.renameReason ?? "AI suggested rename")
-                            .font(.callout)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let confidence = mapping.renameConfidence {
-                            Text("Confidence: \(Int(confidence * 100))%")
-                                .font(.caption)
-                                .foregroundStyle(confidence < FileRenameMapping.lowConfidenceThreshold ? .orange : .secondary)
-                        }
-                    }
-                    .padding(12)
-                    .frame(minWidth: 220, maxWidth: 320)
-                }
+            if let mapping = renameMapping, mapping.hasRename {
+                Image(systemName: "wand.and.stars")
+                    .font(.caption)
+                    .foregroundColor(.purple)
+                    .help(mapping.renameReason ?? "AI suggested rename")
             }
         }
     }
@@ -239,12 +179,12 @@ struct EnhancedFlatFileRow: View {
         HStack(spacing: 4) {
             Image(systemName: "arrow.right")
                 .font(.caption2)
-                .foregroundStyle(Color.accentColor)
+                .foregroundColor(.purple)
             
             Text(mapping.suggestedName ?? "")
                 .font(.body)
                 .fontWeight(.medium)
-                .foregroundStyle(Color.accentColor)
+                .foregroundColor(.purple)
                 .lineLimit(1)
                 .truncationMode(.middle)
             
@@ -254,13 +194,8 @@ struct EnhancedFlatFileRow: View {
                 startEditing(initialValue: mapping.suggestedName ?? "")
             } label: {
                 Image(systemName: "pencil")
-                    .font(.caption2)
-                    .foregroundStyle(Color.accentColor)
-                    .padding(4)
-                    .background(Circle().fill(Color.accentColor.opacity(0.12)))
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("EnhancedRenameEditButton-\(file.id.uuidString)")
             .help("Edit suggested name")
             
             Button {
@@ -268,25 +203,10 @@ struct EnhancedFlatFileRow: View {
                 onPlanChanged()
             } label: {
                 Image(systemName: "xmark.circle")
-                    .font(.caption2)
-                    .foregroundStyle(.red.opacity(0.85))
-                    .padding(4)
-                    .background(Circle().fill(Color.red.opacity(0.1)))
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("EnhancedRenameRejectButton-\(file.id.uuidString)")
             .help("Keep original name")
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.22), lineWidth: 0.8)
-                )
-        )
         .padding(.leading, 20)
         .transition(.opacity)
     }
@@ -299,44 +219,11 @@ struct EnhancedFlatFileRow: View {
     }
     
     private func saveRename() {
-        let validation = renameValidation
-        guard validation.isValid, let safeName = validation.sanitizedName else {
-            HapticFeedbackManager.shared.error()
-            return
-        }
-
-        if !safeName.isEmpty {
-            if store.updateRename(fileID: file.id, folderID: parentFolderID, newName: safeName) {
-                onPlanChanged()
-            }
+        if !editedName.isEmpty {
+            store.updateRename(fileID: file.id, folderID: parentFolderID, newName: editedName)
+            onPlanChanged()
         }
         isEditingName = false
-    }
-
-    private var renameFieldBorderColor: Color {
-        if renameValidation.hasConflict || !renameValidation.errors.isEmpty || renameValidation.hasInvalidCharacters {
-            return .red.opacity(0.8)
-        }
-        if renameValidation.exceedsRecommendedLength || !renameValidation.warnings.isEmpty {
-            return .orange.opacity(0.8)
-        }
-        return .accentColor.opacity(0.45)
-    }
-
-    private var renameValidationMessage: String {
-        if renameValidation.hasConflict {
-            return "Name conflicts with another file in this folder."
-        }
-        if let error = renameValidation.errors.first {
-            return error
-        }
-        if renameValidation.hasInvalidCharacters {
-            return "Contains invalid macOS filename characters."
-        }
-        if renameValidation.exceedsRecommendedLength {
-            return "Name exceeds the recommended 60 characters."
-        }
-        return renameValidation.warnings.first ?? ""
     }
     
     private func cancelRename() {

@@ -10,8 +10,9 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
+    @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
     @State private var selectedCategory: SettingsCategory = .rules
-    @State private var contentOpacity: Double = 0
+    @State private var contentOpacity: Double = 1
     @State private var searchText = ""
 
     private var trimmedSearchText: String {
@@ -35,14 +36,10 @@ struct SettingsView: View {
             if let section = appState.selectedSettingsSection {
                 selectedCategory = section
             }
-            DispatchQueue.main.async {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    contentOpacity = 1.0
-                }
-            }
+            contentOpacity = 1.0
         }
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
-            if let section = newSection {
+            if let section = newSection, section != selectedCategory {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     selectedCategory = section
                 }
@@ -87,11 +84,8 @@ struct SettingsView: View {
                             color: category.color,
                             isSelected: selectedCategory == category
                         ) {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                selectedCategory = category
-                            }
-                            appState.selectedSettingsSection = category
                             appState.settingsFocusTarget = nil
+                            appState.selectedSettingsSection = category
                             HapticFeedbackManager.shared.selection()
                         }
                         .help("\(category.rawValue) settings")
@@ -197,7 +191,7 @@ struct SettingsView: View {
     }
     
     private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
-        category != .finder || FeatureFlags.finderSyncEnabled
+        category != .finder || finderIntegrationEnabled
     }
 
     private var categoryHeader: some View {

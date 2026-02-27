@@ -4,26 +4,6 @@ import AppKit
 import SortyLib
 #endif
 
-@MainActor
-enum ExternalDeeplinkDeduper {
-    private static var lastSignature: String = ""
-    private static var lastHandledAt: Date = .distantPast
-    private static let dedupeWindow: TimeInterval = 0.8
-
-    static func shouldHandle(_ url: URL) -> Bool {
-        let signature = url.absoluteString
-        let now = Date()
-
-        if signature == lastSignature, now.timeIntervalSince(lastHandledAt) < dedupeWindow {
-            return false
-        }
-
-        lastSignature = signature
-        lastHandledAt = now
-        return true
-    }
-}
-
 struct MainWindowRootView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
     @EnvironmentObject private var personaManager: PersonaManager
@@ -50,66 +30,7 @@ struct MainWindowRootView: View {
     let coordinator: AppCoordinator?
 
     var body: some View {
-        ContentView()
-            .environmentObject(settingsViewModel)
-            .environmentObject(windowSession.appState)
-            .environmentObject(personaManager)
-            .environmentObject(customPersonaStore)
-            .environmentObject(watchedFoldersManager)
-            .environmentObject(windowSession.organizer)
-            .environmentObject(exclusionRules)
-            .environmentObject(extensionListener)
-            .environmentObject(deeplinkHandler)
-            .environmentObject(learningsManager)
-            .environmentObject(storageLocationsManager)
-            .environmentObject(automationManager)
-            .environmentObject(notificationSettings)
-            .environmentObject(windowSession.healthManager)
-            .environmentObject(loginItemManager)
-            .environmentObject(namingPresetManager)
-            .environmentObject(globalShortcutManager)
-            .environmentObject(steeringPromptManager)
-            .environmentObject(windowSession.batchManager)
-            .environmentObject(windowSession.appState.duplicateManager)
-            .environmentObject(windowSession.appState.duplicateSettings)
-            .focusedSceneValue(\.appState, windowSession.appState)
-            .focusedSceneValue(\.organizer, windowSession.organizer)
-            .task {
-                await windowSession.configureIfNeeded(
-                    settingsViewModel: settingsViewModel,
-                    personaManager: personaManager,
-                    customPersonaStore: customPersonaStore,
-                    exclusionRules: exclusionRules,
-                    storageLocationsManager: storageLocationsManager,
-                    learningsManager: learningsManager,
-                    automationManager: automationManager,
-                    coordinator: coordinator
-                )
-                processLaunchRequestIfNeeded()
-                processUITestDeeplinkIfNeeded()
-            }
-            .onChange(of: launchRequest?.id) { _, _ in
-                processLaunchRequestIfNeeded()
-            }
-            .onChange(of: settingsViewModel.config) { _, newConfig in
-                Task { @MainActor in
-                    await windowSession.applyConfiguration(newConfig, learningsManager: learningsManager)
-                }
-            }
-            .onChange(of: windowSession.organizer.isAIConfigured) { oldValue, newValue in
-                if oldValue == true && newValue == false {
-                    watchedFoldersManager.disableAutoOrganizeForAll(
-                        reason: "AI provider is no longer configured"
-                    )
-                }
-            }
-            .onChange(of: watchedFoldersManager.folders) { _, _ in
-                coordinator?.syncWatchedFolders()
-            }
-            .onOpenURL { url in
-                SortyAppDelegate.pendingDeeplinkActivation = true
-                handleExternalDeeplink(url)
-            }
+        contentWithLifecycle
             .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { _ in
                 windowSession.appState.currentView = .learnings
                 Task { @MainActor in
@@ -159,6 +80,76 @@ struct MainWindowRootView: View {
             } message: {
                 Text("This will permanently delete all organization history, learnings data, and cached sessions. This action cannot be undone.")
             }
+    }
+
+    private var contentWithLifecycle: some View {
+        contentWithEnvironment
+            .task {
+                let calibrate: ((WatchedFolder) -> Void)? = coordinator.map { coord in
+                    { folder in coord.calibrateFolder(folder) }
+                }
+                await windowSession.configureIfNeeded(
+                    settingsViewModel: settingsViewModel,
+                    personaManager: personaManager,
+                    customPersonaStore: customPersonaStore,
+                    exclusionRules: exclusionRules,
+                    storageLocationsManager: storageLocationsManager,
+                    learningsManager: learningsManager,
+                    automationManager: automationManager,
+                    calibrateAction: calibrate
+                )
+                processLaunchRequestIfNeeded()
+                processUITestDeeplinkIfNeeded()
+            }
+            .onChange(of: launchRequest?.id) { _, _ in
+                processLaunchRequestIfNeeded()
+            }
+            .onChange(of: settingsViewModel.config) { _, newConfig in
+                Task { @MainActor in
+                    await windowSession.applyConfiguration(newConfig, learningsManager: learningsManager)
+                }
+            }
+            .onChange(of: windowSession.organizer.isAIConfigured) { oldValue, newValue in
+                if oldValue == true && newValue == false {
+                    watchedFoldersManager.disableAutoOrganizeForAll(
+                        reason: "AI provider is no longer configured"
+                    )
+                }
+            }
+            .onChange(of: watchedFoldersManager.folders) { _, _ in
+                coordinator?.syncWatchedFolders()
+            }
+            .onOpenURL { url in
+                SortyAppDelegate.pendingDeeplinkActivation = true
+                handleExternalDeeplink(url)
+            }
+    }
+
+    private var contentWithEnvironment: some View {
+        ContentView()
+            .environmentObject(settingsViewModel)
+            .environmentObject(windowSession.appState)
+            .environmentObject(personaManager)
+            .environmentObject(customPersonaStore)
+            .environmentObject(watchedFoldersManager)
+            .environmentObject(windowSession.organizer)
+            .environmentObject(exclusionRules)
+            .environmentObject(extensionListener)
+            .environmentObject(deeplinkHandler)
+            .environmentObject(learningsManager)
+            .environmentObject(storageLocationsManager)
+            .environmentObject(automationManager)
+            .environmentObject(notificationSettings)
+            .environmentObject(windowSession.healthManager)
+            .environmentObject(loginItemManager)
+            .environmentObject(namingPresetManager)
+            .environmentObject(globalShortcutManager)
+            .environmentObject(steeringPromptManager)
+            .environmentObject(windowSession.batchManager)
+            .environmentObject(windowSession.appState.duplicateManager)
+            .environmentObject(windowSession.appState.duplicateSettings)
+            .focusedSceneValue(\.appState, windowSession.appState)
+            .focusedSceneValue(\.organizer, windowSession.organizer)
     }
 
     private func processLaunchRequestIfNeeded() {

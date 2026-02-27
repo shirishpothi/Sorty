@@ -168,7 +168,6 @@ struct AnalysisView: View {
     @State private var isCancelHovered = false
     @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
-    @AppStorage("analysis.compactMode") private var isCompactMode = false
     
     private enum MessageTier {
         case none
@@ -187,104 +186,6 @@ struct AnalysisView: View {
     }
 
     var body: some View {
-        Group {
-            if isCompactMode {
-                compactAnalysisBody
-            } else {
-                labAnalysisBody
-            }
-        }
-        .onAppear {
-            withAnimation {
-                hasAppeared = true
-            }
-            organizer.setLiveInsightsEnabled(liveInsightsEnabled)
-            if isCompactMode {
-                refreshManager.start(organizer: organizer)
-            }
-        }
-        .onDisappear {
-            refreshManager.stop()
-        }
-        .onChange(of: liveInsightsEnabled) { _, enabled in
-            organizer.setLiveInsightsEnabled(enabled)
-        }
-        .onChange(of: isCompactMode) { _, compact in
-            if compact {
-                refreshManager.start(organizer: organizer)
-            } else {
-                refreshManager.stop()
-            }
-        }
-    }
-    
-    // MARK: - Lab Mode
-    
-    private var labAnalysisBody: some View {
-        ZStack {
-            SortingLabView(isCompactMode: $isCompactMode)
-            
-            // Cancel button and notices overlay
-            VStack {
-                // Vision banner at top
-                if scannedImageCount > 0 {
-                    VisionRecommendationBanner(
-                        imageCount: scannedImageCount,
-                        currentModel: settingsViewModel.config.model,
-                        currentProvider: settingsViewModel.config.provider,
-                        isVisionEnabled: settingsViewModel.config.enableVision,
-                        onEnableVision: enableVisionAndReconfigure,
-                        onSwitchModel: { showFasterModelPicker = true },
-                        onDismiss: {}
-                    )
-                    .frame(maxWidth: 500)
-                    .padding(.top, 50)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                }
-                
-                if let summary = organizer.visionAnalysisSummary {
-                    visionAnalysisSummaryView(summary)
-                        .frame(maxWidth: 500)
-                        .padding(.top, 8)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                }
-                
-                Spacer()
-                
-                // Tiered notices and cancel button above the console
-                VStack(spacing: 10) {
-                    tieredNoticeView
-                        .frame(maxWidth: 500)
-                    
-                    cancelButton
-                }
-                .padding(.bottom, 280) // Above the AI Console
-            }
-        }
-        .sheet(isPresented: $showFasterModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showFasterModelPicker,
-                currentProvider: settingsViewModel.config.provider,
-                currentModel: settingsViewModel.config.model,
-                onSelect: { provider, model in
-                    showFasterModelPicker = false
-                    Task {
-                        try? await organizer.regenerateWithModel(
-                            provider: provider,
-                            model: model
-                        )
-                    }
-                }
-            )
-        }
-    }
-    
-    // MARK: - Compact Mode
-    
-    private var compactAnalysisBody: some View {
         WorkflowContainer(currentStep: .analyze) {
             Spacer(minLength: 20)
             
@@ -298,48 +199,6 @@ struct AnalysisView: View {
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 10)
                     .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
-                
-                // Toggle to lab mode
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isCompactMode = false
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "rectangle.expand.vertical")
-                            .font(.system(size: 11, weight: .medium))
-                        Text("Open Sorting Lab")
-                            .font(.caption)
-                    }
-                    .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("Switch to immersive Sorting Lab view")
-                .accessibilityIdentifier("AnalysisOpenLabButton")
-
-                if scannedImageCount > 0 {
-                    VisionRecommendationBanner(
-                        imageCount: scannedImageCount,
-                        currentModel: settingsViewModel.config.model,
-                        currentProvider: settingsViewModel.config.provider,
-                        isVisionEnabled: settingsViewModel.config.enableVision,
-                        onEnableVision: enableVisionAndReconfigure,
-                        onSwitchModel: { showFasterModelPicker = true },
-                        onDismiss: {}
-                    )
-                    .frame(maxWidth: 550)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                }
-
-                if let summary = organizer.visionAnalysisSummary {
-                    visionAnalysisSummaryView(summary)
-                        .frame(maxWidth: 550)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                }
 
                 tieredNoticeView
 
@@ -351,53 +210,61 @@ struct AnalysisView: View {
                         ))
                 }
 
-                cancelButton
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    showCancelConfirmation = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12, weight: .medium))
+                        Text("Cancel Generation")
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .foregroundStyle(.red)
+                .scaleEffect(isCancelHovered ? 1.03 : 1.0)
+                .animation(.easeInOut(duration: 0.15), value: isCancelHovered)
+                .onHover { hovering in
+                    isCancelHovered = hovering
+                }
+                .keyboardShortcut(.escape, modifiers: [])
+                .opacity(hasAppeared ? 1 : 0)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+                .accessibilityIdentifier("AnalysisCancelButton")
+                .confirmationDialog(
+                    "Cancel Organization?",
+                    isPresented: $showCancelConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Cancel Generation", role: .destructive) {
+                        recordCancelledAnalysis()
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            organizer.reset()
+                        }
+                    }
+                    Button("Continue", role: .cancel) { }
+                } message: {
+                    Text("This will stop the AI analysis and return to folder selection. Your progress will not be saved.")
+                }
             }
             .frame(maxHeight: .infinity)
             
             Spacer(minLength: 20)
         }
-    }
-    
-    // MARK: - Shared Cancel Button
-    
-    private var cancelButton: some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            showCancelConfirmation = true
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 12, weight: .medium))
-                Text("Cancel Generation")
+        .onAppear {
+            withAnimation {
+                hasAppeared = true
             }
-            .padding(.horizontal, 4)
+            organizer.setLiveInsightsEnabled(liveInsightsEnabled)
+            refreshManager.start(organizer: organizer)
         }
-        .buttonStyle(.bordered)
-        .tint(.red)
-        .foregroundStyle(.red)
-        .scaleEffect(isCancelHovered ? 1.03 : 1.0)
-        .animation(.easeInOut(duration: 0.15), value: isCancelHovered)
-        .onHover { hovering in
-            isCancelHovered = hovering
+        .onDisappear {
+            refreshManager.stop()
         }
-        .keyboardShortcut(.escape, modifiers: [])
-        .opacity(hasAppeared ? 1 : 0)
-        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
-        .accessibilityIdentifier("AnalysisCancelButton")
-        .confirmationDialog(
-            "Cancel Organization?",
-            isPresented: $showCancelConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Cancel Generation", role: .destructive) {
-                withAnimation(.easeOut(duration: 0.3)) {
-                    organizer.reset()
-                }
-            }
-            Button("Continue", role: .cancel) { }
-        } message: {
-            Text("This will stop the AI analysis and return to folder selection. Your progress will not be saved.")
+        .onChange(of: liveInsightsEnabled) { _, enabled in
+            organizer.setLiveInsightsEnabled(enabled)
         }
     }
     
@@ -449,10 +316,6 @@ struct AnalysisView: View {
             return isConnecting && !organizer.isStreaming
         }
         return false
-    }
-
-    private var scannedImageCount: Int {
-        organizer.scannedFiles.filter { ["jpg", "jpeg", "png", "heic", "webp"].contains($0.extension.lowercased()) }.count
     }
     
     private var timeoutMessage: some View {
@@ -516,34 +379,26 @@ struct AnalysisView: View {
         )
     }
 
-    private func enableVisionAndReconfigure() {
-        settingsViewModel.config.enableVision = true
-        Task {
-            try? await organizer.configure(with: settingsViewModel.config)
-        }
-    }
+    private func recordCancelledAnalysis() {
+        guard let directory = appState.selectedDirectory ?? organizer.currentDirectory else { return }
 
-    @ViewBuilder
-    private func visionAnalysisSummaryView(_ summary: VisionAnalysisSummary) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(summary.summaryText, systemImage: "eye")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if let warning = summary.warningMessage {
-                Label(warning, systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(NSColor.controlBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(NSColor.separatorColor).opacity(0.9), lineWidth: 1)
-                )
+        let plan = organizer.currentPlan
+        let fileCount = max(plan?.totalFiles ?? 0, organizer.scannedFileCount)
+        let proposedFolderCount = plan?.totalFolders ?? 0
+        let folderNames = plan?.suggestions.map { $0.folderName }
+
+        learningsManager.recordCancelledOrganization(
+            folderPath: directory.path,
+            fileCount: fileCount,
+            proposedFolderCount: proposedFolderCount,
+            instructions: organizer.customInstructions.isEmpty ? nil : organizer.customInstructions,
+            stage: organizer.organizationStage.isEmpty ? "analysis" : organizer.organizationStage,
+            proposedFolderNames: (folderNames?.isEmpty == false) ? folderNames : nil,
+            proposedStructureSummary: nil,
+            fileExtensionCounts: nil,
+            regenerationCount: plan?.version ?? 0,
+            regenerationInstructions: nil,
+            aiModel: settingsViewModel.config.model
         )
     }
 }
