@@ -696,7 +696,7 @@ struct DuplicateGroupDetailView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
-            HStack {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.files.first?.displayName ?? "Unknown File")
                         .font(.title2.bold())
@@ -705,18 +705,24 @@ struct DuplicateGroupDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                .layoutPriority(1)
+
                 Spacer()
                 
-                Button("Keep First, Cleanup Others") {
+                Button {
                     let sortedFiles = group.files.sorted { f1, f2 in
                         let d1 = f1.creationDate ?? Date.distantPast
                         let d2 = f2.creationDate ?? Date.distantPast
                         return d1 < d2 // Keep oldest
                     }
                     onDelete(Array(sortedFiles.dropFirst()))
+                } label: {
+                    Text("Keep First")
                 }
                 .buttonStyle(.onboardingPill)
                 .tint(.red)
+                .layoutPriority(2)
+                .help("Keep the first file and clean up the rest.")
             }
             .padding()
             .background(.ultraThinMaterial)
@@ -836,11 +842,13 @@ struct UnifiedDuplicateGroupDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
+                HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Text(group.displayName)
                                 .font(.title2.bold())
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                             
                             // Type badge
                             Text(group.groupTypeLabel)
@@ -879,27 +887,36 @@ struct UnifiedDuplicateGroupDetailView: View {
                             .background(confidenceColor.opacity(0.1), in: Capsule())
                         }
                     }
+                    .layoutPriority(1)
                     
                     Spacer()
                     
                     // Action button based on recommendation
                     if let recommendation = group.recommendation {
-                        Button(recommendation.description) {
+                        Button {
                             applyRecommendation()
+                        } label: {
+                            Text(compactButtonTitle(for: recommendation))
                         }
                         .buttonStyle(.onboardingPill)
                         .tint(.blue)
+                        .layoutPriority(2)
+                        .help(recommendation.description)
                     } else {
-                        Button("Keep First, Cleanup Others") {
+                        Button {
                             let sortedFiles = group.files.sorted { f1, f2 in
                                 let d1 = f1.creationDate ?? Date.distantPast
                                 let d2 = f2.creationDate ?? Date.distantPast
                                 return d1 < d2
                             }
                             onDelete(Array(sortedFiles.dropFirst()))
+                        } label: {
+                            Text("Keep First")
                         }
                         .buttonStyle(.onboardingPill)
                         .tint(.red)
+                        .layoutPriority(2)
+                        .help("Keep the first file and clean up the rest.")
                     }
                 }
             }
@@ -959,6 +976,23 @@ struct UnifiedDuplicateGroupDetailView: View {
             return "Latest Draft"
         case .manualReview, .none:
             return "Recommended"
+        }
+    }
+
+    private func compactButtonTitle(for recommendation: SemanticDuplicateGroup.DuplicateRecommendation) -> String {
+        switch recommendation {
+        case .keepHighestResolution:
+            return "Keep Highest Res"
+        case .keepNewest:
+            return "Keep Newest"
+        case .keepOldest:
+            return "Keep Original"
+        case .keepLargest:
+            return "Keep Largest"
+        case .archiveOlderVersions:
+            return "Archive Older"
+        case .manualReview:
+            return "Review"
         }
     }
     

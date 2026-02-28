@@ -153,6 +153,11 @@ public struct ExtensionCommunication {
         let stderr: String
     }
 
+    private struct FinderSyncRegistrationEntry {
+        let path: String
+        let isEnabled: Bool?
+    }
+
     private static func runCommand(executablePath: String, arguments: [String]) -> CommandResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executablePath)
@@ -242,6 +247,49 @@ public struct ExtensionCommunication {
         return String(line[start...appexRange.upperBound]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private static func canonicalExtensionPath(_ path: String) -> String {
+        URL(fileURLWithPath: path)
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+            .path
+    }
+
+    private static func extensionPathsMatch(_ lhs: String, _ rhs: String) -> Bool {
+        canonicalExtensionPath(lhs) == canonicalExtensionPath(rhs)
+    }
+
+    private static func parseFinderSyncRegistrationEntries(from output: String) -> [FinderSyncRegistrationEntry] {
+        var entries: [FinderSyncRegistrationEntry] = []
+
+        for rawLine in output.split(separator: "\n").map(String.init) {
+            guard let path = extractAppeXPath(from: rawLine) else { continue }
+
+            let marker = rawLine.first(where: { !$0.isWhitespace })
+            let isEnabled: Bool?
+            switch marker {
+            case "+":
+                isEnabled = true
+            case "-":
+                isEnabled = false
+            default:
+                // Some extension classes omit explicit +/- markers in pluginkit output.
+                isEnabled = nil
+            }
+
+            if let existingIndex = entries.firstIndex(where: { extensionPathsMatch($0.path, path) }) {
+                // Prefer explicit enabled/disabled markers over unknown marker state.
+                if entries[existingIndex].isEnabled == nil, isEnabled != nil {
+                    entries[existingIndex] = FinderSyncRegistrationEntry(path: path, isEnabled: isEnabled)
+                }
+                continue
+            }
+
+            entries.append(FinderSyncRegistrationEntry(path: path, isEnabled: isEnabled))
+        }
+
+        return entries
+    }
+
     private static func registeredFinderSyncExtensionPaths() -> [String] {
         let result = runCommand(
             executablePath: "/usr/bin/pluginkit",
@@ -252,7 +300,8 @@ public struct ExtensionCommunication {
 
         var paths: [String] = []
         for line in result.stdout.split(separator: "\n").map(String.init) {
-            if let path = extractAppeXPath(from: line), !paths.contains(path) {
+            if let path = extractAppeXPath(from: line),
+               !paths.contains(where: { extensionPathsMatch($0, path) }) {
                 paths.append(path)
             }
         }
@@ -269,11 +318,32 @@ public struct ExtensionCommunication {
 
         var paths: [String] = []
         for line in result.stdout.split(separator: "\n").map(String.init) {
-            if let path = extractAppeXPath(from: line), !paths.contains(path) {
+            if let path = extractAppeXPath(from: line),
+               !paths.contains(where: { extensionPathsMatch($0, path) }) {
                 paths.append(path)
             }
         }
         return paths
+    }
+
+    private static func registeredFinderSyncExtensionEntries() -> [FinderSyncRegistrationEntry] {
+        let result = runCommand(
+            executablePath: "/usr/bin/pluginkit",
+            arguments: ["-m", "-v", "-i", finderSyncBundleIdentifier()]
+        )
+
+        guard result.exitCode == 0 else { return [] }
+        return parseFinderSyncRegistrationEntries(from: result.stdout)
+    }
+
+    private static func registeredFinderSyncExtensionEntriesAsync() async -> [FinderSyncRegistrationEntry] {
+        let result = await runCommandAsync(
+            executablePath: "/usr/bin/pluginkit",
+            arguments: ["-m", "-v", "-i", finderSyncBundleIdentifier()]
+        )
+
+        guard result.exitCode == 0 else { return [] }
+        return parseFinderSyncRegistrationEntries(from: result.stdout)
     }
 
     private static func restartFinderIfPossible() {
@@ -281,17 +351,37 @@ public struct ExtensionCommunication {
     }
 
     public static func isFinderSyncExtensionActive() -> Bool {
-        guard let currentPath = currentFinderSyncExtensionURL()?.path else {
-            return false
+        let entries = registeredFinderSyncExtensionEntries()
+        guard !entries.isEmpty else { return false }
+
+        // Prefer the current app build path when present.
+        if let currentPath = currentFinderSyncExtensionURL()?.path,
+           let currentEntry = entries.first(where: { extensionPathsMatch($0.path, currentPath) }) {
+            return currentEntry.isEnabled != false
         }
-        return registeredFinderSyncExtensionPaths().contains(currentPath)
+
+        // Fallback for path drift across builds/symlinks: any explicitly enabled entry counts as active.
+        if entries.contains(where: { $0.isEnabled == true }) {
+            return true
+        }
+
+        return false
     }
 
     public static func isFinderSyncExtensionActiveAsync() async -> Bool {
-        guard let currentPath = currentFinderSyncExtensionURL()?.path else {
-            return false
+        let entries = await registeredFinderSyncExtensionEntriesAsync()
+        guard !entries.isEmpty else { return false }
+
+        if let currentPath = currentFinderSyncExtensionURL()?.path,
+           let currentEntry = entries.first(where: { extensionPathsMatch($0.path, currentPath) }) {
+            return currentEntry.isEnabled != false
         }
-        return await registeredFinderSyncExtensionPathsAsync().contains(currentPath)
+
+        if entries.contains(where: { $0.isEnabled == true }) {
+            return true
+        }
+
+        return false
     }
 
     public static func repairFinderSyncExtensionRegistration(restartFinder: Bool = true) -> (success: Bool, message: String) {
@@ -306,7 +396,7 @@ public struct ExtensionCommunication {
         var removedStaleCount = 0
         var removeFailures = 0
 
-        for path in beforePaths where path != currentPath {
+        for path in beforePaths where !extensionPathsMatch(path, currentPath) {
             let removeResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-r", path])
             if removeResult.exitCode == 0 {
                 removedStaleCount += 1
@@ -318,7 +408,7 @@ public struct ExtensionCommunication {
         let addResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-a", currentPath])
         let useResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-e", "use", "-i", bundleIdentifier])
         let afterPaths = registeredFinderSyncExtensionPaths()
-        let isRegistered = afterPaths.contains(currentPath) || addResult.exitCode == 0
+        let isRegistered = afterPaths.contains(where: { extensionPathsMatch($0, currentPath) }) || addResult.exitCode == 0
         let autoEnableSucceeded = useResult.exitCode == 0
         let isActive = isRegistered && autoEnableSucceeded
 
@@ -365,7 +455,7 @@ public struct ExtensionCommunication {
         var removedStaleCount = 0
         var removeFailures = 0
 
-        for path in beforePaths where path != currentPath {
+        for path in beforePaths where !extensionPathsMatch(path, currentPath) {
             let removeResult = await runCommandAsync(executablePath: "/usr/bin/pluginkit", arguments: ["-r", path])
             if removeResult.exitCode == 0 {
                 removedStaleCount += 1
@@ -377,7 +467,7 @@ public struct ExtensionCommunication {
         let addResult = await runCommandAsync(executablePath: "/usr/bin/pluginkit", arguments: ["-a", currentPath])
         let useResult = await runCommandAsync(executablePath: "/usr/bin/pluginkit", arguments: ["-e", "use", "-i", bundleIdentifier])
         let afterPaths = await registeredFinderSyncExtensionPathsAsync()
-        let isRegistered = afterPaths.contains(currentPath) || addResult.exitCode == 0
+        let isRegistered = afterPaths.contains(where: { extensionPathsMatch($0, currentPath) }) || addResult.exitCode == 0
         let autoEnableSucceeded = useResult.exitCode == 0
         let isActive = isRegistered && autoEnableSucceeded
 

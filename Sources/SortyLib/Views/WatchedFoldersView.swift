@@ -572,6 +572,7 @@ struct WatchedFolderConfigView: View {
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @Environment(\.dismiss) var dismiss
     
     @State private var customPrompt: String
@@ -580,6 +581,7 @@ struct WatchedFolderConfigView: View {
     @State private var useCustomModel: Bool
     @State private var selectedProvider: AIProvider
     @State private var selectedModel: String
+    @State private var showModelPicker = false
     
     // Check if AI is available
     private var isAIConfigured: Bool {
@@ -738,6 +740,10 @@ struct WatchedFolderConfigView: View {
                                 Text("Temperature")
                                     .font(.subheadline)
                                 Spacer()
+                                Text("\(temperature, specifier: "%.2f")")
+                                    .font(.subheadline.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                    .contentTransition(.numericText())
                                 Text(creativityLabel)
                                     .font(.caption)
                                     .padding(.horizontal, 8)
@@ -751,11 +757,11 @@ struct WatchedFolderConfigView: View {
                                 .tint(creativityColor)
                             
                             HStack {
-                                Text("Strict")
+                                Text("Strict (0.0)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                Text("Creative")
+                                Text("Creative (1.0)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
@@ -775,23 +781,20 @@ struct WatchedFolderConfigView: View {
                                 }
                             }
                             .toggleStyle(.switch)
-                            
+
                             if useCustomModel {
-                                Picker("Provider", selection: $selectedProvider) {
-                                    ForEach(AIProvider.userSelectableProviders.filter { $0.isAvailable }, id: \.self) { provider in
-                                        Text(provider.displayName).tag(provider)
-                                    }
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Model")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+
+                                    ModelSelectorRow(
+                                        provider: selectedProvider,
+                                        model: selectedModel,
+                                        onTap: { showModelPicker = true }
+                                    )
                                 }
-                                .onChange(of: selectedProvider) { _, newProvider in
-                                    selectedModel = newProvider.recommendedModels.first ?? newProvider.defaultModel
-                                }
-                                
-                                Picker("Model", selection: $selectedModel) {
-                                    ForEach(selectedProvider.recommendedModels, id: \.self) { model in
-                                        Text(model).tag(model)
-                                    }
-                                }
-                                
+                            
                                 HStack(spacing: 8) {
                                     Image(systemName: "info.circle")
                                     Text("Tip: Use cheaper models like gpt-4o-mini, claude-3-haiku, or local Ollama for cost-effective background automation.")
@@ -828,6 +831,46 @@ struct WatchedFolderConfigView: View {
         }
         .frame(width: 450, height: 650)
         .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            primeModelSelectionFromGlobalDefaultsIfNeeded()
+        }
+        .onChange(of: useCustomModel) { _, useOverride in
+            if useOverride && selectedModel.isEmpty {
+                let defaults = globalAutomationSelection
+                selectedProvider = defaults.provider
+                selectedModel = defaults.model
+            }
+        }
+        .sheet(isPresented: $showModelPicker) {
+            ModelSelectionPopover(
+                isPresented: $showModelPicker,
+                currentProvider: selectedProvider,
+                currentModel: selectedModel,
+                onSelect: { provider, model in
+                    selectedProvider = provider
+                    selectedModel = model
+                }
+            )
+        }
+    }
+
+    private var globalAutomationSelection: (provider: AIProvider, model: String) {
+        let provider = settingsViewModel.config.automationProvider ?? settingsViewModel.config.provider
+        let configuredModel = settingsViewModel.config.automationProvider == nil
+            ? settingsViewModel.config.model
+            : (settingsViewModel.config.automationModel ?? "")
+        let model = configuredModel.isEmpty ? provider.defaultModel : configuredModel
+        return (provider, model)
+    }
+
+    private func primeModelSelectionFromGlobalDefaultsIfNeeded() {
+        guard folder.modelOverride == nil || folder.providerOverride == nil else {
+            return
+        }
+
+        let defaults = globalAutomationSelection
+        selectedProvider = defaults.provider
+        selectedModel = defaults.model
     }
     
     private var creativityLabel: String {

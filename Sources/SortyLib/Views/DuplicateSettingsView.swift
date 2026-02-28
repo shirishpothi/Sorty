@@ -195,6 +195,11 @@ struct DuplicateSettingsView: View {
                         VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
                             Toggle("Enable Semantic Matching", isOn: $settingsManager.settings.includeSemanticDuplicates)
                                 .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
+
+                            Text("Find near-duplicates even when file bytes differ, such as resized images, recompressed exports, or revised documents.")
+                                .font(SortyDesignSystem.Typography.caption())
+                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                             
                             if settingsManager.settings.includeSemanticDuplicates {
                                 VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.md) {
@@ -202,7 +207,7 @@ struct DuplicateSettingsView: View {
                                         Text("Similarity Threshold")
                                             .font(SortyDesignSystem.Typography.subheadline())
                                         Spacer()
-                                        Text(String(format: "%.0f%%", settingsManager.settings.semanticSimilarityThreshold * 100))
+                                        Text("\(semanticThresholdPercent)%")
                                             .font(SortyDesignSystem.Typography.mono(size: SortyDesignSystem.Typography.sizeCaption))
                                             .foregroundStyle(SortyDesignSystem.Colors.primary)
                                             .padding(.horizontal, 8)
@@ -210,9 +215,23 @@ struct DuplicateSettingsView: View {
                                             .background(SortyDesignSystem.Colors.primary.opacity(0.1))
                                             .clipShape(Capsule())
                                     }
+
+                                    Text(semanticThresholdGuidance)
+                                        .font(SortyDesignSystem.Typography.caption())
+                                        .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     
                                     VStack(spacing: SortyDesignSystem.Spacing.xxs) {
-                                        Slider(value: $settingsManager.settings.semanticSimilarityThreshold, in: 0.7...1.0, step: 0.05)
+                                        Slider(
+                                            value: Binding(
+                                                get: { settingsManager.settings.normalizedSemanticSimilarityThreshold },
+                                                set: { newValue in
+                                                    settingsManager.settings.semanticSimilarityThreshold = DuplicateSettings.clampedSemanticSimilarityThreshold(newValue)
+                                                }
+                                            ),
+                                            in: DuplicateSettings.minSemanticSimilarityThreshold...DuplicateSettings.maxSemanticSimilarityThreshold,
+                                            step: 0.05
+                                        )
                                             .accentColor(SortyDesignSystem.Colors.primary)
                                         
                                         HStack {
@@ -224,7 +243,7 @@ struct DuplicateSettingsView: View {
                                         .foregroundStyle(SortyDesignSystem.Colors.textTertiary)
                                     }
                                     
-                                    Text("Used to find visually or contextually similar files even if binary data differs (e.g., resized images).")
+                                    Text("Recommended: 90% for balanced precision and recall.")
                                         .font(SortyDesignSystem.Typography.caption())
                                         .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                                         .fixedSize(horizontal: false, vertical: true)
@@ -241,6 +260,24 @@ struct DuplicateSettingsView: View {
         .frame(width: 600, height: 750)
         .background(SortyDesignSystem.Colors.backgroundPrimary)
         .animation(.sortySpringStandard, value: settingsManager.settings.includeSemanticDuplicates)
+    }
+
+    private var semanticThresholdPercent: Int {
+        Int((settingsManager.settings.normalizedSemanticSimilarityThreshold * 100).rounded())
+    }
+
+    private var semanticThresholdGuidance: String {
+        let threshold = settingsManager.settings.normalizedSemanticSimilarityThreshold
+        if threshold >= 0.98 {
+            return "Very strict: keep only near-identical matches and minimize false positives."
+        }
+        if threshold >= 0.90 {
+            return "Balanced: prioritize quality while still catching strong near-duplicates."
+        }
+        if threshold >= 0.80 {
+            return "Moderate: include broader visual/contextual variants with some manual review."
+        }
+        return "Loose: maximize discovery of variants; review results carefully before cleanup."
     }
     
     private func syncFromSettings() {

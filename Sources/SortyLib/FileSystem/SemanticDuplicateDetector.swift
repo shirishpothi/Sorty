@@ -92,11 +92,51 @@ public struct SemanticDuplicateGroup: Identifiable, Sendable {
 
 /// Actor for detecting semantically similar files
 public actor SemanticDuplicateDetector {
-    private let visionAnalyzer = VisionAnalyzer()
-    private let similarityThreshold: Double = 0.85 // 85% similar
-    private let hammingThreshold: Int = 10 // Max hamming distance for similar images
+    private static let perceptualHashBitLength = 64
 
-    public init() {}
+    private let visionAnalyzer = VisionAnalyzer()
+    private let similarityThreshold: Double
+    private let hammingThreshold: Int
+    private let vibeFeaturePrintThreshold: Float
+    private let vibeTextSimilarityThreshold: Double
+
+    public init(similarityThreshold: Double = DuplicateSettings.defaultSemanticSimilarityThreshold) {
+        let normalizedThreshold = Self.clampedMinimumSimilarity(similarityThreshold)
+        self.similarityThreshold = normalizedThreshold
+        self.hammingThreshold = Self.hammingThreshold(for: normalizedThreshold, hashBits: Self.perceptualHashBitLength)
+        self.vibeFeaturePrintThreshold = Self.vibeFeatureThreshold(for: normalizedThreshold)
+        self.vibeTextSimilarityThreshold = Self.vibeTextThreshold(for: normalizedThreshold)
+    }
+
+    static func clampedMinimumSimilarity(_ value: Double) -> Double {
+        DuplicateSettings.clampedSemanticSimilarityThreshold(value)
+    }
+
+    static func hammingThreshold(for minimumSimilarity: Double, hashBits: Int = 64) -> Int {
+        let normalizedThreshold = clampedMinimumSimilarity(minimumSimilarity)
+        let rawThreshold = Int(floor((1.0 - normalizedThreshold) * Double(hashBits)))
+        return max(0, min(hashBits, rawThreshold))
+    }
+
+    static func similarityForHammingDistance(_ distance: Int, hashBits: Int = 64) -> Double {
+        guard hashBits > 0 else { return 0 }
+        let clampedDistance = max(0, min(distance, hashBits))
+        let similarity = 1.0 - (Double(clampedDistance) / Double(hashBits))
+        return max(0, min(1.0, similarity))
+    }
+
+    static func vibeFeatureThreshold(for minimumSimilarity: Double) -> Float {
+        let normalizedThreshold = clampedMinimumSimilarity(minimumSimilarity)
+        let strictness = (normalizedThreshold - DuplicateSettings.minSemanticSimilarityThreshold)
+            / (DuplicateSettings.maxSemanticSimilarityThreshold - DuplicateSettings.minSemanticSimilarityThreshold)
+        // Lower feature-print distance is stricter.
+        return max(8.0, 15.0 - Float(strictness) * 7.0)
+    }
+
+    static func vibeTextThreshold(for minimumSimilarity: Double) -> Double {
+        let normalizedThreshold = clampedMinimumSimilarity(minimumSimilarity)
+        return max(0.55, min(0.90, normalizedThreshold - 0.20))
+    }
 
     /// Find all semantic duplicates in a list of files
     public func findSemanticDuplicates(
@@ -104,12 +144,13 @@ public actor SemanticDuplicateDetector {
         progressHandler: (@Sendable (Int, Int, String) -> Void)? = nil
     ) async -> [SemanticDuplicateGroup] {
         var groups: [SemanticDuplicateGroup] = []
+        let shouldRunVibeDetection = similarityThreshold <= 0.85
 
         // Separate files by type
         let imageFiles = files.filter { isImageFile($0) }
         let documentFiles = files.filter { isDocumentFile($0) }
 
-        let totalSteps = 5
+        let totalSteps = shouldRunVibeDetection ? 5 : 4
         var currentStep = 0
 
         // Step 1: Find burst photos (images taken within seconds of each other)
@@ -136,16 +177,26 @@ public actor SemanticDuplicateDetector {
         groups.append(contentsOf: documentGroups)
         currentStep += 1
 
-        // Step 5: Find vibe groups (conceptual/visual similarity)
-        progressHandler?(currentStep, totalSteps, "Finding vibe groups...")
-        let vibeGroups = await findVibeGroups(in: files)
-        groups.append(contentsOf: vibeGroups)
-        currentStep += 1
+        // Step 5: Find vibe groups (only for looser thresholds)
+        if shouldRunVibeDetection {
+            progressHandler?(currentStep, totalSteps, "Finding vibe groups...")
+            let vibeGroups = await findVibeGroups(in: files)
+            groups.append(contentsOf: vibeGroups)
+            currentStep += 1
+        }
 
-        // Remove duplicates between groups and merge overlapping
-        let mergedGroups = mergeOverlappingGroups(groups)
+        // Keep only groups at or above the configured similarity level.
+        let thresholdedGroups = groups.filter { $0.similarity >= similarityThreshold }
 
-        return mergedGroups.sorted { $0.potentialSavings > $1.potentialSavings }
+        // Remove duplicates between groups and merge overlapping.
+        let mergedGroups = mergeOverlappingGroups(thresholdedGroups)
+
+        return mergedGroups.sorted {
+            if $0.similarity == $1.similarity {
+                return $0.potentialSavings > $1.potentialSavings
+            }
+            return $0.similarity > $1.similarity
+        }
     }
 
     // MARK: - Burst Photo Detection
@@ -225,6 +276,7 @@ public actor SemanticDuplicateDetector {
             guard !processedIds.contains(imageHashes[i].file.id) else { continue }
 
             var similarFiles: [FileItem] = [imageHashes[i].file]
+            var matchedDistances: [Int] = []
 
             for j in (i + 1)..<imageHashes.count {
                 guard !processedIds.contains(imageHashes[j].file.id) else { continue }
@@ -232,13 +284,15 @@ public actor SemanticDuplicateDetector {
                 if let distance = imageHashes[i].hash.hammingDistance(to: imageHashes[j].hash),
                    distance <= hammingThreshold {
                     similarFiles.append(imageHashes[j].file)
+                    matchedDistances.append(distance)
                     processedIds.insert(imageHashes[j].file.id)
                 }
             }
 
             if similarFiles.count > 1 {
                 processedIds.insert(imageHashes[i].file.id)
-                let similarity = 1.0 - (Double(hammingThreshold) / 64.0) // Approximate
+                let worstDistance = matchedDistances.max() ?? 0
+                let similarity = Self.similarityForHammingDistance(worstDistance, hashBits: Self.perceptualHashBitLength)
                 let recommendation = recommendForSimilarImages(similarFiles)
 
                 groups.append(SemanticDuplicateGroup(
@@ -383,6 +437,7 @@ public actor SemanticDuplicateDetector {
                   let content1 = documents[i].semanticTextContent else { continue }
 
             var similarFiles: [FileItem] = [documents[i]]
+            var lowestSimilarityInGroup = 1.0
 
             for j in (i + 1)..<documents.count {
                 guard !localProcessed.contains(documents[j].id),
@@ -391,17 +446,19 @@ public actor SemanticDuplicateDetector {
                 let similarity = calculateTextSimilarity(content1, content2)
                 if similarity >= similarityThreshold {
                     similarFiles.append(documents[j])
+                    lowestSimilarityInGroup = min(lowestSimilarityInGroup, similarity)
                     localProcessed.insert(documents[j].id)
                 }
             }
 
             if similarFiles.count > 1 {
                 localProcessed.insert(documents[i].id)
+                let groupSimilarity = max(similarityThreshold, lowestSimilarityInGroup)
 
                 groups.append(SemanticDuplicateGroup(
                     groupType: .similarDocuments,
                     files: similarFiles,
-                    similarity: 0.85,
+                    similarity: groupSimilarity,
                     recommendation: .manualReview
                 ))
             }
@@ -411,9 +468,6 @@ public actor SemanticDuplicateDetector {
     }
 
     // MARK: - Vibe Group Detection
-
-    private let vibeFeaturePrintThreshold: Float = 15.0
-    private let vibeTextSimilarityThreshold: Double = 0.6
 
     private func findVibeGroups(in files: [FileItem]) async -> [SemanticDuplicateGroup] {
         let imageFiles = files.filter { isImageFile($0) }
@@ -447,6 +501,7 @@ public actor SemanticDuplicateDetector {
             guard !processedIds.contains(featurePrints[i].file.id) else { continue }
 
             var similarFiles: [FileItem] = [featurePrints[i].file]
+            var matchedDistances: [Float] = []
 
             for j in (i + 1)..<featurePrints.count {
                 guard !processedIds.contains(featurePrints[j].file.id) else { continue }
@@ -460,13 +515,16 @@ public actor SemanticDuplicateDetector {
 
                 if distance < vibeFeaturePrintThreshold {
                     similarFiles.append(featurePrints[j].file)
+                    matchedDistances.append(distance)
                     processedIds.insert(featurePrints[j].file.id)
                 }
             }
 
             if similarFiles.count > 1 {
                 processedIds.insert(featurePrints[i].file.id)
-                let normalizedSimilarity = max(0, 1.0 - Double(vibeFeaturePrintThreshold > 0 ? vibeFeaturePrintThreshold : 1) / 30.0)
+                let worstDistance = matchedDistances.max() ?? 0
+                let normalizedDistance = Double(worstDistance / max(vibeFeaturePrintThreshold, 0.001))
+                let normalizedSimilarity = max(0.0, 1.0 - min(1.0, normalizedDistance) * 0.35)
 
                 groups.append(SemanticDuplicateGroup(
                     groupType: .vibeGroup,
@@ -491,25 +549,28 @@ public actor SemanticDuplicateDetector {
                   let content1 = withContent[i].semanticTextContent else { continue }
 
             var similarFiles: [FileItem] = [withContent[i]]
+            var lowestSimilarityInGroup = 1.0
 
             for j in (i + 1)..<withContent.count {
                 guard !processedIds.contains(withContent[j].id),
                       let content2 = withContent[j].semanticTextContent else { continue }
 
                 let similarity = calculateTextSimilarity(content1, content2)
-                if similarity >= vibeTextSimilarityThreshold && similarity < similarityThreshold {
+                if similarity >= vibeTextSimilarityThreshold {
                     similarFiles.append(withContent[j])
+                    lowestSimilarityInGroup = min(lowestSimilarityInGroup, similarity)
                     processedIds.insert(withContent[j].id)
                 }
             }
 
             if similarFiles.count > 1 {
                 processedIds.insert(withContent[i].id)
+                let groupSimilarity = max(vibeTextSimilarityThreshold, lowestSimilarityInGroup)
 
                 groups.append(SemanticDuplicateGroup(
                     groupType: .vibeGroup,
                     files: similarFiles,
-                    similarity: vibeTextSimilarityThreshold,
+                    similarity: groupSimilarity,
                     recommendation: .manualReview
                 ))
             }
@@ -600,10 +661,17 @@ public actor SemanticDuplicateDetector {
     }
 
     private func mergeOverlappingGroups(_ groups: [SemanticDuplicateGroup]) -> [SemanticDuplicateGroup] {
+        let sortedGroups = groups.sorted {
+            if $0.similarity == $1.similarity {
+                return $0.potentialSavings > $1.potentialSavings
+            }
+            return $0.similarity > $1.similarity
+        }
+
         var result: [SemanticDuplicateGroup] = []
         var usedFileIds: Set<UUID> = []
 
-        for group in groups {
+        for group in sortedGroups {
             // Check if any file in this group is already in another group
             let fileIds = Set(group.files.map { $0.id })
             if fileIds.isDisjoint(with: usedFileIds) {

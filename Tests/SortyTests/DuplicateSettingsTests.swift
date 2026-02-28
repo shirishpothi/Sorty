@@ -23,7 +23,17 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertTrue(settings.enableSafeDeletion)
         XCTAssertFalse(settings.autoStartScan)
         XCTAssertFalse(settings.includeSemanticDuplicates)
-        XCTAssertEqual(settings.semanticSimilarityThreshold, 0.9)
+        XCTAssertEqual(settings.semanticSimilarityThreshold, DuplicateSettings.defaultSemanticSimilarityThreshold)
+    }
+
+    func testSemanticSimilarityThresholdClamping() {
+        let tooLow = DuplicateSettings(semanticSimilarityThreshold: 0.25)
+        XCTAssertEqual(tooLow.semanticSimilarityThreshold, DuplicateSettings.minSemanticSimilarityThreshold)
+
+        let tooHigh = DuplicateSettings(semanticSimilarityThreshold: 1.25)
+        XCTAssertEqual(tooHigh.semanticSimilarityThreshold, DuplicateSettings.maxSemanticSimilarityThreshold)
+
+        XCTAssertEqual(DuplicateSettings.clampedSemanticSimilarityThreshold(0.85), 0.85)
     }
     
     func testCustomSettings() {

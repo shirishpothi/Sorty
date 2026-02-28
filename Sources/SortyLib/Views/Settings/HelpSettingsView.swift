@@ -6,9 +6,28 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct HelpSettingsView: View {
     @EnvironmentObject var appState: AppState
+
+    private let deeplinkEntries: [DeeplinkEntry] = [
+        DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
+        DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files view with an optional path and autostart."),
+        DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear."),
+        DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
+        DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support destination with optional section."),
+        DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
+        DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history."),
+        DeeplinkEntry(title: "Workspace Health", url: "sorty://health", summary: "Open workspace health."),
+        DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Create/select persona flows with optional generation prompt."),
+        DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
+        DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions flow with optional add action and pattern."),
+        DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a new exclusion pattern."),
+        DeeplinkEntry(title: "Scan", url: "sorty://scan?path=/Users/me/Downloads", summary: "Open workspace-health scan target for a folder."),
+        DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path."),
+        DeeplinkEntry(title: "Legacy Path", url: "sorty:///Users/me/Downloads", summary: "Legacy path-only deeplink supported for compatibility.")
+    ]
     
     var body: some View {
         VStack(spacing: 20) {
@@ -76,7 +95,41 @@ struct HelpSettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.2)
+
+            SettingsCard(title: "Automation Deeplinks", icon: "link.badge.plus", color: .cyan) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Use these `sorty://` URLs from Shortcuts, Raycast, AppleScript, or shell scripts to jump directly into specific Sorty workflows.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(Array(deeplinkEntries.enumerated()), id: \.element.id) { index, entry in
+                        DeeplinkEntryRow(entry: entry) { value in
+                            copyDeeplink(value)
+                        }
+
+                        if index < deeplinkEntries.count - 1 {
+                            Divider()
+                        }
+                    }
+
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.secondary)
+                        Text("URL-encode `path` and `prompt` values when generating links programmatically.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 2)
+                }
+            }
+            .animatedAppearance(delay: 0.26)
         }
+    }
+
+    private func copyDeeplink(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        HapticFeedbackManager.shared.selection()
     }
 }
 
@@ -132,6 +185,42 @@ private struct HelpLinkRow: View {
         .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
+        }
+    }
+}
+
+private struct DeeplinkEntry: Identifiable {
+    let title: String
+    let url: String
+    let summary: String
+
+    var id: String { url }
+}
+
+private struct DeeplinkEntryRow: View {
+    let entry: DeeplinkEntry
+    let onCopy: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(entry.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button("Copy") {
+                    onCopy(entry.url)
+                }
+                .buttonStyle(.sortySecondary(size: .small))
+            }
+
+            Text(entry.url)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(Color.accentColor)
+                .textSelection(.enabled)
+
+            Text(entry.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

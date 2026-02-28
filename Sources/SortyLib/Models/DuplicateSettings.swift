@@ -10,6 +10,10 @@ import Combine
 
 /// Settings for duplicate detection behavior
 public struct DuplicateSettings: Codable, Sendable {
+    public static let minSemanticSimilarityThreshold: Double = 0.70
+    public static let maxSemanticSimilarityThreshold: Double = 1.00
+    public static let defaultSemanticSimilarityThreshold: Double = 0.90
+
     /// Method used to determine if files are duplicates
     public var comparisonMethod: ComparisonMethod
 
@@ -37,8 +41,16 @@ public struct DuplicateSettings: Codable, Sendable {
     /// Show semantic/similar duplicates (not just exact matches)
     public var includeSemanticDuplicates: Bool
     
-    /// Similarity threshold for semantic duplicates (0.0 - 1.0)
+    /// Similarity threshold for semantic duplicates (0.70 - 1.00)
     public var semanticSimilarityThreshold: Double
+
+    public static func clampedSemanticSimilarityThreshold(_ value: Double) -> Double {
+        min(max(value, minSemanticSimilarityThreshold), maxSemanticSimilarityThreshold)
+    }
+
+    public var normalizedSemanticSimilarityThreshold: Double {
+        Self.clampedSemanticSimilarityThreshold(semanticSimilarityThreshold)
+    }
     
     public init(
         comparisonMethod: ComparisonMethod = .exact,
@@ -50,7 +62,7 @@ public struct DuplicateSettings: Codable, Sendable {
         enableSafeDeletion: Bool = true,
         autoStartScan: Bool = false,
         includeSemanticDuplicates: Bool = false,
-        semanticSimilarityThreshold: Double = 0.9
+        semanticSimilarityThreshold: Double = DuplicateSettings.defaultSemanticSimilarityThreshold
     ) {
         self.comparisonMethod = comparisonMethod
         self.minFileSize = minFileSize
@@ -61,7 +73,7 @@ public struct DuplicateSettings: Codable, Sendable {
         self.enableSafeDeletion = enableSafeDeletion
         self.autoStartScan = autoStartScan
         self.includeSemanticDuplicates = includeSemanticDuplicates
-        self.semanticSimilarityThreshold = semanticSimilarityThreshold
+        self.semanticSimilarityThreshold = Self.clampedSemanticSimilarityThreshold(semanticSimilarityThreshold)
     }
 }
 
@@ -126,7 +138,7 @@ public class DuplicateSettingsManager: ObservableObject {
     public init() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode(DuplicateSettings.self, from: data) {
-            self.settings = decoded
+            self.settings = Self.normalize(decoded)
         } else {
             self.settings = DuplicateSettings()
         }
@@ -140,6 +152,7 @@ public class DuplicateSettingsManager: ObservableObject {
     }
     
     public func save() {
+        settings = Self.normalize(settings)
         if let encoded = try? JSONEncoder().encode(settings) {
             userDefaults.set(encoded, forKey: storageKey)
         }
@@ -148,5 +161,11 @@ public class DuplicateSettingsManager: ObservableObject {
     public func reset() {
         settings = DuplicateSettings()
         save()
+    }
+
+    private static func normalize(_ settings: DuplicateSettings) -> DuplicateSettings {
+        var normalized = settings
+        normalized.semanticSimilarityThreshold = settings.normalizedSemanticSimilarityThreshold
+        return normalized
     }
 }

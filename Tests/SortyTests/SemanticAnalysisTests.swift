@@ -239,6 +239,23 @@ class SemanticDuplicateTests: XCTestCase {
         XCTAssertNil(hash1.hammingDistance(to: differentLength))
     }
 
+    func testSemanticThresholdMapsToHammingDistance() {
+        XCTAssertEqual(SemanticDuplicateDetector.hammingThreshold(for: 1.0), 0)
+        XCTAssertEqual(SemanticDuplicateDetector.hammingThreshold(for: 0.9), 6)
+        XCTAssertEqual(SemanticDuplicateDetector.hammingThreshold(for: 0.7), 19)
+    }
+
+    func testSemanticThresholdClampingInHammingMapping() {
+        XCTAssertEqual(SemanticDuplicateDetector.hammingThreshold(for: 2.0), 0)
+        XCTAssertEqual(SemanticDuplicateDetector.hammingThreshold(for: 0.1), 19)
+    }
+
+    func testSimilarityForHammingDistance() {
+        XCTAssertEqual(SemanticDuplicateDetector.similarityForHammingDistance(0), 1.0)
+        XCTAssertEqual(SemanticDuplicateDetector.similarityForHammingDistance(6), 0.90625, accuracy: 0.0001)
+        XCTAssertEqual(SemanticDuplicateDetector.similarityForHammingDistance(64), 0.0)
+    }
+
     func testSimilarityPercentage() {
         let group = SemanticDuplicateGroup(
             groupType: .nearIdenticalImages,

@@ -366,7 +366,9 @@ public class DuplicateDetectionManager: ObservableObject {
         // Step 3: Semantic duplicate detection (if enabled)
         if settings.includeSemanticDuplicates && !Task.isCancelled {
             scanStage = "Semantic analysis..."
-            let semanticDetector = SemanticDuplicateDetector()
+            let semanticDetector = SemanticDuplicateDetector(
+                similarityThreshold: settings.normalizedSemanticSimilarityThreshold
+            )
             semanticGroups = await semanticDetector.findSemanticDuplicates(in: mutableFiles) { current, total, stage in
                 Task { @MainActor in
                     self.scanStage = stage

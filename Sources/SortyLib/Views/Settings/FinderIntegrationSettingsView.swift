@@ -219,21 +219,21 @@ struct FinderIntegrationSettingsView: View {
             SettingsCard(title: "Automation Permission", icon: "gearshape.2", color: .purple) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
-                        Image(systemName: automationManager.automationStatus.isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        Image(systemName: automationStatusIcon)
                             .font(.title3)
-                            .foregroundStyle(automationManager.automationStatus.isGranted ? .green : .red)
+                            .foregroundStyle(automationStatusColor)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(automationManager.automationStatus.isGranted ? "Automation Granted" : "Automation Not Granted")
+                            Text(automationStatusTitle)
                                 .font(.subheadline.weight(.medium))
-                            Text("Required to read Finder selection and run Finder-driven actions.")
+                            Text(automationStatusSubtitle)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
 
                         Spacer()
 
-                        if !automationManager.automationStatus.isGranted {
+                        if automationManager.automationStatus == .denied {
                             Button("Open System Settings") {
                                 automationManager.openAutomationSettings()
                             }
@@ -241,7 +241,7 @@ struct FinderIntegrationSettingsView: View {
                         }
                     }
 
-                    if !automationManager.automationStatus.isGranted {
+                    if automationManager.automationStatus == .denied {
                         HStack(alignment: .top, spacing: 6) {
                             Image(systemName: "exclamationmark.triangle")
                                 .foregroundStyle(.orange)
@@ -253,6 +253,21 @@ struct FinderIntegrationSettingsView: View {
                         }
                         .padding(8)
                         .background(Color.orange.opacity(0.08))
+                        .cornerRadius(8)
+                    }
+
+                    if automationManager.automationStatus == .unknown {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "questionmark.circle")
+                                .foregroundStyle(.secondary)
+                                .font(.caption)
+                            Text("Permission status is unknown. Click Recover to run a fresh permission check.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.06))
                         .cornerRadius(8)
                     }
 
@@ -348,12 +363,56 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private func refreshFinderContext() {
-        automationManager.checkPermissions()
+        automationManager.checkPermissions(enableChecksIfNeeded: true)
         if automationManager.automationStatus.isGranted {
             automationManager.updateFinderSelection()
             frontmostFinderFolder = automationManager.getFrontmostFinderWindow()
         } else {
             frontmostFinderFolder = nil
+        }
+    }
+
+    private var automationStatusTitle: String {
+        switch automationManager.automationStatus {
+        case .granted:
+            return "Automation Granted"
+        case .denied:
+            return "Automation Denied"
+        case .unknown:
+            return "Automation Status Unknown"
+        }
+    }
+
+    private var automationStatusSubtitle: String {
+        switch automationManager.automationStatus {
+        case .granted:
+            return "Finder integration can read selections and run Finder-driven actions."
+        case .denied:
+            return "Required to read Finder selection and run Finder-driven actions."
+        case .unknown:
+            return "Status has not been confirmed yet."
+        }
+    }
+
+    private var automationStatusIcon: String {
+        switch automationManager.automationStatus {
+        case .granted:
+            return "checkmark.circle.fill"
+        case .denied:
+            return "xmark.circle.fill"
+        case .unknown:
+            return "questionmark.circle.fill"
+        }
+    }
+
+    private var automationStatusColor: Color {
+        switch automationManager.automationStatus {
+        case .granted:
+            return .green
+        case .denied:
+            return .red
+        case .unknown:
+            return .orange
         }
     }
 
@@ -380,8 +439,9 @@ struct FinderIntegrationSettingsView: View {
 
     private func refreshIntegrationStatus() async {
         _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-        isWatchActionInstalled = await ExtensionCommunication.isQuickWatchActionInstalledAsync()
-        finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
+        let status = await ExtensionCommunication.getIntegrationStatusAsync()
+        isWatchActionInstalled = status.quickWatchActionInstalled
+        finderSyncActive = status.finderSyncEnabled
     }
 }
 

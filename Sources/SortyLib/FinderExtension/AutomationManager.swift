@@ -88,6 +88,10 @@ public final class AutomationManager: ObservableObject {
     public func startUp() {
         isStartedUp = true
         FinderAutomation.markAppReady()
+
+        if automationChecksEnabled {
+            checkPermissions()
+        }
         
         // Register the notification observer here instead of init() to avoid
         // permission checks firing during SwiftUI view graph construction
@@ -100,9 +104,19 @@ public final class AutomationManager: ObservableObject {
     }
     
     // MARK: - Permission Management
+
+    private func enableAutomationChecksIfNeeded() {
+        guard !automationChecksEnabled else { return }
+        automationChecksEnabled = true
+        FinderAutomation.enableAutomationChecks()
+    }
     
     /// Check Automation permission status
-    public func checkPermissions() {
+    public func checkPermissions(enableChecksIfNeeded: Bool = false) {
+        if enableChecksIfNeeded {
+            enableAutomationChecksIfNeeded()
+        }
+
         automationStatus = FinderAutomation.checkAutomationPermission(prompt: false)
         switch automationStatus {
         case .granted:
@@ -112,7 +126,10 @@ public final class AutomationManager: ObservableObject {
             statusMessage = "Finder automation permission denied"
             lastPermissionError = "Grant Finder automation in System Settings > Privacy & Security > Automation."
         case .unknown:
-            statusMessage = "Finder automation permission not yet determined"
+            statusMessage = automationChecksEnabled
+                ? "Finder automation permission status unavailable"
+                : "Finder automation permission not yet checked"
+            lastPermissionError = nil
         }
         if automationStatus == .granted {
             UserDefaults.standard.set(true, forKey: "automation.previouslyGranted")
@@ -121,8 +138,7 @@ public final class AutomationManager: ObservableObject {
 
     /// Explicitly trigger automation permission checks after user intent
     public func requestAutomationPermissionCheck() {
-        automationChecksEnabled = true
-        FinderAutomation.enableAutomationChecks()
+        enableAutomationChecksIfNeeded()
         automationStatus = FinderAutomation.checkAutomationPermission(prompt: true)
         switch automationStatus {
         case .granted:
@@ -252,8 +268,16 @@ public final class AutomationManager: ObservableObject {
 
     /// Attempt recovery from stale/denied automation states without app restart.
     public func recoverAutomationState() {
-        checkPermissions()
-        guard automationStatus == .granted else { return }
+        // Explicit recovery action from Settings; this may trigger the system consent prompt.
+        requestAutomationPermissionCheck()
+
+        guard automationStatus == .granted else {
+            if automationStatus == .denied {
+                statusMessage = "Automation still denied. Open System Settings to allow Finder control."
+            }
+            return
+        }
+
         if enableSelectionMonitoring {
             startSelectionMonitoring()
         } else {
