@@ -255,6 +255,67 @@ final class DeeplinkTests: XCTestCase {
         
         handler.clearPending()
     }
+
+    @MainActor
+    func testExclusionsDeeplink() {
+        let handler = DeeplinkHandler.shared
+
+        let url = URL(string: "sorty://exclusions?action=add&pattern=*.tmp")!
+        handler.handle(url: url)
+
+        if case .exclusions(let action, let pattern) = handler.pendingDestination {
+            XCTAssertEqual(action, "add")
+            XCTAssertEqual(pattern, "*.tmp")
+        } else {
+            XCTFail("Expected exclusions destination")
+        }
+
+        handler.clearPending()
+    }
+
+    @MainActor
+    func testScanDeeplink() {
+        let handler = DeeplinkHandler.shared
+
+        let url = URL(string: "sorty://scan?path=/tmp/workspace")!
+        handler.handle(url: url)
+
+        if case .scan(let path) = handler.pendingDestination {
+            XCTAssertEqual(path, "/tmp/workspace")
+        } else {
+            XCTFail("Expected scan destination")
+        }
+
+        handler.clearPending()
+    }
+
+    @MainActor
+    func testStorageDeeplink() {
+        let handler = DeeplinkHandler.shared
+
+        let url = URL(string: "sorty://storage?action=add&path=/tmp/archive")!
+        handler.handle(url: url)
+
+        if case .storage(let action, let path) = handler.pendingDestination {
+            XCTAssertEqual(action, "add")
+            XCTAssertEqual(path, "/tmp/archive")
+        } else {
+            XCTFail("Expected storage destination")
+        }
+
+        handler.clearPending()
+    }
+
+    @MainActor
+    func testHostMatchingIsCaseInsensitive() {
+        let handler = DeeplinkHandler.shared
+
+        let url = URL(string: "sorty://SeTTings?section=help")!
+        handler.handle(url: url)
+
+        XCTAssertEqual(handler.pendingDestination, .settings(section: "help"))
+        handler.clearPending()
+    }
     
     @MainActor
     func testWatchedListDeeplink() {
@@ -428,5 +489,23 @@ final class DeeplinkTests: XCTestCase {
     func testGeneratePersonaURL() {
         let url = DeeplinkHandler.url(for: .persona(action: "generate", prompt: "Test prompt", generate: true))
         XCTAssertEqual(url?.absoluteString, "sorty://persona?action=generate&prompt=Test%20prompt&generate=true")
+    }
+
+    @MainActor
+    func testGenerateExclusionsURL() {
+        let url = DeeplinkHandler.url(for: .exclusions(action: "add", pattern: "*.log"))
+        XCTAssertEqual(url?.absoluteString, "sorty://exclusions?action=add&pattern=*.log")
+    }
+
+    @MainActor
+    func testGenerateScanURL() {
+        let url = DeeplinkHandler.url(for: .scan(path: "/tmp/workspace"))
+        XCTAssertEqual(url?.absoluteString, "sorty://scan?path=/tmp/workspace")
+    }
+
+    @MainActor
+    func testGenerateStorageURL() {
+        let url = DeeplinkHandler.url(for: .storage(action: "add", path: "/tmp/archive"))
+        XCTAssertEqual(url?.absoluteString, "sorty://storage?action=add&path=/tmp/archive")
     }
 }

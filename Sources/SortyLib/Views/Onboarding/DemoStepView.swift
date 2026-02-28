@@ -32,83 +32,91 @@ public struct DemoStepView: View {
     }
     
     public var body: some View {
-        HStack(spacing: 0) {
-            // Left side - What to expect
-            VStack(alignment: .leading, spacing: 24) {
-                Spacer()
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    Image(systemName: demoState == .simulatedDemo ? "sparkles" : "wand.and.stars")
-                        .font(.system(size: 48))
-                        .foregroundStyle(Color.accentColor)
-                        .symbolEffect(.pulse.byLayer, options: .repeating, isActive: demoState == .simulatedDemo)
-                    
-                    Text(demoState == .complete ? "That's Sorty!" : "See the Magic")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                    
-                    Text(leftPanelDescription)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        DemoFeatureRow(icon: "magnifyingglass", activeIcon: "magnifyingglass.circle.fill", text: "Deep file analysis", isActive: demoState == .simulatedDemo || demoState == .analyzing)
-                        DemoFeatureRow(icon: "brain.head.profile", activeIcon: "brain.head.profile", text: "AI-powered categorization", isActive: demoState == .simulatedDemo || demoState == .organizing)
-                        DemoFeatureRow(icon: "folder.badge.gearshape", activeIcon: "folder.badge.gearshape", text: "Smart folder structure", isActive: demoState == .complete)
-                        DemoFeatureRow(icon: "arrow.uturn.backward.circle", activeIcon: "arrow.uturn.backward.circle.fill", text: "Fully reversible changes", isActive: demoState == .complete)
-                    }
-                    .padding(.top, 8)
-                }
-                .frame(maxWidth: 420)
-                .opacity(hasAppeared ? 1 : 0)
-                .offset(x: hasAppeared ? 0 : -20)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
-                
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 60)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-            
-            // Right side - Demo interaction
-            VStack(spacing: 32) {
-                Spacer()
-                
-                switch demoState {
-                case .intro:
-                    introView
-                case .simulatedDemo:
-                    SimulatedDemoAnimationView(onComplete: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            demoState = .complete
+        GeometryReader { geometry in
+            let compactLayout = geometry.size.width < 1180
+            let horizontalPadding: CGFloat = compactLayout ? 32 : 60
+            let rightPanelVerticalPadding: CGFloat = compactLayout ? 28 : 40
+            let sectionSpacing: CGFloat = compactLayout ? 24 : 32
+            let leftContentMaxWidth: CGFloat = compactLayout ? 360 : 420
+
+            HStack(spacing: 0) {
+                // Left side - What to expect
+                VStack(alignment: .leading, spacing: 24) {
+                    Spacer()
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Image(systemName: demoState == .simulatedDemo ? "sparkles" : "wand.and.stars")
+                            .font(.system(size: 48))
+                            .foregroundStyle(Color.accentColor)
+                            .symbolEffect(.pulse.byLayer, options: .repeating, isActive: demoState == .simulatedDemo)
+
+                        Text(demoState == .complete ? "That's Sorty!" : "See the Magic")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+
+                        Text(leftPanelDescription)
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            DemoFeatureRow(icon: "lock.shield", activeIcon: "lock.shield.fill", text: "On-device privacy scanning", isActive: demoState == .simulatedDemo || demoState == .analyzing)
+                            DemoFeatureRow(icon: "person.crop.circle.badge.checkmark", activeIcon: "person.crop.circle.badge.checkmark.fill", text: "Persona-aware planning", isActive: demoState == .simulatedDemo || demoState == .organizing)
+                            DemoFeatureRow(icon: "folder.badge.gearshape", activeIcon: "folder.badge.gearshape.fill", text: "Smart folder structure", isActive: demoState == .complete)
+                            DemoFeatureRow(icon: "arrow.uturn.backward.circle", activeIcon: "arrow.uturn.backward.circle.fill", text: "One-click undo safety", isActive: demoState == .complete)
                         }
-                        HapticFeedbackManager.shared.success()
-                    })
-                case .selectDirectory:
-                    selectDirectoryView
-                case .analyzing, .organizing:
-                    processingView
-                case .complete:
-                    completeView
+                        .padding(.top, 8)
+                    }
+                    .frame(maxWidth: leftContentMaxWidth)
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(x: hasAppeared ? 0 : -20)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+
+                    Spacer()
                 }
-                
-                Spacer()
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, horizontalPadding)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+
+                // Right side - Demo interaction
+                VStack(spacing: sectionSpacing) {
+                    Spacer()
+
+                    switch demoState {
+                    case .intro:
+                        introView
+                    case .simulatedDemo:
+                        SimulatedDemoAnimationView(onComplete: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                demoState = .complete
+                            }
+                            HapticFeedbackManager.shared.success()
+                        })
+                    case .selectDirectory:
+                        selectDirectoryView
+                    case .analyzing, .organizing:
+                        processingView
+                    case .complete:
+                        completeView
+                    }
+
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, rightPanelVerticalPadding)
+                .padding(.horizontal, horizontalPadding)
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(x: hasAppeared ? 0 : 20)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-            .padding(.horizontal, 60)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(x: hasAppeared ? 0 : 20)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .onAppear {
+                withAnimation { hasAppeared = true }
+            }
+            .onChange(of: organizer.state) { _, newState in
+                handleStateChange(newState)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Demo Step")
         }
-        .onAppear {
-            withAnimation { hasAppeared = true }
-        }
-        .onChange(of: organizer.state) { _, newState in
-            handleStateChange(newState)
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Demo Step")
     }
     
     @ViewBuilder
@@ -189,11 +197,17 @@ public struct DemoStepView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(url.lastPathComponent)
                                 .font(.headline)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .minimumScaleFactor(0.85)
                             Text(url.deletingLastPathComponent().path)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                                .truncationMode(.middle)
+                                .minimumScaleFactor(0.8)
                         }
+                        .layoutPriority(1)
                         
                         Spacer()
                         
@@ -212,7 +226,7 @@ public struct DemoStepView: View {
                             .fill(Color(NSColor.controlBackgroundColor))
                             .stroke(Color.blue.opacity(0.3), lineWidth: 1)
                     )
-                    .frame(maxWidth: 400)
+                    .frame(maxWidth: 440)
                     
                     HStack(spacing: 12) {
                         Button {
@@ -362,44 +376,16 @@ public struct DemoStepView: View {
                     .foregroundStyle(.secondary)
             }
             
-            HStack(spacing: 32) {
-                if let plan = organizer.currentPlan {
-                    DemoStatCard(
-                        icon: "doc.fill",
-                        value: "\(plan.totalFiles)",
-                        label: "files organized",
-                        color: .blue
-                    )
-                    
-                    DemoStatCard(
-                        icon: "folder.fill",
-                        value: "\(plan.totalFolders)",
-                        label: "folders created",
-                        color: .orange
-                    )
-                } else {
-                    DemoStatCard(
-                        icon: "doc.fill",
-                        value: "10",
-                        label: "files organized",
-                        color: .blue
-                    )
-                    
-                    DemoStatCard(
-                        icon: "folder.fill",
-                        value: "4",
-                        label: "folders created",
-                        color: .orange
-                    )
-                    
-                    DemoStatCard(
-                        icon: "bolt.fill",
-                        value: "<1s",
-                        label: "time taken",
-                        color: .purple
-                    )
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 24) {
+                    completionStatCards
+                }
+
+                VStack(spacing: 14) {
+                    completionStatCards
                 }
             }
+            .frame(maxWidth: 420)
             
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
@@ -451,6 +437,46 @@ public struct DemoStepView: View {
             return "Sorty is working on your files. Watch the magic happen!"
         case .complete:
             return "Your files are now beautifully organized. Ready to try it on your own folders?"
+        }
+    }
+
+    @ViewBuilder
+    private var completionStatCards: some View {
+        if let plan = organizer.currentPlan {
+            DemoStatCard(
+                icon: "doc.fill",
+                value: "\(plan.totalFiles)",
+                label: "files organized",
+                color: .blue
+            )
+
+            DemoStatCard(
+                icon: "folder.fill",
+                value: "\(plan.totalFolders)",
+                label: "folders created",
+                color: .orange
+            )
+        } else {
+            DemoStatCard(
+                icon: "doc.fill",
+                value: "10",
+                label: "files organized",
+                color: .blue
+            )
+
+            DemoStatCard(
+                icon: "folder.fill",
+                value: "4",
+                label: "folders created",
+                color: .orange
+            )
+
+            DemoStatCard(
+                icon: "bolt.fill",
+                value: "<1s",
+                label: "time taken",
+                color: .purple
+            )
         }
     }
     
@@ -573,6 +599,8 @@ struct DemoFeatureRow: View {
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(isActive ? .primary : .secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
             
             Spacer()
         }
@@ -608,6 +636,8 @@ struct ProcessingStepRow: View {
             Text(text)
                 .font(.subheadline)
                 .foregroundStyle(isComplete ? .green : isActive ? .primary : .secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
     }
 }
@@ -655,6 +685,8 @@ struct DemoHighlightRow: View {
             Text(text)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             
             Spacer()
         }

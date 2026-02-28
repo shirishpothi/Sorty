@@ -81,6 +81,47 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertNil(session.appState.settingsFocusTarget)
     }
 
+    func testWatchedFoldersAliasMapsToRulesSection() async {
+        handle(.settings(section: "watched-folders"))
+
+        XCTAssertEqual(session.appState.currentView, .settings)
+        await spinMainActor()
+        XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
+        XCTAssertNil(session.appState.settingsFocusTarget)
+    }
+
+    func testStorageSettingsSectionMapsToStorageFocusTarget() async {
+        handle(.settings(section: "storage"))
+
+        XCTAssertEqual(session.appState.currentView, .settings)
+        await spinMainActor()
+        XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
+        XCTAssertEqual(session.appState.settingsFocusTarget, .rulesStorageLocations)
+    }
+
+    func testUnknownSettingsSectionClearsSelectionAndFocusTarget() async {
+        handle(.settings(section: "storage-locations"))
+        await spinMainActor()
+        XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
+        XCTAssertEqual(session.appState.settingsFocusTarget, .rulesStorageLocations)
+
+        handle(.settings(section: "totally-unknown-section"))
+        await spinMainActor()
+        XCTAssertNil(session.appState.selectedSettingsSection)
+        XCTAssertNil(session.appState.settingsFocusTarget)
+    }
+
+    func testNilSettingsSectionClearsSelectionAndFocusTarget() async {
+        handle(.settings(section: "provider"))
+        await spinMainActor()
+        XCTAssertEqual(session.appState.selectedSettingsSection, .provider)
+
+        handle(.settings(section: nil))
+        await spinMainActor()
+        XCTAssertNil(session.appState.selectedSettingsSection)
+        XCTAssertNil(session.appState.settingsFocusTarget)
+    }
+
     private func handle(_ destination: DeeplinkDestination) {
         session.handle(
             destination: destination,

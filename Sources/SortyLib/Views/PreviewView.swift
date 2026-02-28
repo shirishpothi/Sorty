@@ -116,6 +116,7 @@ struct PreviewView: View {
         }
         .onAppear {
             previewStore.dragDropManager = dragDropManager
+            previewStore.learningsManager = learningsManager
             learningsManager.loadProfileIfNeededForCollection()
         }
         .onChange(of: plan) { _, newPlan in editablePlan = newPlan; previewStore.updatePlan(newPlan); hasEdits = false }
@@ -181,8 +182,41 @@ struct PreviewView: View {
     
     private func applyOrganization() {
         isApplying = true; if hasEdits { organizer.currentPlan = editablePlan }
+        recordAcceptedPlacements()
         let resolvedURL = appState.resolveSelectedDirectoryWithAccess() ?? baseURL
         Task { @MainActor in do { try await organizer.apply(at: resolvedURL, dryRun: false, enableTagging: settingsViewModel.config.enableFileTagging); if case .completed = organizer.state { isApplying = false } } catch { organizer.state = .error(error); isApplying = false } }
+    }
+    
+    /// Record accepted file placements and rename decisions before applying
+    private func recordAcceptedPlacements() {
+        guard learningsManager.consentManager.canCollectData else { return }
+        
+        func processFolder(_ folder: FolderSuggestion, parentPath: String) {
+            let folderPath = parentPath.isEmpty ? folder.folderName : "\(parentPath)/\(folder.folderName)"
+            for file in folder.files {
+                let destPath = "\(folderPath)/\(file.displayName)"
+                learningsManager.addPositiveExample(srcPath: file.path, dstPath: destPath)
+                
+                // Record accepted renames
+                if let mapping = previewStore.renameMappings[file.id], mapping.hasRename {
+                    learningsManager.recordRenameFeedback(
+                        originalName: file.displayName,
+                        suggestedName: mapping.suggestedName,
+                        finalName: mapping.suggestedName,
+                        folderPath: folderPath,
+                        action: .accept,
+                        confidence: mapping.renameConfidence
+                    )
+                }
+            }
+            for subfolder in folder.subfolders {
+                processFolder(subfolder, parentPath: folderPath)
+            }
+        }
+        
+        for suggestion in editablePlan.suggestions {
+            processFolder(suggestion, parentPath: "")
+        }
     }
     
     private func calculateTimeRemaining() -> TimeInterval? {

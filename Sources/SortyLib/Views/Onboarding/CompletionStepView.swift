@@ -170,7 +170,7 @@ public struct CompletionStepView: View {
             }
 
             // Layer 4: Main content
-            VStack(spacing: 40) {
+            VStack(spacing: 28) {
                 Spacer()
 
                 // Success icon with glow ring
@@ -276,7 +276,7 @@ public struct CompletionStepView: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 60)
+            .padding(.horizontal, 48)
         }
         .onAppear {
             startRevealSequence()

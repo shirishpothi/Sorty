@@ -48,7 +48,7 @@ public struct FeatureTourView: View {
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .stroke(.white.opacity(0.22), lineWidth: 1)
             )
-            .padding(28)
+            .padding(24)
             .shadow(color: .black.opacity(0.22), radius: 28, x: 0, y: 14)
             .opacity(hasAppeared ? 1 : 0)
             .scaleEffect(hasAppeared ? 1 : 0.98)
@@ -123,9 +123,9 @@ public struct FeatureTourView: View {
 
             navigationButtons
         }
-        .padding(.horizontal, 36)
-        .padding(.vertical, 34)
-        .frame(width: 440)
+        .padding(.horizontal, 30)
+        .padding(.vertical, 30)
+        .frame(width: 410)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
     }
 
@@ -236,7 +236,7 @@ public struct FeatureTourView: View {
                     }
                     .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentIndex)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(24)
+                    .padding(20)
                 }
             }
             .overlay(
@@ -244,8 +244,8 @@ public struct FeatureTourView: View {
                     .stroke(.white.opacity(0.2), lineWidth: 1)
             )
         }
-        .padding(.horizontal, 26)
-        .padding(.vertical, 26)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 22)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -262,9 +262,9 @@ public struct FeatureTourView: View {
 
             Spacer(minLength: 0)
         }
-        .frame(width: 238, alignment: .topLeading)
+        .frame(width: 216, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
-        .padding(16)
+        .padding(14)
         .background(
             Rectangle()
                 .fill(Color.black.opacity(0.08))
@@ -480,7 +480,7 @@ private struct FeatureTourStep: Identifiable {
         ),
         FeatureTourStep(
             id: .learnings,
-            sidebarTitle: "The Learnings",
+            sidebarTitle: "Learnings",
             sidebarIcon: "brain",
             title: "Learnings",
             description: "Capture your manual corrections and convert them into reusable rules that improve future organization runs.",
@@ -543,6 +543,8 @@ private struct HighlightButton: View {
         HStack(spacing: 8) {
             Image(systemName: icon)
             Text(title)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
         }
         .font(.subheadline.weight(.semibold))
         .padding(.horizontal, 12)
@@ -573,6 +575,8 @@ private struct FeatureSidebarRow: View {
             Text(item.sidebarTitle)
                 .font(.subheadline.weight(isCurrent ? .semibold : .regular))
                 .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .allowsTightening(true)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
@@ -636,10 +640,12 @@ private struct WorkspaceHealthMockup: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .minimumScaleFactor(0.85)
             Spacer()
             Text(value)
                 .fontWeight(.semibold)
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .font(.subheadline)
         .padding(.horizontal, 12)
@@ -663,13 +669,13 @@ private struct DuplicatesMockup: View {
                     duplicateCard("Invoice (1).pdf", tone: .yellow, active: phase == 2)
                     duplicateCard("Invoice-final.pdf", tone: .pink, active: phase == 1 || phase == 2)
                 }
-                .frame(height: 76)
+                .frame(minHeight: 76)
 
                 HStack(spacing: 10) {
                     duplicateCard("Photo_2044.jpg", tone: .mint, active: phase == 2)
                     duplicateCard("Photo_2044-copy.jpg", tone: .teal, active: phase != 0)
                 }
-                .frame(height: 70)
+                .frame(minHeight: 70)
 
                 HStack {
                     Text("2 duplicate groups selected")
@@ -692,6 +698,8 @@ private struct DuplicatesMockup: View {
             Text(name)
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.75)
             Text(active ? "Matched" : "Analyzing")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -747,15 +755,21 @@ private struct HistoryMockup: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(detail)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                 Text(date)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
 
             Spacer()
 
             Text(status)
                 .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(
@@ -807,11 +821,13 @@ private struct BatchMockup: View {
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .minimumScaleFactor(0.82)
                 Spacer()
                 Text("\(Int(progress * 100))%")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
 
             SortyGradientProgressBar(progress: progress, accent: accent, height: 8)
@@ -851,6 +867,8 @@ private struct ExclusionMockup: View {
                                 .foregroundStyle(.secondary)
                             Text("Path, extension, or wildcard")
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.82)
                             Spacer()
                         }
                         .padding(.horizontal, 12)
@@ -907,6 +925,9 @@ private struct WatchFolderMockup: View {
                                 .foregroundStyle(.secondary)
                             Text(phase == 2 ? "Moved 12 files into /Receipts" : "Detected 3 new files in Downloads")
                                 .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .minimumScaleFactor(0.82)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 12)
@@ -930,9 +951,13 @@ private struct WatchFolderMockup: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text(event)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
             Spacer()
             Circle()
@@ -987,9 +1012,14 @@ private struct LearningsMockup: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
             Text(action)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.82)
 
             HStack {
                 Text("Confidence")

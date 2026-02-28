@@ -2148,8 +2148,8 @@ struct OrganizationBreakdownCard: View {
                     )
                     BreakdownMetric(
                         value: "\(impact.rejectedOrganizations)",
-                        label: "Rejected",
-                        icon: "xmark.circle.fill",
+                        label: "Reverted",
+                        icon: "arrow.uturn.backward.circle.fill",
                         color: .red
                     )
                     BreakdownMetric(

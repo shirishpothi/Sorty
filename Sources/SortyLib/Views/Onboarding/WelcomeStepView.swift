@@ -232,7 +232,7 @@ public struct WelcomeStepView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                VStack(spacing: 24) {
+                VStack(spacing: 18) {
                     ZStack {
                         GlowRing(isActive: showGlowRing)
 
@@ -265,7 +265,7 @@ public struct WelcomeStepView: View {
                 }
 
                 Spacer()
-                    .frame(height: 36)
+                    .frame(height: 24)
 
                 VStack(alignment: .leading, spacing: 12) {
                     WelcomeFeatureRow(
@@ -310,10 +310,10 @@ public struct WelcomeStepView: View {
                     .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.9), value: featuresAppeared)
                 }
                 .frame(maxWidth: 460)
-                .padding(.horizontal, 48)
+                .padding(.horizontal, 40)
 
                 Spacer()
-                    .frame(height: 24)
+                    .frame(height: 16)
 
                 HStack(spacing: 12) {
                     Image(systemName: "info.circle.fill")

@@ -297,7 +297,6 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         -showBuildTimingSummary \
         INFOPLIST_FILE="${PROJECT_DIR}/Info.plist" \
         PRODUCT_BUNDLE_IDENTIFIER="${APP_BUNDLE_ID}" \
-        PRODUCT_NAME="${BINARY_NAME}" \
         CODE_SIGN_IDENTITY="-" \
         CODE_SIGNING_ALLOWED=NO \
         CODE_SIGNING_REQUIRED=NO \

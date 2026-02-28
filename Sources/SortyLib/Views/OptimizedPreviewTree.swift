@@ -71,6 +71,9 @@ class PreviewStore: ObservableObject {
     /// Weak reference to drag drop manager for cache coordination
     weak var dragDropManager: DragDropManager?
     
+    /// Weak reference to learnings manager for recording user actions in the preview
+    weak var learningsManager: LearningsManager?
+    
     init(plan: OrganizationPlan) {
         self.plan = plan
         expandAllFolders()
@@ -452,6 +455,9 @@ class PreviewStore: ObservableObject {
     func moveFileToUnorganized(fileID: UUID) {
         guard let file = findFile(by: fileID) else { return }
         
+        // Record rejection before mutating the plan
+        learningsManager?.recordRejection(originalPath: file.path)
+        
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
             updatedPlan.suggestions[i] = removeFileFromFolder(file, from: updatedPlan.suggestions[i])
@@ -465,6 +471,19 @@ class PreviewStore: ObservableObject {
     }
     
     func updateRename(fileID: UUID, folderID: UUID, newName: String) {
+        // Record rename edit before mutating the plan
+        if let file = findFile(by: fileID),
+           let mapping = renameMappings[fileID], mapping.hasRename {
+            learningsManager?.recordRenameFeedback(
+                originalName: file.displayName,
+                suggestedName: mapping.suggestedName,
+                finalName: newName,
+                folderPath: folderIDToPath[folderID],
+                action: .edit,
+                confidence: mapping.renameConfidence
+            )
+        }
+        
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
             if let updated = updateRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID, newName: newName) {
@@ -476,6 +495,19 @@ class PreviewStore: ObservableObject {
     }
     
     func rejectRename(fileID: UUID, folderID: UUID) {
+        // Record rename rejection before mutating the plan
+        if let file = findFile(by: fileID),
+           let mapping = renameMappings[fileID], mapping.hasRename {
+            learningsManager?.recordRenameFeedback(
+                originalName: file.displayName,
+                suggestedName: mapping.suggestedName,
+                finalName: nil,
+                folderPath: folderIDToPath[folderID],
+                action: .reject,
+                confidence: mapping.renameConfidence
+            )
+        }
+        
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
             if let updated = rejectRenameInFolder(updatedPlan.suggestions[i], targetID: folderID, fileID: fileID) {
@@ -503,6 +535,11 @@ class PreviewStore: ObservableObject {
                 updatedPlan.suggestions[i] = removeFolderFromSuggestion(updatedPlan.suggestions[i], targetID: folderID)
                 break
             }
+        }
+        
+        // Record rejections for all files being reverted from this folder
+        for file in filesToMove {
+            learningsManager?.recordRejection(originalPath: file.path)
         }
         
         updatedPlan.suggestions.removeAll { $0.files.isEmpty && $0.subfolders.isEmpty && $0.id == folderID }
@@ -589,6 +626,11 @@ class PreviewStore: ObservableObject {
     
     func moveFile(fileID: UUID, toFolderID: UUID) {
         guard let file = findFile(by: fileID) else { return }
+        
+        // Record the manual correction (user moved file to a different folder)
+        let destFolderPath = folderIDToPath[toFolderID] ?? ""
+        let destPath = destFolderPath.isEmpty ? file.displayName : "\(destFolderPath)/\(file.displayName)"
+        learningsManager?.recordCorrection(originalPath: file.path, newPath: destPath)
         
         var updatedPlan = plan
         

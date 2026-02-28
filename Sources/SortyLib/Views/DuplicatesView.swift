@@ -31,6 +31,19 @@ struct DuplicatesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if effectiveDirectory == nil {
+                // Base page: Workspace-Health-style layout
+                ScrollView {
+                    VStack(spacing: 24) {
+                        duplicatesBaseHeaderSection()
+                        duplicatesBaseDirectorySelector()
+                        duplicatesBaseEmptyState()
+                    }
+                    .padding(32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
+            } else {
             // Header
             DuplicatesHeaderNew(
                 manager: detectionManager,
@@ -43,17 +56,6 @@ struct DuplicatesView: View {
             )
             
             ZStack {
-                if effectiveDirectory == nil {
-                    // Start State: No directory selected
-                    DuplicatesEmptyStateView(
-                        title: "Select a Directory",
-                        description: "Select a folder to scan for identical files and recover disk space.",
-                        icon: "folder.badge.plus",
-                        actionTitle: "Choose Directory",
-                        action: selectDirectory
-                    )
-                    .transition(.sortyScaleAndFade)
-                } else {
                     switch detectionManager.state {
                     case .preparing:
                         ScanProgressViewNew(progress: 0, isPreparing: true)
@@ -88,11 +90,11 @@ struct DuplicatesView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.sortySpringStandard, value: detectionManager.state)
+                .animation(.sortySpringStandard, value: effectiveDirectory)
+                .opacity(contentOpacity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .animation(.sortySpringStandard, value: detectionManager.state)
-            .animation(.sortySpringStandard, value: effectiveDirectory)
-            .opacity(contentOpacity)
         }
         .navigationTitle("Duplicate Files")
         .alert("Delete Duplicate Files?", isPresented: $showDeleteConfirmation) {
@@ -150,6 +152,76 @@ struct DuplicatesView: View {
         if handoff.autoStart, effectiveDirectory != nil {
             startScan()
         }
+    }
+
+    // MARK: - Base Page (No Directory Selected)
+
+    @ViewBuilder
+    private func duplicatesBaseHeaderSection() -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Duplicate Files")
+                    .font(.largeTitle.bold())
+
+                Text("Find identical files, recover disk space, and keep your workspace tidy")
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func duplicatesBaseDirectorySelector() -> some View {
+        HStack {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: "/tmp"))
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 28, height: 28)
+                .opacity(0.6)
+
+            Text("Select a directory to scan")
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button("Choose...") {
+                selectDirectory()
+            }
+            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            .accessibilityIdentifier("DuplicatesBaseChooseDirectory")
+        }
+        .padding()
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func duplicatesBaseEmptyState() -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "doc.on.doc")
+                .font(.system(size: 48))
+                .foregroundStyle(.secondary)
+                .opacity(0.7)
+
+            VStack(spacing: 8) {
+                Text("Select a Directory")
+                    .font(.title2.bold())
+
+                Text("Choose a folder to scan for identical files and recover disk space")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 350)
+            }
+
+            Button("Choose Directory") {
+                selectDirectory()
+            }
+            .buttonStyle(.onboardingPill)
+            .controlSize(.large)
+            .accessibilityIdentifier("DuplicatesEmptyChooseDirectory")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var noDuplicatesView: some View {

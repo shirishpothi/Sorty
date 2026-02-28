@@ -34,7 +34,7 @@ public struct OnboardingView: View {
                 VStack(spacing: 0) {
                     // Keep the progress row clear of macOS title bar variants.
                     OnboardingProgressBar(currentStep: currentStep)
-                        .padding(.top, max(56, geometry.safeAreaInsets.top + 24))
+                        .padding(.top, max(44, geometry.safeAreaInsets.top + 16))
                         .padding(.horizontal, 60)
                     
                     // Main content
@@ -291,6 +291,10 @@ struct OnboardingProgressBar: View {
                     Text(step.title)
                         .font(.caption2)
                         .foregroundStyle(step == currentStep ? .primary : .secondary)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+                        .multilineTextAlignment(.center)
+                        .frame(minHeight: 20)
                 }
                 .frame(width: 80)
             }

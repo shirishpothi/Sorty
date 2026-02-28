@@ -78,6 +78,14 @@ All sidebar items and key controls have `accessibilityIdentifier` for UI testing
 .accessibilityIdentifier("SettingsSidebarItem")
 ```
 
+### UX & Microinteractions
+Sorty is a polished, detail-oriented Mac app. Be thoughtful about the small things:
+- **Haptics**: Use `HapticFeedbackManager.shared` for tactile feedback — `.selection()` on hover, `.light()` on click, `.success()` / `.error()` for outcomes.
+- **Hover effects**: Interactive elements should respond to hover with subtle visual changes (opacity shifts, color transitions, slight movement).
+- **Animations**: Use `.animatedAppearance(delay:)` for staggered card entrances. Prefer `.spring()` or `.easeInOut` for state transitions. Keep durations short (0.15–0.3s).
+- **Layout polish**: Consistent spacing, proper alignment, and compact designs. Prefer icon+label rows or icon grids over verbose lists when space is tight.
+- When adding or modifying any interactive UI, always consider whether it needs haptics, hover states, and smooth transitions — don't wait to be asked.
+
 ## Key Integration Points
 
 ### Deeplinks

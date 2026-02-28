@@ -7,15 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-- **Sorting Lab and AI Console** — Removed immersive spatial visualization and live console logging to focus on the streamlined workflow.
-- **Manual Rename and Rename Summary** — Simplified the preview experience by removing manual steering and batch rename review panels.
-- **Quick Rename Mode** — Removed the specialized rename-only mode in favor of a unified organization flow.
+## [1.1.2] - 2026-03-01
+
+### Added
+
+- **Preview Learnings Capture** — Sorty now records accepted placements, manual moves, rejections, and rename feedback directly from the preview workflow to improve future suggestions.
+- **Automation Coverage Tests** — Added deeplink tests for exclusions, scan, and storage routes, plus case-insensitive host matching.
+- **Settings Navigation Tests** — Added search matching and settings focus-target tests across Help/Rules sections and deeplink aliases.
+- **Agent Guides** — Added dedicated Finder Integration and Xcode Project guides under `docs/agent-guides/`.
 
 ### Changed
+
 - **Streamlined Analysis View** — Consolidated the analysis stage into a clean, distraction-free interface.
 - **Simplified Preview Tree** — Refined the folder and file preview with a cleaner UI and removed legacy destination picker and validation overlays.
 - **Cleaned Up Settings** — Removed redundant vision-specific batching and OCR language options from organization strategy.
+- **Duplicate Files Landing Experience** — Reworked the no-directory state with a full base page and clearer call-to-action flow.
+- **Onboarding Responsiveness** — Tightened layout spacing and improved text scaling/truncation across Welcome, Demo, Feature Tour, and Completion steps.
+- **Help & Support Card Refresh** — Redesigned support links into compact icon actions with improved hover/tap feedback and haptics.
+- **Learnings Terminology** — Updated the impact metric label from "Rejected" to "Reverted" for clearer intent.
+- **Release Pipeline Simplification** — GitHub Actions now builds/releases a single universal artifact (`Sorty-universal.zip`), and CI Make targets now forward legacy arch-specific commands to universal builds.
+- **Build Script Cleanup** — Removed explicit `PRODUCT_NAME` override from Xcode build scripting to align with target defaults.
+- **Copyright Refresh** — Updated copyright display to 2026 in app/docs surfaces touched by this release.
+
+### Removed
+
+- **Sorting Lab and AI Console** — Removed immersive spatial visualization and live console logging to focus on the streamlined workflow.
+- **Manual Rename and Rename Summary** — Simplified the preview experience by removing manual steering and batch rename review panels.
+- **Quick Rename Mode** — Removed the specialized rename-only mode in favor of a unified organization flow.
+- **Accidental Workspace Artifact** — Removed stray `To solve the compound inequality.txt` from the repository.
+
+### Fixed
+
+- **Preview Feedback Reliability** — Fixed learnings capture timing so preview corrections and rename decisions are recorded before plan mutations.
 
 ## [1.1.1] - 2026-02-13
 

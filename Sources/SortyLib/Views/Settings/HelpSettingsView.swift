@@ -57,40 +57,40 @@ struct HelpSettingsView: View {
             // Section 2: Privacy & App Info
             SettingsCard(title: "Privacy & Support", icon: "lock.shield.fill", color: .green) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Your privacy is our priority. Sorty never uploads your file contents to our servers—only metadata (names/types) is sent to your chosen AI provider.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Divider()
-                        .padding(.vertical, 4)
-                    
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("Sorty \(BuildInfo.version) (\(BuildInfo.build))")
-                                .font(.headline)
-                            Text("© 2024-2026 Shirish Pothi")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        Spacer()
-                    }
-                    
-                    VStack(spacing: 6) {
-                        HelpLinkRow(
+                    // Links row
+                    HStack(spacing: 0) {
+                        HelpIconLink(
                             title: "Documentation",
                             icon: "doc.text",
                             url: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md"
                         )
-                        HelpLinkRow(
+                        HelpIconLink(
                             title: "Report Issue",
                             icon: "exclamationmark.bubble",
                             url: "https://github.com/shirishpothi/Sorty/issues"
                         )
-                        HelpLinkRow(
+                        HelpIconLink(
                             title: "View Changelog",
                             icon: "clock.arrow.circlepath",
                             url: "https://github.com/shirishpothi/Sorty/blob/main/CHANGELOG.md"
                         )
+                    }
+
+                    Divider()
+
+                    // Privacy blurb
+                    Text("Your privacy is our priority. Sorty never uploads your file contents to our servers—only metadata (names/types) is sent to your chosen AI provider.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    // Version & copyright
+                    HStack {
+                        Text("Sorty \(BuildInfo.version) (\(BuildInfo.build))")
+                            .font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text("© 2024-2026 Shirish Pothi")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
@@ -149,43 +149,42 @@ private struct HelpBulletPoint: View {
     }
 }
 
-private struct HelpLinkRow: View {
+private struct HelpIconLink: View {
     let title: String
     let icon: String
     let url: String
-    
+
     @State private var isHovered = false
-    
+
     var body: some View {
         Link(destination: URL(string: url)!) {
-            HStack(spacing: 10) {
+            VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
-                
+                    .font(.title3)
+                    .foregroundStyle(isHovered ? Color.accentColor : .secondary)
                 Text(title)
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                
-                Spacer()
-                
-                Image(systemName: "arrow.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .offset(x: isHovered ? 3 : 0)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
+                    .font(.caption2)
+                    .foregroundStyle(isHovered ? .primary : .secondary)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(isHovered ? Color.primary.opacity(0.04) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            isHovered = hovering
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
         }
+        .simultaneousGesture(TapGesture().onEnded {
+            HapticFeedbackManager.shared.tap()
+        })
     }
 }
 

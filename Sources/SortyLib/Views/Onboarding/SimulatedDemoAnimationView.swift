@@ -72,15 +72,15 @@ struct SimulatedDemoAnimationView: View {
     // Enhanced AI thoughts with privacy and persona focus
     private let aiThoughts: [String] = [
         "Scanning file types...",
-        "Files never leave your device",
-        "Found 4 image files",
-        "Detected document patterns",
-        "Using 'Minimal' persona style...",
-        "Organizing with minimal folders",
-        "Comparing organization options...",
-        "Option A uses fewer folders",
-        "Moving files to categories",
-        "Creating undo checkpoint..."
+        "Files stay on your device",
+        "Found photos, docs, and archives",
+        "Detecting naming patterns",
+        "Applying Minimal persona style",
+        "Choosing fewer folders",
+        "Comparing organization plans",
+        "Plan A keeps things simpler",
+        "Moving files into categories",
+        "Creating one-click undo checkpoint"
     ]
     
     var body: some View {
@@ -92,49 +92,52 @@ struct SimulatedDemoAnimationView: View {
                         .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
                 )
 
-        VStack(spacing: 24) {
-            phaseIndicator
-            
-            ZStack {
-                // Transition particles overlay
-                if transitionParticles {
-                    TransitionParticleView(isActive: transitionParticles, color: .purple, particleCount: 16)
-                }
-                
-                switch phase {
-                case .messy:
-                    messyFilesView
-                case .scanning:
-                    scanningView
-                case .thinking:
-                    thinkingView
-                case .comparing:
-                    comparingView
-                case .organizing:
-                    organizingView
-                case .complete:
-                    completeAnimationView
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            
-            if phase != .complete {
-                aiThoughtBubble
-            }
-            
-            if phase == .complete {
-                Button {
-                    onComplete()
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Continue")
-                        Image(systemName: "arrow.right")
+            VStack(spacing: 24) {
+                phaseIndicator
+
+                ZStack {
+                    // Transition particles overlay
+                    if transitionParticles {
+                        TransitionParticleView(isActive: transitionParticles, color: .purple, particleCount: 16)
+                    }
+
+                    switch phase {
+                    case .messy:
+                        messyFilesView
+                    case .scanning:
+                        scanningView
+                    case .thinking:
+                        thinkingView
+                    case .comparing:
+                        comparingView
+                    case .organizing:
+                        organizingView
+                    case .complete:
+                        completeAnimationView
                     }
                 }
-                .buttonStyle(.onboardingPill)
-                .transition(.scale.combined(with: .opacity))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if phase != .complete {
+                    aiThoughtBubble
+                        .frame(maxWidth: 460)
+                }
+
+                if phase == .complete {
+                    Button {
+                        onComplete()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("Continue")
+                            Image(systemName: "arrow.right")
+                        }
+                    }
+                    .buttonStyle(.onboardingPill)
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
-        }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
         } // ZStack
         .onAppear {
             files = sampleFiles
@@ -427,12 +430,15 @@ struct SimulatedDemoAnimationView: View {
             Text(currentThought)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .multilineTextAlignment(.leading)
                 .contentTransition(.interpolate)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(
-            Capsule()
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color.accentColor.opacity(0.1))
                 .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
         )
@@ -465,8 +471,11 @@ struct SimulatedDemoAnimationView: View {
                 .font(.system(size: 9))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.72)
+                .allowsTightening(true)
         }
-        .frame(width: 76, height: 54)
+        .frame(width: 84, height: 56)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color(NSColor.controlBackgroundColor))
@@ -482,6 +491,8 @@ struct SimulatedDemoAnimationView: View {
             
             Text(folder.name)
                 .font(.subheadline.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
             
             Spacer()
             
@@ -858,6 +869,8 @@ struct DemoOrganizationPlanCard: View {
             HStack {
                 Text(title)
                     .font(.subheadline.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Spacer()
                 if showCheckmark {
                     Image(systemName: "checkmark.circle.fill")
@@ -870,6 +883,7 @@ struct DemoOrganizationPlanCard: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             
             Divider()
             
@@ -890,7 +904,7 @@ struct DemoOrganizationPlanCard: View {
             }
         }
         .padding(12)
-        .frame(width: 160)
+        .frame(width: 172)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(NSColor.controlBackgroundColor))

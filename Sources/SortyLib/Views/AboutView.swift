@@ -79,7 +79,7 @@ struct AboutView: View {
             Spacer().frame(height: 4)
             
             // Copyright
-            Text("© 2024-2026 Shirish Pothi")
+            Text("© 2026 Shirish Pothi")
                 .font(.caption2)
                 .foregroundColor(.secondary.opacity(0.6))
         }

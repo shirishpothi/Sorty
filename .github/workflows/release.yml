@@ -199,19 +199,13 @@ jobs:
 
       - name: Run Unit Tests
         run: |
+          set -o pipefail
           swift test --parallel 2>&1 | tail -100
 
-  build-arch:
+  build-universal:
     runs-on: macos-15
     needs:
       - prepare-release
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        arch:
-          - arm64
-          - x86_64
 
     steps:
       - name: Checkout
@@ -228,52 +222,52 @@ jobs:
           path: |
             .build
             ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-spm-release-${{ matrix.arch }}-${{ hashFiles('**/Package.resolved') }}
+          key: ${{ runner.os }}-spm-release-universal-${{ hashFiles('**/Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-spm-release-${{ matrix.arch }}-
+            ${{ runner.os }}-spm-release-universal-
             ${{ runner.os }}-spm-
 
-      - name: Build (${{ matrix.arch }})
+      - name: Build universal app
         run: |
           chmod +x ./scripts/build.sh
           BUILD_METHOD=xcodebuild \
           SKIP_TESTS=true \
-          BUILD_ARCHS="${{ matrix.arch }}" \
+          BUILD_ARCHS="arm64 x86_64" \
           XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" \
           ./scripts/build.sh
 
-      - name: Package (${{ matrix.arch }})
+      - name: Package universal ZIP
         run: |
           chmod +x ./scripts/package.sh
-          ZIP_NAME_OVERRIDE="Sorty-${{ matrix.arch }}.zip" ./scripts/package.sh
+          ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/package.sh
 
       - name: Stage build artifacts
         run: |
           mkdir -p release-artifacts
-          mv "releases/Sorty.app" "release-artifacts/Sorty-${{ matrix.arch }}.app"
-          cp "releases/Sorty-${{ matrix.arch }}.zip" "release-artifacts/"
-          cp ".build/build_output.log" "release-artifacts/build_output_${{ matrix.arch }}.log" 2>/dev/null || true
+          cp -R "releases/Sorty.app" "release-artifacts/Sorty.app"
+          cp "releases/Sorty-universal.zip" "release-artifacts/"
+          cp ".build/build_output.log" "release-artifacts/build_output_universal.log" 2>/dev/null || true
 
-          # Preserve Sparkle's sign_update so merge-and-release can sign appcast.xml.
+          # Preserve Sparkle's sign_update so release can sign appcast.xml.
           if [ -x ".build/artifacts/sparkle/Sparkle/bin/sign_update" ]; then
             mkdir -p "release-artifacts/sparkle-tools"
             cp ".build/artifacts/sparkle/Sparkle/bin/sign_update" \
                "release-artifacts/sparkle-tools/sign_update"
           fi
 
-      - name: Upload build artifacts (${{ matrix.arch }})
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.arch }}
+          name: release-universal
           path: release-artifacts/
           retention-days: 7
 
-  merge-and-release:
+  release:
     runs-on: macos-15
     needs:
       - prepare-release
       - unit-tests
-      - build-arch
+      - build-universal
     permissions:
       contents: write
 
@@ -289,42 +283,24 @@ jobs:
         with:
           xcode-version: 'latest-stable'
 
-      - name: Download arm64 artifacts
+      - name: Download universal artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-arm64
-          path: artifacts/arm64
+          name: release-universal
+          path: artifacts/universal
 
-      - name: Download x86_64 artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: release-x86_64
-          path: artifacts/x86_64
-
-      - name: Merge arch apps and package universal ZIP
+      - name: Prepare universal release assets
         run: |
-          chmod +x ./scripts/merge_arch_apps.sh
-          chmod +x ./scripts/package.sh
-
           mkdir -p releases
-          cp -R artifacts/arm64/Sorty-arm64.app releases/
-          cp -R artifacts/x86_64/Sorty-x86_64.app releases/
-          cp artifacts/arm64/Sorty-arm64.zip releases/
-          cp artifacts/x86_64/Sorty-x86_64.zip releases/
+          cp -R artifacts/universal/Sorty.app releases/
+          cp artifacts/universal/Sorty-universal.zip releases/
 
-          if [ -f "artifacts/arm64/sparkle-tools/sign_update" ]; then
+          if [ -f "artifacts/universal/sparkle-tools/sign_update" ]; then
             mkdir -p ".build/artifacts/sparkle/Sparkle/bin"
-            cp "artifacts/arm64/sparkle-tools/sign_update" \
+            cp "artifacts/universal/sparkle-tools/sign_update" \
                ".build/artifacts/sparkle/Sparkle/bin/sign_update"
             chmod +x ".build/artifacts/sparkle/Sparkle/bin/sign_update"
           fi
-
-          ./scripts/merge_arch_apps.sh \
-            --arm64 "releases/Sorty-arm64.app" \
-            --x86_64 "releases/Sorty-x86_64.app" \
-            --output "releases/Sorty.app"
-
-          ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/package.sh
 
       - name: Generate Appcast
         env:
@@ -374,16 +350,12 @@ jobs:
           name: ${{ env.PROJECT_NAME }} ${{ needs.prepare-release.outputs.version }}
           files: |
             releases/Sorty-universal.zip
-            releases/Sorty-arm64.zip
-            releases/Sorty-x86_64.zip
             releases/appcast.xml
           generate_release_notes: true
           append_body: true
           body: |
             ## Installation
-            Choose one download below and move `Sorty.app` to `/Applications`:
-            - `Sorty-arm64.zip` (Apple Silicon / arm64)
-            - `Sorty-universal.zip` (Apple Silicon + Intel)
+            Download `Sorty-universal.zip` and move `Sorty.app` to `/Applications`.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:
             > ```bash
             > xattr -cr /Applications/Sorty.app
@@ -393,7 +365,6 @@ jobs:
             Sorty bundles CLI tools inside the app. Install them from **Settings → Finder Integration → Command Line Tools**.
 
             ## Additional Downloads
-            - **Sorty-arm64.zip** - Apple Silicon build
             - **Sorty-universal.zip** - Universal build (Apple Silicon + Intel)
             - **Sorty-Source.zip** - Full source code
 
@@ -412,7 +383,7 @@ jobs:
             echo "Updating appcast on latest stable release: $LATEST_STABLE"
             gh release delete-asset "$LATEST_STABLE" appcast.xml --yes 2>/dev/null || true
             gh release upload "$LATEST_STABLE" releases/appcast.xml --clobber
-            echo "Updated appcast.xml on $LATEST_STABLE with merged entries"
+            echo "Updated appcast.xml on $LATEST_STABLE"
           else
             echo "No stable release found to update"
           fi

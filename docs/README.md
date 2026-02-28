@@ -315,4 +315,4 @@ Yes, with Ollama (local AI) or Apple Intelligence. Cloud providers require inter
 
 ---
 
-*Sorty © 2024-2026 Shirish Pothi*
+*Sorty © 2026 Shirish Pothi*
