@@ -373,8 +373,6 @@ struct AnalysisView: View {
             insights: cachedInsights,
             debugModeEnabled: appState.debugMode,
             streamPreview: organizer.truncatedDisplayStreamingContent,
-            isReadyForStructureOutput: organizer.isReadyToOutputStructure,
-            liveOrganizationMoves: organizer.liveOrganizationMoves,
             liveInsightsEnabled: $liveInsightsEnabled
         )
     }
@@ -526,7 +524,6 @@ private struct AIReasoningStatus: View {
 final class AnalysisInsightViewState: ObservableObject {
     @Published var showDebugStream = false
     @Published var isExpanded = true
-    @Published var isInsightsExpanded = false
 }
 
 private struct InsightHistorySection: View {
@@ -534,8 +531,6 @@ private struct InsightHistorySection: View {
     let insights: (current: String, history: [AIInsight])
     let debugModeEnabled: Bool
     let streamPreview: String
-    let isReadyForStructureOutput: Bool
-    let liveOrganizationMoves: [LiveOrganizationMove]
     @Binding var liveInsightsEnabled: Bool
     
     @StateObject private var viewState = AnalysisInsightViewState()
@@ -613,9 +608,6 @@ private struct InsightHistorySection: View {
                         Button {
                             withAnimation(.spring()) {
                                 viewState.showDebugStream.toggle()
-                                if viewState.showDebugStream && isReadyForStructureOutput {
-                                    viewState.isInsightsExpanded = true
-                                }
                             }
                         } label: {
                             Image(systemName: viewState.showDebugStream ? "terminal.fill" : "terminal")
@@ -655,20 +647,9 @@ private struct InsightHistorySection: View {
             
             if viewState.isExpanded {
                 LazyVStack(spacing: 14) {
-                    if liveInsightsEnabled && isStreaming && isReadyForStructureOutput {
-                        LiveOrganizationStreamView(
-                            isStreaming: isStreaming,
-                            moves: liveOrganizationMoves
-                        )
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    } else {
-                        liveInsightsPrimaryContent
-                    }
+                    liveInsightsPrimaryContent
 
-                    if liveInsightsEnabled && isStreaming && isReadyForStructureOutput {
-                        liveInsightsDisclosure
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    } else if liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
+                    if liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
                         streamingPreview
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -691,23 +672,12 @@ private struct InsightHistorySection: View {
         .onChange(of: liveInsightsEnabled) { _, enabled in
             if !enabled {
                 viewState.showDebugStream = false
-                viewState.isInsightsExpanded = false
-            }
-        }
-        .onChange(of: isReadyForStructureOutput) { _, ready in
-            if ready {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    viewState.isInsightsExpanded = false
-                }
             }
         }
     }
 
     private var headerTitle: String {
         guard isStreaming else { return "Analysis complete" }
-        if isReadyForStructureOutput {
-            return "Live organization in progress"
-        }
         return "AI is reasoning..."
     }
 
@@ -736,43 +706,6 @@ private struct InsightHistorySection: View {
                 markFirstAsLatest: false
             )
         }
-    }
-
-    private var liveInsightsDisclosure: some View {
-        DisclosureGroup(isExpanded: $viewState.isInsightsExpanded) {
-            VStack(alignment: .leading, spacing: 10) {
-                let timeline = Array(insights.history.reversed())
-                if timeline.isEmpty {
-                    Text("No live insights captured yet.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    insightHistoryScroller(entries: timeline, markFirstAsLatest: true)
-                }
-
-                if viewState.showDebugStream && debugModeEnabled {
-                    streamingPreview
-                }
-            }
-            .padding(.top, 8)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "brain.head.profile")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text("Live Insights")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("\(insights.history.count)")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .accessibilityIdentifier("LiveInsightsDisclosure")
     }
 
     private var receivingResponseView: some View {
@@ -1088,263 +1021,6 @@ private struct InsightHistorySection: View {
         .accessibilityLabel("AI response preview")
     }
 
-}
-
-private struct LiveOrganizationStreamView: View {
-    let isStreaming: Bool
-    let moves: [LiveOrganizationMove]
-
-    @State private var animatedMove: LiveOrganizationMove?
-    @State private var transferProgress: CGFloat = 0
-
-    private var latestMove: LiveOrganizationMove? { moves.last }
-    private var recentMoves: [LiveOrganizationMove] { Array(moves.suffix(14).reversed()) }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-
-            transferLane
-                .frame(height: 60)
-                .accessibilityIdentifier("LiveOrganizationTransferLane")
-
-            if !recentMoves.isEmpty {
-                moveHistory
-                    .accessibilityIdentifier("LiveOrganizationMoveHistory")
-            } else if isStreaming {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.mini)
-                    Text("Waiting for streamed file assignments...")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.accentColor.opacity(0.06),
-                            Color(NSColor.controlBackgroundColor)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
-                )
-        )
-        .onAppear {
-            startTransferAnimation(with: latestMove)
-        }
-        .onChange(of: latestMove?.id) { _, _ in
-            startTransferAnimation(with: latestMove)
-        }
-        .onChange(of: latestMove?.destinationFolder) { _, _ in
-            startTransferAnimation(with: latestMove)
-        }
-    }
-
-    private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Live Organization")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-
-                if let latestMove {
-                    Text("Now mapping into \(latestMove.destinationFolder)")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                } else {
-                    Text("Waiting for folder assignments from streamed JSON")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("\(moves.count)")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                Text(moves.count == 1 ? "file mapped" : "files mapped")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var transferLane: some View {
-        GeometryReader { proxy in
-            let destinationWidth = min(180, max(120, proxy.size.width * 0.34))
-            let laneWidth = max(130, proxy.size.width - destinationWidth - 30)
-            let chipWidth = max(120, min(230, laneWidth - 14))
-            let travelWidth = max(0, laneWidth - chipWidth - 14)
-
-            HStack(spacing: 8) {
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.primary.opacity(0.05))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                        )
-
-                    if let moving = animatedMove {
-                        HStack(spacing: 6) {
-                            fileIcon(for: moving, size: 15)
-                            Text(moving.fileName)
-                                .font(.caption2)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .foregroundStyle(.primary)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 8)
-                        .frame(width: chipWidth, height: 32, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9)
-                                .fill(Color(NSColor.windowBackgroundColor))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 9)
-                                        .stroke(Color(NSColor.separatorColor).opacity(0.72), lineWidth: 1)
-                                )
-                                .shadow(color: .black.opacity(0.08), radius: 3, x: 0, y: 1)
-                        )
-                        .offset(x: 7 + (transferProgress * travelWidth))
-                    }
-                }
-                .frame(width: laneWidth, height: 44)
-
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-
-                destinationBadge(for: latestMove?.destinationFolder ?? "—")
-                    .frame(width: destinationWidth, alignment: .leading)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .animation(.easeInOut(duration: 0.2), value: latestMove?.destinationFolder)
-        }
-    }
-
-    private var moveHistory: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 8) {
-                ForEach(recentMoves) { move in
-                    moveRow(move)
-                }
-            }
-            .padding(.vertical, 2)
-        }
-        .frame(maxHeight: 190)
-        .scrollIndicators(.visible)
-    }
-
-    private func destinationBadge(for folderName: String) -> some View {
-        HStack(spacing: 6) {
-            folderIcon(size: 13)
-            Text(folderName)
-                .font(.caption2)
-                .fontWeight(.medium)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 8)
-        .frame(height: 32)
-        .background(
-            RoundedRectangle(cornerRadius: 9)
-                .fill(Color.accentColor.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 9)
-                        .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
-                )
-        )
-    }
-
-    private func moveRow(_ move: LiveOrganizationMove) -> some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 6) {
-                fileIcon(for: move, size: 13)
-                Text(move.fileName)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(.primary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Image(systemName: "arrow.right")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.tertiary)
-
-            HStack(spacing: 4) {
-                folderIcon(size: 12)
-                Text(move.destinationFolder)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: 150, alignment: .leading)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.primary.opacity(0.045))
-        )
-    }
-
-    private func startTransferAnimation(with move: LiveOrganizationMove?) {
-        guard let move else {
-            animatedMove = nil
-            transferProgress = 0
-            return
-        }
-        animatedMove = move
-        transferProgress = 0
-        withAnimation(.linear(duration: 0.55)) {
-            transferProgress = 1
-        }
-    }
-
-    private func fileIcon(for move: LiveOrganizationMove, size: CGFloat) -> some View {
-        Image(nsImage: fallbackFileIcon(for: move.fileName))
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: size, height: size)
-    }
-
-    private func folderIcon(size: CGFloat) -> some View {
-        Image(nsImage: AnalysisIconProvider.icon(for: .folder))
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .frame(width: size, height: size)
-    }
-
-    private func fallbackFileIcon(for fileName: String) -> NSImage {
-        let ext = URL(fileURLWithPath: fileName).pathExtension.lowercased()
-        guard !ext.isEmpty else { return AnalysisIconProvider.icon(for: .data) }
-        return AnalysisIconProvider.icon(forFileExtension: ext)
-    }
 }
 
 // MARK: - Animated Progress Ring

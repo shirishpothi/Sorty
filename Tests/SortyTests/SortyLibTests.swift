@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import SortyLib
 
 // Mock AI Client for testing

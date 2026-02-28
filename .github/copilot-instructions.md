@@ -35,6 +35,8 @@ make quick      # Compile only, skip tests
 make cli        # Build the 'learnings' CLI tool
 ```
 
+**Xcode**: Open `Sorty.xcodeproj`, select the **Sorty** scheme, Build (Cmd+B) or Run (Cmd+R). The Xcode project uses a local SPM package reference — new `.swift` files in `Sources/SortyLib/` are picked up automatically (no manual pbxproj edits needed). Unit tests are runnable from Xcode's Test navigator via the **SortyTests** scheme.
+
 **Important**: Tests run by default on `make build`. Use `SKIP_TESTS=true` to bypass.
 
 ## Project Conventions

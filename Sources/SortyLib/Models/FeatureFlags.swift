@@ -9,8 +9,6 @@ import Foundation
 
 @MainActor
 public enum FeatureFlags {
-    public nonisolated static let applePCCEnabledKey = "applePCCEnabled"
-
     /// Controls whether the Finder Integration section is visible in Settings and the Finder Integration view.
     ///
     /// Disabled by default. Enable via Terminal:
@@ -125,23 +123,6 @@ public enum FeatureFlags {
             return false
         }
         return UserDefaults.standard.bool(forKey: "featureDemoEnabled")
-    }
-
-    /// Controls whether the Apple Private Cloud Compute model is exposed in model selection.
-    ///
-    /// Disabled by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app applePCCEnabled -bool true
-    /// ```
-    /// Disable:
-    /// ```
-    /// defaults write com.sorty.app applePCCEnabled -bool false
-    /// ```
-    public nonisolated static var applePrivateCloudComputeModelEnabled: Bool {
-        if UserDefaults.standard.object(forKey: applePCCEnabledKey) == nil {
-            return false
-        }
-        return UserDefaults.standard.bool(forKey: applePCCEnabledKey)
     }
 
     /// Preview harness mode for rapid development iteration.

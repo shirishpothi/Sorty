@@ -335,11 +335,8 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
 
     # Note: Assets.xcassets is in ${PROJECT_DIR}/Resources/ and compiled to Assets.car by xcodebuild
 
-    # Copy entitlements
-    if [ -f "${PROJECT_DIR}/Sorty.entitlements" ]; then
-        cp "${PROJECT_DIR}/Sorty.entitlements" "${APP_PATH}/Contents/"
-        log_item "Copied entitlements"
-    fi
+    # Remove stale entitlements file from bundle (entitlements are applied via --entitlements flag during signing)
+    rm -f "${APP_PATH}/Contents/Sorty.entitlements"
 
     # Copy LaunchAgent plist for Background Activity
     if [ -f "${PROJECT_DIR}/Resources/com.sorty.app.plist" ]; then
@@ -476,11 +473,8 @@ else
     
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
 
-    # Copy entitlements
-    if [ -f "${PROJECT_DIR}/Sorty.entitlements" ]; then
-        cp "${PROJECT_DIR}/Sorty.entitlements" "${APP_PATH}/Contents/"
-        log_item "Copied entitlements"
-    fi
+    # Remove stale entitlements file from bundle (entitlements are applied via --entitlements flag during signing)
+    rm -f "${APP_PATH}/Contents/Sorty.entitlements"
 
     # Copy LaunchAgent plist for Background Activity
     if [ -f "${PROJECT_DIR}/Resources/com.sorty.app.plist" ]; then
@@ -560,7 +554,24 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
     ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
     FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
 
-    # Sign the Finder Sync extension first (inner-to-outer signing order)
+    # Sign inside-out: innermost components first, then the main app.
+    # Do NOT use --deep as it re-signs inner components with wrong entitlements
+    # and can produce invalid signatures on macOS 15+.
+
+    # 1. Sign Sparkle framework helpers (innermost)
+    FRAMEWORKS_DIR="${APP_PATH}/Contents/Frameworks"
+    if [ -d "${FRAMEWORKS_DIR}/Sparkle.framework" ]; then
+        for helper in "Autoupdate.app" "Updater.app"; do
+            HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
+            if [ -d "${HELPER_PATH}" ]; then
+                codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
+            fi
+        done
+        codesign --force --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
+        log_item "Signed Sparkle.framework"
+    fi
+
+    # 2. Sign the Finder Sync extension
     if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
         if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
             codesign --force --sign - --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
@@ -570,10 +581,23 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
         log_item "Signed SortyFinderSync.appex"
     fi
 
+    # 3. Sign the main app bundle (outermost — must be last)
+    # AMFI rejects ad-hoc signatures that contain restricted entitlements
+    # (for example app groups and time-sensitive notifications). Keep ad-hoc
+    # bundles launchable by signing without entitlements in that case.
+    APPLY_APP_ENTITLEMENTS=true
     if [ -f "${ENTITLEMENTS_FILE}" ]; then
-        codesign --force --deep --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}" 2>/dev/null || true
+        if /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups" "${ENTITLEMENTS_FILE}" >/dev/null 2>&1 || \
+           /usr/libexec/PlistBuddy -c "Print :com.apple.developer.usernotifications.time-sensitive" "${ENTITLEMENTS_FILE}" >/dev/null 2>&1; then
+            APPLY_APP_ENTITLEMENTS=false
+            log_item "Detected restricted entitlements; signing app without entitlements for ad-hoc launch compatibility"
+        fi
+    fi
+
+    if [ "${APPLY_APP_ENTITLEMENTS}" = "true" ] && [ -f "${ENTITLEMENTS_FILE}" ]; then
+        codesign --force --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}"
     else
-        codesign --force --deep --sign - "${APP_PATH}" 2>/dev/null || true
+        codesign --force --sign - "${APP_PATH}"
     fi
     log_success "App signed ($(get_step_duration "sign"))"
 else

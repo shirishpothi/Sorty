@@ -121,7 +121,7 @@ struct AdvancedSettingsView: View {
                     } label: {
                         HStack {
                             Image(systemName: "square.and.arrow.up")
-                            Text("Export Debug Logs")
+                            Text("Show Error Logs")
                         }
                     }
                     .buttonStyle(.bordered)

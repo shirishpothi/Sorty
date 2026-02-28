@@ -8,6 +8,7 @@ AI-powered macOS folder organizer — native SwiftUI app (macOS 15+, Swift 6, SP
 - `make test` — unit tests (`swift test --disable-sandbox`)
 - `swift test --filter SortyTests.TestClass/testMethod` — single test
 - `make now` — debug build + launch
+- **Xcode** — open `Sorty.xcodeproj`, select the **Sorty** scheme, and Build (Cmd+B) / Run (Cmd+R)
 
 ## Architecture
 MVVM with service layers. State injected via `@EnvironmentObject` from `SortyApp`.
@@ -23,6 +24,15 @@ MVVM with service layers. State injected via `@EnvironmentObject` from `SortyApp
 - Tests: use `MockAIClient`; create temp dirs in `setUp()`, clean in `tearDown()`
 - Feature flags: `defaults write com.sorty.app <key> -bool true` (see [docs/agent-guides/feature-flags.md](docs/agent-guides/feature-flags.md))
 - Release: push `v*` tag to trigger CI build (e.g., 'git push origin v1.0.5')
+
+## Xcode Project Notes
+- The Xcode project (`Sorty.xcodeproj`) uses a **local SPM package** reference to `Package.swift`. SortyLib is built as a separate module by SPM, then linked into the native Sorty app target.
+- The Sorty app target only compiles the 3 files in `Sources/SortyApp/`. All SortyLib code comes from the package — **no file drift**: new `.swift` files in `Sources/SortyLib/` are picked up automatically.
+- Sparkle is resolved transitively through the local package's dependency graph.
+- The `#if canImport(SortyLib)` guards in `Sources/SortyApp/` enable both the SPM executable build (where SortyLib is a module) and the Xcode build.
+- **Unit tests**: The native `SortyTests` target links `SortyLib` from the package. Tests use `@testable import SortyLib`. Runnable from Xcode's Test navigator or via `make test` (SPM).
+- **UI tests**: The native `SortyUITests` target runs against the Sorty app.
+- **FinderSync extension**: Built as a separate native target (`SortyFinderSync`), embedded in the app bundle.
 
 ## Finder Integration Notes
 - Finder Sync `.appex` registration and stale-registration cleanup are implemented in `ExtensionCommunication.repairFinderSyncExtensionRegistration`.

@@ -195,6 +195,7 @@ struct PersonaEditorView: View {
                                 do {
                                     let result = try await generator.generatePersona(from: generationInput, config: settingsViewModel.config)
                                     name = result.name
+                                    selectedIcon = result.icon
                                     promptModifier = result.prompt
                                     showingGenerator = false
                                 } catch {

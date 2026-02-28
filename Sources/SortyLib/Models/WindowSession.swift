@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Combine
 
 @MainActor
 public final class WindowSession: ObservableObject {
@@ -146,6 +147,7 @@ public final class WindowSession: ObservableObject {
                             await MainActor.run {
                                 let newPersona = CustomPersona(
                                     name: result.name,
+                                    icon: result.icon,
                                     description: prompt,
                                     promptModifier: result.prompt
                                 )
@@ -250,18 +252,15 @@ public final class WindowSession: ObservableObject {
         }
 
         switch section {
-        case "watched", "watched-folders", "folders":
+        case "watched", "watched-folders", "folders", "exclusions", "rules":
             appState.selectedSettingsSection = .rules
-            appState.settingsFocusTarget = .rulesWatchedFolders
-        case "exclusions", "rules":
-            appState.selectedSettingsSection = .rules
-            appState.settingsFocusTarget = .rulesExclusionRules
+            appState.settingsFocusTarget = nil
         case "storage", "storage-locations":
             appState.selectedSettingsSection = .rules
             appState.settingsFocusTarget = .rulesStorageLocations
         case "health", "workspace-health":
             appState.selectedSettingsSection = .rules
-            appState.settingsFocusTarget = .rulesWorkspaceHealth
+            appState.settingsFocusTarget = nil
         default:
             let category = SettingsCategory.allCases.first {
                 $0.rawValue.lowercased().contains(section) ||

@@ -23,11 +23,12 @@ You are a world-class Information Architect. Your job is to design a specialized
 Return ONLY valid JSON. No markdown code blocks, no explanations, no text outside the JSON.
 
 ```
-{"name": "ShortName", "prompt": "The system prompt text..."}
+{"name": "ShortName", "icon": "sf.symbol.name", "prompt": "The system prompt text..."}
 ```
 
 ## Field Requirements
 - **name**: 3-20 characters, catchy, professional (e.g., "Code Vault", "Photo Archive", "Legal Desk", "Studio Flow")
+- **icon**: An SF Symbol name from the ICON SELECTION list below that best represents this persona's domain
 - **prompt**: 1500-3000 characters, richly detailed, domain-specific organization instructions
 
 # PROMPT GENERATION BLUEPRINT
@@ -108,6 +109,20 @@ If the description mentions business/legal, include knowledge of: client-matter 
 
 If the description mentions academia/research, include knowledge of: citation files (.bib), datasets, paper drafts, LaTeX projects, literature review organization.
 
+# ICON SELECTION
+
+Choose the single best SF Symbol icon name for this persona from EXACTLY this list:
+star.fill, leaf.fill, paintbrush.fill, music.note, film.fill, gamecontroller.fill, book.fill, briefcase.fill, house.fill, graduationcap.fill, heart.fill, cart.fill, airplane, car.fill, hammer.fill, wrench.and.screwdriver.fill, scissors, pencil, doc.text.fill, folder.fill.badge.person.crop, tray.2.fill, archivebox.fill, cube.fill, wand.and.stars, sparkles, camera.fill, desktopcomputer, stethoscope, gavel.fill, banknote.fill, theatermasks.fill, sportscourt.fill, leaf.arrow.circlepath, cpu.fill, flask.fill
+
+Pick the icon that BEST represents the domain described by the user. For example:
+- A developer persona → hammer.fill or cpu.fill
+- A photographer → camera.fill
+- A student → graduationcap.fill
+- An accountant → banknote.fill or briefcase.fill
+- A musician → music.note
+- A designer → paintbrush.fill
+- A legal professional → gavel.fill
+
 # QUALITY BAR
 
 A GOOD generated prompt is one where: if you gave 100 random files to the AI with this persona active, an expert in that domain would look at the result and say "yes, this is exactly how I would organize these."
@@ -124,7 +139,19 @@ A BAD generated prompt is generic advice that could apply to anyone ("sort docum
     
     public init() {}
 
-    public func generatePersona(from description: String, answers: [HoningAnswer] = [], config: AIConfig) async throws -> (name: String, prompt: String) {
+    private let validIcons: Set<String> = [
+        "star.fill", "leaf.fill", "paintbrush.fill", "music.note", "film.fill",
+        "gamecontroller.fill", "book.fill", "briefcase.fill", "house.fill",
+        "graduationcap.fill", "heart.fill", "cart.fill", "airplane", "car.fill",
+        "hammer.fill", "wrench.and.screwdriver.fill", "scissors", "pencil",
+        "doc.text.fill", "folder.fill.badge.person.crop", "tray.2.fill",
+        "archivebox.fill", "cube.fill", "wand.and.stars", "sparkles",
+        "camera.fill", "desktopcomputer", "stethoscope", "gavel.fill",
+        "banknote.fill", "theatermasks.fill", "sportscourt.fill",
+        "leaf.arrow.circlepath", "cpu.fill", "flask.fill"
+    ]
+
+    public func generatePersona(from description: String, answers: [HoningAnswer] = [], config: AIConfig) async throws -> (name: String, icon: String, prompt: String) {
         isGenerating = true
         error = nil
         
@@ -174,18 +201,34 @@ A BAD generated prompt is generic advice that could apply to anyone ("sort docum
                     
                     let extractedName = String(jsonString[nameRange.upperBound..<nameEnd.lowerBound])
                     let extractedPrompt = String(jsonString[promptRange.upperBound..<promptEnd.lowerBound])
-                    return (enforceNameLength(extractedName), extractedPrompt)
+                    let extractedIcon = extractIcon(from: jsonString)
+                    return (enforceNameLength(extractedName), extractedIcon, extractedPrompt)
                 }
                 
-                return (enforceNameLength("Custom Persona"), jsonString)
+                return (enforceNameLength("Custom Persona"), "star.fill", jsonString)
             }
             
-            return (enforceNameLength(name), generatedPrompt)
+            let icon = validateIcon(json["icon"])
+            return (enforceNameLength(name), icon, generatedPrompt)
             
         } catch {
             self.error = error
             throw error
         }
+    }
+    
+    private func validateIcon(_ icon: String?) -> String {
+        guard let icon, validIcons.contains(icon) else { return "star.fill" }
+        return icon
+    }
+    
+    private func extractIcon(from text: String) -> String {
+        if let iconRange = text.range(of: "\"icon\": \""),
+           let iconEnd = text.range(of: "\"", range: iconRange.upperBound..<text.endIndex) {
+            let extracted = String(text[iconRange.upperBound..<iconEnd.lowerBound])
+            return validateIcon(extracted)
+        }
+        return "star.fill"
     }
     
     private func enforceNameLength(_ name: String) -> String {

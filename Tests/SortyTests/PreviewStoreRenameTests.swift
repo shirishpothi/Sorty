@@ -20,14 +20,13 @@ final class PreviewStoreRenameTests: XCTestCase {
         let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
         let store = PreviewStore(plan: plan)
 
-        let success = store.updateRename(fileID: file.id, folderID: folder.id, newName: "  final:name.pdf  ")
-        XCTAssertTrue(success)
+        store.updateRename(fileID: file.id, folderID: folder.id, newName: "  final:name.pdf  ")
 
         let mapping = store.plan.suggestions[0].renameMapping(for: file)
         XCTAssertEqual(mapping?.suggestedName, "final-name.txt")
     }
 
-    func testUpdateRenameRejectsConflictingFilename() {
+    func testUpdateRenameAllowsDuplicateTargetFilenames() {
         let fileA = makeFile("a")
         let fileB = makeFile("b")
         var folder = FolderSuggestion(folderName: "Docs", files: [fileA, fileB])
@@ -35,8 +34,10 @@ final class PreviewStoreRenameTests: XCTestCase {
         let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
         let store = PreviewStore(plan: plan)
 
-        let success = store.updateRename(fileID: fileB.id, folderID: folder.id, newName: "invoice.txt")
-        XCTAssertFalse(success)
+        store.updateRename(fileID: fileB.id, folderID: folder.id, newName: "invoice.txt")
+
+        let mapping = store.plan.suggestions[0].renameMapping(for: fileB)
+        XCTAssertEqual(mapping?.suggestedName, "invoice.txt")
     }
 
     func testUpdateRenameNoOpDoesNotCreateMapping() {
@@ -45,8 +46,7 @@ final class PreviewStoreRenameTests: XCTestCase {
         let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
         let store = PreviewStore(plan: plan)
 
-        let success = store.updateRename(fileID: file.id, folderID: folder.id, newName: "notes.txt")
-        XCTAssertFalse(success)
+        store.updateRename(fileID: file.id, folderID: folder.id, newName: "notes.txt")
         XCTAssertNil(store.plan.suggestions[0].renameMapping(for: file))
     }
 
@@ -65,7 +65,7 @@ final class PreviewStoreRenameTests: XCTestCase {
         XCTAssertNil(mapping?.suggestedName)
     }
 
-    func testAcceptAllAndRejectAllRenames() {
+    func testPerFileRejectAndReapplyRenames() {
         let fileA = makeFile("draft_a")
         let fileB = makeFile("draft_b")
         var folder = FolderSuggestion(folderName: "Docs", files: [fileA, fileB])
@@ -74,16 +74,18 @@ final class PreviewStoreRenameTests: XCTestCase {
         let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
         let store = PreviewStore(plan: plan)
 
-        store.rejectAllRenames()
+        store.rejectRename(fileID: fileA.id, folderID: folder.id)
+        store.rejectRename(fileID: fileB.id, folderID: folder.id)
         XCTAssertFalse(store.plan.suggestions[0].renameMapping(for: fileA)?.hasRename ?? true)
         XCTAssertFalse(store.plan.suggestions[0].renameMapping(for: fileB)?.hasRename ?? true)
 
-        store.acceptAllRenames()
+        store.updateRename(fileID: fileA.id, folderID: folder.id, newName: "final_a.txt")
+        store.updateRename(fileID: fileB.id, folderID: folder.id, newName: "final_b.txt")
         XCTAssertEqual(store.plan.suggestions[0].renameMapping(for: fileA)?.suggestedName, "final_a.txt")
         XCTAssertEqual(store.plan.suggestions[0].renameMapping(for: fileB)?.suggestedName, "final_b.txt")
     }
 
-    func testRenameSummaryIncludesLowConfidenceSkip() {
+    func testLowConfidenceSkipFlagPropagatesThroughPreviewStore() {
         let file = makeFile("image", ext: "jpg")
         let mapping = FileRenameMapping(
             originalFile: file,
@@ -95,9 +97,8 @@ final class PreviewStoreRenameTests: XCTestCase {
         let plan = OrganizationPlan(suggestions: [folder], unorganizedFiles: [], notes: "")
         let store = PreviewStore(plan: plan)
 
-        let entries = store.renameSummaryEntries()
-        XCTAssertEqual(entries.count, 1)
-        XCTAssertTrue(entries[0].isLowConfidenceSkip)
-        XCTAssertEqual(entries[0].newName, file.displayName)
+        let persistedMapping = store.plan.suggestions[0].renameMapping(for: file)
+        XCTAssertTrue(persistedMapping?.isAutoSkippedForLowConfidence ?? false)
+        XCTAssertEqual(persistedMapping?.finalFilename, file.displayName)
     }
 }

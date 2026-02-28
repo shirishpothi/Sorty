@@ -128,7 +128,7 @@ public struct MenuBarView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
-                    Text("No folders watching")
+                    Text("No watched folders active")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -154,7 +154,7 @@ public struct MenuBarView: View {
                 openMainWindow()
             }
             
-            MenuBarButton(title: "View History", icon: "clock.arrow.circlepath") {
+            MenuBarButton(title: "View History", icon: "clock") {
                 openDestination(.history)
             }
             
@@ -162,7 +162,7 @@ public struct MenuBarView: View {
                 openDestination(.health)
             }
             
-            MenuBarButton(title: "Learnings", icon: "lightbulb.fill") {
+            MenuBarButton(title: "Learnings", icon: "brain") {
                 openDestination(.learnings(action: nil, project: nil))
             }
             
@@ -174,16 +174,17 @@ public struct MenuBarView: View {
                 openDestination(.watched(action: nil, path: nil))
             }
             
-            Divider()
-                .padding(.vertical, 2)
-            
-            MenuBarButton(
-                title: isAllPaused ? "Resume All" : "Pause All",
-                icon: isAllPaused ? "play.fill" : "pause.fill"
-            ) {
-                togglePauseAll()
+            if !watchedFoldersManager.folders.isEmpty {
+                Divider()
+                    .padding(.vertical, 2)
+                
+                MenuBarButton(
+                    title: isAllPaused ? "Resume All" : "Pause All",
+                    icon: isAllPaused ? "play.fill" : "pause.fill"
+                ) {
+                    togglePauseAll()
+                }
             }
-            .disabled(watchedFoldersManager.folders.isEmpty)
         }
     }
     
@@ -219,7 +220,7 @@ public struct MenuBarView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "bell.badge.fill")
                         .frame(width: 16)
-                    Text("Automation Notifications")
+                    Text("Notifications")
                 }
             }
             .toggleStyle(.switch)

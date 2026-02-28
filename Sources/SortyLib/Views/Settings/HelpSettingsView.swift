@@ -35,49 +35,7 @@ struct HelpSettingsView: View {
             }
             .animatedAppearance(delay: 0.1)
             
-            // Section 2: Organization Intelligence
-            SettingsCard(title: "Organization Intelligence", icon: "brain.head.profile", color: .purple) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HelpDetailRow(
-                        title: "Personas",
-                        description: "Specialized AI profiles (Developer, Accountant, etc.) that change how files are categorized.",
-                        icon: "person.2.fill"
-                    )
-                    
-                    HelpDetailRow(
-                        title: "The Learnings",
-                        description: "Sorty learns from your manual moves! Every time you correct a file's location, the AI adapts.",
-                        icon: "lightbulb.fill"
-                    )
-                    
-                    HelpDetailRow(
-                        title: "Smart Tags",
-                        description: "Enable tags in Organization Rules to have the AI label files with Finder-compatible colors and keywords.",
-                        icon: "tag.fill"
-                    )
-                }
-            }
-            .animatedAppearance(delay: 0.2)
-            
-            // Section 3: Automation & Power User Features
-            SettingsCard(title: "Automation", icon: "terminal.fill", color: .blue) {
-                VStack(alignment: .leading, spacing: 16) {
-                    HelpDetailRow(
-                        title: "Keyboard Shortcuts",
-                        description: "Use ⌘O to open, ⌘R to organize, and ⌘Z to undo any action instantly.",
-                        icon: "keyboard"
-                    )
-                    
-                    HelpDetailRow(
-                        title: "CLI Tool",
-                        description: "The 'learnings' command-line tool lets you manage profiles and trigger organization from scripts.",
-                        icon: "chevron.right.terminal"
-                    )
-                }
-            }
-            .animatedAppearance(delay: 0.3)
-            
-            // Section 4: Privacy & App Info
+            // Section 2: Privacy & App Info
             SettingsCard(title: "Privacy & Support", icon: "lock.shield.fill", color: .green) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Your privacy is our priority. Sorty never uploads your file contents to our servers—only metadata (names/types) is sent to your chosen AI provider.")
@@ -98,19 +56,26 @@ struct HelpSettingsView: View {
                         Spacer()
                     }
                     
-                    HStack(spacing: 16) {
-                        Link("Documentation", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!)
-                            .font(.subheadline)
-                        
-                        Link("Report Issue", destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!)
-                            .font(.subheadline)
-                        
-                        Link("View Changelog", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/CHANGELOG.md")!)
-                            .font(.subheadline)
+                    VStack(spacing: 6) {
+                        HelpLinkRow(
+                            title: "Documentation",
+                            icon: "doc.text",
+                            url: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md"
+                        )
+                        HelpLinkRow(
+                            title: "Report Issue",
+                            icon: "exclamationmark.bubble",
+                            url: "https://github.com/shirishpothi/Sorty/issues"
+                        )
+                        HelpLinkRow(
+                            title: "View Changelog",
+                            icon: "clock.arrow.circlepath",
+                            url: "https://github.com/shirishpothi/Sorty/blob/main/CHANGELOG.md"
+                        )
                     }
                 }
             }
-            .animatedAppearance(delay: 0.4)
+            .animatedAppearance(delay: 0.2)
         }
     }
 }
@@ -131,26 +96,42 @@ private struct HelpBulletPoint: View {
     }
 }
 
-private struct HelpDetailRow: View {
+private struct HelpLinkRow: View {
     let title: String
-    let description: String
     let icon: String
+    let url: String
+    
+    @State private var isHovered = false
     
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-            
-            VStack(alignment: .leading, spacing: 2) {
+        Link(destination: URL(string: url)!) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+                
                 Text(title)
-                    .font(.subheadline.weight(.medium))
-                Text(description)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                
+                Spacer()
+                
+                Image(systemName: "arrow.right")
                     .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.tertiary)
+                    .offset(x: isHovered ? 3 : 0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
         }
     }
 }

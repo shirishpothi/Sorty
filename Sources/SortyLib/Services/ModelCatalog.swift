@@ -189,11 +189,6 @@ public final class ModelCatalog: ObservableObject {
             return try await fetchGitHubCopilotModels()
         case .appleFoundationModel:
             return (appleFoundationModels(), false)
-        case .applePrivateCloudCompute:
-            guard FeatureFlags.applePrivateCloudComputeModelEnabled else {
-                return ([], false)
-            }
-            return ([ModelInfo(id: AIProvider.applePrivateCloudComputeModelName, displayName: AIProvider.applePrivateCloudComputeModelName, provider: .appleFoundationModel)], false)
         case .openAICompatible:
             return try await fetchOpenAICompatibleModels()
         }
@@ -633,14 +628,7 @@ public final class ModelCatalog: ObservableObject {
     }
     
     private func appleFoundationModels() -> [ModelInfo] {
-        var models = [
-            ModelInfo(id: AIProvider.appleFoundationModelName, displayName: AIProvider.appleFoundationModelName, provider: .appleFoundationModel),
-            ModelInfo(id: AIProvider.applePrivateCloudComputeModelName, displayName: AIProvider.applePrivateCloudComputeModelName, provider: .appleFoundationModel)
-        ]
-        if !FeatureFlags.applePrivateCloudComputeModelEnabled {
-            models.removeAll { $0.id == AIProvider.applePrivateCloudComputeModelName }
-        }
-        return models
+        [ModelInfo(id: AIProvider.appleFoundationModelName, displayName: AIProvider.appleFoundationModelName, provider: .appleFoundationModel)]
     }
     
     private func openAICompatibleFallback() -> [ModelInfo] {
@@ -655,18 +643,7 @@ public final class ModelCatalog: ObservableObject {
     }
 
     private func filteredModels(_ models: [ModelInfo], for provider: AIProvider) -> [ModelInfo] {
-        guard !FeatureFlags.applePrivateCloudComputeModelEnabled else {
-            return models
-        }
-
-        switch provider {
-        case .appleFoundationModel:
-            return models.filter { $0.id != AIProvider.applePrivateCloudComputeModelName }
-        case .applePrivateCloudCompute:
-            return []
-        default:
-            return models
-        }
+        models
     }
     
     private func loadCacheFromDisk() {

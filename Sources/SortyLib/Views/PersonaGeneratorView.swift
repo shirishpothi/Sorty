@@ -249,6 +249,7 @@ struct PersonaGeneratorView: View {
                 
                 let newPersona = CustomPersona(
                     name: result.name,
+                    icon: result.icon,
                     description: prompt,
                     promptModifier: result.prompt
                 )

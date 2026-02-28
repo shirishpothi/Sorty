@@ -138,7 +138,7 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        var options: UNNotificationPresentationOptions = [.banner]
+        var options: UNNotificationPresentationOptions = [.banner, .list]
         if notification.request.content.sound != nil {
             options.insert(.sound)
         }
@@ -293,9 +293,8 @@ public class NotificationManager: ObservableObject {
     
     /// Initialize the notification system (call on app startup for faster first notification)
     private func setupNotificationSystem() async {
-        // Request native notification permission
+        // Check current notification permission status (without requesting)
         if isSafeToUseSystemNotifications {
-            await requestSystemNotificationPermission()
             await checkNotificationPermission()
         } else {
             print("NotificationManager: Skipping system notification setup (CLI/Test environment)")
@@ -364,13 +363,40 @@ public class NotificationManager: ObservableObject {
     /// Request notification permission
     public func requestPermission() async -> Bool {
         guard isSafeToUseSystemNotifications else { return false }
-        
-        do {
-            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
-            await checkNotificationPermission()
-            return granted
-        } catch {
-            print("NotificationManager: Failed to request permission: \(error)")
+
+        await checkNotificationPermission()
+        switch notificationPermissionStatus {
+        case .authorized, .provisional:
+            return true
+        case .denied:
+            return false
+        case .notDetermined:
+            do {
+                // Use callback-based authorization request for maximum compatibility.
+                let granted: Bool = try await withCheckedThrowingContinuation { continuation in
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                        if let error {
+                            continuation.resume(throwing: error)
+                        } else {
+                            continuation.resume(returning: granted)
+                        }
+                    }
+                }
+
+                await checkNotificationPermission()
+
+                // Some environments can return stale status; keep UI state actionable.
+                if notificationPermissionStatus == .notDetermined {
+                    notificationPermissionStatus = granted ? .authorized : .denied
+                }
+
+                return notificationPermissionStatus == .authorized || notificationPermissionStatus == .provisional || granted
+            } catch {
+                print("NotificationManager: Failed to request permission: \(error)")
+                await checkNotificationPermission()
+                return notificationPermissionStatus == .authorized || notificationPermissionStatus == .provisional
+            }
+        @unknown default:
             return false
         }
     }
@@ -594,6 +620,38 @@ public class NotificationManager: ObservableObject {
 
     public func sendInFlowPreviewSample() {
         show(.previewReady(folderName: "Current Batch"))
+    }
+
+    /// Show a demo of the in-app HUD delivery style.
+    public func previewInAppHUDDelivery() {
+        showHUD(
+            title: "In-App HUD Demo",
+            message: "This is how subtle in-app overlays appear in Sorty.",
+            icon: "rectangle.bottomthird.inset.filled",
+            iconColor: .pink,
+            playSound: settings.settings.hudSounds
+        )
+        trackAnalytics(
+            .shown,
+            type: .info(title: "deliveryPreview", message: "inAppHUD"),
+            backend: settings.settings.notificationBackend,
+            detail: "manual HUD delivery preview"
+        )
+    }
+
+    /// Show a demo in macOS Notification Center using native notifications only.
+    public func previewSystemNotificationDelivery() {
+        requestAttention(isCritical: false)
+        Task {
+            await showNativeNotification(
+                type: .info(title: "System Notification Test", message: "This is a test notification from Sorty."),
+                title: "System Notification Test",
+                message: "This is a test notification from Sorty.",
+                playSound: settings.settings.systemNotificationSounds,
+                actionHandler: nil,
+                allowFallbackToNotifiCLI: false
+            )
+        }
     }
     
     // MARK: - Private Methods
@@ -1044,7 +1102,8 @@ public class NotificationManager: ObservableObject {
         title: String,
         message: String,
         playSound: Bool,
-        actionHandler: NotificationActionHandler?
+        actionHandler: NotificationActionHandler?,
+        allowFallbackToNotifiCLI: Bool = true
     ) async {
         guard isSafeToUseSystemNotifications else {
             print("NotificationManager: Skipping native notification (CLI/Test environment)")
@@ -1063,7 +1122,7 @@ public class NotificationManager: ObservableObject {
         guard status == .authorized else {
             print("NotificationManager: System notifications not authorized (status: \(status.rawValue)), trying NotifiCLI fallback")
             trackAnalytics(.failed, type: type, backend: .native, detail: "authorization denied")
-            if await NotifiCLIService.shared.checkAvailability() {
+            if allowFallbackToNotifiCLI, await NotifiCLIService.shared.checkAvailability() {
                 let config = NotifiCLIConfig(title: title, message: message)
                 _ = await NotifiCLIService.shared.send(config)
             }
@@ -1073,9 +1132,10 @@ public class NotificationManager: ObservableObject {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = message
-        if playSound {
-            content.sound = .default
-        }
+        content.sound = .default
+        // Force high-visibility delivery so notifications surface on-screen immediately.
+        content.interruptionLevel = .timeSensitive
+        content.relevanceScore = 1.0
 
         if let categoryIdentifier = nativeCategoryIdentifier(for: type) {
             content.categoryIdentifier = categoryIdentifier
@@ -1107,7 +1167,7 @@ public class NotificationManager: ObservableObject {
         } catch {
             print("NotificationManager: Failed to send system notification: \(error), trying NotifiCLI fallback")
             trackAnalytics(.failed, type: type, backend: .native, detail: error.localizedDescription)
-            if await NotifiCLIService.shared.checkAvailability() {
+            if allowFallbackToNotifiCLI, await NotifiCLIService.shared.checkAvailability() {
                 let config = NotifiCLIConfig(title: title, message: message)
                 _ = await NotifiCLIService.shared.send(config)
             }

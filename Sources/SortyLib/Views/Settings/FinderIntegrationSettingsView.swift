@@ -6,17 +6,51 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct FinderIntegrationSettingsView: View {
     @State private var isWatchActionInstalled = false
     @State private var watchActionMessage: String?
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
-    @State private var showAdvancedFinder = false
+    @State private var frontmostFinderFolder: URL?
     @EnvironmentObject var automationManager: AutomationManager
     
     var body: some View {
         VStack(spacing: 16) {
+            // Integration Status
+            SettingsCard(title: "Integration Status", icon: "checkmark.shield", color: .teal) {
+                VStack(alignment: .leading, spacing: 10) {
+                    statusRow(
+                        label: "Watch Action",
+                        value: isWatchActionInstalled ? "Installed" : "Not installed",
+                        isHealthy: isWatchActionInstalled
+                    )
+
+                    statusRow(
+                        label: "Finder Extension",
+                        value: finderSyncActive ? "Active" : "Needs activation",
+                        isHealthy: finderSyncActive
+                    )
+
+                    HStack {
+                        Text("Use the sections below to install or repair each integration.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Refresh") {
+                            Task {
+                                await refreshIntegrationStatus()
+                                refreshFinderContext()
+                            }
+                        }
+                        .buttonStyle(.sortySecondary(size: .regular))
+                        .accessibilityIdentifier("FinderIntegrationRefreshButton")
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.03)
+
             // Quick Actions
             SettingsCard(title: "Quick Actions", icon: "cursorarrow.click.badge.clock", color: .cyan) {
                 VStack(alignment: .leading, spacing: 14) {
@@ -109,70 +143,153 @@ struct FinderIntegrationSettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.1)
+            
+            // Finder Workflow
+            SettingsCard(title: "Finder Workflow", icon: "sparkles.rectangle.stack", color: .mint) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: automationManager.hasValidFinderSelection ? "checkmark.seal.fill" : "scope")
+                            .font(.title3)
+                            .foregroundStyle(automationManager.hasValidFinderSelection ? .green : .secondary)
 
-            // URL Scheme Info
-            SettingsCard(title: "URL Scheme", icon: "link", color: .blue) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Trigger Sorty from scripts, Alfred, Raycast, or other apps.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        URLSchemeRow(scheme: "sorty://organize?path=/path/to/folder", description: "Organize a folder")
-                        URLSchemeRow(scheme: "sorty://duplicates?path=/path", description: "Find duplicates")
-                        URLSchemeRow(scheme: "sorty://settings", description: "Open settings")
-                        URLSchemeRow(scheme: "sorty://settings?section=provider", description: "Open AI Provider settings")
-                        URLSchemeRow(scheme: "sorty://settings?section=notifications", description: "Open Notification settings")
-                        URLSchemeRow(scheme: "sorty://watched", description: "Open watched folders")
-                        URLSchemeRow(scheme: "sorty://exclusions", description: "Open exclusion rules")
-                        URLSchemeRow(scheme: "sorty://storage", description: "Open storage locations")
-                        URLSchemeRow(scheme: "sorty://learnings?action=honing", description: "Start a Learnings honing session")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(automationManager.statusMessage)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Text("Selection: \(automationManager.selectedFinderItems.count) item\(automationManager.selectedFinderItems.count == 1 ? "" : "s")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Refresh") {
+                            refreshFinderContext()
+                        }
+                        .buttonStyle(.sortySecondary(size: .regular))
+                        .accessibilityIdentifier("FinderWorkflowRefreshButton")
+                    }
+
+                    if let folder = frontmostFinderFolder {
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder")
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Front Finder Folder")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                Text(folder.path)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.06))
+                        .cornerRadius(8)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button {
+                            openFinderSelectionInSorty()
+                        } label: {
+                            Label("Organize Finder Selection", systemImage: "play.fill")
+                        }
+                        .buttonStyle(.sortyPrimary(size: .regular))
+                        .disabled(!automationManager.hasValidFinderSelection && frontmostFinderFolder == nil)
+                        .accessibilityIdentifier("FinderWorkflowOrganizeButton")
+
+                        Button {
+                            if let folder = frontmostFinderFolder {
+                                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+                            }
+                        } label: {
+                            Label("Reveal Folder", systemImage: "folder")
+                        }
+                        .buttonStyle(.sortySecondary(size: .regular))
+                        .disabled(frontmostFinderFolder == nil)
+                        .accessibilityIdentifier("FinderWorkflowRevealButton")
                     }
                 }
             }
             .animatedAppearance(delay: 0.15)
-            
-            // Advanced Controls
-            SettingsCard(title: "Advanced Controls", icon: "slider.horizontal.3", color: .purple) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Global shortcuts, CLI tools, automation permissions, and more.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    
-                    Button {
-                        showAdvancedFinder = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("Open Advanced Controls")
-                                .font(.subheadline)
-                            Image(systemName: "arrow.up.right.square")
+
+            // Automation Permission
+            SettingsCard(title: "Automation Permission", icon: "gearshape.2", color: .purple) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: automationManager.automationStatus.isGranted ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(automationManager.automationStatus.isGranted ? .green : .red)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(automationManager.automationStatus.isGranted ? "Automation Granted" : "Automation Not Granted")
+                                .font(.subheadline.weight(.medium))
+                            Text("Required to read Finder selection and run Finder-driven actions.")
                                 .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        if !automationManager.automationStatus.isGranted {
+                            Button("Open System Settings") {
+                                automationManager.openAutomationSettings()
+                            }
+                            .buttonStyle(.sortySecondary(size: .regular))
                         }
                     }
-                    .buttonStyle(.sortySecondary(size: .regular))
-                    .accessibilityIdentifier("FinderAdvancedControlsButton")
+
+                    if !automationManager.automationStatus.isGranted {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                                .font(.caption)
+                            Text("Without this permission, Finder selection and one-click Finder workflows will not work.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(8)
+                        .background(Color.orange.opacity(0.08))
+                        .cornerRadius(8)
+                    }
+
+                    HStack(spacing: 8) {
+                        Text(automationManager.statusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Recover") {
+                            automationManager.recoverAutomationState()
+                            refreshFinderContext()
+                        }
+                        .buttonStyle(.sortySecondary(size: .regular))
+                        .accessibilityIdentifier("FinderAutomationRecoverButton")
+                    }
                 }
             }
             .animatedAppearance(delay: 0.2)
         }
-        .sheet(isPresented: $showAdvancedFinder) {
-            NavigationStack {
-                FinderIntegrationView()
-                    .environmentObject(automationManager)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") {
-                                showAdvancedFinder = false
-                            }
-                        }
-                    }
-            }
-            .frame(minWidth: 700, minHeight: 600)
-        }
         .task {
-            _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-            isWatchActionInstalled = await ExtensionCommunication.isQuickWatchActionInstalledAsync()
-            finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
+            await refreshIntegrationStatus()
+            refreshFinderContext()
+        }
+    }
+
+    @ViewBuilder
+    private func statusRow(label: String, value: String, isHealthy: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(isHealthy ? .green : .orange)
+                .font(.caption)
+            Text(label)
+                .font(.subheadline)
+            Spacer()
+            Text(value)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(isHealthy ? .green : .orange)
         }
     }
 
@@ -228,6 +345,43 @@ struct FinderIntegrationSettingsView: View {
                 .transition(.scale.combined(with: .opacity))
             }
         }
+    }
+
+    private func refreshFinderContext() {
+        automationManager.checkPermissions()
+        if automationManager.automationStatus.isGranted {
+            automationManager.updateFinderSelection()
+            frontmostFinderFolder = automationManager.getFrontmostFinderWindow()
+        } else {
+            frontmostFinderFolder = nil
+        }
+    }
+
+    private func openFinderSelectionInSorty() {
+        let selectedTarget: URL? = automationManager.selectedFinderItems.first.map { item in
+            let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            return isDirectory ? item : item.deletingLastPathComponent()
+        }
+        let target = selectedTarget ?? frontmostFinderFolder
+        guard let target else { return }
+
+        var components = URLComponents()
+        components.scheme = "sorty"
+        components.host = "organize"
+        components.queryItems = [
+            URLQueryItem(name: "path", value: target.path),
+            URLQueryItem(name: "source", value: "finder")
+        ]
+
+        if let url = components.url {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func refreshIntegrationStatus() async {
+        _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+        isWatchActionInstalled = await ExtensionCommunication.isQuickWatchActionInstalledAsync()
+        finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
     }
 }
 

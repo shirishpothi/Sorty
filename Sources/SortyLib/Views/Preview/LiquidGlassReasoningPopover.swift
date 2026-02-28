@@ -32,34 +32,13 @@ struct LiquidGlassReasoningButton: View {
             Button {
                 showPopover.toggle()
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 22, height: 22)
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(showPopover ? 0.5 : 0.3),
-                                            Color.white.opacity(0.05)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.5
-                                )
-                        )
-                        .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-
-                    Image(systemName: isRule ? "sparkles" : "brain")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(
-                            showPopover
-                                ? (isRule ? Color.orange : Color.purple)
-                                : Color.secondary
-                        )
-                }
+                Image(systemName: isRule ? "sparkles" : "brain")
+                    .font(.caption2)
+                    .foregroundStyle(
+                        showPopover
+                            ? (isRule ? Color.orange : Color.purple)
+                            : .secondary
+                    )
             }
             .buttonStyle(.plain)
             .help(isRule ? "View learned rule" : "View AI reasoning")
@@ -86,38 +65,26 @@ struct LiquidGlassReasoningPopover: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(accentColor.opacity(0.12))
-                        .frame(width: 28, height: 28)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: isRule ? "sparkles" : "brain")
+                    .font(.caption)
+                    .foregroundStyle(accentColor)
 
-                    Image(systemName: isRule ? "sparkles" : "brain")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(accentColor)
-                }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(isRule ? "Learned Rule" : "AI Reasoning")
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-
-                    Text(suggestion.folderName.hasPrefix("/")
-                         ? URL(fileURLWithPath: suggestion.folderName).lastPathComponent
-                         : suggestion.folderName)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
+                Text(isRule ? "Learned Rule" : "AI Reasoning")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.primary)
 
                 Spacer()
-            }
-            .padding(.bottom, 10)
 
-            Divider()
-                .opacity(0.4)
-                .padding(.bottom, 10)
+                Text(suggestion.folderName.hasPrefix("/")
+                     ? URL(fileURLWithPath: suggestion.folderName).lastPathComponent
+                     : suggestion.folderName)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
 
             if let rule = matchedRule {
                 FormattedReasoningText(
@@ -134,7 +101,6 @@ struct LiquidGlassReasoningPopover: View {
                         .italic()
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
-                        .padding(.top, 8)
                 }
             } else {
                 FormattedReasoningText(
@@ -145,7 +111,7 @@ struct LiquidGlassReasoningPopover: View {
                 )
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(minWidth: 240, maxWidth: 340)
     }
 }

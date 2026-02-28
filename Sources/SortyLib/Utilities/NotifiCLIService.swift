@@ -98,13 +98,13 @@ public enum NotifiCLISetupStatus: Sendable {
 /// Automatically builds NotifiCLI from bundled sources on first use
 public actor NotifiCLIService {
     public static let shared = NotifiCLIService()
+    private static let currentBuildVersion = "3"
     
     // Paths
     private let appSupportDir: URL
     private let notifiCLIAppPath: URL
-    private let notifiPersistentAppPath: URL
+    private let buildVersionMarkerPath: URL
     private var notificliPath: String?
-    private var notifiPersistentPath: String?
     
     // State
     private var setupStatus: NotifiCLISetupStatus = .notSetup
@@ -118,28 +118,35 @@ public actor NotifiCLIService {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         appSupportDir = appSupport.appendingPathComponent("Sorty/NotifiCLI")
         notifiCLIAppPath = appSupportDir.appendingPathComponent("SortyNotifications.app")
-        notifiPersistentAppPath = appSupportDir.appendingPathComponent("SortyNotificationsPersistent.app")
+        buildVersionMarkerPath = appSupportDir.appendingPathComponent("build-version.txt")
     }
 
     private var standardBinaryPath: String {
         notifiCLIAppPath.appendingPathComponent("Contents/MacOS/SortyNotifications").path
     }
 
-    private var persistentBinaryPath: String {
-        notifiPersistentAppPath.appendingPathComponent("Contents/MacOS/SortyNotificationsPersistent").path
+    private func hasCurrentBuildVersion() -> Bool {
+        guard let storedVersion = try? String(contentsOf: buildVersionMarkerPath, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines) else {
+            return false
+        }
+        return storedVersion == Self.currentBuildVersion
+    }
+
+    private func writeCurrentBuildVersionMarker() throws {
+        try Self.currentBuildVersion.write(to: buildVersionMarkerPath, atomically: true, encoding: .utf8)
     }
 
     private func hasValidInstallation() -> Bool {
         let fm = FileManager.default
         return fm.isExecutableFile(atPath: standardBinaryPath) &&
-            fm.isExecutableFile(atPath: persistentBinaryPath)
+            hasCurrentBuildVersion()
     }
 
     private func refreshCachedInstallationState() {
         guard hasValidInstallation() else {
             isAvailable = false
             notificliPath = nil
-            notifiPersistentPath = nil
             if case .building = setupStatus {
                 // Keep "building" while active setup is still running.
             } else if case .failed = setupStatus {
@@ -151,7 +158,6 @@ public actor NotifiCLIService {
         }
 
         notificliPath = standardBinaryPath
-        notifiPersistentPath = persistentBinaryPath
         isAvailable = true
         setupStatus = .ready
     }
@@ -163,17 +169,9 @@ public actor NotifiCLIService {
     }
 
     private func resolveExecutablePath(for config: NotifiCLIConfig) -> String? {
-        let fm = FileManager.default
-
-        if config.persistent, let persistentPath = notifiPersistentPath,
-           fm.isExecutableFile(atPath: persistentPath) {
-            return persistentPath
-        }
-
-        if let standardPath = notificliPath, fm.isExecutableFile(atPath: standardPath) {
+        if let standardPath = notificliPath, FileManager.default.isExecutableFile(atPath: standardPath) {
             return standardPath
         }
-
         return nil
     }
     
@@ -237,7 +235,6 @@ public actor NotifiCLIService {
             setupStatus = .failed(error.localizedDescription)
             isAvailable = false
             notificliPath = nil
-            notifiPersistentPath = nil
             result = false
         }
 
@@ -250,12 +247,15 @@ public actor NotifiCLIService {
     public func rebuild() async -> Bool {
         // Remove existing
         try? FileManager.default.removeItem(at: notifiCLIAppPath)
-        try? FileManager.default.removeItem(at: notifiPersistentAppPath)
+        try? FileManager.default.removeItem(at: buildVersionMarkerPath)
         isAvailable = false
         notificliPath = nil
-        notifiPersistentPath = nil
         permissionsGranted = false
         setupStatus = .notSetup
+        
+        // Clean up legacy persistent app
+        let legacyPersistentApp = appSupportDir.appendingPathComponent("SortyNotificationsPersistent.app")
+        try? FileManager.default.removeItem(at: legacyPersistentApp)
         
         return await ensureSetup()
     }
@@ -282,7 +282,7 @@ public actor NotifiCLIService {
             throw NotifiCLIError.sourceNotFound
         }
         
-        // Build standard notification app
+        // Build single notification app (alert style for persistent notification support)
         try await buildApp(
             name: "SortyNotifications",
             bundleId: "com.sorty.notifications",
@@ -290,13 +290,11 @@ public actor NotifiCLIService {
             source: sourceCode
         )
         
-        // Build persistent notification app (same binary, different bundle ID for alert style)
-        try await buildApp(
-            name: "SortyNotificationsPersistent",
-            bundleId: "com.sorty.notifications.persistent",
-            at: notifiPersistentAppPath,
-            source: sourceCode
-        )
+        // Clean up legacy persistent app from previous versions
+        let legacyPersistentApp = appSupportDir.appendingPathComponent("SortyNotificationsPersistent.app")
+        try? fm.removeItem(at: legacyPersistentApp)
+
+        try writeCurrentBuildVersionMarker()
     }
     
     private func buildApp(name: String, bundleId: String, at appPath: URL, source: String) async throws {
@@ -329,7 +327,7 @@ public actor NotifiCLIService {
             <key>LSUIElement</key>
             <true/>
             <key>NSUserNotificationAlertStyle</key>
-            <string>\(name.contains("Persistent") ? "alert" : "banner")</string>
+            <string>alert</string>
         </dict>
         </plist>
         """
@@ -377,7 +375,7 @@ public actor NotifiCLIService {
             arguments: [
                 source.path,
                 "-o", output.path,
-                "-target", "\(targetArch)-apple-macosx11.0",
+                "-target", "\(targetArch)-apple-macosx15.0",
                 "-O"
             ]
         )
@@ -473,7 +471,6 @@ public actor NotifiCLIService {
         // Clear cache and attempt one repair/setup pass before failing.
         isAvailable = false
         notificliPath = nil
-        notifiPersistentPath = nil
         setupStatus = .notSetup
 
         guard await ensureSetup(), let repairedPath = resolveExecutablePath(for: config) else {
@@ -815,7 +812,7 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        var options: UNNotificationPresentationOptions = [.banner]
+        var options: UNNotificationPresentationOptions = [.banner, .list]
         if notification.request.content.sound != nil { options.insert(.sound) }
         completionHandler(options)
     }
@@ -858,6 +855,10 @@ content.title = notificationTitle
 if let s = subtitle { content.subtitle = s }
 content.body = notificationMessage
 content.sound = nil
+if #available(macOS 12.0, *) {
+    content.interruptionLevel = .timeSensitive
+    content.relevanceScore = 1.0
+}
 if !notificationActions.isEmpty { content.categoryIdentifier = "ACTIONS_CATEGORY" }
 
 if let path = imagePath, (path.lowercased().hasPrefix("http://") || path.lowercased().hasPrefix("https://")),

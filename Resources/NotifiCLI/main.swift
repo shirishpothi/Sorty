@@ -79,7 +79,7 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        var options: UNNotificationPresentationOptions = [.banner]
+        var options: UNNotificationPresentationOptions = [.banner, .list]
         if notification.request.content.sound != nil {
             options.insert(.sound)
         }
@@ -155,6 +155,10 @@ if let notificationSubtitle = subtitle {
 content.body = notificationMessage
 
 content.sound = nil
+if #available(macOS 12.0, *) {
+    content.interruptionLevel = .timeSensitive
+    content.relevanceScore = 1.0
+}
 
 if !notificationActions.isEmpty {
     content.categoryIdentifier = "ACTIONS_CATEGORY"

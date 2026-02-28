@@ -269,9 +269,7 @@ struct AIProviderSettingsView: View {
     }
 
     private var appleConfigSection: some View {
-        let pccEnabled = FeatureFlags.applePrivateCloudComputeModelEnabled
-
-        return SettingsCard(title: "Apple Models", icon: "apple.logo", color: .gray) {
+        SettingsCard(title: "Apple Models", icon: "apple.logo", color: .gray) {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Model")
@@ -285,28 +283,7 @@ struct AIProviderSettingsView: View {
                     )
                 }
 
-                if pccEnabled && viewModel.config.model == AIProvider.applePrivateCloudComputeModelName {
-                    Divider()
-
-                    HStack(spacing: 8) {
-                        Image(systemName: ApplePrivateCloudComputeClient.isShortcutInstalled() ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(ApplePrivateCloudComputeClient.isShortcutInstalled() ? .green : .orange)
-                        Text(ApplePrivateCloudComputeClient.isShortcutInstalled() ? "Apple Intelligence shortcut ready" : "Apple Intelligence shortcut unavailable")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                    }
-
-                    Text("No API key needed. Sorty automatically detects \"\(ApplePrivateCloudComputeClient.legacyShortcutName)\" or \"\(ApplePrivateCloudComputeClient.shortcutName)\" and uses whichever is available.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    if !ApplePrivateCloudComputeClient.isShortcutInstalled() {
-                        Button("Open Shortcuts") {
-                            openShortcutsApp()
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                } else if !viewModel.isAppleModelAvailable {
+                if !viewModel.isAppleModelAvailable {
                     Divider()
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "info.circle")
@@ -318,16 +295,6 @@ struct AIProviderSettingsView: View {
                             Text(viewModel.appleModelStatus)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            if pccEnabled {
-                                Button("Use Apple Private Cloud Compute") {
-                                    viewModel.config.model = AIProvider.applePrivateCloudComputeModelName
-                                }
-                                .buttonStyle(.link)
-                            } else {
-                                Text("Apple Private Cloud Compute is disabled by feature flag.")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
                         }
                     }
                 }

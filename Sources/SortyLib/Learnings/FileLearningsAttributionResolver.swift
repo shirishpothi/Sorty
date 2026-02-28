@@ -55,12 +55,34 @@ public enum FileLearningsAttributionResolver {
         suggestion: FolderSuggestion,
         profile: LearningsProfile?
     ) -> FileLearningsAttribution {
-        guard let profile,
-              let ruleID = resolvedRuleID(for: suggestion) else {
+        guard let profile else {
             return .empty
         }
 
-        let rule = profile.inferredRules.first(where: { $0.id == ruleID })
+        let explicitRuleID = resolvedRuleID(for: suggestion)
+        let allRules = profile.inferredRules
+        let heuristicRules = allRules.filter(isEligibleForHeuristicAttribution)
+
+        let resolvedRule: InferredRule?
+        let ruleID: String?
+
+        if let explicitRuleID,
+           let matchedExplicit = allRules.first(where: { $0.id == explicitRuleID }) {
+            resolvedRule = matchedExplicit
+            ruleID = explicitRuleID
+        } else if let heuristicMatch = bestHeuristicRule(file: file, suggestion: suggestion, rules: heuristicRules) {
+            resolvedRule = heuristicMatch
+            ruleID = heuristicMatch.id
+        } else {
+            resolvedRule = nil
+            ruleID = explicitRuleID
+        }
+
+        guard let ruleID else {
+            return .empty
+        }
+
+        let rule = resolvedRule
         let scope = attributionScope(for: file, rule: rule)
         var items: [LearningsAttributionItem] = []
 
@@ -106,6 +128,103 @@ public enum FileLearningsAttributionResolver {
         }
 
         return FileLearningsAttribution(rule: rule, scope: scope, items: items)
+    }
+
+    private static func isEligibleForHeuristicAttribution(_ rule: InferredRule) -> Bool {
+        guard rule.isEnabled else { return false }
+
+        switch rule.status {
+        case .rejected:
+            return false
+        case .cooldown:
+            if let until = rule.cooldownUntil {
+                return until <= Date()
+            }
+            return false
+        case .active, .pendingApproval:
+            return true
+        }
+    }
+
+    private static func bestHeuristicRule(
+        file: FileItem,
+        suggestion: FolderSuggestion,
+        rules: [InferredRule]
+    ) -> InferredRule? {
+        guard !rules.isEmpty else { return nil }
+
+        let scored = rules.compactMap { rule -> (InferredRule, Int)? in
+            guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.caseInsensitive]) else {
+                return nil
+            }
+
+            let score = heuristicScore(rule: rule, regex: regex, file: file, suggestion: suggestion)
+            return score >= 55 ? (rule, score) : nil
+        }
+
+        return scored.max {
+            if $0.1 == $1.1 {
+                if $0.0.priority == $1.0.priority {
+                    return $0.0.supportCount < $1.0.supportCount
+                }
+                return $0.0.priority < $1.0.priority
+            }
+            return $0.1 < $1.1
+        }?.0
+    }
+
+    private static func heuristicScore(
+        rule: InferredRule,
+        regex: NSRegularExpression,
+        file: FileItem,
+        suggestion: FolderSuggestion
+    ) -> Int {
+        var score = 0
+
+        if matches(regex: regex, text: file.displayName) {
+            score += 65
+        }
+
+        if matches(regex: regex, text: file.path) {
+            score += 55
+        }
+
+        if matches(regex: regex, text: suggestion.folderName) {
+            score += 28
+        }
+
+        if !suggestion.description.isEmpty, matches(regex: regex, text: suggestion.description) {
+            score += 14
+        }
+
+        let normalizedFolderName = normalizedFolderName(from: suggestion.folderName)
+        if !normalizedFolderName.isEmpty,
+           rule.template.localizedCaseInsensitiveContains(normalizedFolderName) {
+            score += 24
+        }
+
+        if let evidence = rule.evidenceDescription,
+           !normalizedFolderName.isEmpty,
+           evidence.localizedCaseInsensitiveContains(normalizedFolderName) {
+            score += 10
+        }
+
+        score += min(max(rule.priority, 0), 100) / 10
+        score += min(rule.supportCount, 10)
+
+        return score
+    }
+
+    private static func matches(regex: NSRegularExpression, text: String) -> Bool {
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.firstMatch(in: text, options: [], range: range) != nil
+    }
+
+    private static func normalizedFolderName(from folderName: String) -> String {
+        if folderName.hasPrefix("/") {
+            return URL(fileURLWithPath: folderName).lastPathComponent
+        }
+        return folderName
     }
 
     private static func resolvedRuleID(for suggestion: FolderSuggestion) -> String? {

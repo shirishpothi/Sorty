@@ -1062,14 +1062,15 @@ public class LearningsManager: ObservableObject {
                     content: rule.explanation,
                     weight: min(90, 70 + successPct / 5 + Int(recency * 10)),
                     confidence: successPct,
-                    recency: recencyLabel(rule.lastAppliedAt ?? profile.createdAt, now: now)
+                    recency: recencyLabel(rule.lastAppliedAt ?? profile.createdAt, now: now),
+                    ruleId: rule.id
                 )
             }
             sections.append(LearningsSection(
                 id: "high_confidence_rules",
                 title: "PROVEN PATTERNS",
                 priority: "HIGH",
-                instruction: "These patterns have high success rates - follow them unless user instructions conflict",
+                instruction: "These patterns have high success rates - follow them unless user instructions conflict. When you apply a pattern, include its rule_id in the folder's JSON.",
                 items: Array(items)
             ))
         }
@@ -1170,14 +1171,15 @@ public class LearningsManager: ObservableObject {
                 return LearningsItem(
                     content: rule.explanation,
                     weight: 40 + confidence / 3,
-                    confidence: confidence
+                    confidence: confidence,
+                    ruleId: rule.id
                 )
             }
             sections.append(LearningsSection(
                 id: "learned_patterns",
                 title: "LEARNED PATTERNS",
                 priority: "LOW",
-                instruction: "Consider these tendencies but they may be overridden by explicit preferences",
+                instruction: "Consider these tendencies but they may be overridden by explicit preferences. When you apply a pattern, include its rule_id in the folder's JSON.",
                 items: Array(items)
             ))
         }
@@ -1215,6 +1217,7 @@ public class LearningsManager: ObservableObject {
         var confidence: Int? = nil
         var occurrences: Int? = nil
         var recency: String? = nil
+        var ruleId: String? = nil
     }
     
     private func recencyWeight(from date: Date, to now: Date) -> Double {
@@ -1259,6 +1262,7 @@ public class LearningsManager: ObservableObject {
                     if let conf = item.confidence { attrs += " confidence=\"\(conf)%\"" }
                     if let occ = item.occurrences { attrs += " occurrences=\"\(occ)\"" }
                     if let rec = item.recency { attrs += " recency=\"\(rec)\"" }
+                    if let rid = item.ruleId { attrs += " rule_id=\"\(escapeXML(rid))\"" }
                     xml += "      <item \(attrs)>\(escapeXML(item.content))</item>\n"
                 }
                 xml += "    </items>\n"

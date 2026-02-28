@@ -151,7 +151,7 @@ struct DirectorySelectionView: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isTargeted)
                 .animation(.spring(response: 0.3, dampingFraction: 0.5), value: iconBounce)
                 
-                Text(isTargeted ? "Drop to select" : "Drop folder")
+                Text(isTargeted ? "Drop to select" : "Drop folder here")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
             }

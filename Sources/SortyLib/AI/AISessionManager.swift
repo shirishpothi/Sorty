@@ -112,8 +112,6 @@ public class AISessionManager: ObservableObject {
         case .appleFoundationModel:
             // On-device model - always available
             return true
-        case .applePrivateCloudCompute:
-            return true
         }
     }
     
@@ -131,7 +129,7 @@ public class AISessionManager: ObservableObject {
 
         // Skip prewarming for local/on-device providers
         switch provider {
-        case .ollama, .appleFoundationModel, .applePrivateCloudCompute:
+        case .ollama, .appleFoundationModel:
             isPrewarmed = true
             return
         default:
@@ -261,7 +259,7 @@ public class AISessionManager: ObservableObject {
             modelsURLString = urlString.hasSuffix("/") ? urlString + "api/tags" : urlString + "/api/tags"
         case .openAICompatible:
             modelsURLString = urlString.hasSuffix("/") ? urlString + "v1/models" : urlString + "/v1/models"
-        case .appleFoundationModel, .applePrivateCloudCompute:
+        case .appleFoundationModel:
             return [] // No prewarming needed
         }
 
@@ -378,7 +376,7 @@ public class AISessionManager: ObservableObject {
         case .ollama:
             // Local providers typically don't need auth
             break
-        case .appleFoundationModel, .applePrivateCloudCompute:
+        case .appleFoundationModel:
             // Apple providers don't need auth headers
             break
         }

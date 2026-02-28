@@ -242,29 +242,6 @@ public struct AIInsight: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Parsed move event from streamed organization output (file -> folder)
-public struct LiveOrganizationMove: Identifiable, Equatable, Sendable {
-    public let id: String
-    public let fileName: String
-    public let filePath: String?
-    public let destinationFolder: String
-    public let timestamp: Date
-
-    public init(
-        id: String,
-        fileName: String,
-        filePath: String?,
-        destinationFolder: String,
-        timestamp: Date = Date()
-    ) {
-        self.id = id
-        self.fileName = fileName
-        self.filePath = filePath
-        self.destinationFolder = destinationFolder
-        self.timestamp = timestamp
-    }
-}
-
 /// Progress update for real-time UI feedback
 public struct OrganizationProgress: Sendable {
     public let phase: Phase
@@ -364,8 +341,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var organizationStage: String = ""
     @Published public var isStreaming: Bool = false
     @Published public var liveInsightsEnabled: Bool = true
-    @Published public var isReadyToOutputStructure: Bool = false
-    @Published public var liveOrganizationMoves: [LiveOrganizationMove] = []
     @Published public var deepScanProgress: (current: Int, total: Int)?
     @Published public var visionAnalysisSummary: VisionAnalysisSummary?
     
@@ -374,25 +349,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var lastDisplayUpdate: Date = .distantPast
     private let displayUpdateInterval: TimeInterval = 0.3 // 300ms throttle
     nonisolated private static let streamPreviewCharacterLimit = 1000
-    nonisolated private static let structureReadyCueLine = "Ready to output organization structure."
-    nonisolated private static let structureReadyCueRegex =
-        try? NSRegularExpression(pattern: #"ready\s+to\s+output\s+organization\s+structure"#, options: [.caseInsensitive])
-    nonisolated private static let liveMoveJSONScanTailLength = 60_000
-    nonisolated private static let streamedFolderNameRegex =
-        try? NSRegularExpression(
-            pattern: #""name"\s*:\s*"([^"\n]{1,120})""#,
-            options: [.caseInsensitive]
-        )
-    nonisolated private static let streamedFileObjectRegex =
-        try? NSRegularExpression(
-            pattern: #""filename"\s*:\s*"([^"\n]{1,220})""#,
-            options: [.caseInsensitive]
-        )
-    nonisolated private static let streamedFileArrayStringRegex =
-        try? NSRegularExpression(
-            pattern: #"(?:\[\s*|,\s*)"([^"\n]{1,220}\.[a-zA-Z0-9]{1,12})"\s*(?=,|\])"#,
-            options: []
-        )
     nonisolated private static let assignmentDestinationRegex =
         try? NSRegularExpression(
             pattern: #"\b(?:assigning|moving|mapping)\b.+?\bto\b\s+(.+)$"#,
@@ -435,14 +391,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private var jsonStartedInStream: Bool = false
     private var progressLineCount: Int = 0
     private let progressLineLimit = 12
-    
-    // Live organization streaming support
-    private var liveMoveExtractionTask: Task<Void, Never>?
-    private var lastLiveMoveExtraction: Date = .distantPast
-    private let liveMoveExtractionInterval: TimeInterval = 0.25
-    private let liveMoveHistoryLimit = 500
-    private var liveMoveIndexByID: [String: Int] = [:]
-    private var liveMoveExtractionGeneration: UInt64 = 0
     
     // MARK: - AI Insights Cache
     
@@ -666,21 +614,14 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     private func clearStreamingDisplayState() {
         displayUpdateTask?.cancel()
         displayUpdateTask = nil
-        liveMoveExtractionTask?.cancel()
-        liveMoveExtractionTask = nil
         streamingContent = ""
         displayStreamingContent = ""
         truncatedDisplayStreamingContent = ""
         lastDisplayUpdate = .distantPast
-        lastLiveMoveExtraction = .distantPast
-        liveMoveExtractionGeneration = 0
         progressLineBuffer = ""
         receivedProgressLines = false
         jsonStartedInStream = false
         progressLineCount = 0
-        isReadyToOutputStructure = false
-        liveOrganizationMoves = []
-        liveMoveIndexByID = [:]
     }
 
     @MainActor
@@ -720,12 +661,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 
                 // Start steady progress task for smooth animation
                 self.startSteadyProgressTask()
-            }
-
-            self.processStructureReadyCueIfNeeded()
-            if self.isReadyToOutputStructure {
-                let likelyContainsStructuredOutput = chunk.contains("{") || chunk.contains("\"files\"") || chunk.contains("\"filename\"")
-                self.extractLiveOrganizationMovesIfNeeded(force: likelyContainsStructuredOutput)
             }
 
             if self.liveInsightsEnabled {
@@ -845,114 +780,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return AIInsight(text: clipped, category: category, filePath: resolvedFilePath, stableSeed: text)
     }
 
-    @MainActor
-    private func processStructureReadyCueIfNeeded() {
-        guard !isReadyToOutputStructure else { return }
-        guard containsStructureReadyCue(in: streamingContent) else { return }
-
-        withBatchUpdates {
-            isReadyToOutputStructure = true
-            if organizationStage.lowercased().contains("analyz") || organizationStage.isEmpty {
-                organizationStage = "Streaming organization structure..."
-            }
-
-            guard liveInsightsEnabled else { return }
-            currentInsight = Self.structureReadyCueLine
-            let cueInsight = AIInsight(
-                text: Self.structureReadyCueLine,
-                category: .general,
-                stableSeed: Self.structureReadyCueLine
-            )
-            if let existingIndex = insightHistory.firstIndex(where: { $0.id == cueInsight.id }) {
-                insightHistory.remove(at: existingIndex)
-            }
-            if insightHistory.count >= 12 {
-                insightHistory.removeFirst()
-            }
-            insightHistory.append(cueInsight)
-        }
-
-        extractLiveOrganizationMovesIfNeeded(force: true)
-    }
-
-    private func containsStructureReadyCue(in text: String) -> Bool {
-        guard let regex = Self.structureReadyCueRegex else {
-            return text.localizedCaseInsensitiveContains(Self.structureReadyCueLine)
-        }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        return regex.firstMatch(in: text, options: [], range: range) != nil
-    }
-
-    @MainActor
-    private func extractLiveOrganizationMovesIfNeeded(force: Bool = false) {
-        guard liveInsightsEnabled, isReadyToOutputStructure else { return }
-
-        let now = Date()
-        if !force, now.timeIntervalSince(lastLiveMoveExtraction) < liveMoveExtractionInterval {
-            return
-        }
-        lastLiveMoveExtraction = now
-
-        let contentSnapshot = streamingContent
-        let fileLookup = scannedFilePathLookup
-        let currentDirectoryPath = currentDirectory?.path
-        liveMoveExtractionGeneration &+= 1
-        let generation = liveMoveExtractionGeneration
-
-        liveMoveExtractionTask?.cancel()
-        liveMoveExtractionTask = Task.detached(priority: .utility) {
-            let parsedMoves = Self.extractLiveOrganizationMoves(
-                from: contentSnapshot,
-                scannedFilePathLookup: fileLookup,
-                currentDirectoryPath: currentDirectoryPath
-            )
-            guard !Task.isCancelled else { return }
-
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                guard !Task.isCancelled else { return }
-                guard generation == self.liveMoveExtractionGeneration else { return }
-                guard self.streamingContent.count >= contentSnapshot.count else { return }
-                self.mergeLiveOrganizationMoves(parsedMoves)
-            }
-        }
-    }
-
-    @MainActor
-    private func mergeLiveOrganizationMoves(_ parsedMoves: [LiveOrganizationMove]) {
-        guard !parsedMoves.isEmpty else { return }
-
-        withBatchUpdates {
-            for parsedMove in parsedMoves {
-                if let existingIndex = liveMoveIndexByID[parsedMove.id] {
-                    guard existingIndex < liveOrganizationMoves.count else {
-                        liveMoveIndexByID.removeValue(forKey: parsedMove.id)
-                        continue
-                    }
-                    if liveOrganizationMoves[existingIndex].destinationFolder == parsedMove.destinationFolder {
-                        continue
-                    }
-                    liveOrganizationMoves[existingIndex] = parsedMove
-                    continue
-                }
-                liveMoveIndexByID[parsedMove.id] = liveOrganizationMoves.count
-                liveOrganizationMoves.append(parsedMove)
-            }
-
-            if liveOrganizationMoves.count > liveMoveHistoryLimit {
-                liveOrganizationMoves.removeFirst(liveOrganizationMoves.count - liveMoveHistoryLimit)
-                rebuildLiveMoveIndex()
-            }
-        }
-    }
-
-    @MainActor
-    private func rebuildLiveMoveIndex() {
-        liveMoveIndexByID = Dictionary(
-            uniqueKeysWithValues: liveOrganizationMoves.enumerated().map { ($0.element.id, $0.offset) }
-        )
-    }
-
     private func resolveScannedFilePathForMention(in text: String) -> String? {
         guard let fileName = Self.extractMentionedFileName(from: text) else { return nil }
         return Self.resolveScannedFilePath(
@@ -960,121 +787,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             scannedFilePathLookup: scannedFilePathLookup,
             currentDirectoryPath: currentDirectory?.path
         )
-    }
-
-    nonisolated private static func extractLiveOrganizationMoves(
-        from content: String,
-        scannedFilePathLookup: [String: [String]],
-        currentDirectoryPath: String?
-    ) -> [LiveOrganizationMove] {
-        guard !content.isEmpty else { return [] }
-
-        let relevantContent: String
-        if let cueRegex = structureReadyCueRegex {
-            let fullRange = NSRange(content.startIndex..<content.endIndex, in: content)
-            if let match = cueRegex.firstMatch(in: content, options: [], range: fullRange),
-               let cueRange = Range(match.range, in: content) {
-                relevantContent = String(content[cueRange.upperBound...])
-            } else {
-                relevantContent = content
-            }
-        } else {
-            relevantContent = content
-        }
-
-        guard let firstBraceIndex = relevantContent.firstIndex(of: "{") else { return [] }
-        let jsonSlice = String(relevantContent[firstBraceIndex...].suffix(liveMoveJSONScanTailLength))
-        guard !jsonSlice.isEmpty else { return [] }
-
-        let folderMatches = extractCapturedMatches(
-            using: streamedFolderNameRegex,
-            in: jsonSlice
-        ) { rawName in
-            let normalized = normalizeFolderName(rawName)
-            return isLikelyLiveFolderName(normalized) ? normalized : nil
-        }
-        guard !folderMatches.isEmpty else { return [] }
-
-        let fileObjectMatches = extractCapturedMatches(
-            using: streamedFileObjectRegex,
-            in: jsonSlice
-        ) { rawValue in
-            let normalized = normalizeCandidateFileName(rawValue)
-            guard isLikelyFileName(normalized) else { return nil }
-            let fileName = URL(fileURLWithPath: normalized).lastPathComponent
-            return fileName.isEmpty ? nil : fileName
-        }
-        let fileStringMatches = extractCapturedMatches(
-            using: streamedFileArrayStringRegex,
-            in: jsonSlice
-        ) { rawValue in
-            let normalized = normalizeCandidateFileName(rawValue)
-            guard isLikelyFileName(normalized) else { return nil }
-            let fileName = URL(fileURLWithPath: normalized).lastPathComponent
-            return fileName.isEmpty ? nil : fileName
-        }
-
-        var fileMatches = fileObjectMatches + fileStringMatches
-        fileMatches.sort { lhs, rhs in lhs.location < rhs.location }
-        guard !fileMatches.isEmpty else { return [] }
-
-        var folderIndex = 0
-        var orderedMoveIDs: [String] = []
-        var latestMoveByID: [String: LiveOrganizationMove] = [:]
-
-        for fileMatch in fileMatches {
-            while folderIndex + 1 < folderMatches.count &&
-                    folderMatches[folderIndex + 1].location <= fileMatch.location {
-                folderIndex += 1
-            }
-            guard folderIndex < folderMatches.count else { continue }
-
-            let folderName = folderMatches[folderIndex].value
-            let fileName = fileMatch.value
-            guard !folderName.isEmpty, !fileName.isEmpty else { continue }
-
-            let filePath = resolveScannedFilePath(
-                for: fileName,
-                scannedFilePathLookup: scannedFilePathLookup,
-                currentDirectoryPath: currentDirectoryPath
-            )
-            let moveID = makeLiveMoveID(filePath: filePath, fileName: fileName)
-            if latestMoveByID[moveID] == nil {
-                orderedMoveIDs.append(moveID)
-            }
-            latestMoveByID[moveID] = LiveOrganizationMove(
-                id: moveID,
-                fileName: fileName,
-                filePath: filePath,
-                destinationFolder: folderName
-            )
-        }
-
-        return orderedMoveIDs.compactMap { latestMoveByID[$0] }
-    }
-
-    private struct CapturedMatch {
-        let value: String
-        let location: Int
-    }
-
-    nonisolated private static func extractCapturedMatches(
-        using regex: NSRegularExpression?,
-        in text: String,
-        normalizer: (String) -> String?
-    ) -> [CapturedMatch] {
-        guard let regex else { return [] }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        let matches = regex.matches(in: text, options: [], range: range)
-        guard !matches.isEmpty else { return [] }
-
-        var results: [CapturedMatch] = []
-        for match in matches {
-            guard let valueRange = Range(match.range(at: 1), in: text) else { continue }
-            guard let normalized = normalizer(String(text[valueRange])) else { continue }
-            results.append(CapturedMatch(value: normalized, location: match.range.location))
-        }
-        return results
     }
 
     nonisolated private static func extractMentionedFileName(from text: String) -> String? {
@@ -1194,11 +906,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         return destination.isEmpty ? nil : destination
     }
 
-    nonisolated private static func makeLiveMoveID(filePath: String?, fileName: String) -> String {
-        let base = (filePath ?? fileName).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return base.isEmpty ? fileName.lowercased() : base
-    }
-    
     /// Starts a background task that ensures progress keeps moving even during pauses
     private func startSteadyProgressTask() {
         steadyProgressTimer.start(interval: .milliseconds(500)) { [weak self] in
@@ -1306,9 +1013,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if !streamingContent.isEmpty {
                 syncDisplayContentImmediately()
                 scheduleDisplayUpdate(for: streamingContent, force: true)
-                processStructureReadyCueIfNeeded()
                 extractInsightsIfNeeded(force: true)
-                extractLiveOrganizationMovesIfNeeded(force: true)
             }
             return
         }
@@ -1324,14 +1029,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         insightHistory = []
         lastInsightExtraction = .distantPast
         insightsCache = nil
-
-        liveMoveExtractionTask?.cancel()
-        liveMoveExtractionTask = nil
-        lastLiveMoveExtraction = .distantPast
-        liveMoveExtractionGeneration = 0
-        isReadyToOutputStructure = false
-        liveOrganizationMoves = []
-        liveMoveIndexByID = [:]
     }
     
     private func estimatedStreamingCharacterTarget() -> Int {
@@ -1364,9 +1061,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     public nonisolated func didComplete(content: String) {
         Task { @MainActor in
-            if self.isReadyToOutputStructure {
-                self.extractLiveOrganizationMovesIfNeeded(force: true)
-            }
             self.isStreaming = false
             self.organizationStage = "Building organization plan..."
             self.stopTimeoutTimer()
@@ -1378,10 +1072,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         Task { @MainActor in
             self.isStreaming = false
             self.errorMessage = self.userFacingErrorMessage(for: error)
-            self.liveMoveExtractionTask?.cancel()
-            self.liveMoveExtractionTask = nil
-            self.liveMoveExtractionGeneration = 0
-            self.liveMoveIndexByID = [:]
             self.stopTimeoutTimer()
             self.stopSteadyProgressTask()
             
@@ -1983,10 +1673,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         currentTask = nil
         displayUpdateTask?.cancel()
         displayUpdateTask = nil
-        liveMoveExtractionTask?.cancel()
-        liveMoveExtractionTask = nil
-        liveMoveExtractionGeneration = 0
-        liveMoveIndexByID = [:]
         insightExtractionTask?.cancel()
         insightExtractionTask = nil
         stopTimeoutTimer()

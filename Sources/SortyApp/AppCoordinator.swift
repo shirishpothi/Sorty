@@ -361,7 +361,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     }
     
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        // Notification authorization is handled by NotifiCLI (for enhanced notifications)
+        // or requested lazily when sending native notifications as fallback.
     }
     
     func folderWatcher(_ watcher: FolderWatcher, didDetectStaleBookmarkFor folder: WatchedFolder, newBookmarkData: Data) {

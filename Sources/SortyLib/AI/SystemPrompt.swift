@@ -136,6 +136,11 @@ Return valid JSON as the final output. The only allowed preamble is the >> progr
 - Handle duplicates: if two files appear identical (same name, same size), note it in the "notes" field.
 - Zero-byte files and temp files (~*, .tmp) should be flagged for review.
 
+## Learnings Attribution
+- If a <learnings_context> block is provided and a learned pattern or rule influenced how you organized a folder, you MUST include the "rule_id" field on that folder in the JSON output.
+- Copy the exact rule_id value from the item's rule_id attribute in the learnings context.
+- This allows the app to show users which learned rules were applied to each folder.
+
 # VALIDATION CHECKLIST (RUN BEFORE RESPONDING)
 Before outputting, verify ALL of the following:
 ✓ Output starts with >> progress lines, includes the exact final cue line ">> general: Ready to output organization structure.", then valid JSON only — no markdown code blocks, no prose, no ```json wrapper.
@@ -203,6 +208,7 @@ Before outputting, verify ALL of the following:
                   "description": "Purpose",
                   "tags": ["Blue"],
                   "comment": "Brief folder summary",
+                  "rule_id": "id-from-learnings-context-if-applicable",
                   "subfolders": [...],
                   "files": [{"filename": "file.ext", "tags": ["Tag1", "Tag2"], "comment": "Brief description"}]
                 }
@@ -218,6 +224,7 @@ Before outputting, verify ALL of the following:
                 {
                   "name": "FolderName",
                   "description": "Purpose",
+                  "rule_id": "id-from-learnings-context-if-applicable",
                   "subfolders": [...],
                   "files": [{"filename": "file.ext"}]
                 }
@@ -265,6 +272,7 @@ Before outputting, verify ALL of the following:
                   "description": "Purpose",
                   "tags": ["Blue"],
                   "comment": "Brief folder summary",
+                  "rule_id": "id-from-learnings-context-if-applicable",
                   "subfolders": [...],
                   "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95, "tags": ["Purple", "Photo"], "comment": "Landscape photo of Golden Gate Bridge"}]
                 }
@@ -280,6 +288,7 @@ Before outputting, verify ALL of the following:
                 {
                   "name": "FolderName",
                   "description": "Purpose",
+                  "rule_id": "id-from-learnings-context-if-applicable",
                   "subfolders": [...],
                   "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95}]
                 }

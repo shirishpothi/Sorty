@@ -59,85 +59,49 @@ struct LiquidGlassLearningsButton: View {
             Button {
                 showPopover.toggle()
             } label: {
-                ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 22, height: 22)
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(showPopover ? 0.5 : 0.3),
-                                            Color.white.opacity(0.05)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ),
-                                    lineWidth: 0.5
-                                )
-                        )
-                        .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(showPopover ? .teal : Color.secondary)
-                }
+                Image(systemName: "brain.head.profile")
+                    .font(.caption2)
+                    .foregroundStyle(showPopover ? .teal : .secondary)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("FileLearningsButton")
-            .help("View attributable learnings and honing signals used for this file")
+            .help("View learnings used for this file")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 8) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.teal.opacity(0.12))
-                                .frame(width: 28, height: 28)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "brain.head.profile")
+                            .font(.caption)
+                            .foregroundStyle(.teal)
 
-                            Image(systemName: "brain.head.profile")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.teal)
-                        }
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Learnings Used")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.primary)
-
-                            Text(file.displayName)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
+                        Text("Learnings Used")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
 
                         Spacer()
+
+                        Text(file.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
                     }
-                    .padding(.bottom, 10)
 
-                    Divider()
-                        .opacity(0.4)
-                        .padding(.bottom, 10)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        if !learningRows.isEmpty {
-                            sectionHeader("Learnings")
-                            ForEach(learningRows) { row in
-                                insightRow(row)
-                            }
+                    if !learningRows.isEmpty {
+                        sectionHeader("Learnings")
+                        ForEach(learningRows) { row in
+                            insightRow(row)
                         }
+                    }
 
-                        if !honingRows.isEmpty {
-                            sectionHeader("Honing")
-                            ForEach(honingRows) { row in
-                                insightRow(row)
-                            }
+                    if !honingRows.isEmpty {
+                        sectionHeader("Honing")
+                        ForEach(honingRows) { row in
+                            insightRow(row)
                         }
                     }
                 }
-                .padding(14)
-                .frame(minWidth: 250, maxWidth: 360)
+                .padding(12)
+                .frame(minWidth: 240, maxWidth: 340)
             }
         }
     }
@@ -145,29 +109,30 @@ struct LiquidGlassLearningsButton: View {
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.quaternary)
             .textCase(.uppercase)
-            .padding(.top, 2)
     }
 
     private func insightRow(_ row: LearningsInsightRow) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: row.icon)
-                    .font(.caption)
-                    .foregroundStyle(row.color)
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: row.icon)
+                .font(.caption2)
+                .foregroundStyle(row.color)
+                .frame(width: 12, alignment: .center)
+                .padding(.top, 1)
 
+            VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .font(.caption)
-                    .fontWeight(.semibold)
+                    .fontWeight(.medium)
                     .foregroundStyle(.primary)
-            }
 
-            Text(row.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
+                Text(row.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
         }
     }
 }

@@ -232,6 +232,8 @@ public class MenuBarController: ObservableObject {
         content.title = "File Organized"
         content.body = "\(filename) moved to \(folder)"
         content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        content.relevanceScore = 1.0
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

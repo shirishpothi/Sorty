@@ -26,25 +26,28 @@ public struct OnboardingView: View {
     }
     
     public var body: some View {
-        ZStack {
-            Color(NSColor.windowBackgroundColor)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Progress indicator
-                OnboardingProgressBar(currentStep: currentStep)
-                    .padding(.top, 28)
-                    .padding(.horizontal, 60)
+        GeometryReader { geometry in
+            ZStack {
+                Color(NSColor.windowBackgroundColor)
+                    .ignoresSafeArea()
                 
-                // Main content
-                stepContent
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // Navigation controls
-                navigationControls
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 16)
+                VStack(spacing: 0) {
+                    // Keep the progress row clear of macOS title bar variants.
+                    OnboardingProgressBar(currentStep: currentStep)
+                        .padding(.top, max(56, geometry.safeAreaInsets.top + 24))
+                        .padding(.horizontal, 60)
+                    
+                    // Main content
+                    stepContent
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    
+                    // Navigation controls
+                    navigationControls
+                        .padding(.horizontal, 40)
+                        .padding(.bottom, 16)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 1000, minHeight: 720)
         .accessibilityElement(children: .contain)

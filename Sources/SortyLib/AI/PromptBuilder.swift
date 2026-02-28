@@ -503,6 +503,7 @@ struct PromptBuilder {
         - Use clear folder names
         - Prefer using file_ids in compact responses when IDs are provided.
         - Group by type: Documents, Media, Code, Archives
+        - If learnings_context is provided with rule_id attributes, include "rule_id" on folders influenced by those rules.
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Suggest better filenames where appropriate" : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- Rename is optional per file; keep already-clear names unchanged." : "")
         \(mode == .renameOnly || mode == .organizeAndRename ? "- For each rename_reason, cite concrete evidence and avoid generic wording." : "")
@@ -561,7 +562,7 @@ struct PromptBuilder {
         existingFoldersContext: String? = nil
     ) -> String {
         switch provider {
-        case .appleFoundationModel, .applePrivateCloudCompute:
+        case .appleFoundationModel:
             // Append instructions
             var prompt = buildCompactPrompt(files: files, mode: mode, enableReasoning: enableReasoning)
             if mode == .renameOnly || enableSmartRename {

@@ -1463,6 +1463,8 @@ public class WorkspaceHealthManager: ObservableObject {
             content.title = "Sorty"
             content.body = insight.message
             content.sound = .default
+            content.interruptionLevel = .timeSensitive
+            content.relevanceScore = 1.0
 
             if let prompt = insight.actionPrompt {
                 content.subtitle = prompt

@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct NotificationsSettingsView: View {
     @EnvironmentObject var notificationSettings: NotificationSettingsManager
@@ -43,7 +44,9 @@ struct NotificationsSettingsView: View {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.inAppHUD,
                         title: "In-App HUD",
-                        description: "Show notifications as subtle bottom-left overlays"
+                        description: "Show notifications as subtle bottom-left overlays",
+                        previewAction: { notificationManager.previewInAppHUDDelivery() },
+                        previewIcon: "play.fill"
                     )
                     
                     Divider()
@@ -51,7 +54,9 @@ struct NotificationsSettingsView: View {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.systemNotifications,
                         title: "System Notifications",
-                        description: "Show in macOS Notification Center"
+                        description: "Show in macOS Notification Center",
+                        previewAction: { notificationManager.previewSystemNotificationDelivery() },
+                        previewIcon: "play.fill"
                     )
                     
                     if notificationSettings.settings.systemNotifications && showsAdvancedControls {
@@ -79,9 +84,6 @@ struct NotificationsSettingsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .animatedAppearance(delay: 0.1)
-
-            inFlowPreviewCard
-                .animatedAppearance(delay: 0.11)
             
             // NotifiCLI Settings (advanced controls only)
             if showsAdvancedControls && notificationSettings.settings.notificationBackend == .notifiCLI {
@@ -133,7 +135,8 @@ struct NotificationsSettingsView: View {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.processingComplete,
                         title: "Processing Complete",
-                        description: "When file processing finishes successfully"
+                        description: "When file processing finishes successfully",
+                        previewAction: { playPreviewSound("Glass") }
                     )
                     
                     Divider()
@@ -141,7 +144,8 @@ struct NotificationsSettingsView: View {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.previewReady,
                         title: "Preview Ready",
-                        description: "When AI has finished generating the organization plan"
+                        description: "When AI has finished generating the organization plan",
+                        previewAction: { playPreviewSound("Ping") }
                     )
                     
                     if showsAdvancedControls && notificationSettings.settings.previewReady {
@@ -158,7 +162,8 @@ struct NotificationsSettingsView: View {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.processingErrors,
                         title: "Processing Errors",
-                        description: "When errors occur during processing"
+                        description: "When errors occur during processing",
+                        previewAction: { playPreviewSound("Basso") }
                     )
 
                     if showsAdvancedControls {
@@ -189,7 +194,8 @@ struct NotificationsSettingsView: View {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.playCompletionSound,
                         title: "Completion Sound",
-                        description: "Play a satisfying sound when organization finishes"
+                        description: "Play a satisfying sound when organization finishes",
+                        previewAction: { playPreviewSound("Glass") }
                     )
 
                     if showsAdvancedControls {
@@ -438,39 +444,13 @@ struct NotificationsSettingsView: View {
         }
     }
 
-    private var inFlowPreviewCard: some View {
-        SettingsCard(title: "In-Flow Preview", icon: "waveform.badge.magnifyingglass", color: .teal) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Preview the notification experience that appears while previews are generated.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 10) {
-                    Button {
-                        notificationManager.sendInFlowPreviewSample()
-                        HapticFeedbackManager.shared.selection()
-                    } label: {
-                        Label("Preview During Organization", systemImage: "play.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .accessibilityIdentifier("NotificationInFlowPreviewButton")
-
-                    if showsAdvancedControls {
-                        Button {
-                            NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil)
-                            HapticFeedbackManager.shared.tap()
-                        } label: {
-                            Label("Try Redo Action", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .accessibilityIdentifier("NotificationRedoWithModelPreviewButton")
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+    private func playPreviewSound(_ name: String) {
+        if let sound = NSSound(named: NSSound.Name(name)) {
+            sound.play()
+        } else {
+            NSSound.beep()
         }
+        HapticFeedbackManager.shared.tap()
     }
 
     private var notificationAnalyticsCard: some View {

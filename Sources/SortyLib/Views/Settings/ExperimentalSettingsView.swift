@@ -54,14 +54,6 @@ struct ExperimentalSettingsView: View {
                 enableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true",
                 disableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false"
             ),
-            ExperimentalFlag(
-                name: "Apple Cloud Model (PCC)",
-                description: "Expose the Apple Private Cloud Compute model in Apple model selection.",
-                defaultsKey: "applePCCEnabled",
-                defaultValue: false,
-                enableCommand: "defaults write com.sorty.app applePCCEnabled -bool true",
-                disableCommand: "defaults write com.sorty.app applePCCEnabled -bool false"
-            ),
         ]
     }
 }

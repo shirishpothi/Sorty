@@ -103,7 +103,8 @@ struct LearningsView: View {
                 .font(.system(size: 60))
                 .foregroundStyle(.blue)
                 .padding(32)
-                .liquidGlassCard(cornerRadius: 30)
+                .background(Color.blue.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 24))
                 .accessibilityHidden(true)
 
             VStack(spacing: 8) {
@@ -159,7 +160,8 @@ struct LearningsView: View {
                 .font(.system(size: 60))
                 .foregroundStyle(.purple)
                 .padding(32)
-                .liquidGlassCard(cornerRadius: 30)
+                .background(Color.purple.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 24))
                 .accessibilityHidden(true)
 
             VStack(spacing: 8) {
@@ -180,7 +182,8 @@ struct LearningsView: View {
                 featureRow(icon: "sparkles", title: "Improves Over Time", description: "Uses learnings to make better future suggestions")
             }
             .padding(16)
-            .liquidGlassCard(cornerRadius: 20)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 16))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings features")
 
@@ -530,7 +533,7 @@ struct LearningsView: View {
     // MARK: - Preferences Section
     
     private var preferencesSection: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 20) {
             if let profile = manager.currentProfile {
                 // Rule Suggestions Inbox
                 let pendingRules = manager.getPendingRules()
@@ -650,10 +653,7 @@ struct LearningsView: View {
                             Label("Start Honing Now", systemImage: "wand.and.stars")
                                 .font(.headline)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .liquidGlassCard(cornerRadius: 12)
+                        .buttonStyle(.sortyPrimary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityElement(children: .combine)
@@ -668,10 +668,7 @@ struct LearningsView: View {
                             Label("Refine Preferences", systemImage: "wand.and.stars")
                                 .font(.headline)
                         }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 14)
-                        .liquidGlassCard(cornerRadius: 16)
+                        .buttonStyle(.sortyPrimary)
                         .accessibilityLabel("Refine preferences")
                         .accessibilityHint("Answer questions to improve organization accuracy")
                         Spacer()
@@ -781,9 +778,7 @@ struct LearningsView: View {
                     LearningsEmptyStateView()
                 }
             }
-            
-            Divider()
-            
+
             dataManagementSection
         }
     }
@@ -798,7 +793,8 @@ struct LearningsView: View {
                 HStack(spacing: 16) {
                     Image(systemName: "lock.shield.fill")
                         .foregroundColor(.green)
-                        .font(.title2.bold())
+                        .font(.title3.bold())
+                        .frame(width: 24)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Your data is encrypted locally")
                             .font(.headline)
@@ -809,7 +805,6 @@ struct LearningsView: View {
                     Spacer()
                 }
                 .padding(16)
-                .liquidGlassCard(cornerRadius: 12)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Security: Your data is encrypted locally and protected with \(manager.securityManager.biometryDisplayName)")
                 
@@ -839,7 +834,6 @@ struct LearningsView: View {
                     .accessibilityLabel("Data retention period")
                 }
                 .padding(16)
-                .liquidGlassCard(cornerRadius: 12)
                 
                 Divider()
                 
@@ -875,7 +869,6 @@ struct LearningsView: View {
                     }
                 }
                 .padding(16)
-                .liquidGlassCard(cornerRadius: 12)
                 
                 Divider()
                 
@@ -887,7 +880,7 @@ struct LearningsView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "cpu")
                             .foregroundColor(.purple)
-                            .font(.body.bold())
+                            .font(.title3.bold())
                             .frame(width: 24)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Use AI for analysis")
@@ -902,12 +895,13 @@ struct LearningsView: View {
                             .labelsHidden()
                     }
                     .padding(12)
-                    .liquidGlassCard(cornerRadius: 10)
+                    .background(Color.secondary.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     
                     HStack(spacing: 12) {
                         Image(systemName: "pause.circle")
                             .foregroundColor(.orange)
-                            .font(.body.bold())
+                            .font(.title3.bold())
                             .frame(width: 24)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Session-based Learning")
@@ -925,7 +919,8 @@ struct LearningsView: View {
                             .labelsHidden()
                     }
                     .padding(12)
-                    .liquidGlassCard(cornerRadius: 10)
+                    .background(Color.secondary.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                     
                     HStack(spacing: 12) {
                         Button(action: {
@@ -956,7 +951,6 @@ struct LearningsView: View {
                     }
                 }
                 .padding(16)
-                .liquidGlassCard(cornerRadius: 12)
             }
             .padding(16)
             .liquidGlassCard(cornerRadius: 16)
@@ -976,7 +970,8 @@ struct LearningsView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .liquidGlassCard(cornerRadius: 20)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(Capsule())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Learning status: \(manager.consentManager.hasConsented ? "Active" : "Inactive")")
     }
@@ -1066,7 +1061,8 @@ struct LearningStrengthControl: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .liquidGlassCard(cornerRadius: 10)
+            .background(Color.secondary.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .minimumHitTarget()
@@ -1270,7 +1266,8 @@ struct LearningsImpactCard: View {
                 }
                 .padding(24)
                 .frame(maxWidth: .infinity)
-                .liquidGlassCard(cornerRadius: 20)
+                .background(Color.secondary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
                 .accessibilityLabel("No impact data yet. Organize some files to see results.")
             }
         }
@@ -1293,7 +1290,8 @@ struct ImpactBadge: View {
         .foregroundColor(badgeColor)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .liquidGlassCard(cornerRadius: 20)
+        .background(badgeColor.opacity(0.12))
+        .clipShape(Capsule())
         .accessibilityLabel("Impact rating: \(badgeText)")
     }
     
@@ -1336,7 +1334,8 @@ struct ImpactMetric: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .liquidGlassCard(cornerRadius: 16)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value)")
         .accessibilityHint(hint)
@@ -1407,7 +1406,8 @@ struct BehaviorPill: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .liquidGlassCard(cornerRadius: 12)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(text)
     }
@@ -1464,7 +1464,8 @@ struct EnhancedInsightCard: View {
             .scaleEffect(0.8)
         }
         .padding(12)
-        .liquidGlassCard(cornerRadius: 12)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(rule.explanation). Applied \(rule.successCount) times, corrected \(rule.failureCount) times. \(rule.isEnabled ? "Enabled" : "Disabled")")
         .accessibilityHint("Toggle to enable or disable this pattern")
@@ -1499,7 +1500,8 @@ struct AccessibleStatCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(16)
-        .liquidGlassCard(cornerRadius: 12)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value)")
         .accessibilityHint(hint)
@@ -1530,12 +1532,10 @@ struct AccessiblePreferenceGroup<Content: View>: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(title): \(subtitle)")
             .accessibilityAddTraits(.isHeader)
-            
+
             VStack(alignment: .leading, spacing: 10) {
                 content
             }
-            .padding(12)
-            .liquidGlassCard(cornerRadius: 12)
         }
         .padding(16)
         .liquidGlassCard(cornerRadius: 16)
@@ -1621,7 +1621,8 @@ struct RuleRow: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .liquidGlassCard(cornerRadius: 6)
+                    .background(Color.secondary.opacity(0.08))
+                    .clipShape(Capsule())
                 
                 Toggle("", isOn: Binding(
                     get: { rule.isEnabled },
@@ -1805,7 +1806,8 @@ struct PendingRuleRow: View {
             }
         }
         .padding(12)
-        .liquidGlassCard(cornerRadius: 12)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Suggested rule: \(rule.explanation)")
     }
@@ -1822,14 +1824,14 @@ struct AccessibleActivityGroup<Content: View>: View {
     @State private var isExpanded = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Button(action: { 
+        VStack(alignment: .leading, spacing: 12) {
+            Button(action: {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                    isExpanded.toggle() 
+                    isExpanded.toggle()
                     HapticFeedbackManager.shared.tap()
                 }
             }) {
-                HStack(spacing: 16) {
+                HStack(spacing: 12) {
                     Image(systemName: icon)
                         .font(.headline)
                         .foregroundColor(color)
@@ -1837,23 +1839,23 @@ struct AccessibleActivityGroup<Content: View>: View {
                         Text(title)
                             .font(.headline)
                         Text(subtitle)
-                            .font(.subheadline.bold())
+                            .font(.caption.bold())
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Text("\(count)")
-                        .font(.title2.bold())
+                        .font(.caption2.bold())
                         .foregroundColor(color)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 4)
+                        .background(color.opacity(0.1))
+                        .clipShape(Capsule())
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(.caption2.bold())
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.04))
-                )
                 .contentShape(RoundedRectangle(cornerRadius: 12))
             }
             .buttonStyle(.plain)
@@ -1863,13 +1865,12 @@ struct AccessibleActivityGroup<Content: View>: View {
             .accessibilityHint(isExpanded ? "Collapse to hide items" : "Expand to show items")
             .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
             .accessibilityAddTraits(.isButton)
-            
+
             if isExpanded {
                 VStack(alignment: .leading, spacing: 12) {
                     content
                 }
-                .padding(16)
-                .liquidGlassCard(cornerRadius: 16)
+                .padding(.horizontal, 12)
                 .transition(.opacity.combined(with: .scale))
             }
         }
@@ -2070,7 +2071,8 @@ struct ActionCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
-            .liquidGlassCard(cornerRadius: 16)
+            .background(Color.secondary.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -2099,7 +2101,8 @@ struct PreferenceRow: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .liquidGlassCard(cornerRadius: 6)
+                    .background(Color.secondary.opacity(0.08))
+                    .clipShape(Capsule())
             }
         }
         .padding(.vertical, 6)
@@ -2190,7 +2193,8 @@ struct BreakdownMetric: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
-        .liquidGlassCard(cornerRadius: 12)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(value)")
     }
@@ -2487,7 +2491,8 @@ struct HighCorrectionRateInsight: View {
             }
         }
         .padding(14)
-        .liquidGlassCard(cornerRadius: 14)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Improvement opportunities")
     }

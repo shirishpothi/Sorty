@@ -116,6 +116,7 @@ struct PreviewView: View {
         }
         .onAppear {
             previewStore.dragDropManager = dragDropManager
+            learningsManager.loadProfileIfNeededForCollection()
         }
         .onChange(of: plan) { _, newPlan in editablePlan = newPlan; previewStore.updatePlan(newPlan); hasEdits = false }
         .onChange(of: viewingHistoryIndex) { _, newIndex in

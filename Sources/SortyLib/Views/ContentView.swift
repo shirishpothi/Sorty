@@ -18,9 +18,7 @@ public struct ContentView: View {
 
     @State private var previousView: AppState.AppView?
     @State private var navigationDirection: NavigationDirection = .forward
-    @State private var isCoreExpanded = true
-    @State private var isProductivityExpanded = true
-    @State private var isAdvancedExpanded = false
+    
 
     public init() {}
 
@@ -64,94 +62,73 @@ public struct ContentView: View {
                     }
                 }
             )) {
-                DisclosureGroup(isExpanded: $isCoreExpanded) {
-                    NavigationLink(value: AppState.AppView.organize) {
-                        Label("Organize", systemImage: "folder.badge.gearshape")
-                    }
-                    .accessibilityIdentifier("OrganizeSidebarItem")
-                    .accessibilityHint("Open the main organization workflow")
-                    .help("Organize files with AI suggestions")
+                // Primary actions
+                NavigationLink(value: AppState.AppView.organize) {
+                    Label("Organize", systemImage: "folder.badge.gearshape")
+                }
+                .accessibilityIdentifier("OrganizeSidebarItem")
+                .accessibilityHint("Open the main organization workflow")
+                .help("Organize files with AI suggestions")
 
-                    NavigationLink(value: AppState.AppView.settings) {
-                        Label("Settings", systemImage: "gear")
+                if FeatureFlags.batchOrganizationEnabled {
+                    NavigationLink(value: AppState.AppView.batchOrganization) {
+                        Label("Batch Organize", systemImage: "square.stack.3d.up.fill")
                     }
-                    .accessibilityIdentifier("SettingsSidebarItem")
-                    .accessibilityHint("Configure Sorty behavior and AI providers")
-                    .help("Adjust provider, strategy, and system settings")
-                } label: {
-                    sidebarDisclosureLabel(title: "Core", isExpanded: isCoreExpanded) {
-                        withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
-                            isCoreExpanded.toggle()
-                        }
-                    }
+                    .accessibilityIdentifier("BatchOrganizeSidebarItem")
+                    .accessibilityHint("Organize multiple folders in one run")
+                    .help("Run organization for multiple folders")
                 }
 
-                DisclosureGroup(isExpanded: $isProductivityExpanded) {
-                    NavigationLink(value: AppState.AppView.workspaceHealth) {
-                        Label("Workspace Health", systemImage: "heart.text.square")
-                    }
-                    .accessibilityIdentifier("WorkspaceHealthSidebarItem")
-                    .accessibilityHint("Inspect workspace quality and cleanup opportunities")
-                    .help("Check workspace health insights")
-
-                    NavigationLink(value: AppState.AppView.duplicates) {
-                        Label("Duplicates", systemImage: "doc.on.doc")
-                    }
-                    .accessibilityIdentifier("DuplicatesSidebarItem")
-                    .accessibilityHint("Find and review duplicate files")
-                    .help("Detect and manage duplicate files")
-
-                    NavigationLink(value: AppState.AppView.history) {
-                        Label("History", systemImage: "clock")
-                    }
-                    .accessibilityIdentifier("HistorySidebarItem")
-                    .accessibilityHint("Review past organization sessions")
-                    .help("View organization history and outcomes")
-                } label: {
-                    sidebarDisclosureLabel(title: "Productivity", isExpanded: isProductivityExpanded) {
-                        withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
-                            isProductivityExpanded.toggle()
-                        }
-                    }
+                NavigationLink(value: AppState.AppView.watchedFolders) {
+                    Label("Watched Folders", systemImage: "eye")
                 }
+                .accessibilityIdentifier("WatchedFoldersSidebarItem")
+                .accessibilityHint("Configure folders monitored for automation")
+                .help("Manage watched folders and triggers")
 
-                DisclosureGroup(isExpanded: $isAdvancedExpanded) {
-                    if FeatureFlags.batchOrganizationEnabled {
-                        NavigationLink(value: AppState.AppView.batchOrganization) {
-                            Label("Batch Organize", systemImage: "square.stack.3d.up.fill")
-                        }
-                        .accessibilityIdentifier("BatchOrganizeSidebarItem")
-                        .accessibilityHint("Organize multiple folders in one run")
-                        .help("Run organization for multiple folders")
-                    }
-
-                    NavigationLink(value: AppState.AppView.exclusions) {
-                        Label("Exclusions", systemImage: "eye.slash")
-                    }
-                    .accessibilityIdentifier("ExclusionsSidebarItem")
-                    .accessibilityHint("Define files and folders Sorty should skip")
-                    .help("Manage exclusion rules")
-
-                    NavigationLink(value: AppState.AppView.watchedFolders) {
-                        Label("Watched Folders", systemImage: "eye")
-                    }
-                    .accessibilityIdentifier("WatchedFoldersSidebarItem")
-                    .accessibilityHint("Configure folders monitored for automation")
-                    .help("Manage watched folders and triggers")
-                    
-                    NavigationLink(value: AppState.AppView.learnings) {
-                        Label("The Learnings", systemImage: "brain")
-                    }
-                    .accessibilityIdentifier("LearningsSidebarItem")
-                    .accessibilityHint("Review and manage learned preferences")
-                    .help("See what Sorty has learned from your edits")
-                } label: {
-                    sidebarDisclosureLabel(title: "Advanced", isExpanded: isAdvancedExpanded) {
-                        withAnimation(.spring(response: 0.22, dampingFraction: 0.85)) {
-                            isAdvancedExpanded.toggle()
-                        }
-                    }
+                NavigationLink(value: AppState.AppView.duplicates) {
+                    Label("Duplicates", systemImage: "doc.on.doc")
                 }
+                .accessibilityIdentifier("DuplicatesSidebarItem")
+                .accessibilityHint("Find and review duplicate files")
+                .help("Detect and manage duplicate files")
+
+                // Insights
+                NavigationLink(value: AppState.AppView.workspaceHealth) {
+                    Label("Workspace Health", systemImage: "heart.text.square")
+                }
+                .accessibilityIdentifier("WorkspaceHealthSidebarItem")
+                .accessibilityHint("Inspect workspace quality and cleanup opportunities")
+                .help("Check workspace health insights")
+
+                NavigationLink(value: AppState.AppView.history) {
+                    Label("History", systemImage: "clock")
+                }
+                .accessibilityIdentifier("HistorySidebarItem")
+                .accessibilityHint("Review past organization sessions")
+                .help("View organization history and outcomes")
+
+                NavigationLink(value: AppState.AppView.learnings) {
+                    Label("Learnings", systemImage: "brain")
+                }
+                .accessibilityIdentifier("LearningsSidebarItem")
+                .accessibilityHint("Review and manage learned preferences")
+                .help("See what Sorty has learned from your edits")
+
+                // Configuration
+                NavigationLink(value: AppState.AppView.exclusions) {
+                    Label("Exclusions", systemImage: "eye.slash")
+                }
+                .accessibilityIdentifier("ExclusionsSidebarItem")
+                .accessibilityHint("Define files and folders Sorty should skip")
+                .help("Manage exclusion rules")
+
+                NavigationLink(value: AppState.AppView.settings) {
+                    Label("Settings", systemImage: "gear")
+                }
+                .accessibilityIdentifier("SettingsSidebarItem")
+                .accessibilityHint("Configure Sorty behavior and AI providers")
+                .help("Adjust provider, strategy, and system settings")
             }
             .navigationTitle("Sorty")
             .listStyle(.sidebar)
@@ -189,11 +166,7 @@ public struct ContentView: View {
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {
                 previousView = oldValue
-                ensureActiveSidebarSectionExpanded(for: newValue)
             }
-        }
-        .onAppear {
-            ensureActiveSidebarSectionExpanded(for: appState.currentView)
         }
         .onChange(of: appState.showDirectoryPicker) { oldValue, showPicker in
             if showPicker {
@@ -283,34 +256,9 @@ public struct ContentView: View {
         appState.showDirectoryPicker = false
     }
 
-    private func ensureActiveSidebarSectionExpanded(for view: AppState.AppView) {
-        switch view {
-        case .organize, .settings:
-            isCoreExpanded = true
-        case .workspaceHealth, .duplicates, .history:
-            isProductivityExpanded = true
-        case .batchOrganization, .exclusions, .watchedFolders, .learnings:
-            isAdvancedExpanded = true
-        case .storageLocations:
-            break
-        }
-    }
 
-    @ViewBuilder
-    private func sidebarDisclosureLabel(title: String, isExpanded: Bool, onToggle: @escaping () -> Void) -> some View {
-        HStack {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onToggle()
-        }
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint(isExpanded ? "Collapse section" : "Expand section")
-    }
+
+
 }
 
 // MARK: - Navigation Direction

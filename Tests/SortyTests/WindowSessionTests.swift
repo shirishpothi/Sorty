@@ -78,7 +78,7 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertEqual(session.appState.currentView, .settings)
         await spinMainActor()
         XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
-        XCTAssertEqual(session.appState.settingsFocusTarget, .rulesWatchedFolders)
+        XCTAssertNil(session.appState.settingsFocusTarget)
     }
 
     private func handle(_ destination: DeeplinkDestination) {

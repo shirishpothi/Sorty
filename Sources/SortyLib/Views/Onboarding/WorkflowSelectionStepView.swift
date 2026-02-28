@@ -341,6 +341,7 @@ public struct WorkflowSelectionStepView: View {
                 
                 let newPersona = CustomPersona(
                     name: result.name,
+                    icon: result.icon,
                     description: customDescription,
                     promptModifier: result.prompt
                 )

@@ -81,4 +81,40 @@ final class FileLearningsAttributionResolverTests: XCTestCase {
         XCTAssertTrue(result.hasContent)
         XCTAssertTrue(result.honingItems.isEmpty)
     }
+
+    func testResolveFallsBackToHeuristicRuleMatchingWhenRuleIDIsMissing() {
+        let file = FileItem(path: "/tmp/Invoices/receipt-2026.pdf", name: "receipt-2026", extension: "pdf", size: 2048)
+        let suggestion = FolderSuggestion(folderName: "Invoices", files: [file])
+
+        let matchingRule = InferredRule(
+            id: "rule-pdf",
+            pattern: ".*\\.pdf$",
+            template: "Invoices/{filename}",
+            priority: 85,
+            explanation: "PDF receipts are grouped into Invoices",
+            isEnabled: true,
+            supportCount: 8,
+            status: .active
+        )
+
+        let nonMatchingRule = InferredRule(
+            id: "rule-images",
+            pattern: ".*\\.(png|jpg)$",
+            template: "Images/{filename}",
+            priority: 90,
+            explanation: "Images are grouped into Images",
+            isEnabled: true,
+            supportCount: 12,
+            status: .active
+        )
+
+        let profile = LearningsProfile(inferredRules: [nonMatchingRule, matchingRule])
+
+        let result = FileLearningsAttributionResolver.resolve(file: file, suggestion: suggestion, profile: profile)
+
+        XCTAssertTrue(result.hasContent)
+        XCTAssertEqual(result.rule?.id, "rule-pdf")
+        XCTAssertEqual(result.scope, LearningsAttributionScope.fileRuleMatch)
+        XCTAssertEqual(result.learningsItems.filter { $0.kind == LearningsAttributionKind.learnedRule }.count, 1)
+    }
 }

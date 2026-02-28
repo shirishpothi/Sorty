@@ -240,6 +240,8 @@ struct SettingsToggle: View {
     @Binding var isOn: Bool
     let title: String
     var description: String? = nil
+    var previewAction: (() -> Void)? = nil
+    var previewIcon: String = "speaker.wave.2.fill"
     
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -257,6 +259,19 @@ struct SettingsToggle: View {
             }
             
             Spacer()
+            
+            if let previewAction {
+                Button(action: previewAction) {
+                    Image(systemName: previewIcon)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("preview\(title.replacingOccurrences(of: " ", with: ""))Button")
+                .accessibilityLabel("Preview \(title)")
+            }
             
             Toggle("", isOn: $isOn)
                 .labelsHidden()

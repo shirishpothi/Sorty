@@ -250,45 +250,14 @@ final class StreamingLogicTests: XCTestCase {
         XCTAssertEqual(organizer.organizationStage, "AI is analyzing your files...")
     }
 
-    func testReadyCueActivatesLiveOrganizationMode() async {
+    func testReadyCueCapturedAsGeneralInsight() async {
         organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
-        try? await Task.sleep(nanoseconds: 150_000_000)
-
-        XCTAssertTrue(organizer.isReadyToOutputStructure)
-    }
-
-    func testLiveOrganizationMovesExtractedFromStreamedJSON() async {
-        organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
-        try? await Task.sleep(nanoseconds: 120_000_000)
-
-        organizer.didReceiveChunk("""
-        {"folders":[{"name":"Receipts","files":[{"filename":"invoice_2025.pdf"}],"subfolders":[]}],"unorganized":[],"notes":""}
-        """)
         try? await Task.sleep(nanoseconds: 250_000_000)
 
-        let hasMove = organizer.liveOrganizationMoves.contains {
-            $0.fileName == "invoice_2025.pdf" && $0.destinationFolder == "Receipts"
-        }
-        XCTAssertTrue(hasMove, "Should stream file-to-folder assignment into live organization moves")
-    }
-
-    func testLiveOrganizationMovesHandleLargeFilesArray() async {
-        organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
-        try? await Task.sleep(nanoseconds: 120_000_000)
-
-        let fileObjects = (1...180)
-            .map { #"{"filename":"invoice_\#($0)_archive_copy.pdf"}"# }
-            .joined(separator: ",")
-        organizer.didReceiveChunk("""
-        {"folders":[{"name":"Receipts","files":[\(fileObjects)],"subfolders":[]}],"unorganized":[],"notes":""}
-        """)
-        try? await Task.sleep(nanoseconds: 700_000_000)
-
         XCTAssertTrue(
-            organizer.liveOrganizationMoves.contains {
-                $0.fileName == "invoice_180_archive_copy.pdf" && $0.destinationFolder == "Receipts"
-            },
-            "Large streamed folder arrays should continue mapping files instead of stalling early"
+            organizer.insightHistory.contains {
+                $0.category == .general && $0.text.contains("Ready to output organization structure")
+            }
         )
     }
 
@@ -301,22 +270,6 @@ final class StreamingLogicTests: XCTestCase {
         )
     }
 
-    func testDisablingLiveInsightsClearsLiveOrganizationState() async {
-        organizer.didReceiveChunk(">> general: Ready to output organization structure.\n")
-        organizer.didReceiveChunk("""
-        {"folders":[{"name":"Receipts","files":[{"filename":"invoice_2025.pdf"}],"subfolders":[]}],"unorganized":[],"notes":""}
-        """)
-        try? await Task.sleep(nanoseconds: 250_000_000)
-
-        XCTAssertTrue(organizer.isReadyToOutputStructure)
-        XCTAssertFalse(organizer.liveOrganizationMoves.isEmpty)
-
-        organizer.setLiveInsightsEnabled(false)
-
-        XCTAssertFalse(organizer.isReadyToOutputStructure)
-        XCTAssertTrue(organizer.liveOrganizationMoves.isEmpty)
-    }
-    
     // MARK: - OrganizationProgress Struct Tests
     
     func testOrganizationProgressPercentage() {

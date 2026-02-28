@@ -51,6 +51,7 @@ Logs/
 
 # Sparkle signing keys (private key - NEVER commit)
 sparkle_keys/
+.env
 
 # Build artifacts & temp files
 build_debug.log

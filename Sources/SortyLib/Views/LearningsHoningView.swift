@@ -163,7 +163,8 @@ struct LearningsHoningView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
-                        .liquidGlassCard(cornerRadius: 12)
+                        .background(Color.secondary.opacity(0.05))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
                     .onHover { isHovering in

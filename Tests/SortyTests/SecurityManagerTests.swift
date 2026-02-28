@@ -7,6 +7,7 @@
 //
 
 import XCTest
+import Combine
 import LocalAuthentication
 @testable import SortyLib
 

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UserNotifications
+import AppKit
 
 struct NotificationPermissionCard: View {
     @ObservedObject private var notificationManager = NotificationManager.shared
@@ -77,14 +78,13 @@ struct NotificationPermissionCard: View {
                         
                     case .authorized, .provisional:
                         Button {
-                            Task {
-                                await notificationManager.checkNotificationPermission()
-                            }
+                            openSystemSettings()
                         } label: {
-                            Image(systemName: "arrow.clockwise")
+                            Image(systemName: "gearshape")
                         }
                         .buttonStyle(.bordered)
-                        .help("Refresh permission status")
+                        .controlSize(.small)
+                        .help("Open notification settings")
                         
                     default:
                         EmptyView()
@@ -109,26 +109,47 @@ struct NotificationPermissionCard: View {
                 await notificationManager.checkNotificationPermission()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task {
+                await notificationManager.checkNotificationPermission()
+            }
+        }
     }
     
     private func requestPermission() {
+        HapticFeedbackManager.shared.tap()
         isRequestingPermission = true
         Task {
-            _ = await notificationManager.requestPermission()
+            let granted = await notificationManager.requestPermission()
+            await notificationManager.checkNotificationPermission()
+
             await MainActor.run {
                 isRequestingPermission = false
-                HapticFeedbackManager.shared.success()
+                let status = notificationManager.notificationPermissionStatus
+                if granted || status == .authorized || status == .provisional {
+                    HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                    openSystemSettings()
+                }
             }
         }
     }
     
     private func openSystemSettings() {
         // Open System Settings > Notifications
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
-            NSWorkspace.shared.open(url)
-        } else if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-            NSWorkspace.shared.open(url)
+        let candidateURLs = [
+            "x-apple.systempreferences:com.apple.preference.notifications",
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+        ]
+
+        for urlString in candidateURLs {
+            if let url = URL(string: urlString), NSWorkspace.shared.open(url) {
+                return
+            }
         }
+
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
     }
 }
 

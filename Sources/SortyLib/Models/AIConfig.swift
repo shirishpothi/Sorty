@@ -18,13 +18,11 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case anthropic = "anthropic"
     case gemini = "gemini"
     case appleFoundationModel = "apple_foundation_model"
-    case applePrivateCloudCompute = "apple_private_cloud_compute"
 
     public static let appleFoundationModelName = "Apple Foundation Model"
-    public static let applePrivateCloudComputeModelName = "Apple Private Cloud Compute"
 
     public static var userSelectableProviders: [AIProvider] {
-        allCases.filter { $0 != .applePrivateCloudCompute }
+        allCases
     }
     
     public var displayName: String {
@@ -47,8 +45,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "Google Gemini"
         case .appleFoundationModel:
             return "Apple"
-        case .applePrivateCloudCompute:
-            return "Apple (Cloud)"
         }
     }
     
@@ -58,8 +54,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return true
         case .appleFoundationModel:
             return true
-        case .applePrivateCloudCompute:
-            return FeatureFlags.applePrivateCloudComputeModelEnabled
         }
     }
     
@@ -68,14 +62,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .anthropic, .gemini:
             return nil
         case .appleFoundationModel:
-            return nil
-        case .applePrivateCloudCompute:
-            if !FeatureFlags.applePrivateCloudComputeModelEnabled {
-                return "Disabled by feature flag. Enable with `defaults write com.sorty.app applePCCEnabled -bool true`."
-            }
-            if !ApplePrivateCloudComputeClient.isShortcutInstalled() {
-                return "No Apple Intelligence Shortcut found. Sorty automatically detects \"\(ApplePrivateCloudComputeClient.legacyShortcutName)\" and \"\(ApplePrivateCloudComputeClient.shortcutName)\"."
-            }
             return nil
         }
     }
@@ -101,8 +87,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "https://generativelanguage.googleapis.com/v1beta/openai"
         case .appleFoundationModel:
             return nil
-        case .applePrivateCloudCompute:
-            return nil
         }
     }
     
@@ -127,8 +111,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "gemini-3-flash-preview"
         case .appleFoundationModel:
             return Self.appleFoundationModelName
-        case .applePrivateCloudCompute:
-            return Self.applePrivateCloudComputeModelName
         }
     }
     
@@ -142,8 +124,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .appleFoundationModel:
             // CRITICAL: Apple Foundation Model runs strictly on-device via FoundationModels.framework
             // it does NOT use an API key and this must remain 'false'.
-            return false
-        case .applePrivateCloudCompute:
             return false
         }
     }
@@ -169,8 +149,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "Get your API key from aistudio.google.com"
         case .appleFoundationModel:
             return "No API key required"
-        case .applePrivateCloudCompute:
-            return "No API key required — Sorty auto-detects Apple Intelligence shortcuts"
         }
     }
     
@@ -194,8 +172,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .gemini:
             return URL(string: "https://aistudio.google.com/app/apikey")
         case .appleFoundationModel:
-            return nil
-        case .applePrivateCloudCompute:
             return nil
         }
     }
@@ -221,8 +197,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "aistudio.google.com"
         case .appleFoundationModel:
             return ""
-        case .applePrivateCloudCompute:
-            return ""
         }
     }
     
@@ -246,8 +220,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .gemini:
             return URL(string: "https://ai.google.dev/gemini-api/docs/models/gemini")
         case .appleFoundationModel:
-            return nil
-        case .applePrivateCloudCompute:
             return nil
         }
     }
@@ -273,8 +245,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return "Gemini Models"
         case .appleFoundationModel:
             return ""
-        case .applePrivateCloudCompute:
-            return ""
         }
     }
     
@@ -289,7 +259,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .gemini: return "Gemini"
         case .openAICompatible: return "server.rack"
         case .appleFoundationModel: return "apple.logo"
-        case .applePrivateCloudCompute: return "cloud.fill"
         }
     }
 
@@ -307,7 +276,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
 
     public var usesSystemImage: Bool {
         switch self {
-        case .openAICompatible, .appleFoundationModel, .applePrivateCloudCompute: return true
+        case .openAICompatible, .appleFoundationModel: return true
         default: return false
         }
     }
@@ -326,8 +295,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
             return Color(red: 0.32, green: 0.35, blue: 0.94)
         case .appleFoundationModel:
             return Color.gray
-        case .applePrivateCloudCompute:
-            return Color(red: 0.30, green: 0.60, blue: 0.90)
         case .openAICompatible:
             return Color.blue
         case .openRouter:
@@ -366,15 +333,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openAICompatible:
             return ["gpt-5-mini", "gpt-4o"]
         case .appleFoundationModel:
-            if FeatureFlags.applePrivateCloudComputeModelEnabled {
-                return [Self.appleFoundationModelName, Self.applePrivateCloudComputeModelName]
-            }
             return [Self.appleFoundationModelName]
-        case .applePrivateCloudCompute:
-            if !FeatureFlags.applePrivateCloudComputeModelEnabled {
-                return []
-            }
-            return [Self.applePrivateCloudComputeModelName]
         }
     }
 
@@ -390,7 +349,6 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .githubCopilot: return "github_access_token" // Special case handled by GitHubCopilotAuthManager
         case .openAICompatible: return "openAICompatibleAPIKey"
         case .appleFoundationModel: return "appleFoundationAPIKey"
-        case .applePrivateCloudCompute: return "applePCCAPIKey"
         }
     }
 }
@@ -554,20 +512,6 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var automationProvider: AIProvider?  // nil = use main provider
     public var automationModel: String?         // nil = use main model
 
-    public var usesApplePrivateCloudCompute: Bool {
-        guard FeatureFlags.applePrivateCloudComputeModelEnabled else {
-            return false
-        }
-        switch provider {
-        case .applePrivateCloudCompute:
-            return true
-        case .appleFoundationModel:
-            return model == AIProvider.applePrivateCloudComputeModelName
-        default:
-            return false
-        }
-    }
-
     public init(
         provider: AIProvider = .openAICompatible,
         apiURL: String? = nil,
@@ -681,21 +625,11 @@ public struct AIConfig: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
         let decodedProvider = try container.decodeIfPresent(AIProvider.self, forKey: .provider) ?? .openAICompatible
-        provider = decodedProvider == .applePrivateCloudCompute ? .appleFoundationModel : decodedProvider
+        provider = decodedProvider
         apiURL = try container.decodeIfPresent(String.self, forKey: .apiURL)
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey)
         let decodedModel = try container.decodeIfPresent(String.self, forKey: .model)
-        if decodedProvider == .applePrivateCloudCompute {
-            model = FeatureFlags.applePrivateCloudComputeModelEnabled
-                ? AIProvider.applePrivateCloudComputeModelName
-                : AIProvider.appleFoundationModelName
-        } else {
-            model = decodedModel ?? provider.defaultModel
-        }
-        if !FeatureFlags.applePrivateCloudComputeModelEnabled,
-           model == AIProvider.applePrivateCloudComputeModelName {
-            model = AIProvider.appleFoundationModelName
-        }
+        model = decodedModel ?? provider.defaultModel
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature) ?? 0.7
         requestTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .requestTimeout) ?? 120
         resourceTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .resourceTimeout) ?? 600
@@ -724,22 +658,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         visionDetailLevel = try container.decodeIfPresent(VisionDetailLevel.self, forKey: .visionDetailLevel) ?? VisionDetailLevel.defaultFor(provider: provider)
         ocrLanguages = try container.decodeIfPresent([String].self, forKey: .ocrLanguages) ?? ["en-US"]
         customOCRKeywords = try container.decodeIfPresent([String].self, forKey: .customOCRKeywords)
-        let decodedAutomationProvider = try container.decodeIfPresent(AIProvider.self, forKey: .automationProvider)
-        automationProvider = decodedAutomationProvider == .applePrivateCloudCompute ? .appleFoundationModel : decodedAutomationProvider
+        automationProvider = try container.decodeIfPresent(AIProvider.self, forKey: .automationProvider)
         automationModel = try container.decodeIfPresent(String.self, forKey: .automationModel)
-
-        if automationProvider == .appleFoundationModel,
-           decodedAutomationProvider == .applePrivateCloudCompute,
-           automationModel == nil {
-            automationModel = FeatureFlags.applePrivateCloudComputeModelEnabled
-                ? AIProvider.applePrivateCloudComputeModelName
-                : AIProvider.appleFoundationModelName
-        }
-
-        if !FeatureFlags.applePrivateCloudComputeModelEnabled,
-           automationModel == AIProvider.applePrivateCloudComputeModelName {
-            automationModel = AIProvider.appleFoundationModelName
-        }
     }
 
     public func encode(to encoder: Encoder) throws {
