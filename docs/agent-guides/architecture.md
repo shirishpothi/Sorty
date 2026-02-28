@@ -56,6 +56,12 @@ Uses App Groups (`group.com.sorty.app`) for IPC. Behind the `finderIntegrationEn
 Quick Action and Finder Sync repair flows are exposed in-app via Finder Integration settings.
 The Finder Sync `.appex` registration repair path is `ExtensionCommunication.repairFinderSyncExtensionRegistration` and should be preferred over external terminal instructions.
 
+### Finder Icon Troubleshooting
+- `Watch with Sorty` icon color variants are file-based assets in `Resources/Assets.xcassets/WatchIcon.imageset/`.
+- Light mode should resolve to `eye_black.png`; dark mode should resolve to `eye_white.png`.
+- If icon behavior appears unchanged after code edits, first verify the extension target itself builds: `xcodebuild -project Sorty.xcodeproj -target SortyFinderSync -configuration Debug -destination 'platform=macOS' build`.
+- A stale Finder Sync binary can stay active even when workspace code is updated; after deploy, re-enable `com.sorty.app.SortyFinderSync` and restart Finder to force reload.
+
 ## Learnings System
 User preference learning stored in `LearningsProfile`. Secured with biometric auth via `SecurityManager`.
 

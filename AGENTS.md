@@ -36,6 +36,11 @@ MVVM with service layers. State injected via `@EnvironmentObject` from `SortyApp
 
 ## Finder Integration Notes
 - Finder Sync `.appex` registration and stale-registration cleanup are implemented in `ExtensionCommunication.repairFinderSyncExtensionRegistration`.
+- Finder watch icon assets are sourced from `Resources/Assets.xcassets/WatchIcon.imageset/`:
+- Light mode uses `eye_black.png`.
+- Dark mode uses `eye_white.png`.
+- If Finder icon changes do not appear, verify the extension target builds directly: `xcodebuild -project Sorty.xcodeproj -target SortyFinderSync -configuration Debug -destination 'platform=macOS' build`.
+- Finder can keep a previously installed extension binary; after rebuilding/deploying, reload by re-enabling `com.sorty.app.SortyFinderSync` and restarting Finder.
 
 
 ## Detailed Guides
