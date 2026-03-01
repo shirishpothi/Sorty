@@ -10,7 +10,7 @@ import PDFKit
 import ImageIO
 import UniformTypeIdentifiers
 import Compression
-import AVFoundation
+@preconcurrency import AVFoundation
 import CoreServices
 import CoreMedia
 

@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 import ImageIO
+import CryptoKit
 @testable import SortyLib
 
 final class ImageVisionAnalyzerTests: XCTestCase {
@@ -85,13 +86,14 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         let first = await analyzer.prepareImageForVision(at: imageURL)
         XCTAssertNotNil(first)
 
-        let cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Sorty")
-            .appendingPathComponent("VisionCache")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: cacheDirectory?.path ?? ""))
+        guard let cachedFileURL = cacheFileURL(for: imageURL) else {
+            XCTFail("Failed to resolve expected cache file path")
+            return
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cachedFileURL.path))
 
         analyzer.clearVisionCache()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: cacheDirectory?.path ?? ""))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cachedFileURL.path))
     }
 
     private func createPNG(at url: URL, width: Int, height: Int) throws {
@@ -134,5 +136,21 @@ final class ImageVisionAnalyzerTests: XCTestCase {
             return nil
         }
         return (width, height)
+    }
+
+    private func cacheFileURL(for imageURL: URL) -> URL? {
+        let values = try? imageURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let modTime = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+        let fileSize = values?.fileSize ?? 0
+        let input = "\(imageURL.path)|\(modTime)|\(fileSize)"
+        let digest = SHA256.hash(data: Data(input.utf8))
+        let key = digest.compactMap { String(format: "%02x", $0) }.joined()
+
+        guard let cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Sorty")
+            .appendingPathComponent("VisionCache", isDirectory: true) else {
+            return nil
+        }
+        return cacheDirectory.appendingPathComponent("\(key).jpg")
     }
 }
