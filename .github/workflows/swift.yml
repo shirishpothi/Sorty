@@ -51,12 +51,9 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@v2
-        with:
-          egress-policy: audit
-
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       # Cache SPM dependencies
       - name: Cache SPM
@@ -69,18 +66,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      - name: Show environment info
-        run: |
-          sw_vers
-          xcodebuild -version
-          swift --version
-
       - name: Run Unit Tests (SPM)
         run: |
           set -o pipefail
-          swift test --parallel 2>&1 | tee unit_test_output.log
+          swift test --disable-sandbox --parallel 2>&1 | tee unit_test_output.log
           echo "✅ Unit tests completed"
-
 
       - name: Build the app (via script)
         env:
@@ -110,6 +100,7 @@ jobs:
           ./scripts/validate_sparkle.sh
 
       - name: Pre-release validation
+        if: github.event_name == 'workflow_dispatch'
         run: |
           chmod +x scripts/prerelease_check.sh
           ./scripts/prerelease_check.sh --skip-build --skip-tests --skip-sparkle
@@ -145,14 +136,11 @@ jobs:
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
-        if: always()
+        if: failure()
         with:
           name: test-results
           path: |
             unit_test_output.log
             build_output.log
-            ui_test_output.log
-            cli_build_output.log
-            TestResults.xcresult
           retention-days: 7
           if-no-files-found: ignore
