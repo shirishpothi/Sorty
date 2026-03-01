@@ -264,8 +264,12 @@ else
     log_item "SKIP_TESTS is set."
 fi
 
-# Inject Git Info
-"${SCRIPT_DIR}/inject_git_info.sh" "${PROJECT_DIR}/Resources"
+# Inject Git Info (skippable for fast dev loops)
+if [ "${SKIP_GIT_INJECT}" != "true" ]; then
+    "${SCRIPT_DIR}/inject_git_info.sh" "${PROJECT_DIR}/Resources"
+else
+    log_item "Skipping git info injection (SKIP_GIT_INJECT=true)"
+fi
 
 print_step 2 $TOTAL_STEPS "Compiling Project"
 start_step_timer "build"

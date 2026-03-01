@@ -45,7 +45,10 @@ let package = Package(
                 // Swift 6 strict concurrency - minimal checking to reduce type-check cost
                 .unsafeFlags(["-strict-concurrency=minimal"]),
             ],
-            linkerSettings: []
+            linkerSettings: [
+                // Skip deduplication in debug for faster linking
+                .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
+            ]
         ),
         .executableTarget(
             name: "SortyApp",
@@ -55,7 +58,9 @@ let package = Package(
                 .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
-            linkerSettings: []
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
+            ]
         ),
         .testTarget(
             name: "SortyTests",
@@ -75,7 +80,9 @@ let package = Package(
                 .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
                 .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
             ],
-            linkerSettings: []
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
+            ]
         )
     ]
 )

@@ -63,6 +63,10 @@ SWIFT_ENABLE_INCREMENTAL_COMPILATION = YES
 // Suppress warnings during build for cleaner output
 // GCC_WARN_INHIBIT_ALL_WARNINGS = YES
 
+// MARK: - Linker Optimizations (Debug)
+// Skip deduplication in debug for faster linking
+OTHER_LDFLAGS[config=Debug] = -Xlinker -no_deduplicate
+
 // MARK: - Architecture Settings
 // Limit to macOS only for faster builds
 SUPPORTED_PLATFORMS = macosx

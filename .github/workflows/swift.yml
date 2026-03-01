@@ -66,16 +66,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      - name: Run Unit Tests (SPM)
+      - name: Build & Test (SPM)
         run: |
           set -o pipefail
-          swift test --disable-sandbox --parallel 2>&1 | tee unit_test_output.log
-          echo "✅ Unit tests completed"
+          # Build all products first so SortyApp + LearningsCLI are also validated
+          swift build --disable-sandbox
+          swift test --disable-sandbox --parallel --skip-build 2>&1 | tee unit_test_output.log
+          echo "✅ Build & tests completed"
 
-      - name: Build the app (via script)
+      - name: Build app via script
         env:
           SKIP_TESTS: "true"
           SKIP_GIT_INJECT: "true"
+          BUILD_CONFIG: "debug"
         run: |
           chmod +x scripts/build.sh
           ./scripts/build.sh

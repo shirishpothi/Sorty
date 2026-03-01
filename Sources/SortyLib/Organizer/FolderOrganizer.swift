@@ -1693,7 +1693,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
     }
 
-    private func resetToIdle() {
+    private func resetToIdle(source: OrganizationEntrySource = .manual) {
         // Record cancellation in history if we were in a meaningful state
         if state == .organizing || state == .ready {
             if let directory = currentDirectory {
@@ -1705,7 +1705,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     success: false,
                     status: .cancelled,
                     errorMessage: "User cancelled the operation",
-                    rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
+                    rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                    source: source
                 )
                 history.addEntry(cancelledEntry)
 
@@ -1738,7 +1739,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     @MainActor
-    private func handleOrganizationError(_ error: Error, directory: URL) {
+    private func handleOrganizationError(_ error: Error, directory: URL, source: OrganizationEntrySource = .manual) {
         let displayMessage = userFacingErrorMessage(for: error)
         let failedEntry = OrganizationHistoryEntry(
             directoryPath: directory.path,
@@ -1748,7 +1749,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             success: false,
             status: .failed,
             errorMessage: displayMessage,
-            rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
+            rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+            source: source
         )
         history.addEntry(failedEntry)
 
@@ -2009,7 +2011,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         do {
             try await currentTask?.value
         } catch is CancellationError {
-            resetToIdle()
+            resetToIdle(source: historySource)
         }
     }
 
@@ -2200,7 +2202,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         } catch {
             stopTimeoutTimer()
-            handleOrganizationError(error, directory: directory)
+            handleOrganizationError(error, directory: directory, source: historySource)
             throw error
         }
     }

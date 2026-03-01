@@ -83,6 +83,7 @@ struct OrganizingMascotView: View {
                 mascotView(time: time)
             }
             .frame(width: orbitSize, height: orbitSize)
+            .drawingGroup(opaque: false)
             .clipShape(Circle())
             .contentShape(Circle())
             .onChange(of: time) { _, newTime in

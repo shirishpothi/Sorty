@@ -11,9 +11,9 @@ CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS := -j $(CORES)
 
 # Swift build flags for optimization
-SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox
+SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox -Xlinker -no_deduplicate
 SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=false ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=false ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 
 # Disable index store for local debug builds (saves ~10-15% compile time)
 export SWIFTPM_DISABLE_INDEXING ?= 1
@@ -50,7 +50,7 @@ debug:
 # Fastest development build - parallel, no tests, debug mode
 dev:
 	@echo "⚡ Fast development build ($(CORES) parallel jobs)..."
-	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 
 # runs the complete test suite with parallel execution
 test:
@@ -81,12 +81,12 @@ build-profile:
 # runs basic syntax checks and builds (skips tests)
 quick:
 	@echo "⚡ Quick build (skipping tests, DEBUG mode, $(CORES) parallel jobs)..."
-	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 
 # skips all checks and builds/runs immediately
 now:
 	@echo "🏎️  Immediate build and run (DEBUG mode, $(CORES) parallel jobs)..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@open releases/Sorty.app
 
 clean:
@@ -181,17 +181,17 @@ benchmark-save:
 # Preview harness — launches a targeted view for rapid iteration
 harness:
 	@echo "🔬 Building preview harness ($(CORES) parallel jobs)..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 open releases/Sorty.app
 
 harness-settings:
 	@echo "🔬 Harness → Settings..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=settings open releases/Sorty.app
 
 harness-organize:
 	@echo "🔬 Harness → Organize..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=organize open releases/Sorty.app
 
 help:

@@ -82,10 +82,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 
                 // Just reverted, so we must update snapshot to avoid re-triggering
                 print("Coordinator: Revert detected for \(folder.name), updating snapshot to ignore reverted files")
-                
-                // Pause and Resume will force a snapshot update
-                self.folderWatcher.pause(folder)
-                self.folderWatcher.resume(folder)
+
+                self.folderWatcher.refreshSnapshot(for: folder)
             }
         }
 
@@ -113,8 +111,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                     }) {
                         self.pendingFiles.removeValue(forKey: watchedFolder.id)
                         self.ignoredWatchEventsUntil[watchedFolder.id] = Date().addingTimeInterval(2.0)
-                        self.folderWatcher.pause(watchedFolder)
-                        self.folderWatcher.resume(watchedFolder)
+                        self.folderWatcher.refreshSnapshot(for: watchedFolder)
                     }
                 }
 
@@ -385,7 +382,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             ignoredWatchEventsUntil.removeValue(forKey: folder.id)
         }
         
-        if organizer.state != .idle {
+        if isOrganizerBusyForAutomation() {
             print("Coordinator: Organizer busy, queueing \(newFiles.count) files for \(folder.name)")
             if var existing = pendingFiles[folder.id] {
                 existing.files.formUnion(newFiles)
@@ -410,10 +407,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         }
         
         let startTime = Date()
+        defer {
+            folderWatcher.refreshSnapshot(for: folder)
+        }
         
         do {
-            folderWatcher.pause(folder)
-            
             watchedFoldersManager.markTriggered(folder)
             
             print("Coordinator: Auto-organizing \(files.count) new files in \(folder.name): \(files)")
@@ -427,9 +425,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 modelOverride: folder.modelOverride,
                 historySource: .watchedFolder
             )
-            
-            folderWatcher.resume(folder)
-            
+
             organizer.state = .idle
             
             let duration = Date().timeIntervalSince(startTime)
@@ -451,7 +447,6 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         } catch {
             print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
             notificationManager.showError(message: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)", isCritical: false, isAutomated: true)
-            folderWatcher.resume(folder)
             organizer.state = .idle
         }
     }
@@ -468,23 +463,33 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         retryTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard !Task.isCancelled else { return }
-            if organizer.state == .idle && !pendingFiles.isEmpty {
+            if !isOrganizerBusyForAutomation() && !pendingFiles.isEmpty {
                 await processPendingFiles()
             } else if !pendingFiles.isEmpty {
                 scheduleRetry()
             }
         }
     }
+
+    private func isOrganizerBusyForAutomation() -> Bool {
+        switch organizer.state {
+        case .scanning, .organizing, .applying:
+            return true
+        case .idle, .ready, .completed, .error:
+            return false
+        }
+    }
     
     func calibrateFolder(_ folder: WatchedFolder) {
         Task {
-            folderWatcher.pause(folder)
+            defer {
+                folderWatcher.refreshSnapshot(for: folder)
+            }
             do {
                 try await organizer.organize(directory: folder.url, customPrompt: folder.customPrompt, temperature: folder.temperature)
-                 try await organizer.apply(at: folder.url, dryRun: false)
-                 folderWatcher.resume(folder)
+                try await organizer.apply(at: folder.url, dryRun: false)
             } catch {
-                folderWatcher.resume(folder)
+                // Ignore calibrate failures; caller surface is non-blocking.
             }
         }
     }

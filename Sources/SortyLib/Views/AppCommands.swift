@@ -872,13 +872,20 @@ public class AppState: ObservableObject {
         
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 380),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.contentView = hostingView
         window.title = "About Sorty"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
+        if #available(macOS 26.0, *) {
+            window.backgroundColor = .clear
+            window.isOpaque = false
+        }
         window.center()
         
         // Retain the window controller to prevent deallocation

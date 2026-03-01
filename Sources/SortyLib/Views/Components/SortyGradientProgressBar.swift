@@ -193,6 +193,7 @@ struct SortyGradientCircularProgress: View {
                         .blur(radius: lineWidth * 0.8)
                         .blendMode(.plusLighter)
                 }
+                .drawingGroup(opaque: false)
             }
         }
         .frame(width: size, height: size)
@@ -248,6 +249,7 @@ struct SortyGradientCircularLoader: View {
             }
         }
         .frame(width: size, height: size)
+        .drawingGroup(opaque: false)
     }
 }
 

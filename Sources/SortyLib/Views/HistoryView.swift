@@ -18,7 +18,7 @@ struct HistoryView: View {
     @State private var selectedFilter: HistoryFilter = .all
     @State private var contentOpacity: Double = 0
     @State private var showingDetail = false
-    @State private var showWatchedAutomations = false
+    @State private var showWatchedAutomations = true
     
     // Lazy loading state
     @State private var displayedEntryCount: Int = 50
@@ -43,16 +43,12 @@ struct HistoryView: View {
         }
     }
 
-    private var filteredEntries: [OrganizationHistoryEntry] {
-        Array(allFilteredEntries.prefix(displayedEntryCount))
-    }
-
     private var manualEntries: [OrganizationHistoryEntry] {
-        filteredEntries.filter { $0.source == .manual }
+        Array(allFilteredEntries.filter { $0.source == .manual }.prefix(displayedEntryCount))
     }
 
     private var watchedEntries: [OrganizationHistoryEntry] {
-        filteredEntries.filter { $0.source == .watchedFolder }
+        Array(allFilteredEntries.filter { $0.source == .watchedFolder }.prefix(displayedEntryCount))
     }
 
     private var totalManualFilteredCount: Int {
@@ -64,7 +60,15 @@ struct HistoryView: View {
     }
     
     private var hasMoreEntries: Bool {
-        displayedEntryCount < allFilteredEntries.count
+        switch selectedFilter {
+        case .manual:
+            return manualEntries.count < totalManualFilteredCount
+        case .watched:
+            return watchedEntries.count < totalWatchedFilteredCount
+        case .all, .success, .failed, .skipped:
+            return manualEntries.count < totalManualFilteredCount ||
+                watchedEntries.count < totalWatchedFilteredCount
+        }
     }
 
     enum HistoryFilter: String, CaseIterable, Identifiable {
@@ -246,6 +250,9 @@ struct HistoryView: View {
         .onChange(of: selectedFilter) { _, _ in
             // Reset pagination when filter changes
             displayedEntryCount = pageSize
+            if selectedFilter == .watched {
+                showWatchedAutomations = true
+            }
         }
     }
 

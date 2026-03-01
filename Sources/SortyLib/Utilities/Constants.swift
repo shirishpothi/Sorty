@@ -311,7 +311,7 @@ struct ShimmerModifier: ViewModifier {
                 }
                 .blendMode(.screen)
                 .mask(content)
-                .compositingGroup()
+                .drawingGroup(opaque: false)
         } else {
             content
         }
@@ -414,7 +414,7 @@ struct TextShimmerModifier: ViewModifier {
                     }
                 }
                 .mask(content)
-                .compositingGroup()
+                .drawingGroup(opaque: false)
         } else {
             content
         }
@@ -560,6 +560,7 @@ public struct LoadingDotsView: View {
             }
             .accessibilityHidden(true)
         }
+        .drawingGroup(opaque: false)
     }
 }
 

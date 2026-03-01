@@ -239,7 +239,7 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     }
 
     nonisolated func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        return ["default"] // Only check default channel
+        return [] // Empty set allows all items, including those without a channel
     }
 }
 

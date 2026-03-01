@@ -1330,6 +1330,7 @@ private struct PingRingView: View {
             .stroke(Color.accentColor.opacity(ping ? 0 : 0.3), lineWidth: 2)
             .frame(width: 32, height: 32)
             .scaleEffect(ping ? 2.0 : 1.0)
+            .drawingGroup(opaque: false)
             .onAppear {
                 withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) {
                     ping = true
