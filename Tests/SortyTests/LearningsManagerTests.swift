@@ -141,15 +141,12 @@ final class LearningsManagerTests: XCTestCase {
             p.consentGranted = false
             manager.currentProfile = p
         }
-        
-        // Clear any global consent in UserDefaults that might be affecting things
-        UserDefaults.standard.set(false, forKey: "learnings_consent_granted")
-        
-        // We need a fresh manager or a way to refresh consent because it's cached in the instance
-        let freshManager = LearningsManager()
-        freshManager.currentProfile = manager.currentProfile
-        
-        XCTAssertTrue(freshManager.generatePromptContext().isEmpty, "Context should be empty when no consent is granted")
+
+        // Revoke consent on the same manager instance to avoid global UserDefaults
+        // races when tests run in parallel.
+        await manager.withdrawConsent()
+
+        XCTAssertTrue(manager.generatePromptContext().isEmpty, "Context should be empty when no consent is granted")
     }
     
     

@@ -232,6 +232,66 @@ public struct ExtensionCommunication {
         return nil
     }
 
+    private static func extensionURL(inAppBundle appBundleURL: URL) -> URL? {
+        let pluginsURL = appBundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("PlugIns", isDirectory: true)
+
+        let directPath = pluginsURL.appendingPathComponent(finderSyncExtensionName)
+        if FileManager.default.fileExists(atPath: directPath.path) {
+            return directPath
+        }
+
+        let fallbackPath = pluginsURL.appendingPathComponent("SortyFinderSync.appex")
+        if FileManager.default.fileExists(atPath: fallbackPath.path) {
+            return fallbackPath
+        }
+
+        return nil
+    }
+
+    private static func installedFinderSyncExtensionURL() -> URL? {
+        let bundleName = Bundle.main.bundleURL.lastPathComponent
+        guard !bundleName.isEmpty else { return nil }
+
+        let homeAppsURL = currentUserHomeDirectoryURL()
+            .appendingPathComponent("Applications", isDirectory: true)
+        let candidates = [
+            URL(fileURLWithPath: "/Applications", isDirectory: true)
+                .appendingPathComponent(bundleName, isDirectory: true),
+            homeAppsURL.appendingPathComponent(bundleName, isDirectory: true)
+        ]
+
+        for appURL in candidates {
+            if let extensionURL = extensionURL(inAppBundle: appURL) {
+                return extensionURL
+            }
+        }
+
+        return nil
+    }
+
+    private static func preferredFinderSyncExtensionURLForRegistration() -> URL? {
+        guard let currentExtensionURL = currentFinderSyncExtensionURL() else {
+            return installedFinderSyncExtensionURL()
+        }
+
+        let currentAppPath = Bundle.main.bundleURL.standardizedFileURL.path
+        if currentAppPath.hasPrefix("/Applications/") {
+            return currentExtensionURL
+        }
+
+        let homeApplicationsPrefix = currentUserHomeDirectoryURL()
+            .appendingPathComponent("Applications", isDirectory: true)
+            .standardizedFileURL
+            .path + "/"
+        if currentAppPath.hasPrefix(homeApplicationsPrefix) {
+            return currentExtensionURL
+        }
+
+        return installedFinderSyncExtensionURL() ?? currentExtensionURL
+    }
+
     private static func extractAppeXPath(from line: String) -> String? {
         let tabParts = line
             .split(separator: "\t")
@@ -385,8 +445,8 @@ public struct ExtensionCommunication {
     }
 
     public static func repairFinderSyncExtensionRegistration(restartFinder: Bool = true) -> (success: Bool, message: String) {
-        guard let currentExtensionURL = currentFinderSyncExtensionURL() else {
-            return (false, "Finder Sync extension is missing from the current app bundle.")
+        guard let currentExtensionURL = preferredFinderSyncExtensionURLForRegistration() else {
+            return (false, "Finder Sync extension is missing from both the current app bundle and any installed /Applications copy.")
         }
 
         let currentPath = currentExtensionURL.path
@@ -433,7 +493,10 @@ public struct ExtensionCommunication {
             return (false, "Finder Sync registration refreshed, but automatic enable failed. Open System Settings → Privacy & Security → Extensions → Finder, enable Sorty there, then click Repair again.")
         }
 
-        var message = "Finder Sync extension is active for this app build."
+        var message = "Finder Sync extension is active."
+        if !extensionPathsMatch(currentPath, currentFinderSyncExtensionURL()?.path ?? "") {
+            message += " Registered from the installed app location for Finder compatibility."
+        }
         if removedStaleCount > 0 {
             message += " Removed \(removedStaleCount) stale registration(s)."
         }
@@ -444,8 +507,8 @@ public struct ExtensionCommunication {
     }
 
     public static func repairFinderSyncExtensionRegistrationAsync(restartFinder: Bool = true) async -> (success: Bool, message: String) {
-        guard let currentExtensionURL = currentFinderSyncExtensionURL() else {
-            return (false, "Finder Sync extension is missing from the current app bundle.")
+        guard let currentExtensionURL = preferredFinderSyncExtensionURLForRegistration() else {
+            return (false, "Finder Sync extension is missing from both the current app bundle and any installed /Applications copy.")
         }
 
         let currentPath = currentExtensionURL.path
@@ -492,7 +555,10 @@ public struct ExtensionCommunication {
             return (false, "Finder Sync registration refreshed, but automatic enable failed. Open System Settings → Privacy & Security → Extensions → Finder, enable Sorty there, then click Repair again.")
         }
 
-        var message = "Finder Sync extension is active for this app build."
+        var message = "Finder Sync extension is active."
+        if !extensionPathsMatch(currentPath, currentFinderSyncExtensionURL()?.path ?? "") {
+            message += " Registered from the installed app location for Finder compatibility."
+        }
         if removedStaleCount > 0 {
             message += " Removed \(removedStaleCount) stale registration(s)."
         }
@@ -572,20 +638,23 @@ public struct ExtensionCommunication {
     }
 
     private static func presentServicesDirectoryAccessPanel(suggestedDirectory: URL) -> URL? {
-        let panel = NSOpenPanel()
-        panel.title = "Allow Access to Finder Quick Actions Folder"
-        panel.message = "Select your ~/Library/Services folder so Sorty can install the Finder Quick Action."
-        panel.prompt = "Allow Access"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-        panel.directoryURL = suggestedDirectory
+        // AppKit panel APIs are main-actor isolated on newer SDKs.
+        return MainActor.assumeIsolated {
+            let panel = NSOpenPanel()
+            panel.title = "Allow Access to Finder Quick Actions Folder"
+            panel.message = "Select your ~/Library/Services folder so Sorty can install the Finder Quick Action."
+            panel.prompt = "Allow Access"
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.canCreateDirectories = true
+            panel.directoryURL = suggestedDirectory
 
-        guard panel.runModal() == .OK, let selectedDirectory = panel.url else {
-            return nil
+            guard panel.runModal() == .OK, let selectedDirectory = panel.url else {
+                return nil
+            }
+            return selectedDirectory
         }
-        return selectedDirectory
     }
 
     private static func promptForServicesDirectoryAccess(suggestedDirectory: URL) -> URL? {
