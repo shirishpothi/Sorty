@@ -79,6 +79,7 @@ jobs:
           SKIP_TESTS: "true"
           SKIP_GIT_INJECT: "true"
           BUILD_CONFIG: "debug"
+          APP_ICON_VARIANT: "ci"
         run: |
           chmod +x scripts/build.sh
           ./scripts/build.sh

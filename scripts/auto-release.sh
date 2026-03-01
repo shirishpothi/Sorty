@@ -143,6 +143,7 @@ log_success "All tests passed"
 # Step 3: Build
 print_step 3 6 "Building application"
 export SKIP_TESTS=true  # Already ran tests
+export APP_ICON_VARIANT="${APP_ICON_VARIANT:-release}"
 "${SCRIPT_DIR}/build.sh"
 
 # Step 4: Package

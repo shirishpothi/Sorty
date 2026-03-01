@@ -59,6 +59,9 @@ else
     fi
 fi
 
+# Release builds should always use the release icon unless explicitly overridden.
+export APP_ICON_VARIANT="${APP_ICON_VARIANT:-release}"
+
 # --- Step 1: Build & Test ---
 "${SCRIPT_DIR}/build.sh"
 

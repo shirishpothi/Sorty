@@ -90,6 +90,7 @@ struct LearningsView: View {
                 await manager.unlock()
             }
         }
+        .navigationTitle("Learnings")
     }
     
     // MARK: - Authentication Gate
@@ -2350,6 +2351,7 @@ struct HighCorrectionRateInsight: View {
     let impact: LearningsImpactSummary
     @ObservedObject var manager: LearningsManager
     var onStartHoning: (() -> Void)?
+    @State private var addedInsightIds: Set<String> = []
     
     private var adjustmentCount: Int {
         impact.correctionsAfterAI
@@ -2480,12 +2482,15 @@ struct HighCorrectionRateInsight: View {
                     Spacer()
                     
                     if let actionLabel = insight.actionLabel {
-                        Button(action: { performAction(insight.action) }) {
-                            Text(actionLabel)
+                        let isAdded = addedInsightIds.contains(insight.id.uuidString)
+                        Button(action: { performAction(insight) }) {
+                            Text(isAdded ? "Added ✓" : actionLabel)
                                 .font(.caption2.bold())
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.mini)
+                        .disabled(isAdded)
+                        .tint(isAdded ? .green : nil)
                     }
                 }
             }
@@ -2497,11 +2502,17 @@ struct HighCorrectionRateInsight: View {
         .accessibilityLabel("Improvement opportunities")
     }
     
-    private func performAction(_ action: InsightAction) {
+    private func performAction(_ insight: ActionableInsight) {
         HapticFeedbackManager.shared.tap()
-        switch action {
+        switch insight.action {
         case .addSteering(let prompt):
+            let savedPrompt = SavedSteeringPrompt(name: insight.title, prompt: prompt)
+            SteeringPromptManager.shared.addPrompt(savedPrompt)
             manager.recordSteeringPrompt(prompt, folderPath: nil, sessionId: nil)
+            withAnimation(.easeInOut(duration: 0.2)) {
+                addedInsightIds.insert(insight.id.uuidString)
+            }
+            HapticFeedbackManager.shared.success()
         case .startHoning:
             onStartHoning?()
         case .none:

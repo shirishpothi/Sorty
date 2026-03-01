@@ -52,37 +52,25 @@ struct AdvancedSettingsView: View {
             
             SettingsCard(title: "Timeouts", icon: "clock", color: .orange) {
                 VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("Request Timeout")
-                                .font(.subheadline)
-                            Spacer()
-                            Text("\(Int(viewModel.config.requestTimeout))s")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(value: $viewModel.config.requestTimeout, in: 30...600, step: 10)
-                        Text("Time to wait for initial response")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    TimeoutSliderRow(
+                        title: "Request Timeout",
+                        description: "Time to wait for initial response",
+                        value: $viewModel.config.requestTimeout,
+                        sliderMin: 30,
+                        defaultMax: 600,
+                        step: 10
+                    )
                     
                     Divider()
                     
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("Resource Timeout")
-                                .font(.subheadline)
-                            Spacer()
-                            Text("\(Int(viewModel.config.resourceTimeout))s")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundColor(.secondary)
-                        }
-                        Slider(value: $viewModel.config.resourceTimeout, in: 60...1800, step: 60)
-                        Text("Maximum total request duration")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                    TimeoutSliderRow(
+                        title: "Resource Timeout",
+                        description: "Maximum total request duration",
+                        value: $viewModel.config.resourceTimeout,
+                        sliderMin: 60,
+                        defaultMax: 1800,
+                        step: 60
+                    )
                 }
             }
             .animatedAppearance(delay: 0.1)
@@ -128,6 +116,98 @@ struct AdvancedSettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.2)
+        }
+    }
+}
+
+// MARK: - Timeout Slider with Editable Maximum
+
+private struct TimeoutSliderRow: View {
+    let title: String
+    let description: String
+    @Binding var value: TimeInterval
+    let sliderMin: Double
+    let defaultMax: Double
+    let step: Double
+    
+    @State private var editingMax = false
+    @State private var maxText = ""
+    @State private var customMax: Double?
+    @FocusState private var maxFieldFocused: Bool
+    
+    private var effectiveMax: Double {
+        if let customMax, customMax > sliderMin { return customMax }
+        return max(defaultMax, value)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                    .font(.subheadline)
+                Spacer()
+                Text("\(Int(value))s")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundColor(.secondary)
+            }
+            
+            HStack(spacing: 8) {
+                Slider(value: $value, in: sliderMin...effectiveMax, step: step)
+                
+                if editingMax {
+                    TextField("Max", text: $maxText)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 64)
+                        .font(.subheadline.monospacedDigit())
+                        .focused($maxFieldFocused)
+                        .onSubmit { commitMax() }
+                        .onAppear {
+                            maxText = "\(Int(effectiveMax))"
+                            maxFieldFocused = true
+                        }
+                } else {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            editingMax = true
+                        }
+                    } label: {
+                        Text("\(Int(effectiveMax))s")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Click to set custom maximum")
+                    .onHover { hovering in
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                            HapticFeedbackManager.shared.selection()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                }
+            }
+            
+            Text(description)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    private func commitMax() {
+        if let parsed = Double(maxText), parsed >= sliderMin {
+            let rounded = (parsed / step).rounded() * step
+            withAnimation(.easeInOut(duration: 0.15)) {
+                customMax = rounded
+                if value > rounded { value = rounded }
+            }
+            HapticFeedbackManager.shared.success()
+        }
+        withAnimation(.easeInOut(duration: 0.15)) {
+            editingMax = false
         }
     }
 }

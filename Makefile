@@ -120,8 +120,9 @@ install-cli: cli
 	@echo "✅ Installed! Run with: learnings --help"
 
 # Create a release zip for GitHub (manual)
-release: build
+release:
 	@echo "📦 Creating release package..."
+	@APP_ICON_VARIANT=release $(MAKE) build
 	@cd releases && zip -r Sorty-macOS.zip Sorty.app
 	@echo "✅ Release package created: releases/Sorty-macOS.zip"
 	@echo ""

@@ -549,6 +549,52 @@ else
     log_success "App bundle assembled ($(get_step_duration "assemble"))"
 fi
 
+# Icon variant selection — swap AppIcon.icns in the bundle based on context.
+# APP_ICON_VARIANT accepts:
+# - release/prod/production -> AppIcon-Release.icns
+# - debug/local/dev         -> AppIcon-Debug.icns
+# - ci/commit/push/github   -> AppIcon-CI.icns
+RAW_APP_ICON_VARIANT="${APP_ICON_VARIANT:-debug}"
+APP_ICON_VARIANT_NORMALIZED="$(echo "${RAW_APP_ICON_VARIANT}" | tr '[:upper:]' '[:lower:]')"
+
+case "${APP_ICON_VARIANT_NORMALIZED}" in
+    release|prod|production)
+        APP_ICON_VARIANT_KEY="release"
+        ICON_VARIANT_SUFFIX="Release"
+        ;;
+    debug|local|dev)
+        APP_ICON_VARIANT_KEY="debug"
+        ICON_VARIANT_SUFFIX="Debug"
+        ;;
+    ci|commit|commits|push|github|nonrelease|non-release)
+        APP_ICON_VARIANT_KEY="ci"
+        ICON_VARIANT_SUFFIX="CI"
+        ;;
+    *)
+        APP_ICON_VARIANT_KEY="${APP_ICON_VARIANT_NORMALIZED}"
+        ICON_VARIANT_SUFFIX="$(echo "${APP_ICON_VARIANT_KEY}" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+        ;;
+esac
+
+ICON_SRC="${PROJECT_DIR}/Assets/AppIcon/AppIcon-${ICON_VARIANT_SUFFIX}.icns"
+if [ ! -f "${ICON_SRC}" ]; then
+    # Fallback: case-insensitive match
+    for variant_file in "${PROJECT_DIR}/Assets/AppIcon/AppIcon-"*.icns; do
+        base=$(basename "$variant_file" .icns)
+        suffix="${base#AppIcon-}"
+        if [ "$(echo "$suffix" | tr '[:upper:]' '[:lower:]')" = "$(echo "${APP_ICON_VARIANT_KEY}" | tr '[:upper:]' '[:lower:]')" ]; then
+            ICON_SRC="$variant_file"
+            break
+        fi
+    done
+fi
+if [ -f "${ICON_SRC}" ]; then
+    cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
+    log_item "App icon set to ${APP_ICON_VARIANT_KEY} variant"
+else
+    log_item "Warning: Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"
+fi
+
 # Step 4: Signing (common for both build methods)
 if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
     print_step 4 $TOTAL_STEPS "Ad-hoc Signing"

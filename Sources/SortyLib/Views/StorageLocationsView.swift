@@ -107,6 +107,7 @@ struct StorageLocationsView: View {
             // Restore security-scoped access on appear
             storageLocationsManager.restoreSecurityScopedAccess()
         }
+        .navigationTitle("Storage Locations")
     }
     
     private var headerView: some View {

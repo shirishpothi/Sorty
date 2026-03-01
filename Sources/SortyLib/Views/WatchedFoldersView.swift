@@ -109,6 +109,7 @@ struct WatchedFoldersView: View {
                 contentOpacity = 1.0
             }
         }
+        .navigationTitle("Watched Folders")
     }
     
     private var headerView: some View {

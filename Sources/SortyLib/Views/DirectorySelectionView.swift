@@ -121,41 +121,66 @@ struct DirectorySelectionView: View {
     }
     
     private var dropZone: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(
-                    isTargeted ? Color.accentColor : Color.secondary.opacity(0.2),
-                    style: StrokeStyle(lineWidth: 2, dash: isTargeted ? [] : [10])
-                )
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(isTargeted ? Color.accentColor.opacity(0.05) : Color.secondary.opacity(0.05))
-                )
-                .frame(width: 220, height: settingsViewModel.config.enableSmartRename ? 120 : 150)
-                .scaleEffect(isTargeted ? 1.05 : 1.0)
-                .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
-            
-            VStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(isTargeted ? Color.accentColor.opacity(0.1) : Color.blue.opacity(0.08))
-                        .frame(width: 64, height: 64)
-                        .scaleEffect(isTargeted ? 1.1 : 1.0)
-                    
-                    Image(systemName: isTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(isTargeted ? Color.accentColor : .blue)
-                        .scaleEffect(iconBounce ? 1.1 : 1.0)
-                }
-                .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isTargeted)
-                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: iconBounce)
-                
-                Text(isTargeted ? "Drop to select" : "Drop folder here")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
+        let dropZoneHeight: CGFloat = settingsViewModel.config.enableSmartRename ? 120 : 150
+        let dropZoneCornerRadius: CGFloat = 16
+        let dropZoneContent = VStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isTargeted ? Color.accentColor.opacity(0.1) : Color.blue.opacity(0.08))
+                    .frame(width: 64, height: 64)
+                    .scaleEffect(isTargeted ? 1.1 : 1.0)
+
+                Image(systemName: isTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
+                    .font(.system(size: 34, weight: .light))
+                    .foregroundStyle(isTargeted ? Color.accentColor : .blue)
+                    .scaleEffect(iconBounce ? 1.1 : 1.0)
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isTargeted)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: iconBounce)
+
+            Text(isTargeted ? "Drop to select" : "Drop folder here")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
+        }
+        .frame(width: 220, height: dropZoneHeight)
+
+        return Group {
+            if #available(macOS 26.0, *) {
+                dropZoneContent
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: dropZoneCornerRadius))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .fill(isTargeted ? Color.accentColor.opacity(0.1) : .clear)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .strokeBorder(
+                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.2),
+                                style: StrokeStyle(lineWidth: 2, dash: isTargeted ? [] : [10])
+                            )
+                    }
+            } else {
+                dropZoneContent
+                    .background {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.05))
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : .clear)
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .strokeBorder(
+                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.2),
+                                style: StrokeStyle(lineWidth: 2, dash: isTargeted ? [] : [10])
+                            )
+                    }
             }
         }
+            .scaleEffect(isTargeted ? 1.05 : 1.0)
+            .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.9)
         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
@@ -351,5 +376,3 @@ extension UTType {
         UTType(exportedAs: "public.file-url")
     }
 }
-
-

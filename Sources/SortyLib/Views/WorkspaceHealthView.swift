@@ -127,6 +127,7 @@ public struct WorkspaceHealthView: View {
                 await refreshAnalysis()
             }
         }
+        .navigationTitle("Workspace Health")
     }
     
     // MARK: - Header
