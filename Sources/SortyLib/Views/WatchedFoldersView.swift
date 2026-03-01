@@ -280,247 +280,325 @@ struct WatchedFolderCard: View {
         return "eye.circle.fill"
     }
 
+    private var cardBackgroundColor: Color {
+        if isHighlighted {
+            return Color.accentColor.opacity(highlightPulse ? 0.14 : 0.08)
+        }
+        return isHovered ? Color.primary.opacity(0.03) : Color.clear
+    }
+
+    private var cardBorderColor: Color {
+        if isHighlighted {
+            return Color.accentColor.opacity(highlightPulse ? 0.9 : 0.45)
+        }
+        return folder.exists ? Color.white.opacity(0.1) : Color.red.opacity(0.3)
+    }
+
+    private var cardShadowColor: Color {
+        if isHighlighted {
+            return Color.accentColor.opacity(highlightPulse ? 0.35 : 0.16)
+        }
+        return .black.opacity(0.03)
+    }
+
+    private var cardShadowRadius: CGFloat {
+        isHighlighted ? 10 : 3
+    }
+
+    private var folderIconView: some View {
+        ZStack(alignment: .bottomTrailing) {
+            FolderThumbnailView(url: URL(fileURLWithPath: folder.path), size: CGSize(width: 40, height: 40))
+                .opacity(folder.isEnabled ? 1.0 : 0.6)
+
+            Image(systemName: statusIcon)
+                .font(.system(size: 14))
+                .foregroundStyle(statusColor)
+                .background(
+                    Circle()
+                        .fill(Color(NSColor.controlBackgroundColor))
+                        .frame(width: 18, height: 18)
+                )
+                .offset(x: 4, y: 4)
+        }
+        .frame(width: 48, height: 48)
+    }
+
+    private var organizingBadge: some View {
+        HStack(spacing: 4) {
+            SortyGradientCircularLoader(size: 10, lineWidth: 2)
+            Text("Organizing...")
+                .font(.caption2)
+        }
+        .foregroundColor(.blue)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.blue.opacity(0.1))
+        .clipShape(Capsule())
+    }
+
+    private var aiMissingBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.caption2)
+            Text("AI Missing")
+                .font(.caption2)
+        }
+        .foregroundColor(.orange)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.orange.opacity(0.1))
+        .clipShape(Capsule())
+        .help("Auto-organization requires an AI provider configured in Settings")
+    }
+
+    private var titleRow: some View {
+        HStack(spacing: 8) {
+            Text(folder.name)
+                .font(.headline)
+                .foregroundColor(folder.isEnabled ? .primary : .secondary)
+
+            if isOrganizing {
+                organizingBadge
+            }
+
+            if folder.isEnabled && folder.autoOrganize && !isAIConfigured {
+                aiMissingBadge
+            }
+        }
+    }
+
+    private var lastTriggeredStat: some View {
+        Group {
+            if let lastTriggered = folder.lastTriggered {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                    Text(lastTriggered, style: .relative)
+                        .font(.caption2)
+                }
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var autoStat: some View {
+        Group {
+            if folder.autoOrganize {
+                HStack(spacing: 4) {
+                    Image(systemName: "bolt.fill")
+                        .font(.caption2)
+                    Text("Auto")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.green)
+            }
+        }
+    }
+
+    private var modelOverrideStat: some View {
+        Group {
+            if let modelOverride = folder.modelOverride {
+                HStack(spacing: 4) {
+                    Image(systemName: "cpu")
+                        .font(.caption2)
+                    Text(modelOverride)
+                        .font(.caption2)
+                        .lineLimit(1)
+                }
+                .foregroundStyle(.purple)
+            }
+        }
+    }
+
+    private var missingFolderStatus: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.caption2)
+            Text("Folder not found")
+                .font(.caption2)
+        }
+        .foregroundStyle(.red)
+    }
+
+    private var lostAccessLabel: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "lock.slash.fill")
+                .font(.caption2)
+            Text("Access Lost")
+                .font(.caption2)
+        }
+        .foregroundStyle(.orange)
+        .help("App Sandbox access to this folder was lost. Try removing and re-adding it.")
+    }
+
+    private var grantAccessButton: some View {
+        Button("Grant Access") {
+            let panel = NSOpenPanel()
+            panel.canChooseFiles = false
+            panel.canChooseDirectories = true
+            panel.allowsMultipleSelection = false
+            panel.message = "Re-select \"\(folder.name)\" to restore access"
+            panel.prompt = "Grant Access"
+            panel.directoryURL = URL(fileURLWithPath: folder.path).deletingLastPathComponent()
+
+            if panel.runModal() == .OK, let url = panel.url {
+                watchedFoldersManager.reauthorizeFolder(folder, with: url)
+                HapticFeedbackManager.shared.success()
+            }
+        }
+        .font(.caption2)
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
+    }
+
+    @ViewBuilder
+    private var healthStatusView: some View {
+        if !folder.exists {
+            missingFolderStatus
+        } else if folder.accessStatus == .lost {
+            HStack(spacing: 6) {
+                lostAccessLabel
+                grantAccessButton
+            }
+        }
+    }
+
+    private var statsRow: some View {
+        HStack(spacing: 12) {
+            lastTriggeredStat
+            autoStat
+            modelOverrideStat
+            healthStatusView
+        }
+    }
+
+    private var folderInfoView: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titleRow
+
+            Text(folder.path)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            statsRow
+        }
+    }
+
+    private var quickActionsView: some View {
+        HStack(spacing: 8) {
+            Button {
+                HapticFeedbackManager.shared.tap()
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+            } label: {
+                Image(systemName: "folder")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Reveal in Finder")
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                showingConfig = true
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Configure")
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    watchedFoldersManager.removeFolder(folder)
+                }
+            } label: {
+                Image(systemName: "trash")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Remove")
+        }
+    }
+
+    private var autoOrganizeControlView: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            Toggle("", isOn: Binding(
+                get: { folder.isEnabled },
+                set: { _ in
+                    HapticFeedbackManager.shared.selection()
+                    watchedFoldersManager.toggleEnabled(for: folder)
+                }
+            ))
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .labelsHidden()
+
+            if folder.isEnabled {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    if isAIConfigured {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            watchedFoldersManager.toggleAutoOrganize(for: folder)
+                        }
+                    } else {
+                        HapticFeedbackManager.shared.error()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: folder.autoOrganize ? "bolt.fill" : "bolt")
+                            .font(.caption2)
+                        Text(folder.autoOrganize ? "Auto" : "Manual")
+                            .font(.caption2)
+                    }
+                    .contentShape(Rectangle())
+                    .foregroundColor(folder.autoOrganize ? .green : .secondary)
+                    .opacity(isAIConfigured ? 1.0 : 0.5)
+                }
+                .buttonStyle(.plain)
+                .disabled(!isAIConfigured)
+                .transition(.scale.combined(with: .opacity))
+                .help(!isAIConfigured ? "AI Provider required" : "")
+            }
+        }
+    }
+
+    private var controlsView: some View {
+        HStack(spacing: 12) {
+            if isHovered {
+                quickActionsView
+                    .transition(.scale.combined(with: .opacity))
+            }
+
+            autoOrganizeControlView
+        }
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: folder.isEnabled)
+    }
+
     var body: some View {
         HStack(spacing: 16) {
-            // Folder Icon with Status
-            ZStack(alignment: .bottomTrailing) {
-                FolderThumbnailView(url: URL(fileURLWithPath: folder.path), size: CGSize(width: 40, height: 40))
-                    .opacity(folder.isEnabled ? 1.0 : 0.6)
-                
-                Image(systemName: statusIcon)
-                    .font(.system(size: 14))
-                    .foregroundStyle(statusColor)
-                    .background(
-                        Circle()
-                            .fill(Color(NSColor.controlBackgroundColor))
-                            .frame(width: 18, height: 18)
-                    )
-                    .offset(x: 4, y: 4)
-            }
-            .frame(width: 48, height: 48)
-
-            // Folder Info
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(folder.name)
-                        .font(.headline)
-                        .foregroundColor(folder.isEnabled ? .primary : .secondary)
-                    
-                    if isOrganizing {
-                        HStack(spacing: 4) {
-                            SortyGradientCircularLoader(size: 10, lineWidth: 2)
-                            Text("Organizing...")
-                                .font(.caption2)
-                        }
-                        .foregroundColor(.blue)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.blue.opacity(0.1))
-                        .clipShape(Capsule())
-                    }
-                    
-                    // Show warning if enabled but AI not configured
-                    if folder.isEnabled && folder.autoOrganize && !isAIConfigured {
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .font(.caption2)
-                            Text("AI Missing")
-                                .font(.caption2)
-                        }
-                        .foregroundColor(.orange)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.1))
-                        .clipShape(Capsule())
-                        .help("Auto-organization requires an AI provider configured in Settings")
-                    }
-                }
-
-                Text(folder.path)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                
-                // Stats row
-                HStack(spacing: 12) {
-                    if let lastTriggered = folder.lastTriggered {
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock")
-                                .font(.caption2)
-                            Text(lastTriggered, style: .relative)
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.secondary)
-                    }
-                    
-                    if folder.autoOrganize {
-                        HStack(spacing: 4) {
-                            Image(systemName: "bolt.fill")
-                                .font(.caption2)
-                            Text("Auto")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.green)
-                    }
-                    
-                    if let modelOverride = folder.modelOverride {
-                        HStack(spacing: 4) {
-                            Image(systemName: "cpu")
-                                .font(.caption2)
-                            Text(modelOverride)
-                                .font(.caption2)
-                                .lineLimit(1)
-                        }
-                        .foregroundStyle(.purple)
-                    }
-                    
-                    if !folder.exists {
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.caption2)
-                            Text("Folder not found")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.red)
-                    } else if folder.accessStatus == .lost {
-                        HStack(spacing: 4) {
-                            Image(systemName: "lock.slash.fill")
-                                .font(.caption2)
-                            Text("Access Lost")
-                                .font(.caption2)
-                        }
-                        .foregroundStyle(.orange)
-                        .help("App Sandbox access to this folder was lost. Try removing and re-adding it.")
-
-                        Button("Grant Access") {
-                            let panel = NSOpenPanel()
-                            panel.canChooseFiles = false
-                            panel.canChooseDirectories = true
-                            panel.allowsMultipleSelection = false
-                            panel.message = "Re-select \"\(folder.name)\" to restore access"
-                            panel.prompt = "Grant Access"
-                            if let parentPath = URL(fileURLWithPath: folder.path).deletingLastPathComponent() as URL? {
-                                panel.directoryURL = parentPath
-                            }
-                            if panel.runModal() == .OK, let url = panel.url {
-                                watchedFoldersManager.reauthorizeFolder(folder, with: url)
-                                HapticFeedbackManager.shared.success()
-                            }
-                        }
-                        .font(.caption2)
-                        .buttonStyle(.bordered)
-                        .controlSize(.mini)
-                    }
-                }
-            }
+            folderIconView
+            folderInfoView
 
             Spacer()
 
-            // Controls
-            HStack(spacing: 12) {
-                if isHovered {
-                    // Quick Actions
-                    HStack(spacing: 8) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
-                        } label: {
-                            Image(systemName: "folder")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("Reveal in Finder")
-                        
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            showingConfig = true
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("Configure")
-                        
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                watchedFoldersManager.removeFolder(folder)
-                            }
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.caption)
-                                .foregroundStyle(.red)
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help("Remove")
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
-                
-                // Auto-organize toggle
-                VStack(alignment: .trailing, spacing: 4) {
-                    Toggle("", isOn: Binding(
-                        get: { folder.isEnabled },
-                        set: { _ in
-                            HapticFeedbackManager.shared.selection()
-                            watchedFoldersManager.toggleEnabled(for: folder)
-                        }
-                    ))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
-                    
-                    if folder.isEnabled {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            // Only allow toggling auto if AI is configured
-                            if isAIConfigured {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    watchedFoldersManager.toggleAutoOrganize(for: folder)
-                                }
-                            } else {
-                                // Provide feedback that it's disabled
-                                HapticFeedbackManager.shared.error()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: folder.autoOrganize ? "bolt.fill" : "bolt")
-                                    .font(.caption2)
-                                Text(folder.autoOrganize ? "Auto" : "Manual")
-                                    .font(.caption2)
-                            }
-                            .contentShape(Rectangle())
-                            .foregroundColor(folder.autoOrganize ? .green : .secondary)
-                            .opacity(isAIConfigured ? 1.0 : 0.5)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(!isAIConfigured)
-                        .transition(.scale.combined(with: .opacity))
-                        .help(!isAIConfigured ? "AI Provider required" : "")
-                    }
-                }
-            }
-            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: folder.isEnabled)
+            controlsView
         }
         .padding(16)
         .contentShape(Rectangle())
-        .background(isHighlighted ? Color.accentColor.opacity(highlightPulse ? 0.14 : 0.08) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
+        .background(cardBackgroundColor)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    isHighlighted
-                        ? Color.accentColor.opacity(highlightPulse ? 0.9 : 0.45)
-                        : (folder.exists ? Color.white.opacity(0.1) : Color.red.opacity(0.3)),
-                    lineWidth: isHighlighted ? 1.6 : 1
-                )
+                .stroke(cardBorderColor, lineWidth: isHighlighted ? 1.6 : 1)
         )
-        .shadow(color: isHighlighted ? Color.accentColor.opacity(highlightPulse ? 0.35 : 0.16) : .black.opacity(0.03), radius: isHighlighted ? 10 : 3, x: 0, y: 1)
+        .shadow(color: cardShadowColor, radius: cardShadowRadius, x: 0, y: 1)
         .opacity(folder.exists ? 1.0 : 0.8)
         .scaleEffect(isHighlighted && highlightPulse ? 1.008 : 1.0)
         .onHover { isHovered = $0 }
