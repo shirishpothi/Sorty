@@ -297,7 +297,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         -derivedDataPath "${BUILD_DIR}/DerivedData" \
         -parallelizeTargets \
         -jobs "${XCODE_BUILD_JOBS}" \
-        -disableAutomaticPackageResolution \
+        -skipPackagePluginValidation \
         -showBuildTimingSummary \
         INFOPLIST_FILE="${PROJECT_DIR}/Info.plist" \
         PRODUCT_BUNDLE_IDENTIFIER="${APP_BUNDLE_ID}" \
