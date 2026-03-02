@@ -311,8 +311,9 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         exit 1
     fi
     
-    # Find the built app in DerivedData
-    BUILT_APP=$(find "${BUILD_DIR}/DerivedData" -name "*.app" -type d | head -1)
+    # Find the built app in DerivedData (match exact name to avoid picking up
+    # Sparkle's Updater.app or Autoupdate.app which are also .app bundles)
+    BUILT_APP=$(find "${BUILD_DIR}/DerivedData" -name "${APP_BUNDLE}" -type d | head -1)
     if [ -z "$BUILT_APP" ]; then
         log_failure "Built app not found in DerivedData"
         exit 1
