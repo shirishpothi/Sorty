@@ -329,6 +329,28 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         strip -x "${MACOS_BIN}"
     fi
 
+    # Inject Sparkle keys and version into built Info.plist (xcodebuild may drop custom keys)
+    BUILT_PLIST="${APP_PATH}/Contents/Info.plist"
+    ROOT_PLIST="${PROJECT_DIR}/Info.plist"
+    if [ -f "${BUILT_PLIST}" ] && [ -f "${ROOT_PLIST}" ]; then
+        for key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks; do
+            VAL=$(/usr/libexec/PlistBuddy -c "Print :${key}" "${ROOT_PLIST}" 2>/dev/null || true)
+            if [ -n "${VAL}" ]; then
+                /usr/libexec/PlistBuddy -c "Delete :${key}" "${BUILT_PLIST}" 2>/dev/null || true
+                # Detect type: SUEnableAutomaticChecks is bool, rest are strings
+                if [ "${key}" = "SUEnableAutomaticChecks" ]; then
+                    /usr/libexec/PlistBuddy -c "Add :${key} bool ${VAL}" "${BUILT_PLIST}"
+                else
+                    /usr/libexec/PlistBuddy -c "Add :${key} string ${VAL}" "${BUILT_PLIST}"
+                fi
+            fi
+        done
+        # Also inject version/build from root plist
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${BUILT_PLIST}" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUM}" "${BUILT_PLIST}" 2>/dev/null || true
+        log_item "Injected Sparkle keys and version into bundle Info.plist"
+    fi
+
     # Copy Resources with integrity checks and conflict detection
     RESOURCES_DIR="${APP_PATH}/Contents/Resources"
     SPM_BUNDLE=$(find "${BUILD_DIR}/DerivedData" -name "Sorty_SortyLib.bundle" -type d | head -1)

@@ -303,6 +303,29 @@ jobs:
             chmod +x ".build/artifacts/sparkle/Sparkle/bin/sign_update"
           fi
 
+      - name: Inject Sparkle keys into built app
+        run: |
+          BUILT_PLIST="releases/Sorty.app/Contents/Info.plist"
+          ROOT_PLIST="Info.plist"
+          if [ -f "$BUILT_PLIST" ] && [ -f "$ROOT_PLIST" ]; then
+            for key in SUFeedURL SUPublicEDKey SUEnableAutomaticChecks; do
+              VAL=$(/usr/libexec/PlistBuddy -c "Print :${key}" "$ROOT_PLIST" 2>/dev/null || true)
+              if [ -n "$VAL" ]; then
+                /usr/libexec/PlistBuddy -c "Delete :${key}" "$BUILT_PLIST" 2>/dev/null || true
+                if [ "$key" = "SUEnableAutomaticChecks" ]; then
+                  /usr/libexec/PlistBuddy -c "Add :${key} bool ${VAL}" "$BUILT_PLIST"
+                else
+                  /usr/libexec/PlistBuddy -c "Add :${key} string ${VAL}" "$BUILT_PLIST"
+                fi
+              fi
+            done
+            echo "Injected Sparkle keys into built app Info.plist"
+            # Re-create ZIP with updated plist so appcast signature matches
+            rm -f releases/Sorty-universal.zip
+            ditto -c -k --sequesterRsrc --keepParent releases/Sorty.app releases/Sorty-universal.zip
+            echo "Re-packaged Sorty-universal.zip with updated Info.plist"
+          fi
+
       - name: Generate Appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
