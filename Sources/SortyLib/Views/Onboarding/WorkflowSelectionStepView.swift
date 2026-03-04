@@ -66,77 +66,76 @@ public struct WorkflowSelectionStepView: View {
             .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
             
             // Right side - persona selection
-            VStack(spacing: 20) {
-                Spacer()
-                
-                Text("Select Default Persona")
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                
-                // Built-in personas grid - 2x2 layout
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    ForEach(PersonaType.allCases, id: \.self) { persona in
-                        OnboardingPersonaCard(
-                            persona: persona,
-                            isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil
-                        ) {
-                            HapticFeedbackManager.shared.selection()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                personaManager.selectPersona(persona)
-                                personaManager.selectedCustomPersonaId = nil
-                                isCreatingCustom = false
+            ScrollView {
+                VStack(spacing: 20) {
+                    Text("Select Default Persona")
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    
+                    // Built-in personas grid - 2x2 layout
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        ForEach(PersonaType.allCases, id: \.self) { persona in
+                            OnboardingPersonaCard(
+                                persona: persona,
+                                isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil
+                            ) {
+                                HapticFeedbackManager.shared.selection()
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    personaManager.selectPersona(persona)
+                                    personaManager.selectedCustomPersonaId = nil
+                                    isCreatingCustom = false
+                                }
                             }
                         }
                     }
-                }
-                .frame(maxWidth: 420)
-                
-                // Divider with "or"
-                HStack {
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 1)
-                    Text("or")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(height: 1)
-                }
-                .frame(maxWidth: 420)
-                
-                // Show "Create Your Own" button
-                CreatePersonaButton(isCreatingCustom: $isCreatingCustom)
                     .frame(maxWidth: 420)
-                
-                // Show generated/selected custom persona if any
-                if let persona = generatedPersona {
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .font(.title2)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(persona.name)
-                                .font(.headline)
-                            Text("Custom persona created successfully")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        
-                        Spacer()
+                    
+                    // Divider with "or"
+                    HStack {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(height: 1)
+                        Text("or")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.2))
+                            .frame(height: 1)
                     }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.green.opacity(0.1))
-                    )
                     .frame(maxWidth: 420)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    
+                    // Show "Create Your Own" button
+                    CreatePersonaButton(isCreatingCustom: $isCreatingCustom)
+                        .frame(maxWidth: 420)
+                    
+                    // Show generated/selected custom persona if any
+                    if let persona = generatedPersona {
+                        HStack(spacing: 12) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.title2)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(persona.name)
+                                    .font(.headline)
+                                Text("Custom persona created successfully")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.green.opacity(0.1))
+                        )
+                        .frame(maxWidth: 420)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
                 }
-                
-                Spacer()
+                .padding(.vertical, 32)
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 40)
