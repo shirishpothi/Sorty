@@ -296,6 +296,9 @@ jobs:
           cp -R artifacts/universal/Sorty.app releases/
           cp artifacts/universal/Sorty-universal.zip releases/
 
+          # Ensure binary has execute permission (artifact upload/download may strip it)
+          chmod +x "releases/Sorty.app/Contents/MacOS/Sorty"
+
           if [ -f "artifacts/universal/sparkle-tools/sign_update" ]; then
             mkdir -p ".build/artifacts/sparkle/Sparkle/bin"
             cp "artifacts/universal/sparkle-tools/sign_update" \

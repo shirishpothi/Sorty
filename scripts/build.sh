@@ -326,8 +326,10 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     # Ensure binary has correct RPATH for embedded frameworks
     MACOS_BIN="${APP_PATH}/Contents/MacOS/${BINARY_NAME}"
     if [ -f "${MACOS_BIN}" ]; then
+        chmod +x "${MACOS_BIN}"
         install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_BIN}" 2>/dev/null || true
         strip -x "${MACOS_BIN}"
+        chmod +x "${MACOS_BIN}"
     fi
 
     # Inject Sparkle keys and version into built Info.plist (xcodebuild may drop custom keys)
@@ -469,9 +471,11 @@ else
     # Copy binary (SPM output target remains SortyApp; bundled executable is Sorty)
     if [ -f "${BIN_PATH}/${SPM_BINARY_NAME}" ]; then
         cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
+        chmod +x "${MACOS_DIR}/${BINARY_NAME}"
         # Ensure binary has correct RPATH for embedded frameworks
         install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${BINARY_NAME}" 2>/dev/null || true
         strip -x "${MACOS_DIR}/${BINARY_NAME}"
+        chmod +x "${MACOS_DIR}/${BINARY_NAME}"
     else
         log_failure "Binary not found at ${BIN_PATH}/${SPM_BINARY_NAME}"
         exit 1
