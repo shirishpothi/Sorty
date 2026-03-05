@@ -216,7 +216,13 @@ public struct MenuBarView: View {
     
     private var backgroundToggle: some View {
         VStack(spacing: 0) {
-            Toggle(isOn: $notificationSettings.settings.notifyOnAutoOrganize) {
+            Toggle(isOn: Binding(
+                get: { notificationSettings.settings.notifyOnAutoOrganize },
+                set: { newValue in
+                    notificationSettings.settings.notifyOnAutoOrganize = newValue
+                    HapticFeedbackManager.shared.tap()
+                }
+            )) {
                 HStack(spacing: 8) {
                     Image(systemName: "bell.badge.fill")
                         .frame(width: 16)
@@ -231,11 +237,18 @@ public struct MenuBarView: View {
             Divider()
                 .padding(.vertical, 4)
 
-            Toggle(isOn: $launchAtLogin) {
+            Toggle(isOn: Binding(
+                get: { launchAtLogin },
+                set: { newValue in
+                    launchAtLogin = newValue
+                    HapticFeedbackManager.shared.tap()
+                }
+            )) {
                 HStack(spacing: 8) {
                     Image(systemName: "sunrise.fill")
                         .frame(width: 16)
                     Text("Launch at Login")
+                    Spacer()
                 }
             }
             .toggleStyle(.switch)
@@ -243,11 +256,18 @@ public struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
 
-            Toggle(isOn: $keepInBackground) {
+            Toggle(isOn: Binding(
+                get: { keepInBackground },
+                set: { newValue in
+                    keepInBackground = newValue
+                    HapticFeedbackManager.shared.tap()
+                }
+            )) {
                 HStack(spacing: 8) {
                     Image(systemName: "moon.fill")
                         .frame(width: 16)
                     Text("Keep in Background")
+                    Spacer()
                 }
             }
             .toggleStyle(.switch)
@@ -255,11 +275,18 @@ public struct MenuBarView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
 
-            Toggle(isOn: $hideDockIcon) {
+            Toggle(isOn: Binding(
+                get: { hideDockIcon },
+                set: { newValue in
+                    hideDockIcon = newValue
+                    HapticFeedbackManager.shared.tap()
+                }
+            )) {
                 HStack(spacing: 8) {
                     Image(systemName: "dock.rectangle")
                         .frame(width: 16)
                     Text("Hide Dock Icon")
+                    Spacer()
                 }
             }
             .toggleStyle(.switch)
@@ -352,7 +379,10 @@ private struct MenuBarButton: View {
     @Environment(\.isEnabled) private var isEnabled
     
     var body: some View {
-        Button(action: action) {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            action()
+        } label: {
             HStack(spacing: 8) {
                 if let customImage = customImage {
                     customImage
@@ -378,6 +408,9 @@ private struct MenuBarButton: View {
         .opacity(isEnabled ? 1 : 0.5)
         .onHover { hovering in
             isHovered = hovering
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
         }
     }
 }
@@ -425,6 +458,7 @@ private struct WatchedFolderMenuItem: View {
 
     var body: some View {
         Button {
+            HapticFeedbackManager.shared.tap()
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
         } label: {
             HStack(spacing: 8) {
@@ -452,7 +486,7 @@ private struct WatchedFolderMenuItem: View {
                         .font(.callout)
                         .lineLimit(1)
 
-                    Text(folder.path)
+                    PrivacySensitivePathText(path: folder.path)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -475,6 +509,7 @@ private struct WatchedFolderMenuItem: View {
             .onHover { hovering in
                 isHovered = hovering
                 if hovering {
+                    HapticFeedbackManager.shared.selection()
                     NSCursor.pointingHand.push()
                 } else {
                     NSCursor.pop()

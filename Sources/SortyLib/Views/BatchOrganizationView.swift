@@ -384,7 +384,7 @@ struct BatchOrganizationView: View {
 
                     ForEach(Array(plan.suggestions.prefix(3).enumerated()), id: \.offset) { _, suggestion in
                         HStack {
-                            Text(suggestion.folderName)
+                            PrivacySensitivePathText(path: suggestion.folderName)
                                 .font(.caption)
                                 .lineLimit(1)
                             Spacer()
@@ -504,7 +504,7 @@ struct BatchOrganizationView: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
 
-                Text(folder.deletingLastPathComponent().path)
+                PrivacySensitivePathText(path: folder.deletingLastPathComponent().path)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
@@ -604,7 +604,7 @@ struct BatchOrganizationView: View {
                     Text(folder.lastPathComponent)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    Text(folder.path)
+                    PrivacySensitivePathText(path: folder.path)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)

@@ -157,7 +157,7 @@ struct WorkspaceHealthSettingsView: View {
             Section("Ignored Paths") {
                 List {
                     ForEach(config.ignoredPaths, id: \.self) { path in
-                        Text(path)
+                        PrivacySensitivePathText(path: path)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }

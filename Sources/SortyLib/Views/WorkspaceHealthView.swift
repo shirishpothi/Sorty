@@ -225,7 +225,7 @@ public struct WorkspaceHealthView: View {
             if let dir = selectedDirectory {
                 Text(dir.lastPathComponent)
                     .font(.headline)
-                Text(dir.path)
+                PrivacySensitivePathText(path: dir.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)

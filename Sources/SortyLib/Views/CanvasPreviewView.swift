@@ -653,7 +653,7 @@ struct FolderNodeView: View {
                         size: 32
                     )
 
-                    Text(suggestion.folderName)
+                    PrivacySensitivePathText(path: suggestion.folderName)
                         .font(.headline)
                         .lineLimit(2)
                         .multilineTextAlignment(.center)

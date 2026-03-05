@@ -244,7 +244,7 @@ struct DirectoryHeader: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(url.lastPathComponent)
                     .font(.headline)
-                Text(url.deletingLastPathComponent().path)
+                PrivacySensitivePathText(path: url.deletingLastPathComponent().path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1002,7 +1002,7 @@ struct CompactStorageLocationRow: View {
                     .fontWeight(.medium)
                     .foregroundStyle(location.isEnabled ? .primary : .secondary)
                 
-                Text(location.path)
+                PrivacySensitivePathText(path: location.path)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)

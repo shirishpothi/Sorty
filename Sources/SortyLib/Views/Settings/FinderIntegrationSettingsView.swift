@@ -178,7 +178,7 @@ struct FinderIntegrationSettingsView: View {
                                 Text("Front Finder Folder")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
-                                Text(folder.path)
+                                PrivacySensitivePathText(path: folder.path)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)

@@ -10,6 +10,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
+import AppKit
 
 // MARK: - Flattened Row Model
 
@@ -552,6 +553,19 @@ class PreviewStore: ObservableObject {
         
         updateInternalPlan(updatedPlan)
     }
+
+    func updateFolderDestination(folderID: UUID, newDestinationPath: String) {
+        let canonicalPath = StorageLocationPathResolver.canonicalPath(newDestinationPath)
+        var updatedPlan = plan
+
+        for i in 0..<updatedPlan.suggestions.count {
+            if let updated = updateDestinationInFolder(updatedPlan.suggestions[i], targetID: folderID, newDestinationPath: canonicalPath) {
+                updatedPlan.suggestions[i] = updated
+                updateInternalPlan(updatedPlan)
+                return
+            }
+        }
+    }
     
     private func findFolderByID(_ id: UUID, in folder: FolderSuggestion) -> FolderSuggestion? {
         if folder.id == id { return folder }
@@ -601,6 +615,23 @@ class PreviewStore: ObservableObject {
                 return updatedFolder
             }
         }
+        return nil
+    }
+
+    private func updateDestinationInFolder(_ folder: FolderSuggestion, targetID: UUID, newDestinationPath: String) -> FolderSuggestion? {
+        var updatedFolder = folder
+        if folder.id == targetID {
+            updatedFolder.folderName = newDestinationPath
+            return updatedFolder
+        }
+
+        for i in 0..<updatedFolder.subfolders.count {
+            if let updated = updateDestinationInFolder(updatedFolder.subfolders[i], targetID: targetID, newDestinationPath: newDestinationPath) {
+                updatedFolder.subfolders[i] = updated
+                return updatedFolder
+            }
+        }
+
         return nil
     }
     
@@ -830,8 +861,11 @@ struct FlatFolderRowView: View {
     @ObservedObject var dragDropManager: DragDropManager
     let onPlanChanged: () -> Void
     @EnvironmentObject var learningsManager: LearningsManager
-    
+    @EnvironmentObject var storageLocationsManager: StorageLocationsManager
+
     @State private var isDropTarget = false
+    @State private var showStorageLocationPicker = false
+    @State private var storageLocationPickerErrorMessage: String?
 
     private var folderTags: [String] {
         store.folderTagMappings[suggestion.id] ?? []
@@ -840,7 +874,40 @@ struct FlatFolderRowView: View {
     private var folderComment: String? {
         store.folderCommentMappings[suggestion.id]
     }
-    
+
+    private var isStorageDestination: Bool {
+        suggestion.folderName.hasPrefix("/")
+    }
+
+    private var matchedStorageLocation: StorageLocation? {
+        guard isStorageDestination else { return nil }
+        return storageLocationsManager.locations
+            .filter { StorageLocationPathResolver.isPath(suggestion.folderName, within: $0.path) }
+            .sorted { $0.path.count > $1.path.count }
+            .first
+    }
+
+    private var usedStorageURL: URL? {
+        if let matchedStorageLocation {
+            return URL(fileURLWithPath: matchedStorageLocation.path, isDirectory: true)
+        }
+        return StorageLocationPathResolver.absoluteURL(from: suggestion.folderName)
+    }
+
+    private var usedStorageDisplayName: String {
+        if let matchedStorageLocation {
+            return matchedStorageLocation.name
+        }
+        return usedStorageURL?.lastPathComponent ?? "Storage"
+    }
+
+    private var usedStoragePath: String {
+        if let matchedStorageLocation {
+            return matchedStorageLocation.path
+        }
+        return usedStorageURL?.path ?? suggestion.folderName
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -865,15 +932,9 @@ struct FlatFolderRowView: View {
                 Text("(\(store.getCachedFileCount(for: suggestion.id) { suggestion.totalFileCount }) files)")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
-                if suggestion.folderName.hasPrefix("/") {
-                    Label("Storage", systemImage: "externaldrive")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.1))
-                        .clipShape(Capsule())
+
+                if isStorageDestination {
+                    storageLocationDropdown
                 }
 
                 if !folderTags.isEmpty {
@@ -901,8 +962,8 @@ struct FlatFolderRowView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isDropTarget ? Color.purple.opacity(0.1) : Color.clear)
-                    .strokeBorder(isDropTarget ? Color.purple : Color.clear, lineWidth: 2)
+                    .fill(isDropTarget ? Color.accentColor.opacity(0.1) : Color.clear)
+                    .strokeBorder(isDropTarget ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1.5)
             )
             .contextMenu {
                 Button(role: .destructive) {
@@ -910,6 +971,18 @@ struct FlatFolderRowView: View {
                     onPlanChanged()
                 } label: {
                     Label("Revert Organization", systemImage: "arrow.uturn.backward")
+                }
+
+                if isStorageDestination {
+                    Divider()
+
+                    Button("Change Storage Location…") {
+                        showStorageLocationPicker = true
+                    }
+
+                    Button("Show in Finder") {
+                        revealStorageLocationInFinder()
+                    }
                 }
             }
             .onDrop(of: [.text], delegate: OptimizedFileDropDelegate(
@@ -919,8 +992,100 @@ struct FlatFolderRowView: View {
                 isTargeted: $isDropTarget,
                 onPlanChanged: onPlanChanged
             ))
+            .fileImporter(
+                isPresented: $showStorageLocationPicker,
+                allowedContentTypes: [.folder],
+                allowsMultipleSelection: false
+            ) { result in
+                switch result {
+                case .success(let urls):
+                    guard let selectedURL = urls.first else { return }
+                    do {
+                        try storageLocationsManager.addLocation(url: selectedURL, customName: nil)
+                    } catch {
+                        DebugLogger.log("Could not add selected storage location during preview destination change: \(error)")
+                    }
+                    store.updateFolderDestination(folderID: suggestion.id, newDestinationPath: selectedURL.path)
+                    onPlanChanged()
+                case .failure(let error):
+                    storageLocationPickerErrorMessage = error.localizedDescription
+                }
+            }
+            .alert(
+                "Couldn't Change Storage Location",
+                isPresented: Binding(
+                    get: { storageLocationPickerErrorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            storageLocationPickerErrorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    storageLocationPickerErrorMessage = nil
+                }
+            } message: {
+                Text(storageLocationPickerErrorMessage ?? "Please try selecting the folder again.")
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+    }
+
+    private var storageLocationDropdown: some View {
+        Menu {
+            Button {
+            } label: {
+                HStack(spacing: 8) {
+                    finderIcon(for: usedStoragePath)
+                    PrivacySensitivePathText(path: usedStoragePath)
+                }
+            }
+            .disabled(true)
+
+            Divider()
+
+            Button("Change Storage Location…") {
+                showStorageLocationPicker = true
+            }
+
+            Button("Show in Finder") {
+                revealStorageLocationInFinder()
+            }
+        } label: {
+            Image(systemName: "externaldrive")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .modifier(StorageGlassModifier())
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Storage location: \(PrivacyPathMasker.redactedPath(usedStoragePath))")
+    }
+
+    private func finderIcon(for path: String) -> some View {
+        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+            .resizable()
+            .interpolation(.high)
+            .frame(width: 12, height: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 2))
+    }
+
+    private func revealStorageLocationInFinder() {
+        guard let usedStorageURL else { return }
+        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: usedStorageURL.path)
+    }
+}
+
+private struct StorageGlassModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular.interactive(), in: .circle)
+        } else {
+            content
+                .background(.regularMaterial, in: Circle())
+        }
     }
 }
 

@@ -121,7 +121,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .notifications:
             return ["notification", "alerts", "sound", "banner", "notificli", "completion", "foreground", "permissions"]
         case .advanced:
-            return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "cache"]
+            return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "cache", "privacy", "blur", "username"]
         case .troubleshooting:
             return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
         case .help:
@@ -191,6 +191,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .advanced:
             return [
+                SettingsFeatureSnippet(title: "Privacy", summary: "Blur usernames in file paths for privacy.", keywords: ["privacy", "blur", "username", "path"]),
                 SettingsFeatureSnippet(title: "Menu Bar", summary: "Configure menu bar UI behavior."),
                 SettingsFeatureSnippet(title: "Streaming", summary: "Toggle streaming responses in AI flows."),
                 SettingsFeatureSnippet(title: "Timeouts", summary: "Tune max request durations and retries."),

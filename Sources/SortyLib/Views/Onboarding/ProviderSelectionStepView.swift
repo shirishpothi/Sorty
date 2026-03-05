@@ -171,7 +171,12 @@ public struct ProviderSelectionStepView: View {
                             .foregroundStyle(.secondary)
                         Text(copilotAuth.username ?? "User")
                             .font(.headline)
-                            .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 6)
+                            .blur(radius: !isHoveringUsername ? 10 : 0)
+                            .clipShape(Capsule())
+                            .padding(.vertical, -4)
+                            .padding(.horizontal, -6)
                             .animation(.spring(), value: isHoveringUsername)
                             .onHover { hovering in
                                 isHoveringUsername = hovering

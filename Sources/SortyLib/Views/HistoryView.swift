@@ -698,13 +698,13 @@ struct HistorySessionCard: View {
                     HStack(spacing: 8) {
                         Image(systemName: "folder")
                             .foregroundStyle(.secondary)
-                        Text(entry.directoryPath)
+                        PrivacySensitivePathText(path: entry.directoryPath)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Path: \(entry.directoryPath)")
+                    .accessibilityLabel("Path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
 
                     if hasStorageMoves {
                         HStack(spacing: 8) {
@@ -930,13 +930,17 @@ struct HistoryDetailSheet: View {
                         .accessibilityLabel("\(URL(fileURLWithPath: entry.directoryPath).lastPathComponent), \(entry.status.rawValue), \(entry.timestamp.formatted())")
 
                         // Full Path
-                        Label(entry.directoryPath, systemImage: "folder")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .padding(8)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(6)
-                            .accessibilityLabel("Full path: \(entry.directoryPath)")
+                        Label {
+                            PrivacySensitivePathText(path: entry.directoryPath)
+                        } icon: {
+                            Image(systemName: "folder")
+                        }
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(6)
+                        .accessibilityLabel("Full path: \(PrivacyPathMasker.redactedPath(entry.directoryPath))")
                     }
 
                     Divider()
@@ -1198,7 +1202,7 @@ struct HistoryDetailSheet: View {
                                         }
 
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(suggestion.folderName)
+                                            PrivacySensitivePathText(path: suggestion.folderName)
                                                 .font(.callout)
                                                 .fontWeight(.medium)
                                             if !suggestion.reasoning.isEmpty {
@@ -1878,7 +1882,7 @@ struct FolderHistoryDetailRow: View {
                     .animation(.subtleBounce, value: isHovered)
                     .accessibilityHidden(true)
 
-                    Text(suggestion.folderName)
+                    PrivacySensitivePathText(path: suggestion.folderName)
                         .fontWeight(.semibold)
 
                     Text("(\(suggestion.totalFileCount) files)")

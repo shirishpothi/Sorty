@@ -477,7 +477,7 @@ struct WatchedFolderCard: View {
         VStack(alignment: .leading, spacing: 4) {
             titleRow
 
-            Text(folder.path)
+            PrivacySensitivePathText(path: folder.path)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
@@ -690,7 +690,7 @@ struct WatchedFolderConfigView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(folder.name)
                             .font(.headline)
-                        Text(folder.path)
+                        PrivacySensitivePathText(path: folder.path)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

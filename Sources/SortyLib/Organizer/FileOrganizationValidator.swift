@@ -26,6 +26,9 @@ struct FileOrganizationValidator {
         
         // Check that files in storage locations aren't moved out
         try validateSourcePaths(plan, allowedLocations: allowedStorageLocations)
+
+        // Keep storage usage conservative by default
+        try validateStorageUsage(plan, at: baseURL, allowedLocations: allowedStorageLocations)
         
         // Check for path conflicts
         try checkConflicts(plan, at: baseURL)
@@ -176,6 +179,78 @@ struct FileOrganizationValidator {
         }
     }
 
+    private static func validateStorageUsage(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {
+        guard !allowedLocations.isEmpty else { return }
+
+        let allowedPathSet = Set(allowedLocations.map { StorageLocationPathResolver.canonicalPath($0.path) })
+        let canonicalBasePath = StorageLocationPathResolver.canonicalPath(baseURL.path)
+        var totalFilesBySourceParent: [String: Int] = [:]
+        var storageFilesBySourceParent: [String: Int] = [:]
+
+        func isInStorageRoot(_ path: String) -> Bool {
+            allowedPathSet.contains { StorageLocationPathResolver.isPath(path, within: $0) }
+        }
+
+        func sourceParentPath(for file: FileItem) -> String? {
+            guard let fileURL = file.url else { return nil }
+            let sourcePath = StorageLocationPathResolver.canonicalPath(fileURL.path)
+            let parent = URL(fileURLWithPath: sourcePath, isDirectory: file.isDirectory)
+                .deletingLastPathComponent()
+                .path
+            let canonicalParent = StorageLocationPathResolver.canonicalPath(parent)
+            return canonicalParent.isEmpty ? nil : canonicalParent
+        }
+
+        func registerTotal(_ file: FileItem) {
+            guard let parentPath = sourceParentPath(for: file), !isInStorageRoot(parentPath) else { return }
+            totalFilesBySourceParent[parentPath, default: 0] += 1
+        }
+
+        func checkSuggestion(_ suggestion: FolderSuggestion, destinationIsStorage: Bool) throws {
+            let destinationPath = StorageLocationPathResolver.normalizedAbsolutePath(from: suggestion.folderName)
+            let destinationMatchesStorage = destinationPath.map { isAllowedStorageDestination($0, allowedRoots: allowedPathSet) } ?? false
+            let effectiveDestinationIsStorage = destinationIsStorage || destinationMatchesStorage
+
+            for file in suggestion.files {
+                registerTotal(file)
+
+                guard effectiveDestinationIsStorage,
+                      let parentPath = sourceParentPath(for: file),
+                      !isInStorageRoot(parentPath) else {
+                    continue
+                }
+
+                if file.isDirectory {
+                    throw ValidationError.directoryMovedToStorage(file.displayName)
+                }
+                storageFilesBySourceParent[parentPath, default: 0] += 1
+            }
+
+            for subfolder in suggestion.subfolders {
+                try checkSuggestion(subfolder, destinationIsStorage: effectiveDestinationIsStorage)
+            }
+        }
+
+        for suggestion in plan.suggestions {
+            try checkSuggestion(suggestion, destinationIsStorage: false)
+        }
+
+        for file in plan.unorganizedFiles {
+            registerTotal(file)
+        }
+
+        for (sourceParent, totalCount) in totalFilesBySourceParent {
+            guard sourceParent != canonicalBasePath else { continue }
+            let movedToStorageCount = storageFilesBySourceParent[sourceParent] ?? 0
+
+            // Treat moving every file from a non-root source subfolder to storage as folder-level routing.
+            if totalCount >= 3, movedToStorageCount == totalCount {
+                let folderName = URL(fileURLWithPath: sourceParent).lastPathComponent
+                throw ValidationError.folderBulkMovedToStorage(folderName, totalCount)
+            }
+        }
+    }
+
     private static func isAllowedStorageDestination(_ absolutePath: String, allowedRoots: Set<String>) -> Bool {
         for rootPath in allowedRoots where StorageLocationPathResolver.isPath(absolutePath, within: rootPath) {
             return true
@@ -194,6 +269,8 @@ enum ValidationError: LocalizedError {
     case invalidStorageLocation(String)
     case folderTooDeep(String)
     case sourceInStorageLocation(String, String)
+    case directoryMovedToStorage(String)
+    case folderBulkMovedToStorage(String, Int)
     
     var errorDescription: String? {
         switch self {
@@ -215,7 +292,10 @@ enum ValidationError: LocalizedError {
             return "Folder structure is too deep at '\(folder)'. Maximum depth is 3 levels."
         case .sourceInStorageLocation(let file, let location):
             return "File '\(file)' is inside storage location '\(location)' and cannot be moved out. Files in storage locations are protected from reorganization."
+        case .directoryMovedToStorage(let itemName):
+            return "Directory '\(itemName)' cannot be moved to a storage location automatically. Route individual files to storage instead."
+        case .folderBulkMovedToStorage(let folderName, let count):
+            return "Refusing to move all \(count) files from '\(folderName)' to storage. Storage locations are for specific files, not whole folders, unless explicitly requested."
         }
     }
 }
-

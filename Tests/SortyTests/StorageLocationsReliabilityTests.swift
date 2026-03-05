@@ -131,6 +131,135 @@ final class StorageLocationsReliabilityTests: XCTestCase {
         )
     }
 
+    func testValidatorRejectsMovingDirectoryItemToStorage() throws {
+        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
+        let projectDir = sourceDir.appendingPathComponent("Project Alpha", isDirectory: true)
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
+
+        let directoryItem = FileItem(
+            path: projectDir.path,
+            name: "Project Alpha",
+            extension: "",
+            size: 0,
+            isDirectory: true
+        )
+
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: storageDir.path, files: [directoryItem])
+            ],
+            unorganizedFiles: [],
+            notes: "directory to storage"
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validate(
+                plan,
+                at: sourceDir,
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
+                maxTopLevelFolders: 10
+            )
+        ) { error in
+            guard case ValidationError.directoryMovedToStorage("Project Alpha") = error else {
+                XCTFail("Expected directoryMovedToStorage error, got: \(error)")
+                return
+            }
+        }
+    }
+
+    func testValidatorRejectsBulkFolderMigrationToStorage() throws {
+        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
+        let invoicesDir = sourceDir.appendingPathComponent("Invoices", isDirectory: true)
+        try FileManager.default.createDirectory(at: invoicesDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
+
+        let fileURLs = (1...3).map { index in
+            invoicesDir.appendingPathComponent("invoice-\(index).pdf")
+        }
+        for (index, url) in fileURLs.enumerated() {
+            try "invoice-\(index + 1)".write(to: url, atomically: true, encoding: .utf8)
+        }
+
+        let files = fileURLs.map { url in
+            FileItem(
+                path: url.path,
+                name: url.deletingPathExtension().lastPathComponent,
+                extension: url.pathExtension,
+                size: 1,
+                isDirectory: false
+            )
+        }
+
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: storageDir.path, files: files)],
+            unorganizedFiles: [],
+            notes: "bulk storage migration"
+        )
+
+        XCTAssertThrowsError(
+            try FileOrganizationValidator.validate(
+                plan,
+                at: sourceDir,
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
+                maxTopLevelFolders: 10
+            )
+        ) { error in
+            guard case ValidationError.folderBulkMovedToStorage("Invoices", 3) = error else {
+                XCTFail("Expected folderBulkMovedToStorage error, got: \(error)")
+                return
+            }
+        }
+    }
+
+    func testValidatorAllowsSelectiveStorageMoveFromSubfolder() throws {
+        let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)
+        let storageDir = tempRoot.appendingPathComponent("Archive", isDirectory: true)
+        let receiptsDir = sourceDir.appendingPathComponent("Receipts", isDirectory: true)
+        try FileManager.default.createDirectory(at: receiptsDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: storageDir, withIntermediateDirectories: true)
+
+        let moveURL = receiptsDir.appendingPathComponent("receipt-jan.pdf")
+        let stayURL = receiptsDir.appendingPathComponent("draft-notes.txt")
+        try "receipt".write(to: moveURL, atomically: true, encoding: .utf8)
+        try "notes".write(to: stayURL, atomically: true, encoding: .utf8)
+
+        let moveFile = FileItem(
+            path: moveURL.path,
+            name: "receipt-jan",
+            extension: "pdf",
+            size: 10,
+            isDirectory: false
+        )
+        let stayFile = FileItem(
+            path: stayURL.path,
+            name: "draft-notes",
+            extension: "txt",
+            size: 5,
+            isDirectory: false
+        )
+
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: storageDir.path, files: [moveFile]),
+                FolderSuggestion(folderName: "LocalNotes", files: [stayFile])
+            ],
+            unorganizedFiles: [],
+            notes: "selective storage"
+        )
+
+        XCTAssertNoThrow(
+            try FileOrganizationValidator.validate(
+                plan,
+                at: sourceDir,
+                allowedStorageLocations: [StorageLocation(path: storageDir.path)],
+                maxTopLevelFolders: 10
+            )
+        )
+    }
+
     @MainActor
     func testApplyRevalidatesAndRejectsUnapprovedStoragePath() async throws {
         let sourceDir = tempRoot.appendingPathComponent("Source", isDirectory: true)

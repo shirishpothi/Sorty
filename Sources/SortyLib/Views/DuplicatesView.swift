@@ -524,7 +524,7 @@ struct DuplicatesHeaderNew: View {
                         }
                         .contentShape(RoundedRectangle(cornerRadius: 6))
                         .buttonStyle(.plain)
-                        .help(dir.path)
+                        .help(PrivacyPathMasker.redactedPath(dir.path))
                     } else {
                         Text("No folder selected")
                             .font(.subheadline)
@@ -870,7 +870,7 @@ struct DuplicateFileDetailRow: View {
                 }
                 .contentShape(Capsule())
                 .buttonStyle(.plain)
-                .help("Reveal in Finder: \(fileURL.deletingLastPathComponent().path)")
+                .help("Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))")
                 
                 HStack {
                     Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
@@ -1142,7 +1142,7 @@ struct UnifiedFileDetailRow: View {
                 }
                 .contentShape(Capsule())
                 .buttonStyle(.plain)
-                .help("Reveal in Finder: \(fileURL.deletingLastPathComponent().path)")
+                .help("Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))")
                 
                 HStack {
                     Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))

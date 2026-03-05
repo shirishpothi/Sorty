@@ -1,0 +1,115 @@
+//
+//  PrivacySensitivePathText.swift
+//  Sorty
+//
+
+import SwiftUI
+
+/// Displays paths while blurring only username path segments (for example `/Users/<name>/...`).
+struct PrivacySensitivePathText: View {
+    let path: String
+    var blurRadius: CGFloat = 10
+    var revealOnHover: Bool = true
+
+    @State private var isHoveringUsername = false
+
+    private var isPrivacyEnabled: Bool {
+        FeatureFlags.privacyModeEnabled
+    }
+
+    var body: some View {
+        if isPrivacyEnabled, let segments = PrivacyPathMasker.userPathSegments(in: path) {
+            HStack(spacing: 0) {
+                Text(segments.leading)
+                Text(segments.username)
+                    .padding(.vertical, 4)
+                    .padding(.horizontal, 6)
+                    .blur(radius: (revealOnHover && isHoveringUsername) ? 0 : blurRadius)
+                    .clipShape(Capsule())
+                    .padding(.vertical, -4)
+                    .padding(.horizontal, -6)
+                    .animation(.spring(), value: isHoveringUsername)
+                    .onHover { hovering in
+                        guard revealOnHover else { return }
+                        isHoveringUsername = hovering
+                    }
+                Text(segments.trailing)
+            }
+            .accessibilityLabel(PrivacyPathMasker.redactedPath(path))
+        } else {
+            Text(path)
+        }
+    }
+}
+
+enum PrivacyPathMasker {
+    struct Segments {
+        let leading: String
+        let username: String
+        let trailing: String
+    }
+
+    static func userPathSegments(in text: String, currentUsername: String = NSUserName()) -> Segments? {
+        if let segments = usersDirectorySegments(in: text) {
+            return segments
+        }
+
+        return currentUserSegments(in: text, currentUsername: currentUsername)
+    }
+
+    private static func usersDirectorySegments(in text: String) -> Segments? {
+        let marker = "/Users/"
+        guard let markerRange = text.range(of: marker, options: [.caseInsensitive]) else { return nil }
+
+        let usernameStart = markerRange.upperBound
+        guard usernameStart < text.endIndex else { return nil }
+
+        let remainder = text[usernameStart...]
+        let usernameEnd = remainder.firstIndex(of: "/") ?? text.endIndex
+        guard usernameStart < usernameEnd else { return nil }
+
+        let username = String(text[usernameStart..<usernameEnd])
+        guard !username.isEmpty else { return nil }
+
+        let leading = String(text[..<usernameStart])
+        let trailing = String(text[usernameEnd...])
+        return Segments(leading: leading, username: username, trailing: trailing)
+    }
+
+    private static func currentUserSegments(in text: String, currentUsername: String) -> Segments? {
+        let username = currentUsername.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !username.isEmpty else { return nil }
+        guard let usernameRange = text.range(of: username, options: [.caseInsensitive]) else { return nil }
+
+        if !isPathSegmentBoundary(in: text, for: usernameRange) {
+            return nil
+        }
+
+        let leading = String(text[..<usernameRange.lowerBound])
+        let trailing = String(text[usernameRange.upperBound...])
+        return Segments(leading: leading, username: String(text[usernameRange]), trailing: trailing)
+    }
+
+    private static func isPathSegmentBoundary(in text: String, for range: Range<String.Index>) -> Bool {
+        let validBoundaryCharacters = CharacterSet(charactersIn: "/\\")
+
+        let startsAtBoundary: Bool = {
+            guard range.lowerBound > text.startIndex else { return true }
+            let before = text[text.index(before: range.lowerBound)]
+            return String(before).rangeOfCharacter(from: validBoundaryCharacters) != nil
+        }()
+
+        let endsAtBoundary: Bool = {
+            guard range.upperBound < text.endIndex else { return true }
+            let after = text[range.upperBound]
+            return String(after).rangeOfCharacter(from: validBoundaryCharacters) != nil
+        }()
+
+        return startsAtBoundary && endsAtBoundary
+    }
+
+    static func redactedPath(_ text: String) -> String {
+        guard let segments = userPathSegments(in: text) else { return text }
+        return segments.leading + "[REDACTED_USER]" + segments.trailing
+    }
+}

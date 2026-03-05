@@ -11,9 +11,19 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage("privacyModeEnabled") private var privacyModeEnabled = false
     
     var body: some View {
         VStack(spacing: 16) {
+            SettingsCard(title: "Privacy", icon: "eye.slash", color: .indigo) {
+                SettingsToggle(
+                    isOn: $privacyModeEnabled,
+                    title: "Blur Usernames in Paths",
+                    description: "We'll try to blur your name in file paths throughout Sorty."
+                )
+            }
+            .animatedAppearance(delay: 0.0)
+
             SettingsCard(title: "Menu Bar", icon: "menubar.rectangle", color: .blue) {
                 SettingsToggle(
                     isOn: $showMenuBarExtra,
@@ -21,7 +31,7 @@ struct AdvancedSettingsView: View {
                     description: "Display Sorty icon in the menu bar for quick access"
                 )
             }
-            .animatedAppearance(delay: 0.0)
+            .animatedAppearance(delay: 0.03)
 
             SettingsCard(title: "Finder Workflow", icon: "folder.badge.gearshape", color: .mint) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -39,7 +49,7 @@ struct AdvancedSettingsView: View {
                     }
                 }
             }
-            .animatedAppearance(delay: 0.03)
+            .animatedAppearance(delay: 0.05)
             
             SettingsCard(title: "Streaming", icon: "waveform", color: .purple) {
                 SettingsToggle(
@@ -48,7 +58,7 @@ struct AdvancedSettingsView: View {
                     description: "Stream AI responses for faster feedback"
                 )
             }
-            .animatedAppearance(delay: 0.05)
+            .animatedAppearance(delay: 0.08)
             
             SettingsCard(title: "Timeouts", icon: "clock", color: .orange) {
                 VStack(spacing: 16) {
@@ -73,7 +83,7 @@ struct AdvancedSettingsView: View {
                     )
                 }
             }
-            .animatedAppearance(delay: 0.1)
+            .animatedAppearance(delay: 0.13)
             
             SettingsCard(title: "Token Limits", icon: "number", color: .blue) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -90,7 +100,7 @@ struct AdvancedSettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .animatedAppearance(delay: 0.15)
+            .animatedAppearance(delay: 0.18)
             
             SettingsCard(title: "Developer", icon: "hammer", color: .gray) {
                 VStack(spacing: 12) {
@@ -115,7 +125,7 @@ struct AdvancedSettingsView: View {
                     .buttonStyle(.bordered)
                 }
             }
-            .animatedAppearance(delay: 0.2)
+            .animatedAppearance(delay: 0.23)
         }
     }
 }

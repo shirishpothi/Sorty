@@ -200,7 +200,7 @@ public struct DemoStepView: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .minimumScaleFactor(0.85)
-                            Text(url.deletingLastPathComponent().path)
+                            PrivacySensitivePathText(path: url.deletingLastPathComponent().path)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)

@@ -70,7 +70,7 @@ final class StorageDestinationNormalizerTests: XCTestCase {
         XCTAssertEqual(normalized.suggestions.first?.folderName, "storage")
     }
 
-    func testNormalizeFallsBackToFilesystemSubfolderDiscoveryWhenKnownSubfoldersAreMissing() throws {
+    func testNormalizeDoesNotImplicitlyMapToKnownStorageSubfolderWithoutExplicitStorageIntent() throws {
         let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let storageRoot = tempRoot.appendingPathComponent("Documents", isDirectory: true)
         let existingStorageSubfolder = storageRoot.appendingPathComponent("AyuGram Desktop", isDirectory: true)
@@ -96,10 +96,7 @@ final class StorageDestinationNormalizerTests: XCTestCase {
             knownSubfolders: [:]
         )
 
-        XCTAssertEqual(
-            normalized.suggestions.first?.folderName,
-            StorageLocationPathResolver.canonicalPath(existingStorageSubfolder.path)
-        )
+        XCTAssertEqual(normalized.suggestions.first?.folderName, "AyuGramDesktop")
     }
 
     func testNormalizeRemapsAbsoluteSourceDirPathToStorageLocation() {
@@ -152,14 +149,13 @@ final class StorageDestinationNormalizerTests: XCTestCase {
         )
     }
 
-    func testNormalizeRemapsSourceDirUnknownFolderToStorageWhenSingleRoot() {
+    func testNormalizeDoesNotRemapUnknownSourceDirSubpathToStorageWhenSingleRoot() {
         let sourceDir = URL(fileURLWithPath: "/Users/test/Downloads/MyFolder", isDirectory: true)
         let storageRoot = "/Users/test/Archive"
         let file = FileItem(path: "/Users/test/Downloads/MyFolder/notes.txt", name: "notes", extension: "txt", size: 5, isDirectory: false)
 
-        // AI outputs sourceDir + "RandomFolder" which doesn't match any storage alias.
-        // With a single storage root and no resolved storage destinations, the fallback
-        // remaps the stripped relative name as a subfolder of the storage root.
+        // AI outputs sourceDir + "RandomFolder" which doesn't match storage aliases.
+        // This should remain a regular local relative destination.
         let plan = OrganizationPlan(
             suggestions: [FolderSuggestion(folderName: "/Users/test/Downloads/MyFolder/RandomFolder", files: [file])],
             unorganizedFiles: []
@@ -171,13 +167,10 @@ final class StorageDestinationNormalizerTests: XCTestCase {
             sourceDirectoryURL: sourceDir
         )
 
-        XCTAssertEqual(
-            normalized.suggestions.first?.folderName,
-            StorageLocationPathResolver.canonicalPath("/Users/test/Archive/RandomFolder")
-        )
+        XCTAssertEqual(normalized.suggestions.first?.folderName, "RandomFolder")
     }
 
-    func testNormalizeRemapsSourceDirPlusKnownSubfolderNameToKnownSubfolder() {
+    func testNormalizeDoesNotRemapSourceDirPlusKnownSubfolderNameWithoutRootAlias() {
         let sourceDir = URL(fileURLWithPath: "/Users/test/Documents/Documents", isDirectory: true)
         let storageRoot = "/Users/test/Downloads"
         let knownSubfolder = "/Users/test/Downloads/AyuGram Desktop/Documents"
@@ -205,10 +198,7 @@ final class StorageDestinationNormalizerTests: XCTestCase {
             sourceDirectoryURL: sourceDir
         )
 
-        XCTAssertEqual(
-            normalized.suggestions.first?.folderName,
-            StorageLocationPathResolver.canonicalPath(knownSubfolder)
-        )
+        XCTAssertEqual(normalized.suggestions.first?.folderName, "Documents")
     }
 
     func testNormalizeResolvesAliasWhenSubfolderSharesNameWithRoot() {
@@ -240,7 +230,7 @@ final class StorageDestinationNormalizerTests: XCTestCase {
         )
     }
 
-    func testNormalizeFallbackRemapsRelativeFolderToSingleStorageRoot() {
+    func testNormalizeDoesNotFallbackRemapRelativeFolderToSingleStorageRoot() {
         let storageRoot = "/tmp/storage-root"
         let file = FileItem(path: "/tmp/source/budget.xlsx", name: "budget", extension: "xlsx", size: 10, isDirectory: false)
         let plan = OrganizationPlan(
@@ -248,22 +238,12 @@ final class StorageDestinationNormalizerTests: XCTestCase {
             unorganizedFiles: []
         )
 
-        // AI output "Spreadsheets" instead of an absolute storage path.
-        // With a single storage location and no alias match, the fallback should
-        // remap it as a subfolder of the storage root.
         let normalized = StorageDestinationNormalizer.normalize(
             plan: plan,
             allowedStorageLocations: [StorageLocation(path: storageRoot, name: "Archive")]
         )
 
-        let expectedPath = URL(fileURLWithPath: storageRoot, isDirectory: true)
-            .appendingPathComponent("Spreadsheets", isDirectory: true)
-            .path
-
-        XCTAssertEqual(
-            normalized.suggestions.first?.folderName,
-            StorageLocationPathResolver.canonicalPath(expectedPath)
-        )
+        XCTAssertEqual(normalized.suggestions.first?.folderName, "Spreadsheets")
     }
 
     func testNormalizeFallbackSkippedWhenMultipleStorageLocations() {

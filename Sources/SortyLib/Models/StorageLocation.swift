@@ -223,7 +223,13 @@ public class StorageLocationsManager: ObservableObject {
         ## STORAGE LOCATIONS (Additional Destinations)
         
         The following directories are approved destination bins.
-        Route files there only when the file intent clearly matches the location purpose:
+        IMPORTANT: Be very conservative about routing files to storage locations.
+        Only move a file to a storage location when:
+        - The user explicitly requested that specific file or type of file go there, OR
+        - The file is an exceptionally clear and obvious fit for the location's stated purpose.
+        When in doubt, keep files organized within the source directory — most files should stay local.
+        Do NOT move entire folder groups or large batches of files to storage; prefer individual files that clearly belong.
+        Never treat storage as the default destination. It is optional and should usually be unused.
         
         """
         
@@ -254,12 +260,14 @@ public class StorageLocationsManager: ObservableObject {
         3. FIRST check KNOWN_STORAGE_SUBFOLDERS. When an existing subfolder matches the file's purpose, use its EXACT absolute path as the folder "name" in JSON.
         4. Never use relative placeholders such as "storage", "storage location", "archive", "Spreadsheets", or any other relative name as folder names when targeting storage.
         5. Match files to storage locations based on each location's stated purpose/description.
-        6. Files that don't clearly fit any storage location should be organized within the source directory using relative paths.
+        6. Files that don't clearly fit any storage location MUST be organized within the source directory using relative paths. This is the default — most files should stay in the source.
         7. Do NOT move files that are already inside a storage location to non-storage destinations.
-        8. It is perfectly fine to use zero, one, or multiple storage locations in a single plan — let the files guide your decision.
+        8. It is perfectly fine — and often preferred — to use ZERO storage locations in a plan. Only route files to storage when there is a strong, specific reason. Err on the side of keeping files in the source directory.
         9. Use the FULL absolute path as the folder "name" in JSON (e.g. "name": "/Users/me/Archive/Documents").
            Do NOT split the path into a nested folder hierarchy. Do NOT use PascalCase variants of folder names.
         10. Place files directly in the matching storage subfolder. Do NOT create additional sub-categories inside storage locations unless the user explicitly requests it.
+        11. Do NOT move directory items to storage. Route individual files only.
+        12. Do NOT route all files from one source subfolder into storage unless the user explicitly asked for that exact folder.
         
         REQUIRED JSON FORMAT when routing files to storage:
         {"folders":[{"name":"\(examplePath)","files":[{"filename":"example.xlsx"}]}]}

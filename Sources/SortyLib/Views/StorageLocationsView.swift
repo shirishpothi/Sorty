@@ -325,7 +325,7 @@ struct StorageLocationCard: View {
                         .foregroundColor(location.isEnabled ? .primary : .secondary)
                 }
 
-                Text(location.path)
+                PrivacySensitivePathText(path: location.path)
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
@@ -512,7 +512,7 @@ struct StorageLocationConfigView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(location.name)
                             .font(.headline)
-                        Text(location.path)
+                        PrivacySensitivePathText(path: location.path)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
