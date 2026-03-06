@@ -62,6 +62,15 @@ struct AIProviderSettingsView: View {
                     .animatedAppearance(delay: 0.15)
             }
         }
+        .modelSelectionOverlay(
+            isPresented: $showModelPicker,
+            currentProvider: viewModel.config.provider,
+            currentModel: viewModel.config.model,
+            onSelect: { provider, model in
+                viewModel.config.provider = provider
+                viewModel.config.model = model
+            }
+        )
         .onAppear {
             if viewModel.config.provider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
@@ -257,19 +266,9 @@ struct AIProviderSettingsView: View {
                         model: viewModel.config.model,
                         onTap: { showModelPicker = true }
                     )
+                    .modelSelectorTriggerBounds()
                 }
             }
-        }
-        .sheet(isPresented: $showModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showModelPicker,
-                currentProvider: viewModel.config.provider,
-                currentModel: viewModel.config.model,
-                onSelect: { provider, model in
-                    viewModel.config.provider = provider
-                    viewModel.config.model = model
-                }
-            )
         }
     }
 
@@ -286,6 +285,7 @@ struct AIProviderSettingsView: View {
                         model: viewModel.config.model,
                         onTap: { showModelPicker = true }
                     )
+                    .modelSelectorTriggerBounds()
                 }
 
                 if !viewModel.isAppleModelAvailable {
@@ -304,17 +304,6 @@ struct AIProviderSettingsView: View {
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showModelPicker,
-                currentProvider: .appleFoundationModel,
-                currentModel: viewModel.config.model,
-                onSelect: { provider, model in
-                    viewModel.config.provider = provider
-                    viewModel.config.model = model
-                }
-            )
         }
     }
     

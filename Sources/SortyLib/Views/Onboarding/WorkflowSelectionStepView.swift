@@ -12,12 +12,12 @@ public struct WorkflowSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @State private var hasAppeared = false
-    @State private var showingPersonaGenerator = false
     @State private var isCreatingCustom = false
     @State private var customDescription = ""
     @State private var isGenerating = false
     @State private var generationError: String?
     @State private var generatedPersona: CustomPersona?
+    @State private var createdPersona: CustomPersona?
     @State private var showingSuccess = false
     
     @StateObject private var generator = PersonaGenerator()
@@ -105,38 +105,34 @@ public struct WorkflowSelectionStepView: View {
                     }
                     .frame(maxWidth: 420)
                     
-                    // Show "Create Your Own" button
-                    CreatePersonaButton(isCreatingCustom: $isCreatingCustom)
-                        .frame(maxWidth: 420)
-                    
-                    // Show generated/selected custom persona if any
-                    if let persona = generatedPersona {
-                        HStack(spacing: 12) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.title2)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(persona.name)
-                                    .font(.headline)
-                                Text("Custom persona created successfully")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                    if let persona = customPersonaPreview {
+                        OnboardingCustomPersonaCard(
+                            persona: persona,
+                            isSelected: personaManager.selectedCustomPersonaId == persona.id
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                personaManager.selectCustomPersona(persona.id)
+                                isCreatingCustom = false
                             }
-                            
-                            Spacer()
                         }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.green.opacity(0.1))
-                        )
                         .frame(maxWidth: 420)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
+
+                        CreatePersonaButton(
+                            title: "Generate Another",
+                            subtitle: "Try a different custom workflow idea",
+                            isCreatingCustom: $isCreatingCustom
+                        )
+                        .frame(maxWidth: 420)
+                    } else {
+                        CreatePersonaButton(isCreatingCustom: $isCreatingCustom)
+                            .frame(maxWidth: 420)
                     }
                 }
+                .padding(.horizontal, 8)
                 .padding(.vertical, 32)
             }
+            .scrollClipDisabled()
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 40)
             .opacity(hasAppeared ? 1 : 0)
@@ -151,11 +147,8 @@ public struct WorkflowSelectionStepView: View {
                     Color.black.opacity(0.3)
                         .ignoresSafeArea()
                         .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                isCreatingCustom = false
-                                customDescription = ""
-                                generationError = nil
-                            }
+                            guard !isGenerating else { return }
+                            dismissCustomPersonaComposer()
                         }
                     
                     // Modal content
@@ -206,29 +199,66 @@ public struct WorkflowSelectionStepView: View {
                 .frame(minHeight: 200)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             } else if showingSuccess, let persona = generatedPersona {
-                // Success state - shown briefly before closing
-                VStack(spacing: 24) {
+                // Success state - preview the generated workflow before saving it.
+                VStack(spacing: 20) {
                     ZStack {
                         Circle()
-                            .fill(Color.green.opacity(0.15))
-                            .frame(width: 80, height: 80)
-                        
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(.green)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.accentColor.opacity(0.2), Color.teal.opacity(0.18)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 82, height: 82)
+
+                        Image(systemName: persona.icon)
+                            .font(.system(size: 34, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
                     }
                     
                     VStack(spacing: 8) {
-                        Text("Persona Created!")
+                        Text("Your Custom Workflow Is Ready")
                             .font(.title3.bold())
                         
-                        Text("\"\(persona.name)\" is now your default workflow")
+                        Text("Review the generated persona, then use it as your default workflow for Sorty.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                     }
+
+                    OnboardingCustomPersonaCard(
+                        persona: persona,
+                        isSelected: true,
+                        action: {}
+                    )
+                    .allowsHitTesting(false)
+
+                    HStack(spacing: 12) {
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                showingSuccess = false
+                                generatedPersona = nil
+                                generationError = nil
+                            }
+                        } label: {
+                            Text("Edit Description")
+                                .frame(minWidth: 110)
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button {
+                            commitGeneratedPersona(persona)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Use This Workflow")
+                            }
+                        }
+                        .buttonStyle(.onboardingPill)
+                    }
                 }
-                .frame(minHeight: 200)
+                .frame(minHeight: 320)
                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
             } else {
                 // Input form state
@@ -287,11 +317,7 @@ public struct WorkflowSelectionStepView: View {
                     
                     HStack(spacing: 12) {
                         Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                isCreatingCustom = false
-                                customDescription = ""
-                                generationError = nil
-                            }
+                            dismissCustomPersonaComposer()
                         } label: {
                             Text("Cancel")
                                 .frame(minWidth: 80)
@@ -325,6 +351,15 @@ public struct WorkflowSelectionStepView: View {
         )
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isGenerating)
     }
+
+    private var customPersonaPreview: CustomPersona? {
+        if let customId = personaManager.selectedCustomPersonaId,
+           let custom = customPersonaStore.customPersonas.first(where: { $0.id == customId }) {
+            return custom
+        }
+
+        return createdPersona
+    }
     
     private func generateCustomPersona() {
         isGenerating = true
@@ -346,28 +381,11 @@ public struct WorkflowSelectionStepView: View {
                 )
                 
                 await MainActor.run {
-                    // Save the persona
-                    customPersonaStore.addPersona(newPersona)
-                    
-                    // Select it
-                    personaManager.selectedCustomPersonaId = newPersona.id
-                    
-                    // Update UI - show success state
                     generatedPersona = newPersona
                     isGenerating = false
                     showingSuccess = true
                     
                     HapticFeedbackManager.shared.success()
-                    
-                    // Auto-close after showing success
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            isCreatingCustom = false
-                            showingSuccess = false
-                            customDescription = ""
-                        }
-                    }
                 }
             } catch {
                 await MainActor.run {
@@ -375,6 +393,28 @@ public struct WorkflowSelectionStepView: View {
                     isGenerating = false
                     HapticFeedbackManager.shared.error()
                 }
+            }
+        }
+    }
+
+    private func commitGeneratedPersona(_ persona: CustomPersona) {
+        customPersonaStore.addPersona(persona)
+        personaManager.selectCustomPersona(persona.id)
+        createdPersona = persona
+        generatedPersona = nil
+
+        dismissCustomPersonaComposer(clearDescription: true)
+    }
+
+    private func dismissCustomPersonaComposer(clearDescription: Bool = true) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            isCreatingCustom = false
+            isGenerating = false
+            showingSuccess = false
+            generationError = nil
+            generatedPersona = nil
+            if clearDescription {
+                customDescription = ""
             }
         }
     }
@@ -428,15 +468,144 @@ struct OnboardingPersonaCard: View {
             )
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered && !isSelected ? 1.02 : 1.0)
+        .shadow(
+            color: Color.black.opacity(isHovered && !isSelected ? 0.08 : 0),
+            radius: isHovered && !isSelected ? 14 : 0,
+            x: 0,
+            y: isHovered && !isSelected ? 8 : 0
+        )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
     }
 }
 
+struct OnboardingCustomPersonaCard: View {
+    let persona: CustomPersona
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            action()
+        } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.accentColor.opacity(0.22), Color.teal.opacity(0.16)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 58, height: 58)
+
+                        Image(systemName: persona.icon)
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(persona.name)
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+
+                            Spacer(minLength: 8)
+
+                            Text(isSelected ? "Selected" : "Custom")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.12))
+                                )
+                        }
+
+                        Text(isSelected ? "Sorty will use this custom workflow by default." : "Custom workflow ready to use as your default persona.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if !persona.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("\"\(persona.description)\"")
+                        .font(.callout)
+                        .foregroundStyle(.primary.opacity(0.88))
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 10) {
+                    Label("AI-generated persona", systemImage: "sparkles")
+                    Label(isSelected ? "Default workflow" : "Ready to select", systemImage: isSelected ? "checkmark.circle.fill" : "arrow.up.right.circle")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(NSColor.controlBackgroundColor),
+                                (isSelected ? Color.accentColor : Color.teal).opacity(0.06)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(
+                        isSelected ? Color.accentColor.opacity(0.7) : Color.secondary.opacity(isHovered ? 0.28 : 0.12),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            )
+            .shadow(
+                color: (isSelected ? Color.accentColor : Color.black).opacity(isHovered || isSelected ? 0.12 : 0.06),
+                radius: isHovered || isSelected ? 20 : 10,
+                x: 0,
+                y: isHovered || isSelected ? 10 : 5
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 18))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            if hovering && !isHovered {
+                HapticFeedbackManager.shared.selection()
+            }
+            isHovered = hovering
+        }
+        .animation(.easeOut(duration: 0.18), value: isHovered)
+    }
+}
+
 struct CreatePersonaButton: View {
+    let title: String
+    let subtitle: String
     @Binding var isCreatingCustom: Bool
     @State private var isHovered = false
+
+    init(
+        title: String = "Create Your Own",
+        subtitle: String = "Describe your ideal organization style",
+        isCreatingCustom: Binding<Bool>
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self._isCreatingCustom = isCreatingCustom
+    }
     
     var body: some View {
         Button {
@@ -457,11 +626,11 @@ struct CreatePersonaButton: View {
                 }
                 
                 VStack(spacing: 4) {
-                    Text("Create Your Own")
+                    Text(title)
                         .font(.headline)
                         .foregroundStyle(.primary)
                     
-                    Text("Describe your ideal organization style")
+                    Text(subtitle)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -481,7 +650,12 @@ struct CreatePersonaButton: View {
             )
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .shadow(
+            color: Color.black.opacity(isHovered ? 0.08 : 0),
+            radius: isHovered ? 14 : 0,
+            x: 0,
+            y: isHovered ? 8 : 0
+        )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
     }

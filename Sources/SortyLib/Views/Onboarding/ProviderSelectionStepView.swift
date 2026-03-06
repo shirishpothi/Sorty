@@ -19,6 +19,7 @@ public struct ProviderSelectionStepView: View {
     @State private var isLoadingModels = false
     @State private var isHoveringUsername = false
     @State private var isShowingAPIKey = false
+    @State private var isShowingModelPopover = false
     
     enum ConnectionTestStatus {
         case idle
@@ -153,6 +154,18 @@ public struct ProviderSelectionStepView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Provider Selection Step")
+        .modelSelectionOverlay(
+            isPresented: $isShowingModelPopover,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model
+        ) { provider, model in
+            settingsViewModel.config.provider = provider
+            settingsViewModel.config.model = model
+            if let defaultURL = provider.defaultAPIURL {
+                settingsViewModel.config.apiURL = defaultURL
+            }
+            settingsViewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
+        }
     }
     
     @ViewBuilder
@@ -197,41 +210,28 @@ public struct ProviderSelectionStepView: View {
                 .background(Color.green.opacity(0.1))
                 .cornerRadius(8)
                 
-                // Model selector - fetched dynamically from GitHub Copilot API
+                // Model selector
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Model")
                         .font(.subheadline)
                         .fontWeight(.medium)
                     
-                    HStack {
-                        if !availableModels.isEmpty {
-                            Picker("", selection: Binding(
-                                get: { settingsViewModel.config.model },
-                                set: { settingsViewModel.config.model = $0 }
-                            )) {
-                                ForEach(availableModels, id: \.self) { model in
-                                    Text(model).tag(model)
-                                }
-                            }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                        } else if isLoadingModels {
-                            HStack(spacing: 8) {
-                                BouncingSpinner(size: 12, color: .secondary)
-                                Text("Loading models...")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } else {
-                            Text(settingsViewModel.config.model)
+                    if isLoadingModels {
+                        HStack(spacing: 8) {
+                            BouncingSpinner(size: 12, color: .secondary)
+                            Text("Loading models...")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                    } else {
+                        ModelSelectorRow(
+                            provider: settingsViewModel.config.provider,
+                            model: settingsViewModel.config.model
+                        ) {
+                            isShowingModelPopover = true
+                        }
+                        .modelSelectorTriggerBounds()
                     }
-                    
-                    Text("Select the model to use with GitHub Copilot")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
                 .onAppear {
                     if copilotAuth.isAuthenticated && availableModels.isEmpty {
@@ -430,35 +430,13 @@ public struct ProviderSelectionStepView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                     
-                    TextField(settingsViewModel.config.provider.defaultModel, text: Binding(
-                        get: { settingsViewModel.config.model },
-                        set: { 
-                            settingsViewModel.config.model = $0.isEmpty ? settingsViewModel.config.provider.defaultModel : $0
-                        }
-                    ))
-                    .textFieldStyle(.roundedBorder)
-                    
-                    HStack(spacing: 4) {
-                        Text("Recommended: \(settingsViewModel.config.provider.defaultModel)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        if let url = settingsViewModel.config.provider.modelDocumentationURL {
-                            Text("•")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            
-                            Link(destination: url) {
-                                HStack(spacing: 2) {
-                                    Text("See \(settingsViewModel.config.provider.modelDocsLinkLabel)")
-                                        .font(.caption)
-                                        .underline()
-                                    Image(systemName: "arrow.up.right.square")
-                                        .font(.system(size: 8))
-                                }
-                            }
-                        }
+                    ModelSelectorRow(
+                        provider: settingsViewModel.config.provider,
+                        model: settingsViewModel.config.model
+                    ) {
+                        isShowingModelPopover = true
                     }
+                    .modelSelectorTriggerBounds()
                 }
             }
         }

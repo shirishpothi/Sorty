@@ -44,6 +44,17 @@ struct AutomationSettingsView: View {
         .onAppear {
             loadAutomationSettings()
         }
+        .modelSelectionOverlay(
+            isPresented: $showModelPicker,
+            currentProvider: selectedProvider,
+            currentModel: selectedModel,
+            onSelect: { provider, model in
+                selectedProvider = provider
+                selectedModel = model
+                viewModel.config.automationProvider = provider
+                viewModel.config.automationModel = model
+            }
+        )
     }
     
     private var globalModelSection: some View {
@@ -101,6 +112,7 @@ struct AutomationSettingsView: View {
                             model: selectedModel,
                             onTap: { showModelPicker = true }
                         )
+                        .modelSelectorTriggerBounds()
                     }
                     
                     Divider()
@@ -117,19 +129,6 @@ struct AutomationSettingsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
-        }
-        .sheet(isPresented: $showModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showModelPicker,
-                currentProvider: selectedProvider,
-                currentModel: selectedModel,
-                onSelect: { provider, model in
-                    selectedProvider = provider
-                    selectedModel = model
-                    viewModel.config.automationProvider = provider
-                    viewModel.config.automationModel = model
-                }
-            )
         }
     }
     

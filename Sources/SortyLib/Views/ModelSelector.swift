@@ -50,6 +50,36 @@ struct ModelSelectorRow: View {
     }
 }
 
+private struct ModelSelectionTriggerBoundsPreferenceKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
+    }
+}
+
+extension View {
+    func modelSelectorTriggerBounds() -> some View {
+        anchorPreference(key: ModelSelectionTriggerBoundsPreferenceKey.self, value: .bounds) { $0 }
+    }
+
+    func modelSelectionOverlay(
+        isPresented: Binding<Bool>,
+        currentProvider: AIProvider,
+        currentModel: String,
+        onSelect: @escaping (AIProvider, String) -> Void
+    ) -> some View {
+        modifier(
+            ModelSelectionOverlayModifier(
+                isPresented: isPresented,
+                currentProvider: currentProvider,
+                currentModel: currentModel,
+                onSelect: onSelect
+            )
+        )
+    }
+}
+
 // MARK: - Model Selection Popover (Two-Column Layout)
 
 struct ModelSelectionPopover: View {
@@ -57,6 +87,8 @@ struct ModelSelectionPopover: View {
     let currentProvider: AIProvider
     let currentModel: String
     let onSelect: (AIProvider, String) -> Void
+
+    private let cornerRadius: CGFloat = 18
     
     @StateObject private var modelCatalog = ModelCatalog.shared
     
@@ -113,8 +145,8 @@ struct ModelSelectionPopover: View {
             footer
         }
         .frame(width: 500, height: 420)
-        .background(Color(NSColor.windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .modifier(ModelSelectionPopoverGlassModifier(cornerRadius: cornerRadius))
         .onAppear {
             selectedProvider = currentProvider
             selectedModel = currentModel
@@ -160,7 +192,7 @@ struct ModelSelectionPopover: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(chromeBackground)
     }
     
     // MARK: - Two Column Content
@@ -195,7 +227,7 @@ struct ModelSelectionPopover: View {
             }
         }
         .frame(width: 160)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+        .background(sidebarBackground)
     }
     
     private func providerRow(_ provider: AIProvider) -> some View {
@@ -444,8 +476,7 @@ struct ModelSelectionPopover: View {
                 .font(.system(size: 12, design: .monospaced))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(Color(NSColor.textBackgroundColor))
-                .cornerRadius(4)
+                .background(customFieldBackground)
             
             Button("Use") {
                 if !customModelText.isEmpty {
@@ -503,6 +534,48 @@ struct ModelSelectionPopover: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .background(chromeBackground)
+    }
+
+    @ViewBuilder
+    private var chromeBackground: some View {
+        if #available(macOS 26.0, *) {
+            Color.clear
+        } else {
+            LinearGradient(
+                colors: [
+                    Color.primary.opacity(0.05),
+                    Color.primary.opacity(0.015)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarBackground: some View {
+        if #available(macOS 26.0, *) {
+            Color.clear
+        } else {
+            LinearGradient(
+                colors: [
+                    Color.accentColor.opacity(0.08),
+                    Color.primary.opacity(0.03)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    private var customFieldBackground: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(Color.primary.opacity(0.06))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            )
     }
     
     // MARK: - Helpers
@@ -513,6 +586,93 @@ struct ModelSelectionPopover: View {
             return catalogModels.map { $0.id }
         }
         return provider.recommendedModels
+    }
+}
+
+private struct ModelSelectionPopoverGlassModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .presentationCornerRadius(cornerRadius)
+                .presentationBackground(.clear)
+                .background {
+                    Color.clear
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+                }
+        } else {
+            content
+                .presentationCornerRadius(cornerRadius)
+                .presentationBackground(.clear)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.12), radius: 18, y: 10)
+        }
+    }
+}
+
+private struct ModelSelectionOverlayModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    let currentProvider: AIProvider
+    let currentModel: String
+    let onSelect: (AIProvider, String) -> Void
+
+    private let popoverSize = CGSize(width: 500, height: 420)
+    private let contentPadding: CGFloat = 12
+    private let verticalSpacing: CGFloat = 12
+
+    func body(content: Content) -> some View {
+        content
+            .overlayPreferenceValue(ModelSelectionTriggerBoundsPreferenceKey.self) { anchor in
+                GeometryReader { proxy in
+                    if isPresented, let anchor {
+                        let frame = proxy[anchor]
+
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    isPresented = false
+                                }
+
+                            ModelSelectionPopover(
+                                isPresented: $isPresented,
+                                currentProvider: currentProvider,
+                                currentModel: currentModel,
+                                onSelect: onSelect
+                            )
+                            .shadow(color: .black.opacity(0.22), radius: 28, y: 14)
+                            .offset(
+                                x: resolvedX(for: frame, in: proxy.size),
+                                y: resolvedY(for: frame, in: proxy.size)
+                            )
+                            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)))
+                        }
+                        .zIndex(1000)
+                    }
+                }
+            }
+    }
+
+    private func resolvedX(for frame: CGRect, in containerSize: CGSize) -> CGFloat {
+        let preferredX = frame.maxX - popoverSize.width
+        let maxX = max(contentPadding, containerSize.width - popoverSize.width - contentPadding)
+        return min(max(preferredX, contentPadding), maxX)
+    }
+
+    private func resolvedY(for frame: CGRect, in containerSize: CGSize) -> CGFloat {
+        let belowY = frame.maxY + verticalSpacing
+        let maxY = containerSize.height - popoverSize.height - contentPadding
+
+        if belowY <= maxY {
+            return belowY
+        }
+
+        return max(frame.minY - popoverSize.height - verticalSpacing, contentPadding)
     }
 }
 

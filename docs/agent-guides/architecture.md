@@ -65,6 +65,14 @@ The Finder Sync `.appex` registration repair path is `ExtensionCommunication.rep
 ## Learnings System
 User preference learning stored in `LearningsProfile`. Secured with biometric auth via `SecurityManager`.
 
+## UI Presentation Pitfalls
+
+### Liquid Glass Surfaces
+- Use `Sources/SortyLib/Views/AboutView.swift` as the visual reference for a correct liquid glass surface.
+- If a view needs to look like the About window, do not assume SwiftUI `.popover` or `.sheet` chrome will preserve that look. The presenter shell can make system glass read like a dark AppKit panel even when `glassEffect` is applied correctly.
+- `ModelSelectionPopover` in Settings and Automation Settings intentionally does **not** use the native popover presenter. It is anchored with `modelSelectorTriggerBounds()` and rendered via `modelSelectionOverlay(...)` from `Sources/SortyLib/Views/ModelSelector.swift`.
+- When updating liquid glass UI, separate the **glass surface** from the **presentation shell**. If the shell is visually wrong, replace the presenter first instead of stacking more material/glass modifiers.
+
 ## Common Tasks
 - **Add AI provider**: Create client in `AI/`, implement `AIClientProtocol`, add to `AIProvider` enum + `AIClientFactory`
 - **Add settings option**: Update `AIConfig`, `SettingsViewModel`, `SettingsView`

@@ -103,3 +103,4 @@ SortyLib is a monolithic target (199 files, ~85K lines). Clean builds take ~160s
 - **Avoid `make clean`** unless you're debugging build cache issues
 - **Use `make test-fast`** to run only unit tests (excludes slow integration tests)
 - **Close Xcode** when using SPM builds — Xcode's indexer competes for resources
+- **For liquid glass changes, do a visual check** — compile/test success is not enough. Compare against `AboutView` if the goal is “system liquid glass”, because native `.popover` or `.sheet` chrome can look wrong even when `glassEffect` compiles.
