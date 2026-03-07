@@ -13,6 +13,12 @@
 4. Use `Repair Finder Sync` (or `Activate Extension`) for the `.appex`.
 5. Use `Open Extensions` and confirm `com.sorty.app.SortyFinderSync` is enabled.
 
+## Extension Isolation
+- If Sorty is running from `/Applications` or `~/Applications`, Finder Sync is registered from that app bundle directly.
+- If Sorty is running from a non-Applications path (for example, a workspace `releases/` build), repair stages the app in `~/Applications/Sorty.app` and registers Finder Sync from there so Finder can activate right-click menus.
+- On launch the app auto-repairs the extension registration if it doesn't match the current build (`autoRepairFinderSyncIfNeeded`).
+- Repair also kills any stale `SortyFinderSync` process and force-removes the old `pluginkit` registration before re-adding.
+
 ## Troubleshooting
 - Verify extension target builds:
   - `xcodebuild -project Sorty.xcodeproj -target SortyFinderSync -configuration Debug -destination 'platform=macOS' build`

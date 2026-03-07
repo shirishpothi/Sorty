@@ -162,6 +162,7 @@ struct SortyApp: App {
                     ExtensionCommunication.beginMonitoringFinderSyncRuntime()
                     Task {
                         _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                        await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
                     }
                 }
             }
@@ -214,6 +215,7 @@ struct SortyApp: App {
             ExtensionCommunication.beginMonitoringFinderSyncRuntime()
             Task {
                 _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
             }
         }
 

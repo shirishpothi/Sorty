@@ -14,6 +14,10 @@ import Combine
 public class LoginItemManager: ObservableObject {
 
     public static let shared = LoginItemManager()
+    public nonisolated(unsafe) static let backgroundAgentPlistName = "com.sorty.app.background-agent.plist"
+    public nonisolated(unsafe) static let legacyBackgroundAgentPlistName = "com.sorty.app.plist"
+    public nonisolated(unsafe) static let backgroundAgentServiceLabel = "com.sorty.app.background-agent"
+    public nonisolated(unsafe) static let backgroundAgentBundleProgram = "MacOS/Sorty"
 
     @Published public var isLaunchAtLoginEnabled: Bool = false
     @Published public var isBackgroundAgentEnabled: Bool = false
@@ -25,6 +29,28 @@ public class LoginItemManager: ObservableObject {
     private init() {
         refreshStatus()
         setupObservations()
+    }
+
+    public nonisolated static func backgroundAgentConfigurationIssues(
+        label: String,
+        bundleProgram: String,
+        mainAppServiceLabel: String
+    ) -> [String] {
+        var issues: [String] = []
+
+        if label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append("Background agent label is missing")
+        } else if label == mainAppServiceLabel {
+            issues.append("Background agent label collides with the main app service label")
+        }
+
+        if bundleProgram.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            issues.append("Background agent BundleProgram is missing")
+        } else if bundleProgram != backgroundAgentBundleProgram {
+            issues.append("Background agent BundleProgram must remain \(backgroundAgentBundleProgram)")
+        }
+
+        return issues
     }
 
     // MARK: - Observations
@@ -67,7 +93,7 @@ public class LoginItemManager: ObservableObject {
 
         // Background Agent Status
         // plist name must include the .plist extension per Apple documentation
-        let agent = SMAppService.agent(plistName: "com.sorty.app.plist")
+        let agent = SMAppService.agent(plistName: Self.backgroundAgentPlistName)
         let aStatus = agent.status
         self.isBackgroundAgentEnabled = (aStatus == .enabled)
         self.agentStatus = describe(aStatus)
@@ -111,10 +137,22 @@ public class LoginItemManager: ObservableObject {
             DebugLogger.log("Unregistered main app service (Login Item)")
         }
 
+        // Migrate off the legacy agent plist that reused the app's service label.
+        let legacyAgent = SMAppService.agent(plistName: Self.legacyBackgroundAgentPlistName)
+        let legacyAgentStatus = legacyAgent.status
+        if legacyAgentStatus == .enabled || legacyAgentStatus == .requiresApproval {
+            do {
+                try legacyAgent.unregister()
+                DebugLogger.log("Removed legacy Sorty background agent registration")
+            } catch {
+                DebugLogger.log("Failed to remove legacy background agent registration: \(error.localizedDescription)")
+            }
+        }
+
         // 2. Sync Background Activity (Agent)
         // Background permission is required for keepInBackground logic to work reliably
         // Decoupled from showMenuBarExtra to give user control over System Settings entry
-        let agent = SMAppService.agent(plistName: "com.sorty.app.plist")
+        let agent = SMAppService.agent(plistName: Self.backgroundAgentPlistName)
         let shouldBeBackgroundAgent = keepInBackground
         let agentCurrentStatus = agent.status
 

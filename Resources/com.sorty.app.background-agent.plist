@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.sorty.app</string>
+    <string>com.sorty.app.background-agent</string>
     <key>BundleProgram</key>
     <string>MacOS/Sorty</string>
     <key>RunAtLoad</key>

@@ -110,7 +110,7 @@ struct FinderIntegrationSettingsView: View {
                     }
 
                     HStack(spacing: 8) {
-                        Button("Repair") {
+                        Button(repairButtonTitle) {
                             Task {
                                 let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
                                 await refreshIntegrationStatus()
@@ -149,6 +149,22 @@ struct FinderIntegrationSettingsView: View {
                                 .foregroundStyle(.orange)
                                 .font(.caption)
                             Text("Stale Sorty registrations found: \(diagnostics.problemPaths.count). Repair removes the old app copies so Finder keeps using the right one.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(8)
+                        .background(Color.orange.opacity(0.08))
+                        .cornerRadius(8)
+                    }
+
+                    if let diagnostics = finderSyncDiagnostics,
+                       diagnostics.needsCodeSignatureRepair {
+                        HStack(alignment: .top, spacing: 6) {
+                            Image(systemName: "hammer.circle.fill")
+                                .foregroundStyle(.orange)
+                                .font(.caption)
+                            Text("This build was signed without the Finder entitlements it needs. Repair will re-sign the current app, rebuild the registration, and restart Finder automatically.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -517,7 +533,7 @@ struct FinderIntegrationSettingsView: View {
             return "checkmark.circle.fill"
         case .registered:
             return "checkmark.seal.fill"
-        case .activeElsewhere, .needsCleanup, .indeterminate, .disabled:
+        case .signatureInvalid, .activeElsewhere, .needsCleanup, .indeterminate, .disabled:
             return "exclamationmark.triangle.fill"
         case .missing, .notRegistered:
             return "xmark.circle.fill"
@@ -531,11 +547,15 @@ struct FinderIntegrationSettingsView: View {
             return .green
         case .registered:
             return .yellow
-        case .activeElsewhere, .needsCleanup, .indeterminate, .disabled:
+        case .signatureInvalid, .activeElsewhere, .needsCleanup, .indeterminate, .disabled:
             return .orange
         case .missing, .notRegistered:
             return .red
         }
+    }
+
+    private var repairButtonTitle: String {
+        finderSyncDiagnostics?.needsCodeSignatureRepair == true ? "Repair & Re-sign" : "Repair"
     }
 }
 

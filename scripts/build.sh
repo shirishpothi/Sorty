@@ -5,6 +5,12 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 
+BACKGROUND_AGENT_PLIST_NAME="com.sorty.app.background-agent.plist"
+LEGACY_BACKGROUND_AGENT_PLIST_NAME="com.sorty.app.plist"
+BACKGROUND_AGENT_SERVICE_LABEL="com.sorty.app.background-agent"
+BACKGROUND_AGENT_BUNDLE_PROGRAM="MacOS/Sorty"
+UNSUPPORTED_ADHOC_ENTITLEMENT="com.apple.developer.usernotifications.time-sensitive"
+
 # MARK: - Resource Copying Helpers
 
 # Safely copies resources with integrity checks and conflict detection
@@ -120,6 +126,61 @@ bundle_cli_tools() {
         cp "${sorty_script}" "${cli_dir}/sorty"
         chmod 755 "${cli_dir}/sorty"
         log_item "Bundled sorty CLI script"
+    fi
+}
+
+bundle_background_agent_plist() {
+    local app_path="$1"
+    local launch_agents_dir="${app_path}/Contents/Library/LaunchAgents"
+    local source_plist="${PROJECT_DIR}/Resources/${BACKGROUND_AGENT_PLIST_NAME}"
+    local bundled_plist="${launch_agents_dir}/${BACKGROUND_AGENT_PLIST_NAME}"
+    local legacy_plist="${launch_agents_dir}/${LEGACY_BACKGROUND_AGENT_PLIST_NAME}"
+
+    mkdir -p "${launch_agents_dir}"
+    rm -f "${legacy_plist}" "${bundled_plist}"
+
+    if [ ! -f "${source_plist}" ]; then
+        log_item "Warning: Background agent plist not found at ${source_plist}"
+        return
+    fi
+
+    cp "${source_plist}" "${bundled_plist}"
+
+    local label
+    label=$(/usr/libexec/PlistBuddy -c "Print :Label" "${bundled_plist}" 2>/dev/null || true)
+    local bundle_program
+    bundle_program=$(/usr/libexec/PlistBuddy -c "Print :BundleProgram" "${bundled_plist}" 2>/dev/null || true)
+
+    if [ -z "${label}" ]; then
+        log_failure "Background agent plist is missing Label"
+        exit 1
+    fi
+
+    if [ "${label}" = "${APP_BUNDLE_ID}" ]; then
+        log_failure "Background agent Label (${label}) must not match the app bundle identifier (${APP_BUNDLE_ID})"
+        exit 1
+    fi
+
+    if [ "${label}" != "${BACKGROUND_AGENT_SERVICE_LABEL}" ]; then
+        log_failure "Background agent Label must remain ${BACKGROUND_AGENT_SERVICE_LABEL} (found ${label})"
+        exit 1
+    fi
+
+    if [ "${bundle_program}" != "${BACKGROUND_AGENT_BUNDLE_PROGRAM}" ]; then
+        log_failure "Background agent BundleProgram must remain ${BACKGROUND_AGENT_BUNDLE_PROGRAM} (found ${bundle_program:-<missing>})"
+        exit 1
+    fi
+
+    log_item "Copied background agent plist"
+}
+
+validate_adhoc_entitlements() {
+    local entitlements_path="$1"
+    local description="$2"
+
+    if /usr/libexec/PlistBuddy -c "Print :${UNSUPPORTED_ADHOC_ENTITLEMENT}" "${entitlements_path}" >/dev/null 2>&1; then
+        log_failure "${description} cannot request ${UNSUPPORTED_ADHOC_ENTITLEMENT} when Sorty is ad-hoc signed."
+        exit 1
     fi
 }
 
@@ -367,11 +428,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     rm -f "${APP_PATH}/Contents/Sorty.entitlements"
 
     # Copy LaunchAgent plist for Background Activity
-    if [ -f "${PROJECT_DIR}/Resources/com.sorty.app.plist" ]; then
-        mkdir -p "${APP_PATH}/Contents/Library/LaunchAgents"
-        cp "${PROJECT_DIR}/Resources/com.sorty.app.plist" "${APP_PATH}/Contents/Library/LaunchAgents/"
-        log_item "Copied LaunchAgent plist"
-    fi
+    bundle_background_agent_plist "${APP_PATH}"
 
     CLI_BUILD_ARCH=""
     if [ "${#BUILD_ARCH_ARRAY[@]}" -eq 1 ]; then
@@ -508,11 +565,7 @@ else
     rm -f "${APP_PATH}/Contents/Sorty.entitlements"
 
     # Copy LaunchAgent plist for Background Activity
-    if [ -f "${PROJECT_DIR}/Resources/com.sorty.app.plist" ]; then
-        mkdir -p "${APP_PATH}/Contents/Library/LaunchAgents"
-        cp "${PROJECT_DIR}/Resources/com.sorty.app.plist" "${APP_PATH}/Contents/Library/LaunchAgents/"
-        log_item "Copied LaunchAgent plist"
-    fi
+    bundle_background_agent_plist "${APP_PATH}"
 
     # Embed Sparkle framework for SPM builds
     FRAMEWORKS_DIR="${APP_PATH}/Contents/Frameworks"
@@ -631,6 +684,10 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
 
     ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
     FINDER_SYNC_ENTITLEMENTS="${PROJECT_DIR}/SortyFinderSync/SortyFinderSync.entitlements"
+    REPAIR_ENTITLEMENTS_FILE="${PROJECT_DIR}/Sources/SortyLib/Resources/SortyAppRepair.entitlements"
+
+    validate_adhoc_entitlements "${ENTITLEMENTS_FILE}" "Sorty.entitlements"
+    validate_adhoc_entitlements "${REPAIR_ENTITLEMENTS_FILE}" "SortyAppRepair.entitlements"
 
     # Sign inside-out: innermost components first, then the main app.
     # Do NOT use --deep as it re-signs inner components with wrong entitlements
@@ -660,19 +717,9 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
     fi
 
     # 3. Sign the main app bundle (outermost — must be last)
-    # AMFI rejects ad-hoc signatures that contain restricted entitlements
-    # (for example app groups and time-sensitive notifications). Keep ad-hoc
-    # bundles launchable by signing without entitlements in that case.
-    APPLY_APP_ENTITLEMENTS=true
+    # Finder Sync depends on the containing app carrying the same sandbox/app-group
+    # entitlements as the embedded extension. Do not silently strip them.
     if [ -f "${ENTITLEMENTS_FILE}" ]; then
-        if /usr/libexec/PlistBuddy -c "Print :com.apple.security.application-groups" "${ENTITLEMENTS_FILE}" >/dev/null 2>&1 || \
-           /usr/libexec/PlistBuddy -c "Print :com.apple.developer.usernotifications.time-sensitive" "${ENTITLEMENTS_FILE}" >/dev/null 2>&1; then
-            APPLY_APP_ENTITLEMENTS=false
-            log_item "Detected restricted entitlements; signing app without entitlements for ad-hoc launch compatibility"
-        fi
-    fi
-
-    if [ "${APPLY_APP_ENTITLEMENTS}" = "true" ] && [ -f "${ENTITLEMENTS_FILE}" ]; then
         codesign --force --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}"
     else
         codesign --force --sign - "${APP_PATH}"

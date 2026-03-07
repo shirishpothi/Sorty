@@ -40,6 +40,31 @@ final class FinderIntegrationStatusTests: XCTestCase {
         XCTAssertNil(entries.first(where: { $0.path.contains("/private/tmp/") })?.isEnabled)
     }
 
+    func testFinderSyncRegistrationHostEligibilityAcceptsApplicationsPaths() {
+        XCTAssertTrue(
+            ExtensionCommunication.isFinderSyncRegistrationHostEligible(
+                appBundlePath: "/Applications/Sorty.app",
+                homeDirectoryPath: "/Users/test"
+            )
+        )
+
+        XCTAssertTrue(
+            ExtensionCommunication.isFinderSyncRegistrationHostEligible(
+                appBundlePath: "/Users/test/Applications/Sorty.app",
+                homeDirectoryPath: "/Users/test"
+            )
+        )
+    }
+
+    func testFinderSyncRegistrationHostEligibilityRejectsWorkspaceBuildPath() {
+        XCTAssertFalse(
+            ExtensionCommunication.isFinderSyncRegistrationHostEligible(
+                appBundlePath: "/Users/test/Code Projects/Sorty/releases/Sorty.app",
+                homeDirectoryPath: "/Users/test"
+            )
+        )
+    }
+
     func testFinderSyncDiagnosticsFlagsAnotherActiveAppCopy() {
         let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
             entries: [.init(path: staleExtensionPath, isEnabled: true)],
@@ -81,6 +106,32 @@ final class FinderIntegrationStatusTests: XCTestCase {
         XCTAssertTrue(diagnostics.isVerifiedWorking)
     }
 
+    func testFinderSyncDiagnosticsVerifiesCurrentBuildWithRunningProcessPath() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil,
+            runningProcessPath: preferredExtensionPath
+        )
+
+        XCTAssertEqual(diagnostics.kind, .verified)
+        XCTAssertTrue(diagnostics.isOperational)
+        XCTAssertTrue(diagnostics.isVerifiedWorking)
+    }
+
+    func testFinderSyncDiagnosticsFlagsAnotherActiveCopyFromRunningProcessPath() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil,
+            runningProcessPath: staleExtensionPath
+        )
+
+        XCTAssertEqual(diagnostics.kind, .activeElsewhere)
+        XCTAssertEqual(diagnostics.activePath, staleExtensionPath)
+        XCTAssertTrue(diagnostics.needsRepair)
+    }
+
     func testFinderSyncDiagnosticsFlagsStaleDuplicateRegistrations() {
         let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
             entries: [
@@ -94,5 +145,96 @@ final class FinderIntegrationStatusTests: XCTestCase {
         XCTAssertEqual(diagnostics.kind, .needsCleanup)
         XCTAssertEqual(diagnostics.problemPaths, [staleExtensionPath])
         XCTAssertTrue(diagnostics.needsRepair)
+    }
+
+    func testMissingFinderIntegrationAppEntitlementsAllowsUnsignedHostApp() {
+        let missing = ExtensionCommunication.missingFinderIntegrationAppEntitlements(in: [:])
+
+        XCTAssertTrue(missing.isEmpty)
+    }
+
+    func testFinderSyncDiagnosticsIgnoresMissingHostAppEntitlements() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil,
+            appBundleMissingEntitlements: ["com.apple.security.app-sandbox"]
+        )
+
+        XCTAssertEqual(diagnostics.kind, .registered)
+        XCTAssertFalse(diagnostics.needsCodeSignatureRepair)
+        XCTAssertFalse(diagnostics.needsRepair)
+    }
+
+    func testAutoRepairTriggersWhenCurrentBuildIsOnlyRegistered() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil
+        )
+
+        XCTAssertTrue(
+            ExtensionCommunication.shouldAutoRepairFinderSync(
+                diagnostics: diagnostics,
+                currentPath: preferredExtensionPath
+            )
+        )
+    }
+
+    func testAutoRepairSkipsWhenCurrentBuildIsVerified() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: .init(
+                event: "launch",
+                bundleIdentifier: "com.sorty.app.SortyFinderSync",
+                path: preferredExtensionPath,
+                reportedAt: Date()
+            )
+        )
+
+        XCTAssertFalse(
+            ExtensionCommunication.shouldAutoRepairFinderSync(
+                diagnostics: diagnostics,
+                currentPath: preferredExtensionPath
+            )
+        )
+    }
+
+    func testAutoRepairTriggersWhenCurrentBuildPathDiffersFromPreferredRegistration() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil
+        )
+
+        let workspaceBuildPath = "/Users/test/Code Projects/Sorty/releases/Sorty.app/Contents/PlugIns/SortyFinderSync.appex"
+
+        XCTAssertTrue(
+            ExtensionCommunication.shouldAutoRepairFinderSync(
+                diagnostics: diagnostics,
+                currentPath: workspaceBuildPath
+            )
+        )
+    }
+
+    func testBackgroundAgentConfigurationRejectsMainAppLabelCollision() {
+        let issues = LoginItemManager.backgroundAgentConfigurationIssues(
+            label: "com.sorty.app",
+            bundleProgram: "MacOS/Sorty",
+            mainAppServiceLabel: "com.sorty.app"
+        )
+
+        XCTAssertTrue(issues.contains("Background agent label collides with the main app service label"))
+    }
+
+    func testBackgroundAgentConfigurationAcceptsDedicatedAgentLabel() {
+        let issues = LoginItemManager.backgroundAgentConfigurationIssues(
+            label: LoginItemManager.backgroundAgentServiceLabel,
+            bundleProgram: LoginItemManager.backgroundAgentBundleProgram,
+            mainAppServiceLabel: "com.sorty.app"
+        )
+
+        XCTAssertTrue(issues.isEmpty)
     }
 }

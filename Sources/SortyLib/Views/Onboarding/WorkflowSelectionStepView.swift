@@ -17,7 +17,6 @@ public struct WorkflowSelectionStepView: View {
     @State private var isGenerating = false
     @State private var generationError: String?
     @State private var generatedPersona: CustomPersona?
-    @State private var createdPersona: CustomPersona?
     @State private var showingSuccess = false
     
     @StateObject private var generator = PersonaGenerator()
@@ -105,18 +104,20 @@ public struct WorkflowSelectionStepView: View {
                     }
                     .frame(maxWidth: 420)
                     
-                    if let persona = customPersonaPreview {
-                        OnboardingCustomPersonaCard(
-                            persona: persona,
-                            isSelected: personaManager.selectedCustomPersonaId == persona.id
-                        ) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                personaManager.selectCustomPersona(persona.id)
-                                isCreatingCustom = false
+                    if !customPersonaStore.customPersonas.isEmpty {
+                        ForEach(customPersonaStore.customPersonas) { persona in
+                            OnboardingCustomPersonaCard(
+                                persona: persona,
+                                isSelected: personaManager.selectedCustomPersonaId == persona.id
+                            ) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    personaManager.selectCustomPersona(persona.id)
+                                    isCreatingCustom = false
+                                }
                             }
+                            .frame(maxWidth: 420)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         }
-                        .frame(maxWidth: 420)
-                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
 
                         CreatePersonaButton(
                             title: "Generate Another",
@@ -352,14 +353,6 @@ public struct WorkflowSelectionStepView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isGenerating)
     }
 
-    private var customPersonaPreview: CustomPersona? {
-        if let customId = personaManager.selectedCustomPersonaId,
-           let custom = customPersonaStore.customPersonas.first(where: { $0.id == customId }) {
-            return custom
-        }
-
-        return createdPersona
-    }
     
     private func generateCustomPersona() {
         isGenerating = true
@@ -400,7 +393,6 @@ public struct WorkflowSelectionStepView: View {
     private func commitGeneratedPersona(_ persona: CustomPersona) {
         customPersonaStore.addPersona(persona)
         personaManager.selectCustomPersona(persona.id)
-        createdPersona = persona
         generatedPersona = nil
 
         dismissCustomPersonaComposer(clearDescription: true)

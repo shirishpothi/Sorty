@@ -24,10 +24,7 @@ final class SortyFinderSync: FIFinderSync {
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
         let organizeImage = Self.normalizedMenuIcon(Self.finderOrganizeImage(), isTemplate: false)
-        let watchImage = Self.normalizedMenuIcon(
-            Self.finderWatchImage(for: menu.effectiveAppearance),
-            isTemplate: false
-        )
+        let watchImage = Self.normalizedMenuIcon(Self.finderWatchImage(), isTemplate: true)
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer, .contextualMenuForSidebar:
@@ -172,14 +169,17 @@ final class SortyFinderSync: FIFinderSync {
         return fallback
     }
 
-    private static func finderWatchImage(for appearance: NSAppearance?) -> NSImage {
-        let preferredBaseNames = prefersDarkAppearance(appearance)
-            ? ["eye_white", "eye_black"]
-            : ["eye_black", "eye_white"]
+    private static func finderWatchImage() -> NSImage {
+        if let assetImage = NSImage(named: NSImage.Name("WatchIcon")) {
+            let copiedImage = (assetImage.copy() as? NSImage) ?? assetImage
+            copiedImage.isTemplate = true
+            return copiedImage
+        }
 
+        let preferredBaseNames = ["WatchIconTemplate", "eye_black", "eye_white"]
         for baseName in preferredBaseNames {
             if let image = loadWatchIconImage(named: baseName) {
-                image.isTemplate = false
+                image.isTemplate = true
                 return image
             }
         }
@@ -222,16 +222,6 @@ final class SortyFinderSync: FIFinderSync {
         }
 
         return nil
-    }
-
-    private static func prefersDarkAppearance(_ appearance: NSAppearance?) -> Bool {
-        if appearance?.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
-            return true
-        }
-        guard let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") else {
-            return false
-        }
-        return style.caseInsensitiveCompare("Dark") == .orderedSame
     }
 
     private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {
