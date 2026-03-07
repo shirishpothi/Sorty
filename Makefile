@@ -13,7 +13,7 @@ PARALLEL_FLAGS := -j $(CORES)
 # Swift build flags for optimization
 SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox -Xlinker -no_deduplicate
 SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=false ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 
 # Disable index store for local debug builds (saves ~10-15% compile time)
 export SWIFTPM_DISABLE_INDEXING ?= 1

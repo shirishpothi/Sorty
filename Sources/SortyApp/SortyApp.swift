@@ -159,6 +159,7 @@ struct SortyApp: App {
             }
             .onChange(of: finderIntegrationEnabled) { _, newValue in
                 if newValue {
+                    ExtensionCommunication.beginMonitoringFinderSyncRuntime()
                     Task {
                         _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
                     }
@@ -210,6 +211,7 @@ struct SortyApp: App {
         storageLocationsManager.restoreSecurityScopedAccess()
 
         if finderIntegrationEnabled {
+            ExtensionCommunication.beginMonitoringFinderSyncRuntime()
             Task {
                 _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
             }

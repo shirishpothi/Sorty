@@ -383,6 +383,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then
         bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
     else
+        rm -rf "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         log_item "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
     fi
 
@@ -570,6 +571,7 @@ else
     if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then
         bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
     else
+        rm -rf "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         log_item "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
     fi
 

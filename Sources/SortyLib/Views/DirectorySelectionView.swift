@@ -15,6 +15,7 @@ struct DirectorySelectionView: View {
     @State private var isHovering = false
     @State private var iconBounce = false
     @State private var hasAppeared = false
+    @State private var browseHovered = false
 
     var body: some View {
         WorkflowContainer(currentStep: .selectFolder) {
@@ -54,6 +55,11 @@ struct DirectorySelectionView: View {
                 }
                 .buttonStyle(.onboardingPill)
                 .keyboardShortcut("o", modifiers: .command)
+                .scaleEffect(browseHovered ? 1.04 : 1.0)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.15)) { browseHovered = hovering }
+                    if hovering { HapticFeedbackManager.shared.selection() }
+                }
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(y: hasAppeared ? 0 : 10)
                 .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)

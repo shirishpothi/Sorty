@@ -2,6 +2,8 @@ import Cocoa
 import FinderSync
 
 final class SortyFinderSync: FIFinderSync {
+    private static let heartbeatNotificationName = Notification.Name("SortyFinderSyncHeartbeat")
+
     override init() {
         super.init()
 
@@ -15,9 +17,11 @@ final class SortyFinderSync: FIFinderSync {
         }
 
         finderSync.directoryURLs.insert(FileManager.default.homeDirectoryForCurrentUser)
+        Self.reportHeartbeat(event: "launch")
     }
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
+        Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
         let organizeImage = Self.normalizedMenuIcon(Self.finderOrganizeImage(), isTemplate: false)
         let watchImage = Self.normalizedMenuIcon(
@@ -224,9 +228,6 @@ final class SortyFinderSync: FIFinderSync {
         if appearance?.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
             return true
         }
-        if NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
-            return true
-        }
         guard let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") else {
             return false
         }
@@ -254,5 +255,35 @@ final class SortyFinderSync: FIFinderSync {
         rendered.unlockFocus()
         rendered.isTemplate = isTemplate
         return rendered
+    }
+
+    private static func reportHeartbeat(event: String) {
+        let userInfo: [String: Any] = [
+            "event": event,
+            "bundleIdentifier": Bundle.main.bundleIdentifier ?? "",
+            "path": Bundle.main.bundleURL.path,
+            "timestamp": Date().timeIntervalSince1970
+        ]
+
+        DistributedNotificationCenter.default().post(
+            name: heartbeatNotificationName,
+            object: nil,
+            userInfo: userInfo
+        )
+    }
+
+    private static func menuEventName(for menuKind: FIMenuKind) -> String {
+        switch menuKind {
+        case .contextualMenuForItems:
+            return "menu.items"
+        case .contextualMenuForContainer:
+            return "menu.container"
+        case .contextualMenuForSidebar:
+            return "menu.sidebar"
+        case .toolbarItemMenu:
+            return "menu.toolbar"
+        @unknown default:
+            return "menu.unknown"
+        }
     }
 }

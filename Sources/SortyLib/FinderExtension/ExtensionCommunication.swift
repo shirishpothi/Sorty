@@ -36,6 +36,10 @@ public struct ExtensionCommunication {
         (previewQuickActionBundleIdentifier, "Preview with Sorty")
     ]
     public static let notificationName = Notification.Name("SortyDirectorySelected")
+    public static let finderSyncHeartbeatNotification = Notification.Name("SortyFinderSyncHeartbeat")
+    private static let finderSyncHeartbeatDefaultsKey = "finderSyncHeartbeatCache"
+    private static let finderSyncHeartbeatMaxAge: TimeInterval = 180
+    nonisolated(unsafe) private static var finderSyncHeartbeatObserver: NSObjectProtocol?
     
     // MARK: - URL Scheme Handling
     
@@ -153,9 +157,84 @@ public struct ExtensionCommunication {
         let stderr: String
     }
 
-    private struct FinderSyncRegistrationEntry {
+    struct FinderSyncRegistrationEntry: Sendable, Equatable {
         let path: String
         let isEnabled: Bool?
+    }
+
+    struct FinderSyncRuntimeHeartbeat: Codable, Sendable, Equatable {
+        let event: String
+        let bundleIdentifier: String
+        let path: String
+        let reportedAt: Date
+
+        var isRecent: Bool {
+            Date().timeIntervalSince(reportedAt) <= finderSyncHeartbeatMaxAge
+        }
+    }
+
+    enum FinderSyncStatusKind: String, Sendable {
+        case missing
+        case notRegistered
+        case disabled
+        case indeterminate
+        case activeElsewhere
+        case needsCleanup
+        case registered
+        case verified
+    }
+
+    struct FinderSyncDiagnostics: Sendable {
+        let kind: FinderSyncStatusKind
+        let statusText: String
+        let detailMessage: String
+        let preferredPath: String?
+        let activePath: String?
+        let problemPaths: [String]
+        let registeredPaths: [String]
+        let heartbeat: FinderSyncRuntimeHeartbeat?
+
+        var isOperational: Bool {
+            switch kind {
+            case .registered, .verified:
+                return true
+            default:
+                return false
+            }
+        }
+
+        var isVerifiedWorking: Bool {
+            kind == .verified
+        }
+
+        var needsRepair: Bool {
+            switch kind {
+            case .registered, .verified:
+                return false
+            default:
+                return true
+            }
+        }
+    }
+
+    public static func beginMonitoringFinderSyncRuntime() {
+        Task { @MainActor in
+            beginMonitoringFinderSyncRuntimeOnMainActor()
+        }
+    }
+
+    @MainActor
+    private static func beginMonitoringFinderSyncRuntimeOnMainActor() {
+        guard finderSyncHeartbeatObserver == nil else { return }
+
+        finderSyncHeartbeatObserver = DistributedNotificationCenter.default().addObserver(
+            forName: finderSyncHeartbeatNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let heartbeat = finderSyncRuntimeHeartbeat(from: notification.userInfo) else { return }
+            cacheFinderSyncRuntimeHeartbeat(heartbeat)
+        }
     }
 
     private static func runCommand(executablePath: String, arguments: [String]) -> CommandResult {
@@ -201,6 +280,59 @@ public struct ExtensionCommunication {
         return raw.replacingOccurrences(of: "\n", with: " ")
     }
 
+    private static func finderSyncRuntimeHeartbeat(from userInfo: [AnyHashable: Any]?) -> FinderSyncRuntimeHeartbeat? {
+        guard let userInfo,
+              let path = userInfo["path"] as? String,
+              !path.isEmpty else {
+            return nil
+        }
+
+        let event = (userInfo["event"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bundleIdentifier = (userInfo["bundleIdentifier"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let timestampValue = userInfo["timestamp"]
+
+        let reportedAt: Date
+        switch timestampValue {
+        case let value as Double:
+            reportedAt = Date(timeIntervalSince1970: value)
+        case let value as NSNumber:
+            reportedAt = Date(timeIntervalSince1970: value.doubleValue)
+        case let value as String:
+            reportedAt = Date(timeIntervalSince1970: Double(value) ?? Date().timeIntervalSince1970)
+        default:
+            reportedAt = Date()
+        }
+
+        return FinderSyncRuntimeHeartbeat(
+            event: event?.isEmpty == false ? event! : "heartbeat",
+            bundleIdentifier: bundleIdentifier?.isEmpty == false ? bundleIdentifier! : finderSyncBundleIdentifier(),
+            path: path,
+            reportedAt: reportedAt
+        )
+    }
+
+    private static func cacheFinderSyncRuntimeHeartbeat(_ heartbeat: FinderSyncRuntimeHeartbeat) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(heartbeat) else { return }
+        UserDefaults.standard.set(data, forKey: finderSyncHeartbeatDefaultsKey)
+    }
+
+    private static func cachedFinderSyncRuntimeHeartbeat() -> FinderSyncRuntimeHeartbeat? {
+        guard let data = UserDefaults.standard.data(forKey: finderSyncHeartbeatDefaultsKey) else {
+            return nil
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let heartbeat = try? decoder.decode(FinderSyncRuntimeHeartbeat.self, from: data) else {
+            UserDefaults.standard.removeObject(forKey: finderSyncHeartbeatDefaultsKey)
+            return nil
+        }
+
+        return heartbeat.isRecent ? heartbeat : nil
+    }
+
     private static func finderSyncBundleIdentifier() -> String {
         // Try to get identifier from the actual embedded extension bundle first
         // This avoids mismatches if the main app's bundle ID was overridden at build time
@@ -214,6 +346,10 @@ public struct ExtensionCommunication {
             return appBundleID + finderSyncBundleSuffix
         }
         return "shirishpothi.Sorty.SortyFinderSync"
+    }
+
+    private static func finderSyncPluginkitArguments() -> [String] {
+        ["-m", "-v", "-A", "-D", "-i", finderSyncBundleIdentifier()]
     }
 
     private static func currentFinderSyncExtensionURL() -> URL? {
@@ -318,7 +454,7 @@ public struct ExtensionCommunication {
         canonicalExtensionPath(lhs) == canonicalExtensionPath(rhs)
     }
 
-    private static func parseFinderSyncRegistrationEntries(from output: String) -> [FinderSyncRegistrationEntry] {
+    static func parseFinderSyncRegistrationEntries(from output: String) -> [FinderSyncRegistrationEntry] {
         var entries: [FinderSyncRegistrationEntry] = []
 
         for rawLine in output.split(separator: "\n").map(String.init) {
@@ -353,7 +489,7 @@ public struct ExtensionCommunication {
     private static func registeredFinderSyncExtensionPaths() -> [String] {
         let result = runCommand(
             executablePath: "/usr/bin/pluginkit",
-            arguments: ["-m", "-v", "-i", finderSyncBundleIdentifier()]
+            arguments: finderSyncPluginkitArguments()
         )
 
         guard result.exitCode == 0 else { return [] }
@@ -371,7 +507,7 @@ public struct ExtensionCommunication {
     private static func registeredFinderSyncExtensionPathsAsync() async -> [String] {
         let result = await runCommandAsync(
             executablePath: "/usr/bin/pluginkit",
-            arguments: ["-m", "-v", "-i", finderSyncBundleIdentifier()]
+            arguments: finderSyncPluginkitArguments()
         )
 
         guard result.exitCode == 0 else { return [] }
@@ -389,7 +525,7 @@ public struct ExtensionCommunication {
     private static func registeredFinderSyncExtensionEntries() -> [FinderSyncRegistrationEntry] {
         let result = runCommand(
             executablePath: "/usr/bin/pluginkit",
-            arguments: ["-m", "-v", "-i", finderSyncBundleIdentifier()]
+            arguments: finderSyncPluginkitArguments()
         )
 
         guard result.exitCode == 0 else { return [] }
@@ -399,7 +535,7 @@ public struct ExtensionCommunication {
     private static func registeredFinderSyncExtensionEntriesAsync() async -> [FinderSyncRegistrationEntry] {
         let result = await runCommandAsync(
             executablePath: "/usr/bin/pluginkit",
-            arguments: ["-m", "-v", "-i", finderSyncBundleIdentifier()]
+            arguments: finderSyncPluginkitArguments()
         )
 
         guard result.exitCode == 0 else { return [] }
@@ -410,38 +546,140 @@ public struct ExtensionCommunication {
         _ = runCommand(executablePath: "/usr/bin/killall", arguments: ["Finder"])
     }
 
+    static func finderSyncDiagnostics(
+        entries: [FinderSyncRegistrationEntry],
+        preferredPath: String?,
+        heartbeat: FinderSyncRuntimeHeartbeat?
+    ) -> FinderSyncDiagnostics {
+        let recentHeartbeat = heartbeat?.isRecent == true ? heartbeat : nil
+        let preferredEntry = preferredPath.flatMap { preferredPath in
+            entries.first(where: { extensionPathsMatch($0.path, preferredPath) })
+        }
+        let enabledEntries = entries.filter { $0.isEnabled == true }
+        let ambiguousEntries = entries.filter { $0.isEnabled == nil }
+        let activePath = recentHeartbeat?.path ?? enabledEntries.first?.path
+        let problemEntries = entries.filter { entry in
+            guard let preferredPath else { return entry.isEnabled != false }
+            return !extensionPathsMatch(entry.path, preferredPath) && entry.isEnabled != false
+        }
+        let problemPaths = problemEntries.map(\.path)
+
+        func diagnostics(kind: FinderSyncStatusKind, statusText: String, detail: String) -> FinderSyncDiagnostics {
+            FinderSyncDiagnostics(
+                kind: kind,
+                statusText: statusText,
+                detailMessage: detail,
+                preferredPath: preferredPath,
+                activePath: activePath,
+                problemPaths: problemPaths,
+                registeredPaths: entries.map(\.path),
+                heartbeat: recentHeartbeat
+            )
+        }
+
+        guard let preferredPath else {
+            return diagnostics(
+                kind: .missing,
+                statusText: "Missing",
+                detail: "Sorty could not find an embedded Finder Sync extension in this app or in an installed Applications copy."
+            )
+        }
+
+        if let recentHeartbeat, !extensionPathsMatch(recentHeartbeat.path, preferredPath) {
+            return diagnostics(
+                kind: .activeElsewhere,
+                statusText: "Another App Copy Active",
+                detail: "Finder recently loaded a different Sorty app copy. Repair will remove stale registrations and switch Finder back to this build."
+            )
+        }
+
+        guard !entries.isEmpty else {
+            return diagnostics(
+                kind: .notRegistered,
+                statusText: "Not Registered",
+                detail: "Finder does not have Sorty registered yet. Repair will register the extension and restart Finder."
+            )
+        }
+
+        guard let preferredEntry else {
+            if enabledEntries.isEmpty, !ambiguousEntries.isEmpty {
+                return diagnostics(
+                    kind: .indeterminate,
+                    statusText: "Needs Repair",
+                    detail: "Finder knows about Sorty, but macOS did not report the preferred app copy as enabled. Repair will rebuild the registration."
+                )
+            }
+
+            return diagnostics(
+                kind: .activeElsewhere,
+                statusText: "Another App Copy Active",
+                detail: "Finder is registered to another Sorty app copy instead of this build. Repair will remove the stale copy and switch Finder back."
+            )
+        }
+
+        switch preferredEntry.isEnabled {
+        case false:
+            return diagnostics(
+                kind: .disabled,
+                statusText: "Disabled",
+                detail: "The Sorty Finder extension is registered, but Finder currently has it disabled. Repair will re-enable it and restart Finder."
+            )
+        case nil:
+            return diagnostics(
+                kind: .indeterminate,
+                statusText: "Needs Repair",
+                detail: "macOS reported the Sorty Finder extension in an indeterminate state. Repair will rebuild the registration from scratch."
+            )
+        case true:
+            if !problemPaths.isEmpty {
+                return diagnostics(
+                    kind: .needsCleanup,
+                    statusText: "Cleanup Needed",
+                    detail: "Finder still has stale Sorty extension registrations from other app copies. Repair will clean those up so this build stays active."
+                )
+            }
+
+            if let recentHeartbeat, extensionPathsMatch(recentHeartbeat.path, preferredPath) {
+                return diagnostics(
+                    kind: .verified,
+                    statusText: "Verified Working",
+                    detail: "Finder recently loaded this Sorty extension build, so the right-click menu should be available."
+                )
+            }
+
+            return diagnostics(
+                kind: .registered,
+                statusText: "Registered",
+                detail: "Finder has the correct Sorty registration, but Sorty has not yet confirmed this build loaded into Finder. If the menu is missing, click Repair."
+            )
+        }
+    }
+
+    static func getFinderSyncDiagnostics() -> FinderSyncDiagnostics {
+        beginMonitoringFinderSyncRuntime()
+        return finderSyncDiagnostics(
+            entries: registeredFinderSyncExtensionEntries(),
+            preferredPath: preferredFinderSyncExtensionURLForRegistration()?.path,
+            heartbeat: cachedFinderSyncRuntimeHeartbeat()
+        )
+    }
+
+    static func getFinderSyncDiagnosticsAsync() async -> FinderSyncDiagnostics {
+        beginMonitoringFinderSyncRuntime()
+        let entries = await registeredFinderSyncExtensionEntriesAsync()
+        return finderSyncDiagnostics(
+            entries: entries,
+            preferredPath: preferredFinderSyncExtensionURLForRegistration()?.path,
+            heartbeat: cachedFinderSyncRuntimeHeartbeat()
+        )
+    }
+
     public static func isFinderSyncExtensionActive() -> Bool {
-        let entries = registeredFinderSyncExtensionEntries()
-        guard !entries.isEmpty else { return false }
-
-        // Prefer the current app build path when present.
-        if let currentPath = currentFinderSyncExtensionURL()?.path,
-           let currentEntry = entries.first(where: { extensionPathsMatch($0.path, currentPath) }) {
-            return currentEntry.isEnabled != false
-        }
-
-        // Fallback for path drift across builds/symlinks: any explicitly enabled entry counts as active.
-        if entries.contains(where: { $0.isEnabled == true }) {
-            return true
-        }
-
-        return false
+        getFinderSyncDiagnostics().isOperational
     }
 
     public static func isFinderSyncExtensionActiveAsync() async -> Bool {
-        let entries = await registeredFinderSyncExtensionEntriesAsync()
-        guard !entries.isEmpty else { return false }
-
-        if let currentPath = currentFinderSyncExtensionURL()?.path,
-           let currentEntry = entries.first(where: { extensionPathsMatch($0.path, currentPath) }) {
-            return currentEntry.isEnabled != false
-        }
-
-        if entries.contains(where: { $0.isEnabled == true }) {
-            return true
-        }
-
-        return false
+        (await getFinderSyncDiagnosticsAsync()).isOperational
     }
 
     public static func repairFinderSyncExtensionRegistration(restartFinder: Bool = true) -> (success: Bool, message: String) {
@@ -451,6 +689,8 @@ public struct ExtensionCommunication {
 
         let currentPath = currentExtensionURL.path
         let bundleIdentifier = finderSyncBundleIdentifier()
+
+        beginMonitoringFinderSyncRuntime()
 
         let beforePaths = registeredFinderSyncExtensionPaths()
         var removedStaleCount = 0
@@ -467,33 +707,28 @@ public struct ExtensionCommunication {
 
         let addResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-a", currentPath])
         let useResult = runCommand(executablePath: "/usr/bin/pluginkit", arguments: ["-e", "use", "-i", bundleIdentifier])
-        let afterPaths = registeredFinderSyncExtensionPaths()
-        let isRegistered = afterPaths.contains(where: { extensionPathsMatch($0, currentPath) }) || addResult.exitCode == 0
-        let autoEnableSucceeded = useResult.exitCode == 0
-        let isActive = isRegistered && autoEnableSucceeded
-
-        UserDefaults.standard.set(isActive, forKey: "enableFinderSyncExtension")
-
         if restartFinder {
             restartFinderIfPossible()
         }
 
-        guard isRegistered else {
+        let diagnostics = getFinderSyncDiagnostics()
+        UserDefaults.standard.set(diagnostics.isOperational, forKey: "enableFinderSyncExtension")
+
+        guard diagnostics.isOperational else {
             var details: [String] = []
             if addResult.exitCode != 0 { details.append("register failed") }
             if useResult.exitCode != 0 { details.append("enable failed") }
-            if details.isEmpty { details.append("path mismatch remains") }
+            if diagnostics.problemPaths.isEmpty { details.append(diagnostics.statusText.lowercased()) }
             if let detail = commandFailureSummary(addResult) {
+                details.append(detail)
+            }
+            if let detail = commandFailureSummary(useResult) {
                 details.append(detail)
             }
             return (false, "Finder Sync repair failed (\(details.joined(separator: ", "))). Open System Settings → Privacy & Security → Extensions → Finder, enable Sorty there, then click Repair again.")
         }
 
-        guard autoEnableSucceeded else {
-            return (false, "Finder Sync registration refreshed, but automatic enable failed. Open System Settings → Privacy & Security → Extensions → Finder, enable Sorty there, then click Repair again.")
-        }
-
-        var message = "Finder Sync extension is active."
+        var message = diagnostics.detailMessage
         if !extensionPathsMatch(currentPath, currentFinderSyncExtensionURL()?.path ?? "") {
             message += " Registered from the installed app location for Finder compatibility."
         }
@@ -514,6 +749,8 @@ public struct ExtensionCommunication {
         let currentPath = currentExtensionURL.path
         let bundleIdentifier = finderSyncBundleIdentifier()
 
+        beginMonitoringFinderSyncRuntime()
+
         let beforePaths = await registeredFinderSyncExtensionPathsAsync()
         var removedStaleCount = 0
         var removeFailures = 0
@@ -529,33 +766,29 @@ public struct ExtensionCommunication {
 
         let addResult = await runCommandAsync(executablePath: "/usr/bin/pluginkit", arguments: ["-a", currentPath])
         let useResult = await runCommandAsync(executablePath: "/usr/bin/pluginkit", arguments: ["-e", "use", "-i", bundleIdentifier])
-        let afterPaths = await registeredFinderSyncExtensionPathsAsync()
-        let isRegistered = afterPaths.contains(where: { extensionPathsMatch($0, currentPath) }) || addResult.exitCode == 0
-        let autoEnableSucceeded = useResult.exitCode == 0
-        let isActive = isRegistered && autoEnableSucceeded
-
-        UserDefaults.standard.set(isActive, forKey: "enableFinderSyncExtension")
-
         if restartFinder {
             _ = await runCommandAsync(executablePath: "/usr/bin/killall", arguments: ["Finder"])
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
         }
 
-        guard isRegistered else {
+        let diagnostics = await getFinderSyncDiagnosticsAsync()
+        UserDefaults.standard.set(diagnostics.isOperational, forKey: "enableFinderSyncExtension")
+
+        guard diagnostics.isOperational else {
             var details: [String] = []
             if addResult.exitCode != 0 { details.append("register failed") }
             if useResult.exitCode != 0 { details.append("enable failed") }
-            if details.isEmpty { details.append("path mismatch remains") }
+            if diagnostics.problemPaths.isEmpty { details.append(diagnostics.statusText.lowercased()) }
             if let detail = commandFailureSummary(addResult) {
+                details.append(detail)
+            }
+            if let detail = commandFailureSummary(useResult) {
                 details.append(detail)
             }
             return (false, "Finder Sync repair failed (\(details.joined(separator: ", "))). Open System Settings → Privacy & Security → Extensions → Finder, enable Sorty there, then click Repair again.")
         }
 
-        guard autoEnableSucceeded else {
-            return (false, "Finder Sync registration refreshed, but automatic enable failed. Open System Settings → Privacy & Security → Extensions → Finder, enable Sorty there, then click Repair again.")
-        }
-
-        var message = "Finder Sync extension is active."
+        var message = diagnostics.detailMessage
         if !extensionPathsMatch(currentPath, currentFinderSyncExtensionURL()?.path ?? "") {
             message += " Registered from the installed app location for Finder compatibility."
         }
