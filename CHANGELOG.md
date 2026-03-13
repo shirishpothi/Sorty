@@ -17,10 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Storage Destination Normalization** — `StorageDestinationNormalizer` resolves AI-suggested folder names (aliases, absolute paths, source-relative paths) to correct storage location paths.
 - **Storage Validation Guards** — Validator now rejects directory items and bulk subfolder migrations to storage locations, preventing unintended mass moves.
 
+- **Traffic Light UI components** — Added `TrafficLightUpdateButton` component and `TrafficLightStyling` utilities to support status/update indicators in the UI.
+- **Developer tooling** — Added `DevRebuilder` developer utility and a local CI helper script (`scripts/local_ci.sh`) to speed up iterative development and local CI checks.
+- **NotifiCLI license** — Added license file for the bundled NotifiCLI helper (`Resources/NotifiCLI/LICENSE`).
+- **Docs & tests** — Minor updates to the architecture and Finder integration guides and improvements to Finder integration tests.
+- **CI & workflow updates** — Updated GitHub Actions workflow and Makefile targets to improve quick-build and CI behavior.
+
 ### Changed
 
 - **Finder Sync Registration Parsing** — `parseFinderSyncRegistrationEntries` now deduplicates entries and prefers explicit enabled/disabled markers over ambiguous states.
 - **Extension Host Eligibility** — Registration repair only targets app bundles in `/Applications` or `~/Applications`; workspace builds are staged to `~/Applications` automatically.
+
+- **Small UI and app command adjustments** — Tweaked `MainWindowRootView`, `AppCommands`, and a few settings views for improved layout and behavior during Finder/extension interactions.
 
 ## [1.1.2] - 2026-03-01
 
