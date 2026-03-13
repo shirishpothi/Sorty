@@ -23,6 +23,7 @@ public struct ExtensionCommunication {
     private static let previewQuickActionBundleIdentifier = "com.sorty.workflow.preview"
     private static let quickActionIconBaseName = "SortyQuickActionIcon"
     private static let quickActionServiceIconName = "workflowCustomImageTemplate"
+    private static let watchWorkflowIconVariantInfoKey = "SortyWatchIconVariant"
     private static let servicesDirectoryPathDefaultsKey = "finderQuickActionServicesDirectoryPath"
     private static let finderSyncExtensionName = "SortyFinderSync.appex"
     private static let finderSyncBundleSuffix = ".SortyFinderSync"
@@ -1461,6 +1462,25 @@ public struct ExtensionCommunication {
         case watch
     }
 
+    private static func isSystemUsingDarkAppearance() -> Bool {
+        guard let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") else {
+            return false
+        }
+        return style.caseInsensitiveCompare("Dark") == .orderedSame
+    }
+
+    private static func currentWatchWorkflowIconVariant() -> String {
+        isSystemUsingDarkAppearance() ? "dark" : "light"
+    }
+
+    private static func preferredWatchIconBaseNames() -> [String] {
+        if isSystemUsingDarkAppearance() {
+            // Quick Action icons are rasterized files; use explicit white glyph in dark mode.
+            return ["eye_white", "eye_black", "WatchIconTemplate"]
+        }
+        return ["eye_black", "eye_white", "WatchIconTemplate"]
+    }
+
     private static func quickActionMascotIconURLCandidates() -> [URL] {
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let finderSyncResources = Bundle.main.builtInPlugInsURL?
@@ -1539,15 +1559,20 @@ public struct ExtensionCommunication {
         ].compactMap { $0 }
 
         var candidates: [URL] = []
+        let preferredBaseNames = preferredWatchIconBaseNames()
         for root in roots {
-            candidates.append(root.appendingPathComponent("WatchIconTemplate.png"))
-            candidates.append(root.appendingPathComponent("Assets.xcassets/WatchIcon.imageset/eye_black.png"))
-            candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/WatchIconTemplate.png"))
-            candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/Assets.xcassets/WatchIcon.imageset/eye_black.png"))
+            for baseName in preferredBaseNames {
+                candidates.append(root.appendingPathComponent("\(baseName).png"))
+                candidates.append(root.appendingPathComponent("Assets.xcassets/WatchIcon.imageset/\(baseName).png"))
+                candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/\(baseName).png"))
+                candidates.append(root.appendingPathComponent("SortyLib_SortyLib.bundle/Assets.xcassets/WatchIcon.imageset/\(baseName).png"))
+            }
         }
 
-        candidates.append(cwd.appendingPathComponent("Resources/WatchIconTemplate.png"))
-        candidates.append(cwd.appendingPathComponent("Resources/Assets.xcassets/WatchIcon.imageset/eye_black.png"))
+        for baseName in preferredBaseNames {
+            candidates.append(cwd.appendingPathComponent("Resources/\(baseName).png"))
+            candidates.append(cwd.appendingPathComponent("Resources/Assets.xcassets/WatchIcon.imageset/\(baseName).png"))
+        }
 
         var unique: [URL] = []
         for candidate in candidates where !unique.contains(where: { $0.path == candidate.path }) {
@@ -1557,15 +1582,9 @@ public struct ExtensionCommunication {
     }
 
     private static func quickActionWatchTemplateImage() -> NSImage? {
-        if let namedImage = NSImage(named: NSImage.Name("WatchIcon")) {
-            let copiedImage = (namedImage.copy() as? NSImage) ?? namedImage
-            copiedImage.isTemplate = true
-            return copiedImage
-        }
-
         for candidate in quickActionWatchIconURLCandidates() where FileManager.default.fileExists(atPath: candidate.path) {
             if let image = NSImage(contentsOf: candidate) {
-                image.isTemplate = true
+                image.isTemplate = false
                 return image
             }
         }
@@ -1612,8 +1631,20 @@ public struct ExtensionCommunication {
                 ?? NSImage(size: NSSize(width: 256, height: 256))
             let config = NSImage.SymbolConfiguration(pointSize: 120, weight: .regular)
             let configured = symbol.withSymbolConfiguration(config) ?? symbol
-            configured.isTemplate = true
-            return configured
+            let drawColor = isSystemUsingDarkAppearance() ? NSColor.white : NSColor.black
+            let targetSize = NSSize(width: 256, height: 256)
+            let rendered = NSImage(size: targetSize)
+            rendered.lockFocus()
+            drawColor.set()
+            configured.draw(
+                in: NSRect(origin: .zero, size: targetSize),
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1.0
+            )
+            rendered.unlockFocus()
+            rendered.isTemplate = false
+            return rendered
         }
     }
 
@@ -1646,8 +1677,14 @@ public struct ExtensionCommunication {
         let iconImage = quickActionIconImage(style: style)
         let iconICNSData = style == .organize ? quickActionMascotIconData() : nil
 
-        // Use Sorty's mascot instead of Automator's default wand icon in Finder Quick Actions.
-        _ = NSWorkspace.shared.setIcon(iconImage, forFile: workflowDir.path, options: [])
+        if style == .watch {
+            // Avoid package-level custom icon for watch actions so Finder uses
+            // the NSServices template icon that adapts to light/dark mode.
+            _ = NSWorkspace.shared.setIcon(nil, forFile: workflowDir.path, options: [])
+        } else {
+            // Use Sorty's mascot instead of Automator's default wand icon in Finder Quick Actions.
+            _ = NSWorkspace.shared.setIcon(iconImage, forFile: workflowDir.path, options: [])
+        }
 
         do {
             let resourcesDir = contentsDir.appendingPathComponent("Resources", isDirectory: true)
@@ -1655,7 +1692,9 @@ public struct ExtensionCommunication {
 
             // Finder Quick Actions look up icon name via NSServices.NSIconName,
             // while some surfaces still use bundle icon keys.
-            let iconNames = [quickActionIconBaseName, quickActionServiceIconName]
+            let iconNames = style == .watch
+                ? [quickActionServiceIconName]
+                : [quickActionIconBaseName, quickActionServiceIconName]
 
             if let icnsData = iconICNSData {
                 for iconName in iconNames {
@@ -1715,6 +1754,62 @@ public struct ExtensionCommunication {
 
             return true
         }
+        return false
+    }
+
+    private static func hasInstalledWatchWorkflowPackage() -> Bool {
+        candidateServicesDirectories().contains { servicesDir in
+            let workflowPath = servicesDir.appendingPathComponent(watchQuickActionWorkflowName)
+            return FileManager.default.fileExists(atPath: workflowPath.path)
+        }
+    }
+
+    private static func watchWorkflowUsesExpectedIconConfiguration(
+        workflowPath: URL,
+        infoPlist: [String: Any]
+    ) -> Bool {
+        guard infoPlist["CFBundleIconFile"] as? String == quickActionServiceIconName else {
+            return false
+        }
+
+        guard infoPlist[watchWorkflowIconVariantInfoKey] as? String == currentWatchWorkflowIconVariant() else {
+            return false
+        }
+
+        let resourcesDir = workflowPath.appendingPathComponent("Contents/Resources", isDirectory: true)
+        let servicePNG = resourcesDir.appendingPathComponent("\(quickActionServiceIconName).png")
+        guard FileManager.default.fileExists(atPath: servicePNG.path) else {
+            return false
+        }
+
+        let legacyIconCandidates = ["Icon", "Icon\r"]
+        for iconName in legacyIconCandidates {
+            let candidate = workflowPath.appendingPathComponent(iconName)
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private static func isWatchWorkflowInstalledAndCompatible() -> Bool {
+        for servicesDir in candidateServicesDirectories() {
+            let workflowPath = servicesDir.appendingPathComponent(watchQuickActionWorkflowName)
+            guard FileManager.default.fileExists(atPath: workflowPath.path) else { continue }
+
+            let infoPath = workflowPath.appendingPathComponent("Contents/Info.plist")
+            guard let info = NSDictionary(contentsOf: infoPath) as? [String: Any],
+                  let currentBundleIdentifier = info["CFBundleIdentifier"] as? String,
+                  currentBundleIdentifier == watchQuickActionBundleIdentifier,
+                  workflowHasFinderContext(infoPlist: info),
+                  watchWorkflowUsesExpectedIconConfiguration(workflowPath: workflowPath, infoPlist: info) else {
+                continue
+            }
+
+            return true
+        }
+
         return false
     }
 
@@ -1890,12 +1985,36 @@ public struct ExtensionCommunication {
     /// Ensure legacy organize Quick Action is removed and Watch service entries are refreshed.
     public static func ensureQuickActionInstalled() -> (installed: Bool, message: String) {
         let removedLegacyQuickAction = uninstallQuickAction()
+        let hasWatchWorkflow = hasInstalledWatchWorkflowPackage()
+
+        var refreshedWatchWorkflow = false
+        var watchRefreshError: String?
+        if hasWatchWorkflow && !isWatchWorkflowInstalledAndCompatible() {
+            let refreshResult = installQuickWatchAction()
+            refreshedWatchWorkflow = refreshResult.success
+            if !refreshResult.success {
+                watchRefreshError = refreshResult.message
+            }
+        }
+
         if !areSortyServiceEntriesEnabled() {
             refreshDynamicServicesRegistry()
         }
 
+        if let watchRefreshError {
+            return (false, "Finder services refreshed, but Watch workflow icon update failed: \(watchRefreshError)")
+        }
+
+        if removedLegacyQuickAction && refreshedWatchWorkflow {
+            return (true, "Removed deprecated 'Organize with Sorty' Quick Action, refreshed Finder services, and updated Watch workflow icon for current appearance.")
+        }
+
         if removedLegacyQuickAction {
             return (true, "Removed deprecated 'Organize with Sorty' Quick Action and refreshed Finder services.")
+        }
+
+        if refreshedWatchWorkflow {
+            return (true, "Refreshed Watch workflow icon for current appearance.")
         }
 
         return (true, "Finder services are up to date. 'Organize with Sorty' is available in the main context menu.")
@@ -2305,7 +2424,9 @@ public struct ExtensionCommunication {
                 <key>CFBundlePackageType</key>
                 <string>BNDL</string>
                 <key>CFBundleIconFile</key>
-                <string>\(quickActionIconBaseName)</string>
+                <string>\(quickActionServiceIconName)</string>
+                <key>\(watchWorkflowIconVariantInfoKey)</key>
+                <string>\(currentWatchWorkflowIconVariant())</string>
                 <key>NSServices</key>
                 <array>
                     <dict>
@@ -2572,10 +2693,7 @@ public struct ExtensionCommunication {
 
     /// Check if Quick Watch Action is installed
     public static func isQuickWatchActionInstalled() -> Bool {
-        return isWorkflowInstalledAndCompatible(
-            workflowName: watchQuickActionWorkflowName,
-            bundleIdentifier: watchQuickActionBundleIdentifier
-        )
+        return isWatchWorkflowInstalledAndCompatible()
     }
 
     public static func isQuickWatchActionInstalledAsync() async -> Bool {

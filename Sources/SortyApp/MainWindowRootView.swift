@@ -150,6 +150,8 @@ struct MainWindowRootView: View {
             .environmentObject(windowSession.appState.duplicateSettings)
             .focusedSceneValue(\.appState, windowSession.appState)
             .focusedSceneValue(\.organizer, windowSession.organizer)
+            .trafficLightInactiveBorders()
+            .trafficLightUpdateButton(updateManager: windowSession.appState.updateManager)
     }
 
     private func processLaunchRequestIfNeeded() {

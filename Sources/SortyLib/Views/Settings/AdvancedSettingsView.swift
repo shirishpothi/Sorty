@@ -12,6 +12,26 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = false
+    @State private var showAutoRevealInfo = false
+
+    enum AutoRevealOption: String, CaseIterable, Identifiable {
+        case off = "Off (Recommended)"
+        case on = "On"
+
+        var id: String { rawValue }
+    }
+
+    private var autoRevealSelection: Binding<AutoRevealOption> {
+        Binding(
+            get: { automationManager.autoSelectOrganizedFolders ? .on : .off },
+            set: { option in
+                let shouldAutoReveal = option == .on
+                guard automationManager.autoSelectOrganizedFolders != shouldAutoReveal else { return }
+                automationManager.autoSelectOrganizedFolders = shouldAutoReveal
+                HapticFeedbackManager.shared.selection()
+            }
+        )
+    }
     
     var body: some View {
         VStack(spacing: 16) {
@@ -35,18 +55,56 @@ struct AdvancedSettingsView: View {
 
             SettingsCard(title: "Finder Workflow", icon: "folder.badge.gearshape", color: .mint) {
                 VStack(alignment: .leading, spacing: 10) {
-                    SettingsToggle(
-                        isOn: $automationManager.autoSelectOrganizedFolders,
-                        title: "Automatically reveal organized folders",
-                        description: "Open Finder and highlight newly organized folders after each completed run"
-                    )
-                    .accessibilityIdentifier("FinderAutoRevealToggle")
+                    HStack(alignment: .center, spacing: 10) {
+                        Text("Automatically reveal organized folders")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
 
-                    if !automationManager.autoSelectOrganizedFolders {
-                        Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 12)
+
+                        Picker("", selection: autoRevealSelection) {
+                            ForEach(AutoRevealOption.allCases) { option in
+                                Text(option.rawValue).tag(option)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .accessibilityIdentifier("FinderAutoRevealToggle")
+                        .accessibilityLabel("Automatically reveal organized folders")
+                        .accessibilityValue(automationManager.autoSelectOrganizedFolders ? "On" : "Off")
+
+                        Button {
+                            showAutoRevealInfo.toggle()
+                            HapticFeedbackManager.shared.selection()
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 22, height: 22)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .help("Recommended usage")
+                        .popover(isPresented: $showAutoRevealInfo, arrowEdge: .bottom) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Recommendation")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(12)
+                            .frame(width: 320, alignment: .leading)
+                        }
+                        .accessibilityIdentifier("FinderAutoRevealInfoButton")
+                        .accessibilityLabel("Finder auto-reveal recommendation")
                     }
+
+                    Text("Open Finder and highlight newly organized folders after each completed run")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .animatedAppearance(delay: 0.05)
@@ -129,6 +187,8 @@ struct AdvancedSettingsView: View {
         }
     }
 }
+
+
 
 // MARK: - Timeout Slider with Editable Maximum
 

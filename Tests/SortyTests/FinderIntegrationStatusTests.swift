@@ -237,4 +237,145 @@ final class FinderIntegrationStatusTests: XCTestCase {
 
         XCTAssertTrue(issues.isEmpty)
     }
+
+    // MARK: - parseEntitlementsPlist
+
+    func testParseEntitlementsPlistWithValidXML() {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>com.apple.security.app-sandbox</key>
+            <true/>
+            <key>com.apple.security.application-groups</key>
+            <array>
+                <string>group.com.sorty.app</string>
+            </array>
+        </dict>
+        </plist>
+        """
+
+        let result = ExtensionCommunication.parseEntitlementsPlist(from: xml)
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?["com.apple.security.app-sandbox"] as? Bool, true)
+        let groups = result?["com.apple.security.application-groups"] as? [String]
+        XCTAssertEqual(groups, ["group.com.sorty.app"])
+    }
+
+    func testParseEntitlementsPlistWithEmptyStringReturnsNil() {
+        let result = ExtensionCommunication.parseEntitlementsPlist(from: "")
+        XCTAssertNil(result)
+    }
+
+    func testParseEntitlementsPlistWithInvalidXMLReturnsNil() {
+        let result = ExtensionCommunication.parseEntitlementsPlist(from: "not xml at all")
+        XCTAssertNil(result)
+    }
+
+    // MARK: - finderSyncDiagnostics edge cases
+
+    func testFinderSyncDiagnosticsReportsNotRegisteredWhenNoEntries() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil
+        )
+
+        XCTAssertEqual(diagnostics.kind, .notRegistered)
+        XCTAssertTrue(diagnostics.needsRepair)
+    }
+
+    func testFinderSyncDiagnosticsReportsDisabledWhenPreferredEntryDisabled() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: false)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil
+        )
+
+        XCTAssertEqual(diagnostics.kind, .disabled)
+        XCTAssertTrue(diagnostics.needsRepair)
+    }
+
+    func testFinderSyncDiagnosticsReportsMissingWhenNoPreferredPath() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [],
+            preferredPath: nil,
+            heartbeat: nil
+        )
+
+        XCTAssertEqual(diagnostics.kind, .missing)
+        XCTAssertFalse(diagnostics.isOperational)
+    }
+
+    func testFinderSyncDiagnosticsReportsIndeterminateWhenEntryHasNoEnabledState() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: nil)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil
+        )
+
+        XCTAssertEqual(diagnostics.kind, .indeterminate)
+    }
+
+    // MARK: - backgroundAgentConfigurationIssues edge cases
+
+    func testBackgroundAgentConfigurationRejectsEmptyLabel() {
+        let issues = LoginItemManager.backgroundAgentConfigurationIssues(
+            label: "",
+            bundleProgram: "MacOS/Sorty",
+            mainAppServiceLabel: "com.sorty.app"
+        )
+
+        XCTAssertTrue(issues.contains("Background agent label is missing"))
+    }
+
+    func testBackgroundAgentConfigurationRejectsWrongBundleProgram() {
+        let issues = LoginItemManager.backgroundAgentConfigurationIssues(
+            label: LoginItemManager.backgroundAgentServiceLabel,
+            bundleProgram: "MacOS/WrongApp",
+            mainAppServiceLabel: "com.sorty.app"
+        )
+
+        XCTAssertTrue(issues.contains("Background agent BundleProgram must remain MacOS/Sorty"))
+    }
+
+    // MARK: - parseFinderSyncRegistrationEntries deduplication
+
+    func testParseFinderSyncRegistrationEntriesDeduplicatesMatchingPaths() {
+        let output = """
+             com.sorty.app.SortyFinderSync(1.1.2)\tUUID-1\t2026-03-07 02:42:55 +0000\t\(preferredExtensionPath)
+        +    com.sorty.app.SortyFinderSync(1.1.2)\tUUID-2\t2026-03-07 02:42:55 +0000\t\(preferredExtensionPath)
+        """
+
+        let entries = ExtensionCommunication.parseFinderSyncRegistrationEntries(from: output)
+
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.isEnabled, true)
+    }
+
+    // MARK: - FinderSyncRuntimeHeartbeat.isRecent
+
+    func testHeartbeatIsRecentReturnsFalseForOldTimestamp() {
+        let heartbeat = ExtensionCommunication.FinderSyncRuntimeHeartbeat(
+            event: "launch",
+            bundleIdentifier: "com.sorty.app.SortyFinderSync",
+            path: preferredExtensionPath,
+            reportedAt: Date().addingTimeInterval(-300)
+        )
+
+        XCTAssertFalse(heartbeat.isRecent)
+    }
+
+    func testHeartbeatIsRecentReturnsTrueForFreshTimestamp() {
+        let heartbeat = ExtensionCommunication.FinderSyncRuntimeHeartbeat(
+            event: "launch",
+            bundleIdentifier: "com.sorty.app.SortyFinderSync",
+            path: preferredExtensionPath,
+            reportedAt: Date()
+        )
+
+        XCTAssertTrue(heartbeat.isRecent)
+    }
 }

@@ -304,14 +304,19 @@ public class AppState: ObservableObject {
     @Published public var highlightedWatchedFolderID: UUID?
     
     /// Trigger update check with visible UI feedback.
-    /// Uses Sparkle's native UI by default. The in-app update dialog is only shown
-    /// when `githubUpdateCheckerEnabled` defaults flag is true.
+    /// In debug builds this rebuilds and relaunches from source via `make now`.
+    /// In release builds it uses Sparkle's native UI by default; the in-app
+    /// update dialog is only shown when `githubUpdateCheckerEnabled` is true.
     public func checkForUpdatesInteractive() {
+        #if DEBUG
+        DevRebuilder.shared.rebuild()
+        #else
         if FeatureFlags.githubUpdateCheckerEnabled {
             showUpdateSheet = true
         } else {
             updateManager.checkForUpdates()
         }
+        #endif
     }
     
     @Published public var hasCompletedOnboarding: Bool {

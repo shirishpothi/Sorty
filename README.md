@@ -1,7 +1,7 @@
 # Sorty - macOS AI-Powered Directory Management
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
+[![Swift](https://img.shields.io/badge/Swift-6.0+-orange.svg)](https://swift.org)
 [![macOS](https://img.shields.io/badge/macOS-15.1+-blue.svg)](https://www.apple.com/macos)
 [![Security Checks](https://github.com/shirishpothi/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/shirishpothi/Sorty/actions/workflows/swift.yml)
 
@@ -98,18 +98,6 @@ To enable the "Organize with AI..." context menu in Finder:
 - Add folders to the "Watched" list in the sidebar to enable automatic background monitoring.
 - **Note**: The "Auto-Organize" feature will remain disabled until a valid AI provider is configured in Settings.
 
-### 4. Advanced Notification Controls (Optional)
-Sorty keeps notification settings simple by default. If you want technical notification controls (backend selection, NotifiCLI internals, advanced test actions), enable:
-
-```bash
-defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true
-```
-
-Disable again with:
-
-```bash
-defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false
-```
 
 ## Security Considerations
 
@@ -126,7 +114,7 @@ Sorty is designed with security and privacy in mind:
 Pre-built releases are NOT code-signed. You will need to remove macOS quarantine flags after installation (see Installation section). Build from source if you prefer complete control.
 
 **Best Practices:**
-- Use Ollama or Apple Foundation Models for on-device processing
+- Use Ollama or Apple Foundation Models for on-device processing. (However, for remotely large directories small local model likely won't suffice)
 - Review which files are being sent to cloud AI providers
 - Enable Safe Deletion for duplicate management
 - Regularly backup important directories
@@ -178,6 +166,14 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ## Testing
 
+### Local CI (Recommended)
+
+Run the same checks as GitHub Actions on your machine for faster feedback:
+```bash
+make ci              # Security scan, build, tests, app bundle
+make ci-report       # Same + report result to GitHub (skips redundant remote CI)
+```
+
 ### Running Tests
 
 **Using Swift Package Manager:**
@@ -201,6 +197,10 @@ Key test files include:
 - `SortyTests.swift` - Core organization logic
 - `WorkspaceHealthTests.swift` - Health monitoring features
 - `LearningsManagerTests.swift` - Passive learning system
+- `FinderIntegrationStatusTests.swift` - Finder Sync diagnostics, registration parsing, and auto-repair
+- `StorageDestinationNormalizerTests.swift` - Storage location path resolution and normalization
+- `StorageLocationsReliabilityTests.swift` - Storage validation and reliability
+- `PrivacyPathMaskerTests.swift` - Privacy-sensitive path redaction
 - `CustomPersonaTests.swift` - Persona management
 - `DeeplinkTests.swift` - URL scheme handling
 - `UpdateManagerTests.swift` - Update checking functionality
@@ -253,6 +253,10 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+Sorty bundles [NotifiCLI](https://github.com/saihgupr/NotifiCLI) for enhanced notifications.
+NotifiCLI is licensed under the MIT License (Copyright (c) 2026 saihgupr).
+See [Resources/NotifiCLI/LICENSE](Resources/NotifiCLI/LICENSE) for the full license text.
 
 ## Support
 

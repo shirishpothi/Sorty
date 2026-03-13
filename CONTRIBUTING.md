@@ -46,6 +46,8 @@ make test
 | `make cli` | Build the `learnings` CLI tool |
 | `make install` | Install app to /Applications |
 | `make harness` | Preview harness for rapid UI iteration |
+| `make ci` | Run CI checks locally (security, build, test, app bundle) |
+| `make ci-report` | Run CI locally + report pass/fail to GitHub |
 | `make benchmark` | Measure build times |
 
 For the full fast development loop guide, see [docs/agent-guides/fast-loop.md](docs/agent-guides/fast-loop.md).
@@ -245,10 +247,15 @@ Add `accessibilityIdentifier` to all interactive elements:
 
 ### Before Submitting
 
-1. **Verify Tests Pass**:
+1. **Run Local CI** (recommended — mirrors GitHub Actions):
+```bash
+make ci              # Run all CI checks locally
+make ci-report       # Same, but also reports result to GitHub
+```
+
+   Or run tests individually:
 ```bash
 make test
-make test-ui  # If UI changes made
 ```
 
 2. **Check Code Style**:
@@ -270,8 +277,9 @@ make test-ui  # If UI changes made
 
 ### Review Process
 
-1. Automated CI runs tests and security checks
-2. Maintainers review for code quality and architecture alignment
+1. If you ran `make ci-report`, GitHub CI skips redundant checks for that commit
+2. Otherwise, automated CI runs tests and security checks
+3. Maintainers review for code quality and architecture alignment
 3. Feedback is provided within 48 hours
 4. Changes may be requested before approval
 

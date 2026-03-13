@@ -41,7 +41,7 @@ struct AboutView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
             
-            Spacer().frame(height: 8)
+            Spacer().frame(height: 4)
             
             // Version Info - Centered
             VStack(spacing: 4) {
@@ -102,12 +102,31 @@ struct AboutView: View {
                 }
             }
             
-            Spacer().frame(height: 4)
+            Spacer().frame(height: 0)
             
-            // Copyright
-            Text("© 2026 Shirish Pothi")
+            VStack(spacing: 2) {
+                // Copyright
+                Text("© 2026 Shirish Pothi")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.6))
+
+                HStack(spacing: 4) {
+                    Text("Includes")
+                        .foregroundColor(.secondary.opacity(0.6))
+                    Link("NotifiCLI (MIT)", destination: URL(string: "https://github.com/saihgupr/NotifiCLI")!)
+                        .foregroundColor(.blue)
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            if hovering {
+                                HapticFeedbackManager.shared.selection()
+                            }
+                        }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            HapticFeedbackManager.shared.tap()
+                        })
+                }
                 .font(.caption2)
-                .foregroundColor(.secondary.opacity(0.6))
+            }
         }
         .padding(24)
         .frame(width: 300, height: 380)

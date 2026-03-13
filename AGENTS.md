@@ -7,6 +7,8 @@ AI-powered macOS folder organizer — native SwiftUI app (macOS 15+, Swift 6, SP
 - `make dev` — fast debug build (no tests)
 - `make build` — full build with tests
 - `make test` — unit tests (`swift test --disable-sandbox`)
+- `make ci` — run CI checks locally (security, build, test, app bundle)
+- `make ci-report` — run CI locally + report pass/fail to GitHub
 - `swift test --filter SortyTests.TestClass/testMethod` — single test
 - Xcode: open `Sorty.xcodeproj`, select **Sorty**, Build/Run
 

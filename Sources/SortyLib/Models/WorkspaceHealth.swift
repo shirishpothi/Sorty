@@ -1073,17 +1073,19 @@ public class WorkspaceHealthManager: ObservableObject {
                 queue: monitorQueue
             )
             
-            source.setEventHandler { [weak self] in
+            source.setEventHandler { @Sendable [weak self] in
                 // Dispatch to MainActor since handleFileEvent accesses @MainActor isolated state
                 Task { @MainActor [weak self] in
                     self?.handleFileEvent()
                 }
             }
             
-            // Capture fd directly to avoid accessing @MainActor isolated property from background queue
-            source.setCancelHandler {
-                if fd >= 0 {
-                    close(fd)
+            // Capture fd by value in a @Sendable closure to avoid @MainActor isolation
+            // being inherited from the enclosing context (which would crash on the background queue)
+            let capturedFd = fd
+            source.setCancelHandler { @Sendable in
+                if capturedFd >= 0 {
+                    close(capturedFd)
                 }
             }
             

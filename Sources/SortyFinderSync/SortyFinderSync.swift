@@ -24,7 +24,7 @@ final class SortyFinderSync: FIFinderSync {
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
         let organizeImage = Self.normalizedMenuIcon(Self.finderOrganizeImage(), isTemplate: false)
-        let watchImage = Self.normalizedMenuIcon(Self.finderWatchImage(), isTemplate: true)
+        let watchImage = Self.finderWatchImage()
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer, .contextualMenuForSidebar:
@@ -170,58 +170,52 @@ final class SortyFinderSync: FIFinderSync {
     }
 
     private static func finderWatchImage() -> NSImage {
-        if let assetImage = NSImage(named: NSImage.Name("WatchIcon")) {
-            let copiedImage = (assetImage.copy() as? NSImage) ?? assetImage
-            copiedImage.isTemplate = true
-            return copiedImage
-        }
+        // Finder Sync extensions do NOT honor isTemplate for menu item images.
+        // We must explicitly render the SF Symbol in the correct color for the
+        // current appearance (white in dark mode, black in light mode).
+        // See docs/agent-guides/finder-integration.md "Menu Icon Rendering" for details.
+        let isDark = prefersDarkAppearance()
+        let drawColor = isDark ? NSColor.white : NSColor.black
+        let menuIconSize = NSSize(width: 16, height: 16)
 
-        let preferredBaseNames = ["WatchIconTemplate", "eye_black", "eye_white"]
-        for baseName in preferredBaseNames {
-            if let image = loadWatchIconImage(named: baseName) {
-                image.isTemplate = true
-                return image
-            }
-        }
+        let symbol = NSImage(systemSymbolName: "eye", accessibilityDescription: "Watch")
+            ?? NSImage(systemSymbolName: "folder", accessibilityDescription: "Watch")
+            ?? NSImage(size: menuIconSize)
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        let configured = symbol.withSymbolConfiguration(config) ?? symbol
 
-        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        if let symbol = NSImage(systemSymbolName: "eye", accessibilityDescription: "Watch") {
-            let configured = symbol.withSymbolConfiguration(config) ?? symbol
-            configured.isTemplate = true
-            return configured
-        }
-        let fallback = NSImage(size: NSSize(width: 16, height: 16))
-        fallback.isTemplate = true
-        return fallback
+        // Scale the symbol proportionally and center it within the menu icon size
+        let sourceSize = configured.size
+        let maxDimension = max(sourceSize.width, sourceSize.height, 1)
+        let scale = min(menuIconSize.width, menuIconSize.height) / maxDimension
+        let drawSize = NSSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
+        let drawRect = NSRect(
+            x: (menuIconSize.width - drawSize.width) / 2,
+            y: (menuIconSize.height - drawSize.height) / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        )
+
+        let rendered = NSImage(size: menuIconSize)
+        rendered.lockFocus()
+        // Draw the symbol scaled proportionally (renders in default black)
+        configured.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+        // Tint only the opaque pixels with the desired color
+        drawColor.set()
+        NSRect(origin: .zero, size: menuIconSize).fill(using: .sourceAtop)
+        rendered.unlockFocus()
+        rendered.isTemplate = false
+        return rendered
     }
 
-    private static func loadWatchIconImage(named baseName: String) -> NSImage? {
-        if let directURL = Bundle.main.url(forResource: baseName, withExtension: "png"),
-           let image = NSImage(contentsOf: directURL) {
-            return image
+    private static func prefersDarkAppearance() -> Bool {
+        if NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+            return true
         }
-
-        if let resourceURL = Bundle.main.resourceURL {
-            let hostAppResourcesURL = Bundle.main.bundleURL
-                .deletingLastPathComponent() // PlugIns
-                .deletingLastPathComponent() // Contents
-                .appendingPathComponent("Resources", isDirectory: true)
-
-            let candidates = [
-                resourceURL.appendingPathComponent("Assets.xcassets/WatchIcon.imageset/\(baseName).png"),
-                hostAppResourcesURL.appendingPathComponent("Assets.xcassets/WatchIcon.imageset/\(baseName).png"),
-                resourceURL.appendingPathComponent("\(baseName).png"),
-                hostAppResourcesURL.appendingPathComponent("\(baseName).png")
-            ]
-
-            for candidate in candidates {
-                if let image = NSImage(contentsOf: candidate) {
-                    return image
-                }
-            }
+        guard let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") else {
+            return false
         }
-
-        return nil
+        return style.caseInsensitiveCompare("Dark") == .orderedSame
     }
 
     private static func normalizedMenuIcon(_ image: NSImage, isTemplate: Bool) -> NSImage {

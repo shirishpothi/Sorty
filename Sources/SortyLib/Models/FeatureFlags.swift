@@ -38,12 +38,21 @@ public enum FeatureFlags {
         UserDefaults.standard.bool(forKey: "githubUpdateCheckerEnabled")
     }
 
-    /// Controls privacy features like blurring sensitive path segments and hiding API keys.
+    /// Controls privacy features like blurring sensitive handles and hiding API keys by default.
     ///
-    /// Off by default. Toggled from Settings → Advanced → Privacy.
-    /// The GitHub Copilot username blur is always active regardless of this flag.
+    /// Enabled by default. Disable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app privacyModeEnabled -bool false
+    /// ```
+    /// Enable:
+    /// ```
+    /// defaults write com.sorty.app privacyModeEnabled -bool true
+    /// ```
     public static var privacyModeEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "privacyModeEnabled")
+        if UserDefaults.standard.object(forKey: "privacyModeEnabled") == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "privacyModeEnabled")
     }
 
     /// Controls whether Finder file tagging is enabled during organization.

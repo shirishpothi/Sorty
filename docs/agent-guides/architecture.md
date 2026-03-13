@@ -56,11 +56,17 @@ Uses App Groups (`group.com.sorty.app`) for IPC. Behind the `finderIntegrationEn
 Quick Action and Finder Sync repair flows are exposed in-app via Finder Integration settings.
 The Finder Sync `.appex` registration repair path is `ExtensionCommunication.repairFinderSyncExtensionRegistration` and should be preferred over external terminal instructions.
 
-### Finder Icon Troubleshooting
-- `Watch with Sorty` icon color variants are file-based assets in `Resources/Assets.xcassets/WatchIcon.imageset/`.
-- Light mode should resolve to `eye_black.png`; dark mode should resolve to `eye_white.png`.
-- If icon behavior appears unchanged after code edits, first verify the extension target itself builds: `xcodebuild -project Sorty.xcodeproj -target SortyFinderSync -configuration Debug -destination 'platform=macOS' build`.
-- A stale Finder Sync binary can stay active even when workspace code is updated; after deploy, re-enable `com.sorty.app.SortyFinderSync` and restart Finder to force reload.
+### Background Agent
+- `LoginItemManager` manages both the main app login item (via `SMAppService.mainApp`) and a background LaunchAgent (`com.sorty.app.background-agent.plist`).
+- On sync, it auto-migrates off the legacy agent plist (`com.sorty.app.plist`) that reused the app's service label.
+- `backgroundAgentConfigurationIssues(label:bundleProgram:mainAppServiceLabel:)` validates agent configuration at build/test time.
+
+### Finder Sync Menu Icon Rendering (CRITICAL)
+- **`isTemplate` does NOT work** in Finder Sync extensions. Finder ignores it for extension-provided menu item images. Do not use `isTemplate = true` for dark/light mode adaptation — this has caused repeated regressions.
+- The correct approach (in `finderWatchImage()`): detect appearance via `prefersDarkAppearance()`, render the SF Symbol into a new `NSImage` via `lockFocus` with **proportional scaling and centering** (not force-drawn into the full rect — non-square symbols like "eye" get distorted), then tint with `.sourceAtop` (`drawColor.set()` + `NSRect.fill(using: .sourceAtop)`), and set `isTemplate = false`.
+- See `docs/agent-guides/finder-integration.md` → "Menu Icon Rendering" for the full pattern and list of approaches that must NOT be used.
+- Asset catalog images (`NSImage(named:)`) are inaccessible from the extension bundle — use SF Symbols rendered at runtime.
+- A stale Finder Sync binary can stay active even when workspace code is updated; after deploy, `pkill -f SortyFinderSync`, re-enable `com.sorty.app.SortyFinderSync`, and restart Finder.
 
 ## Learnings System
 User preference learning stored in `LearningsProfile`. Secured with biometric auth via `SecurityManager`.

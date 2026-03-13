@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Finder Sync Runtime Diagnostics** — New diagnostic system (`FinderSyncDiagnostics`) with status kinds (`verified`, `registered`, `activeElsewhere`, `needsCleanup`, etc.) for precise Finder extension health reporting.
+- **Finder Sync Heartbeat Monitoring** — Extension now posts distributed notifications on launch; the main app caches heartbeats to verify the correct build is loaded into Finder.
+- **Finder Sync Auto-Repair on Launch** — App automatically repairs stale or mismatched Finder Sync registrations on startup without user intervention.
+- **Background Agent Migration** — `LoginItemManager` auto-migrates from legacy `com.sorty.app.plist` to dedicated `com.sorty.app.background-agent.plist` to prevent service label collisions.
+- **Privacy Path Masking** — `PrivacyPathMasker` redacts usernames from file paths in UI and logs for privacy-sensitive displays.
+- **Storage Destination Normalization** — `StorageDestinationNormalizer` resolves AI-suggested folder names (aliases, absolute paths, source-relative paths) to correct storage location paths.
+- **Storage Validation Guards** — Validator now rejects directory items and bulk subfolder migrations to storage locations, preventing unintended mass moves.
+
+### Changed
+
+- **Finder Sync Registration Parsing** — `parseFinderSyncRegistrationEntries` now deduplicates entries and prefers explicit enabled/disabled markers over ambiguous states.
+- **Extension Host Eligibility** — Registration repair only targets app bundles in `/Applications` or `~/Applications`; workspace builds are staged to `~/Applications` automatically.
+
 ## [1.1.2] - 2026-03-01
 
 ### Added

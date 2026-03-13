@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize
+.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
 
 # Default target
 all: build
@@ -88,6 +88,18 @@ now:
 	@echo "🏎️  Immediate build and run (DEBUG mode, $(CORES) parallel jobs)..."
 	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@open releases/Sorty.app
+
+# Local CI - mirrors GitHub Actions CI checks on your machine (faster)
+ci:
+	@echo "🔄 Running local CI checks ($(CORES) cores)..."
+	@chmod +x scripts/local_ci.sh
+	@./scripts/local_ci.sh
+
+# Local CI + report result to GitHub as a commit status
+ci-report:
+	@echo "🔄 Running local CI checks + reporting to GitHub..."
+	@chmod +x scripts/local_ci.sh
+	@./scripts/local_ci.sh --report
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
@@ -208,6 +220,11 @@ help:
 	@echo "  make build-ci-universal - CI-style universal xcodebuild + Sorty-universal.zip"
 	@echo "  make build-ci-arm64     - Deprecated alias (forwards to build-ci-universal)"
 	@echo "  make build-ci-x86_64    - Deprecated alias (forwards to build-ci-universal)"
+	@echo ""
+	@echo ""
+	@echo "Local CI (mirrors GitHub Actions):"
+	@echo "  make ci          - Run CI checks locally (security, build, test, app bundle)"
+	@echo "  make ci-report   - Run CI locally + report pass/fail to GitHub"
 	@echo ""
 	@echo "Build Profiling:"
 	@echo "  make build-profile - Identify slow-compiling files and functions"

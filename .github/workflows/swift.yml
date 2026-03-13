@@ -45,8 +45,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # Check if local CI already passed for this commit
+  check-local-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Check for local-ci status
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          STATUS=$(gh api "/repos/${{ github.repository }}/commits/${SHA}/statuses" \
+            --jq '[.[] | select(.context == "local-ci" and .state == "success")] | length' \
+            2>/dev/null || echo "0")
+          if [ "$STATUS" -gt 0 ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Local CI already passed for ${SHA:0:7} — skipping redundant checks"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "No local CI status found — running full CI"
+          fi
+
   # Main build and test job
   build-and-test:
+    needs: check-local-ci
+    if: ${{ needs.check-local-ci.outputs.skip != 'true' }}
     runs-on: macos-15
     timeout-minutes: 30
 
@@ -91,7 +117,7 @@ jobs:
           echo "✅ Build script succeeded"
 
       - name: Generate Appcast
-        if: github.event_name == 'workflow_dispatch' && inputs.release_type != 'None'
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_type != 'None' }}
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
@@ -103,19 +129,19 @@ jobs:
           ./scripts/generate_appcast_ci.sh
 
       - name: Validate Sparkle Update System
-        if: github.event_name == 'workflow_dispatch' && inputs.release_type != 'None'
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_type != 'None' }}
         run: |
           chmod +x ./scripts/validate_sparkle.sh
           ./scripts/validate_sparkle.sh
 
       - name: Pre-release validation
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           chmod +x scripts/prerelease_check.sh
           ./scripts/prerelease_check.sh --skip-build --skip-tests --skip-sparkle
 
       - name: Run Build and Release
-        if: github.event_name == 'workflow_dispatch'
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
           ARGS=""
           
@@ -131,13 +157,9 @@ jobs:
           
           echo "Running release.sh with args: $ARGS"
           ./scripts/release.sh $ARGS
-        env:
-          NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
-          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-          TEAM_ID: ${{ secrets.TEAM_ID }}
 
       - name: Archive Release Artifacts
-        if: github.event_name == 'workflow_dispatch' && inputs.release_type != 'None'
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_type != 'None' }}
         uses: actions/upload-artifact@v4
         with:
           name: Release-Artifacts

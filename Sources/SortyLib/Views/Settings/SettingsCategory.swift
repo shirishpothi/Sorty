@@ -33,6 +33,7 @@ public enum SettingsFocusTarget: String, Sendable {
     case rulesStorageLocations = "settings.rules.storage-locations"
     case rulesOrganizationLimits = "settings.rules.organization-limits"
     case rulesContentRules = "settings.rules.content-rules"
+    case rulesSteeringPrompts = "settings.rules.steering-prompts"
     case rulesOrganizationStyle = "settings.rules.organization-style"
 }
 
@@ -111,13 +112,13 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy:
             return ["strategy", "deep scanning", "smart renaming", "vision", "naming style", "folder structure", "organization style"]
         case .rules:
-            return ["rules", "instructions", "storage locations", "destinations", "tagging", "pattern"]
+            return ["rules", "instructions", "steering prompt", "default prompt", "storage locations", "destinations", "tagging", "pattern"]
         case .tuning:
             return ["temperature", "creativity", "strictness", "parameters", "timeouts", "token limits", "quality"]
         case .automation:
             return ["automation", "watched folders", "auto organize", "background", "scheduler", "spring cleaning", "folder trigger"]
         case .finder:
-            return ["finder", "quick action", "watch action", "extension", "service", "workflow", "automation permission", "repair"]
+            return ["finder", "quick action", "toolbar", "extension", "service", "keyboard shortcut", "url scheme"]
         case .notifications:
             return ["notification", "alerts", "sound", "banner", "notificli", "completion", "foreground", "permissions"]
         case .advanced:
@@ -125,7 +126,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .troubleshooting:
             return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
         case .help:
-            return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "deeplink", "url scheme", "sorty://", "automation links"]
+            return ["help", "support", "documentation", "faq", "guide", "tips", "contact"]
         case .experimental:
             return ["experimental", "labs", "beta", "feature flags", "defaults", "finder integration", "batch organization"]
         }
@@ -155,6 +156,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Organization Limits", summary: "Set max top-level folders to control output structure."),
                 SettingsFeatureSnippet(title: "Duplicate Handling", summary: "Use the duplicate detection dropdown in preview to control how duplicates are scanned.", keywords: ["duplicates", "duplicate detection"]),
                 SettingsFeatureSnippet(title: "Enable File Tagging", summary: "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"]),
+                SettingsFeatureSnippet(title: "Steering Prompts", summary: "Save default or reusable instructions that steer organization behavior."),
                 SettingsFeatureSnippet(title: "Organization Style", summary: "Pick personas and style preferences for folder structures.")
             ]
         case .tuning:
@@ -175,9 +177,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .finder:
             return [
                 SettingsFeatureSnippet(title: "Quick Action", summary: "Run Sorty directly from Finder context menus."),
-                SettingsFeatureSnippet(title: "Finder Extension", summary: "Activate or repair the Finder Sync extension and jump to macOS Extensions settings."),
-                SettingsFeatureSnippet(title: "Finder Workflow", summary: "Check selected Finder items and organize the current Finder context in one click."),
-                SettingsFeatureSnippet(title: "Automation Permission", summary: "Grant and recover Finder automation permission required for workflow controls.")
+                SettingsFeatureSnippet(title: "URL Scheme", summary: "Use sorty:// deep links for Finder and scripts."),
+                SettingsFeatureSnippet(title: "Finder Sync Extension", summary: "Enable extension status and integration checks."),
+                SettingsFeatureSnippet(title: "Advanced Controls", summary: "Access permission and troubleshooting controls for Finder integration.")
             ]
         case .notifications:
             return [
@@ -208,8 +210,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .help:
             return [
                 SettingsFeatureSnippet(title: "The Basics", summary: "Walk through the core organize-preview-apply workflow."),
-                SettingsFeatureSnippet(title: "Privacy and Support", summary: "Open docs, changelog, and issue reporting links."),
-                SettingsFeatureSnippet(title: "Automation Deeplinks", summary: "Browse and copy all supported sorty:// deeplinks for scripts, launchers, and Shortcuts.", keywords: ["deeplink", "url scheme", "sorty://", "automation"])
+                SettingsFeatureSnippet(title: "Privacy and Support", summary: "Open docs, changelog, and issue reporting links.")
             ]
         case .experimental:
             return [
@@ -269,6 +270,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return .rulesOrganizationLimits
         case "Duplicate Handling", "Enable File Tagging":
             return .rulesContentRules
+        case "Steering Prompts":
+            return .rulesSteeringPrompts
         case "Organization Style":
             return .rulesOrganizationStyle
         default:
