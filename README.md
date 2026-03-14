@@ -1,4 +1,5 @@
-# Sorty - macOS AI-Powered Directory Management
+# <h1 align="center">Sorty <img src="Sources/SortyLib/Resources/Images/SortyMascotHead.png" alt="Sorty logo" width="32" style="vertical-align:middle; height:32px; display:inline-block; margin:0 8px;" /> - AI-Powered Folder Organizer for macOS</h1>
+
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Swift](https://img.shields.io/badge/Swift-6.0+-orange.svg)](https://swift.org)

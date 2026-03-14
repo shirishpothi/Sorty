@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Darwin
 
 public enum NetworkPrivacyPolicy {
     public static let internetPrivacyModeKey = "internetPrivacyModeEnabled"
@@ -30,6 +31,37 @@ public enum NetworkPrivacyPolicy {
         guard scheme == "http" || scheme == "https" else { return false }
 
         guard let host = url.host?.lowercased() else { return false }
-        return host == "localhost" || host == "127.0.0.1" || host == "::1"
+        if host == "localhost" { return true }
+        if isIPv4LoopbackHost(host) { return true }
+        if isIPv6LoopbackHost(host) { return true }
+        return false
+    }
+
+    private static func isIPv4LoopbackHost(_ host: String) -> Bool {
+        var address = in_addr()
+        let parseResult = host.withCString { inet_pton(AF_INET, $0, &address) }
+        guard parseResult == 1 else { return false }
+
+        let value = UInt32(bigEndian: address.s_addr)
+        return (value & 0xFF00_0000) == 0x7F00_0000
+    }
+
+    private static func isIPv6LoopbackHost(_ host: String) -> Bool {
+        var address = in6_addr()
+        let parseResult = host.withCString { inet_pton(AF_INET6, $0, &address) }
+        guard parseResult == 1 else { return false }
+
+        let bytes = withUnsafeBytes(of: address) { Array($0) }
+        guard bytes.count == 16 else { return false }
+
+        let isIPv6Loopback = bytes[0..<15].allSatisfy { $0 == 0 } && bytes[15] == 1
+        if isIPv6Loopback { return true }
+
+        let isIPv4Mapped = bytes[0..<10].allSatisfy { $0 == 0 } && bytes[10] == 0xFF && bytes[11] == 0xFF
+        if isIPv4Mapped {
+            return bytes[12] == 127
+        }
+
+        return false
     }
 }
