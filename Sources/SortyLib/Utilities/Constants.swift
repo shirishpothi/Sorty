@@ -51,7 +51,7 @@ public class HapticFeedbackManager {
 
     /// Performs haptic feedback for alignment or snapping
     public func alignment() {
-        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+        performLightAlignmentHaptic()
     }
 
     /// Performs haptic feedback for errors or warnings
@@ -66,6 +66,10 @@ public class HapticFeedbackManager {
 
     /// Performs a subtle light haptic for hover transitions and gentle state changes.
     public func light() {
+        performLightAlignmentHaptic()
+    }
+
+    private func performLightAlignmentHaptic() {
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
     }
 }
@@ -153,6 +157,7 @@ public struct HapticTapModifier: ViewModifier {
         case success
         case error
         case selection
+        case light
     }
 
     public func body(content: Content) -> some View {
@@ -169,6 +174,8 @@ public struct HapticTapModifier: ViewModifier {
                             HapticFeedbackManager.shared.error()
                         case .selection:
                             HapticFeedbackManager.shared.selection()
+                        case .light:
+                            HapticFeedbackManager.shared.light()
                         }
                     }
             )

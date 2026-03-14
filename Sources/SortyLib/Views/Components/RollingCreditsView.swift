@@ -32,15 +32,22 @@ private struct GitHubErrorPayload: Decodable, Sendable {
     let message: String?
 }
 
-struct CreditItem: Identifiable, Hashable {
-    let id = UUID()
-    let name: String
-    let license: String
-    let url: URL
+public struct CreditItem: Identifiable, Hashable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let license: String
+    public let url: URL
+
+    public init(name: String, license: String, url: URL) {
+        self.id = UUID()
+        self.name = name
+        self.license = license
+        self.url = url
+    }
 }
 
-enum OpenSourceCredits {
-    static let all: [CreditItem] = [
+public enum OpenSourceCredits {
+    public static let all: [CreditItem] = [
         CreditItem(
             name: "Sparkle",
             license: "MIT",
@@ -455,10 +462,9 @@ final class GitHubContributorsFetcher: ObservableObject {
         scheduledFetchTask?.cancel()
 
         let delay = max(1, date.timeIntervalSinceNow)
-        let nanoseconds = UInt64(delay * 1_000_000_000)
 
         scheduledFetchTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: nanoseconds)
+            try? await Task.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let self else { return }
 
             await MainActor.run {
@@ -583,6 +589,7 @@ struct RollingCreditsView: View {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .accessibilityIdentifier("RollingCreditsTitle")
 
             GeometryReader { _ in
                 SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 60.0)) { context in
@@ -615,7 +622,9 @@ struct RollingCreditsView: View {
                     self.pausedAt = nil
                 }
             }
+            .accessibilityIdentifier("RollingCreditsViewport")
         }
+        .accessibilityIdentifier("RollingCreditsView")
     }
 
     @ViewBuilder
@@ -646,6 +655,7 @@ struct RollingCreditsView: View {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .accessibilityIdentifier("RollingCreditRow_\(rowKey)")
         .onHover { hovering in
             if hovering {
                 hoveredRowKey = rowKey

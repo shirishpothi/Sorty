@@ -52,7 +52,7 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
 
         config.setAuthMethod(.accountSignIn, for: .anthropic)
         XCTAssertEqual(config.authMethod(for: .openAI), .manualSessionToken)
-        XCTAssertEqual(config.authMethod(for: .anthropic), .apiKey)
+        XCTAssertEqual(config.authMethod(for: .anthropic), .accountSignIn)
     }
 
     func testAIConfigAuthMethodsAreCodable() throws {
@@ -64,7 +64,7 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         let decoded = try JSONDecoder().decode(AIConfig.self, from: data)
 
         XCTAssertEqual(decoded.authMethod(for: .openAI), .accountSignIn)
-        XCTAssertEqual(decoded.authMethod(for: .anthropic), .apiKey)
+        XCTAssertEqual(decoded.authMethod(for: .anthropic), .manualSessionToken)
     }
 
     func testProviderAuthResolverUsesConfigApiKeyWhenPresent() {

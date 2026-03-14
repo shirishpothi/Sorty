@@ -1,18 +1,18 @@
 import Foundation
-import AppKit
 
 @MainActor
-final class SubscriptionAuthManager: ObservableObject {
-    static let openAI = SubscriptionAuthManager(provider: .openAI)
+public final class SubscriptionAuthManager: ObservableObject {
 
     let provider: AIProvider
+    private let codexAuthManager: CodexCLIAuthManager
 
     @Published var isAuthenticated = false
     @Published var accountLabel: String?
     @Published var authError: String?
 
-    init(provider: AIProvider) {
+    public init(provider: AIProvider, codexAuthManager: CodexCLIAuthManager) {
         self.provider = provider
+        self.codexAuthManager = codexAuthManager
         checkAuthenticationStatus()
     }
 
@@ -37,7 +37,7 @@ final class SubscriptionAuthManager: ObservableObject {
             return
         }
 
-        let codex = CodexCLIAuthManager.shared
+        let codex = codexAuthManager
         codex.checkStatus()
         isAuthenticated = codex.isAuthenticated
         accountLabel = codex.accountEmail
@@ -45,7 +45,7 @@ final class SubscriptionAuthManager: ObservableObject {
 
     func signOut() {
         guard provider == .openAI else { return }
-        CodexCLIAuthManager.shared.signOut()
+        codexAuthManager.signOut()
         isAuthenticated = false
         accountLabel = nil
     }

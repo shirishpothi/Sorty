@@ -78,20 +78,30 @@ public class SparkleUpdateManager: ObservableObject {
         updateState = .disabled
         #endif
 
-        _ = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            guard let self else { return }
-            let privacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
-            guard privacyModeEnabled != self.lastObservedInternetPrivacyModeEnabled else {
-                return
-            }
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUserDefaultsDidChange),
+            name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+    }
 
-            self.lastObservedInternetPrivacyModeEnabled = privacyModeEnabled
-            self.applyInternetPrivacyPolicy()
+    deinit {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleUserDefaultsDidChange(_ notification: Notification) {
+        let privacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
+        guard privacyModeEnabled != lastObservedInternetPrivacyModeEnabled else {
+            return
         }
+
+        lastObservedInternetPrivacyModeEnabled = privacyModeEnabled
+        applyInternetPrivacyPolicy()
     }
 
     #if canImport(Sparkle)
@@ -227,19 +237,16 @@ public class SparkleUpdateManager: ObservableObject {
         let privacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
         lastObservedInternetPrivacyModeEnabled = privacyModeEnabled
 
-        #if canImport(Sparkle)
-        if let updater = self.updater as? SPUUpdater {
-            let shouldAutomaticallyCheckForUpdates = !privacyModeEnabled
-            if updater.automaticallyChecksForUpdates != shouldAutomaticallyCheckForUpdates {
-                updater.automaticallyChecksForUpdates = shouldAutomaticallyCheckForUpdates
-            }
-        }
-        #endif
-
         if privacyModeEnabled {
             updateState = .disabled
-        } else if updateState == .disabled {
-            updateState = .idle
+        } else {
+            #if canImport(Sparkle)
+            // Preserve Sparkle's persisted user preference for automatic checks.
+            // Privacy mode only gates update behavior while active.
+            if updateState == .disabled, updater != nil {
+                updateState = .idle
+            }
+            #endif
         }
     }
 }

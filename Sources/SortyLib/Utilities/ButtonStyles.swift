@@ -256,6 +256,8 @@ public struct HapticBounceButtonStyle: ButtonStyle {
                         HapticFeedbackManager.shared.error()
                     case .selection:
                         HapticFeedbackManager.shared.selection()
+                    case .light:
+                        HapticFeedbackManager.shared.light()
                     }
                 }
             }

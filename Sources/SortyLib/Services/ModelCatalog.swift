@@ -217,7 +217,10 @@ public final class ModelCatalog: ObservableObject {
         let authMethod = ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config)
 
         if authMethod == .accountSignIn {
-            return (codexSubscriptionModels(), false)
+            if ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config) {
+                return (codexSubscriptionModels(), false)
+            }
+            return ([], true)
         }
 
         guard let url = URL(string: "https://api.openai.com/v1/models") else {
@@ -262,7 +265,8 @@ public final class ModelCatalog: ObservableObject {
 
     private func codexSubscriptionModels() -> [ModelInfo] {
         // Codex subscription sessions do not expose /v1/models like API-key sessions.
-        // Keep this list aligned with https://developers.openai.com/codex/models.
+        // Keep this list aligned with https://developers.openai.com/codex/models
+        // whenever OpenAI updates the Codex model catalog.
         let codexModelOrder = [
             "gpt-5.4",
             "gpt-5.3-codex",
@@ -280,10 +284,17 @@ public final class ModelCatalog: ObservableObject {
 
         var orderedModels = codexModelOrder
 
-        if let cliConfigured = CodexCLIAuthManager.readConfiguredModel(),
-           !cliConfigured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           !orderedModels.contains(cliConfigured) {
-            orderedModels.insert(cliConfigured, at: 0)
+        if let cliConfigured = CodexCLIAuthManager.readConfiguredModel() {
+            let trimmedConfiguredModel = cliConfigured.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedConfiguredModel.isEmpty,
+               !orderedModels.contains(trimmedConfiguredModel) {
+                LogManager.shared.log(
+                    "Codex CLI configured model '\(trimmedConfiguredModel)' is not in the known static Codex model list. Consider updating codexSubscriptionModels().",
+                    level: .warning,
+                    category: "ModelCatalog"
+                )
+                orderedModels.insert(trimmedConfiguredModel, at: 0)
+            }
         }
 
         return orderedModels.map {

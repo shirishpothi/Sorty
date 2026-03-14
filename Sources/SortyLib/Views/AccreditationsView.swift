@@ -37,6 +37,7 @@ struct AccreditationsView: View {
                 .font(.system(size: 54, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .scaleEffect(iconHovered ? 1.06 : 1.0)
+                .accessibilityIdentifier("AccreditationsIcon")
                 .onHover { hovering in
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
                         iconHovered = hovering
@@ -61,6 +62,7 @@ struct AccreditationsView: View {
                 items: allCredits,
                 viewportHeight: 220
             )
+            .accessibilityIdentifier("AccreditationsRollingCredits")
 
             if shouldFetchContributors && contributorsFetcher.isLoading && contributorsFetcher.contributors.isEmpty {
                 Text("Loading GitHub contributors...")
@@ -86,11 +88,13 @@ struct AccreditationsView: View {
         .overlay(alignment: .topLeading) {
             if showBackButton, let onBack {
                 GlassyBackButton(action: onBack)
+                    .accessibilityIdentifier("AccreditationsBackButton")
                     .padding(.top, 10)
                     .padding(.leading, 8)
             }
         }
-        .modifier(AccreditationsGlassBackground())
+        .modifier(WindowGlassBackground())
+        .accessibilityIdentifier("AccreditationsView")
         .onAppear {
             contributorsFetcher.fetchIfNeeded(enabled: shouldFetchContributors)
         }
@@ -99,21 +103,6 @@ struct AccreditationsView: View {
         }
         .onChange(of: internetPrivacyModeEnabled) { _, newValue in
             contributorsFetcher.fetchIfNeeded(enabled: fetchGitHubContributorsEnabled && !newValue, forceRefresh: true)
-        }
-    }
-}
-
-private struct AccreditationsGlassBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .background {
-                    Color.clear
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 0))
-                        .ignoresSafeArea()
-                }
-        } else {
-            content.background(.ultraThinMaterial)
         }
     }
 }

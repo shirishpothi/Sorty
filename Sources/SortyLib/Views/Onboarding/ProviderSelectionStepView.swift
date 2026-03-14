@@ -9,9 +9,9 @@ import SwiftUI
 
 public struct ProviderSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var openAIAuth: SubscriptionAuthManager
+    @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
-    @ObservedObject var openAIAuth = SubscriptionAuthManager.openAI
-    @ObservedObject var codexAuth = CodexCLIAuthManager.shared
     @State private var hasAppeared = false
     @State private var connectionStatus: ConnectionTestStatus = .idle
     @State private var connectionError: String?
@@ -567,6 +567,7 @@ public struct ProviderSelectionStepView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("CodexTerminalSignInButton")
                 .onHover { hovering in
                     if hovering && !isHoveringCodexTerminalButton {
                         HapticFeedbackManager.shared.selection()
@@ -595,6 +596,7 @@ public struct ProviderSelectionStepView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("CodexVerifyButton")
                 .onHover { hovering in
                     if hovering && !isHoveringCodexVerifyButton {
                         HapticFeedbackManager.shared.selection()
@@ -789,6 +791,7 @@ public struct ProviderSelectionStepView: View {
         }
         settingsViewModel.config = next
         HapticFeedbackManager.shared.selection()
+        settingsViewModel.updateAvailableModels(force: true)
         scheduleConnectionTest()
         openAIAuth.checkAuthenticationStatus()
     }
@@ -1077,6 +1080,10 @@ struct OnboardingProviderRow: View {
 // MARK: - Preview
 
 #Preview {
+    let codexAuthManager = CodexCLIAuthManager()
+
     ProviderSelectionStepView()
         .environmentObject(SettingsViewModel())
+        .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
+        .environmentObject(codexAuthManager)
 }

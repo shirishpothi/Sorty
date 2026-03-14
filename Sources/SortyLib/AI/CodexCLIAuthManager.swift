@@ -9,9 +9,7 @@ import Foundation
 import AppKit
 
 @MainActor
-final class CodexCLIAuthManager: ObservableObject {
-    static let shared = CodexCLIAuthManager()
-
+public final class CodexCLIAuthManager: ObservableObject {
     @Published var isAuthenticated = false
     @Published var accountEmail: String?
     @Published var authError: String?
@@ -58,7 +56,7 @@ final class CodexCLIAuthManager: ObservableObject {
         let account_id: String?
     }
 
-    init() {
+    public init() {
         checkStatus()
     }
 
@@ -127,10 +125,10 @@ final class CodexCLIAuthManager: ObservableObject {
     }
 
     func signOut() {
-        if isCodexInstalled {
+        if let codexExecutablePath = resolveCodexExecutablePath() {
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["codex", "logout"]
+            process.executableURL = URL(fileURLWithPath: codexExecutablePath)
+            process.arguments = ["logout"]
             process.standardOutput = Pipe()
             process.standardError = Pipe()
             do {
@@ -165,12 +163,20 @@ final class CodexCLIAuthManager: ObservableObject {
     }
 
     private func prepareLoginScript() throws -> URL {
+        guard let codexExecutablePath = resolveCodexExecutablePath() else {
+            throw NSError(
+                domain: "CodexCLIAuthManager",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Codex CLI executable was not found"]
+            )
+        }
+        let escapedCodexExecutablePath = codexExecutablePath.replacingOccurrences(of: "\"", with: "\\\"")
+
         let scriptURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-codex-login.command")
         let script = """
         #!/bin/zsh
-        export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
-        codex login
+        "\(escapedCodexExecutablePath)" login
         """
 
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
@@ -179,31 +185,45 @@ final class CodexCLIAuthManager: ObservableObject {
     }
 
     private func checkCodexInstalled() -> Bool {
+        resolveCodexExecutablePath() != nil
+    }
+
+    private func resolveCodexExecutablePath() -> String? {
         let paths = [
             "/usr/local/bin/codex",
             "/opt/homebrew/bin/codex",
             "\(FileManager.default.homeDirectoryForCurrentUser.path)/.npm-global/bin/codex",
         ]
 
-        for path in paths {
-            if FileManager.default.fileExists(atPath: path) {
-                return true
-            }
+        for path in paths where FileManager.default.fileExists(atPath: path) {
+            return path
         }
 
-        // Also check via `which`
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["which", "codex"]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = Pipe()
+
         do {
             try process.run()
             process.waitUntilExit()
-            return process.terminationStatus == 0
+
+            guard process.terminationStatus == 0 else {
+                return nil
+            }
+
+            let output = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let resolvedPath = String(data: output, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !resolvedPath.isEmpty,
+                  FileManager.default.fileExists(atPath: resolvedPath) else {
+                return nil
+            }
+
+            return resolvedPath
         } catch {
-            return false
+            return nil
         }
     }
 
@@ -213,6 +233,9 @@ final class CodexCLIAuthManager: ObservableObject {
         guard parts.count >= 2 else { return nil }
 
         var base64 = String(parts[1])
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+
         // Pad base64 to multiple of 4
         let remainder = base64.count % 4
         if remainder != 0 {
@@ -243,11 +266,12 @@ final class CodexCLIAuthManager: ObservableObject {
                 continue
             }
 
-            guard line.hasPrefix("\(key)") else {
+            guard let equalsIndex = line.firstIndex(of: "=") else {
                 continue
             }
 
-            guard let equalsIndex = line.firstIndex(of: "=") else {
+            let parsedKey = line[..<equalsIndex].trimmingCharacters(in: .whitespaces)
+            guard parsedKey == key else {
                 continue
             }
 

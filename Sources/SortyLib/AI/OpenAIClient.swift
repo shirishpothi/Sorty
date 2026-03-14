@@ -170,12 +170,17 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     
     public func checkHealth() async throws {
         let apiURL = try AIRequestSupport.requireAPIURL(from: config)
-        try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
 
         if config.provider == .openAI,
            ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn {
-            try await checkSubscriptionHealth(apiURL: apiURL)
-            return
+            guard ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config) else {
+                throw AIClientError.apiError(
+                    statusCode: 401,
+                    message: "Codex CLI sign-in is required. Run 'codex login' and verify in Sorty settings."
+                )
+            }
+        } else {
+            try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
         }
 
         let url = try AIRequestSupport.openAIModelsURL(from: apiURL)
@@ -184,27 +189,6 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         var request = try AIRequestSupport.makeJSONRequest(url: url, method: "GET", headers: headers)
         request.timeoutInterval = min(config.requestTimeout, 60)
-
-        let session = await AIRequestSupport.session(for: config)
-        let (data, response) = try await AIRequestSupport.withTransientRetry {
-            try await session.data(for: request)
-        }
-        _ = try AIRequestSupport.validateHTTPResponse(data: data, response: response)
-    }
-
-    private func checkSubscriptionHealth(apiURL: String) async throws {
-        let url = try AIRequestSupport.openAIChatCompletionsURL(from: apiURL)
-        let headers = authHeaders()
-
-        let requestBody: [String: Any] = [
-            "model": config.model,
-            "messages": [["role": "user", "content": "ping"]],
-            "max_tokens": 1,
-            "temperature": 0
-        ]
-
-        var request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
-        request.timeoutInterval = min(config.requestTimeout, 45)
 
         let session = await AIRequestSupport.session(for: config)
         let (data, response) = try await AIRequestSupport.withTransientRetry {

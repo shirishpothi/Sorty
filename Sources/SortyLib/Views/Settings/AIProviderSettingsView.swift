@@ -9,9 +9,9 @@ import SwiftUI
 
 struct AIProviderSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject var openAIAuth: SubscriptionAuthManager
+    @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
-    @ObservedObject var openAIAuth = SubscriptionAuthManager.openAI
-    @ObservedObject var codexAuth = CodexCLIAuthManager.shared
     
     @State private var testConnectionStatus: String?
     @State private var testConnectionDetails: String?
@@ -462,6 +462,7 @@ struct AIProviderSettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("CodexTerminalSignInButton")
                 .onHover { hovering in
                     if hovering && !isHoveringCodexTerminalButton {
                         HapticFeedbackManager.shared.selection()
@@ -494,6 +495,7 @@ struct AIProviderSettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("CodexVerifyButton")
                 .onHover { hovering in
                     if hovering && !isHoveringCodexVerifyButton {
                         HapticFeedbackManager.shared.selection()
@@ -908,7 +910,11 @@ struct AIProviderSettingsView: View {
 }
 
 #Preview {
+    let codexAuthManager = CodexCLIAuthManager()
+
     AIProviderSettingsView()
         .environmentObject(SettingsViewModel())
+        .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
+        .environmentObject(codexAuthManager)
         .frame(width: 500, height: 600)
 }

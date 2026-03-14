@@ -14,7 +14,12 @@ enum ProviderAuthResolver {
     static func authHeader(for provider: AIProvider, config: AIConfig) -> Header? {
         let method = effectiveAuthMethod(for: provider, config: config)
 
-        guard let credential = credential(for: provider, method: method, config: config), !credential.isEmpty else {
+        guard let rawCredential = credential(for: provider, method: method, config: config) else {
+            return nil
+        }
+
+        let credential = rawCredential.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !credential.isEmpty else {
             return nil
         }
 
@@ -34,15 +39,20 @@ enum ProviderAuthResolver {
     }
 
     static func hasRequiredCredential(for provider: AIProvider, config: AIConfig) -> Bool {
-        guard config.requiresAPIKey else {
-            return true
-        }
-
         switch provider {
         case .githubCopilot, .ollama, .appleFoundationModel:
             return true
         default:
-            return authHeader(for: provider, config: config) != nil
+            let method = effectiveAuthMethod(for: provider, config: config)
+            switch method {
+            case .accountSignIn, .manualSessionToken:
+                return authHeader(for: provider, config: config) != nil
+            case .apiKey:
+                guard config.requiresAPIKey else {
+                    return true
+                }
+                return authHeader(for: provider, config: config) != nil
+            }
         }
     }
 
@@ -75,9 +85,9 @@ enum ProviderAuthResolver {
     }
 
     private static func configuredOrStoredAPIKey(for provider: AIProvider, config: AIConfig) -> String? {
-        if let key = config.apiKey, !key.isEmpty {
+        if let key = config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
             return key
         }
-        return KeychainManager.get(key: provider.keychainKey)
+        return KeychainManager.get(key: provider.keychainKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

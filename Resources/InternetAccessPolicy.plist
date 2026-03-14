@@ -85,6 +85,8 @@
         <dict>
             <key>Host</key>
             <string>github.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
             <key>Purpose</key>
             <string>Sorty uses GitHub sign-in endpoints for GitHub Copilot authentication and also checks/downloading app updates hosted on GitHub Releases.</string>
             <key>DenyConsequences</key>
@@ -93,6 +95,8 @@
         <dict>
             <key>Host</key>
             <string>api.github.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
             <key>Purpose</key>
             <string>Sorty calls GitHub APIs for Copilot token and account validation, release metadata checks, and optional contributor data.</string>
             <key>DenyConsequences</key>

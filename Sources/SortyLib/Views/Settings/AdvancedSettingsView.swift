@@ -44,6 +44,7 @@ struct AdvancedSettingsView: View {
                         title: "Block Internet Connections",
                         description: "When enabled, Sorty blocks all internet requests and only allows loopback localhost traffic for local models."
                     )
+                    .accessibilityIdentifier("InternetPrivacyModeToggle")
 
                     Divider()
 
@@ -52,6 +53,7 @@ struct AdvancedSettingsView: View {
                         title: "Blur Usernames in Paths",
                         description: "We'll try to blur your name in file paths throughout Sorty."
                     )
+                    .accessibilityIdentifier("BlurUsernamesToggle")
 
                     Divider()
 
@@ -60,6 +62,7 @@ struct AdvancedSettingsView: View {
                         title: "Fetch GitHub Contributors",
                         description: "Include live contributor names in Accreditations. Disable this to avoid contributor fetch requests to GitHub."
                     )
+                    .accessibilityIdentifier("FetchGitHubContributorsToggle")
                 }
             }
             .animatedAppearance(delay: 0.0)

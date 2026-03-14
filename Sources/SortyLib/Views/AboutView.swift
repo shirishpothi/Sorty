@@ -72,6 +72,7 @@ struct AboutView: View {
                             .foregroundColor(.blue)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("AboutCommitButton")
                     .scaleEffect(commitHovered ? 1.02 : 1.0)
                     .onHover { hovering in
                         withAnimation(.easeInOut(duration: 0.15)) { commitHovered = hovering }
@@ -119,6 +120,7 @@ struct AboutView: View {
                     openAccreditations?()
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("AboutAccreditationsButton")
                 .scaleEffect(accreditationsHovered ? 1.04 : 1.0)
                 .onHover { hovering in
                     withAnimation(.easeInOut(duration: 0.15)) { accreditationsHovered = hovering }

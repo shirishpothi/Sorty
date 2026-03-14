@@ -789,6 +789,8 @@ public extension AIConfig {
         switch provider {
         case .openAI:
             return openAIAuthMethod
+        case .anthropic:
+            return anthropicAuthMethod
         default:
             return .apiKey
         }
@@ -798,6 +800,8 @@ public extension AIConfig {
         switch provider {
         case .openAI:
             openAIAuthMethod = method
+        case .anthropic:
+            anthropicAuthMethod = method
         default:
             break
         }

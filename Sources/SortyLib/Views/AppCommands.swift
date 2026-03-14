@@ -233,7 +233,7 @@ public struct SortyCommands: Commands {
             Button("Accreditations") {
                 appState?.showAccreditations(entryPoint: .help)
             }
-                .keyboardShortcut("©", modifiers: .command)
+                .keyboardShortcut("c", modifiers: [.command, .shift])
                 .disabled(appState == nil)
 
             Divider()
@@ -389,7 +389,7 @@ public class AppState: ObservableObject {
     }
     /// Security-scoped bookmark for the selected directory, ensuring sandbox access persists.
     public private(set) var selectedDirectoryBookmark: Data?
-    @Published public var updateManager = SparkleUpdateManager()
+    @Published public var updateManager: SparkleUpdateManager
     @Published public var selectedSettingsSection: SettingsCategory?
     @Published public var settingsFocusTarget: SettingsFocusTarget?
     @Published public var duplicateManager = DuplicateDetectionManager()
@@ -478,7 +478,9 @@ public class AppState: ObservableObject {
         }
     }
 
-    public init() {
+    public init(updateManager: SparkleUpdateManager = SparkleUpdateManager()) {
+        self.updateManager = updateManager
+
         // Detect fresh install vs in-app update
         // Fresh install: no previous version stored AND onboarding not completed
         // In-app update: previous version exists, so skip onboarding even if flag was reset

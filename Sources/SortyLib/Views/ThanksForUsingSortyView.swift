@@ -27,7 +27,8 @@ struct ThanksForUsingSortyView: View {
         }
         .padding(22)
         .frame(width: Self.preferredWindowWidth, height: Self.preferredWindowHeight)
-        .modifier(ThanksGlassBackground())
+        .modifier(WindowGlassBackground())
+        .accessibilityIdentifier("ThanksForUsingSortyView")
         .onAppear {
             stats = UserStatsSnapshot.load()
             isHeartBeating = true
@@ -183,21 +184,6 @@ private struct LiquidSurface: ViewModifier {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(Color.white.opacity(0.20), lineWidth: 1)
                 }
-        }
-    }
-}
-
-private struct ThanksGlassBackground: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .background {
-                    Color.clear
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 0))
-                        .ignoresSafeArea()
-                }
-        } else {
-            content.background(.ultraThinMaterial)
         }
     }
 }

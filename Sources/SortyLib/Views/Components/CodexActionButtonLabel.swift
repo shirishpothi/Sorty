@@ -79,6 +79,13 @@ struct CodexActionButtonLabel: View {
         state == .activating
     }
 
+    private var accessibilityID: String {
+        let normalizedTitle = idleTitle
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "_")
+        return "codexActionLabel_\(normalizedTitle)"
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             ZStack {
@@ -128,6 +135,7 @@ struct CodexActionButtonLabel: View {
         )
         .shadow(color: Color.black.opacity(isHovered ? 0.2 : 0.12), radius: isHovered ? 6 : 4, x: 0, y: 2)
         .scaleEffect(isAnimating ? 0.985 : (isHovered ? 1.01 : 1.0))
+        .accessibilityIdentifier(accessibilityID)
         .animation(.spring(response: 0.28, dampingFraction: 0.8), value: state)
         .animation(.spring(response: 0.2, dampingFraction: 0.85), value: isHovered)
     }

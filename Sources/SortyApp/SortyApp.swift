@@ -79,6 +79,8 @@ struct SortyApp: App {
     @StateObject private var deeplinkHandler = DeeplinkHandler.shared
     @StateObject private var learningsManager = LearningsManager()
     @StateObject private var automationManager = AutomationManager()
+    @StateObject private var openAIAuthManager: SubscriptionAuthManager
+    @StateObject private var codexAuthManager: CodexCLIAuthManager
     @StateObject private var notificationSettings = NotificationSettingsManager.shared
     @StateObject private var loginItemManager = LoginItemManager.shared
     @StateObject private var namingPresetManager = NamingPresetManager.shared
@@ -94,6 +96,12 @@ struct SortyApp: App {
     private var backgroundActivity: NSObjectProtocol?
 
     init() {
+        let codexAuthManager = CodexCLIAuthManager()
+        _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
+        _openAIAuthManager = StateObject(
+            wrappedValue: SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager)
+        )
+
         UserDefaults.standard.register(defaults: [
             "showMenuBarExtra": true,
             "keepInBackground": false,
@@ -186,6 +194,8 @@ struct SortyApp: App {
         .environmentObject(deeplinkHandler)
         .environmentObject(learningsManager)
         .environmentObject(automationManager)
+        .environmentObject(openAIAuthManager)
+        .environmentObject(codexAuthManager)
         .environmentObject(notificationSettings)
         .environmentObject(loginItemManager)
         .environmentObject(namingPresetManager)

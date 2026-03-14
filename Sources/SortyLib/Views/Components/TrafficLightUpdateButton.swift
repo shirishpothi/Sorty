@@ -224,6 +224,7 @@ final class UpdateButtonNSView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        setAccessibilityIdentifier("trafficLight.updateButton")
         observeWindowFocusIfNeeded()
     }
 
@@ -276,6 +277,9 @@ final class UpdateButtonNSView: NSView {
         let focused = (window?.isKeyWindow ?? false) && NSApp.isActive
         guard focused != isWindowFocused else { return }
         isWindowFocused = focused
+        if !NSApp.isActive {
+            isHovered = false
+        }
         applyVisualState(animated: animated)
     }
 
@@ -450,7 +454,7 @@ final class UpdateButtonNSView: NSView {
             arrowColor = hoverArrowColor
             spinnerColor = hoverArrowColor
             textColor = .white
-        } else if isHovered {
+        } else if isHovered && NSApp.isActive {
             fillColor = hoverFillColor
             borderColor = hoverBorderColor
             highlightColor = hoverHighlightColor
