@@ -1,4 +1,4 @@
-# <h1 align="center">Sorty <img src="Sources/SortyLib/Resources/Images/SortyMascotHead.png" alt="Sorty logo" width="32" style="vertical-align:middle; height:32px; display:inline-block; margin:0 8px;" /> - AI-Powered Folder Organizer for macOS</h1>
+<h1 align="center">Sorty <img src="Sources/SortyLib/Resources/Images/SortyMascotHead.png" alt="Sorty logo" width="32" style="vertical-align:middle; height:32px; display:inline-block; margin:0 8px;" /> - AI-Powered Folder Organizer for macOS</h1>
 
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -266,3 +266,11 @@ See [Resources/NotifiCLI/LICENSE](Resources/NotifiCLI/LICENSE) for the full lice
 - **Feature Requests**: Use the [Feature Request template](../../issues/new?template=feature_request.md)
 - **Security Issues**: Email shirish.pothi.27@gmail.com (do not open public issues)
 - **Questions**: Open a [GitHub Discussion](../../discussions)
+
+#
+
+<div align="center">
+  <img src="Assets/AppIcon/AppIcon-Release.png" alt="Sorty logo" width="150" />
+  <br>
+  <strong>Sorty: The FOSS AI File Organiser</strong>
+</div>
