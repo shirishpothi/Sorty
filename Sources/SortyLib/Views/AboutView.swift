@@ -8,10 +8,16 @@
 import SwiftUI
 
 struct AboutView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var docsHovered = false
     @State private var githubHovered = false
+    @State private var accreditationsHovered = false
+    @State private var commitHovered = false
     @State private var iconHovered = false
+    let openAccreditations: (() -> Void)?
+
+    init(openAccreditations: (() -> Void)? = nil) {
+        self.openAccreditations = openAccreditations
+    }
     
     var body: some View {
         VStack(spacing: 16) {
@@ -55,15 +61,22 @@ struct AboutView: View {
                 
                 // Commit link
                 if BuildInfo.hasValidCommit {
-                    Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/commit/\(BuildInfo.commit)")!) {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        if let url = URL(string: "https://github.com/shirishpothi/Sorty/commit/\(BuildInfo.commit)") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    } label: {
                         Text("Commit \(BuildInfo.shortCommit)")
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.blue)
                     }
                     .buttonStyle(.plain)
-                    .simultaneousGesture(TapGesture().onEnded {
-                        HapticFeedbackManager.shared.tap()
-                    })
+                    .scaleEffect(commitHovered ? 1.02 : 1.0)
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.15)) { commitHovered = hovering }
+                        if hovering { HapticFeedbackManager.shared.selection() }
+                    }
                 } else {
                     Text("Commit \(BuildInfo.shortCommit)")
                         .font(.system(.caption, design: .monospaced))
@@ -100,36 +113,27 @@ struct AboutView: View {
                     withAnimation(.easeInOut(duration: 0.15)) { githubHovered = hovering }
                     if hovering { HapticFeedbackManager.shared.selection() }
                 }
-            }
-            
-            Spacer().frame(height: 0)
-            
-            VStack(spacing: 2) {
-                // Copyright
-                Text("© 2026 Shirish Pothi")
-                    .font(.caption2)
-                    .foregroundColor(.secondary.opacity(0.6))
 
-                HStack(spacing: 4) {
-                    Text("Includes")
-                        .foregroundColor(.secondary.opacity(0.6))
-                    Link("NotifiCLI (MIT)", destination: URL(string: "https://github.com/saihgupr/NotifiCLI")!)
-                        .foregroundColor(.blue)
-                        .buttonStyle(.plain)
-                        .onHover { hovering in
-                            if hovering {
-                                HapticFeedbackManager.shared.selection()
-                            }
-                        }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            HapticFeedbackManager.shared.tap()
-                        })
+                Button("Accreditations") {
+                    HapticFeedbackManager.shared.tap()
+                    openAccreditations?()
                 }
-                .font(.caption2)
+                .buttonStyle(.bordered)
+                .scaleEffect(accreditationsHovered ? 1.04 : 1.0)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.15)) { accreditationsHovered = hovering }
+                    if hovering { HapticFeedbackManager.shared.selection() }
+                }
             }
+            
+            Spacer().frame(height: 8)
+
+            Text("© 2026 Shirish Pothi")
+                .font(.caption2)
+                .foregroundColor(.secondary.opacity(0.6))
         }
         .padding(24)
-        .frame(width: 300, height: 380)
+        .frame(width: 360, height: 420)
         .modifier(AboutGlassBackground())
     }
 }

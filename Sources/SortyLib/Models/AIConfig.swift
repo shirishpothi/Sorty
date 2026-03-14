@@ -8,6 +8,23 @@
 import Foundation
 import SwiftUI
 
+public enum ProviderAuthMethod: String, Codable, CaseIterable, Sendable {
+    case apiKey = "api_key"
+    case accountSignIn = "account_sign_in"
+    case manualSessionToken = "manual_session_token"
+
+    public var displayName: String {
+        switch self {
+        case .apiKey:
+            return "API Key"
+        case .accountSignIn:
+            return "Codex CLI (Subscription)"
+        case .manualSessionToken:
+            return "API Key"
+        }
+    }
+}
+
 public enum AIProvider: String, Codable, CaseIterable, Sendable {
     case openAI = "openai"
     case githubCopilot = "github_copilot"
@@ -351,6 +368,22 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .appleFoundationModel: return "appleFoundationAPIKey"
         }
     }
+
+    public var supportsSubscriptionAuth: Bool {
+        switch self {
+        case .openAI:
+            return true
+        default:
+            return false
+        }
+    }
+
+    public var supportedAuthMethods: [ProviderAuthMethod] {
+        guard supportsSubscriptionAuth else {
+            return [.apiKey]
+        }
+        return [.apiKey, .accountSignIn]
+    }
 }
 
 public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
@@ -511,6 +544,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
     // Automation-specific settings (for background/watched folder operations)
     public var automationProvider: AIProvider?  // nil = use main provider
     public var automationModel: String?         // nil = use main model
+    public var openAIAuthMethod: ProviderAuthMethod = .apiKey
+    public var anthropicAuthMethod: ProviderAuthMethod = .apiKey
 
     public init(
         provider: AIProvider = .openAICompatible,
@@ -546,7 +581,9 @@ public struct AIConfig: Codable, Sendable, Equatable {
         ocrLanguages: [String] = ["en-US"],
         customOCRKeywords: [String]? = nil,
         automationProvider: AIProvider? = nil,
-        automationModel: String? = nil
+        automationModel: String? = nil,
+        openAIAuthMethod: ProviderAuthMethod = .apiKey,
+        anthropicAuthMethod: ProviderAuthMethod = .apiKey
     ) {
         self.provider = provider
         self.apiURL = apiURL
@@ -582,6 +619,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.customOCRKeywords = customOCRKeywords
         self.automationProvider = automationProvider
         self.automationModel = automationModel
+        self.openAIAuthMethod = openAIAuthMethod
+        self.anthropicAuthMethod = anthropicAuthMethod
     }
 
     enum CodingKeys: String, CodingKey {
@@ -619,6 +658,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         case customOCRKeywords
         case automationProvider
         case automationModel
+        case openAIAuthMethod
+        case anthropicAuthMethod
     }
 
     public init(from decoder: Decoder) throws {
@@ -660,6 +701,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         customOCRKeywords = try container.decodeIfPresent([String].self, forKey: .customOCRKeywords)
         automationProvider = try container.decodeIfPresent(AIProvider.self, forKey: .automationProvider)
         automationModel = try container.decodeIfPresent(String.self, forKey: .automationModel)
+        openAIAuthMethod = try container.decodeIfPresent(ProviderAuthMethod.self, forKey: .openAIAuthMethod) ?? .apiKey
+        anthropicAuthMethod = try container.decodeIfPresent(ProviderAuthMethod.self, forKey: .anthropicAuthMethod) ?? .apiKey
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -698,6 +741,8 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encodeIfPresent(customOCRKeywords, forKey: .customOCRKeywords)
         try container.encodeIfPresent(automationProvider, forKey: .automationProvider)
         try container.encodeIfPresent(automationModel, forKey: .automationModel)
+        try container.encode(openAIAuthMethod, forKey: .openAIAuthMethod)
+        try container.encode(anthropicAuthMethod, forKey: .anthropicAuthMethod)
     }
     
     public static let `default` = AIConfig(
@@ -733,11 +778,31 @@ public struct AIConfig: Codable, Sendable, Equatable {
         ocrLanguages: ["en-US"],
         customOCRKeywords: nil,
         automationProvider: nil,
-        automationModel: nil
+        automationModel: nil,
+        openAIAuthMethod: .apiKey,
+        anthropicAuthMethod: .apiKey
     )
 }
 
 public extension AIConfig {
+    func authMethod(for provider: AIProvider) -> ProviderAuthMethod {
+        switch provider {
+        case .openAI:
+            return openAIAuthMethod
+        default:
+            return .apiKey
+        }
+    }
+
+    mutating func setAuthMethod(_ method: ProviderAuthMethod, for provider: AIProvider) {
+        switch provider {
+        case .openAI:
+            openAIAuthMethod = method
+        default:
+            break
+        }
+    }
+
     var effectiveVisionDetailLevel: VisionDetailLevel {
         if provider == .githubCopilot && visionDetailLevel == .auto {
             return .low

@@ -42,6 +42,7 @@ public final class ModelCatalog: ObservableObject {
     
     private static let cloudTTL: TimeInterval = 24 * 60 * 60
     private static let ollamaTTL: TimeInterval = 10 * 60
+    private let configKey = "aiConfig"
     
     private var cacheDirectory: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -131,6 +132,23 @@ public final class ModelCatalog: ObservableObject {
         
         return results.sorted { $0.provider.displayName < $1.provider.displayName }
     }
+
+    private func storedAIConfig() -> AIConfig? {
+        guard let data = UserDefaults.standard.data(forKey: configKey) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(AIConfig.self, from: data)
+    }
+
+    private func configForProvider(_ provider: AIProvider) -> AIConfig {
+        var config = storedAIConfig() ?? .default
+        config.provider = provider
+        config.apiURL = provider.defaultAPIURL
+        config.model = provider.defaultModel
+        config.requiresAPIKey = provider.typicallyRequiresAPIKey
+        config.apiKey = KeychainManager.get(key: provider.keychainKey)
+        return config
+    }
     
     public func performDebouncedSearch(query: String) {
         searchTask?.cancel()
@@ -174,7 +192,7 @@ public final class ModelCatalog: ObservableObject {
     private func fetchModels(for provider: AIProvider) async throws -> (models: [ModelInfo], isFallback: Bool) {
         switch provider {
         case .openAI:
-            return (try await fetchOpenAIModels(), false)
+            return try await fetchOpenAIModels()
         case .anthropic:
             return try await fetchAnthropicModels()
         case .gemini:
@@ -194,19 +212,27 @@ public final class ModelCatalog: ObservableObject {
         }
     }
     
-    private func fetchOpenAIModels() async throws -> [ModelInfo] {
+    private func fetchOpenAIModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
+        let config = configForProvider(.openAI)
+        let authMethod = ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config)
+
+        if authMethod == .accountSignIn {
+            return (codexSubscriptionModels(), false)
+        }
+
         guard let url = URL(string: "https://api.openai.com/v1/models") else {
             throw ModelCatalogError.invalidURL
         }
-        
-        guard let openAIAPIKey = KeychainManager.get(key: AIProvider.openAI.keychainKey), !openAIAPIKey.isEmpty else {
+        try ensureNetworkAllowed(url)
+
+        guard let authHeader = ProviderAuthResolver.authHeader(for: .openAI, config: config) else {
             throw ModelCatalogError.fetchFailed
         }
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 8
-        request.setValue("Bearer \(openAIAPIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(authHeader.value, forHTTPHeaderField: authHeader.field)
         
         let (data, response) = try await session.data(for: request)
         
@@ -223,7 +249,7 @@ public final class ModelCatalog: ObservableObject {
         }
         
         let decoded = try JSONDecoder().decode(OpenAIModelsResponse.self, from: data)
-        return decoded.data.map { model in
+        let models = decoded.data.map { model in
             ModelInfo(
                 id: model.id,
                 displayName: model.id,
@@ -231,12 +257,45 @@ public final class ModelCatalog: ObservableObject {
                 updatedAt: model.created.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date()
             )
         }
+        return (models, false)
+    }
+
+    private func codexSubscriptionModels() -> [ModelInfo] {
+        // Codex subscription sessions do not expose /v1/models like API-key sessions.
+        // Keep this list aligned with https://developers.openai.com/codex/models.
+        let codexModelOrder = [
+            "gpt-5.4",
+            "gpt-5.3-codex",
+            "gpt-5.3-codex-spark",
+            "gpt-5.2-codex",
+            "gpt-5.2",
+            "gpt-5.1-codex-max",
+            "gpt-5.1-codex-mini",
+            "gpt-5.1-codex",
+            "gpt-5.1",
+            "gpt-5-codex",
+            "gpt-5-codex-mini",
+            "gpt-5"
+        ]
+
+        var orderedModels = codexModelOrder
+
+        if let cliConfigured = CodexCLIAuthManager.readConfiguredModel(),
+           !cliConfigured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !orderedModels.contains(cliConfigured) {
+            orderedModels.insert(cliConfigured, at: 0)
+        }
+
+        return orderedModels.map {
+            ModelInfo(id: $0, displayName: $0, provider: .openAI, updatedAt: Date())
+        }
     }
     
     private func fetchGroqModels() async throws -> [ModelInfo] {
         guard let url = URL(string: "https://api.groq.com/openai/v1/models") else {
             throw ModelCatalogError.invalidURL
         }
+        try ensureNetworkAllowed(url)
         
         guard let groqAPIKey = KeychainManager.get(key: AIProvider.groq.keychainKey), !groqAPIKey.isEmpty else {
             throw ModelCatalogError.fetchFailed
@@ -276,6 +335,7 @@ public final class ModelCatalog: ObservableObject {
         guard let url = URL(string: "https://openrouter.ai/api/v1/models") else {
             throw ModelCatalogError.invalidURL
         }
+        try ensureNetworkAllowed(url)
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -325,6 +385,7 @@ public final class ModelCatalog: ObservableObject {
         guard let url = URL(string: "http://localhost:11434/api/tags") else {
             throw ModelCatalogError.invalidURL
         }
+        try ensureNetworkAllowed(url)
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -363,15 +424,19 @@ public final class ModelCatalog: ObservableObject {
         guard let url = URL(string: "https://api.anthropic.com/v1/models") else {
             throw ModelCatalogError.invalidURL
         }
-        
-        guard let anthropicAPIKey = KeychainManager.get(key: AIProvider.anthropic.keychainKey), !anthropicAPIKey.isEmpty else {
+        if !NetworkPrivacyPolicy.isRequestAllowed(url: url) {
+            return (anthropicFallbackModels(), true)
+        }
+
+        let config = configForProvider(.anthropic)
+        guard let authHeader = ProviderAuthResolver.authHeader(for: .anthropic, config: config) else {
             return (anthropicFallbackModels(), true)
         }
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 8
-        request.setValue(anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(authHeader.value, forHTTPHeaderField: authHeader.field)
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         
         do {
@@ -414,7 +479,6 @@ public final class ModelCatalog: ObservableObject {
         // However, we can try to use the stored URL in UserDefaults or just fallback
         
         let userDefaults = UserDefaults.standard
-        let configKey = "aiConfig"
         
         var apiURL = "https://api.openai.com"
         var apiKey: String?
@@ -443,6 +507,9 @@ public final class ModelCatalog: ObservableObject {
         }
         
         guard let url = URL(string: urlString), url.scheme != nil else {
+            return (openAICompatibleFallback(), true)
+        }
+        if !NetworkPrivacyPolicy.isRequestAllowed(url: url) {
             return (openAICompatibleFallback(), true)
         }
         
@@ -486,6 +553,7 @@ public final class ModelCatalog: ObservableObject {
         guard let url = URL(string: "https://api.githubcopilot.com/models") else {
             throw ModelCatalogError.invalidURL
         }
+        try ensureNetworkAllowed(url)
 
         let authManager = GitHubCopilotAuthManager.shared
         let initialToken = try await authManager.getCopilotToken()
@@ -534,6 +602,7 @@ public final class ModelCatalog: ObservableObject {
     }
 
     private func fetchGitHubCopilotModelsResponse(url: URL, token: String) async throws -> (data: Data, statusCode: Int) {
+        try ensureNetworkAllowed(url)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = 10
@@ -555,6 +624,9 @@ public final class ModelCatalog: ObservableObject {
     private func fetchGeminiModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1/models") else {
             throw ModelCatalogError.invalidURL
+        }
+        if !NetworkPrivacyPolicy.isRequestAllowed(url: url) {
+            return (geminiFallbackModels(), true)
         }
         
         guard let geminiAPIKey = KeychainManager.get(key: AIProvider.gemini.keychainKey), !geminiAPIKey.isEmpty else {
@@ -758,6 +830,12 @@ public final class ModelCatalog: ObservableObject {
         return caps.contains(where: { $0.lowercased().contains("vision") || $0.lowercased().contains("image") })
     }
 
+    private func ensureNetworkAllowed(_ url: URL) throws {
+        guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+            throw ModelCatalogError.privacyModeBlocked
+        }
+    }
+
     /// Check if a specific model supports vision capabilities
     public func supportsVision(modelId: String, provider: AIProvider) -> Bool {
         // First check cached model capabilities metadata if available
@@ -821,12 +899,14 @@ public enum ModelCatalogError: Error, LocalizedError {
     case invalidURL
     case fetchFailed
     case decodingFailed
+    case privacyModeBlocked
     
     public var errorDescription: String? {
         switch self {
         case .invalidURL: return "Invalid URL for model API"
         case .fetchFailed: return "Failed to fetch models from provider"
         case .decodingFailed: return "Failed to decode model response"
+        case .privacyModeBlocked: return NetworkPrivacyPolicy.blockedMessage
         }
     }
 }

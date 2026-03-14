@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import AppKit
 
 enum GitHubAuthError: Error {
     case invalidURL
@@ -18,6 +19,7 @@ enum GitHubAuthError: Error {
     case slowDown
     case expiredToken
     case accessDenied
+    case privacyModeBlocked
     case unknown(String)
 }
 
@@ -42,6 +44,8 @@ extension GitHubAuthError: LocalizedError {
             return "Your authorization has expired. Please sign in again."
         case .accessDenied:
             return "Access denied. Please check your GitHub Copilot subscription and permissions."
+        case .privacyModeBlocked:
+            return NetworkPrivacyPolicy.blockedMessage
         case .unknown(let message):
             return "Authentication failed: \(message)"
         }
@@ -108,6 +112,12 @@ class GitHubCopilotAuthManager: ObservableObject {
 
     private func authorizationHeader(token: String) -> String {
         "Bearer \(token)"
+    }
+
+    private func ensureNetworkAllowed(_ url: URL) throws {
+        guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+            throw GitHubAuthError.privacyModeBlocked
+        }
     }
     
     init() {
@@ -191,6 +201,7 @@ class GitHubCopilotAuthManager: ObservableObject {
     func startDeviceFlow() async throws {
         self.authError = nil
         let url = URL(string: "https://github.com/login/device/code")!
+        try ensureNetworkAllowed(url)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -211,6 +222,13 @@ class GitHubCopilotAuthManager: ObservableObject {
         
         let codeResponse = try JSONDecoder().decode(DeviceCodeResponse.self, from: data)
         self.deviceCodeResponse = codeResponse
+
+        if let verificationURL = URL(string: codeResponse.verificationUri) {
+            NSWorkspace.shared.open(verificationURL)
+        } else {
+            self.authError = "Unable to open GitHub verification page. Use the code shown below at github.com/login/device."
+        }
+
         LogManager.shared.log("Starting polling for access token", category: "AuthManager")
         // Start polling
         startPolling(interval: Double(codeResponse.interval), deviceCode: codeResponse.deviceCode)
@@ -259,6 +277,7 @@ class GitHubCopilotAuthManager: ObservableObject {
     
     private func requestAccessToken(deviceCode: String) async throws -> String {
         let url = URL(string: "https://github.com/login/oauth/access_token")!
+        try ensureNetworkAllowed(url)
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -298,6 +317,9 @@ class GitHubCopilotAuthManager: ObservableObject {
         guard let token = KeychainManager.get(key: "github_access_token") else { return }
         
         let url = URL(string: "https://api.github.com/user")!
+        guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+            return
+        }
         var request = URLRequest(url: url)
         request.setValue(authorizationHeader(token: token), forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -417,6 +439,9 @@ class GitHubCopilotAuthManager: ObservableObject {
             LogManager.shared.log("Refreshing GitHub Copilot token...", category: "AuthManager")
             
             let url = URL(string: "https://api.github.com/copilot_internal/v2/token")!
+            guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+                throw GitHubAuthError.privacyModeBlocked
+            }
             var request = URLRequest(url: url)
             request.setValue(authorizationHeader(token: accessToken), forHTTPHeaderField: "Authorization")
             request.setValue("GithubCopilot/1.138.0", forHTTPHeaderField: "User-Agent")
@@ -479,6 +504,9 @@ class GitHubCopilotAuthManager: ObservableObject {
     /// Returns true if the token works, false if it returns 401.
     private func verifyTokenValidity(token: String) async -> Bool {
         let url = URL(string: "https://api.github.com/user")!
+        guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+            return true
+        }
         var request = URLRequest(url: url)
         request.setValue(authorizationHeader(token: token), forHTTPHeaderField: "Authorization")
         request.setValue("Sorty/1.0", forHTTPHeaderField: "User-Agent")

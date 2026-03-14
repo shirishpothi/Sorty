@@ -1,0 +1,123 @@
+//
+//  AccreditationsView.swift
+//  Sorty
+//
+//  Dedicated open-source accreditations window.
+//
+
+import SwiftUI
+
+struct AccreditationsView: View {
+    @State private var iconHovered = false
+    @StateObject private var contributorsFetcher = GitHubContributorsFetcher()
+    @AppStorage("fetchGitHubContributorsEnabled") private var fetchGitHubContributorsEnabled = true
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
+    let showBackButton: Bool
+    let onBack: (() -> Void)?
+
+    init(showBackButton: Bool = false, onBack: (() -> Void)? = nil) {
+        self.showBackButton = showBackButton
+        self.onBack = onBack
+    }
+
+    private var shouldFetchContributors: Bool {
+        fetchGitHubContributorsEnabled && !internetPrivacyModeEnabled
+    }
+
+    private var allCredits: [CreditItem] {
+        if shouldFetchContributors {
+            return OpenSourceCredits.all + contributorsFetcher.contributors
+        }
+        return OpenSourceCredits.all
+    }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "c.circle.fill")
+                .font(.system(size: 54, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .scaleEffect(iconHovered ? 1.06 : 1.0)
+                .onHover { hovering in
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+                        iconHovered = hovering
+                    }
+                    if hovering {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                }
+
+            Text("Accreditations")
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+
+            Text("These open source projects help keep Sorty alive.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Spacer().frame(height: 6)
+
+            RollingCreditsView(
+                title: "Open Source Projects & Contributors",
+                items: allCredits,
+                viewportHeight: 220
+            )
+
+            if shouldFetchContributors && contributorsFetcher.isLoading && contributorsFetcher.contributors.isEmpty {
+                Text("Loading GitHub contributors...")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary.opacity(0.7))
+                    .transition(.opacity)
+            }
+
+            Text("Tap a project to open its repository or license details.")
+                .font(.caption)
+                .foregroundStyle(.secondary.opacity(0.82))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Thank you to every maintainer and contributor.")
+                .font(.caption2)
+                .foregroundStyle(.secondary.opacity(0.65))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(24)
+        .frame(width: 380, height: 500)
+        .overlay(alignment: .topLeading) {
+            if showBackButton, let onBack {
+                GlassyBackButton(action: onBack)
+                    .padding(.top, 10)
+                    .padding(.leading, 8)
+            }
+        }
+        .modifier(AccreditationsGlassBackground())
+        .onAppear {
+            contributorsFetcher.fetchIfNeeded(enabled: shouldFetchContributors)
+        }
+        .onChange(of: fetchGitHubContributorsEnabled) { _, newValue in
+            contributorsFetcher.fetchIfNeeded(enabled: newValue && !internetPrivacyModeEnabled, forceRefresh: true)
+        }
+        .onChange(of: internetPrivacyModeEnabled) { _, newValue in
+            contributorsFetcher.fetchIfNeeded(enabled: fetchGitHubContributorsEnabled && !newValue, forceRefresh: true)
+        }
+    }
+}
+
+private struct AccreditationsGlassBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content
+                .background {
+                    Color.clear
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 0))
+                        .ignoresSafeArea()
+                }
+        } else {
+            content.background(.ultraThinMaterial)
+        }
+    }
+}
+
+#Preview {
+    AccreditationsView()
+}

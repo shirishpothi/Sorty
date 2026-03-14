@@ -63,6 +63,11 @@ public class HapticFeedbackManager {
     public func selection() {
         NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .default)
     }
+
+    /// Performs a subtle light haptic for hover transitions and gentle state changes.
+    public func light() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
+    }
 }
 
 // MARK: - Page Transition Styles

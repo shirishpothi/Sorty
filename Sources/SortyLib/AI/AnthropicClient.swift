@@ -17,11 +17,20 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     public init(config: AIConfig) {
         self.config = config
     }
-    
-    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
-        guard let apiKey = config.apiKey, !apiKey.isEmpty else {
+
+    private func requiredHeaders() throws -> [String: String] {
+        guard let authHeader = ProviderAuthResolver.authHeader(for: .anthropic, config: config) else {
             throw AIClientError.missingAPIKey
         }
+
+        return [
+            authHeader.field: authHeader.value,
+            "anthropic-version": "2023-06-01"
+        ]
+    }
+    
+    public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
+        let headers = try requiredHeaders()
 
         let url = Self.messagesURL
         
@@ -52,16 +61,14 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         ]
 
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files)
         } else {
-            return try await analyzeStandard(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
+            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files)
         }
     }
 
     public func analyzeWithImages(files: [FileItem], imageData: [String: Data], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
-        guard let apiKey = config.apiKey, !apiKey.isEmpty else {
-            throw AIClientError.missingAPIKey
-        }
+        let headers = try requiredHeaders()
 
         let url = Self.messagesURL
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
@@ -113,9 +120,9 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         ]
         
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, headers: headers, files: files)
         } else {
-            return try await analyzeStandard(url: url, requestBody: requestBody, apiKey: apiKey, files: files)
+            return try await analyzeStandard(url: url, requestBody: requestBody, headers: headers, files: files)
         }
     }
 
@@ -123,13 +130,10 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         imageData.keys.sorted()
     }
     
-    private func analyzeStandard(url: URL, requestBody: [String: Any], apiKey: String, files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeStandard(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem]) async throws -> OrganizationPlan {
         let request = try AIRequestSupport.makeJSONRequest(
             url: url,
-            headers: [
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01"
-            ],
+            headers: headers,
             body: requestBody
         )
 
@@ -155,16 +159,13 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         }
     }
     
-    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], apiKey: String, files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], headers: [String: String], files: [FileItem]) async throws -> OrganizationPlan {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
 
         let request = try AIRequestSupport.makeJSONRequest(
             url: url,
-            headers: [
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01"
-            ],
+            headers: headers,
             body: streamingRequestBody
         )
 
@@ -246,17 +247,12 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     }
     
     public func checkHealth() async throws {
-        guard let apiKey = config.apiKey, !apiKey.isEmpty else {
-            throw AIClientError.missingAPIKey
-        }
+        let headers = try requiredHeaders()
 
         var request = try AIRequestSupport.makeJSONRequest(
             url: Self.modelsURL,
             method: "GET",
-            headers: [
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01"
-            ]
+            headers: headers
         )
         request.timeoutInterval = min(config.requestTimeout, 60)
 
@@ -268,9 +264,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
     }
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
-        guard let apiKey = config.apiKey, !apiKey.isEmpty else {
-            throw AIClientError.missingAPIKey
-        }
+        let headers = try requiredHeaders()
         
         let url = Self.messagesURL
         
@@ -286,10 +280,7 @@ public final class AnthropicClient: AIClientProtocol, Sendable {
         
         let request = try AIRequestSupport.makeJSONRequest(
             url: url,
-            headers: [
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01"
-            ],
+            headers: headers,
             body: requestBody
         )
 

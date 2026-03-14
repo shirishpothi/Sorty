@@ -3,7 +3,12 @@ import Foundation
 @testable import SortyLib
 
 final class MultimodalRequestFormatTests: XCTestCase {
+    private var previousInternetPrivacyModeValue: Any?
+
     override func setUp() async throws {
+        previousInternetPrivacyModeValue = UserDefaults.standard.object(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        UserDefaults.standard.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+
         MockHTTPURLProtocol.reset()
         AIRequestSupport.sessionOverride = { _ in
             let config = URLSessionConfiguration.ephemeral
@@ -14,6 +19,13 @@ final class MultimodalRequestFormatTests: XCTestCase {
 
     override func tearDown() {
         AIRequestSupport.sessionOverride = nil
+
+        if let previousInternetPrivacyModeValue {
+            UserDefaults.standard.set(previousInternetPrivacyModeValue, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        }
+
         super.tearDown()
     }
 

@@ -10,6 +10,8 @@ import SwiftUI
 public struct ProviderSelectionStepView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
+    @ObservedObject var openAIAuth = SubscriptionAuthManager.openAI
+    @ObservedObject var codexAuth = CodexCLIAuthManager.shared
     @State private var hasAppeared = false
     @State private var connectionStatus: ConnectionTestStatus = .idle
     @State private var connectionError: String?
@@ -20,6 +22,12 @@ public struct ProviderSelectionStepView: View {
     @State private var isHoveringUsername = false
     @State private var isShowingAPIKey = false
     @State private var isShowingModelPopover = false
+    @State private var codexTerminalButtonState: CodexActionVisualState = .idle
+    @State private var codexVerifyButtonState: CodexActionVisualState = .idle
+    @State private var isHoveringCodexTerminalButton = false
+    @State private var isHoveringCodexVerifyButton = false
+    @State private var codexTerminalResetTask: Task<Void, Never>?
+    @State private var codexVerifyResetTask: Task<Void, Never>?
     
     enum ConnectionTestStatus {
         case idle
@@ -146,10 +154,18 @@ public struct ProviderSelectionStepView: View {
             if settingsViewModel.config.provider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
             }
+            if settingsViewModel.config.provider == .openAI {
+                openAIAuth.checkAuthenticationStatus()
+                codexAuth.checkStatus()
+            }
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
             if newProvider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
+            }
+            if newProvider == .openAI {
+                openAIAuth.checkAuthenticationStatus()
+                codexAuth.checkStatus()
             }
         }
         .accessibilityElement(children: .contain)
@@ -182,17 +198,30 @@ public struct ProviderSelectionStepView: View {
                         Text("Signed in as")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text(copilotAuth.username ?? "User")
+                        ZStack {
+                            Text(copilotAuth.username ?? "User")
+                                .opacity(isHoveringUsername ? 0 : 1)
+                                .blur(radius: 10)
+
+                            Text(copilotAuth.username ?? "User")
+                                .opacity(isHoveringUsername ? 1 : 0)
+                        }
                             .font(.headline)
                             .padding(.vertical, 4)
                             .padding(.horizontal, 6)
-                            .blur(radius: !isHoveringUsername ? 10 : 0)
                             .clipShape(Capsule())
                             .padding(.vertical, -4)
                             .padding(.horizontal, -6)
-                            .animation(.spring(), value: isHoveringUsername)
+                            .animation(
+                                isHoveringUsername
+                                    ? .easeOut(duration: 0.34)
+                                    : .easeInOut(duration: 0.24),
+                                value: isHoveringUsername
+                            )
                             .onHover { hovering in
+                                guard hovering != isHoveringUsername else { return }
                                 isHoveringUsername = hovering
+                                HapticFeedbackManager.shared.light()
                             }
                     }
                     
@@ -304,7 +333,15 @@ public struct ProviderSelectionStepView: View {
                         .foregroundColor(.secondary)
                     
                     Button {
-                        Task { try? await copilotAuth.startDeviceFlow() }
+                        Task {
+                            do {
+                                try await copilotAuth.startDeviceFlow()
+                            } catch {
+                                await MainActor.run {
+                                    copilotAuth.authError = error.localizedDescription
+                                }
+                            }
+                        }
                     } label: {
                         HStack {
                             Image(systemName: "person.badge.key.fill")
@@ -356,69 +393,24 @@ public struct ProviderSelectionStepView: View {
             // API Key field
             if settingsViewModel.config.provider.typicallyRequiresAPIKey {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("API Key")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
-                        Spacer()
-                        
-                        if FeatureFlags.privacyModeEnabled {
-                            Button {
-                                isShowingAPIKey.toggle()
-                                HapticFeedbackManager.shared.tap()
-                            } label: {
-                                Image(systemName: isShowingAPIKey ? "eye.slash" : "eye")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                    if supportsSubscriptionAuthUI {
+                        Picker("Authentication", selection: selectedAuthMethod) {
+                            ForEach(settingsViewModel.config.provider.supportedAuthMethods, id: \.self) { method in
+                                Text(method.displayName).tag(method)
                             }
-                            .buttonStyle(.plain)
-                            .help(isShowingAPIKey ? "Hide API Key" : "Show API Key")
                         }
-                    }
-                    
-                    Group {
-                        if isShowingAPIKey && FeatureFlags.privacyModeEnabled {
-                            TextField("Enter your API key", text: Binding(
-                                get: { settingsViewModel.config.apiKey ?? "" },
-                                set: { 
-                                    settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
-                                    scheduleConnectionTest()
-                                }
-                            ))
-                        } else {
-                            SecureField("Enter your API key", text: Binding(
-                                get: { settingsViewModel.config.apiKey ?? "" },
-                                set: { 
-                                    settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
-                                    scheduleConnectionTest()
-                                }
-                            ))
-                        }
-                    }
-                    .textFieldStyle(.roundedBorder)
-                    
-                    // Clickable link to get API key
-                    if let url = settingsViewModel.config.provider.apiKeyURL {
-                        HStack(spacing: 4) {
-                            Text("Get your API key at")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            
-                            Link(destination: url) {
-                                Text(settingsViewModel.config.provider.apiKeyLinkLabel)
-                                    .font(.caption)
-                                    .underline()
-                            }
-                            
-                            Image(systemName: "arrow.up.right.square")
-                                .font(.caption2)
-                                .foregroundStyle(.blue)
+                        .pickerStyle(.menu)
+
+                        switch settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) {
+                        case .apiKey:
+                            apiKeyInputSection
+                        case .accountSignIn:
+                            onboardingCodexCLISection
+                        case .manualSessionToken:
+                            apiKeyInputSection
                         }
                     } else {
-                        Text(settingsViewModel.config.provider.apiKeyHelpText)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        apiKeyInputSection
                     }
                 }
             }
@@ -445,6 +437,217 @@ public struct ProviderSelectionStepView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(NSColor.controlBackgroundColor))
         )
+    }
+
+    @ViewBuilder
+    private var apiKeyInputSection: some View {
+        HStack {
+            Text("API Key")
+                .font(.subheadline)
+                .fontWeight(.medium)
+
+            Spacer()
+
+            if FeatureFlags.privacyModeEnabled {
+                Button {
+                    isShowingAPIKey.toggle()
+                    HapticFeedbackManager.shared.tap()
+                } label: {
+                    Image(systemName: isShowingAPIKey ? "eye.slash" : "eye")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(isShowingAPIKey ? "Hide API Key" : "Show API Key")
+            }
+        }
+
+        Group {
+            if isShowingAPIKey && FeatureFlags.privacyModeEnabled {
+                TextField("Enter your API key", text: Binding(
+                    get: { settingsViewModel.config.apiKey ?? "" },
+                    set: {
+                        settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
+                        scheduleConnectionTest()
+                    }
+                ))
+            } else {
+                SecureField("Enter your API key", text: Binding(
+                    get: { settingsViewModel.config.apiKey ?? "" },
+                    set: {
+                        settingsViewModel.config.apiKey = $0.isEmpty ? nil : $0
+                        scheduleConnectionTest()
+                    }
+                ))
+            }
+        }
+        .textFieldStyle(.roundedBorder)
+
+        if let url = settingsViewModel.config.provider.apiKeyURL {
+            HStack(spacing: 4) {
+                Text("Get your API key at")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Link(destination: url) {
+                    Text(settingsViewModel.config.provider.apiKeyLinkLabel)
+                        .font(.caption)
+                        .underline()
+                }
+
+                Image(systemName: "arrow.up.right.square")
+                    .font(.caption2)
+                    .foregroundStyle(.blue)
+            }
+        } else {
+            Text(settingsViewModel.config.provider.apiKeyHelpText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var onboardingCodexCLISection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if codexAuth.isAuthenticated {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.green)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Signed in via Codex CLI")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        if let email = codexAuth.accountEmail {
+                            Text(email)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer()
+
+                    Button("Sign Out") {
+                        codexAuth.signOut()
+                        openAIAuth.checkAuthenticationStatus()
+                        scheduleConnectionTest()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+                .padding(10)
+                .background(Color.green.opacity(0.08))
+                .cornerRadius(8)
+            } else {
+                Text("Sign in with your OpenAI account using Codex CLI to enable Codex integration in Sorty.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Step 1: Install & sign in")
+                        .font(.caption).fontWeight(.semibold)
+                    Text("Install Node.js 18+, then:")
+                        .font(.caption2).foregroundStyle(.secondary)
+                    onboardingCommandBlock("npm i -g @openai/codex")
+                    onboardingCommandBlock("codex login")
+                }
+
+                Button {
+                    startCodexTerminalSignIn()
+                } label: {
+                    CodexActionButtonLabel(
+                        idleTitle: "Open Terminal & Sign In",
+                        activatingTitle: "Opening Terminal...",
+                        successTitle: "Terminal Opened",
+                        failureTitle: "Could Not Open Terminal",
+                        idleSymbol: "terminal",
+                        state: codexTerminalButtonState,
+                        isHovered: isHoveringCodexTerminalButton
+                    )
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering && !isHoveringCodexTerminalButton {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    isHoveringCodexTerminalButton = hovering
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Step 2: Verify")
+                        .font(.caption).fontWeight(.semibold)
+                    Text("We automatically verify that Codex CLI is installed and auth tokens are present. You can also run a manual verify anytime.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+
+                Button {
+                    manuallyVerifyCodexCLI()
+                } label: {
+                    CodexActionButtonLabel(
+                        idleTitle: "Verify Codex CLI",
+                        activatingTitle: "Verifying...",
+                        successTitle: "Verified",
+                        failureTitle: "Verification Failed",
+                        idleSymbol: "checkmark.shield",
+                        state: codexVerifyButtonState,
+                        isHovered: isHoveringCodexVerifyButton
+                    )
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering && !isHoveringCodexVerifyButton {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    isHoveringCodexVerifyButton = hovering
+                }
+
+                HStack(spacing: 8) {
+                    BouncingSpinner(size: 10, color: .secondary)
+                    Text("Automatic verification runs every few seconds while this panel is open.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                if !codexAuth.isCodexInstalled {
+                    Label("Codex CLI not detected", systemImage: "xmark.circle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                if let error = codexAuth.authError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .task {
+            await autoVerifyCodexSignInLoop()
+        }
+    }
+
+    @ViewBuilder
+    private func onboardingCommandBlock(_ command: String) -> some View {
+        HStack {
+            Text(command)
+                .font(.system(.caption2, design: .monospaced))
+                .textSelection(.enabled)
+            Spacer()
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(command, forType: .string)
+                HapticFeedbackManager.shared.tap()
+            } label: {
+                Image(systemName: "doc.on.doc")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(6)
+        .background(Color.black.opacity(0.05))
+        .cornerRadius(4)
     }
     
     @ViewBuilder
@@ -547,10 +750,7 @@ public struct ProviderSelectionStepView: View {
         if provider == .ollama {
             return true // Ollama doesn't require API key
         }
-        if provider.typicallyRequiresAPIKey {
-            return (settingsViewModel.config.apiKey ?? "").count >= 10
-        }
-        return true
+        return ProviderAuthResolver.hasRequiredCredential(for: provider, config: settingsViewModel.config)
     }
     
     private func selectProvider(_ provider: AIProvider) {
@@ -565,6 +765,32 @@ public struct ProviderSelectionStepView: View {
             connectionStatus = .idle
             connectionError = nil
         }
+    }
+
+    private var supportsSubscriptionAuthUI: Bool {
+        FeatureFlags.subscriptionAuthEnabled && settingsViewModel.config.provider.supportsSubscriptionAuth
+    }
+
+    private var selectedAuthMethod: Binding<ProviderAuthMethod> {
+        Binding(
+            get: { settingsViewModel.config.authMethod(for: settingsViewModel.config.provider) },
+            set: { setAuthMethod($0) }
+        )
+    }
+
+    private func setAuthMethod(_ method: ProviderAuthMethod) {
+        var next = settingsViewModel.config
+        let provider = next.provider
+        next.setAuthMethod(method, for: provider)
+        if method == .apiKey {
+            next.apiKey = KeychainManager.get(key: provider.keychainKey)
+        } else {
+            next.apiKey = nil
+        }
+        settingsViewModel.config = next
+        HapticFeedbackManager.shared.selection()
+        scheduleConnectionTest()
+        openAIAuth.checkAuthenticationStatus()
     }
     
     private func scheduleConnectionTest() {
@@ -624,6 +850,109 @@ public struct ProviderSelectionStepView: View {
                     }
                     HapticFeedbackManager.shared.error()
                 }
+            }
+        }
+    }
+
+    @MainActor
+    @discardableResult
+    private func verifyCodexSignInStatus() -> Bool {
+        let wasAuthenticated = codexAuth.isAuthenticated
+        codexAuth.checkStatus()
+        openAIAuth.checkAuthenticationStatus()
+        let becameAuthenticated = codexAuth.isAuthenticated && !wasAuthenticated
+        if becameAuthenticated {
+            settingsViewModel.updateAvailableModels(force: true)
+            scheduleConnectionTest()
+        }
+        return becameAuthenticated
+    }
+
+    private func autoVerifyCodexSignInLoop() async {
+        while !Task.isCancelled {
+            let becameAuthenticated = await MainActor.run {
+                verifyCodexSignInStatus()
+            }
+
+            if becameAuthenticated {
+                await MainActor.run {
+                    codexVerifyButtonState = .success
+                    HapticFeedbackManager.shared.success()
+                    scheduleCodexVerifyButtonReset()
+                }
+            }
+
+            let shouldContinue = await MainActor.run {
+                settingsViewModel.config.provider == .openAI
+                    && settingsViewModel.config.authMethod(for: .openAI) == .accountSignIn
+                    && !codexAuth.isAuthenticated
+            }
+            if !shouldContinue {
+                break
+            }
+
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+    }
+
+    @MainActor
+    private func startCodexTerminalSignIn() {
+        HapticFeedbackManager.shared.tap()
+        codexTerminalButtonState = .activating
+        codexAuth.openTerminalWithLogin()
+
+        if codexAuth.authError == nil {
+            codexTerminalButtonState = .success
+            HapticFeedbackManager.shared.success()
+        } else {
+            codexTerminalButtonState = .failure
+            HapticFeedbackManager.shared.error()
+        }
+
+        scheduleCodexTerminalButtonReset()
+    }
+
+    @MainActor
+    private func manuallyVerifyCodexCLI() {
+        HapticFeedbackManager.shared.tap()
+        codexVerifyButtonState = .activating
+
+        let becameAuthenticated = verifyCodexSignInStatus()
+        if codexAuth.isAuthenticated || becameAuthenticated {
+            codexVerifyButtonState = .success
+            HapticFeedbackManager.shared.success()
+            scheduleCodexVerifyButtonReset()
+            return
+        }
+
+        codexVerifyButtonState = .failure
+        HapticFeedbackManager.shared.error()
+        if !codexAuth.isCodexInstalled {
+            codexAuth.authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
+        } else if codexAuth.authError == nil {
+            codexAuth.authError = "Auth tokens not found. Run 'codex login' first."
+        }
+        scheduleCodexVerifyButtonReset()
+    }
+
+    @MainActor
+    private func scheduleCodexTerminalButtonReset() {
+        codexTerminalResetTask?.cancel()
+        codexTerminalResetTask = Task {
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            await MainActor.run {
+                codexTerminalButtonState = .idle
+            }
+        }
+    }
+
+    @MainActor
+    private func scheduleCodexVerifyButtonReset() {
+        codexVerifyResetTask?.cancel()
+        codexVerifyResetTask = Task {
+            try? await Task.sleep(nanoseconds: 1_400_000_000)
+            await MainActor.run {
+                codexVerifyButtonState = .idle
             }
         }
     }
