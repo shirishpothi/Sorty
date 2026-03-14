@@ -11,7 +11,9 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = false
+    @AppStorage("fetchGitHubContributorsEnabled") private var fetchGitHubContributorsEnabled = true
     @State private var showAutoRevealInfo = false
 
     enum AutoRevealOption: String, CaseIterable, Identifiable {
@@ -36,11 +38,32 @@ struct AdvancedSettingsView: View {
     var body: some View {
         VStack(spacing: 16) {
             SettingsCard(title: "Privacy", icon: "eye.slash", color: .indigo) {
-                SettingsToggle(
-                    isOn: $privacyModeEnabled,
-                    title: "Blur Usernames in Paths",
-                    description: "We'll try to blur your name in file paths throughout Sorty."
-                )
+                VStack(spacing: 12) {
+                    SettingsToggle(
+                        isOn: $internetPrivacyModeEnabled,
+                        title: "Block Internet Connections",
+                        description: "When enabled, Sorty blocks all internet requests and only allows loopback localhost traffic for local models."
+                    )
+                    .accessibilityIdentifier("InternetPrivacyModeToggle")
+
+                    Divider()
+
+                    SettingsToggle(
+                        isOn: $privacyModeEnabled,
+                        title: "Blur Usernames in Paths",
+                        description: "We'll try to blur your name in file paths throughout Sorty."
+                    )
+                    .accessibilityIdentifier("BlurUsernamesToggle")
+
+                    Divider()
+
+                    SettingsToggle(
+                        isOn: $fetchGitHubContributorsEnabled,
+                        title: "Fetch GitHub Contributors",
+                        description: "Include live contributor names in Accreditations. Disable this to avoid contributor fetch requests to GitHub."
+                    )
+                    .accessibilityIdentifier("FetchGitHubContributorsToggle")
+                }
             }
             .animatedAppearance(delay: 0.0)
 

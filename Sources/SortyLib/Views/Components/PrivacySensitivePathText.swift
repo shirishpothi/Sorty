@@ -17,21 +17,40 @@ struct PrivacySensitivePathText: View {
         FeatureFlags.privacyModeEnabled
     }
 
+    private var revealAnimation: Animation {
+        isHoveringUsername
+            ? .timingCurve(0.2, 0.95, 0.2, 1.0, duration: 0.38)
+            : .easeInOut(duration: 0.26)
+    }
+
     var body: some View {
         if isPrivacyEnabled, let segments = PrivacyPathMasker.userPathSegments(in: path) {
             HStack(spacing: 0) {
                 Text(segments.leading)
-                Text(segments.username)
+                ZStack {
+                    Text(segments.username)
+                        .opacity(isHoveringUsername ? 0 : 1)
+                        .blur(radius: blurRadius)
+
+                    Text(segments.username)
+                        .opacity(isHoveringUsername ? 1 : 0)
+                }
                     .padding(.vertical, 4)
                     .padding(.horizontal, 6)
-                    .blur(radius: (revealOnHover && isHoveringUsername) ? 0 : blurRadius)
                     .clipShape(Capsule())
                     .padding(.vertical, -4)
                     .padding(.horizontal, -6)
-                    .animation(.spring(), value: isHoveringUsername)
+                    .onChange(of: revealOnHover) { _, _ in
+                        if !revealOnHover {
+                            isHoveringUsername = false
+                        }
+                    }
+                    .animation(revealAnimation, value: isHoveringUsername)
                     .onHover { hovering in
                         guard revealOnHover else { return }
+                        guard hovering != isHoveringUsername else { return }
                         isHoveringUsername = hovering
+                        HapticFeedbackManager.shared.light()
                     }
                 Text(segments.trailing)
             }

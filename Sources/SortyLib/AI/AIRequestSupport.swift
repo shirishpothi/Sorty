@@ -18,7 +18,7 @@ enum AIRequestSupport {
     }
 
     static func requireAPIKeyIfNeeded(from config: AIConfig) throws {
-        if config.requiresAPIKey && (config.apiKey == nil || config.apiKey?.isEmpty == true) {
+        if !ProviderAuthResolver.hasRequiredCredential(for: config.provider, config: config) {
             throw AIClientError.missingAPIKey
         }
     }
@@ -95,6 +95,8 @@ enum AIRequestSupport {
         headers: [String: String] = [:],
         body: [String: Any]? = nil
     ) throws -> URLRequest {
+        try ensureNetworkAllowed(url: url)
+
         var request = URLRequest(url: url)
         request.httpMethod = method
 
@@ -111,6 +113,12 @@ enum AIRequestSupport {
         }
 
         return request
+    }
+
+    static func ensureNetworkAllowed(url: URL) throws {
+        guard NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+            throw AIClientError.apiError(statusCode: 403, message: NetworkPrivacyPolicy.blockedMessage)
+        }
     }
 
     static func validateHTTPResponse(data: Data, response: URLResponse) throws -> HTTPURLResponse {

@@ -8,6 +8,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
+import AppKit
 
 // MARK: - App Commands
 
@@ -229,6 +230,14 @@ public struct SortyCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
+            Button("Accreditations") {
+                appState?.showAccreditations(entryPoint: .help)
+            }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(appState == nil)
+
+            Divider()
+
             Button("Sorty Help") {
                 appState?.showHelp()
             }
@@ -264,7 +273,97 @@ public struct SortyCommands: Commands {
                 appState?.checkForUpdatesInteractive()
             }
             .disabled(appState == nil)
+
+            Divider()
+
+            Button("Thank you for using Sorty") {
+                appState?.showThanksForUsingSorty()
+            }
+            .keyboardShortcut("♥", modifiers: .command)
+            .disabled(appState == nil)
         }
+    }
+}
+
+@MainActor
+private final class HelpMenuHoverHapticsController: NSObject, NSMenuDelegate {
+    private let center: NotificationCenter
+    private let targetItemTitle = "Thank you for using Sorty"
+    private var didFireForCurrentMenuOpen = false
+
+    init(center: NotificationCenter = .default) {
+        self.center = center
+        super.init()
+
+        installDelegateOnHelpMenuIfNeeded()
+
+        center.addObserver(
+            self,
+            selector: #selector(handleDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification,
+            object: nil
+        )
+
+        center.addObserver(
+            self,
+            selector: #selector(handleMenuDidBeginTracking(_:)),
+            name: NSMenu.didBeginTrackingNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleDidBecomeActive() {
+        installDelegateOnHelpMenuIfNeeded()
+    }
+
+    @objc private func handleMenuDidBeginTracking(_ notification: Notification) {
+        guard
+            let menu = notification.object as? NSMenu,
+            menu.item(withTitle: targetItemTitle) != nil
+        else { return }
+
+        installDelegate(on: menu)
+        didFireForCurrentMenuOpen = false
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        didFireForCurrentMenuOpen = false
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        didFireForCurrentMenuOpen = false
+    }
+
+    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        guard item?.title == targetItemTitle else { return }
+        guard didFireForCurrentMenuOpen == false else { return }
+
+        didFireForCurrentMenuOpen = true
+        HapticFeedbackManager.shared.selection()
+    }
+
+    private func installDelegateOnHelpMenuIfNeeded() {
+        guard let mainMenu = NSApp.mainMenu else { return }
+
+        for menu in allMenus(in: mainMenu) where menu.item(withTitle: targetItemTitle) != nil {
+            installDelegate(on: menu)
+        }
+    }
+
+    private func installDelegate(on menu: NSMenu) {
+        if menu.delegate == nil || (menu.delegate as AnyObject?) === self {
+            menu.delegate = self
+        }
+    }
+
+    private func allMenus(in rootMenu: NSMenu) -> [NSMenu] {
+        var menus: [NSMenu] = [rootMenu]
+        for item in rootMenu.items {
+            if let submenu = item.submenu {
+                menus.append(contentsOf: allMenus(in: submenu))
+            }
+        }
+        return menus
     }
 }
 
@@ -290,7 +389,7 @@ public class AppState: ObservableObject {
     }
     /// Security-scoped bookmark for the selected directory, ensuring sandbox access persists.
     public private(set) var selectedDirectoryBookmark: Data?
-    @Published public var updateManager = SparkleUpdateManager()
+    @Published public var updateManager: SparkleUpdateManager
     @Published public var selectedSettingsSection: SettingsCategory?
     @Published public var settingsFocusTarget: SettingsFocusTarget?
     @Published public var duplicateManager = DuplicateDetectionManager()
@@ -338,6 +437,9 @@ public class AppState: ObservableObject {
     // Window controllers - retained to prevent use-after-free crashes
     // These MUST be retained to keep windows alive during animations
     private var aboutWindowController: NSWindowController?
+    private var accreditationsWindowController: NSWindowController?
+    private var thanksWindowController: NSWindowController?
+    private let helpMenuHoverHapticsController = HelpMenuHoverHapticsController()
 
     public enum AppView: Equatable, Sendable {
         case settings
@@ -350,6 +452,11 @@ public class AppState: ObservableObject {
         case learnings
         case storageLocations
         case batchOrganization
+    }
+
+    public enum AccreditationsEntryPoint: Sendable {
+        case about
+        case help
     }
 
     public struct DuplicatesHandoff: Equatable, Sendable {
@@ -371,7 +478,9 @@ public class AppState: ObservableObject {
         }
     }
 
-    public init() {
+    public init(updateManager: SparkleUpdateManager = SparkleUpdateManager()) {
+        self.updateManager = updateManager
+
         // Detect fresh install vs in-app update
         // Fresh install: no previous version stored AND onboarding not completed
         // In-app update: previous version exists, so skip onboarding even if flag was reset
@@ -872,11 +981,13 @@ public class AppState: ObservableObject {
         }
         
         // Create a new About window
-        let aboutView = AboutView()
+        let aboutView = AboutView(openAccreditations: { [weak self] in
+            self?.showAccreditations(entryPoint: .about)
+        })
         let hostingView = NSHostingView(rootView: aboutView)
         
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 300, height: 380),
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 420),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -897,6 +1008,90 @@ public class AppState: ObservableObject {
         aboutWindowController = NSWindowController(window: window)
         aboutWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func showAccreditations(entryPoint: AccreditationsEntryPoint = .help) {
+        let accreditationsView = AccreditationsView(
+            showBackButton: entryPoint == .about,
+            onBack: entryPoint == .about ? { [weak self] in
+                self?.accreditationsWindowController?.close()
+                self?.showAbout()
+                HapticFeedbackManager.shared.selection()
+            } : nil
+        )
+        let hostingView = NSHostingView(rootView: accreditationsView)
+
+        if let existingWindow = accreditationsWindowController?.window {
+            existingWindow.contentView = hostingView
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            HapticFeedbackManager.shared.selection()
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 500),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hostingView
+        window.title = "Sorty Accreditations"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        if #available(macOS 26.0, *) {
+            window.backgroundColor = .clear
+            window.isOpaque = false
+        }
+        window.center()
+
+        accreditationsWindowController = NSWindowController(window: window)
+        accreditationsWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        HapticFeedbackManager.shared.selection()
+    }
+
+    public func showThanksForUsingSorty() {
+        // If window already exists and is visible, just bring it to front
+        if let existingWindow = thanksWindowController?.window, existingWindow.isVisible {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            HapticFeedbackManager.shared.selection()
+            return
+        }
+
+        let thanksView = ThanksForUsingSortyView()
+        let hostingView = NSHostingView(rootView: thanksView)
+
+        let window = NSWindow(
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: ThanksForUsingSortyView.preferredWindowWidth,
+                height: ThanksForUsingSortyView.preferredWindowHeight
+            ),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hostingView
+        window.title = "Thanks for Using Sorty"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        if #available(macOS 26.0, *) {
+            window.backgroundColor = .clear
+            window.isOpaque = false
+        }
+        window.center()
+
+        thanksWindowController = NSWindowController(window: window)
+        thanksWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        HapticFeedbackManager.shared.selection()
     }
     
     private func csvEscape(_ field: String) -> String {

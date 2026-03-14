@@ -101,8 +101,10 @@ final class UpdateButtonNSView: NSView {
     private var widthConstraint: NSLayoutConstraint?
     private var isHovered = false
     private var isPressed = false
+    private var isWindowFocused = false
     private var isRebuilding = false
     private var trackingArea: NSTrackingArea?
+    private var windowFocusObservations: [NSObjectProtocol] = []
     private var rebuildStateCancellable: AnyCancellable?
 
     private let buttonDiameter: CGFloat = 14
@@ -163,6 +165,10 @@ final class UpdateButtonNSView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    deinit {
+        removeWindowFocusObservation()
+    }
+
     // MARK: Setup
 
     private func setupLayers() {
@@ -181,11 +187,11 @@ final class UpdateButtonNSView: NSView {
 
         // Down-arrow icon
         let arrowPath = CGMutablePath()
-        arrowPath.move(to: CGPoint(x: 0, y: -2.3))
-        arrowPath.addLine(to: CGPoint(x: 0, y: 2.3))
-        arrowPath.move(to: CGPoint(x: -1.9, y: 0.3))
-        arrowPath.addLine(to: CGPoint(x: 0, y: 2.3))
-        arrowPath.addLine(to: CGPoint(x: 1.9, y: 0.3))
+        arrowPath.move(to: CGPoint(x: 0, y: 2.3))
+        arrowPath.addLine(to: CGPoint(x: 0, y: -2.3))
+        arrowPath.move(to: CGPoint(x: -1.9, y: -0.3))
+        arrowPath.addLine(to: CGPoint(x: 0, y: -2.3))
+        arrowPath.addLine(to: CGPoint(x: 1.9, y: -0.3))
 
         arrowLayer.path = arrowPath
         arrowLayer.strokeColor = normalArrowColor.cgColor
@@ -214,6 +220,67 @@ final class UpdateButtonNSView: NSView {
         layer?.addSublayer(textLayer)
 
         applyVisualState(animated: false)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        setAccessibilityIdentifier("trafficLight.updateButton")
+        observeWindowFocusIfNeeded()
+    }
+
+    private func observeWindowFocusIfNeeded() {
+        removeWindowFocusObservation()
+
+        guard let window else {
+            isWindowFocused = false
+            applyVisualState(animated: false)
+            return
+        }
+
+        let nc = NotificationCenter.default
+
+        windowFocusObservations.append(
+            nc.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in
+                self?.refreshWindowFocus(animated: true)
+            }
+        )
+
+        windowFocusObservations.append(
+            nc.addObserver(forName: NSWindow.didResignKeyNotification, object: window, queue: .main) { [weak self] _ in
+                self?.refreshWindowFocus(animated: true)
+            }
+        )
+
+        windowFocusObservations.append(
+            nc.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.refreshWindowFocus(animated: true)
+            }
+        )
+
+        windowFocusObservations.append(
+            nc.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                self?.refreshWindowFocus(animated: true)
+            }
+        )
+
+        refreshWindowFocus(animated: false)
+    }
+
+    private func removeWindowFocusObservation() {
+        for observation in windowFocusObservations {
+            NotificationCenter.default.removeObserver(observation)
+        }
+        windowFocusObservations.removeAll()
+    }
+
+    private func refreshWindowFocus(animated: Bool) {
+        let focused = (window?.isKeyWindow ?? false) && NSApp.isActive
+        guard focused != isWindowFocused else { return }
+        isWindowFocused = focused
+        if !NSApp.isActive {
+            isHovered = false
+        }
+        applyVisualState(animated: animated)
     }
 
     private func setupRebuildObservation() {
@@ -387,10 +454,17 @@ final class UpdateButtonNSView: NSView {
             arrowColor = hoverArrowColor
             spinnerColor = hoverArrowColor
             textColor = .white
-        } else if isHovered {
+        } else if isHovered && NSApp.isActive {
             fillColor = hoverFillColor
             borderColor = hoverBorderColor
             highlightColor = hoverHighlightColor
+            arrowColor = hoverArrowColor
+            spinnerColor = hoverArrowColor
+            textColor = .white
+        } else if isWindowFocused {
+            fillColor = hoverFillColor
+            borderColor = hoverBorderColor
+            highlightColor = normalHighlightColor
             arrowColor = hoverArrowColor
             spinnerColor = hoverArrowColor
             textColor = .white

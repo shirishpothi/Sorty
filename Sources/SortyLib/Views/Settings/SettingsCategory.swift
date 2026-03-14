@@ -122,7 +122,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .notifications:
             return ["notification", "alerts", "sound", "banner", "notificli", "completion", "foreground", "permissions"]
         case .advanced:
-            return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "cache", "privacy", "blur", "username"]
+            return ["advanced", "menu bar", "streaming", "performance", "developer", "diagnostics", "debug", "cache", "privacy", "blur", "username", "contributors", "github contributors", "accreditations"]
         case .troubleshooting:
             return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
         case .help:
@@ -194,6 +194,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .advanced:
             return [
                 SettingsFeatureSnippet(title: "Privacy", summary: "Blur usernames in file paths for privacy.", keywords: ["privacy", "blur", "username", "path"]),
+                SettingsFeatureSnippet(title: "GitHub Contributors", summary: "Control whether Sorty fetches live contributor names for Accreditations.", keywords: ["contributors", "github", "accreditations", "privacy"]),
                 SettingsFeatureSnippet(title: "Menu Bar", summary: "Configure menu bar UI behavior."),
                 SettingsFeatureSnippet(title: "Streaming", summary: "Toggle streaming responses in AI flows."),
                 SettingsFeatureSnippet(title: "Timeouts", summary: "Tune max request durations and retries."),

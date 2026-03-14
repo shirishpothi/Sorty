@@ -14,6 +14,10 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     public init(config: AIConfig) {
         self.config = config
     }
+
+    private func authHeaders() -> [String: String] {
+        ProviderAuthResolver.authHeaders(for: config.provider, config: config)
+    }
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let apiURL = try AIRequestSupport.requireAPIURL(from: config)
@@ -142,10 +146,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             requestBody["max_tokens"] = maxTokens
         }
         
-        var headers: [String: String] = [:]
-        if let apiKey = config.apiKey, !apiKey.isEmpty {
-            headers["Authorization"] = "Bearer \(apiKey)"
-        }
+        let headers = authHeaders()
         let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
 
         let session = await AIRequestSupport.session(for: config)
@@ -169,12 +170,22 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     
     public func checkHealth() async throws {
         let apiURL = try AIRequestSupport.requireAPIURL(from: config)
+
+        if config.provider == .openAI,
+           ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn {
+            guard ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config) else {
+                throw AIClientError.apiError(
+                    statusCode: 401,
+                    message: "Codex CLI sign-in is required. Run 'codex login' and verify in Sorty settings."
+                )
+            }
+        } else {
+            try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
+        }
+
         let url = try AIRequestSupport.openAIModelsURL(from: apiURL)
 
-        var headers: [String: String] = [:]
-        if config.requiresAPIKey, let apiKey = config.apiKey, !apiKey.isEmpty {
-            headers["Authorization"] = "Bearer \(apiKey)"
-        }
+        let headers = authHeaders()
 
         var request = try AIRequestSupport.makeJSONRequest(url: url, method: "GET", headers: headers)
         request.timeoutInterval = min(config.requestTimeout, 60)
@@ -190,10 +201,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     
     private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], systemPrompt: String, userPrompt: String) async throws -> OrganizationPlan {
         let startTime = Date()
-        var headers: [String: String] = [:]
-        if let apiKey = config.apiKey, !apiKey.isEmpty {
-            headers["Authorization"] = "Bearer \(apiKey)"
-        }
+        let headers = authHeaders()
 
         let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: requestBody)
 
@@ -251,10 +259,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
         
-        var headers: [String: String] = [:]
-        if let apiKey = config.apiKey, !apiKey.isEmpty {
-            headers["Authorization"] = "Bearer \(apiKey)"
-        }
+        let headers = authHeaders()
 
         let request = try AIRequestSupport.makeJSONRequest(url: url, headers: headers, body: streamingRequestBody)
         

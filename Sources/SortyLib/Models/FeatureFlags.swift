@@ -55,6 +55,20 @@ public enum FeatureFlags {
         return UserDefaults.standard.bool(forKey: "privacyModeEnabled")
     }
 
+    /// Controls internet network blocking privacy mode.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app internetPrivacyModeEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app internetPrivacyModeEnabled -bool false
+    /// ```
+    public static var internetPrivacyModeEnabled: Bool {
+        UserDefaults.standard.bool(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+    }
+
     /// Controls whether Finder file tagging is enabled during organization.
     /// Tags may not apply correctly in all macOS sandboxed environments.
     ///
@@ -123,6 +137,23 @@ public enum FeatureFlags {
             return false
         }
         return UserDefaults.standard.bool(forKey: "featureDemoEnabled")
+    }
+
+    /// Controls whether subscription-based auth methods are available for supported AI providers.
+    ///
+    /// Enabled by default. Disable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app subscriptionAuthEnabled -bool false
+    /// ```
+    /// Re-enable:
+    /// ```
+    /// defaults write com.sorty.app subscriptionAuthEnabled -bool true
+    /// ```
+    public static var subscriptionAuthEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "subscriptionAuthEnabled") == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "subscriptionAuthEnabled")
     }
 
     /// Preview harness mode for rapid development iteration.

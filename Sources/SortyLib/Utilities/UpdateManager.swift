@@ -41,6 +41,11 @@ public class UpdateManager: ObservableObject {
     /// Check for updates on app launch if sufficient time has passed
     /// - Parameter minimumInterval: Minimum time between automatic checks (default: 24 hours)
     public func checkOnLaunchIfNeeded(minimumInterval: TimeInterval = 24 * 60 * 60) async {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            state = .idle
+            return
+        }
+
         // Skip if already checking
         guard state != .checking else { return }
         
@@ -62,6 +67,11 @@ public class UpdateManager: ObservableObject {
     
     /// Checks for updates from GitHub Releases
     public func checkForUpdates() async {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            state = .idle
+            return
+        }
+
         state = .checking
         lastCheckDate = Date()
         

@@ -23,6 +23,10 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     private func getSession() async -> URLSession {
         return await AIRequestSupport.session(for: config)
     }
+
+    private func ensureNetworkAllowed(_ url: URL) throws {
+        try AIRequestSupport.ensureNetworkAllowed(url: url)
+    }
     
     private func getHeaders() async throws -> [String: String] {
         if let testHeadersProvider {
@@ -48,6 +52,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     
     public func analyze(files: [FileItem], customInstructions: String? = nil, personaPrompt: String? = nil, temperature: Double? = nil) async throws -> OrganizationPlan {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
+        try ensureNetworkAllowed(url)
         
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
         let userPrompt = PromptBuilder.buildOrganizationPrompt(
@@ -95,6 +100,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         }
         
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
+        try ensureNetworkAllowed(url)
         let orderedImageNames = Self.orderedImageFilenames(from: imageData)
         
         let systemPrompt = config.systemPromptOverride ?? PromptBuilder.buildSystemPrompt(personaInfo: personaPrompt ?? "", maxTopLevelFolders: config.maxTopLevelFolders, mode: config.mode, enableTagging: config.enableFileTagging)
@@ -157,6 +163,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     
     public func fetchAvailableModels() async throws -> [String] {
         let url = URL(string: "https://api.githubcopilot.com/models")!
+        try ensureNetworkAllowed(url)
         DebugLogger.log("Fetching available models")
         let session = await getSession()
         var didRetryAfterAuthFailure = false
@@ -209,6 +216,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     
     public func checkHealth() async throws {
         let url = URL(string: "https://api.githubcopilot.com/models")!
+        try ensureNetworkAllowed(url)
         let session = await getSession()
         var didRetryAfterAuthFailure = false
 
@@ -247,6 +255,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     
     public func generateText(prompt: String, systemPrompt: String? = nil) async throws -> String {
         let url = URL(string: "https://api.githubcopilot.com/chat/completions")!
+        try ensureNetworkAllowed(url)
         
         let requestBody: [String: Any] = [
             "model": config.model,
@@ -307,6 +316,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     // MARK: - Non-Streaming Implementation
     
     private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+        try ensureNetworkAllowed(url)
         let startTime = Date()
         let session = await getSession()
         var didRetryAfterAuthFailure = false
@@ -381,6 +391,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
     // MARK: - Streaming Implementation
     
     private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+        try ensureNetworkAllowed(url)
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
 

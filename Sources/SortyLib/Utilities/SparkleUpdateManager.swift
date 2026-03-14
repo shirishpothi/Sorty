@@ -45,6 +45,8 @@ public class SparkleUpdateManager: ObservableObject {
 
     // UserDefaults key for persisting last check date
     private static let lastAutoCheckKey = "lastSparkleUpdateCheckDate"
+    private var lastObservedInternetPrivacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
+    private var isApplyingInternetPrivacyPolicy = false
 
     public init() {
         // Restore last check date
@@ -65,6 +67,7 @@ public class SparkleUpdateManager: ObservableObject {
         // Initialize Sparkle safely - may fail during development builds
         do {
             try initializeSparkle()
+            applyInternetPrivacyPolicy()
         } catch {
             LogManager.shared.log("Sparkle initialization failed (expected during development builds): \(error.localizedDescription)", level: .warning, category: "SparkleUpdateManager")
             updateState = .disabled
@@ -74,6 +77,31 @@ public class SparkleUpdateManager: ObservableObject {
         self.userDriverDelegate = nil
         updateState = .disabled
         #endif
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUserDefaultsDidChange),
+            name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UserDefaults.didChangeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func handleUserDefaultsDidChange(_ notification: Notification) {
+        let privacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
+        guard privacyModeEnabled != lastObservedInternetPrivacyModeEnabled else {
+            return
+        }
+
+        lastObservedInternetPrivacyModeEnabled = privacyModeEnabled
+        applyInternetPrivacyPolicy()
     }
 
     #if canImport(Sparkle)
@@ -123,6 +151,11 @@ public class SparkleUpdateManager: ObservableObject {
 
     /// Check for updates immediately
     public func checkForUpdates() {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            updateState = .disabled
+            return
+        }
+
         #if canImport(Sparkle)
         guard let controller = updaterController as? SPUStandardUpdaterController else {
             LogManager.shared.log("Cannot check for updates - Sparkle is disabled", level: .warning, category: "SparkleUpdateManager")
@@ -140,6 +173,11 @@ public class SparkleUpdateManager: ObservableObject {
 
     /// Check for updates in the background (no UI)
     public func checkForUpdatesInBackground() {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            updateState = .disabled
+            return
+        }
+
         #if canImport(Sparkle)
         guard let updater = self.updater as? SPUUpdater else {
             LogManager.shared.log("Cannot check for updates in background - Sparkle is disabled", level: .warning, category: "SparkleUpdateManager")
@@ -158,6 +196,11 @@ public class SparkleUpdateManager: ObservableObject {
     /// Check for updates on app launch if sufficient time has passed
     /// - Parameter minimumInterval: Minimum time between automatic checks (default: 24 hours)
     public func checkOnLaunchIfNeeded(minimumInterval: TimeInterval = 24 * 60 * 60) {
+        guard !NetworkPrivacyPolicy.isInternetPrivacyModeEnabled else {
+            updateState = .disabled
+            return
+        }
+
         // Skip if Sparkle is disabled
         #if canImport(Sparkle)
         guard updater != nil else { return }
@@ -184,6 +227,27 @@ public class SparkleUpdateManager: ObservableObject {
     /// Reset state to idle
     public func resetState() {
         updateState = .idle
+    }
+
+    private func applyInternetPrivacyPolicy() {
+        guard !isApplyingInternetPrivacyPolicy else { return }
+        isApplyingInternetPrivacyPolicy = true
+        defer { isApplyingInternetPrivacyPolicy = false }
+
+        let privacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
+        lastObservedInternetPrivacyModeEnabled = privacyModeEnabled
+
+        if privacyModeEnabled {
+            updateState = .disabled
+        } else {
+            #if canImport(Sparkle)
+            // Preserve Sparkle's persisted user preference for automatic checks.
+            // Privacy mode only gates update behavior while active.
+            if updateState == .disabled, updater != nil {
+                updateState = .idle
+            }
+            #endif
+        }
     }
 }
 

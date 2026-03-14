@@ -16,10 +16,27 @@ public class SettingsViewModel: ObservableObject {
             let newKey = config.apiKey
             let oldProvider = oldValue.provider
             let newProvider = config.provider
+            let oldAuthMethod = oldValue.authMethod(for: oldProvider)
+            let newAuthMethod = config.authMethod(for: newProvider)
 
             // Persist model changes immediately for the active provider.
             if oldProvider == newProvider, oldValue.model != config.model {
                 userDefaults.set(config.model, forKey: modelSelectionKey(for: newProvider))
+            }
+
+            // Same provider, auth method switched — preserve API key and hydrate/clear in-memory field.
+            if oldProvider == newProvider, oldAuthMethod != newAuthMethod {
+                if oldAuthMethod == .apiKey,
+                   let oldKey = oldValue.apiKey,
+                   !oldKey.isEmpty {
+                    _ = KeychainManager.save(key: newProvider.keychainKey, value: oldKey)
+                }
+
+                if newAuthMethod == .apiKey {
+                    config.apiKey = KeychainManager.get(key: newProvider.keychainKey)
+                } else {
+                    config.apiKey = nil
+                }
             }
 
             // Debounce the save operation
@@ -45,7 +62,10 @@ public class SettingsViewModel: ObservableObject {
 
                 // Save the old provider's API key to its keychain slot
                 // Skip for GitHub Copilot — its token is managed by GitHubCopilotAuthManager
-                if oldProvider != .githubCopilot, let oldKey = oldValue.apiKey, !oldKey.isEmpty {
+                if oldProvider != .githubCopilot,
+                   oldAuthMethod == .apiKey,
+                   let oldKey = oldValue.apiKey,
+                   !oldKey.isEmpty {
                     _ = KeychainManager.save(key: oldProvider.keychainKey, value: oldKey)
                 }
 
@@ -53,8 +73,10 @@ public class SettingsViewModel: ObservableObject {
                 // Skip for GitHub Copilot — auth is handled by GitHubCopilotAuthManager, not apiKey
                 if newProvider == .githubCopilot {
                     config.apiKey = nil
-                } else {
+                } else if newAuthMethod == .apiKey {
                     config.apiKey = KeychainManager.get(key: newProvider.keychainKey)
+                } else {
+                    config.apiKey = nil
                 }
 
                 // Update API URL and requiresAPIKey for the new provider
@@ -81,7 +103,10 @@ public class SettingsViewModel: ObservableObject {
                     }
                     await AISessionManager.shared.prewarm(provider: newProvider, config: config)
                 }
-            } else if oldKey != newKey, let newKey = newKey, !newKey.isEmpty {
+            } else if oldKey != newKey,
+                      newAuthMethod == .apiKey,
+                      let newKey = newKey,
+                      !newKey.isEmpty {
                 // Same provider, API key changed — save immediately to Keychain
                 // so ModelCatalog reads the fresh key (fixes Gemini model list race)
                 _ = KeychainManager.save(key: newProvider.keychainKey, value: newKey)
@@ -137,8 +162,11 @@ public class SettingsViewModel: ObservableObject {
             }
             
             // 2. Load API key from provider-specific Keychain key
-            if let apiKey = KeychainManager.get(key: decoded.provider.keychainKey) {
+            if decoded.authMethod(for: decoded.provider) == .apiKey,
+               let apiKey = KeychainManager.get(key: decoded.provider.keychainKey) {
                 decoded.apiKey = apiKey
+            } else {
+                decoded.apiKey = nil
             }
             
             config = decoded
@@ -184,7 +212,7 @@ public class SettingsViewModel: ObservableObject {
         ])
         
         // Save API key to provider-specific Keychain key
-        if provider != .githubCopilot {
+        if provider != .githubCopilot, config.authMethod(for: provider) == .apiKey {
             let providerKey = provider.keychainKey
             if let apiKey = apiKey {
                 _ = KeychainManager.save(key: providerKey, value: apiKey)

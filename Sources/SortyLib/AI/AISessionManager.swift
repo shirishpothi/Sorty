@@ -143,14 +143,19 @@ public class AISessionManager: ObservableObject {
             // This handles custom setups (Azure, proxies, enterprise gateways) where
             // the standard /v1/models path may not exist
             let prewarmURLs = getPrewarmURLs(for: provider, config: config)
+            let allowedPrewarmURLs = prewarmURLs.filter { NetworkPrivacyPolicy.isRequestAllowed(url: $0) }
 
-            guard !prewarmURLs.isEmpty else {
-                prewarmError = "Invalid API URL"
+            guard !allowedPrewarmURLs.isEmpty else {
+                if NetworkPrivacyPolicy.isInternetPrivacyModeEnabled {
+                    prewarmError = NetworkPrivacyPolicy.blockedMessage
+                } else {
+                    prewarmError = "Invalid API URL"
+                }
                 return
             }
 
             // Try each URL in order (specific endpoint first, then root)
-            for (index, url) in prewarmURLs.enumerated() {
+            for (index, url) in allowedPrewarmURLs.enumerated() {
                 var request = URLRequest(url: url)
                 request.httpMethod = "GET"
                 request.timeoutInterval = 5
@@ -353,32 +358,8 @@ public class AISessionManager: ObservableObject {
     }
     
     private func addAuthHeaders(to request: inout URLRequest, provider: AIProvider, config: AIConfig) {
-        // Add appropriate auth headers based on provider
-        // For prewarming, fetch from Keychain if config doesn't have the key
-        let apiKey = (config.apiKey?.isEmpty ?? true) ? KeychainManager.get(key: provider.keychainKey) : config.apiKey
-        
-        switch provider {
-        case .openAI, .groq, .openRouter, .openAICompatible:
-            if let key = apiKey, !key.isEmpty {
-                request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-            }
-        case .anthropic:
-            if let key = apiKey, !key.isEmpty {
-                request.setValue(key, forHTTPHeaderField: "x-api-key")
-            }
-        case .gemini:
-            if let key = apiKey, !key.isEmpty {
-                request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-            }
-        case .githubCopilot:
-            // GitHub Copilot uses dynamic tokens, skip for prewarm
-            break
-        case .ollama:
-            // Local providers typically don't need auth
-            break
-        case .appleFoundationModel:
-            // Apple providers don't need auth headers
-            break
+        if let header = ProviderAuthResolver.authHeader(for: provider, config: config) {
+            request.setValue(header.value, forHTTPHeaderField: header.field)
         }
     }
     
