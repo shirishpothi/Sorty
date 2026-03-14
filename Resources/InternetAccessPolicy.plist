@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>DeveloperName</key>
+    <string>Sorty</string>
+    <key>ApplicationDescription</key>
+    <string>Sorty organizes files and folders using AI providers you configure. It can also sign in to GitHub Copilot, check for app updates, and optionally load contributor data.</string>
+    <key>Website</key>
+    <string>https://github.com/shirishpothi/Sorty</string>
+    <key>Connections</key>
+    <array>
+        <dict>
+            <key>Host</key>
+            <string>localhost,127.0.0.1,::1</string>
+            <key>Port</key>
+            <string>11434</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty connects to a local Ollama server when you choose Ollama as your AI provider.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, Sorty cannot use local Ollama models.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>api.openai.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty sends AI requests to OpenAI when you choose OpenAI.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, OpenAI-powered organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>api.groq.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty sends AI requests to Groq when you choose Groq.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, Groq-powered organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>openrouter.ai</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty sends AI requests to OpenRouter when you choose OpenRouter.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, OpenRouter-powered organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>api.anthropic.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty sends AI requests to Anthropic when you choose Claude.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, Claude-powered organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>generativelanguage.googleapis.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty sends AI requests to Google when you choose Gemini.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, Gemini-powered organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>api.githubcopilot.com</string>
+            <key>Relevance</key>
+            <string>Essential</string>
+            <key>Purpose</key>
+            <string>Sorty sends AI requests to GitHub Copilot when you choose GitHub Copilot.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, GitHub Copilot organization and model checks will fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>github.com</string>
+            <key>Purpose</key>
+            <string>Sorty uses GitHub sign-in endpoints for GitHub Copilot authentication and also checks/downloading app updates hosted on GitHub Releases.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, GitHub Copilot sign-in and in-app update delivery may fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>api.github.com</string>
+            <key>Purpose</key>
+            <string>Sorty calls GitHub APIs for Copilot token and account validation, release metadata checks, and optional contributor data.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, GitHub Copilot token refresh, release checks, and contributor data loading may fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>*.githubusercontent.com</string>
+            <key>Purpose</key>
+            <string>GitHub may redirect release asset downloads to GitHub content delivery hosts during updates.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, update downloads may fail even if release checks succeed.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>=*</string>
+            <key>Purpose</key>
+            <string>Sorty can connect to custom API endpoints you configure for OpenAI-compatible providers, and to direct image URLs you explicitly provide for notifications.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, custom provider requests and externally hosted notification images may fail.</string>
+        </dict>
+        <dict>
+            <key>Host</key>
+            <string>*</string>
+            <key>Purpose</key>
+            <string>Fallback entry for hostnames not covered above when you configure custom providers or explicit external URLs.</string>
+            <key>DenyConsequences</key>
+            <string>If you deny these connections, user-configured network features may not work.</string>
+        </dict>
+    </array>
+</dict>
+</plist>

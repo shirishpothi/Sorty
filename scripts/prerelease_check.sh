@@ -386,6 +386,21 @@ phase_app_bundle() {
     else
         check_warn "App icon" "AppIcon.icns not found in Resources"
     fi
+
+    # Check bundled Internet Access Policy
+    IAP_PATH="${APP_PATH}/Contents/Resources/InternetAccessPolicy.plist"
+    if [ -f "${IAP_PATH}" ]; then
+        check_pass "InternetAccessPolicy.plist bundled"
+        if /usr/bin/plutil -lint "${IAP_PATH}" >/dev/null 2>&1; then
+            check_pass "InternetAccessPolicy.plist is valid"
+        else
+            check_fail "InternetAccessPolicy.plist" "Bundled file is not valid plist"
+            return 1
+        fi
+    else
+        check_fail "InternetAccessPolicy.plist" "Missing from app bundle Resources"
+        return 1
+    fi
     
     return 0
 }
