@@ -153,16 +153,19 @@ struct DirectorySelectionView: View {
         return Group {
             if #available(macOS 26.0, *) {
                 dropZoneContent
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: dropZoneCornerRadius))
+                    .background {
+                        RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
+                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.05))
+                    }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(isTargeted ? Color.accentColor.opacity(0.1) : .clear)
+                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : .clear)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
-                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.2),
-                                style: StrokeStyle(lineWidth: 2, dash: isTargeted ? [] : [10])
+                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
+                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: isTargeted ? [] : [6, 6])
                             )
                     }
             } else {
@@ -178,8 +181,8 @@ struct DirectorySelectionView: View {
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
-                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.2),
-                                style: StrokeStyle(lineWidth: 2, dash: isTargeted ? [] : [10])
+                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
+                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: isTargeted ? [] : [6, 6])
                             )
                     }
             }

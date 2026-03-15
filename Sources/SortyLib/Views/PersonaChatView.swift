@@ -161,11 +161,13 @@ struct PersonaChatView: View {
 
     @ViewBuilder
     private func chatBubble(for message: ChatMessage) -> some View {
+        let displayContent = FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(message.content) : message.content
+
         switch message.role {
         case .user:
             HStack {
                 Spacer()
-                Text(message.content)
+                Text(displayContent)
                     .padding(10)
                     .background(Color.accentColor)
                     .foregroundColor(.white)
@@ -174,7 +176,7 @@ struct PersonaChatView: View {
             }
         case .assistant:
             HStack {
-                Text(message.content)
+                Text(displayContent)
                     .padding(10)
                     .background(Color.secondary.opacity(0.15))
                     .cornerRadius(12)
@@ -183,7 +185,7 @@ struct PersonaChatView: View {
                 Spacer()
             }
         case .system:
-            Text(message.content)
+            Text(displayContent)
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .italic()

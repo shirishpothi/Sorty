@@ -10,17 +10,23 @@ struct PrivacySensitivePathText: View {
     let path: String
     var blurRadius: CGFloat = 10
     var revealOnHover: Bool = true
+    var revealOnClick: Bool = true
 
     @State private var isHoveringUsername = false
+    @State private var isClickRevealed = false
 
     private var isPrivacyEnabled: Bool {
         FeatureFlags.privacyModeEnabled
     }
 
     private var revealAnimation: Animation {
-        isHoveringUsername
+        isRevealed
             ? .timingCurve(0.2, 0.95, 0.2, 1.0, duration: 0.38)
             : .easeInOut(duration: 0.26)
+    }
+
+    private var isRevealed: Bool {
+        isHoveringUsername || isClickRevealed
     }
 
     var body: some View {
@@ -29,11 +35,11 @@ struct PrivacySensitivePathText: View {
                 Text(segments.leading)
                 ZStack {
                     Text(segments.username)
-                        .opacity(isHoveringUsername ? 0 : 1)
+                        .opacity(isRevealed ? 0 : 1)
                         .blur(radius: blurRadius)
 
                     Text(segments.username)
-                        .opacity(isHoveringUsername ? 1 : 0)
+                        .opacity(isRevealed ? 1 : 0)
                 }
                     .padding(.vertical, 4)
                     .padding(.horizontal, 6)
@@ -45,12 +51,16 @@ struct PrivacySensitivePathText: View {
                             isHoveringUsername = false
                         }
                     }
-                    .animation(revealAnimation, value: isHoveringUsername)
+                    .animation(revealAnimation, value: isRevealed)
                     .onHover { hovering in
                         guard revealOnHover else { return }
                         guard hovering != isHoveringUsername else { return }
                         isHoveringUsername = hovering
                         HapticFeedbackManager.shared.light()
+                    }
+                    .onTapGesture {
+                        guard revealOnClick else { return }
+                        isClickRevealed.toggle()
                     }
                 Text(segments.trailing)
             }
@@ -58,6 +68,53 @@ struct PrivacySensitivePathText: View {
         } else {
             Text(path)
         }
+    }
+}
+
+struct PrivacyBlurModifier: ViewModifier {
+    var enabled: Bool = FeatureFlags.privacyModeEnabled
+    var blurRadius: CGFloat = 10
+    var revealOnHover: Bool = true
+
+    @State private var isHovering = false
+
+    private var shouldReveal: Bool {
+        revealOnHover && isHovering
+    }
+
+    private var revealAnimation: Animation {
+        shouldReveal
+            ? .timingCurve(0.2, 0.95, 0.2, 1.0, duration: 0.34)
+            : .easeInOut(duration: 0.24)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: enabled && !shouldReveal ? blurRadius : 0)
+            .onChange(of: revealOnHover) { _, newValue in
+                if !newValue {
+                    isHovering = false
+                }
+            }
+            .animation(revealAnimation, value: shouldReveal)
+            .onHover { hovering in
+                guard enabled, revealOnHover else { return }
+                guard hovering != isHovering else { return }
+                isHovering = hovering
+                HapticFeedbackManager.shared.selection()
+            }
+    }
+}
+
+extension View {
+    func privacyBlurredIfNeeded(blurRadius: CGFloat = 10, revealOnHover: Bool = true) -> some View {
+        modifier(
+            PrivacyBlurModifier(
+                enabled: FeatureFlags.privacyModeEnabled,
+                blurRadius: blurRadius,
+                revealOnHover: revealOnHover
+            )
+        )
     }
 }
 
@@ -128,7 +185,32 @@ enum PrivacyPathMasker {
     }
 
     static func redactedPath(_ text: String) -> String {
-        guard let segments = userPathSegments(in: text) else { return text }
-        return segments.leading + "[REDACTED_USER]" + segments.trailing
+        redactedText(text)
+    }
+
+    static func redactedText(_ text: String, currentUsername: String = NSUserName()) -> String {
+        guard !text.isEmpty else { return text }
+
+        var redacted = redactUsersDirectoryUsernames(in: text)
+        redacted = redactCurrentUsernameSegments(in: redacted, currentUsername: currentUsername)
+        return redacted
+    }
+
+    private static func redactUsersDirectoryUsernames(in text: String) -> String {
+        let pattern = #"(?i)(/Users/)([^/\s]+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "$1[REDACTED_USER]")
+    }
+
+    private static func redactCurrentUsernameSegments(in text: String, currentUsername: String) -> String {
+        var redacted = text
+        for _ in 0..<24 {
+            guard let segments = currentUserSegments(in: redacted, currentUsername: currentUsername) else {
+                break
+            }
+            redacted = segments.leading + "[REDACTED_USER]" + segments.trailing
+        }
+        return redacted
     }
 }

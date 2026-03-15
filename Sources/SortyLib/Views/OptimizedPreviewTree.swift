@@ -865,6 +865,7 @@ struct FlatFolderRowView: View {
 
     @State private var isDropTarget = false
     @State private var showStorageLocationPicker = false
+    @State private var showStoragePopover = false
     @State private var storageLocationPickerErrorMessage: String?
 
     private var folderTags: [String] {
@@ -1033,35 +1034,36 @@ struct FlatFolderRowView: View {
     }
 
     private var storageLocationDropdown: some View {
-        Menu {
-            Button {
-            } label: {
-                HStack(spacing: 8) {
-                    finderIcon(for: usedStoragePath)
-                    PrivacySensitivePathText(path: usedStoragePath)
-                }
-            }
-            .disabled(true)
-
-            Divider()
-
-            Button("Change Storage Location…") {
-                showStorageLocationPicker = true
-            }
-
-            Button("Show in Finder") {
-                revealStorageLocationInFinder()
-            }
+        Button {
+            showStoragePopover.toggle()
         } label: {
             Image(systemName: "externaldrive")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .modifier(StorageGlassModifier())
+                .foregroundStyle(showStoragePopover ? .primary : .secondary)
+                .frame(width: 18, height: 18)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Storage location: \(PrivacyPathMasker.redactedPath(usedStoragePath))")
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("StorageLocationMenuButton")
+        .help("Storage location options")
+        .popover(isPresented: $showStoragePopover, arrowEdge: .bottom) {
+            StorageLocationPopoverContent(
+                displayName: usedStorageDisplayName,
+                path: usedStoragePath,
+                onChangeLocation: {
+                    showStoragePopover = false
+                    showStorageLocationPicker = true
+                },
+                onShowInFinder: {
+                    showStoragePopover = false
+                    revealStorageLocationInFinder()
+                },
+                onCopyPath: {
+                    showStoragePopover = false
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(usedStoragePath, forType: .string)
+                }
+            )
+        }
     }
 
     private func finderIcon(for path: String) -> some View {
@@ -1075,17 +1077,6 @@ struct FlatFolderRowView: View {
     private func revealStorageLocationInFinder() {
         guard let usedStorageURL else { return }
         NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: usedStorageURL.path)
-    }
-}
-
-private struct StorageGlassModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content.glassEffect(.regular.interactive(), in: .circle)
-        } else {
-            content
-                .background(.regularMaterial, in: Circle())
-        }
     }
 }
 

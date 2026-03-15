@@ -168,6 +168,9 @@ struct AnalysisView: View {
     @State private var isCancelHovered = false
     @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
+    @State private var lastInsightCount = 0
+    @State private var lastMessageTier: MessageTier = .none
+    @State private var lastInsightPulseAt: Date = .distantPast
     
     private enum MessageTier {
         case none
@@ -265,6 +268,14 @@ struct AnalysisView: View {
         }
         .onChange(of: liveInsightsEnabled) { _, enabled in
             organizer.setLiveInsightsEnabled(enabled)
+        }
+        .onChange(of: organizer.insightHistory.count) { _, newCount in
+            lastInsightCount = newCount
+        }
+        .onChange(of: currentMessageTier) { oldTier, newTier in
+            if oldTier == .none, newTier != .none {
+                HapticSequenceManager.shared.playEventPulse()
+            }
         }
     }
     
@@ -373,7 +384,17 @@ struct AnalysisView: View {
             insights: cachedInsights,
             debugModeEnabled: appState.debugMode,
             streamPreview: organizer.truncatedDisplayStreamingContent,
-            liveInsightsEnabled: $liveInsightsEnabled
+            liveInsightsEnabled: $liveInsightsEnabled,
+            streamingModeEnabled: Binding(
+                get: { settingsViewModel.config.enableStreaming },
+                set: { newValue in
+                    settingsViewModel.config.enableStreaming = newValue
+                    if !newValue {
+                        liveInsightsEnabled = false
+                        organizer.setLiveInsightsEnabled(false)
+                    }
+                }
+            )
         )
     }
 
@@ -532,8 +553,14 @@ private struct InsightHistorySection: View {
     let debugModeEnabled: Bool
     let streamPreview: String
     @Binding var liveInsightsEnabled: Bool
+    @Binding var streamingModeEnabled: Bool
     
     @StateObject private var viewState = AnalysisInsightViewState()
+    @State private var showPrivacyWarning = false
+
+    private var displayedStreamPreview: String {
+        FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(streamPreview) : streamPreview
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -594,6 +621,7 @@ private struct InsightHistorySection: View {
                                     viewState.showDebugStream = false
                                 }
                             }
+                            HapticFeedbackManager.shared.selection()
                         } label: {
                             Image(systemName: liveInsightsEnabled ? "bolt.badge.checkmark" : "bolt.slash")
                                 .font(.caption)
@@ -602,6 +630,60 @@ private struct InsightHistorySection: View {
                         .buttonStyle(.plain)
                         .help(liveInsightsEnabled ? "Disable streamed live insights" : "Enable streamed live insights")
                         .accessibilityIdentifier("LiveInsightsToggle")
+                    }
+
+                    if isStreaming {
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                                streamingModeEnabled.toggle()
+                            }
+                            HapticFeedbackManager.shared.selection()
+                        } label: {
+                            Image(systemName: streamingModeEnabled ? "dot.radiowaves.left.and.right" : "dot.radiowaves.left.and.right.slash")
+                                .font(.caption)
+                                .foregroundStyle(streamingModeEnabled ? Color.accentColor : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(streamingModeEnabled ? "Disable Streaming Mode" : "Enable Streaming Mode")
+                        .accessibilityIdentifier("StreamingModeToggle")
+                    }
+
+                    if FeatureFlags.privacyModeEnabled {
+                        Button {
+                            showPrivacyWarning.toggle()
+                        } label: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Privacy warning for live AI insights")
+                        .accessibilityIdentifier("LiveInsightsPrivacyWarningButton")
+                        .popover(isPresented: $showPrivacyWarning, arrowEdge: .top) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundStyle(.orange)
+                                    Text("Privacy Warning")
+                                        .font(.headline)
+                                }
+
+                                Text("Sorty masks username path segments in streamed text, but model-generated names can still appear before full parsing. Disable Streaming Mode and Live Insights for strict privacy.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                Toggle("Streaming Mode", isOn: $streamingModeEnabled)
+                                    .toggleStyle(.switch)
+
+                                Toggle("Live Insights", isOn: $liveInsightsEnabled)
+                                    .toggleStyle(.switch)
+                                    .disabled(!streamingModeEnabled)
+                                    .opacity(streamingModeEnabled ? 1 : 0.6)
+                            }
+                            .padding(12)
+                            .frame(width: 300)
+                        }
                     }
                     
                     if debugModeEnabled {
@@ -617,7 +699,7 @@ private struct InsightHistorySection: View {
                         .buttonStyle(.plain)
                         .disabled(!liveInsightsEnabled)
                         .opacity(liveInsightsEnabled ? 1 : 0.45)
-                        .help(liveInsightsEnabled ? "Toggle raw AI stream" : "Enable live insights to preview raw AI stream")
+                        .help(liveInsightsEnabled ? "Toggle Streaming Mode preview" : "Enable Live Insights to preview Streaming Mode output")
                     }
                     
                     Image(systemName: "chevron.down")
@@ -649,7 +731,7 @@ private struct InsightHistorySection: View {
                 LazyVStack(spacing: 14) {
                     liveInsightsPrimaryContent
 
-                    if liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
+                    if streamingModeEnabled && liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
                         streamingPreview
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -674,6 +756,14 @@ private struct InsightHistorySection: View {
                 viewState.showDebugStream = false
             }
         }
+        .onChange(of: streamingModeEnabled) { _, enabled in
+            if !enabled {
+                liveInsightsEnabled = false
+                viewState.showDebugStream = false
+            } else if isStreaming && !liveInsightsEnabled {
+                liveInsightsEnabled = true
+            }
+        }
     }
 
     private var headerTitle: String {
@@ -684,7 +774,9 @@ private struct InsightHistorySection: View {
     @ViewBuilder
     private var liveInsightsPrimaryContent: some View {
         let currentInsightItem = insights.history.last(where: { $0.text == insights.current })
-        if liveInsightsEnabled, !insights.current.isEmpty {
+        if !streamingModeEnabled {
+            receivingResponseView
+        } else if liveInsightsEnabled, !insights.current.isEmpty {
             currentInsightPill(
                 insight: insights.current,
                 detail: currentInsightItem,
@@ -700,7 +792,7 @@ private struct InsightHistorySection: View {
             receivingResponseView
         }
 
-        if liveInsightsEnabled && insights.history.count > 1 {
+        if streamingModeEnabled && liveInsightsEnabled && insights.history.count > 1 {
             insightHistoryScroller(
                 entries: Array(insights.history.dropLast().reversed()),
                 markFirstAsLatest: false
@@ -734,7 +826,7 @@ private struct InsightHistorySection: View {
     }
 
     private var streamFallbackInsight: String? {
-        let content = streamPreview
+        let content = displayedStreamPreview
             .replacingOccurrences(of: "...", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return nil }
@@ -831,11 +923,13 @@ private struct InsightHistorySection: View {
     }
 
     private func currentInsightPill(insight: String, detail: AIInsight?, fallbackCategory: AIInsight.Category?) -> some View {
-        HStack(spacing: 12) {
+        let displayInsight = FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(insight) : insight
+
+        return HStack(spacing: 12) {
             insightIcon(for: detail, fallbackText: insight, fallbackCategory: fallbackCategory)
                 .frame(width: 24, height: 24)
             
-            Text(insight)
+            Text(displayInsight)
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(.primary)
@@ -993,17 +1087,18 @@ private struct InsightHistorySection: View {
             ScrollView {
                 ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(streamPreview)
+                        Text(displayedStreamPreview)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.leading)
+                            .transaction { transaction in
+                                transaction.animation = nil
+                            }
                             .id("bottom")
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .onChange(of: streamPreview) { _, _ in
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            proxy.scrollTo("bottom", anchor: .bottom)
-                        }
+                        proxy.scrollTo("bottom", anchor: .bottom)
                     }
                 }
             }
@@ -1018,7 +1113,7 @@ private struct InsightHistorySection: View {
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
         )
-        .accessibilityLabel("AI response preview")
+        .accessibilityLabel(FeatureFlags.privacyModeEnabled ? "AI response preview hidden in Privacy Mode" : "AI response preview")
     }
 
 }
@@ -1205,6 +1300,10 @@ struct InlineNotice: View {
 
 struct InsightPill: View {
     let insight: AIInsight
+
+    private var displayText: String {
+        FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(insight.text) : insight.text
+    }
     
     private var resolvedFinderIcon: NSImage? {
         if let filePath = insight.filePath {
@@ -1267,7 +1366,7 @@ struct InsightPill: View {
                     .padding(.horizontal, 3)
             }
             
-            Text(insight.text)
+            Text(displayText)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

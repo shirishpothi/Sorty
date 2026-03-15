@@ -95,7 +95,7 @@ struct LiquidGlassReasoningPopover: View {
                 )
 
                 if !suggestion.reasoning.isEmpty {
-                    Text(suggestion.reasoning)
+                    Text(FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(suggestion.reasoning) : suggestion.reasoning)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .italic()

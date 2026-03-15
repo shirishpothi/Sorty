@@ -1357,51 +1357,7 @@ struct HistoryDetailSheet: View {
 
                     // Raw AI Response
                     if let raw = entry.rawAIResponse {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    showRawAIResponse.toggle()
-                                }
-                                HapticFeedbackManager.shared.tap()
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: showRawAIResponse ? "chevron.down" : "chevron.right")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Text("Raw AI Response")
-                                        .font(.headline)
-                                    Spacer()
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("RawAIResponseDisclosure")
-                            .accessibilityHint(showRawAIResponse ? "Tap to collapse" : "Tap to expand")
-                            
-                            if showRawAIResponse {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Spacer()
-                                        CopyButtonWithAnimation(content: raw, label: "Copy Raw JSON")
-                                            .accessibilityIdentifier("CopyRawJSONButton")
-                                    }
-                                    
-                                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                                        Text(raw)
-                                            .font(.system(.caption, design: .monospaced))
-                                            .foregroundStyle(.secondary)
-                                            .textSelection(.enabled)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 500, alignment: .leading)
-                                    .padding()
-                                    .background(Color.black.opacity(0.05))
-                                    .cornerRadius(8)
-                                    .accessibilityLabel("Raw AI response data")
-                                }
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                            }
-                        }
+                        rawAIResponseSection(raw)
                     }
                     }
                     .padding(24)
@@ -1439,6 +1395,61 @@ struct HistoryDetailSheet: View {
                     handleRedoWithModel(provider: provider, model: model)
                 }
             )
+        }
+    }
+
+    @ViewBuilder
+    private func rawAIResponseSection(_ raw: String) -> some View {
+        let displayRaw = FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(raw) : raw
+        let copyRaw = FeatureFlags.privacyModeEnabled ? displayRaw : raw
+
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showRawAIResponse.toggle()
+                }
+                HapticFeedbackManager.shared.tap()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: showRawAIResponse ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Raw AI Response")
+                        .font(.headline)
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("RawAIResponseDisclosure")
+            .accessibilityHint(showRawAIResponse ? "Tap to collapse" : "Tap to expand")
+
+            if showRawAIResponse {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Spacer()
+                        CopyButtonWithAnimation(
+                            content: copyRaw,
+                            label: FeatureFlags.privacyModeEnabled ? "Copy Redacted JSON" : "Copy Raw JSON"
+                        )
+                        .accessibilityIdentifier("CopyRawJSONButton")
+                    }
+
+                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                        Text(displayRaw)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 500, alignment: .leading)
+                    .padding()
+                    .background(Color.black.opacity(0.05))
+                    .cornerRadius(8)
+                    .accessibilityLabel(FeatureFlags.privacyModeEnabled ? "Raw AI response hidden in Privacy Mode" : "Raw AI response data")
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 
@@ -1816,6 +1827,7 @@ struct FolderHistoryDetailRow: View {
     @EnvironmentObject var learningsManager: LearningsManager
     @State private var isExpanded = false
     @State private var isHovered = false
+    @State private var showStoragePopover = false
     @State private var visibleFileCount: Int = 60
     private let filePageSize: Int = 60
 
@@ -1830,6 +1842,22 @@ struct FolderHistoryDetailRow: View {
 
     private var allSiblingFiles: [FileItem] {
         suggestion.files
+    }
+
+    private var isStorageDestination: Bool {
+        suggestion.folderName.hasPrefix("/")
+    }
+
+    private var storageLocationURL: URL? {
+        StorageLocationPathResolver.absoluteURL(from: suggestion.folderName)
+    }
+
+    private var storageLocationPath: String {
+        storageLocationURL?.path ?? suggestion.folderName
+    }
+
+    private var storageLocationDisplayName: String {
+        storageLocationURL?.lastPathComponent ?? "Storage"
     }
 
     private func fileDuplicateInfo(for file: FileItem) -> DuplicateInfo? {
@@ -1888,6 +1916,10 @@ struct FolderHistoryDetailRow: View {
                     Text("(\(suggestion.totalFileCount) files)")
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    if isStorageDestination {
+                        storageLocationDropdown
+                    }
 
                     if !suggestion.tags.isEmpty {
                         TagDotsView(tags: suggestion.tags)
@@ -2007,6 +2039,36 @@ struct FolderHistoryDetailRow: View {
         }
         .onChange(of: highlightedFileID) { _, newValue in
             expandForHighlightedFileIfNeeded(newValue)
+        }
+    }
+
+    @ViewBuilder
+    private var storageLocationDropdown: some View {
+        Button {
+            showStoragePopover.toggle()
+        } label: {
+            Image(systemName: "externaldrive")
+                .font(.caption)
+                .foregroundStyle(showStoragePopover ? .primary : .secondary)
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.plain)
+        .help("Storage location options")
+        .accessibilityIdentifier("HistoryStorageLocationMenuButton-\(suggestion.id.uuidString)")
+        .popover(isPresented: $showStoragePopover, arrowEdge: .bottom) {
+            StorageLocationPopoverContent(
+                displayName: storageLocationDisplayName,
+                path: storageLocationPath,
+                onShowInFinder: {
+                    showStoragePopover = false
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: storageLocationPath)
+                },
+                onCopyPath: {
+                    showStoragePopover = false
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(storageLocationPath, forType: .string)
+                }
+            )
         }
     }
 }

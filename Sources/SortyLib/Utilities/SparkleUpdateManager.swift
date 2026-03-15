@@ -80,7 +80,7 @@ public class SparkleUpdateManager: ObservableObject {
 
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(handleUserDefaultsDidChange),
+            selector: #selector(handleUserDefaultsDidChangeNotification(_:)),
             name: UserDefaults.didChangeNotification,
             object: nil
         )
@@ -94,7 +94,13 @@ public class SparkleUpdateManager: ObservableObject {
         )
     }
 
-    @objc private func handleUserDefaultsDidChange(_ notification: Notification) {
+    @objc nonisolated private func handleUserDefaultsDidChangeNotification(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            self?.handleUserDefaultsDidChange()
+        }
+    }
+
+    private func handleUserDefaultsDidChange() {
         let privacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
         guard privacyModeEnabled != lastObservedInternetPrivacyModeEnabled else {
             return

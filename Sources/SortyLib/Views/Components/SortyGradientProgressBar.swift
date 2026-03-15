@@ -216,7 +216,7 @@ struct SortyGradientCircularLoader: View {
     var lineWidth: CGFloat = 3
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 45.0)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             let rotation = (time * 280).truncatingRemainder(dividingBy: 360)
             let pulse = (sin(time * 2.2) + 1) * 0.5

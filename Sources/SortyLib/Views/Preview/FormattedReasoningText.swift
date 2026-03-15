@@ -14,13 +14,17 @@ struct FormattedReasoningText: View {
     var foregroundStyle: Color = .primary
     var showSectionIcons: Bool = true
 
+    private var displayText: String {
+        FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(text) : text
+    }
+
     private var segments: [ReasoningSegment] {
-        parseReasoning(text)
+        parseReasoning(displayText)
     }
 
     var body: some View {
         if segments.count <= 1 {
-            attributedText(text, font: font)
+            attributedText(displayText, font: font)
                 .foregroundStyle(foregroundStyle)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)

@@ -74,6 +74,66 @@ public class HapticFeedbackManager {
     }
 }
 
+// MARK: - Haptic Sequence Manager
+
+/// Plays timed haptic sequences that follow visual animations (e.g., shimmer left-to-right).
+@MainActor
+public final class HapticSequenceManager {
+    public static let shared = HapticSequenceManager()
+    private var activeTask: Task<Void, Never>?
+    private var lastWaveStartAt: Date = .distantPast
+    
+    private init() {}
+    
+    /// Plays a left-to-right haptic wave that eases forward to mirror shimmer motion.
+    public func playShimmerWave(
+        tapCount: Int = 5,
+        duration: TimeInterval = 0.65,
+        minimumInterval: TimeInterval = 0.2
+    ) {
+        let now = Date()
+        guard now.timeIntervalSince(lastWaveStartAt) >= minimumInterval else { return }
+        lastWaveStartAt = now
+
+        activeTask?.cancel()
+        activeTask = Task { @MainActor in
+            let clampedTapCount = max(tapCount, 2)
+            var previousEasedPhase = 0.0
+
+            for i in 0..<clampedTapCount {
+                guard !Task.isCancelled else { return }
+
+                if i > 0 {
+                    let phase = Double(i) / Double(clampedTapCount - 1)
+                    let easedPhase = pow(phase, 1.35)
+                    let delay = max(0, duration * (easedPhase - previousEasedPhase))
+                    previousEasedPhase = easedPhase
+
+                    if delay > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    }
+                }
+
+                guard !Task.isCancelled else { return }
+
+                let feedback: NSHapticFeedbackManager.FeedbackPattern =
+                    i == clampedTapCount - 1 ? .levelChange : .alignment
+                NSHapticFeedbackManager.defaultPerformer.perform(feedback, performanceTime: .now)
+            }
+        }
+    }
+    
+    /// Plays a single emphasis haptic for a notable UI event (new insight, popup appearing).
+    public func playEventPulse() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+    }
+    
+    public func cancel() {
+        activeTask?.cancel()
+        activeTask = nil
+    }
+}
+
 // MARK: - Page Transition Styles
 
 /// Custom page transition animation types
@@ -300,7 +360,7 @@ struct ShimmerModifier: ViewModifier {
                         let bandWidth = width * bandWidthRatio
                         let travelDistance = width + (bandWidth * 2)
 
-                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 45.0, paused: !isLoading)) { context in
+                        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isLoading)) { context in
                             let elapsed = context.date.timeIntervalSinceReferenceDate * shimmerSpeed
                             let progress = elapsed - floor(elapsed)
                             let offsetX = (progress * travelDistance) - bandWidth
@@ -371,7 +431,7 @@ struct TextShimmerModifier: ViewModifier {
                             .rotationEffect(shimmerAngle)
                             .offset(x: (width - bandWidth) * 0.18)
                         } else {
-                            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: !isLoading)) { context in
+                            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !isLoading)) { context in
                                 let elapsed = (context.date.timeIntervalSinceReferenceDate + phaseOffset) * shimmerSpeed
                                 let progress = elapsed - floor(elapsed)
                                 let easedProgress = progress * progress * (3 - (2 * progress))

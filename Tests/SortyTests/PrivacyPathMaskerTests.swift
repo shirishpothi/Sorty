@@ -48,4 +48,20 @@ final class PrivacyPathMaskerTests: XCTestCase {
 
         XCTAssertEqual(redacted, "/Users/[REDACTED_USER]/Downloads/AyuGram Desktop")
     }
+
+    func testRedactedTextReplacesAllUsersDirectoryOccurrences() {
+        let text = "Primary: /Users/alex/Desktop | Secondary: /users/jordan/Documents"
+
+        let redacted = PrivacyPathMasker.redactedText(text, currentUsername: "ignored")
+
+        XCTAssertEqual(redacted, "Primary: /Users/[REDACTED_USER]/Desktop | Secondary: /users/[REDACTED_USER]/Documents")
+    }
+
+    func testRedactedTextReplacesCurrentUsernamePathSegmentOutsideUsersDirectory() {
+        let text = "scan /Volumes/Data/shirishpothi/Invoices and /home/shirishpothi/.config"
+
+        let redacted = PrivacyPathMasker.redactedText(text, currentUsername: "shirishpothi")
+
+        XCTAssertEqual(redacted, "scan /Volumes/Data/[REDACTED_USER]/Invoices and /home/[REDACTED_USER]/.config")
+    }
 }

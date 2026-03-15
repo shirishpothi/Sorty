@@ -347,7 +347,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     // Throttle timer for display content updates (prevents layout thrashing)
     private var displayUpdateTask: Task<Void, Never>?
     private var lastDisplayUpdate: Date = .distantPast
-    private let displayUpdateInterval: TimeInterval = 0.3 // 300ms throttle
+    private let displayUpdateInterval: TimeInterval = 0.55 // Slightly slower cadence to reduce dropped frames during generation
     nonisolated private static let streamPreviewCharacterLimit = 1000
     nonisolated private static let assignmentDestinationRegex =
         try? NSRegularExpression(
@@ -381,7 +381,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var currentInsight: String = ""
     @Published public var insightHistory: [AIInsight] = []
     private var lastInsightExtraction: Date = .distantPast
-    private let insightExtractionInterval: TimeInterval = 0.5 // Reduce processing overhead during streaming
+    private let insightExtractionInterval: TimeInterval = 0.9 // Lower extraction frequency to cut parser pressure while streaming
     private let insightExtractor = AIInsightExtractor()
     private var insightExtractionTask: Task<Void, Never>?
     
@@ -734,6 +734,65 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             jsonStartedInStream = true
         }
     }
+
+    /// Rebuild insight timeline from the already-buffered stream text.
+    /// Used when users re-enable Live Insights during an active generation.
+    @MainActor
+    private func rebuildInsightsFromStreamingSnapshot() {
+        let snapshot = streamingContent
+        guard !snapshot.isEmpty else {
+            withBatchUpdates {
+                currentInsight = ""
+                insightHistory = []
+            }
+            progressLineBuffer = ""
+            receivedProgressLines = false
+            jsonStartedInStream = false
+            progressLineCount = 0
+            return
+        }
+
+        let rawLines = snapshot.components(separatedBy: .newlines)
+        var rebuiltInsights: [AIInsight] = []
+        var sawJSON = false
+        var trailingPartialBuffer = ""
+
+        for (index, rawLine) in rawLines.enumerated() {
+            let isLastLine = index == rawLines.count - 1
+            let trimmedLine = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if trimmedLine.contains("{") {
+                sawJSON = true
+                trailingPartialBuffer = ""
+                break
+            }
+
+            if isLastLine, !snapshot.hasSuffix("\n") {
+                trailingPartialBuffer = rawLine
+            }
+
+            guard !trimmedLine.isEmpty else { continue }
+            guard trimmedLine.hasPrefix(">> "), rebuiltInsights.count < progressLineLimit else { continue }
+
+            let lineContent = String(trimmedLine.dropFirst(3))
+            guard let insight = parseProgressLine(lineContent) else { continue }
+
+            if let existingIndex = rebuiltInsights.firstIndex(where: { $0.id == insight.id }) {
+                rebuiltInsights.remove(at: existingIndex)
+            }
+            rebuiltInsights.append(insight)
+        }
+
+        progressLineBuffer = sawJSON ? "" : trailingPartialBuffer
+        receivedProgressLines = !rebuiltInsights.isEmpty
+        jsonStartedInStream = sawJSON || progressLineBuffer.contains("{")
+        progressLineCount = rebuiltInsights.count
+
+        withBatchUpdates {
+            currentInsight = rebuiltInsights.last?.text ?? ""
+            insightHistory = rebuiltInsights
+        }
+    }
     
     /// Parse a progress line like "file: Assigning invoice.pdf to Finances" into an AIInsight
     private func parseProgressLine(_ content: String) -> AIInsight? {
@@ -992,7 +1051,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     /// Get cached insights if available, otherwise returns current insights
     /// Use this from UI to avoid re-parsing during render
     public func getCachedInsights() -> (current: String, history: [AIInsight]) {
-        guard liveInsightsEnabled else { return ("", []) }
         if let cache = insightsCache, cache.isValid {
             return (cache.currentInsight, cache.insights)
         }
@@ -1011,9 +1069,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         if enabled {
             if !streamingContent.isEmpty {
+                rebuildInsightsFromStreamingSnapshot()
                 syncDisplayContentImmediately()
                 scheduleDisplayUpdate(for: streamingContent, force: true)
-                extractInsightsIfNeeded(force: true)
+                if !receivedProgressLines {
+                    extractInsightsIfNeeded(force: true)
+                }
             }
             return
         }
@@ -1025,8 +1086,6 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         insightExtractionTask?.cancel()
         insightExtractionTask = nil
-        currentInsight = ""
-        insightHistory = []
         lastInsightExtraction = .distantPast
         insightsCache = nil
     }

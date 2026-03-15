@@ -88,31 +88,33 @@ struct AboutView: View {
             Spacer().frame(height: 8)
             
             // Buttons
-            HStack(spacing: 12) {
-                Button("Docs") {
-                    HapticFeedbackManager.shared.tap()
-                    if let url = URL(string: "https://github.com/shirishpothi/Sorty#readme") {
-                        NSWorkspace.shared.open(url)
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    Button("Docs") {
+                        HapticFeedbackManager.shared.tap()
+                        if let url = URL(string: "https://github.com/shirishpothi/Sorty#readme") {
+                            NSWorkspace.shared.open(url)
+                        }
                     }
-                }
-                .buttonStyle(.bordered)
-                .scaleEffect(docsHovered ? 1.04 : 1.0)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) { docsHovered = hovering }
-                    if hovering { HapticFeedbackManager.shared.selection() }
-                }
-                
-                Button("GitHub") {
-                    HapticFeedbackManager.shared.tap()
-                    if let url = URL(string: "https://github.com/shirishpothi/Sorty") {
-                        NSWorkspace.shared.open(url)
+                    .buttonStyle(.bordered)
+                    .scaleEffect(docsHovered ? 1.04 : 1.0)
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.15)) { docsHovered = hovering }
+                        if hovering { HapticFeedbackManager.shared.selection() }
                     }
-                }
-                .buttonStyle(.bordered)
-                .scaleEffect(githubHovered ? 1.04 : 1.0)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) { githubHovered = hovering }
-                    if hovering { HapticFeedbackManager.shared.selection() }
+                    
+                    Button("GitHub") {
+                        HapticFeedbackManager.shared.tap()
+                        if let url = URL(string: "https://github.com/shirishpothi/Sorty") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .scaleEffect(githubHovered ? 1.04 : 1.0)
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.15)) { githubHovered = hovering }
+                        if hovering { HapticFeedbackManager.shared.selection() }
+                    }
                 }
 
                 Button("Accreditations") {

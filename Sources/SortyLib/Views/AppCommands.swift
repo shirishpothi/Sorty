@@ -233,8 +233,14 @@ public struct SortyCommands: Commands {
             Button("Accreditations") {
                 appState?.showAccreditations(entryPoint: .help)
             }
-                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .keyboardShortcut("©", modifiers: .command)
                 .disabled(appState == nil)
+
+            Button("Internet Access Policy") {
+                appState?.showInternetAccessPolicy()
+            }
+            .keyboardShortcut("🌐", modifiers: .command)
+            .disabled(appState == nil)
 
             Divider()
 
@@ -438,6 +444,7 @@ public class AppState: ObservableObject {
     // These MUST be retained to keep windows alive during animations
     private var aboutWindowController: NSWindowController?
     private var accreditationsWindowController: NSWindowController?
+    private var internetAccessPolicyWindowController: NSWindowController?
     private var thanksWindowController: NSWindowController?
     private let helpMenuHoverHapticsController = HelpMenuHoverHapticsController()
 
@@ -457,6 +464,11 @@ public class AppState: ObservableObject {
     public enum AccreditationsEntryPoint: Sendable {
         case about
         case help
+    }
+
+    public enum InternetAccessPolicyEntryPoint: Sendable {
+        case about
+        case appMenu
     }
 
     public struct DuplicatesHandoff: Equatable, Sendable {
@@ -1008,6 +1020,49 @@ public class AppState: ObservableObject {
         aboutWindowController = NSWindowController(window: window)
         aboutWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    public func showInternetAccessPolicy(entryPoint: InternetAccessPolicyEntryPoint = .appMenu) {
+        let policyView = InternetAccessPolicyView(
+            showBackButton: entryPoint == .about,
+            onBack: entryPoint == .about ? { [weak self] in
+                self?.internetAccessPolicyWindowController?.close()
+                self?.showAbout()
+                HapticFeedbackManager.shared.selection()
+            } : nil
+        )
+        let hostingView = NSHostingView(rootView: policyView)
+
+        if let existingWindow = internetAccessPolicyWindowController?.window {
+            existingWindow.contentView = hostingView
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            HapticFeedbackManager.shared.selection()
+            return
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = hostingView
+        window.title = "Internet Access Policy"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.isReleasedWhenClosed = false
+        if #available(macOS 26.0, *) {
+            window.backgroundColor = .clear
+            window.isOpaque = false
+        }
+        window.center()
+
+        internetAccessPolicyWindowController = NSWindowController(window: window)
+        internetAccessPolicyWindowController?.showWindow(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        HapticFeedbackManager.shared.selection()
     }
 
     public func showAccreditations(entryPoint: AccreditationsEntryPoint = .help) {
