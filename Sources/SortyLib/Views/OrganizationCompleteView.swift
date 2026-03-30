@@ -156,6 +156,11 @@ struct OrganizationCompleteView: View {
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.sortyPrimary(size: .large))
+                        .onHover { hovering in
+                            if hovering {
+                                HapticFeedbackManager.shared.selection()
+                            }
+                        }
                         .help("Open the organized folder in Finder")
                         .accessibilityHint("Shows your organized files in Finder")
                         
@@ -168,6 +173,11 @@ struct OrganizationCompleteView: View {
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
+                            .onHover { hovering in
+                                if hovering {
+                                    HapticFeedbackManager.shared.selection()
+                                }
+                            }
                             .help("Undo the latest organization for this folder")
                             .accessibilityHint("Restores files from the most recent successful run")
                             
@@ -182,6 +192,11 @@ struct OrganizationCompleteView: View {
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
+                            .onHover { hovering in
+                                if hovering {
+                                    HapticFeedbackManager.shared.selection()
+                                }
+                            }
                             .help("Choose another folder to organize")
                             .accessibilityHint("Returns to folder selection")
                         }
@@ -199,6 +214,11 @@ struct OrganizationCompleteView: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
                     .help("Review this run and previous organization sessions")
                     .accessibilityHint("Opens organization history")
                     .padding(.top, 8)
@@ -298,10 +318,16 @@ struct OrganizationCompleteView: View {
         Task {
             do {
                 try await organizer.undoHistoryEntry(lastEntry)
+                await MainActor.run {
+                    HapticFeedbackManager.shared.success()
+                }
                 withAnimation(.pageTransition) {
                     organizer.reset()
                 }
             } catch {
+                await MainActor.run {
+                    HapticFeedbackManager.shared.error()
+                }
                 print("Failed to undo organization: \(error)")
             }
         }

@@ -781,8 +781,14 @@ final class AIConfigOCRKeywordsTests: XCTestCase {
         XCTAssertEqual(decoded.customOCRKeywords, ["custom1", "custom2"])
     }
 
+    func testLimitVisionImagesDefault() {
+        let config = AIConfig.default
+        XCTAssertTrue(config.limitVisionImages)
+    }
+
     func testVisionAndOCRSettingsCodable() throws {
         var config = AIConfig.default
+        config.limitVisionImages = false
         config.visionBatchStrategy = .noText
         config.visionDetailLevel = .high
         config.ocrLanguages = ["en-US", "fr-FR"]
@@ -790,6 +796,7 @@ final class AIConfigOCRKeywordsTests: XCTestCase {
         let data = try JSONEncoder().encode(config)
         let decoded = try JSONDecoder().decode(AIConfig.self, from: data)
 
+        XCTAssertFalse(decoded.limitVisionImages)
         XCTAssertEqual(decoded.visionBatchStrategy, .noText)
         XCTAssertEqual(decoded.visionDetailLevel, .high)
         XCTAssertEqual(decoded.ocrLanguages, ["en-US", "fr-FR"])

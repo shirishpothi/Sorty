@@ -21,6 +21,7 @@ public struct WorkspaceHealthView: View {
     @State private var analysisError: String?
     @State private var analysisStartedAt: Date?
     @State private var autoRefreshTask: Task<Void, Never>?
+    @State private var initialRefreshTask: Task<Void, Never>?
     
     public init() {}
     
@@ -116,8 +117,12 @@ public struct WorkspaceHealthView: View {
         .onAppear {
             if let dir = appState.selectedDirectory {
                 selectedDirectory = dir
-                Task { await refreshAnalysis() }
+                scheduleInitialRefresh()
             }
+        }
+        .onDisappear {
+            initialRefreshTask?.cancel()
+            autoRefreshTask?.cancel()
         }
         .onChange(of: healthManager.fileChangeDetected) { _, _ in
             // Auto-refresh on file changes
@@ -611,7 +616,18 @@ public struct WorkspaceHealthView: View {
             Task { await refreshAnalysis() }
         }
     }
-    
+
+    private func scheduleInitialRefresh() {
+        initialRefreshTask?.cancel()
+        guard selectedDirectory != nil else { return }
+
+        initialRefreshTask = Task {
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard !Task.isCancelled else { return }
+            await refreshAnalysis()
+        }
+    }
+
     private func refreshAnalysis() async {
         guard let dir = selectedDirectory else { return }
 

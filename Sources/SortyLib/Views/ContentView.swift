@@ -17,8 +17,6 @@ public struct ContentView: View {
     @EnvironmentObject var extensionListener: ExtensionListener
 
     @State private var previousView: AppState.AppView?
-    @State private var navigationDirection: NavigationDirection = .forward
-    
 
     public init() {}
 
@@ -29,13 +27,13 @@ public struct ContentView: View {
         } else {
             ZStack {
                 mainContent
-                
+
                 // HUD notification overlay (bottom-left)
                 HUDNotificationOverlay()
             }
         }
     }
-    
+
     private var mainContent: some View {
         NavigationSplitView(columnVisibility: Binding(
             get: { appState.showingSidebar ? .all : .detailOnly },
@@ -46,19 +44,16 @@ public struct ContentView: View {
                 get: { appState.currentView },
                 set: { newValue in
                     if let newValue = newValue {
-                        // Determine navigation direction for animation
-                        navigationDirection = determineDirection(from: appState.currentView, to: newValue)
+                        guard newValue != appState.currentView else { return }
                         previousView = appState.currentView
 
                         // Haptic feedback on navigation
                         HapticFeedbackManager.shared.selection()
-                        
+
                         // Clear navigatedFromSettings when using sidebar
                         appState.navigatedFromSettings = false
 
-                        withAnimation(.pageTransition) {
-                            appState.currentView = newValue
-                        }
+                        appState.currentView = newValue
                     }
                 }
             )) {
@@ -134,30 +129,25 @@ public struct ContentView: View {
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
-            // Main content area - uses full width with page transitions
-            ZStack {
-                contentView(for: appState.currentView)
-                    .id(appState.currentView)
-                    .transition(transitionForDirection(navigationDirection))
-            }
-            .animation(.pageTransition, value: appState.currentView)
-            .toolbar {
-                if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
-                    ToolbarItem(placement: .navigation) {
-                        Button {
-                            HapticFeedbackManager.shared.tap()
-                            appState.navigatedFromSettings = false
-                            withAnimation(.pageTransition) {
+            // Keep the detail view lightweight during navigation: only render the active page.
+            contentView(for: appState.currentView)
+                .transition(TransitionStyles.scaleAndFade)
+                .animation(.easeInOut(duration: 0.3), value: appState.currentView)
+                .toolbar {
+                    if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
+                        ToolbarItem(placement: .navigation) {
+                            Button {
+                                HapticFeedbackManager.shared.tap()
+                                appState.navigatedFromSettings = false
                                 appState.currentView = prev
+                            } label: {
+                                Label("Back", systemImage: "chevron.left")
                             }
-                        } label: {
-                            Label("Back", systemImage: "chevron.left")
+                            .accessibilityIdentifier("SettingsReturnButton")
+                            .accessibilityLabel("Return to previous view")
                         }
-                        .accessibilityIdentifier("SettingsReturnButton")
-                        .accessibilityLabel("Return to previous view")
                     }
                 }
-            }
         }
         .navigationSplitViewStyle(.balanced)
         .accessibilityElement(children: .contain)
@@ -168,7 +158,7 @@ public struct ContentView: View {
                 previousView = oldValue
             }
         }
-        .onChange(of: appState.showDirectoryPicker) { oldValue, showPicker in
+        .onChange(of: appState.showDirectoryPicker) { _, showPicker in
             if showPicker {
                 openDirectoryPicker()
             }
@@ -176,9 +166,7 @@ public struct ContentView: View {
         .onReceive(extensionListener.$incomingURL) { url in
             if let url = url {
                 appState.selectedDirectory = url
-                withAnimation(.pageTransition) {
-                    appState.currentView = .organize
-                }
+                appState.currentView = .organize
                 extensionListener.incomingURL = nil
             }
         }
@@ -218,28 +206,6 @@ public struct ContentView: View {
         }
     }
 
-    private func transitionForDirection(_ direction: NavigationDirection) -> AnyTransition {
-        switch direction {
-        case .forward:
-            return TransitionStyles.slideFromRight
-        case .backward:
-            return TransitionStyles.slideFromLeft
-        }
-    }
-
-    private func determineDirection(from oldView: AppState.AppView, to newView: AppState.AppView) -> NavigationDirection {
-        let viewOrder: [AppState.AppView] = [
-            .organize, .batchOrganization, .workspaceHealth, .duplicates, .settings, .history, .exclusions, .watchedFolders, .storageLocations, .learnings
-        ]
-
-        guard let oldIndex = viewOrder.firstIndex(of: oldView),
-              let newIndex = viewOrder.firstIndex(of: newView) else {
-            return .forward
-        }
-
-        return newIndex > oldIndex ? .forward : .backward
-    }
-
     private func openDirectoryPicker() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
@@ -255,17 +221,6 @@ public struct ContentView: View {
 
         appState.showDirectoryPicker = false
     }
-
-
-
-
-}
-
-// MARK: - Navigation Direction
-
-enum NavigationDirection {
-    case forward
-    case backward
 }
 
 // MARK: - Preview
@@ -299,7 +254,7 @@ enum PreviewObjects {
         state.hasCompletedOnboarding = true
         return state
     }
-    
+
     static var onboardingAppState: AppState {
         let state = AppState()
         state.hasCompletedOnboarding = false

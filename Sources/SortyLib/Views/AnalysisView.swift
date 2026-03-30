@@ -5,8 +5,8 @@
 //  Real-time organization display with streaming progress
 //
 
-import SwiftUI
 import Combine
+import SwiftUI
 import UniformTypeIdentifiers
 
 // MARK: - Analysis Icon Provider
@@ -27,7 +27,8 @@ enum AnalysisIconProvider {
     }
 
     static func icon(forFileExtension fileExtension: String) -> NSImage {
-        let normalizedExtension = fileExtension
+        let normalizedExtension =
+            fileExtension
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         guard !normalizedExtension.isEmpty else {
@@ -53,11 +54,11 @@ enum AnalysisIconProvider {
 final class AnalysisRefreshManager: ObservableObject {
     @Published var currentFunnyMessage: String = ""
     @Published var funnyMessageOpacity: Double = 0
-    
+
     private var refreshManager: RefreshManager?
     private weak var organizer: FolderOrganizer?
     private var timerGroup: CoordinatedRefreshGroup?
-    
+
     private let funnyMessages = [
         "Teaching folders to play nice together...",
         "Convincing files they belong somewhere...",
@@ -78,34 +79,34 @@ final class AnalysisRefreshManager: ObservableObject {
         "Orchestrating a symphony of folders...",
         "Performing file feng shui...",
         "Making Marie Kondo proud...",
-        "Alphabetizing... just kidding, we're smarter than that..."
+        "Alphabetizing... just kidding, we're smarter than that...",
     ]
-    
+
     private let calmerMessages = [
         "Still working...",
         "Almost there...",
         "Processing your files...",
         "Organizing in progress...",
-        "Just a moment longer..."
+        "Just a moment longer...",
     ]
-    
+
     func start(organizer: FolderOrganizer) {
         self.organizer = organizer
-        
+
         // Set initial values
         currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
-        
+
         withAnimation(.easeIn(duration: 0.5)) {
             funnyMessageOpacity = 1
         }
-        
+
         // Use the centralized RefreshManager with coordinated group
         refreshManager = RefreshManager()
         timerGroup = refreshManager?.createCoordinatedGroup()
-        
+
         startRefreshLoop()
     }
-    
+
     func stop() {
         timerGroup?.cancelAll()
         timerGroup = nil
@@ -115,15 +116,15 @@ final class AnalysisRefreshManager: ObservableObject {
         currentFunnyMessage = ""
         funnyMessageOpacity = 0
     }
-    
+
     func pause() {
         timerGroup?.pause()
     }
-    
+
     func resume() {
         timerGroup?.resume()
     }
-    
+
     private func startRefreshLoop() {
         // Use async tasks with weak self to prevent retain cycles
         // Funny message cycle: every 5s (reduced from 4s)
@@ -133,24 +134,24 @@ final class AnalysisRefreshManager: ObservableObject {
             }
         }
     }
-    
+
     private func cycleFunnyMessage() async {
         guard organizer != nil else { return }
-        
+
         withAnimation(.easeInOut(duration: 0.55)) {
             funnyMessageOpacity = 0
         }
-        
+
         try? await Task.sleep(nanoseconds: 520_000_000)
         guard organizer != nil else { return }
-        
+
         let elapsedSeconds = Int(organizer?.elapsedTime ?? 0)
         if elapsedSeconds > 30 {
             currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages[0]
         } else {
             currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
         }
-        
+
         withAnimation(.easeInOut(duration: 0.65)) {
             funnyMessageOpacity = 1
         }
@@ -168,16 +169,26 @@ struct AnalysisView: View {
     @State private var isCancelHovered = false
     @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
+    @State private var pendingModelSwitch: PendingModelSwitch?
     @State private var lastInsightCount = 0
     @State private var lastMessageTier: MessageTier = .none
     @State private var lastInsightPulseAt: Date = .distantPast
-    
+
     private enum MessageTier {
         case none
         case backgroundTip
         case takingLonger
     }
-    
+
+    private struct PendingModelSwitch: Equatable {
+        let provider: AIProvider
+        let model: String
+
+        var restartStage: String {
+            "Restarting analysis with \(provider.displayName) (\(model))..."
+        }
+    }
+
     private var currentMessageTier: MessageTier {
         let elapsedSeconds = Int(organizer.elapsedTime)
         if elapsedSeconds >= 90 || organizer.showTimeoutMessage {
@@ -191,26 +202,29 @@ struct AnalysisView: View {
     var body: some View {
         WorkflowContainer(currentStep: .analyze) {
             Spacer(minLength: 20)
-            
+
             VStack(spacing: 24) {
                 progressSection
                     .opacity(hasAppeared ? 1 : 0)
                     .scaleEffect(hasAppeared ? 1 : 0.9)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
-                
+                    .animation(
+                        .spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+
                 stageIndicator
                     .opacity(hasAppeared ? 1 : 0)
                     .offset(y: hasAppeared ? 0 : 10)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+                    .animation(
+                        .spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
 
                 tieredNoticeView
 
                 if organizer.isStreaming {
                     aiInsightsView
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .opacity
-                        ))
+                        .transition(
+                            .asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                 }
 
                 Button {
@@ -234,7 +248,9 @@ struct AnalysisView: View {
                 }
                 .keyboardShortcut(.escape, modifiers: [])
                 .opacity(hasAppeared ? 1 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared
+                )
                 .accessibilityIdentifier("AnalysisCancelButton")
                 .confirmationDialog(
                     "Cancel Organization?",
@@ -247,13 +263,15 @@ struct AnalysisView: View {
                             organizer.reset()
                         }
                     }
-                    Button("Continue", role: .cancel) { }
+                    Button("Continue", role: .cancel) {}
                 } message: {
-                    Text("This will stop the AI analysis and return to folder selection. Your progress will not be saved.")
+                    Text(
+                        "This will stop the AI analysis and return to folder selection. Your progress will not be saved."
+                    )
                 }
             }
             .frame(maxHeight: .infinity)
-            
+
             Spacer(minLength: 20)
         }
         .onAppear {
@@ -277,30 +295,58 @@ struct AnalysisView: View {
                 HapticSequenceManager.shared.playEventPulse()
             }
         }
+        .onChange(of: organizer.organizationStage) { _, newStage in
+            guard let pendingModelSwitch else { return }
+            guard !newStage.isEmpty, newStage != pendingModelSwitch.restartStage else { return }
+            self.pendingModelSwitch = nil
+        }
+        .modelSelectionOverlay(
+            isPresented: $showFasterModelPicker,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model,
+            contextMessage: "Sorty will stop the current attempt and restart analysis from the beginning. The model you choose becomes your active model for future runs.",
+            selectionActionTitle: "Restart Analysis",
+            onSelect: { provider, model in
+                handleFasterModelSelection(provider: provider, model: model)
+            }
+        )
     }
-    
+
     @ViewBuilder
     private var tieredNoticeView: some View {
-        switch currentMessageTier {
-        case .none:
-            EmptyView()
-        case .backgroundTip:
-            multitaskingHint
-                .transition(.asymmetric(
-                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                    removal: .opacity
-                ))
-        case .takingLonger:
-            timeoutMessage
-                .transition(.asymmetric(
-                    insertion: .scale(scale: 0.95).combined(with: .opacity),
-                    removal: .opacity
-                ))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Warning: Organization is taking longer than usual")
+        if let pendingModelSwitch {
+            modelSwitchNotice(pendingModelSwitch)
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .opacity
+                    )
+                )
+        } else {
+            switch currentMessageTier {
+            case .none:
+                EmptyView()
+            case .backgroundTip:
+                multitaskingHint
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+            case .takingLonger:
+                timeoutMessage
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.95).combined(with: .opacity),
+                            removal: .opacity
+                        )
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Warning: Organization is taking longer than usual")
+            }
         }
     }
-    
+
     private var progressSection: some View {
         StreamingProgressRing(
             progress: organizer.progress,
@@ -319,7 +365,7 @@ struct AnalysisView: View {
             funnyMessageOpacity: refreshManager.funnyMessageOpacity
         )
     }
-    
+
     private var isEstablishingConnection: Bool {
         if case .organizing = organizer.state {
             let stage = organizer.organizationStage
@@ -328,36 +374,22 @@ struct AnalysisView: View {
         }
         return false
     }
-    
+
     private var timeoutMessage: some View {
         InlineNotice(
             icon: "folder.badge.gearshape",
-            title: "Complex folder detected —",
-            message: "Large folders with many files may take 1-3 minutes to analyze. Feel free to switch windows—we'll notify you when ready.",
+            title: "This folder is taking longer than usual",
+            message: "Large folders can take 1-3 minutes. You can keep working in other apps. ",
             severity: .info,
             actions: [
                 InlineNoticeAction(title: "Try Faster Model", systemImage: "bolt.circle") {
+                    HapticFeedbackManager.shared.tap()
                     showFasterModelPicker = true
                 }
             ],
             isCentered: true
         )
-        .sheet(isPresented: $showFasterModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showFasterModelPicker,
-                currentProvider: settingsViewModel.config.provider,
-                currentModel: settingsViewModel.config.model,
-                onSelect: { provider, model in
-                    showFasterModelPicker = false
-                    Task {
-                        try? await organizer.regenerateWithModel(
-                            provider: provider,
-                            model: model
-                        )
-                    }
-                }
-            )
-        }
+        .modelSelectorTriggerBounds()
     }
 
     private var multitaskingHint: some View {
@@ -371,13 +403,13 @@ struct AnalysisView: View {
         .accessibilityLabel("Background processing")
         .accessibilityHint("You will be notified when the preview is ready")
     }
-    
+
     // MARK: - AI Insights View
-    
+
     private var cachedInsights: (current: String, history: [AIInsight]) {
         organizer.getCachedInsights()
     }
-    
+
     private var aiInsightsView: some View {
         InsightHistorySection(
             isStreaming: organizer.isStreaming,
@@ -398,8 +430,20 @@ struct AnalysisView: View {
         )
     }
 
+    private func modelSwitchNotice(_ pendingModelSwitch: PendingModelSwitch) -> some View {
+        InlineNotice(
+            icon: "bolt.fill",
+            title: "Switching to \(pendingModelSwitch.provider.displayName) / \(pendingModelSwitch.model)",
+            message: "Stopping the current attempt and restarting analysis from the top. This model is now your active selection.",
+            severity: .tip,
+            isCentered: true
+        )
+    }
+
     private func recordCancelledAnalysis() {
-        guard let directory = appState.selectedDirectory ?? organizer.currentDirectory else { return }
+        guard let directory = appState.selectedDirectory ?? organizer.currentDirectory else {
+            return
+        }
 
         let plan = organizer.currentPlan
         let fileCount = max(plan?.totalFiles ?? 0, organizer.scannedFileCount)
@@ -420,6 +464,25 @@ struct AnalysisView: View {
             aiModel: settingsViewModel.config.model
         )
     }
+
+    private func handleFasterModelSelection(provider: AIProvider, model: String) {
+        showFasterModelPicker = false
+        pendingModelSwitch = PendingModelSwitch(provider: provider, model: model)
+
+        Task {
+            do {
+                settingsViewModel.config.provider = provider
+                settingsViewModel.config.model = model
+                try await organizer.configure(with: settingsViewModel.config)
+                try await organizer.regenerateWithModel(provider: provider, model: model)
+            } catch {
+                await MainActor.run {
+                    pendingModelSwitch = nil
+                    organizer.state = .error(error)
+                }
+            }
+        }
+    }
 }
 
 private struct StreamingProgressRing: View {
@@ -428,32 +491,86 @@ private struct StreamingProgressRing: View {
     let isEstablishingConnection: Bool
 
     var body: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                SortyGradientCircularProgress(
-                    progress: progress,
-                    size: 120,
-                    lineWidth: 8,
-                    showsShimmer: false
+        ZStack {
+            // Dark glass backdrop — keeps text legible and gives the ring depth
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.black.opacity(0.30),
+                            Color.black.opacity(0.12),
+                            .clear,
+                        ],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: 86
+                    )
                 )
-                
-                VStack(spacing: 2) {
-                    Text("\(Int(progress * 100))%")
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText())
-                        .animation(.easeInOut(duration: 0.3), value: Int(progress * 100))
+                .frame(width: 172, height: 172)
 
-                    if elapsedSeconds > 0 {
-                        Text(Self.formatTime(elapsedSeconds))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
+            // Faint accent halo that sits behind the track ring
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            Color.accentColor.opacity(0.0),
+                            Color.accentColor.opacity(0.12),
+                            Color.accentColor.opacity(0.0),
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 22
+                )
+                .frame(width: 152, height: 152)
+                .blur(radius: 10)
+
+            // Thin glassy rim
+            Circle()
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.18), .white.opacity(0.04)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+                .frame(width: 152, height: 152)
+
+            SortyGradientCircularTrackProgress(
+                progress: progress,
+                accent: .accentColor,
+                size: 152,
+                lineWidth: 11,
+                isIndeterminate: isEstablishingConnection && progress <= 0.02
+            )
+
+            VStack(spacing: 4) {
+                Text("\(Int(progress * 100))%")
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.white, .white.opacity(0.85)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.3), value: Int(progress * 100))
+
+                if elapsedSeconds > 0 {
+                    Text(Self.formatTime(elapsedSeconds))
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .monospacedDigit()
                 }
-                .accessibilityIdentifier("AnalysisPercentageText")
             }
+            .accessibilityIdentifier("AnalysisPercentageText")
         }
+        .frame(width: 172, height: 172)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Organization preview progress")
+        .accessibilityValue("\(Int(progress * 100)) percent")
     }
 
     private static func formatTime(_ elapsedSeconds: Int) -> String {
@@ -509,11 +626,12 @@ private struct AIReasoningStatus: View {
                         .offset(y: funnyMessageOpacity > 0.5 ? 0 : 1)
                         .blur(radius: funnyMessageOpacity > 0.5 ? 0 : 0.3)
                         .animation(.easeInOut(duration: 0.6), value: funnyMessageOpacity)
-                        .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
+                        .transition(
+                            .opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
                 }
             }
         }
-        .padding(.leading, -10) // Move the whole group slightly left to compensate for mascot's orbit padding
+        .padding(.leading, -10)  // Move the whole group slightly left to compensate for mascot's orbit padding
         .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Current organization stage: \(organizationStage)")
@@ -554,12 +672,13 @@ private struct InsightHistorySection: View {
     let streamPreview: String
     @Binding var liveInsightsEnabled: Bool
     @Binding var streamingModeEnabled: Bool
-    
+
     @StateObject private var viewState = AnalysisInsightViewState()
     @State private var showPrivacyWarning = false
 
     private var displayedStreamPreview: String {
-        FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(streamPreview) : streamPreview
+        FeatureFlags.privacyModeEnabled
+            ? PrivacyPathMasker.redactedText(streamPreview) : streamPreview
     }
 
     var body: some View {
@@ -587,21 +706,21 @@ private struct InsightHistorySection: View {
                             .font(.callout)
                             .foregroundStyle(.green)
                     }
-                    
+
                     Text(headerTitle)
                         .font(.callout)
                         .fontWeight(.medium)
                         .foregroundStyle(.primary)
-                    
+
                     if isStreaming {
                         Image(systemName: "waveform")
                             .font(.caption)
                             .foregroundStyle(Color.accentColor)
                             .symbolEffect(.variableColor.iterative, options: .repeating)
                     }
-                    
+
                     Spacer()
-                    
+
                     let insightCount = insights.history.count
                     if insightCount > 0 {
                         Text("\(insightCount)")
@@ -623,12 +742,18 @@ private struct InsightHistorySection: View {
                             }
                             HapticFeedbackManager.shared.selection()
                         } label: {
-                            Image(systemName: liveInsightsEnabled ? "bolt.badge.checkmark" : "bolt.slash")
-                                .font(.caption)
-                                .foregroundStyle(liveInsightsEnabled ? Color.accentColor : .secondary)
+                            Image(
+                                systemName: liveInsightsEnabled
+                                    ? "bolt.badge.checkmark" : "bolt.slash"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(liveInsightsEnabled ? Color.accentColor : .secondary)
                         }
                         .buttonStyle(.plain)
-                        .help(liveInsightsEnabled ? "Disable streamed live insights" : "Enable streamed live insights")
+                        .help(
+                            liveInsightsEnabled
+                                ? "Disable streamed live insights" : "Enable streamed live insights"
+                        )
                         .accessibilityIdentifier("LiveInsightsToggle")
                     }
 
@@ -639,12 +764,19 @@ private struct InsightHistorySection: View {
                             }
                             HapticFeedbackManager.shared.selection()
                         } label: {
-                            Image(systemName: streamingModeEnabled ? "dot.radiowaves.left.and.right" : "dot.radiowaves.left.and.right.slash")
-                                .font(.caption)
-                                .foregroundStyle(streamingModeEnabled ? Color.accentColor : .secondary)
+                            Image(
+                                systemName: streamingModeEnabled
+                                    ? "dot.radiowaves.left.and.right"
+                                    : "dot.radiowaves.left.and.right.slash"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(streamingModeEnabled ? Color.accentColor : .secondary)
                         }
                         .buttonStyle(.plain)
-                        .help(streamingModeEnabled ? "Disable Streaming Mode" : "Enable Streaming Mode")
+                        .help(
+                            streamingModeEnabled
+                                ? "Disable Streaming Mode" : "Enable Streaming Mode"
+                        )
                         .accessibilityIdentifier("StreamingModeToggle")
                     }
 
@@ -668,10 +800,12 @@ private struct InsightHistorySection: View {
                                         .font(.headline)
                                 }
 
-                                Text("Sorty masks username path segments in streamed text, but model-generated names can still appear before full parsing. Disable Streaming Mode and Live Insights for strict privacy.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(
+                                    "Sorty masks username path segments in streamed text, but model-generated names can still appear before full parsing. Disable Streaming Mode and Live Insights for strict privacy."
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
 
                                 Toggle("Streaming Mode", isOn: $streamingModeEnabled)
                                     .toggleStyle(.switch)
@@ -685,28 +819,36 @@ private struct InsightHistorySection: View {
                             .frame(width: 300)
                         }
                     }
-                    
+
                     if debugModeEnabled {
                         Button {
                             withAnimation(.spring()) {
                                 viewState.showDebugStream.toggle()
                             }
                         } label: {
-                            Image(systemName: viewState.showDebugStream ? "terminal.fill" : "terminal")
-                                .font(.caption)
-                                .foregroundStyle(viewState.showDebugStream ? Color.accentColor : .secondary)
+                            Image(
+                                systemName: viewState.showDebugStream ? "terminal.fill" : "terminal"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(
+                                viewState.showDebugStream ? Color.accentColor : .secondary)
                         }
                         .buttonStyle(.plain)
                         .disabled(!liveInsightsEnabled)
                         .opacity(liveInsightsEnabled ? 1 : 0.45)
-                        .help(liveInsightsEnabled ? "Toggle Streaming Mode preview" : "Enable Live Insights to preview Streaming Mode output")
+                        .help(
+                            liveInsightsEnabled
+                                ? "Toggle Streaming Mode preview"
+                                : "Enable Live Insights to preview Streaming Mode output")
                     }
-                    
+
                     Image(systemName: "chevron.down")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(viewState.isExpanded ? 0 : -90))
-                        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewState.isExpanded)
+                        .animation(
+                            .spring(response: 0.3, dampingFraction: 0.8),
+                            value: viewState.isExpanded)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -716,7 +858,7 @@ private struct InsightHistorySection: View {
                             LinearGradient(
                                 colors: [
                                     Color.accentColor.opacity(0.08),
-                                    Color.accentColor.opacity(0.03)
+                                    Color.accentColor.opacity(0.03),
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -726,12 +868,14 @@ private struct InsightHistorySection: View {
             }
             .buttonStyle(.plain)
             .contentShape(RoundedRectangle(cornerRadius: viewState.isExpanded ? 0 : 16))
-            
+
             if viewState.isExpanded {
                 LazyVStack(spacing: 14) {
                     liveInsightsPrimaryContent
 
-                    if streamingModeEnabled && liveInsightsEnabled && viewState.showDebugStream && debugModeEnabled {
+                    if streamingModeEnabled && liveInsightsEnabled && viewState.showDebugStream
+                        && debugModeEnabled
+                    {
                         streamingPreview
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
@@ -804,12 +948,12 @@ private struct InsightHistorySection: View {
         HStack(spacing: 12) {
             SortyGradientLoadingBar(width: 84, height: 8)
                 .padding(.vertical, 6)
-            
+
             Text("Receiving AI response...")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .italic()
-            
+
             Spacer()
         }
         .padding(.horizontal, 14)
@@ -826,7 +970,8 @@ private struct InsightHistorySection: View {
     }
 
     private var streamFallbackInsight: String? {
-        let content = displayedStreamPreview
+        let content =
+            displayedStreamPreview
             .replacingOccurrences(of: "...", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return nil }
@@ -835,17 +980,15 @@ private struct InsightHistorySection: View {
             return assignment
         }
 
-        let plainLine = content
+        let plainLine =
+            content
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .reversed()
             .first { line in
                 let lower = line.lowercased()
-                return line.count >= 12 &&
-                    !line.contains("{") &&
-                    !line.contains("}") &&
-                    !lower.hasPrefix("\"folders\"") &&
-                    !lower.hasPrefix("\"files\"")
+                return line.count >= 12 && !line.contains("{") && !line.contains("}")
+                    && !lower.hasPrefix("\"folders\"") && !lower.hasPrefix("\"files\"")
             }
 
         guard let plainLine else { return nil }
@@ -856,16 +999,22 @@ private struct InsightHistorySection: View {
         let folderPattern = #""name"\s*:\s*"([^"\n]{2,80})""#
         let filePattern = #""([^"\n]{2,140}\.[a-zA-Z0-9]{1,12})""#
 
-        guard let folderRegex = try? NSRegularExpression(pattern: folderPattern, options: [.caseInsensitive]),
-              let fileRegex = try? NSRegularExpression(pattern: filePattern, options: []) else {
+        guard
+            let folderRegex = try? NSRegularExpression(
+                pattern: folderPattern, options: [.caseInsensitive]),
+            let fileRegex = try? NSRegularExpression(pattern: filePattern, options: [])
+        else {
             return nil
         }
 
-        let folderMatches = folderRegex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
-        let fileMatches = fileRegex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
+        let folderMatches = folderRegex.matches(
+            in: text, options: [], range: NSRange(text.startIndex..., in: text))
+        let fileMatches = fileRegex.matches(
+            in: text, options: [], range: NSRange(text.startIndex..., in: text))
 
         guard let folderMatch = folderMatches.last,
-              let folderRange = Range(folderMatch.range(at: 1), in: text) else {
+            let folderRange = Range(folderMatch.range(at: 1), in: text)
+        else {
             return nil
         }
 
@@ -873,7 +1022,8 @@ private struct InsightHistorySection: View {
         guard isLikelyInsightFolderName(folderName) else { return nil }
 
         if let fileMatch = fileMatches.last,
-           let fileRange = Range(fileMatch.range(at: 1), in: text) {
+            let fileRange = Range(fileMatch.range(at: 1), in: text)
+        {
             let fileName = URL(fileURLWithPath: String(text[fileRange])).lastPathComponent
             if isLikelyFileName(fileName) {
                 return "Assigning \(fileName) to \(folderName)"
@@ -884,19 +1034,22 @@ private struct InsightHistorySection: View {
     }
 
     private func isLikelyInsightFolderName(_ candidate: String) -> Bool {
-        let normalized = candidate
+        let normalized =
+            candidate
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: ",.;:!?"))
             .lowercased()
         guard normalized.count >= 2, normalized.count <= 80 else { return false }
-        guard !normalized.contains("{"), !normalized.contains("}"), !normalized.contains("/") else { return false }
+        guard !normalized.contains("{"), !normalized.contains("}"), !normalized.contains("/") else {
+            return false
+        }
         guard URL(fileURLWithPath: normalized).pathExtension.isEmpty else { return false }
 
         let blocked: Set<String> = [
             "a", "an", "and", "as", "at", "by", "for", "from", "gets", "in", "is", "it",
             "name", "of", "on", "or", "that", "the", "this", "to", "with", "folder",
             "folders", "file", "files", "filename", "json", "reasoning", "notes",
-            "description", "content", "data", "true", "false", "null"
+            "description", "content", "data", "true", "false", "null",
         ]
         return !blocked.contains(normalized)
     }
@@ -922,22 +1075,25 @@ private struct InsightHistorySection: View {
         return .general
     }
 
-    private func currentInsightPill(insight: String, detail: AIInsight?, fallbackCategory: AIInsight.Category?) -> some View {
-        let displayInsight = FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(insight) : insight
+    private func currentInsightPill(
+        insight: String, detail: AIInsight?, fallbackCategory: AIInsight.Category?
+    ) -> some View {
+        let displayInsight =
+            FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(insight) : insight
 
         return HStack(spacing: 12) {
             insightIcon(for: detail, fallbackText: insight, fallbackCategory: fallbackCategory)
                 .frame(width: 24, height: 24)
-            
+
             Text(displayInsight)
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(.primary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
-            
+
             Spacer()
-            
+
             if isStreaming {
                 Circle()
                     .fill(Color.accentColor.opacity(0.4))
@@ -959,7 +1115,9 @@ private struct InsightHistorySection: View {
     }
 
     @ViewBuilder
-    private func insightIcon(for insight: AIInsight?, fallbackText: String, fallbackCategory: AIInsight.Category?) -> some View {
+    private func insightIcon(
+        for insight: AIInsight?, fallbackText: String, fallbackCategory: AIInsight.Category?
+    ) -> some View {
         if let filePath = insight?.filePath {
             let url = URL(fileURLWithPath: filePath)
             if url.hasDirectoryPath {
@@ -1029,11 +1187,15 @@ private struct InsightHistorySection: View {
     private func mentionedFileExtension(in text: String) -> String? {
         let pattern = #"(?:\"|')?([A-Za-z0-9_\-\(\) ]+\.([A-Za-z0-9]{1,12}))(?:\"|')?"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []),
-              let match = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text)).last,
-              let extRange = Range(match.range(at: 2), in: text) else {
+            let match = regex.matches(
+                in: text, options: [], range: NSRange(text.startIndex..., in: text)
+            ).last,
+            let extRange = Range(match.range(at: 2), in: text)
+        else {
             return nil
         }
-        let ext = String(text[extRange]).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let ext = String(text[extRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
         return ext.isEmpty ? nil : ext
     }
 
@@ -1045,7 +1207,8 @@ private struct InsightHistorySection: View {
         return mentionedFileExtension(in: text) != nil && lowered.contains(" to ")
     }
 
-    private func insightHistoryScroller(entries: [AIInsight], markFirstAsLatest: Bool) -> some View {
+    private func insightHistoryScroller(entries: [AIInsight], markFirstAsLatest: Bool) -> some View
+    {
         ScrollView {
             FlowLayout(spacing: 6) {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { index, insight in
@@ -1083,7 +1246,7 @@ private struct InsightHistorySection: View {
                     .fontWeight(.medium)
             }
             .font(.caption)
-            
+
             ScrollView {
                 ScrollViewReader { proxy in
                     VStack(alignment: .leading, spacing: 0) {
@@ -1113,7 +1276,9 @@ private struct InsightHistorySection: View {
                         .stroke(Color(NSColor.separatorColor), lineWidth: 1)
                 )
         )
-        .accessibilityLabel(FeatureFlags.privacyModeEnabled ? "AI response preview hidden in Privacy Mode" : "AI response preview")
+        .accessibilityLabel(
+            FeatureFlags.privacyModeEnabled
+                ? "AI response preview hidden in Privacy Mode" : "AI response preview")
     }
 
 }
@@ -1147,7 +1312,7 @@ struct InlineNoticeAction {
     let title: String
     let systemImage: String?
     let action: () -> Void
-    
+
     init(title: String, systemImage: String? = nil, action: @escaping () -> Void) {
         self.title = title
         self.systemImage = systemImage
@@ -1159,7 +1324,7 @@ enum NoticeSeverity {
     case info
     case warning
     case tip
-    
+
     var color: Color {
         switch self {
         case .info: return .blue
@@ -1167,7 +1332,7 @@ enum NoticeSeverity {
         case .tip: return .green
         }
     }
-    
+
     var defaultIcon: String {
         switch self {
         case .info: return "info.circle.fill"
@@ -1184,7 +1349,7 @@ struct InlineNotice: View {
     let severity: NoticeSeverity
     var actions: [InlineNoticeAction]
     var isCentered: Bool
-    
+
     init(
         icon: String? = nil,
         title: String,
@@ -1200,7 +1365,7 @@ struct InlineNotice: View {
         self.actions = actions
         self.isCentered = isCentered
     }
-    
+
     @available(*, deprecated, message: "Use severity-based initializer instead")
     init(icon: String, title: String, message: String? = nil, tintColor: Color) {
         self.icon = icon
@@ -1210,31 +1375,31 @@ struct InlineNotice: View {
         self.actions = []
         self.isCentered = false
     }
-    
+
     private var effectiveIcon: String {
         icon ?? severity.defaultIcon
     }
-    
+
     var body: some View {
         VStack(alignment: isCentered ? .center : .leading, spacing: 6) {
             HStack(spacing: 6) {
                 if isCentered { Spacer(minLength: 0) }
-                
+
                 Image(systemName: effectiveIcon)
                     .font(.caption)
                     .foregroundStyle(severity.color)
-                
+
                 Text(title)
                     .font(.caption)
                     .fontWeight(.semibold)
-                
+
                 if !isCentered {
                     Spacer(minLength: 0)
                 } else {
                     Spacer(minLength: 0)
                 }
             }
-            
+
             if let message = message {
                 Text(message)
                     .font(.caption)
@@ -1244,11 +1409,11 @@ struct InlineNotice: View {
                     .multilineTextAlignment(isCentered ? .center : .leading)
                     .padding(.leading, isCentered ? 0 : 20)
             }
-            
+
             if !actions.isEmpty {
                 HStack(spacing: 8) {
                     if isCentered { Spacer(minLength: 0) }
-                    
+
                     ForEach(actions.indices, id: \.self) { index in
                         let action = actions[index]
                         Button {
@@ -1273,7 +1438,7 @@ struct InlineNotice: View {
                                 .fill(severity.color.opacity(0.12))
                         )
                     }
-                    
+
                     if isCentered { Spacer(minLength: 0) }
                 }
                 .padding(.leading, isCentered ? 0 : 20)
@@ -1302,9 +1467,10 @@ struct InsightPill: View {
     let insight: AIInsight
 
     private var displayText: String {
-        FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(insight.text) : insight.text
+        FeatureFlags.privacyModeEnabled
+            ? PrivacyPathMasker.redactedText(insight.text) : insight.text
     }
-    
+
     private var resolvedFinderIcon: NSImage? {
         if let filePath = insight.filePath {
             let fileURL = URL(fileURLWithPath: filePath)
@@ -1325,7 +1491,8 @@ struct InsightPill: View {
         if insight.category == .file {
             let text = insight.text
             if let dotIndex = text.lastIndex(of: ".") {
-                let ext = String(text[text.index(after: dotIndex)...])
+                let ext =
+                    String(text[text.index(after: dotIndex)...])
                     .trimmingCharacters(in: .whitespaces)
                     .components(separatedBy: .whitespaces).first ?? ""
                 if !ext.isEmpty {
@@ -1348,7 +1515,7 @@ struct InsightPill: View {
         case .general: return .secondary
         }
     }
-    
+
     var body: some View {
         HStack(spacing: 6) {
             if let finderIcon = resolvedFinderIcon {
@@ -1365,7 +1532,7 @@ struct InsightPill: View {
                     .frame(width: 8, height: 8)
                     .padding(.horizontal, 3)
             }
-            
+
             Text(displayText)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -1384,46 +1551,54 @@ struct InsightPill: View {
 
 public struct FlowLayout: Layout {
     public var spacing: CGFloat = 8
-    
-    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ())
+        -> CGSize
+    {
         let result = layoutResult(for: subviews, in: proposal.width ?? 0)
         return CGSize(width: proposal.width ?? 0, height: result.height)
     }
-    
-    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+
+    public func placeSubviews(
+        in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+    ) {
         let result = layoutResult(for: subviews, in: bounds.width)
         for (index, position) in result.positions.enumerated() {
-            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+            subviews[index].place(
+                at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
+                proposal: .unspecified)
         }
     }
-    
-    private func layoutResult(for subviews: Subviews, in width: CGFloat) -> (positions: [CGPoint], height: CGFloat) {
+
+    private func layoutResult(for subviews: Subviews, in width: CGFloat) -> (
+        positions: [CGPoint], height: CGFloat
+    ) {
         var positions: [CGPoint] = []
         var x: CGFloat = 0
         var y: CGFloat = 0
         var rowHeight: CGFloat = 0
-        
+
         for subview in subviews {
             let size = subview.sizeThatFits(.unspecified)
-            
+
             if x + size.width > width && x > 0 {
                 x = 0
                 y += rowHeight + spacing
                 rowHeight = 0
             }
-            
+
             positions.append(CGPoint(x: x, y: y))
             rowHeight = max(rowHeight, size.height)
             x += size.width + spacing
         }
-        
+
         return (positions, y + rowHeight)
     }
 }
 
 private struct PingRingView: View {
     @State private var ping = false
-    
+
     var body: some View {
         Circle()
             .stroke(Color.accentColor.opacity(ping ? 0 : 0.3), lineWidth: 2)
@@ -1440,60 +1615,68 @@ private struct PingRingView: View {
 
 #Preview("Analysis View - Scanning") {
     AnalysisView()
-        .environmentObject({
-            let organizer = FolderOrganizer()
-            organizer.state = .scanning
-            organizer.progress = 0.45
-            organizer.organizationStage = "Scanning files..."
-            organizer.elapsedTime = 3.5
-            return organizer
-        }())
+        .environmentObject(
+            {
+                let organizer = FolderOrganizer()
+                organizer.state = .scanning
+                organizer.progress = 0.45
+                organizer.organizationStage = "Scanning files..."
+                organizer.elapsedTime = 3.5
+                return organizer
+            }()
+        )
         .environmentObject(AppState.preview)
         .frame(width: 700, height: 500)
 }
 
 #Preview("Analysis View - Organizing") {
     AnalysisView()
-        .environmentObject({
-            let organizer = FolderOrganizer()
-            organizer.state = .organizing
-            organizer.progress = 0.75
-            organizer.organizationStage = "Analyzing with AI..."
-            organizer.elapsedTime = 8.2
-            organizer.isStreaming = true
-            organizer.currentInsight = "Creating project folders based on file types"
-            return organizer
-        }())
+        .environmentObject(
+            {
+                let organizer = FolderOrganizer()
+                organizer.state = .organizing
+                organizer.progress = 0.75
+                organizer.organizationStage = "Analyzing with AI..."
+                organizer.elapsedTime = 8.2
+                organizer.isStreaming = true
+                organizer.currentInsight = "Creating project folders based on file types"
+                return organizer
+            }()
+        )
         .environmentObject(AppState.preview)
         .frame(width: 700, height: 550)
 }
 
 #Preview("Analysis View - Applying") {
     AnalysisView()
-        .environmentObject({
-            let organizer = FolderOrganizer()
-            organizer.state = .applying
-            organizer.progress = 0.85
-            organizer.organizationStage = "Moving files..."
-            organizer.elapsedTime = 12.5
-            return organizer
-        }())
+        .environmentObject(
+            {
+                let organizer = FolderOrganizer()
+                organizer.state = .applying
+                organizer.progress = 0.85
+                organizer.organizationStage = "Moving files..."
+                organizer.elapsedTime = 12.5
+                return organizer
+            }()
+        )
         .environmentObject(AppState.preview)
         .frame(width: 700, height: 500)
 }
 
 #Preview("Analysis View - Long Running") {
     AnalysisView()
-        .environmentObject({
-            let organizer = FolderOrganizer()
-            organizer.state = .organizing
-            organizer.progress = 0.65
-            organizer.organizationStage = "Processing large folder..."
-            organizer.elapsedTime = 65.0
-            organizer.showTimeoutMessage = true
-            organizer.isStreaming = true
-            return organizer
-        }())
+        .environmentObject(
+            {
+                let organizer = FolderOrganizer()
+                organizer.state = .organizing
+                organizer.progress = 0.65
+                organizer.organizationStage = "Processing large folder..."
+                organizer.elapsedTime = 65.0
+                organizer.showTimeoutMessage = true
+                organizer.isStreaming = true
+                return organizer
+            }()
+        )
         .environmentObject(AppState.preview)
         .frame(width: 700, height: 550)
 }

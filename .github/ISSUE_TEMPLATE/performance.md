@@ -27,7 +27,7 @@ Describe the performance problem in detail.
 **Sorty Configuration:**
 - Sorty Version: [e.g., 1.0.5]
 - AI Provider: [e.g., OpenAI, Ollama local]
-- Model: [e.g., gpt-5-mini, llama4]
+- Model: [e.g., gpt-5.4-mini, llama3.1]
 - Deep Scan enabled: [Yes/No]
 - Streaming mode: [Yes/No]
 

@@ -972,7 +972,7 @@ public struct ProviderSelectionStepView: View {
                         availableModels = models
                         // Ensure current model is valid
                         if !models.contains(settingsViewModel.config.model) {
-                            settingsViewModel.config.model = models.first ?? "gpt-4"
+                            settingsViewModel.config.model = models.first ?? AIProvider.githubCopilot.defaultModel
                         }
                         isLoadingModels = false
                     }

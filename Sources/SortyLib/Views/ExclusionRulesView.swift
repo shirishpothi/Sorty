@@ -13,7 +13,7 @@ struct ExclusionRulesView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingAddRule = false
     @State private var searchText = ""
-    @State private var contentOpacity: Double = 0
+    @State private var contentOpacity: Double = 1
     @State private var newNLException = ""
     @State private var isImprovingException = false
 
@@ -102,11 +102,6 @@ struct ExclusionRulesView: View {
                 .modalBounce()
         }
         .opacity(contentOpacity)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
-        }
     }
     
     private var headerView: some View {
@@ -133,6 +128,10 @@ struct ExclusionRulesView: View {
                         .foregroundStyle(.secondary)
                     Text("\(rulesManager.rules.count - rulesManager.enabledRulesCount) disabled")
                         .foregroundStyle(.secondary)
+                    Text("•")
+                        .foregroundStyle(.secondary)
+                    Text("Also blocks learnings")
+                        .foregroundStyle(.orange)
                 }
                 .font(.caption)
                 .contentTransition(.numericText())
@@ -196,7 +195,7 @@ struct ExclusionRulesView: View {
     private var naturalLanguageExceptionsCard: some View {
         SettingsCard(title: "Natural Language Exceptions", icon: "text.bubble", color: .purple) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Describe files the AI should never touch, in plain English.")
+                Text("Describe files the AI should never touch, in plain English. Use Learnings > Controls for learnings-only exclusions.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -313,11 +312,11 @@ struct EmptyExclusionRulesView: View {
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text("Add rules to exclude certain files or folders from organization")
+                Text("Add rules to exclude certain files or folders from organization. Excluded items also won't generate learnings.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: 360)
             }
             
             HStack(spacing: 6) {

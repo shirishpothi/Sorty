@@ -80,6 +80,39 @@ final class FolderOrganizerVisionFlowTests: XCTestCase {
         XCTAssertNotNil(organizer.visionAnalysisSummary?.warningMessage)
     }
 
+    func testVisionFlowWithoutLimitSendsAllImages() async throws {
+        let config = AIConfig(
+            provider: .openAI,
+            apiURL: "https://api.openai.com",
+            apiKey: "test-key",
+            model: "gpt-4o",
+            enableVision: true,
+            limitVisionImages: false,
+            visionBatchSize: 1,
+            visionBatchStrategy: .firstN
+        )
+        try await organizer.configure(with: config)
+
+        let mockClient = VisionFlowMockClient(config: config)
+        organizer.setAIClientForTesting(mockClient)
+
+        try createPNG(at: tempDirectory.appendingPathComponent("one.png"))
+        try createPNG(at: tempDirectory.appendingPathComponent("two.png"))
+
+        try await organizer.organize(directory: tempDirectory)
+
+        let analyzeWithImagesCalls = await mockClient.analyzeWithImagesCalls
+        let analyzeCalls = await mockClient.analyzeCalls
+        let lastImageCount = await mockClient.lastImageCount
+
+        XCTAssertEqual(analyzeWithImagesCalls, 1)
+        XCTAssertEqual(analyzeCalls, 0)
+        XCTAssertEqual(lastImageCount, 2)
+        XCTAssertEqual(organizer.visionAnalysisSummary?.analyzedCount, 2)
+        XCTAssertEqual(organizer.visionAnalysisSummary?.totalImageCount, 2)
+        XCTAssertEqual(organizer.visionAnalysisSummary?.skippedCount, 0)
+    }
+
     private func createPNG(at url: URL) throws {
         let size = NSSize(width: 80, height: 80)
         guard let rep = NSBitmapImageRep(

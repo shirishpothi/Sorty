@@ -82,31 +82,12 @@ struct AutomationSettingsView: View {
                 
                 if useSeparateModel {
                     Divider()
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Provider")
+                        Text("Provider & Model")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                        
-                        Picker("", selection: $selectedProvider) {
-                            ForEach(AIProvider.userSelectableProviders.filter { $0.isAvailable }, id: \.self) { provider in
-                                Text(provider.displayName).tag(provider)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .onChange(of: selectedProvider) { _, newProvider in
-                            selectedModel = newProvider.defaultModel
-                            viewModel.config.automationProvider = newProvider
-                            viewModel.config.automationModel = selectedModel
-                        }
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Model")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        
+
                         ModelSelectorRow(
                             provider: selectedProvider,
                             model: selectedModel,

@@ -1,0 +1,97 @@
+import XCTest
+@testable import SortyLib
+
+@MainActor
+final class ContinuousLearningObserverTests: XCTestCase {
+    private var manager: LearningsManager!
+    private var history: OrganizationHistory!
+    private var observer: ContinuousLearningObserver!
+    private var defaults: UserDefaults!
+    private var suiteName: String!
+
+    override func setUp() async throws {
+        suiteName = "ContinuousLearningObserverTests-\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suiteName)
+        defaults.removePersistentDomain(forName: suiteName)
+        manager = LearningsManager(userDefaults: defaults)
+        manager.currentProfile = LearningsProfile()
+        await manager.grantConsent()
+        history = OrganizationHistory(userDefaults: defaults)
+        observer = ContinuousLearningObserver(history: history, learningsManager: manager)
+    }
+
+    override func tearDown() async throws {
+        defaults.removePersistentDomain(forName: suiteName)
+        manager = nil
+        history = nil
+        observer = nil
+        defaults = nil
+        suiteName = nil
+    }
+
+    func testGeneratePromptContextMigratesLegacySignalsIntoSessions() async {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.honingAnswers = [
+            HoningAnswer(questionId: "q1", selectedOption: "Prefer project-based organization")
+        ]
+        profile.additionalInstructionsHistory = [
+            UserInstruction(
+                timestamp: Date(),
+                instruction: "Keep client work grouped together",
+                folderPath: "/Users/test/Projects"
+            )
+        ]
+        profile.postOrganizationChanges = [
+            DirectoryChange(
+                timestamp: Date(),
+                originalPath: "/Users/test/Projects/Misc/invoice.pdf",
+                newPath: "/Users/test/Projects/Finance/Invoices/invoice.pdf",
+                wasAIOrganized: true
+            )
+        ]
+
+        manager.currentProfile = profile
+
+        let context = manager.generatePromptContext(forFolder: "/Users/test/Projects")
+
+        XCTAssertFalse(context.isEmpty)
+        XCTAssertTrue(context.contains("USER INSTRUCTIONS"))
+        XCTAssertTrue(context.contains("PREFERENCES"))
+        XCTAssertTrue(context.contains("CORRECTIONS"))
+        XCTAssertEqual(manager.currentProfile?.sessions.count, 1)
+        XCTAssertEqual(manager.currentProfile?.sessions.first?.reaction, .corrected)
+    }
+
+    func testMonitoringWindowExpiryCreatesAcceptedSessionAndPositiveExamples() async throws {
+        let rule = InferredRule(
+            id: "rule-invoices",
+            pattern: ".*\\.pdf$",
+            template: "/Users/test/Finance/Invoices/{filename}",
+            priority: 90,
+            explanation: "PDF invoices go in Finance/Invoices"
+        )
+        manager.currentProfile?.inferredRules = [rule]
+
+        let destinationPath = "/Users/test/Finance/Invoices/invoice.pdf"
+        let operation = FileSystemManager.FileOperation(
+            type: .moveFile,
+            sourcePath: "/Users/test/Downloads/invoice.pdf",
+            destinationPath: destinationPath
+        )
+
+        observer.startSession(folderPath: "/Users/test", historyEntryId: "history-1", operations: [operation])
+        observer.recordRuleApplication(destinationPath: destinationPath, ruleId: rule.id)
+        await Task.yield()
+        observer.endSession()
+        observer.handleMonitoringWindowExpired(for: "/Users/test")
+
+        let session = try XCTUnwrap(manager.currentProfile?.sessions.first)
+        XCTAssertEqual(session.reaction, .accepted)
+        XCTAssertEqual(session.filesMoved.count, 1)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.dstPath, destinationPath)
+        XCTAssertEqual(manager.currentProfile?.inferredRules.first?.successCount, 1)
+        XCTAssertEqual(manager.currentProfile?.inferredRules.first?.failureCount, 0)
+    }
+}

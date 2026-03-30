@@ -133,6 +133,7 @@ struct PreviewActionsView: View {
             .accessibilityIdentifier("ChooseModelButton")
             .accessibilityLabel("Choose a different model")
             .accessibilityHint("Opens model picker for regeneration")
+            .modelSelectorTriggerBounds()
         }
     }
     

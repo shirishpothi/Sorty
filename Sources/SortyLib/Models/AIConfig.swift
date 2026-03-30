@@ -111,21 +111,21 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     public var defaultModel: String {
         switch self {
         case .openAI:
-            return "gpt-5-mini"
+            return "gpt-5.4-mini"
         case .githubCopilot:
             return "gpt-5-mini"
         case .groq:
-            return "llama-4-70b-versatile"
+            return "openai/gpt-oss-120b"
         case .openAICompatible:
-            return "gpt-5-mini"
+            return "gpt-5.4-mini"
         case .openRouter:
-            return "anthropic/claude-haiku-4.5"
+            return "anthropic/claude-sonnet-4.6"
         case .ollama:
-            return "llama4"
+            return "llama3.1"
         case .anthropic:
-            return "claude-haiku-4.5"
+            return "claude-sonnet-4-6"
         case .gemini:
-            return "gemini-3-flash-preview"
+            return "gemini-2.5-flash"
         case .appleFoundationModel:
             return Self.appleFoundationModelName
         }
@@ -183,7 +183,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return URL(string: "https://openrouter.ai/keys")
         case .ollama:
-            return URL(string: "https://ollama.ai/download")
+            return URL(string: "https://ollama.com/download")
         case .anthropic:
             return URL(string: "https://console.anthropic.com/settings/keys")
         case .gemini:
@@ -207,7 +207,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return "openrouter.ai/keys"
         case .ollama:
-            return "ollama.ai"
+            return "ollama.com"
         case .anthropic:
             return "console.anthropic.com"
         case .gemini:
@@ -223,7 +223,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openAI:
             return URL(string: "https://platform.openai.com/docs/models")
         case .githubCopilot:
-            return URL(string: "https://docs.github.com/en/copilot/using-github-copilot/using-claude-sonnet-in-github-copilot")
+            return URL(string: "https://docs.github.com/en/copilot/reference/ai-models/supported-models")
         case .groq:
             return URL(string: "https://console.groq.com/docs/models")
         case .openAICompatible:
@@ -231,11 +231,11 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return URL(string: "https://openrouter.ai/models")
         case .ollama:
-            return URL(string: "https://ollama.ai/library")
+            return URL(string: "https://ollama.com/library")
         case .anthropic:
             return URL(string: "https://docs.anthropic.com/en/docs/about-claude/models")
         case .gemini:
-            return URL(string: "https://ai.google.dev/gemini-api/docs/models/gemini")
+            return URL(string: "https://ai.google.dev/gemini-api/docs/models")
         case .appleFoundationModel:
             return nil
         }
@@ -307,7 +307,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .groq:
             return Color(red: 0.95, green: 0.45, blue: 0.25)
         case .ollama:
-            return Color(red: 0.55, green: 0.35, blue: 0.95)
+            return .primary
         case .githubCopilot:
             return Color(red: 0.32, green: 0.35, blue: 0.94)
         case .appleFoundationModel:
@@ -323,7 +323,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
 
     public var hasColorLogo: Bool {
         switch self {
-        case .anthropic, .gemini:
+        case .gemini:
             return true
         default:
             return false
@@ -334,21 +334,21 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
     public var recommendedModels: [String] {
         switch self {
         case .openAI:
-            return ["gpt-5.2", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "o4-mini", "o3", "gpt-4o", "gpt-4o-mini"]
+            return ["gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o", "gpt-4o-mini"]
         case .anthropic:
-            return ["claude-opus-4", "claude-sonnet-4", "claude-haiku-4.5", "claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest"]
+            return ["claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-haiku-4-5-20251001", "claude-sonnet-4", "claude-opus-4"]
         case .gemini:
-            return ["gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-pro", "gemini-1.5-pro", "gemini-1.5-flash"]
+            return ["gemini-3.1-pro", "gemini-3-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"]
         case .groq:
-            return ["llama-4-70b-versatile", "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
+            return ["meta-llama/llama-4-scout-17b-16e-instruct", "llama-3.2-90b-vision-preview", "llama-3.2-11b-vision-preview", "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile"]
         case .openRouter:
-            return ["anthropic/claude-sonnet-4", "openai/gpt-5-mini", "google/gemini-2.5-flash", "meta-llama/llama-4-70b-instruct"]
+            return ["anthropic/claude-sonnet-4.6", "openai/gpt-5.4-mini", "openai/gpt-4o", "google/gemini-2.5-pro", "google/gemini-2.5-flash", "meta-llama/llama-4-scout-17b-16e-instruct"]
         case .ollama:
-            return ["llama4", "llama3", "mistral", "codellama", "phi3", "gemma2", "qwen2"]
+            return ["llava", "llama3.2-vision", "qwen2.5vl", "gemma3", "llama4", "moondream", "llama3.1"]
         case .githubCopilot:
-            return ["gpt-5-mini", "gpt-4o", "claude-sonnet-4", "claude-3.5-sonnet"]
+            return ["gpt-5-mini", "gpt-5.4-mini", "gpt-5.4", "gpt-5.3-codex", "claude-sonnet-4.6", "claude-opus-4.6", "claude-haiku-4.5", "gemini-3.1-pro", "gemini-3-flash", "grok-code-fast-1", "gpt-4.1"]
         case .openAICompatible:
-            return ["gpt-5-mini", "gpt-4o"]
+            return ["gpt-5.4-mini", "gpt-5.4", "gpt-4.1", "gpt-4o"]
         case .appleFoundationModel:
             return [Self.appleFoundationModelName]
         }
@@ -535,6 +535,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public var renameRules: [RenameRule] // Custom find/replace rename rules
     public var renameRuleMode: RenameRuleApplicationMode // How custom rules interact with AI renaming
     public var selectedNamingPresetId: UUID? // Selected naming preset ID
+    public var limitVisionImages: Bool // If false, send all detected images to the AI
     public var visionBatchSize: Int // Number of images to process in one AI call
     public var visionBatchStrategy: VisionBatchStrategy = .firstN // How images are selected for vision analysis
     public var visionDetailLevel: VisionDetailLevel = .auto // Provider image detail hint for multimodal APIs
@@ -551,7 +552,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         provider: AIProvider = .openAICompatible,
         apiURL: String? = nil,
         apiKey: String? = nil,
-        model: String = "gpt-4",
+        model: String = AIProvider.openAICompatible.defaultModel,
         temperature: Double = 0.7,
         requestTimeout: TimeInterval = 120,
         resourceTimeout: TimeInterval = 600,
@@ -575,6 +576,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         renameRules: [RenameRule] = [],
         renameRuleMode: RenameRuleApplicationMode = .beforeAI,
         selectedNamingPresetId: UUID? = nil,
+        limitVisionImages: Bool = true,
         visionBatchSize: Int = 5,
         visionBatchStrategy: VisionBatchStrategy = .firstN,
         visionDetailLevel: VisionDetailLevel? = nil,
@@ -612,6 +614,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.renameRules = renameRules
         self.renameRuleMode = renameRuleMode
         self.selectedNamingPresetId = selectedNamingPresetId
+        self.limitVisionImages = limitVisionImages
         self.visionBatchSize = visionBatchSize
         self.visionBatchStrategy = visionBatchStrategy
         self.visionDetailLevel = visionDetailLevel ?? VisionDetailLevel.defaultFor(provider: provider)
@@ -651,6 +654,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         case renameRules
         case renameRuleMode
         case selectedNamingPresetId
+        case limitVisionImages
         case visionBatchSize
         case visionBatchStrategy
         case visionDetailLevel
@@ -694,6 +698,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         renameRules = try container.decodeIfPresent([RenameRule].self, forKey: .renameRules) ?? []
         renameRuleMode = try container.decodeIfPresent(RenameRuleApplicationMode.self, forKey: .renameRuleMode) ?? .beforeAI
         selectedNamingPresetId = try container.decodeIfPresent(UUID.self, forKey: .selectedNamingPresetId)
+        limitVisionImages = try container.decodeIfPresent(Bool.self, forKey: .limitVisionImages) ?? true
         visionBatchSize = try container.decodeIfPresent(Int.self, forKey: .visionBatchSize) ?? 5
         visionBatchStrategy = try container.decodeIfPresent(VisionBatchStrategy.self, forKey: .visionBatchStrategy) ?? .firstN
         visionDetailLevel = try container.decodeIfPresent(VisionDetailLevel.self, forKey: .visionDetailLevel) ?? VisionDetailLevel.defaultFor(provider: provider)
@@ -734,6 +739,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encode(renameRules, forKey: .renameRules)
         try container.encode(renameRuleMode, forKey: .renameRuleMode)
         try container.encodeIfPresent(selectedNamingPresetId, forKey: .selectedNamingPresetId)
+        try container.encode(limitVisionImages, forKey: .limitVisionImages)
         try container.encode(visionBatchSize, forKey: .visionBatchSize)
         try container.encode(visionBatchStrategy, forKey: .visionBatchStrategy)
         try container.encode(visionDetailLevel, forKey: .visionDetailLevel)
@@ -748,7 +754,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
     public static let `default` = AIConfig(
         provider: .openAICompatible,
         apiURL: "https://api.openai.com",
-        model: "gpt-4",
+        model: AIProvider.openAICompatible.defaultModel,
         temperature: 0.7,
         requestTimeout: 120,
         resourceTimeout: 600,
@@ -772,6 +778,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         renameRules: [],
         renameRuleMode: .beforeAI,
         selectedNamingPresetId: nil,
+        limitVisionImages: true,
         visionBatchSize: 5,
         visionBatchStrategy: .firstN,
         visionDetailLevel: .auto,

@@ -707,4 +707,80 @@ struct PromptBuilder {
         
         return context
     }
+    
+    // MARK: - Reference Model Directory Context
+    
+    /// Build a reference-directory context section from one or more model directories.
+    /// Scans folder structure only (no file content analysis) to keep prompts lightweight.
+    /// - Parameters:
+    ///   - paths: Filesystem paths to reference directories
+    ///   - maxDepth: Maximum directory traversal depth (default 3)
+    ///   - maxEntriesPerDirectory: Maximum folder entries per directory (default 20)
+    /// - Returns: Formatted prompt context string, or empty string if no valid directories
+    static func buildReferenceDirectoryContext(
+        paths: [String],
+        maxDepth: Int = 3,
+        maxEntriesPerDirectory: Int = 20
+    ) -> String {
+        let fm = FileManager.default
+        var sections: [String] = []
+        
+        for path in paths {
+            let url = URL(fileURLWithPath: path)
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else {
+                continue
+            }
+            
+            let dirName = url.lastPathComponent
+            var folders: [String] = []
+            
+            func scan(_ scanURL: URL, depth: Int, prefix: String) {
+                guard depth <= maxDepth, folders.count < maxEntriesPerDirectory else { return }
+                
+                guard let contents = try? fm.contentsOfDirectory(
+                    at: scanURL,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                ) else { return }
+                
+                let subdirs = contents.filter {
+                    (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+                }.sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+                
+                for subdir in subdirs {
+                    guard folders.count < maxEntriesPerDirectory else { return }
+                    let name = prefix.isEmpty ? subdir.lastPathComponent : "\(prefix)/\(subdir.lastPathComponent)"
+                    folders.append(name)
+                    
+                    if depth < maxDepth {
+                        scan(subdir, depth: depth + 1, prefix: name)
+                    }
+                }
+            }
+            
+            scan(url, depth: 1, prefix: "")
+            
+            guard !folders.isEmpty else { continue }
+            
+            let truncated = folders.count >= maxEntriesPerDirectory
+            let folderList = folders.map { "  - \($0)" }.joined(separator: "\n")
+            var section = "Reference: \"\(dirName)\"\n\(folderList)"
+            if truncated {
+                section += "\n  ... (truncated to \(maxEntriesPerDirectory) entries)"
+            }
+            sections.append(section)
+        }
+        
+        guard !sections.isEmpty else { return "" }
+        
+        return """
+        ## REFERENCE MODEL DIRECTORIES
+        The user has provided the following well-organized directories as examples of their preferred folder structure and naming conventions. Use these as guidance for how to name and organize folders — match the style, hierarchy depth, and naming patterns you see here.
+        
+        \(sections.joined(separator: "\n\n"))
+        
+        IMPORTANT: These are reference examples only — do NOT reorganize files into these directories. Instead, replicate the naming style and structure patterns in your organization plan.
+        """
+    }
 }

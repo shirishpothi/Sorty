@@ -67,6 +67,8 @@ extension View {
         isPresented: Binding<Bool>,
         currentProvider: AIProvider,
         currentModel: String,
+        contextMessage: String? = nil,
+        selectionActionTitle: String = "Select",
         onSelect: @escaping (AIProvider, String) -> Void
     ) -> some View {
         modifier(
@@ -74,6 +76,8 @@ extension View {
                 isPresented: isPresented,
                 currentProvider: currentProvider,
                 currentModel: currentModel,
+                contextMessage: contextMessage,
+                selectionActionTitle: selectionActionTitle,
                 onSelect: onSelect
             )
         )
@@ -86,6 +90,9 @@ struct ModelSelectionPopover: View {
     @Binding var isPresented: Bool
     let currentProvider: AIProvider
     let currentModel: String
+    let contextMessage: String?
+    let selectionActionTitle: String
+    let popoverSize: CGSize
     let onSelect: (AIProvider, String) -> Void
 
     private let cornerRadius: CGFloat = 18
@@ -99,6 +106,24 @@ struct ModelSelectionPopover: View {
     @State private var customModelText: String = ""
     @State private var showCustomInput: Bool = false
     @State private var showFreeOnly: Bool = false
+
+    init(
+        isPresented: Binding<Bool>,
+        currentProvider: AIProvider,
+        currentModel: String,
+        contextMessage: String?,
+        selectionActionTitle: String,
+        popoverSize: CGSize = CGSize(width: 500, height: 420),
+        onSelect: @escaping (AIProvider, String) -> Void
+    ) {
+        self._isPresented = isPresented
+        self.currentProvider = currentProvider
+        self.currentModel = currentModel
+        self.contextMessage = contextMessage
+        self.selectionActionTitle = selectionActionTitle
+        self.popoverSize = popoverSize
+        self.onSelect = onSelect
+    }
     
     private var availableProviders: [AIProvider] {
         AIProvider.userSelectableProviders.filter { $0.isAvailable }
@@ -135,16 +160,25 @@ struct ModelSelectionPopover: View {
         let catalogModels = modelCatalog.cachedModels(for: selectedProvider)
         return catalogModels.first(where: { $0.id == modelId })?.isFree ?? false
     }
+
+    /// Returns whether a model supports vision (for badge display)
+    private func isVisionModel(_ modelId: String) -> Bool {
+        modelCatalog.supportsVision(modelId: modelId, provider: selectedProvider)
+    }
     
     var body: some View {
         VStack(spacing: 0) {
             header
             Divider()
+            if let contextMessage, !contextMessage.isEmpty {
+                contextMessageView(message: contextMessage)
+                Divider()
+            }
             twoColumnContent
             Divider()
             footer
         }
-        .frame(width: 500, height: 420)
+        .frame(width: popoverSize.width, height: popoverSize.height)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .modifier(ModelSelectionPopoverGlassModifier(cornerRadius: cornerRadius))
         .onAppear {
@@ -154,6 +188,24 @@ struct ModelSelectionPopover: View {
                 await modelCatalog.refresh(provider: currentProvider)
             }
         }
+    }
+
+    private func contextMessageView(message: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .foregroundColor(.accentColor)
+                .font(.system(size: 12))
+
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.accentColor.opacity(0.05))
     }
     
     // MARK: - Header
@@ -368,6 +420,21 @@ struct ModelSelectionPopover: View {
                     .foregroundColor(selectedModel == model ? .white : .primary)
                     .lineLimit(1)
 
+                if isVisionModel(model) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "eye.fill")
+                            .font(.system(size: 8, weight: .semibold))
+                        Text("Vision")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .foregroundColor(selectedModel == model ? .white : .teal)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule().fill(selectedModel == model ? Color.white.opacity(0.2) : Color.teal.opacity(0.15))
+                    )
+                }
+
                 if selectedProvider == .openRouter && isModelFree(model) {
                     Text("Free")
                         .font(.system(size: 8, weight: .bold))
@@ -524,7 +591,7 @@ struct ModelSelectionPopover: View {
             }
             .keyboardShortcut(.escape, modifiers: [])
             
-            Button("Select") {
+            Button(selectionActionTitle) {
                 onSelect(selectedProvider, selectedModel)
                 isPresented = false
             }
@@ -619,9 +686,10 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     @Binding var isPresented: Bool
     let currentProvider: AIProvider
     let currentModel: String
+    let contextMessage: String?
+    let selectionActionTitle: String
     let onSelect: (AIProvider, String) -> Void
 
-    private let popoverSize = CGSize(width: 500, height: 420)
     private let contentPadding: CGFloat = 12
     private let verticalSpacing: CGFloat = 12
 
@@ -631,6 +699,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                 GeometryReader { proxy in
                     if isPresented, let anchor {
                         let frame = proxy[anchor]
+                        let popoverSize = resolvedPopoverSize(in: proxy.size)
 
                         ZStack(alignment: .topLeading) {
                             Color.clear
@@ -643,12 +712,15 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                                 isPresented: $isPresented,
                                 currentProvider: currentProvider,
                                 currentModel: currentModel,
+                                contextMessage: contextMessage,
+                                selectionActionTitle: selectionActionTitle,
+                                popoverSize: popoverSize,
                                 onSelect: onSelect
                             )
                             .shadow(color: .black.opacity(0.22), radius: 28, y: 14)
                             .offset(
-                                x: resolvedX(for: frame, in: proxy.size),
-                                y: resolvedY(for: frame, in: proxy.size)
+                                x: resolvedX(for: frame, popoverSize: popoverSize, in: proxy.size),
+                                y: resolvedY(for: frame, popoverSize: popoverSize, in: proxy.size)
                             )
                             .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)))
                         }
@@ -658,13 +730,23 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
             }
     }
 
-    private func resolvedX(for frame: CGRect, in containerSize: CGSize) -> CGFloat {
+    private func resolvedPopoverSize(in containerSize: CGSize) -> CGSize {
+        let availableWidth = max(0, containerSize.width - (contentPadding * 2))
+        let availableHeight = max(0, containerSize.height - (contentPadding * 2))
+
+        return CGSize(
+            width: min(500, availableWidth),
+            height: min(420, availableHeight)
+        )
+    }
+
+    private func resolvedX(for frame: CGRect, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
         let preferredX = frame.maxX - popoverSize.width
         let maxX = max(contentPadding, containerSize.width - popoverSize.width - contentPadding)
         return min(max(preferredX, contentPadding), maxX)
     }
 
-    private func resolvedY(for frame: CGRect, in containerSize: CGSize) -> CGFloat {
+    private func resolvedY(for frame: CGRect, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
         let belowY = frame.maxY + verticalSpacing
         let maxY = containerSize.height - popoverSize.height - contentPadding
 
@@ -683,6 +765,8 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
         isPresented: .constant(true),
         currentProvider: .openAI,
         currentModel: "gpt-4o",
+        contextMessage: nil,
+        selectionActionTitle: "Select",
         onSelect: { _, _ in }
     )
 }

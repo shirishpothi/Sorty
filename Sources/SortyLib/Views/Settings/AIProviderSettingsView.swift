@@ -143,16 +143,16 @@ struct AIProviderSettingsView: View {
                     
                     Spacer()
                     
-                    if !viewModel.availableModels.isEmpty {
-                        Picker("", selection: $viewModel.config.model) {
-                            ForEach(viewModel.availableModels, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 140)
-                    } else if viewModel.isLoadingModels {
+                    if viewModel.isLoadingModels {
                         BouncingSpinner(size: 12, color: .secondary)
+                    } else {
+                        ModelSelectorRow(
+                            provider: .githubCopilot,
+                            model: viewModel.config.model,
+                            onTap: { showModelPicker = true }
+                        )
+                        .frame(maxWidth: 220)
+                        .modelSelectorTriggerBounds()
                     }
                     
                     Button("Sign Out") {

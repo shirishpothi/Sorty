@@ -414,6 +414,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var showTimeoutMessage: Bool = false
     private var startTime: Date?
     private var timeoutTask: Task<Void, Never>?
+    private var suppressCancellationReset = false
     
     // MARK: - Batch Update Mechanism
     
@@ -1181,24 +1182,35 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         // Cancel any existing task first
         cancelInternal()
+        try await runOrganizationTask(directory: directory, customPrompt: customPrompt, temperature: temperature)
+    }
 
-        // Reset cancellation flag
+    private func runOrganizationTask(
+        directory: URL,
+        customPrompt: String?,
+        temperature: Double?
+    ) async throws {
         isCancellationRequested = false
         userInitiatedAction = true
         visionAnalysisSummary = nil
 
         currentTask = Task {
-            try await performOrganization(directory: directory, customPrompt: customPrompt, temperature: temperature)
+            try await performOrganization(
+                directory: directory,
+                customPrompt: customPrompt,
+                temperature: temperature
+            )
         }
         defer { currentTask = nil }
 
         do {
             try await currentTask?.value
         } catch is CancellationError {
-            // Handle cancellation gracefully
-            await MainActor.run {
-                resetToIdle()
+            if suppressCancellationReset {
+                suppressCancellationReset = false
+                return
             }
+            resetToIdle()
         } catch {
             throw error
         }
@@ -1384,6 +1396,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Learnings context into prompt")
         }
 
+        if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+            instructions += "\n\n" + modelDirContext
+            DebugLogger.log("Injected Model Directory reference context into prompt")
+        }
+
         if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             let sourceDir = StorageLocationPathResolver.canonicalPath(directory.path)
             let enabledLocations = storageLocationsManager?.enabledLocations ?? []
@@ -1424,9 +1441,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let modelSupportsVision = ModelCatalog.shared.supportsVision(modelId: currentModel, provider: currentProvider)
 
         if !imageFiles.isEmpty && visionEnabled && modelSupportsVision {
+            let shouldLimitVisionImages = aiConfig?.limitVisionImages ?? true
             let configuredBatchSize = max(1, aiConfig?.visionBatchSize ?? 5)
             let strategy = aiConfig?.visionBatchStrategy ?? .firstN
-            let selectedBatch = selectVisionBatch(from: imageFiles, batchSize: configuredBatchSize, strategy: strategy)
+            let selectedBatch: [FileItem]
+            if shouldLimitVisionImages {
+                selectedBatch = selectVisionBatch(from: imageFiles, batchSize: configuredBatchSize, strategy: strategy)
+            } else {
+                selectedBatch = imageFiles
+            }
             updateProgress(0.25, stage: "Analyzing \(selectedBatch.count) of \(imageFiles.count) images with Vision AI...")
 
             let urlPayload = await visionAnalyzer.prepareImagesForVision(urls: selectedBatch.compactMap { $0.url })
@@ -1735,6 +1758,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         insightExtractionTask?.cancel()
         insightExtractionTask = nil
         stopTimeoutTimer()
+    }
+
+    private func cancelCurrentOperationForRestart() async {
+        suppressCancellationReset = true
+        isCancellationRequested = true
+
+        let taskToCancel = currentTask
+        currentTask?.cancel()
+        currentTask = nil
+        displayUpdateTask?.cancel()
+        displayUpdateTask = nil
+        insightExtractionTask?.cancel()
+        insightExtractionTask = nil
+        stopTimeoutTimer()
+        stopSteadyProgressTask()
+
+        _ = await taskToCancel?.result
+        suppressCancellationReset = false
     }
 
     private func checkCancellation() throws {
@@ -2192,6 +2233,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
                 finalPrompt += "\n\n" + learnedContext
             }
+
+            if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+                finalPrompt += "\n\n" + modelDirContext
+            }
             
             // Add Storage Locations context
             if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
@@ -2406,6 +2451,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             var finalPrompt = prompt
             if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
                 finalPrompt += "\n\n" + learnedContext
+            }
+
+            if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+                finalPrompt += "\n\n" + modelDirContext
             }
 
             // Add Storage Locations context
@@ -2668,6 +2717,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
         }
+        if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+            instructions += "\n\n" + modelDirContext
+        }
         if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             instructions += "\n\n" + storageContext
         }
@@ -2823,6 +2875,30 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     /// Regenerate preview with a specific provider and model
     public func regenerateWithModel(provider: AIProvider, model: String) async throws {
+        if state == .scanning || state == .organizing {
+            guard let directory = currentDirectory else {
+                throw OrganizationError.noCurrentPlan
+            }
+
+            await cancelCurrentOperationForRestart()
+
+            withBatchUpdates {
+                clearStreamingDisplayState()
+                isStreaming = false
+                showTimeoutMessage = false
+                currentInsight = ""
+                insightHistory = []
+                insightsCache = nil
+                errorMessage = nil
+                elapsedTime = 0
+                organizationStage = "Restarting analysis with \(provider.displayName) (\(model))..."
+                progress = 0.08
+            }
+
+            try await runOrganizationTask(directory: directory, customPrompt: nil, temperature: nil)
+            return
+        }
+
         var files = getFilesFromCurrentPlan()
         
         if files.isEmpty, let directory = currentDirectory {
@@ -2993,6 +3069,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             var instructions = customInstructions
             if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
                 instructions += "\n\n" + learnedContext
+            }
+
+            if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+                instructions += "\n\n" + modelDirContext
             }
             
             // Add Storage Locations context

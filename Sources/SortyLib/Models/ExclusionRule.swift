@@ -438,6 +438,8 @@ public struct ExclusionRulePreset: Identifiable, Sendable {
 
 @MainActor
 public class ExclusionRulesManager: ObservableObject {
+    public static let legacyLearningsLinkedDescription = "Added from Learnings exclusion"
+
     @Published public private(set) var rules: [ExclusionRule] = []
     @Published public var activePresetName: String?
     @Published public private(set) var naturalLanguageExceptions: [String] = []
@@ -449,6 +451,7 @@ public class ExclusionRulesManager: ObservableObject {
 
     public init() {
         loadRules()
+        removeLegacyLearningsLinkedRules()
         loadNaturalLanguageExceptions()
         if rules.isEmpty {
             setupDefaultRules()
@@ -482,6 +485,18 @@ public class ExclusionRulesManager: ObservableObject {
     public func removeRule(_ rule: ExclusionRule) {
         rules.removeAll { $0.id == rule.id }
         saveRules()
+    }
+
+    public func removeLegacyLearningsLinkedRules() {
+        removeRules { isLegacyLearningsLinkedRule($0) }
+    }
+
+    public func removeLegacyLearningsLinkedRules(matchingLearningPattern pattern: String) {
+        let normalizedPattern = normalizedLearningsLinkedPattern(pattern)
+        removeRules { rule in
+            isLegacyLearningsLinkedRule(rule) &&
+            normalizedLearningsLinkedPattern(rule.pattern) == normalizedPattern
+        }
     }
 
     public func updateRule(_ rule: ExclusionRule) {
@@ -636,6 +651,25 @@ public class ExclusionRulesManager: ObservableObject {
         activePresetName = userDefaults.string(forKey: presetKey)
     }
 
+    private func removeRules(where shouldRemove: (ExclusionRule) -> Bool) {
+        let originalCount = rules.count
+        rules.removeAll(where: shouldRemove)
+        if rules.count != originalCount {
+            saveRules()
+        }
+    }
+
+    private func isLegacyLearningsLinkedRule(_ rule: ExclusionRule) -> Bool {
+        rule.type == .folderName &&
+        rule.description == Self.legacyLearningsLinkedDescription
+    }
+
+    private func normalizedLearningsLinkedPattern(_ pattern: String) -> String {
+        let trimmed = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "" }
+        return URL(fileURLWithPath: trimmed).lastPathComponent.lowercased()
+    }
+
     private func saveRules() {
         if let encoded = try? JSONEncoder().encode(rules) {
             userDefaults.set(encoded, forKey: rulesKey)
@@ -643,4 +677,3 @@ public class ExclusionRulesManager: ObservableObject {
         userDefaults.set(activePresetName, forKey: presetKey)
     }
 }
-

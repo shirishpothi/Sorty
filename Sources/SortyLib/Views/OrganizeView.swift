@@ -292,6 +292,14 @@ struct ReadyToOrganizeView: View {
         sessionManager.prewarmingProvider != nil
     }
 
+    private var selectedStorageLocationCount: Int {
+        storageLocationsManager.locations.filter(\.isEnabled).count
+    }
+
+    private var unavailableSelectedStorageLocationCount: Int {
+        max(0, selectedStorageLocationCount - storageLocationsManager.enabledLocations.count)
+    }
+
     var body: some View {
         WorkflowContainer(currentStep: .configure) {
             // Compact header
@@ -308,24 +316,22 @@ struct ReadyToOrganizeView: View {
                 }
             }
             .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.8)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+            .scaleEffect(hasAppeared ? 1 : 0.95)
+            .animation(.easeOut(duration: 0.2).delay(0.05), value: hasAppeared)
             
             // Instructions card
             WorkflowCard(title: "Instructions", icon: "text.bubble") {
                 instructionsContent
             }
             .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .animation(.easeOut(duration: 0.2).delay(0.08), value: hasAppeared)
             
             // Storage locations card
             WorkflowCard(title: "Storage Locations", icon: "externaldrive") {
                 storageLocationsContent
             }
             .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .animation(.easeOut(duration: 0.2).delay(0.11), value: hasAppeared)
             
             // Start button - full width
             Button {
@@ -350,8 +356,7 @@ struct ReadyToOrganizeView: View {
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)
             .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
+            .animation(.easeOut(duration: 0.2).delay(0.14), value: hasAppeared)
             .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start organizing files using your current settings")
             .accessibilityIdentifier("StartOrganizationButton")
             .accessibilityLabel(isConnecting ? "Connecting to provider" : "Start organization")
@@ -369,12 +374,12 @@ struct ReadyToOrganizeView: View {
             }
             .foregroundStyle(.quaternary)
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.45), value: hasAppeared)
+            .animation(.easeOut(duration: 0.2).delay(0.16), value: hasAppeared)
             
             // Connection status indicator
             connectionStatusView
                 .opacity(hasAppeared ? 1 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5), value: hasAppeared)
+                .animation(.easeOut(duration: 0.2).delay(0.18), value: hasAppeared)
 
         }
         .fileImporter(
@@ -433,14 +438,27 @@ struct ReadyToOrganizeView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    if !storageLocationsManager.enabledLocations.isEmpty {
-                        Text("\(storageLocationsManager.enabledLocations.count) active")
+                    if selectedStorageLocationCount > 0 {
+                        Text("\(selectedStorageLocationCount) selected")
                             .font(.caption)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(unavailableSelectedStorageLocationCount > 0 ? .orange : .green)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.green.opacity(0.1))
+                            .background(
+                                (unavailableSelectedStorageLocationCount > 0 ? Color.orange : Color.green)
+                                    .opacity(0.1)
+                            )
                             .clipShape(Capsule())
+
+                        if unavailableSelectedStorageLocationCount > 0 {
+                            Text("\(unavailableSelectedStorageLocationCount) unavailable")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    } else if !storageLocationsManager.locations.isEmpty {
+                        Text("No active locations")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     } else {
                         Text("No locations configured")
                             .font(.caption)

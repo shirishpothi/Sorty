@@ -16,10 +16,10 @@ public final class RefreshManager: ObservableObject {
     // MARK: - Types
     
     /// Represents a scheduled refresh action
-    private struct ScheduledAction {
+    private struct ScheduledAction: @unchecked Sendable {
         let id: UUID
         let interval: TimeInterval
-        let action: () -> Void
+        let action: @Sendable () -> Void
         let timer: Timer
     }
     
@@ -56,7 +56,7 @@ public final class RefreshManager: ObservableObject {
     ///   - action: The action to perform (captured with weak self)
     /// - Returns: A unique identifier for the scheduled timer
     @discardableResult
-    public func schedule(interval: TimeInterval, action: @escaping () -> Void) -> UUID {
+    public func schedule(interval: TimeInterval, action: @escaping @Sendable () -> Void) -> UUID {
         let id = UUID()
         
         // Use a weak self pattern via a wrapper
@@ -126,7 +126,7 @@ public final class RefreshManager: ObservableObject {
     ///   - action: Action to perform after delay
     /// - Returns: A unique identifier for the scheduled action
     @discardableResult
-    public func scheduleOnce(delay: TimeInterval, action: @escaping () -> Void) -> UUID {
+    public func scheduleOnce(delay: TimeInterval, action: @escaping @Sendable () -> Void) -> UUID {
         let id = UUID()
         
         let timer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
@@ -219,7 +219,7 @@ public final class RefreshManager: ObservableObject {
     // MARK: - Convenience Methods
     
     /// Schedule multiple actions with different intervals at once
-    public func scheduleBatch(_ schedules: [(interval: TimeInterval, action: () -> Void)]) -> [UUID] {
+    public func scheduleBatch(_ schedules: [(interval: TimeInterval, action: @Sendable () -> Void)]) -> [UUID] {
         var ids: [UUID] = []
         for schedule in schedules {
             let id = self.schedule(interval: schedule.interval, action: schedule.action)
@@ -248,7 +248,7 @@ public final class CoordinatedRefreshGroup {
     
     /// Add a timer to this coordinated group
     @discardableResult
-    public func addTimer(interval: TimeInterval, action: @escaping () -> Void) -> UUID {
+    public func addTimer(interval: TimeInterval, action: @escaping @Sendable () -> Void) -> UUID {
         guard let manager = manager else { return UUID() }
         let id = manager.schedule(interval: interval, action: action)
         timerIDs.append(id)

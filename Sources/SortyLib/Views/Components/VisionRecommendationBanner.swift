@@ -77,7 +77,7 @@ struct VisionRecommendationBanner: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else if state.recommendedAction == .switchModel {
-                        Text("Use a vision model like gpt-4o or claude-3-5-sonnet for better results")
+                        Text("Use a vision model like gpt-5.4-mini or claude-sonnet-4.6 for better results")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -129,8 +129,8 @@ struct VisionRecommendationBanner: View {
     VStack(spacing: 20) {
         VisionRecommendationBanner(
             imageCount: 23,
-            currentModel: "gpt-3.5-turbo",
-            currentProvider: .openAI,
+            currentModel: "openai/gpt-oss-20b",
+            currentProvider: .groq,
             isVisionEnabled: false,
             onEnableVision: {},
             onSwitchModel: {},

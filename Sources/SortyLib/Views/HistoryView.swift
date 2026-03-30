@@ -526,7 +526,7 @@ struct HistorySummaryCard: View {
                     color: .mint
                 )
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Total AI cost: \(totalCostValue)")
+                .accessibilityLabel("Total AI costs: \(totalCostValue)")
             }
         }
         .padding(14)
@@ -764,6 +764,7 @@ struct HistorySessionCard: View {
                             .controlSize(.small)
                             .accessibilityLabel("Try organization with a different AI model")
                             .accessibilityIdentifier("TryModelButton-\(entry.id.uuidString)")
+                            .modelSelectorTriggerBounds()
                         }
 
                         Spacer()
@@ -785,16 +786,14 @@ struct HistorySessionCard: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .sheet(isPresented: $showRedoModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showRedoModelPicker,
-                currentProvider: settingsViewModel.config.provider,
-                currentModel: settingsViewModel.config.model,
-                onSelect: { provider, model in
-                    onRedoWithModel?(provider, model)
-                }
-            )
-        }
+        .modelSelectionOverlay(
+            isPresented: $showRedoModelPicker,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model,
+            onSelect: { provider, model in
+                onRedoWithModel?(provider, model)
+            }
+        )
     }
 }
 
@@ -1156,6 +1155,7 @@ struct HistoryDetailSheet: View {
                                         .controlSize(.large)
                                         .accessibilityLabel("Try organization with a different AI model")
                                         .accessibilityIdentifier("TryModelSessionButton")
+                                        .modelSelectorTriggerBounds()
                                     }
                                 }
                             }
@@ -1386,16 +1386,14 @@ struct HistoryDetailSheet: View {
             }
         }
         .frame(minWidth: 600, minHeight: 500)
-        .sheet(isPresented: $showRedoModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showRedoModelPicker,
-                currentProvider: settingsViewModel.config.provider,
-                currentModel: settingsViewModel.config.model,
-                onSelect: { provider, model in
-                    handleRedoWithModel(provider: provider, model: model)
-                }
-            )
-        }
+        .modelSelectionOverlay(
+            isPresented: $showRedoModelPicker,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model,
+            onSelect: { provider, model in
+                handleRedoWithModel(provider: provider, model: model)
+            }
+        )
     }
 
     @ViewBuilder

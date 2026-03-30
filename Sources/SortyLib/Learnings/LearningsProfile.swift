@@ -74,6 +74,13 @@ public struct LearningsProfile: Codable, Sendable {
     
     /// Whether session-based learning is enabled (don't persist learnings from this session)
     public var sessionLearningEnabled: Bool
+
+    /// Session-centric timeline of organization behavior and feedback.
+    /// Legacy arrays remain for compatibility while callers migrate.
+    public var sessions: [OrganizationSession]
+    
+    /// Answers to inline post-organization learning moments
+    public var inlineLearningMomentAnswers: [InlineLearningMomentAnswer]
     
     public init(
         createdAt: Date = Date(),
@@ -95,7 +102,9 @@ public struct LearningsProfile: Codable, Sendable {
         jobHistory: [JobManifest] = [],
         rejectedRuleCooldowns: [String: Date] = [:],
         learningExclusionPatterns: [String] = [],
-        sessionLearningEnabled: Bool = true
+        sessionLearningEnabled: Bool = true,
+        sessions: [OrganizationSession] = [],
+        inlineLearningMomentAnswers: [InlineLearningMomentAnswer] = []
     ) {
         self.createdAt = createdAt
         self.consentGranted = consentGranted
@@ -117,6 +126,86 @@ public struct LearningsProfile: Codable, Sendable {
         self.rejectedRuleCooldowns = rejectedRuleCooldowns
         self.learningExclusionPatterns = learningExclusionPatterns
         self.sessionLearningEnabled = sessionLearningEnabled
+        self.sessions = sessions
+        self.inlineLearningMomentAnswers = inlineLearningMomentAnswers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case createdAt
+        case consentGranted
+        case consentDate
+        case additionalInstructionsHistory
+        case guidingInstructionsHistory
+        case steeringPrompts
+        case postOrganizationChanges
+        case renameFeedbackHistory
+        case historyReverts
+        case cancelledOrganizations
+        case regeneratedOrganizations
+        case honingAnswers
+        case inferredRules
+        case corrections
+        case rejections
+        case positiveExamples
+        case jobHistory
+        case rejectedRuleCooldowns
+        case learningExclusionPatterns
+        case sessionLearningEnabled
+        case sessions
+        case inlineLearningMomentAnswers
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        consentGranted = try container.decodeIfPresent(Bool.self, forKey: .consentGranted) ?? false
+        consentDate = try container.decodeIfPresent(Date.self, forKey: .consentDate)
+        additionalInstructionsHistory = try container.decodeIfPresent([UserInstruction].self, forKey: .additionalInstructionsHistory) ?? []
+        guidingInstructionsHistory = try container.decodeIfPresent([UserInstruction].self, forKey: .guidingInstructionsHistory) ?? []
+        steeringPrompts = try container.decodeIfPresent([SteeringPrompt].self, forKey: .steeringPrompts) ?? []
+        postOrganizationChanges = try container.decodeIfPresent([DirectoryChange].self, forKey: .postOrganizationChanges) ?? []
+        renameFeedbackHistory = try container.decodeIfPresent([RenameFeedbackEvent].self, forKey: .renameFeedbackHistory) ?? []
+        historyReverts = try container.decodeIfPresent([RevertEvent].self, forKey: .historyReverts) ?? []
+        cancelledOrganizations = try container.decodeIfPresent([CancelledOrganization].self, forKey: .cancelledOrganizations) ?? []
+        regeneratedOrganizations = try container.decodeIfPresent([RegeneratedOrganization].self, forKey: .regeneratedOrganizations) ?? []
+        honingAnswers = try container.decodeIfPresent([HoningAnswer].self, forKey: .honingAnswers) ?? []
+        inferredRules = try container.decodeIfPresent([InferredRule].self, forKey: .inferredRules) ?? []
+        corrections = try container.decodeIfPresent([LabeledExample].self, forKey: .corrections) ?? []
+        rejections = try container.decodeIfPresent([LabeledExample].self, forKey: .rejections) ?? []
+        positiveExamples = try container.decodeIfPresent([LabeledExample].self, forKey: .positiveExamples) ?? []
+        jobHistory = try container.decodeIfPresent([JobManifest].self, forKey: .jobHistory) ?? []
+        rejectedRuleCooldowns = try container.decodeIfPresent([String: Date].self, forKey: .rejectedRuleCooldowns) ?? [:]
+        learningExclusionPatterns = try container.decodeIfPresent([String].self, forKey: .learningExclusionPatterns) ?? []
+        sessionLearningEnabled = try container.decodeIfPresent(Bool.self, forKey: .sessionLearningEnabled) ?? true
+        sessions = try container.decodeIfPresent([OrganizationSession].self, forKey: .sessions) ?? []
+        inlineLearningMomentAnswers = try container.decodeIfPresent([InlineLearningMomentAnswer].self, forKey: .inlineLearningMomentAnswers) ?? []
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(consentGranted, forKey: .consentGranted)
+        try container.encodeIfPresent(consentDate, forKey: .consentDate)
+        try container.encode(additionalInstructionsHistory, forKey: .additionalInstructionsHistory)
+        try container.encode(guidingInstructionsHistory, forKey: .guidingInstructionsHistory)
+        try container.encode(steeringPrompts, forKey: .steeringPrompts)
+        try container.encode(postOrganizationChanges, forKey: .postOrganizationChanges)
+        try container.encode(renameFeedbackHistory, forKey: .renameFeedbackHistory)
+        try container.encode(historyReverts, forKey: .historyReverts)
+        try container.encode(cancelledOrganizations, forKey: .cancelledOrganizations)
+        try container.encode(regeneratedOrganizations, forKey: .regeneratedOrganizations)
+        try container.encode(honingAnswers, forKey: .honingAnswers)
+        try container.encode(inferredRules, forKey: .inferredRules)
+        try container.encode(corrections, forKey: .corrections)
+        try container.encode(rejections, forKey: .rejections)
+        try container.encode(positiveExamples, forKey: .positiveExamples)
+        try container.encode(jobHistory, forKey: .jobHistory)
+        try container.encode(rejectedRuleCooldowns, forKey: .rejectedRuleCooldowns)
+        try container.encode(learningExclusionPatterns, forKey: .learningExclusionPatterns)
+        try container.encode(sessionLearningEnabled, forKey: .sessionLearningEnabled)
+        try container.encode(sessions, forKey: .sessions)
+        try container.encode(inlineLearningMomentAnswers, forKey: .inlineLearningMomentAnswers)
     }
 }
 
@@ -443,4 +532,3 @@ public enum EntryStatus: String, Codable, Sendable {
     case skipped
     case rolledBack
 }
-

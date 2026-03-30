@@ -35,16 +35,16 @@ copy_resources_safely() {
         fi
     fi
     
-    # Priority 2: Resources folder (only copy files not already present)
+    # Priority 2: Resources folder (sync updates from source)
     if [ -d "${resources_dir}" ]; then
         log_item "Syncing additional resources from Resources folder"
-        rsync -a --ignore-existing "${resources_dir}/" "${dest_dir}/"
+        rsync -a "${resources_dir}/" "${dest_dir}/"
     fi
 
     # Priority 2b: SortyLib source resources (audio/svg not in top-level Resources)
     if [ -d "${source_resources_dir}" ]; then
         log_item "Syncing additional resources from SortyLib source resources"
-        rsync -a --ignore-existing --exclude "Images/" "${source_resources_dir}/" "${dest_dir}/"
+        rsync -a --exclude "Images/" "${source_resources_dir}/" "${dest_dir}/"
     fi
     
     # Priority 3: Fallback images (only if Images folder doesn't exist yet)

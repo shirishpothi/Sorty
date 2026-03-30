@@ -270,6 +270,52 @@ final class StreamingLogicTests: XCTestCase {
         )
     }
 
+    func testRegenerateWithModelWhileOrganizingRestartsAnalysis() async throws {
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+
+        let fileURL = tempDirectory.appendingPathComponent("notes.txt")
+        try "hello".write(to: fileURL, atomically: true, encoding: .utf8)
+
+        let config = AIConfig(
+            provider: .openAI,
+            apiURL: "https://api.openai.com",
+            apiKey: "test-key",
+            model: "gpt-5.2"
+        )
+        try await organizer.configure(with: config)
+
+        let mockClient = RestartableStreamingMockClient(config: config)
+        organizer.setAIClientForTesting(mockClient)
+
+        let initialRun = Task {
+            try? await organizer.organize(directory: tempDirectory)
+        }
+
+        for _ in 0..<40 {
+            if await mockClient.analyzeCallCount >= 1 {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        let initialAnalyzeCount = await mockClient.currentAnalyzeCallCount()
+        XCTAssertEqual(initialAnalyzeCount, 1)
+
+        organizer.showTimeoutMessage = true
+
+        try await organizer.regenerateWithModel(provider: .openAI, model: "gpt-5-mini")
+        _ = await initialRun.result
+
+        let finalAnalyzeCount = await mockClient.currentAnalyzeCallCount()
+        XCTAssertEqual(finalAnalyzeCount, 2)
+        XCTAssertEqual(organizer.state, .ready)
+        XCTAssertEqual(organizer.organizationStage, "Ready!")
+        XCTAssertFalse(organizer.showTimeoutMessage)
+        XCTAssertNotNil(organizer.currentPlan)
+    }
+
     // MARK: - OrganizationProgress Struct Tests
     
     func testOrganizationProgressPercentage() {
@@ -366,4 +412,58 @@ final class StreamingLogicTests: XCTestCase {
         organizer.resetToIdleState()
         XCTAssertEqual(organizer.state, .idle)
     }
+}
+
+actor RestartableStreamingMockClient: AIClientProtocol {
+    let config: AIConfig
+    @MainActor weak var streamingDelegate: StreamingDelegate?
+    private(set) var analyzeCallCount = 0
+
+    init(config: AIConfig) {
+        self.config = config
+    }
+
+    func currentAnalyzeCallCount() -> Int {
+        analyzeCallCount
+    }
+
+    func analyze(
+        files: [FileItem],
+        customInstructions: String?,
+        personaPrompt: String?,
+        temperature: Double?
+    ) async throws -> OrganizationPlan {
+        analyzeCallCount += 1
+        let callNumber = analyzeCallCount
+
+        if callNumber == 1 {
+            try await Task.sleep(nanoseconds: 5_000_000_000)
+        }
+
+        return OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Sorted", files: files)],
+            notes: "call \(callNumber)"
+        )
+    }
+
+    func analyzeWithImages(
+        files: [FileItem],
+        imageData: [String: Data],
+        customInstructions: String?,
+        personaPrompt: String?,
+        temperature: Double?
+    ) async throws -> OrganizationPlan {
+        try await analyze(
+            files: files,
+            customInstructions: customInstructions,
+            personaPrompt: personaPrompt,
+            temperature: temperature
+        )
+    }
+
+    func generateText(prompt: String, systemPrompt: String?) async throws -> String {
+        "ok"
+    }
+
+    func checkHealth() async throws {}
 }

@@ -14,7 +14,7 @@ struct WatchedFoldersView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
-    @State private var contentOpacity: Double = 0
+    @State private var contentOpacity: Double = 1
     
     // Check if AI is available
     private var isAIConfigured: Bool {
@@ -104,11 +104,6 @@ struct WatchedFoldersView: View {
             }
         }
         .opacity(contentOpacity)
-        .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
-        }
         .navigationTitle("Watched Folders")
     }
     
@@ -154,9 +149,9 @@ struct WatchedFoldersView: View {
                 HapticFeedbackManager.shared.tap()
                 showingFolderPicker = true
             } label: {
-                Label("Add Folder", systemImage: "plus")
+                Label("Add Folder", systemImage: "folder.badge.plus")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.onboardingPill)
             .accessibilityIdentifier("AddWatchedFolderButton")
         }
         .padding()
@@ -203,9 +198,9 @@ struct EmptyWatchedFoldersView: View {
             Button {
                 onAddFolder()
             } label: {
-                Label("Add Folder", systemImage: "plus")
+                Label("Add Folder", systemImage: "folder.badge.plus")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.onboardingPill)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -872,6 +867,7 @@ struct WatchedFolderConfigView: View {
                                         model: selectedModel,
                                         onTap: { showModelPicker = true }
                                     )
+                                    .modelSelectorTriggerBounds()
                                 }
                             
                                 HStack(spacing: 8) {
@@ -908,7 +904,7 @@ struct WatchedFolderConfigView: View {
                 .padding(20)
             }
         }
-        .frame(width: 450, height: 650)
+        .frame(minWidth: 520, idealWidth: 560, minHeight: 650, idealHeight: 700)
         .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             primeModelSelectionFromGlobalDefaultsIfNeeded()
@@ -920,17 +916,15 @@ struct WatchedFolderConfigView: View {
                 selectedModel = defaults.model
             }
         }
-        .sheet(isPresented: $showModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showModelPicker,
-                currentProvider: selectedProvider,
-                currentModel: selectedModel,
-                onSelect: { provider, model in
-                    selectedProvider = provider
-                    selectedModel = model
-                }
-            )
-        }
+        .modelSelectionOverlay(
+            isPresented: $showModelPicker,
+            currentProvider: selectedProvider,
+            currentModel: selectedModel,
+            onSelect: { provider, model in
+                selectedProvider = provider
+                selectedModel = model
+            }
+        )
     }
 
     private var globalAutomationSelection: (provider: AIProvider, model: String) {

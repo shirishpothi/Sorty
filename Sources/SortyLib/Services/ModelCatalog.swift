@@ -249,14 +249,27 @@ public final class ModelCatalog: ObservableObject {
         struct OpenAIModel: Decodable {
             let id: String
             let created: Int?
+            let modalities: [String]?
+            let capabilities: [String]?
+            let input_modalities: [String]?
+            let output_modalities: [String]?
         }
         
         let decoded = try JSONDecoder().decode(OpenAIModelsResponse.self, from: data)
         let models = decoded.data.map { model in
-            ModelInfo(
+            let capabilityTags = mergeCapabilityTags([
+                model.modalities,
+                model.capabilities,
+                model.input_modalities,
+                model.input_modalities?.map { "input:\($0)" },
+                model.output_modalities,
+                model.output_modalities?.map { "output:\($0)" }
+            ])
+            return ModelInfo(
                 id: model.id,
                 displayName: model.id,
                 provider: .openAI,
+                capabilities: capabilityTags,
                 updatedAt: model.created.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date()
             )
         }
@@ -269,6 +282,7 @@ public final class ModelCatalog: ObservableObject {
         // whenever OpenAI updates the Codex model catalog.
         let codexModelOrder = [
             "gpt-5.4",
+            "gpt-5.4-mini",
             "gpt-5.3-codex",
             "gpt-5.3-codex-spark",
             "gpt-5.2-codex",
@@ -329,14 +343,27 @@ public final class ModelCatalog: ObservableObject {
         struct GroqModel: Decodable {
             let id: String
             let created: Int?
+            let modalities: [String]?
+            let capabilities: [String]?
+            let input_modalities: [String]?
+            let output_modalities: [String]?
         }
         
         let decoded = try JSONDecoder().decode(GroqModelsResponse.self, from: data)
         return decoded.data.map { model in
-            ModelInfo(
+            let capabilityTags = mergeCapabilityTags([
+                model.modalities,
+                model.capabilities,
+                model.input_modalities,
+                model.input_modalities?.map { "input:\($0)" },
+                model.output_modalities,
+                model.output_modalities?.map { "output:\($0)" }
+            ])
+            return ModelInfo(
                 id: model.id,
                 displayName: model.id,
                 provider: .groq,
+                capabilities: capabilityTags,
                 updatedAt: model.created.map { Date(timeIntervalSince1970: TimeInterval($0)) } ?? Date()
             )
         }
@@ -370,7 +397,13 @@ public final class ModelCatalog: ObservableObject {
             let name: String?
             let modalities: [String]?
             let capabilities: [String]?
+            let architecture: OpenRouterArchitecture?
             let pricing: OpenRouterPricing?
+        }
+        struct OpenRouterArchitecture: Decodable {
+            let modality: String?
+            let input_modalities: [String]?
+            let output_modalities: [String]?
         }
         struct OpenRouterPricing: Decodable {
             let prompt: String?
@@ -381,11 +414,32 @@ public final class ModelCatalog: ObservableObject {
         return decoded.data.map { model in
             let isFree = model.id.hasSuffix(":free") ||
                 (model.pricing?.prompt == "0" && model.pricing?.completion == "0")
+            let architectureTags: [String]? = {
+                guard model.architecture != nil else { return nil }
+                var tags: [String] = []
+                if let modality = model.architecture?.modality {
+                    tags.append(modality)
+                }
+                if let inputModalities = model.architecture?.input_modalities {
+                    tags.append(contentsOf: inputModalities)
+                    tags.append(contentsOf: inputModalities.map { "input:\($0)" })
+                }
+                if let outputModalities = model.architecture?.output_modalities {
+                    tags.append(contentsOf: outputModalities)
+                    tags.append(contentsOf: outputModalities.map { "output:\($0)" })
+                }
+                return tags
+            }()
+            let capabilityTags = mergeCapabilityTags([
+                model.modalities,
+                model.capabilities,
+                architectureTags
+            ])
             return ModelInfo(
                 id: model.id,
                 displayName: model.name ?? model.id,
                 provider: .openRouter,
-                capabilities: model.modalities ?? model.capabilities,
+                capabilities: capabilityTags,
                 updatedAt: Date(),
                 isFree: isFree
             )
@@ -414,11 +468,23 @@ public final class ModelCatalog: ObservableObject {
         struct OllamaModel: Decodable {
             let name: String
             let modified_at: String?
+            let capabilities: [String]?
         }
         
         let decoded = try JSONDecoder().decode(OllamaTagsResponse.self, from: data)
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        var capabilityByModel: [String: [String]] = [:]
+        for model in decoded.models.prefix(40) {
+            if let capabilities = normalizedCapabilityTags(from: model.capabilities) {
+                capabilityByModel[model.name] = capabilities
+                continue
+            }
+            if let capabilities = await fetchOllamaModelCapabilities(modelName: model.name) {
+                capabilityByModel[model.name] = capabilities
+            }
+        }
         
         return decoded.models.map { model in
             let updatedAt = model.modified_at.flatMap { dateFormatter.date(from: $0) } ?? Date()
@@ -426,8 +492,40 @@ public final class ModelCatalog: ObservableObject {
                 id: model.name,
                 displayName: model.name,
                 provider: .ollama,
+                capabilities: capabilityByModel[model.name] ?? normalizedCapabilityTags(from: model.capabilities),
                 updatedAt: updatedAt
             )
+        }
+    }
+
+    private func fetchOllamaModelCapabilities(modelName: String) async -> [String]? {
+        guard let url = URL(string: "http://localhost:11434/api/show"),
+              NetworkPrivacyPolicy.isRequestAllowed(url: url) else {
+            return nil
+        }
+
+        struct ShowRequest: Encodable {
+            let model: String
+        }
+        struct ShowResponse: Decodable {
+            let capabilities: [String]?
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 1.5
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONEncoder().encode(ShowRequest(model: modelName))
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+                return nil
+            }
+            let decoded = try JSONDecoder().decode(ShowResponse.self, from: data)
+            return normalizedCapabilityTags(from: decoded.capabilities)
+        } catch {
+            return nil
         }
     }
     
@@ -463,6 +561,7 @@ public final class ModelCatalog: ObservableObject {
             struct AnthropicModel: Decodable {
                 let id: String
                 let display_name: String?
+                let capabilities: [String: AnyAnthropicCapability]?
             }
             
             let decoded = try JSONDecoder().decode(AnthropicModelsResponse.self, from: data)
@@ -471,10 +570,12 @@ public final class ModelCatalog: ObservableObject {
             }
             
             let models = decoded.data.map { model in
-                ModelInfo(
+                let capabilityTags = anthropicCapabilityTags(from: model.capabilities)
+                return ModelInfo(
                     id: model.id,
                     displayName: model.display_name ?? model.id,
                     provider: .anthropic,
+                    capabilities: capabilityTags,
                     updatedAt: Date()
                 )
             }
@@ -543,14 +644,27 @@ public final class ModelCatalog: ObservableObject {
             }
             struct OpenAIModel: Decodable {
                 let id: String
+                let modalities: [String]?
+                let capabilities: [String]?
+                let input_modalities: [String]?
+                let output_modalities: [String]?
             }
             
             let decoded = try JSONDecoder().decode(OpenAIModelsResponse.self, from: data)
             let models = decoded.data.map { model in
-                ModelInfo(
+                let capabilityTags = mergeCapabilityTags([
+                    model.modalities,
+                    model.capabilities,
+                    model.input_modalities,
+                    model.input_modalities?.map { "input:\($0)" },
+                    model.output_modalities,
+                    model.output_modalities?.map { "output:\($0)" }
+                ])
+                return ModelInfo(
                     id: model.id,
                     displayName: model.id,
                     provider: .openAICompatible,
+                    capabilities: capabilityTags,
                     updatedAt: Date()
                 )
             }
@@ -589,26 +703,34 @@ public final class ModelCatalog: ObservableObject {
             throw ModelCatalogError.fetchFailed
         }
 
-        struct ModelsResponse: Decodable {
-            let data: [ModelData]
-            struct ModelData: Decodable {
-                let id: String
-            }
-        }
-
-        let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
-        if decoded.data.isEmpty {
+        let decodedModels = decodeGitHubCopilotModelPayloads(from: data)
+        if decodedModels.isEmpty {
             throw ModelCatalogError.fetchFailed
         }
 
-        let models = decoded.data.map { model in
-            ModelInfo(
-                id: model.id,
-                displayName: model.id,
+        let models = decodedModels.compactMap { model -> ModelInfo? in
+            guard let modelID = model.resolvedID else { return nil }
+            let capabilityTags = mergeCapabilityTags([
+                model.modalities,
+                model.capabilities,
+                model.resolvedInputModalities,
+                model.resolvedInputModalities?.map { "input:\($0)" },
+                model.resolvedOutputModalities,
+                model.resolvedOutputModalities?.map { "output:\($0)" }
+            ])
+            return ModelInfo(
+                id: modelID,
+                displayName: modelID,
                 provider: .githubCopilot,
+                capabilities: capabilityTags,
                 updatedAt: Date()
             )
         }
+
+        if models.isEmpty {
+            throw ModelCatalogError.fetchFailed
+        }
+
         return (models, false)
     }
 
@@ -630,6 +752,151 @@ public final class ModelCatalog: ObservableObject {
         }
 
         return (data, httpResponse.statusCode)
+    }
+
+    private func decodeGitHubCopilotModelPayloads(from data: Data) -> [GitHubCopilotModelPayload] {
+        let decoder = JSONDecoder()
+
+        if let wrapped = try? decoder.decode(GitHubCopilotModelsResponse.self, from: data),
+           let wrappedModels = wrapped.preferredModels,
+           !wrappedModels.isEmpty {
+            return wrappedModels
+        }
+
+        if let topLevelArray = try? decoder.decode([GitHubCopilotModelPayload].self, from: data),
+           !topLevelArray.isEmpty {
+            return topLevelArray
+        }
+
+        return decodeGitHubCopilotModelPayloadsLoosely(from: data)
+    }
+
+    private func decodeGitHubCopilotModelPayloadsLoosely(from data: Data) -> [GitHubCopilotModelPayload] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) else {
+            return []
+        }
+
+        let rawModels: [[String: Any]]
+        if let dictionary = json as? [String: Any] {
+            if let dataArray = dictionary["data"] as? [[String: Any]] {
+                rawModels = dataArray
+            } else if let modelsArray = dictionary["models"] as? [[String: Any]] {
+                rawModels = modelsArray
+            } else {
+                rawModels = []
+            }
+        } else if let array = json as? [[String: Any]] {
+            rawModels = array
+        } else {
+            rawModels = []
+        }
+
+        return rawModels.compactMap { GitHubCopilotModelPayload(dictionary: $0) }
+    }
+
+    private struct GitHubCopilotModelsResponse: Decodable {
+        let data: [GitHubCopilotModelPayload]?
+        let models: [GitHubCopilotModelPayload]?
+
+        var preferredModels: [GitHubCopilotModelPayload]? {
+            if let data, !data.isEmpty { return data }
+            if let models, !models.isEmpty { return models }
+            return nil
+        }
+    }
+
+    private struct GitHubCopilotModelPayload: Decodable {
+        let id: String?
+        let model: String?
+        let name: String?
+        let modalities: [String]?
+        let capabilities: [String]?
+        let input_modalities: [String]?
+        let output_modalities: [String]?
+        let inputModalities: [String]?
+        let outputModalities: [String]?
+
+        var resolvedID: String? {
+            [id, model, name]
+                .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .first(where: { !$0.isEmpty })
+        }
+
+        var resolvedInputModalities: [String]? {
+            if let input_modalities, !input_modalities.isEmpty {
+                return input_modalities
+            }
+            return inputModalities
+        }
+
+        var resolvedOutputModalities: [String]? {
+            if let output_modalities, !output_modalities.isEmpty {
+                return output_modalities
+            }
+            return outputModalities
+        }
+
+        init(
+            id: String? = nil,
+            model: String? = nil,
+            name: String? = nil,
+            modalities: [String]? = nil,
+            capabilities: [String]? = nil,
+            input_modalities: [String]? = nil,
+            output_modalities: [String]? = nil,
+            inputModalities: [String]? = nil,
+            outputModalities: [String]? = nil
+        ) {
+            self.id = id
+            self.model = model
+            self.name = name
+            self.modalities = modalities
+            self.capabilities = capabilities
+            self.input_modalities = input_modalities
+            self.output_modalities = output_modalities
+            self.inputModalities = inputModalities
+            self.outputModalities = outputModalities
+        }
+
+        init?(dictionary: [String: Any]) {
+            let id = dictionary["id"] as? String
+            let model = dictionary["model"] as? String
+            let name = dictionary["name"] as? String
+            let modalities = Self.stringArray(from: dictionary["modalities"])
+            let capabilities = Self.stringArray(from: dictionary["capabilities"])
+            let inputModalitiesSnake = Self.stringArray(from: dictionary["input_modalities"])
+            let outputModalitiesSnake = Self.stringArray(from: dictionary["output_modalities"])
+            let inputModalitiesCamel = Self.stringArray(from: dictionary["inputModalities"])
+            let outputModalitiesCamel = Self.stringArray(from: dictionary["outputModalities"])
+
+            let payload = GitHubCopilotModelPayload(
+                id: id,
+                model: model,
+                name: name,
+                modalities: modalities,
+                capabilities: capabilities,
+                input_modalities: inputModalitiesSnake,
+                output_modalities: outputModalitiesSnake,
+                inputModalities: inputModalitiesCamel,
+                outputModalities: outputModalitiesCamel
+            )
+
+            guard payload.resolvedID != nil else { return nil }
+            self = payload
+        }
+
+        private static func stringArray(from value: Any?) -> [String]? {
+            if let values = value as? [String] {
+                return values
+            }
+
+            if let values = value as? [Any] {
+                let strings = values.compactMap { $0 as? String }
+                return strings.isEmpty ? nil : strings
+            }
+
+            return nil
+        }
     }
     
     private func fetchGeminiModels() async throws -> (models: [ModelInfo], isFallback: Bool) {
@@ -662,6 +929,7 @@ public final class ModelCatalog: ObservableObject {
             struct GeminiModel: Decodable {
                 let name: String
                 let displayName: String?
+                let supportedGenerationMethods: [String]?
             }
             
             let decoded = try JSONDecoder().decode(GeminiModelsResponse.self, from: data)
@@ -671,10 +939,15 @@ public final class ModelCatalog: ObservableObject {
             
             let models = decoded.models.map { model in
                 let id = model.name.replacingOccurrences(of: "models/", with: "")
+                let capabilityTags = geminiCapabilityTags(
+                    modelId: id,
+                    supportedGenerationMethods: model.supportedGenerationMethods
+                )
                 return ModelInfo(
                     id: id,
                     displayName: model.displayName ?? id,
                     provider: .gemini,
+                    capabilities: capabilityTags,
                     updatedAt: Date()
                 )
             }
@@ -686,26 +959,24 @@ public final class ModelCatalog: ObservableObject {
     
     private func anthropicFallbackModels() -> [ModelInfo] {
         let models = [
-            "claude-opus-4",
+            "claude-sonnet-4-6",
+            "claude-opus-4-6",
+            "claude-haiku-4-5",
+            "claude-haiku-4-5-20251001",
             "claude-sonnet-4",
-            "claude-haiku-4.5",
-            "claude-sonnet-4-20250514",
-            "claude-opus-4-20250514",
-            "claude-3-5-sonnet-latest",
-            "claude-3-5-haiku-latest"
+            "claude-opus-4"
         ]
         return models.map { ModelInfo(id: $0, displayName: $0, provider: .anthropic) }
     }
 
     private func geminiFallbackModels() -> [ModelInfo] {
         let models = [
+            "gemini-3.1-pro-preview",
             "gemini-3-flash-preview",
+            "gemini-3.1-flash-lite-preview",
             "gemini-2.5-pro",
             "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-2.0-pro",
-            "gemini-1.5-pro",
-            "gemini-1.5-flash"
+            "gemini-2.5-flash-lite"
         ]
         return models.map { ModelInfo(id: $0, displayName: $0, provider: .gemini) }
     }
@@ -715,7 +986,7 @@ public final class ModelCatalog: ObservableObject {
     }
     
     private func openAICompatibleFallback() -> [ModelInfo] {
-        [ModelInfo(id: "gpt-4", displayName: "GPT-4", provider: .openAICompatible)]
+        [ModelInfo(id: "gpt-5.4-mini", displayName: "gpt-5.4-mini", provider: .openAICompatible)]
     }
     
     private func fallbackModels(for provider: AIProvider) -> [ModelInfo] {
@@ -726,7 +997,36 @@ public final class ModelCatalog: ObservableObject {
     }
 
     private func filteredModels(_ models: [ModelInfo], for provider: AIProvider) -> [ModelInfo] {
-        models
+        var sanitized: [ModelInfo] = []
+        var seenModelIDs = Set<String>()
+
+        for model in models {
+            let trimmedID = model.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedID.isEmpty else { continue }
+
+            let dedupeKey = trimmedID.lowercased()
+            guard seenModelIDs.insert(dedupeKey).inserted else { continue }
+
+            let trimmedDisplayName = model.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedDisplayName = trimmedDisplayName.isEmpty ? trimmedID : trimmedDisplayName
+
+            if trimmedID == model.id && normalizedDisplayName == model.displayName {
+                sanitized.append(model)
+            } else {
+                sanitized.append(
+                    ModelInfo(
+                        id: trimmedID,
+                        displayName: normalizedDisplayName,
+                        provider: provider,
+                        capabilities: model.capabilities,
+                        updatedAt: model.updatedAt,
+                        isFree: model.isFree
+                    )
+                )
+            }
+        }
+
+        return sanitized
     }
     
     private func loadCacheFromDisk() {
@@ -766,11 +1066,106 @@ public final class ModelCatalog: ObservableObject {
         }
     }
 
+    private static func normalizeCapabilityTag(_ raw: String) -> String? {
+        let normalized = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "_")
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private func normalizedCapabilityTags(from rawCapabilities: [String]?) -> [String]? {
+        mergeCapabilityTags([rawCapabilities])
+    }
+
+    private func mergeCapabilityTags(_ groups: [[String]?]) -> [String]? {
+        var tags = Set<String>()
+
+        for group in groups {
+            guard let group else { continue }
+            for rawTag in group {
+                guard let tag = Self.normalizeCapabilityTag(rawTag) else { continue }
+                tags.insert(tag)
+
+                if tag == "image_input" || tag == "input:image" || tag == "input:image_url" || tag == "vision" {
+                    tags.insert("vision")
+                    tags.insert("image")
+                }
+            }
+        }
+
+        return tags.isEmpty ? nil : tags.sorted()
+    }
+
+    private func anthropicCapabilityTags(from capabilities: [String: AnyAnthropicCapability]?) -> [String]? {
+        guard let capabilities, !capabilities.isEmpty else { return nil }
+
+        var tags = Set<String>()
+        for (rawKey, value) in capabilities {
+            guard let key = Self.normalizeCapabilityTag(rawKey) else { continue }
+            if value.supported == true {
+                tags.insert(key)
+                if key == "image_input" {
+                    tags.insert("vision")
+                    tags.insert("image")
+                }
+            }
+            if key == "image_input", value.supported == false {
+                tags.insert("no_image_input")
+            }
+        }
+
+        return tags.isEmpty ? nil : tags.sorted()
+    }
+
+    private func geminiCapabilityTags(modelId: String, supportedGenerationMethods: [String]?) -> [String]? {
+        let loweredModelId = modelId.lowercased()
+        var tags = Set<String>()
+
+        if let supportedGenerationMethods {
+            for method in supportedGenerationMethods {
+                if let normalizedMethod = Self.normalizeCapabilityTag(method) {
+                    tags.insert(normalizedMethod)
+                }
+            }
+        }
+
+        if loweredModelId.contains("embedding") {
+            tags.insert("embedding")
+            tags.insert("text_only")
+        }
+
+        if loweredModelId.contains("tts") || loweredModelId.contains("speech") {
+            tags.insert("audio")
+        }
+
+        // Gemini model metadata doesn't expose explicit image-input modalities in this endpoint.
+        // For generateContent models, Gemini docs indicate multimodal support by default.
+        let appearsGenerativeGemini = loweredModelId.hasPrefix("gemini-") &&
+            !loweredModelId.contains("embedding") &&
+            !loweredModelId.contains("tts") &&
+            !loweredModelId.contains("speech")
+        if appearsGenerativeGemini,
+           tags.contains("generatecontent") || tags.contains("generatemessage") {
+            tags.insert("multimodal")
+            tags.insert("vision")
+            tags.insert("image")
+            tags.insert("image_input")
+        }
+
+        return tags.isEmpty ? nil : tags.sorted()
+    }
+
+    private struct AnyAnthropicCapability: Decodable {
+        let supported: Bool?
+    }
+
     // MARK: - Vision Support
 
     /// Known models that support vision (multimodal)
     private static let knownVisionModels: Set<String> = [
         // OpenAI - GPT models
+        "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
         "gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4-vision-preview",
         "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
         // OpenAI - Reasoning models with vision
@@ -779,13 +1174,17 @@ public final class ModelCatalog: ObservableObject {
         "claude-3-5-sonnet-20241022", "claude-3-5-sonnet-latest", "claude-3-5-haiku-20241022",
         "claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307",
         // Anthropic - New naming (claude-sonnet-4, claude-opus-4, etc.)
-        "claude-sonnet-4", "claude-opus-4", "claude-haiku-4.5", "claude-sonnet-4-20250514", "claude-opus-4-20250514",
+        "claude-sonnet-4", "claude-opus-4", "claude-haiku-4.5",
+        "claude-sonnet-4.5", "claude-opus-4.5", "claude-sonnet-4.6", "claude-opus-4.6",
+        "claude-sonnet-4-6", "claude-opus-4-6", "claude-haiku-4-5", "claude-haiku-4-5-20251001",
         // Gemini
-        "gemini-3-flash-preview", "gemini-2.5-pro", "gemini-2.5-flash",
+        "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite",
+        "gemini-3.1-pro", "gemini-3-flash", "gemini-3.1-flash-lite",
         "gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-2.0-flash-exp",
         "gemini-2.0-flash", "gemini-2.0-pro",
         // Groq
-        "llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview"
+        "llama-3.2-11b-vision-preview", "llama-3.2-90b-vision-preview",
+        "meta-llama/llama-4-scout-17b-16e-instruct", "llama-4-scout-17b-16e-instruct"
     ]
 
     /// Known model prefixes that support vision (for partial matching)
@@ -801,7 +1200,8 @@ public final class ModelCatalog: ObservableObject {
         // Gemini
         "gemini-3", "gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-exp", "gemini-pro-vision",
         // Other
-        "llama-3.2-11b-vision", "llama-3.2-90b-vision", "llava", "phi-3-vision"
+        "llama-3.2-11b-vision", "llama-3.2-90b-vision", "llama-4-scout", "llava", "phi-3-vision",
+        "qwen3-vl", "qwen2.5vl", "llama3.2-vision"
     ]
     
     /// General vision keywords used across providers
@@ -813,10 +1213,29 @@ public final class ModelCatalog: ObservableObject {
     private static let knownNonVisionModels: Set<String> = [
         "gemma-flash",
         "gemma-2-flash",
-        "gemma3",
-        "gemma3:latest",
         "llama-3.3-70b-versatile",
         "llama-4-70b-versatile"
+    ]
+
+    /// Local/open-source model families commonly exposed through OpenAI-compatible endpoints.
+    private static let openAICompatibleVisionKeywords: [String] = [
+        "llava", "bakllava", "moondream", "minicpm", "glm-4v", "internvl", "cogvlm",
+        "qwen-vl", "qwen2.5-vl", "qwen2.5vl", "qwen2-vl", "qwen3-vl", "llama3.2-vision",
+        "vision", "image", "multimodal", "omni", "vl", "mm"
+    ]
+
+    /// OpenAI model families that are generally vision-capable when explicitly namespaced.
+    private static let openAIVisionFamilies: [String] = [
+        "gpt-5", "gpt-4o", "gpt-4.1", "gpt-4-turbo", "gpt-4-vision", "o1", "o3", "o4"
+    ]
+
+    /// Provider-scoped vision prefixes to avoid cross-provider capability assumptions.
+    private static let providerVisionPrefixes: [AIProvider: [String]] = [
+        .openAI: ["gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "o1", "o3", "o4"],
+        .anthropic: ["claude-3-5-sonnet", "claude-3-opus", "claude-3-sonnet", "claude-3-haiku", "claude-3.5", "claude-3.7", "claude-sonnet-4", "claude-opus-4", "claude-haiku-4", "claude-sonnet", "claude-opus"],
+        .gemini: ["gemini-3", "gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-exp", "gemini-pro-vision"],
+        .groq: ["llama-3.2-11b-vision", "llama-3.2-90b-vision", "llama-4-scout"],
+        .githubCopilot: ["gpt-5", "gpt-4o", "gpt-4-turbo", "gpt-4-vision", "gpt-4.1", "o1", "o3", "o4", "claude-3", "claude-sonnet", "claude-opus", "gemini"]
     ]
     
     /// Known vision-capable model families for GitHub Copilot
@@ -838,7 +1257,119 @@ public final class ModelCatalog: ObservableObject {
               let caps = model.capabilities else {
             return nil
         }
-        return caps.contains(where: { $0.lowercased().contains("vision") || $0.lowercased().contains("image") })
+
+        let normalizedCaps = caps.compactMap { Self.normalizeCapabilityTag($0) }
+        if normalizedCaps.isEmpty {
+            return nil
+        }
+
+        let positiveSignals = [
+            "vision", "multimodal", "input_image", "image_input", "input:image", "input:image_url"
+        ]
+        if normalizedCaps.contains(where: { positiveSignals.contains($0) }) {
+            return true
+        }
+
+        let negativeSignals = ["no_image_input", "text-only", "text_only", "text->text"]
+        if normalizedCaps.contains(where: { cap in
+            negativeSignals.contains(where: { cap == $0 })
+        }) {
+            return false
+        }
+
+        let hasExplicitModalityMetadata = normalizedCaps.contains(where: { cap in
+            cap.hasPrefix("input:") ||
+            cap.hasPrefix("output:") ||
+            cap.contains("->") ||
+            cap == "completion" ||
+            cap == "embedding" ||
+            cap == "audio" ||
+            cap == "text"
+        })
+
+        if hasExplicitModalityMetadata {
+            let hasInputImage = normalizedCaps.contains(where: { cap in
+                cap == "input:image" ||
+                cap == "input:image_url" ||
+                cap == "image_input"
+            })
+            if hasInputImage {
+                return true
+            }
+
+            let hasOutputImageOnly = normalizedCaps.contains("output:image")
+            if hasOutputImageOnly {
+                return false
+            }
+
+            if normalizedCaps.contains("text") && !normalizedCaps.contains("image") {
+                return false
+            }
+        }
+
+        return nil
+    }
+
+    private func normalizedVisionCandidates(for modelId: String) -> [String] {
+        let lowered = modelId.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !lowered.isEmpty else { return [] }
+
+        var candidates: [String] = [lowered]
+
+        if let slash = lowered.lastIndex(of: "/") {
+            let namespacedBase = String(lowered[lowered.index(after: slash)...])
+            if !namespacedBase.isEmpty {
+                candidates.append(namespacedBase)
+            }
+        }
+
+        if let colon = lowered.firstIndex(of: ":") {
+            let withoutTag = String(lowered[..<colon])
+            if !withoutTag.isEmpty {
+                candidates.append(withoutTag)
+            }
+        }
+
+        if let slash = lowered.lastIndex(of: "/") {
+            let namespacedBase = String(lowered[lowered.index(after: slash)...])
+            if let colon = namespacedBase.firstIndex(of: ":") {
+                let namespacedWithoutTag = String(namespacedBase[..<colon])
+                if !namespacedWithoutTag.isEmpty {
+                    candidates.append(namespacedWithoutTag)
+                }
+            }
+        }
+
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0).inserted }
+    }
+
+    private func matchesKnownVisionModels(_ candidates: [String], provider: AIProvider) -> Bool {
+        candidates.contains { candidate in
+            guard Self.knownVisionModels.contains(candidate) else { return false }
+            switch provider {
+            case .openAI:
+                return candidate.hasPrefix("gpt-") || candidate.hasPrefix("o1") || candidate.hasPrefix("o3") || candidate.hasPrefix("o4")
+            case .anthropic:
+                return candidate.hasPrefix("claude")
+            case .gemini:
+                return candidate.hasPrefix("gemini")
+            case .groq:
+                return candidate.contains("vision-preview") || candidate.contains("llama-4-scout")
+            case .githubCopilot:
+                return Self.copilotVisionFamilies.contains { family in candidate.contains(family.lowercased()) }
+            default:
+                return false
+            }
+        }
+    }
+
+    private func matchesProviderVisionPrefixes(_ candidates: [String], provider: AIProvider) -> Bool {
+        guard let prefixes = Self.providerVisionPrefixes[provider] else { return false }
+        return prefixes.contains { prefix in
+            let normalizedPrefix = prefix.lowercased()
+            return candidates.contains(where: { $0.hasPrefix(normalizedPrefix) || $0.contains(normalizedPrefix) })
+        }
     }
 
     private func ensureNetworkAllowed(_ url: URL) throws {
@@ -849,28 +1380,40 @@ public final class ModelCatalog: ObservableObject {
 
     /// Check if a specific model supports vision capabilities
     public func supportsVision(modelId: String, provider: AIProvider) -> Bool {
-        // First check cached model capabilities metadata if available
-        if let hasVision = checkModelMetadataForVision(modelId: modelId, provider: provider), hasVision {
-            return true
+        // First check cached model capabilities metadata if available.
+        // If metadata is explicit, treat it as authoritative.
+        if let hasVision = checkModelMetadataForVision(modelId: modelId, provider: provider) {
+            return hasVision
         }
-        
-        // Check explicitly known models
-        if Self.knownVisionModels.contains(modelId) {
-            return true
-        }
-        
-        let lowercaseId = modelId.lowercased()
 
-        if Self.knownNonVisionModels.contains(lowercaseId) {
+        let candidates = normalizedVisionCandidates(for: modelId)
+        guard !candidates.isEmpty else { return false }
+
+        if candidates.contains(where: { Self.knownNonVisionModels.contains($0) }) {
             return false
         }
-        
-        // Check against known prefixes
-        for prefix in Self.visionModelPrefixes {
-            if lowercaseId.hasPrefix(prefix.lowercased()) || lowercaseId.contains(prefix.lowercased()) {
+
+        // Only apply known-model and prefix heuristics within the same provider family.
+        if matchesKnownVisionModels(candidates, provider: provider) {
+            return true
+        }
+
+        if matchesProviderVisionPrefixes(candidates, provider: provider) {
+            return true
+        }
+
+        if provider == .openAICompatible {
+            let namespacedOpenAIVision = candidates.contains { candidate in
+                candidate.hasPrefix("openai/") && Self.openAIVisionFamilies.contains { family in
+                    candidate.contains(family)
+                }
+            }
+            if namespacedOpenAIVision {
                 return true
             }
         }
+
+        let lowercaseId = candidates[0]
 
         // Provider-specific heuristics
         switch provider {
@@ -886,17 +1429,27 @@ public final class ModelCatalog: ObservableObject {
             return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         case .ollama:
             // Ollama often uses models like 'llava', 'bakllava' for vision
-            let ollamaVisionKeywords = ["llava", "vision", "moondream", "minicpm", "bakllava", "phi-3-vision", "glm-4v"]
-            return ollamaVisionKeywords.contains { lowercaseId.contains($0) }
+            return Self.openAICompatibleVisionKeywords.contains { keyword in
+                candidates.contains(where: { $0.contains(keyword) })
+            }
+        case .openAICompatible:
+            // OpenAI-compatible endpoints frequently proxy local vision models.
+            // Reuse both modern OpenAI-family and local-model keyword heuristics.
+            return Self.openAICompatibleVisionKeywords.contains { keyword in
+                candidates.contains(where: { $0.contains(keyword) })
+            }
         case .gemini:
-            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) }) ||
-                   lowercaseId.contains("gemini") ||
-                   lowercaseId.contains("flash")
+            return lowercaseId.contains("gemini") &&
+                !lowercaseId.contains("embedding") &&
+                !lowercaseId.contains("tts") &&
+                !lowercaseId.contains("speech")
+        case .openAI, .anthropic, .groq:
+            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         case .openRouter:
             // OpenRouter often includes vision in the name or we can check the ID
             return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
         default:
-            return Self.visionKeywords.contains(where: { lowercaseId.contains($0) })
+            return false
         }
     }
 }

@@ -40,6 +40,8 @@ public class LearningsManager: ObservableObject {
         }
     }
     @Published public var sessionLearningPaused: Bool = false
+    @Published public var modelDirectories: [ReferenceModelDirectory] = []
+    @Published public private(set) var learningsModelSelection: LearningsModelSelection?
     @Published public var behaviorPreferences: BehaviorPreferences?
 
     /// Suggestions for files that should be added to exceptions (e.g., related project files)
@@ -69,11 +71,13 @@ public class LearningsManager: ObservableObject {
         learningStrength = userDefaults.object(forKey: "learningStrength") as? Double ?? 0.5
         dataRetentionDays = userDefaults.integer(forKey: "learningDataRetentionDays")
         useAIForLearnings = userDefaults.object(forKey: "useAIForLearnings") as? Bool ?? true
+        loadLearningsModelSelection()
+        loadModelDirectories()
     }
     
     public func configure(with config: AIConfig) {
         do {
-            let client = try AIClientFactory.createClient(config: config)
+            let client = try AIClientFactory.createClient(config: effectiveAIConfig(from: config))
             analyzer.configure(aiClient: client)
         } catch {
             self.error = "Failed to configure AI: \(error.localizedDescription)"
@@ -162,13 +166,13 @@ public class LearningsManager: ObservableObject {
         isLoading = true
         do {
             if let profile = try LearningsFileManager.load() {
-                currentProfile = profile
+                currentProfile = prepareLoadedProfile(profile)
             } else {
-                currentProfile = LearningsProfile()
+                currentProfile = prepareLoadedProfile(LearningsProfile())
             }
         } catch {
             self.error = "Failed to load profile: \(error.localizedDescription)"
-            currentProfile = LearningsProfile()
+            currentProfile = prepareLoadedProfile(LearningsProfile())
         }
         isLoading = false
     }
@@ -180,13 +184,13 @@ public class LearningsManager: ObservableObject {
         
         do {
             if let profile = try LearningsFileManager.load() {
-                currentProfile = profile
+                currentProfile = prepareLoadedProfile(profile)
             } else {
-                currentProfile = LearningsProfile()
+                currentProfile = prepareLoadedProfile(LearningsProfile())
             }
         } catch {
             self.error = "Failed to load profile: \(error.localizedDescription)"
-            currentProfile = LearningsProfile()
+            currentProfile = prepareLoadedProfile(LearningsProfile())
         }
     }
     
@@ -202,12 +206,377 @@ public class LearningsManager: ObservableObject {
             self.error = "Failed to save profile: \(error.localizedDescription)"
         }
     }
-    
+
+    private func prepareLoadedProfile(_ profile: LearningsProfile) -> LearningsProfile {
+        migrateLegacySessionsIfNeeded(in: profile)
+    }
+
+    public func upsertOrganizationSession(_ session: OrganizationSession) {
+        guard consentManager.canCollectData else { return }
+        guard !isPathExcludedFromLearning(session.folderPath) else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
+
+        upsertOrganizationSession(&profile, session: session)
+        currentProfile = profile
+        debouncedSave()
+    }
+
+    private func upsertOrganizationSession(_ profile: inout LearningsProfile, session: OrganizationSession) {
+        if let index = profile.sessions.firstIndex(where: { $0.id == session.id }) {
+            profile.sessions[index] = session
+        } else {
+            profile.sessions.append(session)
+        }
+        profile.sessions.sort { lhs, rhs in
+            let lhsDate = lhs.completedAt ?? lhs.timestamp
+            let rhsDate = rhs.completedAt ?? rhs.timestamp
+            return lhsDate > rhsDate
+        }
+    }
+
+    private func mutateSession(
+        in profile: inout LearningsProfile,
+        sessionId: String? = nil,
+        folderPath: String? = nil,
+        timestamp: Date = Date(),
+        createIfMissing: Bool = true,
+        mutation: (inout OrganizationSession) -> Void
+    ) {
+        if let sessionId, let index = profile.sessions.firstIndex(where: { $0.id == sessionId }) {
+            mutation(&profile.sessions[index])
+            return
+        }
+
+        if let folderPath, let index = bestMatchingSessionIndex(in: profile.sessions, folderPath: folderPath, timestamp: timestamp) {
+            mutation(&profile.sessions[index])
+            return
+        }
+
+        guard createIfMissing, let folderPath else { return }
+        var session = OrganizationSession(timestamp: timestamp, folderPath: folderPath)
+        mutation(&session)
+        upsertOrganizationSession(&profile, session: session)
+    }
+
+    private func bestMatchingSessionIndex(
+        in sessions: [OrganizationSession],
+        folderPath: String,
+        timestamp: Date,
+        maxDistance: TimeInterval = 6 * 60 * 60
+    ) -> Int? {
+        let normalizedFolder = URL(fileURLWithPath: folderPath).standardizedFileURL.path
+
+        return sessions.enumerated()
+            .filter { _, session in
+                URL(fileURLWithPath: session.folderPath).standardizedFileURL.path == normalizedFolder
+            }
+            .filter { _, session in
+                abs((session.completedAt ?? session.timestamp).timeIntervalSince(timestamp)) <= maxDistance
+            }
+            .sorted { lhs, rhs in
+                let lhsDelta = abs((lhs.element.completedAt ?? lhs.element.timestamp).timeIntervalSince(timestamp))
+                let rhsDelta = abs((rhs.element.completedAt ?? rhs.element.timestamp).timeIntervalSince(timestamp))
+                return lhsDelta < rhsDelta
+            }
+            .map(\.offset)
+            .first
+    }
+
+    private func migrateLegacySessionsIfNeeded(in profile: LearningsProfile) -> LearningsProfile {
+        guard profile.sessions.isEmpty else { return profile }
+
+        var migrated = profile
+        var sessions: [OrganizationSession] = []
+
+        func upsert(_ session: OrganizationSession) {
+            if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+                sessions[index] = session
+            } else {
+                sessions.append(session)
+            }
+        }
+
+        func appendEvent(
+            folderPath: String,
+            timestamp: Date,
+            sessionId: String? = nil,
+            createIfMissing: Bool = true,
+            _ mutation: (inout OrganizationSession) -> Void
+        ) {
+            if let sessionId, let index = sessions.firstIndex(where: { $0.id == sessionId }) {
+                mutation(&sessions[index])
+                return
+            }
+
+            if let index = bestMatchingSessionIndex(in: sessions, folderPath: folderPath, timestamp: timestamp) {
+                mutation(&sessions[index])
+                return
+            }
+
+            guard createIfMissing else { return }
+            var session = OrganizationSession(timestamp: timestamp, folderPath: folderPath)
+            mutation(&session)
+            upsert(session)
+        }
+
+        for cancelled in profile.cancelledOrganizations {
+            var session = OrganizationSession(
+                timestamp: cancelled.timestamp,
+                completedAt: cancelled.timestamp,
+                folderPath: cancelled.folderPath,
+                planSummary: cancelled.proposedStructureSummary,
+                reaction: .cancelled,
+                events: [
+                    OrganizationSessionEvent(
+                        timestamp: cancelled.timestamp,
+                        kind: .cancelled,
+                        summary: "Cancelled organization during \(cancelled.cancelledAtStage)"
+                    )
+                ]
+            )
+            if let instructions = cancelled.instructions, !instructions.isEmpty {
+                session.additionalInstructions.append(
+                    UserInstruction(
+                        timestamp: cancelled.timestamp,
+                        instruction: instructions,
+                        context: "cancelled",
+                        folderPath: cancelled.folderPath,
+                        fileCount: cancelled.fileCount,
+                        isRegeneration: false
+                    )
+                )
+            }
+            upsert(session)
+        }
+
+        for regenerated in profile.regeneratedOrganizations {
+            let folderPath = regenerated.folderPath
+            appendEvent(folderPath: folderPath, timestamp: regenerated.timestamp) { session in
+                session.completedAt = max(session.completedAt ?? .distantPast, regenerated.timestamp)
+                session.reaction = .regenerated
+                if let guiding = regenerated.guidingInstruction, !guiding.isEmpty {
+                    session.guidingInstructions.append(
+                        UserInstruction(
+                            timestamp: regenerated.timestamp,
+                            instruction: guiding,
+                            context: "regeneration",
+                            folderPath: folderPath,
+                            isRegeneration: true
+                        )
+                    )
+                }
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: regenerated.timestamp,
+                        kind: .regenerated,
+                        summary: "Regenerated organization attempt #\(regenerated.regenerationCount)"
+                    )
+                )
+            }
+        }
+
+        for change in profile.postOrganizationChanges.sorted(by: { $0.timestamp < $1.timestamp }) {
+            let folderPath = sessionFolderPath(for: change)
+            appendEvent(folderPath: folderPath, timestamp: change.timestamp, sessionId: change.aiSessionId) { session in
+                session.userCorrections.append(change)
+                session.reaction = session.wasReverted ? .reverted : .corrected
+                session.timeToReaction = minNonNil(session.timeToReaction, change.timestamp.timeIntervalSince(session.timestamp))
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: change.timestamp,
+                        kind: .correction,
+                        summary: "User moved a file after organization",
+                        sourcePath: change.originalPath,
+                        destinationPath: change.newPath
+                    )
+                )
+            }
+        }
+
+        for revert in profile.historyReverts {
+            let folderPath = revert.folderPath ?? ""
+            appendEvent(folderPath: folderPath, timestamp: revert.timestamp, createIfMissing: !folderPath.isEmpty) { session in
+                session.wasReverted = true
+                session.reaction = .reverted
+                session.completedAt = max(session.completedAt ?? .distantPast, revert.timestamp)
+                session.timeToReaction = minNonNil(session.timeToReaction, revert.timestamp.timeIntervalSince(session.timestamp))
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: revert.timestamp,
+                        kind: .reverted,
+                        summary: revert.reason ?? "Organization was reverted",
+                        metadata: ["entryId": revert.entryId]
+                    )
+                )
+            }
+        }
+
+        for prompt in profile.steeringPrompts {
+            let folderPath = prompt.folderPath ?? inferredFolderPath(from: prompt.sessionId, sessions: sessions)
+            guard let folderPath else { continue }
+            appendEvent(folderPath: folderPath, timestamp: prompt.timestamp, sessionId: prompt.sessionId) { session in
+                session.steeringPrompts.append(prompt.prompt)
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: prompt.timestamp,
+                        kind: .steeringPrompt,
+                        summary: prompt.prompt
+                    )
+                )
+            }
+        }
+
+        for instruction in profile.additionalInstructionsHistory {
+            guard let folderPath = instruction.folderPath else { continue }
+            appendEvent(folderPath: folderPath, timestamp: instruction.timestamp) { session in
+                session.additionalInstructions.append(instruction)
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: instruction.timestamp,
+                        kind: .additionalInstruction,
+                        summary: instruction.instruction
+                    )
+                )
+            }
+        }
+
+        for instruction in profile.guidingInstructionsHistory {
+            guard let folderPath = instruction.folderPath else { continue }
+            appendEvent(folderPath: folderPath, timestamp: instruction.timestamp) { session in
+                session.guidingInstructions.append(instruction)
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: instruction.timestamp,
+                        kind: .guidingInstruction,
+                        summary: instruction.instruction
+                    )
+                )
+            }
+        }
+
+        for event in profile.renameFeedbackHistory {
+            guard let folderPath = event.folderPath else { continue }
+            appendEvent(folderPath: folderPath, timestamp: event.timestamp) { session in
+                session.renameFeedback.append(event)
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: event.timestamp,
+                        kind: .renameFeedback,
+                        summary: "Rename feedback for \(event.originalName)"
+                    )
+                )
+            }
+        }
+
+        for example in profile.positiveExamples.sorted(by: { $0.timestamp < $1.timestamp }) {
+            let folderPath = sessionFolderPath(for: example)
+            appendEvent(folderPath: folderPath, timestamp: example.timestamp) { session in
+                session.completedAt = max(session.completedAt ?? .distantPast, example.timestamp)
+                session.reaction = session.userCorrections.isEmpty && !session.wasReverted ? .accepted : session.reaction
+                session.filesMoved.append(
+                    OrganizationSessionMovedFile(
+                        sourcePath: example.srcPath,
+                        destinationPath: example.dstPath
+                    )
+                )
+            }
+        }
+
+        for example in profile.corrections.sorted(by: { $0.timestamp < $1.timestamp }) {
+            let folderPath = sessionFolderPath(for: example)
+            appendEvent(folderPath: folderPath, timestamp: example.timestamp) { session in
+                session.reaction = session.wasReverted ? .reverted : .corrected
+                session.timeToReaction = minNonNil(session.timeToReaction, example.timestamp.timeIntervalSince(session.timestamp))
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: example.timestamp,
+                        kind: .correction,
+                        summary: "Manual correction learned",
+                        sourcePath: example.srcPath,
+                        destinationPath: example.dstPath
+                    )
+                )
+            }
+        }
+
+        for example in profile.rejections.sorted(by: { $0.timestamp < $1.timestamp }) {
+            let folderPath = sessionFolderPath(for: example)
+            appendEvent(folderPath: folderPath, timestamp: example.timestamp) { session in
+                session.reaction = session.wasReverted ? .reverted : .corrected
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: example.timestamp,
+                        kind: .rejection,
+                        summary: "Rejected suggested placement",
+                        sourcePath: example.srcPath,
+                        destinationPath: example.dstPath
+                    )
+                )
+            }
+        }
+
+        sessions.sort { ($0.completedAt ?? $0.timestamp) > ($1.completedAt ?? $1.timestamp) }
+        migrated.sessions = sessions
+        return migrated
+    }
+
+    private func inferredFolderPath(from sessionId: String?, sessions: [OrganizationSession]) -> String? {
+        guard let sessionId else { return nil }
+        return sessions.first(where: { $0.id == sessionId })?.folderPath
+    }
+
+    private func sessionFolderPath(for change: DirectoryChange) -> String {
+        let originalFolder = URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().path
+        let newFolder = change.newPath.isEmpty ? originalFolder : URL(fileURLWithPath: change.newPath).deletingLastPathComponent().path
+        return commonAncestorPath([originalFolder, newFolder]) ?? originalFolder
+    }
+
+    private func sessionFolderPath(for example: LabeledExample) -> String {
+        let sourceFolder = URL(fileURLWithPath: example.srcPath).deletingLastPathComponent().path
+        let destinationFolder = URL(fileURLWithPath: example.dstPath).deletingLastPathComponent().path
+        return commonAncestorPath([sourceFolder, destinationFolder]) ?? sourceFolder
+    }
+
+    private func commonAncestorPath(_ paths: [String]) -> String? {
+        let components = paths
+            .map { URL(fileURLWithPath: $0).standardizedFileURL.path.split(separator: "/").map(String.init) }
+            .filter { !$0.isEmpty }
+
+        guard let first = components.first else { return nil }
+        var prefix: [String] = []
+
+        for index in first.indices {
+            let component = first[index]
+            guard components.allSatisfy({ $0.indices.contains(index) && $0[index] == component }) else {
+                break
+            }
+            prefix.append(component)
+        }
+
+        guard !prefix.isEmpty else { return "/" }
+        return "/" + prefix.joined(separator: "/")
+    }
+
+    private func minNonNil(_ lhs: TimeInterval?, _ rhs: TimeInterval?) -> TimeInterval? {
+        switch (lhs, rhs) {
+        case let (left?, right?):
+            return min(left, right)
+        case let (left?, nil):
+            return left
+        case let (nil, right?):
+            return right
+        case (nil, nil):
+            return nil
+        }
+    }
+
     // MARK: - Behavior Tracking
     
     /// Record additional instructions provided by user
     public func recordAdditionalInstruction(_ instruction: String, for folderPath: String, fileCount: Int? = nil) {
         guard consentManager.canCollectData else { return }
+        guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -219,6 +588,16 @@ public class LearningsManager: ObservableObject {
             isRegeneration: false
         )
         profile.additionalInstructionsHistory.append(userInstruction)
+        mutateSession(in: &profile, folderPath: folderPath, timestamp: userInstruction.timestamp) { session in
+            session.additionalInstructions.append(userInstruction)
+            session.events.append(
+                OrganizationSessionEvent(
+                    timestamp: userInstruction.timestamp,
+                    kind: .additionalInstruction,
+                    summary: instruction
+                )
+            )
+        }
         currentProfile = profile
         Task { await saveProfile() }
     }
@@ -226,6 +605,7 @@ public class LearningsManager: ObservableObject {
     /// Record guiding instructions for next attempt
     public func recordGuidingInstruction(_ instruction: String, for folderPath: String? = nil, fileCount: Int? = nil) {
         guard consentManager.canCollectData else { return }
+        if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -237,6 +617,18 @@ public class LearningsManager: ObservableObject {
             isRegeneration: true
         )
         profile.guidingInstructionsHistory.append(userInstruction)
+        if let folderPath {
+            mutateSession(in: &profile, folderPath: folderPath, timestamp: userInstruction.timestamp) { session in
+                session.guidingInstructions.append(userInstruction)
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: userInstruction.timestamp,
+                        kind: .guidingInstruction,
+                        summary: instruction
+                    )
+                )
+            }
+        }
         currentProfile = profile
         debouncedSave()
     }
@@ -256,6 +648,7 @@ public class LearningsManager: ObservableObject {
         aiModel: String? = nil
     ) {
         guard consentManager.canCollectData else { return }
+        guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -273,6 +666,18 @@ public class LearningsManager: ObservableObject {
             aiModel: aiModel
         )
         profile.cancelledOrganizations.append(cancelled)
+        mutateSession(in: &profile, folderPath: folderPath, timestamp: cancelled.timestamp) { session in
+            session.completedAt = cancelled.timestamp
+            session.planSummary = proposedStructureSummary ?? session.planSummary
+            session.reaction = .cancelled
+            session.events.append(
+                OrganizationSessionEvent(
+                    timestamp: cancelled.timestamp,
+                    kind: .cancelled,
+                    summary: "Cancelled organization during \(stage)"
+                )
+            )
+        }
         currentProfile = profile
         debouncedSave()
     }
@@ -280,6 +685,7 @@ public class LearningsManager: ObservableObject {
     /// Record a regenerated organization session
     public func recordRegeneratedOrganization(folderPath: String, previousPlanSummary: String? = nil, guidingInstruction: String? = nil, regenerationCount: Int) {
         guard consentManager.canCollectData else { return }
+        guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -290,6 +696,18 @@ public class LearningsManager: ObservableObject {
             regenerationCount: regenerationCount
         )
         profile.regeneratedOrganizations.append(regenerated)
+        mutateSession(in: &profile, folderPath: folderPath, timestamp: regenerated.timestamp) { session in
+            session.completedAt = regenerated.timestamp
+            session.reaction = .regenerated
+            session.planSummary = previousPlanSummary ?? session.planSummary
+            session.events.append(
+                OrganizationSessionEvent(
+                    timestamp: regenerated.timestamp,
+                    kind: .regenerated,
+                    summary: "Regenerated organization attempt #\(regenerationCount)"
+                )
+            )
+        }
         currentProfile = profile
         debouncedSave()
     }
@@ -297,6 +715,7 @@ public class LearningsManager: ObservableObject {
     /// Record a steering prompt (post-organization feedback)
     public func recordSteeringPrompt(_ prompt: String, folderPath: String?, sessionId: String?) {
         guard consentManager.canCollectData else { return }
+        if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -306,6 +725,16 @@ public class LearningsManager: ObservableObject {
             sessionId: sessionId
         )
         profile.steeringPrompts.append(steeringPrompt)
+        mutateSession(in: &profile, sessionId: sessionId, folderPath: folderPath, timestamp: steeringPrompt.timestamp, createIfMissing: folderPath != nil) { session in
+            session.steeringPrompts.append(prompt)
+            session.events.append(
+                OrganizationSessionEvent(
+                    timestamp: steeringPrompt.timestamp,
+                    kind: .steeringPrompt,
+                    summary: prompt
+                )
+            )
+        }
         currentProfile = profile
         debouncedSave()
     }
@@ -313,6 +742,7 @@ public class LearningsManager: ObservableObject {
     /// Record a directory change made after AI organization
     public func recordDirectoryChange(from original: String, to new: String, wasAIOrganized: Bool, sessionId: String? = nil) {
         guard consentManager.canCollectData else { return }
+        guard !shouldExcludeLearning(paths: [original, new]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -339,6 +769,7 @@ public class LearningsManager: ObservableObject {
         confidence: Double?
     ) {
         guard consentManager.canCollectData else { return }
+        if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
 
@@ -351,6 +782,18 @@ public class LearningsManager: ObservableObject {
             confidence: confidence
         )
         profile.renameFeedbackHistory.append(event)
+        if let folderPath {
+            mutateSession(in: &profile, folderPath: folderPath, timestamp: event.timestamp) { session in
+                session.renameFeedback.append(event)
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: event.timestamp,
+                        kind: .renameFeedback,
+                        summary: "Rename feedback for \(originalName)"
+                    )
+                )
+            }
+        }
         currentProfile = profile
 
         // Feed rename outcomes into the existing example pipeline.
@@ -364,6 +807,7 @@ public class LearningsManager: ObservableObject {
     /// Record a history revert event
     public func recordHistoryRevert(entryId: String, operationCount: Int, folderPath: String? = nil, revertReason: String? = nil) {
         guard consentManager.canCollectData else { return }
+        if let folderPath, isPathExcludedFromLearning(folderPath) { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -381,6 +825,7 @@ public class LearningsManager: ObservableObject {
     /// Record a successfully completed organization run
     public func recordSuccessfulRun(folderPath: String, fileCount: Int, ruleIdsUsed: Set<String>) {
         guard consentManager.canCollectData else { return }
+        guard !isPathExcludedFromLearning(folderPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -396,6 +841,105 @@ public class LearningsManager: ObservableObject {
         
         currentProfile = profile
         debouncedSave()
+    }
+    
+    // MARK: - Inline Learning Moments
+    
+    /// Generate a post-organization learning moment based on the most uncertain decision
+    public func generateInlineLearningMoment(
+        from session: OrganizationSession,
+        proposedFolders: [String]
+    ) -> InlineLearningMoment? {
+        guard !session.filesMoved.isEmpty else { return nil }
+        
+        let existingFolderNames = Set(session.folderPatterns.map(\.folderName))
+        
+        // Priority 1: Files moved to newly-created folders (highest uncertainty)
+        let movedToNewFolders = session.filesMoved.filter { moved in
+            let destFolder = URL(fileURLWithPath: moved.destinationPath).deletingLastPathComponent().lastPathComponent
+            return !existingFolderNames.contains(destFolder) && proposedFolders.contains(destFolder)
+        }
+        
+        if let candidate = movedToNewFolders.first {
+            let destFolder = URL(fileURLWithPath: candidate.destinationPath).deletingLastPathComponent().lastPathComponent
+            let fileExt = URL(fileURLWithPath: candidate.sourcePath).pathExtension.lowercased()
+            let fileDesc = fileExt.isEmpty ? candidate.fileName : ".\(fileExt) files"
+            
+            // Find alternative folders from the session
+            let alternativeFolders = session.folderPatterns
+                .map(\.folderName)
+                .filter { $0 != destFolder }
+                .prefix(2)
+            
+            guard !alternativeFolders.isEmpty else { return nil }
+            
+            var options = [destFolder] + alternativeFolders
+            options.append("Create a different folder")
+            
+            return InlineLearningMoment(
+                sessionId: session.id,
+                folderPath: session.folderPath,
+                prompt: "Should \(fileDesc) like '\(candidate.fileName)' go in '\(destFolder)' or '\(alternativeFolders.first!)'?",
+                options: options,
+                kind: .folderPlacement,
+                relatedFilePath: candidate.sourcePath
+            )
+        }
+        
+        // Priority 2: Files with common extensions moved to unusual locations
+        var extensionDestinations: [String: [String]] = [:]
+        for moved in session.filesMoved {
+            let ext = URL(fileURLWithPath: moved.sourcePath).pathExtension.lowercased()
+            guard !ext.isEmpty else { continue }
+            let destFolder = URL(fileURLWithPath: moved.destinationPath).deletingLastPathComponent().lastPathComponent
+            extensionDestinations[ext, default: []].append(destFolder)
+        }
+        
+        // Find extensions that went to multiple different folders
+        for (ext, destinations) in extensionDestinations {
+            let uniqueDestinations = Array(Set(destinations))
+            guard uniqueDestinations.count >= 2 else { continue }
+            
+            let options = Array(uniqueDestinations.prefix(3)) + ["Keep them together in one folder"]
+            
+            return InlineLearningMoment(
+                sessionId: session.id,
+                folderPath: session.folderPath,
+                prompt: ".\(ext) files were sorted into multiple folders. Should all .\(ext) files go together?",
+                options: options,
+                kind: .fileGrouping
+            )
+        }
+        
+        // No meaningful uncertainty — session was straightforward
+        return nil
+    }
+    
+    /// Record the user's answer to an inline learning moment
+    public func recordInlineLearningMomentAnswer(_ answer: InlineLearningMomentAnswer) async {
+        guard consentManager.canCollectData else { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
+        
+        profile.inlineLearningMomentAnswers.append(answer)
+        
+        // Convert to a HoningAnswer for compatibility with existing prompt context
+        let honingAnswer = HoningAnswer(
+            questionId: answer.momentId,
+            selectedOption: answer.selectedOption
+        )
+        profile.honingAnswers.append(honingAnswer)
+        
+        // Record as a steering prompt if the answer implies a clear preference
+        let steeringPrompt = SteeringPrompt(
+            prompt: "User preference: \(answer.selectedOption)",
+            folderPath: nil,
+            sessionId: answer.sessionId
+        )
+        profile.steeringPrompts.append(steeringPrompt)
+        
+        currentProfile = profile
+        await saveProfile()
     }
     
     // MARK: - Debounced Saving
@@ -461,6 +1005,9 @@ public class LearningsManager: ObservableObject {
         if profile.regeneratedOrganizations.count > cap {
             profile.regeneratedOrganizations = Array(profile.regeneratedOrganizations.suffix(cap))
         }
+        if profile.sessions.count > cap {
+            profile.sessions = Array(profile.sessions.prefix(cap))
+        }
         
         currentProfile = profile
     }
@@ -470,6 +1017,7 @@ public class LearningsManager: ObservableObject {
     /// Record a manual correction (File moved manually after AI organization)
     public func recordCorrection(originalPath: String, newPath: String) {
         guard consentManager.canCollectData else { return }
+        guard !shouldExcludeLearning(paths: [originalPath, newPath]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -489,6 +1037,7 @@ public class LearningsManager: ObservableObject {
     /// Record a rejection (File reverted or explicitly rejected)
     public func recordRejection(originalPath: String) {
         guard consentManager.canCollectData else { return }
+        guard !isPathExcludedFromLearning(originalPath) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -521,6 +1070,7 @@ public class LearningsManager: ObservableObject {
     /// Internal helper to add a labeled example
     public func addLabeledExample(srcPath: String, dstPath: String, action: ExampleAction) {
         guard consentManager.canCollectData else { return }
+        guard !shouldExcludeLearning(paths: [srcPath, dstPath]) else { return }
         loadProfileIfNeededForCollection()
         guard var profile = currentProfile else { return }
         
@@ -550,6 +1100,42 @@ public class LearningsManager: ObservableObject {
     }
     
     // MARK: - Analysis
+
+    private func runAnalysis(rootPaths: [String], examplePaths: [String]) async {
+        guard let profile = currentProfile else {
+            error = "No profile loaded"
+            return
+        }
+
+        let sanitizedProfile = filteredLearningProfile(from: profile)
+        if learningProfileSnapshot(sanitizedProfile) != learningProfileSnapshot(profile) {
+            currentProfile = sanitizedProfile
+            extractBehaviorPreferences()
+        }
+
+        error = nil
+
+        let filteredRootPaths = rootPaths.filter { !isPathExcludedFromLearning($0) }.orderedDeduplicated()
+        let filteredExamplePaths = examplePaths.filter { !isPathExcludedFromLearning($0) }.orderedDeduplicated()
+
+        do {
+            analysisResult = try await analyzer.analyze(
+                profile: sanitizedProfile,
+                rootPaths: filteredRootPaths,
+                examplePaths: filteredExamplePaths
+            )
+
+            if let result = analysisResult {
+                var updatedProfile = sanitizedProfile
+                updatedProfile.inferredRules = mergeInferredRules(existing: sanitizedProfile.inferredRules, new: result.inferredRules)
+                currentProfile = updatedProfile
+                extractBehaviorPreferences()
+                await saveProfile()
+            }
+        } catch {
+            self.error = "Analysis failed: \(error.localizedDescription)"
+        }
+    }
     
     /// Run analysis on current profile and paths
     public func analyze(rootPaths: [String], examplePaths: [String]) async {
@@ -557,33 +1143,26 @@ public class LearningsManager: ObservableObject {
             error = "AI analysis is disabled. Enable 'Use AI for analysis' in Learnings settings."
             return
         }
-        guard let profile = currentProfile else {
-            error = "No profile loaded"
+        
+        // Use configured model directories as example paths when none are explicitly provided
+        let effectiveExamplePaths: [String]
+        if examplePaths.isEmpty {
+            effectiveExamplePaths = enabledModelDirectoryPaths()
+        } else {
+            effectiveExamplePaths = examplePaths
+        }
+
+        await runAnalysis(rootPaths: rootPaths, examplePaths: effectiveExamplePaths)
+    }
+
+    /// Re-synthesize learning insights without requiring scan roots.
+    public func synthesizeLearnings() async {
+        guard useAIForLearnings else {
+            error = "AI analysis is disabled. Enable 'Use AI for analysis' in Learnings settings."
             return
         }
-        
-        error = nil
-        
-        do {
-            analysisResult = try await analyzer.analyze(
-                profile: profile,
-                rootPaths: rootPaths,
-                examplePaths: examplePaths
-            )
-            
-            // Update profile with inferred rules?
-            // Maybe we only update profile rules if the user APPLIES the changes?
-            // Or we treat "Inferred Rules" as a transient analysis artifact until confirmed?
-            // For now, let's update them so they persist as "current understanding"
-            if let result = analysisResult {
-                var updatedProfile = profile
-                updatedProfile.inferredRules = result.inferredRules
-                currentProfile = updatedProfile
-                await saveProfile()
-            }
-        } catch {
-            self.error = "Analysis failed: \(error.localizedDescription)"
-        }
+
+        await runAnalysis(rootPaths: [], examplePaths: enabledModelDirectoryPaths())
     }
     
     /// Save results from a Honing Session
@@ -829,379 +1408,192 @@ public class LearningsManager: ObservableObject {
     // MARK: - Prompt Context Generation
     
     /// Generates a prompt context string based on the current profile
-    /// This is the bridge between learned data and the AI organization engine
-    /// Uses weighted priorities: Explicit preferences > High-confidence rules > Recent feedback > General patterns
-    /// Returns XML-structured output for better AI parsing
+    /// This is the bridge between learned data and the AI organization engine.
+    /// The context is intentionally short and session-centric so the model gets
+    /// recent, attributable signals instead of a long undifferentiated dump.
     public func generatePromptContext(forFolder folderPath: String? = nil) -> String {
         loadProfileIfNeededForCollection()
-        
+
         guard let profile = currentProfile, (profile.consentGranted || consentManager.hasConsented) else {
             return ""
         }
-        
-        if !profile.consentGranted && !consentManager.hasConsented {
+
+        let preparedProfile = prepareLoadedProfile(profile)
+        if preparedProfile.sessions.count != profile.sessions.count {
+            currentProfile = preparedProfile
+        }
+
+        let filteredProfile = filteredLearningProfile(from: preparedProfile)
+        if !filteredProfile.consentGranted && !consentManager.hasConsented {
             return ""
         }
-        
-        var sections: [LearningsSection] = []
-        let now = Date()
-        
-        // SECTION 1: REJECTION PATTERNS - Most important, show first
-        let recentRejections = profile.rejections
+
+        let scopedSessions = filteredProfile.sessions
+            .filter { session in
+                guard let folderPath else { return true }
+                return session.folderPath.hasPrefix(folderPath) || folderPath.hasPrefix(session.folderPath)
+            }
+            .sorted(by: { ($0.completedAt ?? $0.timestamp) > ($1.completedAt ?? $1.timestamp) })
+
+        var hardRules: [String] = []
+        hardRules.append(contentsOf: filteredProfile.honingAnswers.prefix(3).map { "Explicit preference: \($0.selectedOption)" })
+
+        let recentInstructions = (filteredProfile.additionalInstructionsHistory + filteredProfile.guidingInstructionsHistory)
             .sorted(by: { $0.timestamp > $1.timestamp })
-            .prefix(15)
-        if !recentRejections.isEmpty {
-            var items: [LearningsItem] = []
-            var rejectionPatterns: [String: (count: Int, lastSeen: Date)] = [:]
-            for rejection in recentRejections {
-                let ext = URL(fileURLWithPath: rejection.srcPath).pathExtension.lowercased()
-                let folder = URL(fileURLWithPath: rejection.dstPath).deletingLastPathComponent().lastPathComponent
-                if !folder.isEmpty {
-                    let pattern = ext.isEmpty ? "files → \(folder)" : ".\(ext) → \(folder)"
-                    let existing = rejectionPatterns[pattern]
-                    rejectionPatterns[pattern] = (
-                        count: (existing?.count ?? 0) + 1,
-                        lastSeen: max(existing?.lastSeen ?? .distantPast, rejection.timestamp)
-                    )
+            .prefix(4)
+            .map { "Recent instruction (\(promptDateString($0.timestamp))): \($0.instruction)" }
+        hardRules.append(contentsOf: recentInstructions)
+
+        let activeRules = filteredProfile.inferredRules
+            .filter { $0.isEnabled && $0.status == .active }
+            .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: nil) }
+            .sorted {
+                if $0.successRate == $1.successRate {
+                    return $0.supportCount > $1.supportCount
                 }
+                return $0.successRate > $1.successRate
             }
-            for (pattern, data) in rejectionPatterns.sorted(by: { $0.value.count > $1.value.count }).prefix(8) {
-                let recency = recencyWeight(from: data.lastSeen, to: now)
-                let weight = min(100, 70 + data.count * 10 + Int(recency * 20))
-                items.append(LearningsItem(
-                    content: "DO NOT place \(pattern)",
-                    weight: weight,
-                    occurrences: data.count,
-                    recency: recencyLabel(data.lastSeen, now: now)
-                ))
+            .prefix(4)
+            .map { rule in
+                let successRate = Int(rule.successRate * 100)
+                return "Proven rule (\(successRate)% success): \(rule.explanation)"
             }
-            if !items.isEmpty {
-                sections.append(LearningsSection(
-                    id: "rejections",
-                    title: "REJECTION PATTERNS",
-                    priority: "CRITICAL",
-                    instruction: "NEVER use these placements - user explicitly rejected them",
-                    items: items
-                ))
-            }
-        }
-        
-        // SECTION 2: CRITICAL PREFERENCES - Honing Answers
-        if !profile.honingAnswers.isEmpty {
-            let answerDate = profile.consentDate ?? profile.createdAt
-            let items = profile.honingAnswers.prefix(10).map { answer in
-                let recency = recencyWeight(from: answerDate, to: now)
-                return LearningsItem(
-                    content: answer.selectedOption,
-                    weight: 95 + Int(recency * 5),
-                    recency: recencyLabel(answerDate, now: now)
-                )
-            }
-            sections.append(LearningsSection(
-                id: "preferences",
-                title: "USER PREFERENCES",
-                priority: "CRITICAL",
-                instruction: "These are explicit user preferences - always follow them",
-                items: Array(items)
-            ))
-        }
-        
-        // SECTION 3: BEHAVIOR PREFERENCES
-        extractBehaviorPreferences()
-        if let prefs = behaviorPreferences, prefs != BehaviorPreferences() {
-            var items: [LearningsItem] = []
-            items.append(LearningsItem(content: "Deletion policy: \(prefs.deletionVsArchive.displayName)", weight: 90))
-            items.append(LearningsItem(content: "Folder structure: \(prefs.folderDepthPreference.displayName)", weight: 90))
-            items.append(LearningsItem(content: "Primary organization: \(prefs.dateVsContentPreference.displayName)", weight: 90))
-            items.append(LearningsItem(content: "Duplicate handling: \(prefs.duplicateKeeperStrategy.displayName)", weight: 90))
-            sections.append(LearningsSection(
-                id: "structure",
-                title: "STRUCTURAL PREFERENCES",
-                priority: "HIGH",
-                instruction: "User's organization philosophy - use these to guide folder structure decisions",
-                items: items
-            ))
+        hardRules.append(contentsOf: activeRules)
+        hardRules = Array(hardRules.orderedDeduplicated().prefix(5))
+
+        let recentContext = scopedSessions.prefix(5).map(summarizePromptSession)
+        let learnedPatterns = buildPromptPatterns(from: filteredProfile, sessions: Array(scopedSessions.prefix(12)), folderPath: folderPath)
+
+        let sections: [(String, [String])] = [
+            ("HARD RULES, USER INSTRUCTIONS, AND PREFERENCES", hardRules),
+            ("RECENT SESSION CONTEXT", recentContext),
+            ("LEARNED PATTERNS", learnedPatterns)
+        ]
+
+        var output: [String] = [
+            "LEARNINGS CONTEXT",
+            "Use the following user-specific learnings to guide the organization plan. Prioritize explicit preferences first, then recent accepted/corrected sessions, then repeated patterns."
+        ]
+
+        if let folderPath {
+            output.append("Current folder: \(folderPath)")
         }
 
-        // SECTION 3B: USER INSTRUCTIONS
-        let recentInstructions = profile.additionalInstructionsHistory
-            .sorted(by: { $0.timestamp > $1.timestamp })
-            .prefix(8)
-        if !recentInstructions.isEmpty {
-            let items = recentInstructions.map { instruction in
-                let recency = recencyWeight(from: instruction.timestamp, to: now)
-                return LearningsItem(
-                    content: instruction.instruction,
-                    weight: 80 + Int(recency * 15),
-                    recency: recencyLabel(instruction.timestamp, now: now)
-                )
-            }
-            sections.append(LearningsSection(
-                id: "instructions",
-                title: "USER INSTRUCTIONS",
-                priority: "HIGH",
-                instruction: "Direct user instructions that must be followed",
-                items: Array(items)
-            ))
-        }
-        
-        // SECTION 4: CORRECTIONS - Avoid repeating mistakes
-        let recentCorrections = profile.postOrganizationChanges
-            .filter { $0.wasAIOrganized }
-            .sorted(by: { $0.timestamp > $1.timestamp })
-            .prefix(15)
-        if !recentCorrections.isEmpty {
-            var items: [LearningsItem] = []
-            var correctionPatterns: [String: (from: String, to: String, count: Int, lastSeen: Date)] = [:]
-            for change in recentCorrections {
-                let originalURL = URL(fileURLWithPath: change.originalPath)
-                let newURL = URL(fileURLWithPath: change.newPath)
-                let srcFolder = originalURL.deletingLastPathComponent().lastPathComponent
-                let dstFolder = newURL.deletingLastPathComponent().lastPathComponent
-                let srcDisplay = (srcFolder.isEmpty || srcFolder == "/") ? "root" : srcFolder
-                let dstDisplay = (dstFolder.isEmpty || dstFolder == "/") ? "root" : dstFolder
-                let ext = originalURL.pathExtension.lowercased()
-                let key = "\(ext.isEmpty ? "misc" : ext):\(srcDisplay)->\(dstDisplay)"
-                let existing = correctionPatterns[key]
-                correctionPatterns[key] = (
-                    from: srcDisplay,
-                    to: dstDisplay,
-                    count: (existing?.count ?? 0) + 1,
-                    lastSeen: max(existing?.lastSeen ?? .distantPast, change.timestamp)
-                )
-            }
-            for (key, data) in correctionPatterns.sorted(by: { $0.value.count > $1.value.count }).prefix(8) {
-                let ext = key.components(separatedBy: ":").first ?? "files"
-                let recency = recencyWeight(from: data.lastSeen, to: now)
-                let weight = min(95, 60 + data.count * 15 + Int(recency * 20))
-                items.append(LearningsItem(
-                    content: ".\(ext) files: prefer '\(data.to)/' over '\(data.from)/'",
-                    weight: weight,
-                    occurrences: data.count,
-                    recency: recencyLabel(data.lastSeen, now: now)
-                ))
-            }
-            if !items.isEmpty {
-                sections.append(LearningsSection(
-                    id: "corrections",
-                    title: "PAST CORRECTIONS",
-                    priority: "HIGH",
-                    instruction: "User corrected these placements - avoid repeating the same mistakes",
-                    items: items
-                ))
-            }
+        for (title, items) in sections where !items.isEmpty {
+            output.append("")
+            output.append("## \(title)")
+            output.append(contentsOf: items.prefix(5).map { "- \($0)" })
         }
 
-        // SECTION 4B: RENAME PATTERNS
-        let recentRenameFeedback = profile.renameFeedbackHistory
-            .sorted(by: { $0.timestamp > $1.timestamp })
-            .prefix(20)
-        if !recentRenameFeedback.isEmpty {
-            var items: [LearningsItem] = []
-
-            let accepted = recentRenameFeedback.filter { $0.action == .accept }
-            let edited = recentRenameFeedback.filter { $0.action == .edit }
-            let rejected = recentRenameFeedback.filter { $0.action == .reject }
-
-            if !accepted.isEmpty {
-                items.append(
-                    LearningsItem(
-                        content: "Accepted rename patterns: \(accepted.prefix(3).compactMap { $0.suggestedName }.joined(separator: ", "))",
-                        weight: 72,
-                        occurrences: accepted.count
-                    )
-                )
-            }
-
-            if !edited.isEmpty {
-                let edits = edited.prefix(3).map { event in
-                    let source = event.suggestedName ?? event.originalName
-                    return "\(source) -> \(event.finalName ?? event.originalName)"
-                }
-                items.append(
-                    LearningsItem(
-                        content: "User-edited rename preferences: \(edits.joined(separator: " ; "))",
-                        weight: 82,
-                        occurrences: edited.count
-                    )
-                )
-            }
-
-            if !rejected.isEmpty {
-                items.append(
-                    LearningsItem(
-                        content: "Avoid low-value rename styles. \(rejected.count) rename suggestions were rejected recently.",
-                        weight: 88,
-                        occurrences: rejected.count
-                    )
-                )
-            }
-
-            if !items.isEmpty {
-                sections.append(
-                    LearningsSection(
-                        id: "rename_patterns",
-                        title: "RENAME PREFERENCES",
-                        priority: "HIGH",
-                        instruction: "Apply these learned rename tendencies to improve filename suggestions.",
-                        items: items
-                    )
-                )
-            }
-        }
-        
-        // SECTION 5: HIGH-CONFIDENCE RULES
-        let highConfidenceRules = getActiveRules(forFolder: folderPath)
-            .filter { $0.confidenceLevel == .high && $0.successRate > 0.7 }
-            .sorted(by: { ($0.lastAppliedAt ?? .distantPast) > ($1.lastAppliedAt ?? .distantPast) })
-        if !highConfidenceRules.isEmpty {
-            let items = highConfidenceRules.prefix(8).map { rule in
-                let recency = recencyWeight(from: rule.lastAppliedAt ?? profile.createdAt, to: now)
-                let successPct = Int(rule.successRate * 100)
-                return LearningsItem(
-                    content: rule.explanation,
-                    weight: min(90, 70 + successPct / 5 + Int(recency * 10)),
-                    confidence: successPct,
-                    recency: recencyLabel(rule.lastAppliedAt ?? profile.createdAt, now: now),
-                    ruleId: rule.id
-                )
-            }
-            sections.append(LearningsSection(
-                id: "high_confidence_rules",
-                title: "PROVEN PATTERNS",
-                priority: "HIGH",
-                instruction: "These patterns have high success rates - follow them unless user instructions conflict. When you apply a pattern, include its rule_id in the folder's JSON.",
-                items: Array(items)
-            ))
-        }
-        
-        // SECTION 6: RECENT FEEDBACK (Steering prompts)
-        let recentSteering = profile.steeringPrompts.sorted(by: { $0.timestamp > $1.timestamp }).prefix(8)
-        if !recentSteering.isEmpty {
-            let items = recentSteering.map { prompt in
-                let recency = recencyWeight(from: prompt.timestamp, to: now)
-                return LearningsItem(
-                    content: prompt.prompt,
-                    weight: 60 + Int(recency * 30),
-                    recency: recencyLabel(prompt.timestamp, now: now)
-                )
-            }
-            sections.append(LearningsSection(
-                id: "feedback",
-                title: "RECENT FEEDBACK",
-                priority: "MEDIUM-HIGH",
-                instruction: "Apply these adjustments from recent user feedback",
-                items: Array(items)
-            ))
-        }
-        
-        // SECTION 7: CANCELLED ORGANIZATIONS - What NOT to do
-        let recentCancellations = profile.cancelledOrganizations.sorted(by: { $0.timestamp > $1.timestamp }).prefix(5)
-        if !recentCancellations.isEmpty {
-            var items: [LearningsItem] = []
-            for cancel in recentCancellations {
-                if let instr = cancel.instructions, !instr.isEmpty {
-                    let recency = recencyWeight(from: cancel.timestamp, to: now)
-                    items.append(LearningsItem(
-                        content: "Avoid plan style: '\(instr)' (cancelled at \(cancel.cancelledAtStage))",
-                        weight: 50 + Int(recency * 30),
-                        recency: recencyLabel(cancel.timestamp, now: now)
-                    ))
-                }
-            }
-            if !items.isEmpty {
-                sections.append(LearningsSection(
-                    id: "cancellations",
-                    title: "CANCELLED PATTERNS",
-                    priority: "MEDIUM",
-                    instruction: "User cancelled these organization approaches - avoid similar structures",
-                    items: items
-                ))
-            }
-        }
-        
-        // SECTION 8: POSITIVE EXAMPLES
-        let recentPositives = profile.positiveExamples.sorted(by: { $0.timestamp > $1.timestamp }).prefix(20)
-        if !recentPositives.isEmpty {
-            var positivePatterns: [String: (files: [(file: String, ext: String)], lastSeen: Date)] = [:]
-            for example in recentPositives {
-                let srcFile = URL(fileURLWithPath: example.srcPath).lastPathComponent
-                let dstFolder = URL(fileURLWithPath: example.dstPath).deletingLastPathComponent().lastPathComponent
-                let ext = URL(fileURLWithPath: example.srcPath).pathExtension.lowercased()
-                let existing = positivePatterns[dstFolder]
-                positivePatterns[dstFolder] = (
-                    files: (existing?.files ?? []) + [(file: srcFile, ext: ext)],
-                    lastSeen: max(existing?.lastSeen ?? .distantPast, example.timestamp)
-                )
-            }
-            var items: [LearningsItem] = []
-            for (folder, data) in positivePatterns.sorted(by: { $0.value.files.count > $1.value.files.count }).prefix(6) {
-                let extCounts = Dictionary(grouping: data.files) { $0.ext }.mapValues { $0.count }
-                let topExtensions = extCounts.sorted(by: { $0.value > $1.value }).prefix(3)
-                let extList = topExtensions.map { ".\($0.key)" }.joined(separator: ", ")
-                let recency = recencyWeight(from: data.lastSeen, to: now)
-                let weight = 40 + data.files.count * 5 + Int(recency * 20)
-                if !extList.isEmpty {
-                    items.append(LearningsItem(
-                        content: "'\(folder)/' is good for: \(extList) files",
-                        weight: min(80, weight),
-                        occurrences: data.files.count,
-                        recency: recencyLabel(data.lastSeen, now: now)
-                    ))
-                }
-            }
-            if !items.isEmpty {
-                sections.append(LearningsSection(
-                    id: "positive_patterns",
-                    title: "APPROVED DESTINATIONS",
-                    priority: "MEDIUM",
-                    instruction: "User explicitly approved these folder placements",
-                    items: items
-                ))
-            }
-        }
-        
-        // SECTION 9: MEDIUM-CONFIDENCE RULES
-        let mediumConfidenceRules = getActiveRules(forFolder: folderPath)
-            .filter { $0.confidenceLevel == .medium || ($0.confidenceLevel == .high && $0.successRate <= 0.7) }
-            .sorted(by: { ($0.lastAppliedAt ?? .distantPast) > ($1.lastAppliedAt ?? .distantPast) })
-        if !mediumConfidenceRules.isEmpty {
-            let items = mediumConfidenceRules.prefix(5).map { rule in
-                let confidence = Int(rule.successRate * 100)
-                return LearningsItem(
-                    content: rule.explanation,
-                    weight: 40 + confidence / 3,
-                    confidence: confidence,
-                    ruleId: rule.id
-                )
-            }
-            sections.append(LearningsSection(
-                id: "learned_patterns",
-                title: "LEARNED PATTERNS",
-                priority: "LOW",
-                instruction: "Consider these tendencies but they may be overridden by explicit preferences. When you apply a pattern, include its rule_id in the folder's JSON.",
-                items: Array(items)
-            ))
-        }
-        
-        // SECTION 10: REVERT WARNING
-        let recentReverts = profile.historyReverts.suffix(5)
-        if recentReverts.count >= 2 {
-            sections.append(LearningsSection(
-                id: "caution",
-                title: "CAUTION",
-                priority: "ADVISORY",
-                instruction: "User has reverted \(recentReverts.count) recent organizations - be more conservative with changes",
-                items: []
-            ))
-        }
-        
-        guard !sections.isEmpty else { return "" }
-        
-        return formatAsXML(sections: sections, folderPath: folderPath)
+        return output.count > 2 ? output.joined(separator: "\n") : ""
     }
     
     // MARK: - Prompt Context Helpers
+
+    private func promptDateString(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+    }
+
+    private func summarizePromptSession(_ session: OrganizationSession) -> String {
+        let date = promptDateString(session.completedAt ?? session.timestamp)
+        let folderName = URL(fileURLWithPath: session.folderPath).lastPathComponent
+        let movedCount = max(session.filesMoved.count, session.appliedRules.count)
+
+        switch session.reaction {
+        case .accepted:
+            let destinations = session.folderPatterns.prefix(3).map(\.relativePath).joined(separator: ", ")
+            if !destinations.isEmpty {
+                return "\(date): Accepted run in \(folderName). \(movedCount) files stayed in place, using \(destinations)."
+            }
+            return "\(date): Accepted run in \(folderName). \(movedCount) files needed no corrections."
+        case .corrected:
+            let changeSummary = session.userCorrections.prefix(2).map { change in
+                let from = URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent
+                let to = URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent
+                return "\(from) -> \(to)"
+            }.joined(separator: ", ")
+            return "\(date): Corrected run in \(folderName). User changed \(session.userCorrections.count) placements\(changeSummary.isEmpty ? "." : ": \(changeSummary).")"
+        case .reverted:
+            return "\(date): Reverted run in \(folderName). Be more conservative with this folder."
+        case .cancelled:
+            return "\(date): Cancelled run in \(folderName). The proposed structure was not accepted."
+        case .regenerated:
+            return "\(date): Regenerated run in \(folderName). The first plan needed a second attempt."
+        case .inProgress:
+            return "\(date): Recent run in \(folderName) is still collecting feedback."
+        }
+    }
+
+    private func buildPromptPatterns(
+        from profile: LearningsProfile,
+        sessions: [OrganizationSession],
+        folderPath: String?
+    ) -> [String] {
+        var patterns: [String] = []
+
+        let acceptedSessions = sessions.filter(\.acceptedWithoutCorrections)
+        let correctedSessions = sessions.filter { $0.reaction == .corrected || !$0.userCorrections.isEmpty }
+
+        var acceptedFolderPatterns: [String: (count: Int, extensions: [String: Int])] = [:]
+        for session in acceptedSessions {
+            for pattern in session.folderPatterns {
+                var entry = acceptedFolderPatterns[pattern.relativePath] ?? (count: 0, extensions: [:])
+                entry.count += pattern.fileCount
+                for ext in pattern.fileExtensions {
+                    entry.extensions[ext, default: 0] += 1
+                }
+                acceptedFolderPatterns[pattern.relativePath] = entry
+            }
+        }
+
+        let topAcceptedPatterns = acceptedFolderPatterns
+            .sorted { $0.value.count > $1.value.count }
+            .prefix(4)
+        for (path, payload) in topAcceptedPatterns {
+            let topExtensions = payload.extensions
+                .sorted { $0.value > $1.value }
+                .prefix(3)
+                .map { key, _ in key.isEmpty ? "files" : ".\(key)" }
+                .joined(separator: ", ")
+            patterns.append("Accepted structure: \(path) is a good destination for \(topExtensions.isEmpty ? "similar files" : topExtensions).")
+        }
+
+        var correctionPatterns: [String: Int] = [:]
+        for session in correctedSessions {
+            for change in session.userCorrections where change.wasAIOrganized {
+                let from = URL(fileURLWithPath: change.originalPath).deletingLastPathComponent().lastPathComponent
+                let to = URL(fileURLWithPath: change.newPath).deletingLastPathComponent().lastPathComponent
+                let ext = URL(fileURLWithPath: change.originalPath).pathExtension.lowercased()
+                let label = ext.isEmpty
+                    ? "Prefer \(to) over \(from) for similar files."
+                    : "CORRECTIONS: .\(ext) files were moved from \(from) to \(to)."
+                correctionPatterns[label, default: 0] += 1
+            }
+        }
+
+        patterns.append(contentsOf: correctionPatterns.sorted { $0.value > $1.value }.prefix(4).map(\.key))
+
+        let positiveExamples = profile.positiveExamples
+            .filter { example in
+                guard let folderPath else { return true }
+                return example.dstPath.hasPrefix(folderPath)
+            }
+            .sorted(by: { $0.timestamp > $1.timestamp })
+            .prefix(4)
+            .map { example in
+                let ext = URL(fileURLWithPath: example.srcPath).pathExtension.lowercased()
+                let folder = URL(fileURLWithPath: example.dstPath).deletingLastPathComponent().path
+                return ext.isEmpty
+                    ? "Accepted example: similar files belonged in \(folder)."
+                    : "Accepted example: .\(ext) files belonged in \(folder)."
+            }
+        patterns.append(contentsOf: positiveExamples)
+
+        return Array(patterns.orderedDeduplicated().prefix(6))
+    }
     
     private struct LearningsSection {
         let id: String
@@ -1414,31 +1806,7 @@ public class LearningsManager: ObservableObject {
         }
         
         // Filter by scope if provided
-        if let folderPath = folderPath {
-            activeRules = activeRules.filter { rule in
-                switch rule.scope {
-                case .global:
-                    return true
-                case .folder(let rulePath):
-                    return folderPath.hasPrefix(rulePath) || rulePath == folderPath
-                case .activePersona:
-                    return false
-                }
-            }
-        }
-        
-        if let personaId = personaId {
-            activeRules = activeRules.filter { rule in
-                switch rule.scope {
-                case .global:
-                    return true
-                case .activePersona(let rulePersonaId):
-                    return rulePersonaId == personaId
-                case .folder:
-                    return true
-                }
-            }
-        }
+        activeRules = activeRules.filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: personaId) }
         
         // Sort by priority
         activeRules.sort { $0.priority > $1.priority }
@@ -1544,9 +1912,14 @@ public class LearningsManager: ObservableObject {
     /// Add a path exclusion pattern (learning will be skipped for matching paths)
     public func addLearningExclusion(_ pattern: String) async {
         guard var profile = currentProfile else { return }
-        if !profile.learningExclusionPatterns.contains(pattern) {
-            profile.learningExclusionPatterns.append(pattern)
+        let trimmedPattern = normalizedLearningPattern(pattern)
+        guard !trimmedPattern.isEmpty else { return }
+
+        if !profile.learningExclusionPatterns.map(normalizedLearningPattern).contains(trimmedPattern) {
+            profile.learningExclusionPatterns.append(trimmedPattern)
             currentProfile = profile
+            analysisResult = nil
+            await pruneExcludedLearningData()
             await saveProfile()
         }
     }
@@ -1554,29 +1927,52 @@ public class LearningsManager: ObservableObject {
     /// Remove a learning exclusion pattern
     public func removeLearningExclusion(_ pattern: String) async {
         guard var profile = currentProfile else { return }
-        profile.learningExclusionPatterns.removeAll { $0 == pattern }
+        let normalizedPattern = normalizedLearningPattern(pattern)
+        profile.learningExclusionPatterns.removeAll {
+            normalizedLearningPattern($0) == normalizedPattern
+        }
         currentProfile = profile
+        analysisResult = nil
         await saveProfile()
     }
     
     /// Check if a path should be excluded from learning
     public func isPathExcludedFromLearning(_ path: String) -> Bool {
         guard let profile = currentProfile else { return false }
-        let loweredPath = path.lowercased()
+        let normalizedPath = normalizedLearningPath(path)
+        let pathComponents = normalizedPath.split(separator: "/").map(String.init)
+        let fileName = URL(fileURLWithPath: normalizedPath).lastPathComponent.lowercased()
+
         return profile.learningExclusionPatterns.contains { pattern in
-            let loweredPattern = pattern.lowercased()
-            return loweredPath.contains(loweredPattern) ||
-                   loweredPath.hasSuffix(loweredPattern) ||
-                   URL(fileURLWithPath: path).lastPathComponent.lowercased().contains(loweredPattern)
+            let normalizedPattern = normalizedLearningPattern(pattern)
+            guard !normalizedPattern.isEmpty else { return false }
+
+            if normalizedPath == normalizedPattern || normalizedPath.hasSuffix("/" + normalizedPattern) {
+                return true
+            }
+
+            let patternComponents = normalizedPattern.split(separator: "/").map(String.init)
+            if !patternComponents.isEmpty && pathComponents.count >= patternComponents.count {
+                for start in 0...(pathComponents.count - patternComponents.count) {
+                    if Array(pathComponents[start..<(start + patternComponents.count)]) == patternComponents {
+                        return true
+                    }
+                }
+            }
+
+            return fileName == normalizedPattern || pathComponents.contains(normalizedPattern)
         }
     }
     
     /// Extract behavior preferences from honing answers
     public func extractBehaviorPreferences() {
         guard let profile = currentProfile else { return }
-        
+        behaviorPreferences = behaviorPreferences(from: filteredLearningProfile(from: profile))
+    }
+
+    private func behaviorPreferences(from profile: LearningsProfile) -> BehaviorPreferences {
         var prefs = BehaviorPreferences()
-        
+
         for answer in profile.honingAnswers {
             let option = answer.selectedOption.lowercased()
             
@@ -1609,8 +2005,476 @@ public class LearningsManager: ObservableObject {
                 prefs.duplicateKeeperStrategy = .keepOldest
             }
         }
+
+        return prefs
+    }
+    
+    // MARK: - Model Directories (Local Persistence)
+    
+    private static let learningsModelSelectionKey = "learningsModelSelection"
+    private static let modelDirectoriesKey = "learningsModelDirectories"
+    private static let maxEnabledModelDirectories = 5
+    private static let maxFolderEntriesPerDirectory = 20
+
+    private func loadLearningsModelSelection() {
+        guard let data = userDefaults.data(forKey: Self.learningsModelSelectionKey) else {
+            learningsModelSelection = nil
+            return
+        }
+
+        do {
+            learningsModelSelection = try JSONDecoder().decode(LearningsModelSelection.self, from: data)
+        } catch {
+            DebugLogger.log("Failed to load learnings model selection: \(error.localizedDescription)")
+            learningsModelSelection = nil
+        }
+    }
+
+    private func saveLearningsModelSelection() {
+        if let learningsModelSelection {
+            do {
+                let data = try JSONEncoder().encode(learningsModelSelection)
+                userDefaults.set(data, forKey: Self.learningsModelSelectionKey)
+            } catch {
+                DebugLogger.log("Failed to save learnings model selection: \(error.localizedDescription)")
+            }
+        } else {
+            userDefaults.removeObject(forKey: Self.learningsModelSelectionKey)
+        }
+    }
+
+    public func setLearningsModelOverride(provider: AIProvider, model: String) {
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedModel.isEmpty else { return }
+        learningsModelSelection = LearningsModelSelection(provider: provider, model: trimmedModel)
+        saveLearningsModelSelection()
+    }
+
+    public func clearLearningsModelOverride() {
+        learningsModelSelection = nil
+        saveLearningsModelSelection()
+    }
+
+    public func effectiveAIConfig(from config: AIConfig) -> AIConfig {
+        guard
+            let learningsModelSelection,
+            learningsModelSelection.provider == config.provider
+        else {
+            return config
+        }
+
+        var effectiveConfig = config
+        effectiveConfig.model = learningsModelSelection.model
+        return effectiveConfig
+    }
+    
+    private func loadModelDirectories() {
+        guard let data = userDefaults.data(forKey: Self.modelDirectoriesKey) else {
+            modelDirectories = []
+            return
+        }
+        do {
+            modelDirectories = try JSONDecoder().decode([ReferenceModelDirectory].self, from: data)
+            restoreModelDirectoryAccess()
+        } catch {
+            DebugLogger.log("Failed to load model directories: \(error.localizedDescription)")
+            modelDirectories = []
+        }
+    }
+    
+    private func saveModelDirectories() {
+        do {
+            let data = try JSONEncoder().encode(modelDirectories)
+            userDefaults.set(data, forKey: Self.modelDirectoriesKey)
+        } catch {
+            DebugLogger.log("Failed to save model directories: \(error.localizedDescription)")
+        }
+    }
+    
+    /// Add a reference model directory from a URL, creating a security-scoped bookmark
+    /// and triggering an initial scan. Deduplicates by canonical path.
+    public func addModelDirectory(url: URL) -> Bool {
+        let canonical = url.standardizedFileURL.path
+        guard !modelDirectories.contains(where: { $0.canonicalPath == canonical }) else {
+            return false
+        }
         
-        behaviorPreferences = prefs
+        var bookmark: Data?
+        do {
+            bookmark = try url.bookmarkData(
+                options: .withSecurityScope,
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        } catch {
+            DebugLogger.log("Failed to create security-scoped bookmark for \(url.path): \(error.localizedDescription)")
+        }
+        
+        let directory = ReferenceModelDirectory(
+            path: url.path,
+            bookmarkData: bookmark
+        )
+        modelDirectories.append(directory)
+        saveModelDirectories()
+        restoreModelDirectoryAccess()
+        
+        let directoryId = directory.id
+        Task {
+            await rescanModelDirectory(id: directoryId)
+        }
+        
+        return true
+    }
+    
+    /// Add a reference model directory by path (legacy convenience).
+    /// Prefer `addModelDirectory(url:)` for proper bookmark persistence.
+    public func addModelDirectory(path: String) -> Bool {
+        addModelDirectory(url: URL(fileURLWithPath: path))
+    }
+    
+    /// Add multiple directories at once, returning the count of newly added ones
+    @discardableResult
+    public func addModelDirectories(paths: [String]) -> Int {
+        var added = 0
+        for path in paths {
+            if addModelDirectory(path: path) {
+                added += 1
+            }
+        }
+        return added
+    }
+    
+    /// Remove a model directory by its ID
+    public func removeModelDirectory(id: String) {
+        modelDirectories.removeAll { $0.id == id }
+        saveModelDirectories()
+    }
+    
+    /// Toggle the enabled state of a model directory
+    public func toggleModelDirectory(id: String) {
+        guard let index = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
+        modelDirectories[index].isEnabled.toggle()
+        saveModelDirectories()
+    }
+    
+    /// Validate all directories, restoring bookmark access where needed
+    public func validateModelDirectories() {
+        restoreModelDirectoryAccess()
+    }
+    
+    /// Restore security-scoped access for all saved directories by resolving bookmarks.
+    /// Updates stale bookmarks automatically.
+    private func restoreModelDirectoryAccess() {
+        var didUpdate = false
+        for i in modelDirectories.indices {
+            guard let bookmark = modelDirectories[i].bookmarkData else { continue }
+            
+            do {
+                var isStale = false
+                let resolvedURL = try URL(
+                    resolvingBookmarkData: bookmark,
+                    options: .withSecurityScope,
+                    relativeTo: nil,
+                    bookmarkDataIsStale: &isStale
+                )
+                
+                _ = resolvedURL.startAccessingSecurityScopedResource()
+                
+                if isStale {
+                    do {
+                        let newBookmark = try resolvedURL.bookmarkData(
+                            options: .withSecurityScope,
+                            includingResourceValuesForKeys: nil,
+                            relativeTo: nil
+                        )
+                        modelDirectories[i].bookmarkData = newBookmark
+                        didUpdate = true
+                        DebugLogger.log("Refreshed stale bookmark for \(modelDirectories[i].displayName)")
+                    } catch {
+                        DebugLogger.log("Failed to refresh stale bookmark for \(modelDirectories[i].displayName): \(error.localizedDescription)")
+                    }
+                }
+            } catch {
+                DebugLogger.log("Failed to resolve bookmark for \(modelDirectories[i].displayName): \(error.localizedDescription)")
+            }
+        }
+        
+        if didUpdate {
+            saveModelDirectories()
+        }
+    }
+    
+    /// Re-scan a model directory and update its cached snapshot
+    public func rescanModelDirectory(id: String) async {
+        guard let index = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
+        
+        let directory = modelDirectories[index]
+        let directoryURL = URL(fileURLWithPath: directory.path)
+        
+        guard directory.isAccessible else {
+            DebugLogger.log("Cannot scan inaccessible directory: \(directory.displayName)")
+            return
+        }
+        
+        let snapshot = await ReferenceDirectoryScanner.scan(url: directoryURL)
+        
+        guard let currentIndex = modelDirectories.firstIndex(where: { $0.id == id }) else { return }
+        modelDirectories[currentIndex].scanSnapshot = snapshot
+        modelDirectories[currentIndex].lastScannedAt = snapshot.scannedAt
+        saveModelDirectories()
+    }
+    
+    /// Returns enabled, accessible reference directory paths (capped at maxEnabledModelDirectories)
+    public func enabledModelDirectoryPaths() -> [String] {
+        modelDirectories
+            .filter { $0.isEnabled && $0.isAccessible }
+            .prefix(Self.maxEnabledModelDirectories)
+            .map { $0.path }
+    }
+    
+    /// Build a reference-directory context string for prompt injection.
+    /// Uses cached snapshots when available, falling back to live scan via PromptBuilder.
+    public func generateModelDirectoryContext() -> String {
+        let enabledDirs = modelDirectories
+            .filter { $0.isEnabled && $0.isAccessible }
+            .prefix(Self.maxEnabledModelDirectories)
+        
+        let snapshots = enabledDirs.compactMap { dir -> (String, ReferenceDirectorySnapshot)? in
+            guard let snapshot = dir.scanSnapshot else { return nil }
+            return (dir.displayName, snapshot)
+        }
+        
+        guard !snapshots.isEmpty else {
+            let paths = enabledDirs.map(\.path)
+            guard !paths.isEmpty else { return "" }
+            return PromptBuilder.buildReferenceDirectoryContext(paths: Array(paths))
+        }
+        
+        return formatSnapshotContext(snapshots: snapshots)
+    }
+    
+    /// Format cached snapshots into a compact prompt context string (~15 lines max)
+    private func formatSnapshotContext(snapshots: [(String, ReferenceDirectorySnapshot)]) -> String {
+        var lines: [String] = [
+            "## REFERENCE MODEL DIRECTORIES",
+            "The user has provided the following well-organized directories as examples of their preferred folder structure and naming conventions. Use these as guidance for how to name and organize folders — match the style, hierarchy depth, and naming patterns you see here."
+        ]
+        
+        for (name, snapshot) in snapshots {
+            lines.append("")
+            lines.append("Reference: \"\(name)\" (\(snapshot.totalFolderCount) folders, \(snapshot.totalFileCount) files)")
+            
+            if !snapshot.namingConventions.isEmpty {
+                lines.append("  Naming: \(snapshot.namingConventions.joined(separator: ", "))")
+            }
+            
+            let topFolders = snapshot.folderHierarchy.prefix(Self.maxFolderEntriesPerDirectory)
+            for folder in topFolders {
+                let typeInfo = folder.fileTypeDistribution
+                    .sorted { $0.value > $1.value }
+                    .prefix(3)
+                    .map { "\($0.key):\($0.value)" }
+                    .joined(separator: ", ")
+                let suffix = typeInfo.isEmpty ? "" : " [\(typeInfo)]"
+                lines.append("  - \(folder.relativePath)\(suffix)")
+            }
+            
+            if snapshot.folderHierarchy.count > Self.maxFolderEntriesPerDirectory {
+                lines.append("  ... (\(snapshot.folderHierarchy.count - Self.maxFolderEntriesPerDirectory) more folders)")
+            }
+        }
+        
+        lines.append("")
+        lines.append("IMPORTANT: These are reference examples only — do NOT reorganize files into these directories. Instead, replicate the naming style and structure patterns in your organization plan.")
+        
+        return lines.joined(separator: "\n")
+    }
+
+    private func shouldExcludeLearning(paths: [String]) -> Bool {
+        paths.contains(where: isPathExcludedFromLearning)
+    }
+
+    private func normalizedLearningPattern(_ pattern: String) -> String {
+        var normalized = pattern
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "\\", with: "/")
+
+        while normalized.contains("//") {
+            normalized = normalized.replacingOccurrences(of: "//", with: "/")
+        }
+
+        if normalized.hasPrefix("./") {
+            normalized.removeFirst(2)
+        }
+
+        if normalized.hasSuffix("/") {
+            normalized.removeLast()
+        }
+
+        return normalized
+    }
+
+    private func normalizedLearningPath(_ path: String) -> String {
+        normalizedLearningPattern(URL(fileURLWithPath: path).standardizedFileURL.path)
+    }
+
+    func filteredLearningProfile(from profile: LearningsProfile) -> LearningsProfile {
+        guard !profile.learningExclusionPatterns.isEmpty else { return profile }
+
+        var filtered = profile
+
+        filtered.additionalInstructionsHistory = profile.additionalInstructionsHistory.filter { instruction in
+            guard let folderPath = instruction.folderPath else { return true }
+            return !isPathExcludedFromLearning(folderPath)
+        }
+        filtered.guidingInstructionsHistory = profile.guidingInstructionsHistory.filter { instruction in
+            guard let folderPath = instruction.folderPath else { return true }
+            return !isPathExcludedFromLearning(folderPath)
+        }
+        filtered.steeringPrompts = profile.steeringPrompts.filter { prompt in
+            guard let folderPath = prompt.folderPath else { return true }
+            return !isPathExcludedFromLearning(folderPath)
+        }
+        filtered.postOrganizationChanges = profile.postOrganizationChanges.filter {
+            !shouldExcludeLearning(paths: [$0.originalPath, $0.newPath].filter { !$0.isEmpty })
+        }
+        filtered.renameFeedbackHistory = profile.renameFeedbackHistory.filter { event in
+            guard let folderPath = event.folderPath else { return true }
+            return !isPathExcludedFromLearning(folderPath)
+        }
+        filtered.cancelledOrganizations = profile.cancelledOrganizations.filter {
+            !isPathExcludedFromLearning($0.folderPath)
+        }
+        filtered.regeneratedOrganizations = profile.regeneratedOrganizations.filter {
+            !isPathExcludedFromLearning($0.folderPath)
+        }
+        filtered.historyReverts = profile.historyReverts.filter { revert in
+            guard let folderPath = revert.folderPath else { return true }
+            return !isPathExcludedFromLearning(folderPath)
+        }
+        filtered.corrections = profile.corrections.filter {
+            !shouldExcludeLearning(paths: [$0.srcPath, $0.dstPath])
+        }
+        filtered.rejections = profile.rejections.filter {
+            !shouldExcludeLearning(paths: [$0.srcPath, $0.dstPath])
+        }
+        filtered.positiveExamples = profile.positiveExamples.filter {
+            !shouldExcludeLearning(paths: [$0.srcPath, $0.dstPath])
+        }
+        filtered.sessions = profile.sessions.filter { session in
+            !isPathExcludedFromLearning(session.folderPath)
+        }.map { session in
+            var updated = session
+            updated.filesMoved = session.filesMoved.filter {
+                !shouldExcludeLearning(paths: [$0.sourcePath, $0.destinationPath])
+            }
+            updated.userCorrections = session.userCorrections.filter {
+                !shouldExcludeLearning(paths: [$0.originalPath, $0.newPath].filter { !$0.isEmpty })
+            }
+            updated.folderPatterns = session.folderPatterns.filter { pattern in
+                !pattern.relativePath.isEmpty
+            }
+            return updated
+        }
+
+        let excludedExampleIDs = Set(profile.corrections.map(\.id))
+            .subtracting(Set(filtered.corrections.map(\.id)))
+            .union(Set(profile.rejections.map(\.id)).subtracting(Set(filtered.rejections.map(\.id))))
+            .union(Set(profile.positiveExamples.map(\.id)).subtracting(Set(filtered.positiveExamples.map(\.id))))
+
+        if !excludedExampleIDs.isEmpty {
+            filtered.inferredRules = filtered.inferredRules.filter { rule in
+                let usesExcludedExample = !Set(rule.exampleIds).isDisjoint(with: excludedExampleIDs)
+                let usesExcludedEvidence = !Set(rule.evidenceIds).isDisjoint(with: excludedExampleIDs)
+                return !usesExcludedExample && !usesExcludedEvidence
+            }
+        }
+
+        return filtered
+    }
+
+    private func learningProfileSnapshot(_ profile: LearningsProfile) -> [Int] {
+        [
+            profile.additionalInstructionsHistory.count,
+            profile.guidingInstructionsHistory.count,
+            profile.steeringPrompts.count,
+            profile.postOrganizationChanges.count,
+            profile.renameFeedbackHistory.count,
+            profile.historyReverts.count,
+            profile.cancelledOrganizations.count,
+            profile.regeneratedOrganizations.count,
+            profile.corrections.count,
+            profile.rejections.count,
+            profile.positiveExamples.count,
+            profile.inferredRules.count,
+            profile.sessions.count
+        ]
+    }
+
+    private func pruneExcludedLearningData() async {
+        guard let profile = currentProfile else { return }
+        let filtered = filteredLearningProfile(from: profile)
+        guard learningProfileSnapshot(filtered) != learningProfileSnapshot(profile) else { return }
+        currentProfile = filtered
+        extractBehaviorPreferences()
+        await saveProfile()
+    }
+
+    private func ruleMatchesScope(rule: InferredRule, folderPath: String?, personaId: UUID?) -> Bool {
+        if folderPath == nil && personaId == nil {
+            return true
+        }
+
+        switch rule.scope {
+        case .global:
+            return true
+        case .folder(let rulePath):
+            guard let folderPath else { return false }
+            return folderPath.hasPrefix(rulePath) || rulePath == folderPath
+        case .activePersona(let rulePersonaId):
+            guard let personaId else { return false }
+            return rulePersonaId == personaId
+        }
+    }
+
+    private func mergeInferredRules(existing: [InferredRule], new: [InferredRule]) -> [InferredRule] {
+        var merged: [String: InferredRule] = [:]
+
+        for rule in existing {
+            merged["\(rule.pattern)|\(rule.template)"] = rule
+        }
+
+        for rule in new {
+            let key = "\(rule.pattern)|\(rule.template)"
+            if let existingRule = merged[key] {
+                merged[key] = InferredRule(
+                    id: existingRule.id,
+                    pattern: rule.pattern,
+                    template: rule.template,
+                    metadataCues: Array(Set(existingRule.metadataCues + rule.metadataCues)),
+                    priority: max(existingRule.priority, rule.priority),
+                    exampleIds: Array(Set(existingRule.exampleIds + rule.exampleIds)),
+                    explanation: rule.explanation,
+                    successCount: existingRule.successCount,
+                    failureCount: existingRule.failureCount,
+                    isEnabled: existingRule.isEnabled,
+                    lastAppliedAt: existingRule.lastAppliedAt ?? rule.lastAppliedAt,
+                    supportCount: max(existingRule.supportCount, rule.supportCount),
+                    initialConfidence: rule.initialConfidence ?? existingRule.initialConfidence,
+                    scope: rule.scope,
+                    status: existingRule.status,
+                    evidenceIds: Array(Set(existingRule.evidenceIds + rule.evidenceIds)),
+                    evidenceDescription: rule.evidenceDescription ?? existingRule.evidenceDescription,
+                    rejectedAt: existingRule.rejectedAt,
+                    cooldownUntil: existingRule.cooldownUntil
+                )
+            } else {
+                merged[key] = rule
+            }
+        }
+
+        return merged.values.sorted { $0.priority > $1.priority }
     }
 }
 

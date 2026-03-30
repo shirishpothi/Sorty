@@ -61,6 +61,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 self?.continuousLearningObserver.handleFileRemoval(at: path)
             }
         }
+
+        self.learningsFSMonitor.onMonitoringWindowExpired = { [weak self] directoryURL in
+            Task { @MainActor in
+                self?.continuousLearningObserver.handleMonitoringWindowExpired(for: directoryURL.path)
+            }
+        }
         
         // Prewarm connections for all configured AI providers on startup
         Task {

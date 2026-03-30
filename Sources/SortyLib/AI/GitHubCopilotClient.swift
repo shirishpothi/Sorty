@@ -69,7 +69,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         )
         
         var requestBody: [String: Any] = [
-            "model": config.model, // Usually gpt-4 or similar supported by Copilot
+            "model": config.model,
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userPrompt]
@@ -166,6 +166,18 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
         try ensureNetworkAllowed(url)
         DebugLogger.log("Fetching available models")
         let session = await getSession()
+        let fallbackModels = [
+            "gpt-5-mini",
+            "gpt-5.4-mini",
+            "gpt-5.4",
+            "gpt-4o",
+            "gpt-5.3-codex",
+            "claude-sonnet-4.6",
+            "claude-opus-4.6",
+            "claude-haiku-4.5",
+            "gemini-3.1-pro",
+            "gemini-3-flash"
+        ]
         var didRetryAfterAuthFailure = false
 
         while true {
@@ -181,7 +193,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                 let (data, response) = try await session.data(for: request)
 
                 guard let httpResponse = response as? HTTPURLResponse else {
-                    return ["gpt-4", "gpt-3.5-turbo"]
+                    return fallbackModels
                 }
 
                 if !(200...299).contains(httpResponse.statusCode) {
@@ -192,7 +204,7 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
                         continue
                     }
                     // Fallback models if endpoint fails or not available
-                    return ["gpt-4", "gpt-3.5-turbo"]
+                    return fallbackModels
                 }
 
                 struct ModelsResponse: Decodable {
@@ -204,12 +216,12 @@ public final class GitHubCopilotClient: AIClientProtocol, @unchecked Sendable {
 
                 let modelsResponse = try JSONDecoder().decode(ModelsResponse.self, from: data)
                 let models = modelsResponse.data.map { $0.id }
-                return models.isEmpty ? ["gpt-4", "gpt-3.5-turbo"] : models
+                return models.isEmpty ? fallbackModels : models
 
             } catch {
                 // Fallback on error
                 DebugLogger.log("Failed to fetch models: \(error), using defaults")
-                return ["gpt-4", "gpt-3.5-turbo"]
+                return fallbackModels
             }
         }
     }

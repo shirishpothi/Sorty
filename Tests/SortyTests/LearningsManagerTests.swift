@@ -14,15 +14,22 @@ final class LearningsManagerTests: XCTestCase {
     var manager: LearningsManager!
     
     override func setUp() async throws {
-        
+        UserDefaults.standard.removeObject(forKey: "learningsModelDirectories")
+        UserDefaults.standard.removeObject(forKey: "learningsModelSelection")
         manager = LearningsManager()
         // Reset to empty profile for tests
         manager.currentProfile = LearningsProfile()
+        // Clear any persisted model directories from prior runs
+        manager.modelDirectories = []
         // Grant consent for tests
         await manager.grantConsent()
     }
     
     override func tearDown() async throws {
+        // Clean up persisted model directories
+        manager.modelDirectories = []
+        UserDefaults.standard.removeObject(forKey: "learningsModelDirectories")
+        UserDefaults.standard.removeObject(forKey: "learningsModelSelection")
         manager = nil
         
     }
@@ -91,13 +98,23 @@ final class LearningsManagerTests: XCTestCase {
     
     // MARK: - Analysis Tests
     
-    func testAnalyzeWithNoInputs() async {
-        // Should error if no inputs
+    func testAnalyzeWithNoInputsUsesExistingLearningSignals() async {
+        manager.addLabeledExample(
+            srcPath: "/Downloads/Invoice_001.pdf",
+            dstPath: "/Finance/Invoice_001.pdf",
+            action: .accept
+        )
+        manager.addLabeledExample(
+            srcPath: "/Downloads/Invoice_002.pdf",
+            dstPath: "/Finance/Invoice_002.pdf",
+            action: .accept
+        )
+
         await manager.analyze(rootPaths: [], examplePaths: [])
-        
-        // Analyzer throws emptyRootPaths, so manager.error should be set
-        XCTAssertNotNil(manager.error)
-        XCTAssertEqual(manager.error, "Analysis failed: No root paths provided for analysis")
+
+        XCTAssertNil(manager.error)
+        XCTAssertNotNil(manager.analysisResult)
+        XCTAssertFalse(manager.analysisResult?.inferredRules.isEmpty ?? true)
     }
     // MARK: - Prompt Context Generation Tests
     
@@ -151,12 +168,140 @@ final class LearningsManagerTests: XCTestCase {
     
     
     func testErrorStateClearing() async {
-        manager.error = "Previous error"
-        // Perform an action that clears error usually at start
-        // manager.analyze clears errors, but we need valid inputs so it doesn't fail again immediately
-        await manager.analyze(rootPaths: ["/tmp"], examplePaths: [])
-        
-        XCTAssertNil(manager.error)
+       manager.error = "Previous error"
+       // Perform an action that clears error usually at start
+       // manager.analyze clears errors, but we need valid inputs so it doesn't fail again immediately
+       await manager.analyze(rootPaths: ["/tmp"], examplePaths: [])
+       
+       XCTAssertNil(manager.error)
+    }
+    
+    // MARK: - Model Directory Tests
+    
+    func testAddModelDirectory() {
+       let tempPath = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyTestModelDir-\(UUID().uuidString)").path
+       try? FileManager.default.createDirectory(atPath: tempPath, withIntermediateDirectories: true)
+       defer { try? FileManager.default.removeItem(atPath: tempPath) }
+       
+       let added = manager.addModelDirectory(path: tempPath)
+       XCTAssertTrue(added)
+       XCTAssertEqual(manager.modelDirectories.count, 1)
+       XCTAssertEqual(manager.modelDirectories.first?.path, tempPath)
+    }
+    
+    func testAddDuplicateModelDirectory() {
+       let tempPath = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyTestModelDir-\(UUID().uuidString)").path
+       try? FileManager.default.createDirectory(atPath: tempPath, withIntermediateDirectories: true)
+       defer { try? FileManager.default.removeItem(atPath: tempPath) }
+       
+       let added1 = manager.addModelDirectory(path: tempPath)
+       let added2 = manager.addModelDirectory(path: tempPath)
+       
+       XCTAssertTrue(added1)
+       XCTAssertFalse(added2, "Duplicate canonical path should be rejected")
+       XCTAssertEqual(manager.modelDirectories.count, 1)
+    }
+    
+    func testRemoveModelDirectory() {
+       let tempPath = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyTestModelDir-\(UUID().uuidString)").path
+       try? FileManager.default.createDirectory(atPath: tempPath, withIntermediateDirectories: true)
+       defer { try? FileManager.default.removeItem(atPath: tempPath) }
+       
+       _ = manager.addModelDirectory(path: tempPath)
+       let id = manager.modelDirectories.first!.id
+       manager.removeModelDirectory(id: id)
+       
+       XCTAssertTrue(manager.modelDirectories.isEmpty)
+    }
+    
+    func testToggleModelDirectory() {
+       let tempPath = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyTestModelDir-\(UUID().uuidString)").path
+       try? FileManager.default.createDirectory(atPath: tempPath, withIntermediateDirectories: true)
+       defer { try? FileManager.default.removeItem(atPath: tempPath) }
+       
+       _ = manager.addModelDirectory(path: tempPath)
+       let id = manager.modelDirectories.first!.id
+       
+       XCTAssertTrue(manager.modelDirectories.first!.isEnabled)
+       manager.toggleModelDirectory(id: id)
+       XCTAssertFalse(manager.modelDirectories.first!.isEnabled)
+       manager.toggleModelDirectory(id: id)
+       XCTAssertTrue(manager.modelDirectories.first!.isEnabled)
+    }
+    
+    func testEnabledModelDirectoryPaths() {
+       let path1 = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyTestModelDir1-\(UUID().uuidString)").path
+       let path2 = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyTestModelDir2-\(UUID().uuidString)").path
+       try? FileManager.default.createDirectory(atPath: path1, withIntermediateDirectories: true)
+       try? FileManager.default.createDirectory(atPath: path2, withIntermediateDirectories: true)
+       defer {
+           try? FileManager.default.removeItem(atPath: path1)
+           try? FileManager.default.removeItem(atPath: path2)
+       }
+       
+       _ = manager.addModelDirectory(path: path1)
+       _ = manager.addModelDirectory(path: path2)
+       
+       // Both enabled
+       XCTAssertEqual(manager.enabledModelDirectoryPaths().count, 2)
+       
+       // Disable one
+       let id = manager.modelDirectories.first!.id
+       manager.toggleModelDirectory(id: id)
+       XCTAssertEqual(manager.enabledModelDirectoryPaths().count, 1)
+    }
+    
+    func testModelDirectoryContextGeneration() {
+       let tempPath = FileManager.default.temporaryDirectory
+           .appendingPathComponent("SortyTestModelDir-\(UUID().uuidString)")
+       try? FileManager.default.createDirectory(
+           at: tempPath.appendingPathComponent("Projects"),
+           withIntermediateDirectories: true
+       )
+       defer { try? FileManager.default.removeItem(at: tempPath) }
+       
+       _ = manager.addModelDirectory(path: tempPath.path)
+       let context = manager.generateModelDirectoryContext()
+       
+       XCTAssertTrue(context.contains("REFERENCE MODEL DIRECTORIES"))
+       XCTAssertTrue(context.contains("Projects"))
+    }
+    
+    func testModelDirectoryContextEmptyWhenNoneConfigured() {
+       let context = manager.generateModelDirectoryContext()
+       XCTAssertTrue(context.isEmpty)
+    }
+
+    func testLearningsModelOverrideUsesDedicatedModelForAnalysis() {
+       manager.setLearningsModelOverride(provider: .openAI, model: "gpt-5-mini")
+
+       var baseConfig = AIConfig.default
+       baseConfig.provider = .openAI
+       baseConfig.model = "gpt-5"
+
+       let effectiveConfig = manager.effectiveAIConfig(from: baseConfig)
+
+       XCTAssertEqual(effectiveConfig.provider, .openAI)
+       XCTAssertEqual(effectiveConfig.model, "gpt-5-mini")
+    }
+
+    func testLearningsModelOverrideFallsBackWhenProviderChanges() {
+       manager.setLearningsModelOverride(provider: .openAI, model: "gpt-5-mini")
+
+       var baseConfig = AIConfig.default
+       baseConfig.provider = .anthropic
+       baseConfig.model = "claude-sonnet-4-20250514"
+
+       let effectiveConfig = manager.effectiveAIConfig(from: baseConfig)
+
+       XCTAssertEqual(effectiveConfig.provider, .anthropic)
+       XCTAssertEqual(effectiveConfig.model, "claude-sonnet-4-20250514")
     }
 }
 
@@ -525,6 +670,76 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertTrue(manager.isPathExcludedFromLearning("/Users/test/Temp/file.pdf"))
         XCTAssertTrue(manager.isPathExcludedFromLearning("/Users/test/Downloads/Cache/data.json"))
         XCTAssertFalse(manager.isPathExcludedFromLearning("/Users/test/Documents/report.pdf"))
+    }
+
+    func testExcludedPathsAreIgnoredWhenRecordingLearnings() async {
+        await manager.addLearningExclusion("Temp")
+
+        manager.addLabeledExample(
+            srcPath: "/Users/test/Temp/file.txt",
+            dstPath: "/Users/test/Documents/file.txt",
+            action: .accept
+        )
+        manager.recordCorrection(
+            originalPath: "/Users/test/Temp/file.txt",
+            newPath: "/Users/test/Documents/file.txt"
+        )
+        manager.recordDirectoryChange(
+            from: "/Users/test/Temp/file.txt",
+            to: "/Users/test/Documents/file.txt",
+            wasAIOrganized: true
+        )
+
+        XCTAssertTrue(manager.currentProfile?.positiveExamples.isEmpty ?? false)
+        XCTAssertTrue(manager.currentProfile?.corrections.isEmpty ?? false)
+        XCTAssertTrue(manager.currentProfile?.postOrganizationChanges.isEmpty ?? false)
+    }
+
+    func testAddingExclusionPrunesExistingLearningsAndRules() async {
+        let excludedExample = LabeledExample(
+            id: "excluded-example",
+            srcPath: "/Users/test/Temp/file.txt",
+            dstPath: "/Users/test/Archive/file.txt",
+            action: .accept
+        )
+        let keptExample = LabeledExample(
+            id: "kept-example",
+            srcPath: "/Users/test/Documents/report.txt",
+            dstPath: "/Users/test/Reports/report.txt",
+            action: .accept
+        )
+
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.positiveExamples = [excludedExample, keptExample]
+        profile.corrections = [
+            LabeledExample(
+                srcPath: "/Users/test/Temp/correct.txt",
+                dstPath: "/Users/test/Archive/correct.txt",
+                action: .edit
+            )
+        ]
+        profile.additionalInstructionsHistory = [
+            UserInstruction(instruction: "Ignore temp work", folderPath: "/Users/test/Temp")
+        ]
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.txt$",
+                template: "Archive/{filename}",
+                priority: 80,
+                exampleIds: ["excluded-example"],
+                explanation: "Temp text files go to Archive"
+            )
+        ]
+        manager.currentProfile = profile
+
+        await manager.addLearningExclusion("Temp")
+
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.count, 1)
+        XCTAssertEqual(manager.currentProfile?.positiveExamples.first?.id, "kept-example")
+        XCTAssertTrue(manager.currentProfile?.corrections.isEmpty ?? false)
+        XCTAssertTrue(manager.currentProfile?.additionalInstructionsHistory.isEmpty ?? false)
+        XCTAssertTrue(manager.currentProfile?.inferredRules.isEmpty ?? false)
     }
     
     // MARK: - Rule Evidence Tests

@@ -164,44 +164,45 @@ public enum SortyResources {
                 return nsImage
             }
         }
+
+        // Try 2: Raw asset catalog file lookup inside app/framework resources.
+        // Prefer this before generic bundle image lookup so updated images in
+        // Resources/Assets.xcassets win over legacy fallback PNGs in Images/.
+        if let nsImage = loadImageFromRawAssetCatalog(named: name) {
+            logger.debug("Loaded image '\(name)' from raw Assets.xcassets in bundle resources")
+            return nsImage
+        }
         
-        // Try 2: Direct bundle resource lookup (works for Xcode builds with asset catalog)
+        // Try 3: Direct bundle resource lookup (works for Xcode builds with asset catalog)
         if let nsImage = bundle.image(forResource: name) {
             logger.debug("Loaded image '\(name)' from bundle resource")
             return nsImage
         }
 
-        // Try 3: Main bundle fallback (covers app-level asset catalogs)
+        // Try 4: Main bundle fallback (covers app-level asset catalogs)
         if bundle != Bundle.main, let nsImage = Bundle.main.image(forResource: name) {
             logger.debug("Loaded image '\(name)' from main bundle")
             return nsImage
         }
 
-        // Try 4: Images subdirectory (SPM .copy() resources)
+        // Try 5: Images subdirectory (SPM .copy() resources)
         if let imageURL = bundle.url(forResource: name, withExtension: ext, subdirectory: "Images"),
            let nsImage = NSImage(contentsOf: imageURL) {
             logger.debug("Loaded image '\(name)' from Images subdirectory")
             return nsImage
         }
 
-        // Try 5: Direct bundle resource with extension
+        // Try 6: Direct bundle resource with extension
         if let imageURL = bundle.url(forResource: name, withExtension: ext),
            let nsImage = NSImage(contentsOf: imageURL) {
             logger.debug("Loaded image '\(name)' from bundle root")
             return nsImage
         }
 
-        // Try 6: Bundle image resource helper (covers non-asset bundled images)
+        // Try 7: Bundle image resource helper (covers non-asset bundled images)
         if let imageURL = bundle.urlForImageResource(name),
            let nsImage = NSImage(contentsOf: imageURL) {
             logger.debug("Loaded image '\(name)' via urlForImageResource")
-            return nsImage
-        }
-
-        // Try 7: Raw asset catalog file lookup inside app/framework resources.
-        // Some release artifacts may ship Assets.xcassets uncompiled (no Assets.car).
-        if let nsImage = loadImageFromRawAssetCatalog(named: name) {
-            logger.debug("Loaded image '\(name)' from raw Assets.xcassets in bundle resources")
             return nsImage
         }
         
@@ -239,13 +240,73 @@ public enum SortyResources {
 
         for root in assetRoots {
             let imagesetURL = root.appendingPathComponent("\(name).imageset")
+
+            // Respect the file configured in Contents.json first.
+            if let configuredAsset = configuredAssetURL(in: imagesetURL),
+               FileManager.default.fileExists(atPath: configuredAsset.path),
+               let nsImage = preferredImage(from: configuredAsset, in: imagesetURL) {
+                return nsImage
+            }
+
             for fileExt in extensions {
                 let candidate = imagesetURL.appendingPathComponent("\(name).\(fileExt)")
                 if FileManager.default.fileExists(atPath: candidate.path),
-                   let nsImage = NSImage(contentsOf: candidate) {
+                   let nsImage = preferredImage(from: candidate, in: imagesetURL) {
                     return nsImage
                 }
             }
+        }
+
+        return nil
+    }
+
+    private static func preferredImage(from candidate: URL, in imagesetURL: URL) -> NSImage? {
+        guard let nsImage = NSImage(contentsOf: candidate) else {
+            return nil
+        }
+
+        // Some third-party SVGs use width/height="1em", which AppKit decodes as
+        // a 1x1 image and renders as a dot. Prefer PNG fallback in that case.
+        if candidate.pathExtension.lowercased() == "svg",
+           nsImage.size.width <= 2,
+           nsImage.size.height <= 2 {
+            let pngFallback = imagesetURL.appendingPathComponent(candidate.deletingPathExtension().lastPathComponent + ".png")
+            if FileManager.default.fileExists(atPath: pngFallback.path),
+               let pngImage = NSImage(contentsOf: pngFallback) {
+                return pngImage
+            }
+        }
+
+        return nsImage
+    }
+
+    private static func configuredAssetURL(in imagesetURL: URL) -> URL? {
+        let contentsURL = imagesetURL.appendingPathComponent("Contents.json")
+        guard let data = try? Data(contentsOf: contentsURL) else {
+            return nil
+        }
+
+        struct AssetCatalogImageSet: Decodable {
+            struct Entry: Decodable {
+                let filename: String?
+                let idiom: String?
+            }
+
+            let images: [Entry]
+        }
+
+        guard let parsed = try? JSONDecoder().decode(AssetCatalogImageSet.self, from: data) else {
+            return nil
+        }
+
+        if let universal = parsed.images.first(where: {
+            ($0.idiom == nil || $0.idiom == "universal") && ($0.filename?.isEmpty == false)
+        })?.filename {
+            return imagesetURL.appendingPathComponent(universal)
+        }
+
+        if let firstNamed = parsed.images.first(where: { $0.filename?.isEmpty == false })?.filename {
+            return imagesetURL.appendingPathComponent(firstNamed)
         }
 
         return nil

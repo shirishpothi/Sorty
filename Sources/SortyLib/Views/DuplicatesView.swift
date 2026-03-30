@@ -15,7 +15,7 @@ struct DuplicatesView: View {
     @State private var selectedGroup: UnifiedDuplicateGroup?
     @State private var showDeleteConfirmation = false
     @State private var filesToDelete: [FileItem] = []
-    @State private var contentOpacity: Double = 0
+    @State private var contentOpacity: Double = 1
     @State private var showSettings = false
     @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
     @State private var localDirectory: URL?
@@ -109,9 +109,6 @@ struct DuplicatesView: View {
             Text("This will permanently delete \(filesToDelete.count) file(s). This cannot be undone.")
         }
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
             consumePendingHandoffIfNeeded()
         }
         .onChange(of: effectiveDirectory) { _, _ in

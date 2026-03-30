@@ -60,4 +60,55 @@ class ExclusionRulesTests: XCTestCase {
         let file = FileItem(path: "/p/a.tmp", name: "a", extension: "tmp", size: 0, isDirectory: false)
         XCTAssertFalse(manager.shouldExclude(file))
     }
+
+    @MainActor
+    func testRemoveLegacyLearningsLinkedRulesKeepsManualRules() {
+        let legacyRule = ExclusionRule(
+            type: .folderName,
+            pattern: "Cache",
+            description: ExclusionRulesManager.legacyLearningsLinkedDescription
+        )
+        let manualRule = ExclusionRule(
+            type: .folderName,
+            pattern: "Cache",
+            description: "User-created cache exclusion"
+        )
+
+        manager.addRule(legacyRule)
+        manager.addRule(manualRule)
+
+        manager.removeLegacyLearningsLinkedRules()
+
+        XCTAssertFalse(manager.rules.contains(where: { $0.id == legacyRule.id }))
+        XCTAssertTrue(manager.rules.contains(where: { $0.id == manualRule.id }))
+    }
+
+    @MainActor
+    func testRemoveLegacyLearningsLinkedRulesMatchingPatternOnlyRemovesMatchingRule() {
+        let matchingLegacyRule = ExclusionRule(
+            type: .folderName,
+            pattern: "Cache",
+            description: ExclusionRulesManager.legacyLearningsLinkedDescription
+        )
+        let otherLegacyRule = ExclusionRule(
+            type: .folderName,
+            pattern: "Temp",
+            description: ExclusionRulesManager.legacyLearningsLinkedDescription
+        )
+        let manualRule = ExclusionRule(
+            type: .folderName,
+            pattern: "Cache",
+            description: "Manual cache exclusion"
+        )
+
+        manager.addRule(matchingLegacyRule)
+        manager.addRule(otherLegacyRule)
+        manager.addRule(manualRule)
+
+        manager.removeLegacyLearningsLinkedRules(matchingLearningPattern: "/Users/test/Downloads/Cache")
+
+        XCTAssertFalse(manager.rules.contains(where: { $0.id == matchingLegacyRule.id }))
+        XCTAssertTrue(manager.rules.contains(where: { $0.id == otherLegacyRule.id }))
+        XCTAssertTrue(manager.rules.contains(where: { $0.id == manualRule.id }))
+    }
 }

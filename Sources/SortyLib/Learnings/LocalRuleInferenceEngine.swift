@@ -518,23 +518,24 @@ extension LearningsManager {
     
     /// Run local rule inference without requiring AI
     public func runLocalRuleInference() async {
-        guard var profile = currentProfile else { return }
+        guard let profile = currentProfile else { return }
+        var workingProfile = filteredLearningProfile(from: profile)
         
         let engine = LocalRuleInferenceEngine()
-        let inferredRules = await engine.inferRules(from: profile)
+        let inferredRules = await engine.inferRules(from: workingProfile)
         
         // Merge with existing rules, preferring existing ones
-        var existingRulePatterns = Set(profile.inferredRules.map { "\($0.pattern)|\($0.template)" })
+        var existingRulePatterns = Set(workingProfile.inferredRules.map { "\($0.pattern)|\($0.template)" })
         
         for newRule in inferredRules {
             let key = "\(newRule.pattern)|\(newRule.template)"
             if !existingRulePatterns.contains(key) {
-                profile.inferredRules.append(newRule)
+                workingProfile.inferredRules.append(newRule)
                 existingRulePatterns.insert(key)
             }
         }
         
-        currentProfile = profile
+        currentProfile = workingProfile
         await forceSave()
         
         LogManager.shared.log("Local rule inference complete: \(inferredRules.count) new rules inferred", category: "Learnings")

@@ -3196,6 +3196,54 @@ public struct ExtensionCommunication {
         }
     }
 
+    public struct FinderIntegrationAvailabilityStatus: Sendable, Equatable {
+        enum State: Sendable, Equatable {
+            case featureDisabled
+            case checking
+            case setupPending
+            case ready
+        }
+
+        let state: State
+        let title: String
+        let detail: String
+    }
+
+    static func finderIntegrationAvailabilityStatus(
+        featureFlagEnabled: Bool,
+        diagnostics: FinderSyncDiagnostics?
+    ) -> FinderIntegrationAvailabilityStatus {
+        guard featureFlagEnabled else {
+            return FinderIntegrationAvailabilityStatus(
+                state: .featureDisabled,
+                title: "Feature Flag Disabled",
+                detail: "Turn this on to show Sorty's Finder integration controls and setup flow."
+            )
+        }
+
+        guard let diagnostics else {
+            return FinderIntegrationAvailabilityStatus(
+                state: .checking,
+                title: "Checking Finder Sync",
+                detail: "Sorty is checking whether the macOS Finder Sync extension is enabled."
+            )
+        }
+
+        if diagnostics.isOperational {
+            return FinderIntegrationAvailabilityStatus(
+                state: .ready,
+                title: diagnostics.isVerifiedWorking ? "Finder Sync Verified" : "Finder Sync Registered",
+                detail: diagnostics.detailMessage
+            )
+        }
+
+        return FinderIntegrationAvailabilityStatus(
+            state: .setupPending,
+            title: "Finder Sync Needs Setup",
+            detail: "Finder integration is enabled in Sorty, but the macOS Finder Sync extension is currently \(diagnostics.statusText.lowercased()). Open Settings -> Finder Integration and run Repair to finish setup."
+        )
+    }
+
     /// Get current integration status
     public static func getIntegrationStatus() -> FinderIntegrationStatus {
         let finderSyncEnabled = isFinderSyncExtensionActive()

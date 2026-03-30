@@ -99,14 +99,20 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
         configuration.label
             .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
             .lineLimit(1)
-            .foregroundColor(.white)
+            .foregroundColor(isSecondary ? .primary : .white)
             .padding(.horizontal, size == .small ? 16 : 22)
             .padding(.vertical, size == .small ? 8 : 10)
             .background(
                 ZStack {
                     if isSecondary {
                         Capsule()
-                            .fill(Color.secondary.opacity(0.3))
+                            .fill(Color(nsColor: .controlBackgroundColor).opacity(colorScheme == .dark ? 0.92 : 0.98))
+
+                        Capsule()
+                            .strokeBorder(
+                                Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.08),
+                                lineWidth: 1
+                            )
                     } else {
                         Capsule()
                             .fill(
@@ -153,11 +159,73 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
                     }
                 }
             )
-            .shadow(color: isSecondary ? .clear : Color.accentColor.opacity(0.3), radius: 8, x: 0, y: 4)
+            .shadow(
+                color: isSecondary
+                    ? Color.black.opacity(colorScheme == .dark ? 0.14 : 0.05)
+                    : Color.accentColor.opacity(0.3),
+                radius: 8,
+                x: 0,
+                y: 4
+            )
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { oldValue, newValue in
+                if newValue {
+                    HapticFeedbackManager.shared.tap()
+                }
+            }
+    }
+}
+
+/// Pill button style with a caller-provided fill color for semantic actions.
+public struct TintedPillButtonStyle: ButtonStyle {
+    var fillColor: Color
+    var foregroundColor: Color = .white
+    var size: ControlSize = .regular
+
+    public init(fillColor: Color, foregroundColor: Color = .white, size: ControlSize = .regular) {
+        self.fillColor = fillColor
+        self.foregroundColor = foregroundColor
+        self.size = size
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
+            .lineLimit(1)
+            .foregroundColor(foregroundColor)
+            .padding(.horizontal, size == .small ? 16 : 22)
+            .padding(.vertical, size == .small ? 8 : 10)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(fillColor.opacity(configuration.isPressed ? 0.88 : 1.0))
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.14),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                    Capsule()
+                        .strokeBorder(
+                            fillColor.opacity(0.35),
+                            lineWidth: 1
+                        )
+                }
+            )
+            .shadow(color: fillColor.opacity(0.24), radius: 8, x: 0, y: 4)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.92 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, newValue in
                 if newValue {
                     HapticFeedbackManager.shared.tap()
                 }
@@ -274,6 +342,16 @@ extension ButtonStyle where Self == OnboardingPillButtonStyle {
     
     public static func onboardingPill(isSecondary: Bool, size: ControlSize = .regular) -> OnboardingPillButtonStyle {
         OnboardingPillButtonStyle(isSecondary: isSecondary, size: size)
+    }
+}
+
+extension ButtonStyle where Self == TintedPillButtonStyle {
+    public static func tintedPill(
+        _ fillColor: Color,
+        foreground foregroundColor: Color = .white,
+        size: ControlSize = .regular
+    ) -> TintedPillButtonStyle {
+        TintedPillButtonStyle(fillColor: fillColor, foregroundColor: foregroundColor, size: size)
     }
 }
 

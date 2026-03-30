@@ -31,7 +31,7 @@ What actually happened?
 
 **Configuration:**
 - AI Provider: [e.g., OpenAI, Ollama, Apple Foundation Models]
-- Model: [e.g., gpt-5-mini, llama4]
+- Model: [e.g., gpt-5.4-mini, llama3.1]
 - Persona: [e.g., General, Developer, Custom]
 
 ## Diagnostic Information

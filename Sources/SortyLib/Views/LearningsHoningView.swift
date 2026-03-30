@@ -114,8 +114,6 @@ struct LearningsHoningView: View {
             .padding(.bottom, 30)
         }
         .padding(.horizontal, 40)
-        .liquidGlassCard(cornerRadius: 16)
-        .padding(20)
     }
     
     // MARK: - Question

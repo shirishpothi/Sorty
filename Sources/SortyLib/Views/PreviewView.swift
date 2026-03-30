@@ -132,7 +132,12 @@ struct PreviewView: View {
             showRedoModelPicker = true
         }
         .sheet(isPresented: $showPostOrganizationHoning) { PostOrganizationHoningView(fileCount: editablePlan.totalFiles, folderCount: editablePlan.totalFolders, config: settingsViewModel.config, onComplete: { answers in Task { await learningsManager.saveHoningResults(answers); showPostOrganizationHoning = false } }, onSkip: { showPostOrganizationHoning = false }) }
-        .sheet(isPresented: $showRedoModelPicker) { ModelSelectionPopover(isPresented: $showRedoModelPicker, currentProvider: settingsViewModel.config.provider, currentModel: settingsViewModel.config.model, onSelect: redoWithProviderAndModel) }
+        .modelSelectionOverlay(
+            isPresented: $showRedoModelPicker,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model,
+            onSelect: redoWithProviderAndModel
+        )
         .environmentObject(dragDropManager)
         .background(Color(NSColor.windowBackgroundColor))
     }

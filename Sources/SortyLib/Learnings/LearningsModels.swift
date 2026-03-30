@@ -69,6 +69,179 @@ public enum RuleStatus: String, Codable, Sendable {
     case cooldown
 }
 
+// MARK: - Session Timeline
+
+public enum OrganizationSessionReaction: String, Codable, Sendable {
+    case inProgress
+    case accepted
+    case corrected
+    case reverted
+    case cancelled
+    case regenerated
+}
+
+public enum OrganizationSessionEventKind: String, Codable, Sendable {
+    case started
+    case applied
+    case completionPending
+    case accepted
+    case correction
+    case rejection
+    case reverted
+    case cancelled
+    case regenerated
+    case additionalInstruction
+    case guidingInstruction
+    case steeringPrompt
+    case renameFeedback
+}
+
+public struct OrganizationSessionEvent: Codable, Identifiable, Sendable {
+    public let id: String
+    public let timestamp: Date
+    public let kind: OrganizationSessionEventKind
+    public let summary: String
+    public let sourcePath: String?
+    public let destinationPath: String?
+    public let ruleId: String?
+    public let metadata: [String: String]?
+
+    public init(
+        id: String = UUID().uuidString,
+        timestamp: Date = Date(),
+        kind: OrganizationSessionEventKind,
+        summary: String,
+        sourcePath: String? = nil,
+        destinationPath: String? = nil,
+        ruleId: String? = nil,
+        metadata: [String: String]? = nil
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.kind = kind
+        self.summary = summary
+        self.sourcePath = sourcePath
+        self.destinationPath = destinationPath
+        self.ruleId = ruleId
+        self.metadata = metadata
+    }
+}
+
+public struct OrganizationSessionMovedFile: Codable, Sendable {
+    public let sourcePath: String
+    public let destinationPath: String
+    public let fileName: String
+    public let destinationFolderPath: String
+    public var ruleId: String?
+
+    public init(
+        sourcePath: String,
+        destinationPath: String,
+        fileName: String? = nil,
+        destinationFolderPath: String? = nil,
+        ruleId: String? = nil
+    ) {
+        self.sourcePath = sourcePath
+        self.destinationPath = destinationPath
+        self.fileName = fileName ?? URL(fileURLWithPath: sourcePath).lastPathComponent
+        self.destinationFolderPath = destinationFolderPath ?? URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path
+        self.ruleId = ruleId
+    }
+}
+
+public struct OrganizationSessionFolderPattern: Codable, Sendable {
+    public let relativePath: String
+    public let folderName: String
+    public let fileCount: Int
+    public let fileExtensions: [String]
+    public let sampleFileNames: [String]
+
+    public init(
+        relativePath: String,
+        folderName: String,
+        fileCount: Int,
+        fileExtensions: [String] = [],
+        sampleFileNames: [String] = []
+    ) {
+        self.relativePath = relativePath
+        self.folderName = folderName
+        self.fileCount = fileCount
+        self.fileExtensions = fileExtensions
+        self.sampleFileNames = sampleFileNames
+    }
+}
+
+public struct OrganizationSession: Codable, Identifiable, Sendable {
+    public let id: String
+    public var timestamp: Date
+    public var completedAt: Date?
+    public var folderPath: String
+    public var historyEntryId: String?
+    public var planSummary: String?
+    public var steeringPrompts: [String]
+    public var additionalInstructions: [UserInstruction]
+    public var guidingInstructions: [UserInstruction]
+    public var userCorrections: [DirectoryChange]
+    public var renameFeedback: [RenameFeedbackEvent]
+    public var wasReverted: Bool
+    public var appliedRules: [String: String]
+    public var usedRuleIds: Set<String>
+    public var failedRuleIds: Set<String>
+    public var filesMoved: [OrganizationSessionMovedFile]
+    public var folderPatterns: [OrganizationSessionFolderPattern]
+    public var reaction: OrganizationSessionReaction
+    public var timeToReaction: TimeInterval?
+    public var events: [OrganizationSessionEvent]
+
+    public init(
+        id: String = UUID().uuidString,
+        timestamp: Date = Date(),
+        completedAt: Date? = nil,
+        folderPath: String,
+        historyEntryId: String? = nil,
+        planSummary: String? = nil,
+        steeringPrompts: [String] = [],
+        additionalInstructions: [UserInstruction] = [],
+        guidingInstructions: [UserInstruction] = [],
+        userCorrections: [DirectoryChange] = [],
+        renameFeedback: [RenameFeedbackEvent] = [],
+        wasReverted: Bool = false,
+        appliedRules: [String: String] = [:],
+        usedRuleIds: Set<String> = [],
+        failedRuleIds: Set<String> = [],
+        filesMoved: [OrganizationSessionMovedFile] = [],
+        folderPatterns: [OrganizationSessionFolderPattern] = [],
+        reaction: OrganizationSessionReaction = .inProgress,
+        timeToReaction: TimeInterval? = nil,
+        events: [OrganizationSessionEvent] = []
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        self.completedAt = completedAt
+        self.folderPath = folderPath
+        self.historyEntryId = historyEntryId
+        self.planSummary = planSummary
+        self.steeringPrompts = steeringPrompts
+        self.additionalInstructions = additionalInstructions
+        self.guidingInstructions = guidingInstructions
+        self.userCorrections = userCorrections
+        self.renameFeedback = renameFeedback
+        self.wasReverted = wasReverted
+        self.appliedRules = appliedRules
+        self.usedRuleIds = usedRuleIds
+        self.failedRuleIds = failedRuleIds
+        self.filesMoved = filesMoved
+        self.folderPatterns = folderPatterns
+        self.reaction = reaction
+        self.timeToReaction = timeToReaction
+        self.events = events
+    }
+
+    public var acceptedWithoutCorrections: Bool {
+        reaction == .accepted && userCorrections.isEmpty && !wasReverted
+    }
+}
+
 // MARK: - Inferred Rule
 
 /// A regex + template rule learned from examples
@@ -520,6 +693,175 @@ public struct LearningsImpactSummary: Sendable {
         self.rejectedOrganizations = rejectedOrganizations
         self.cancelledOrganizations = cancelledOrganizations
         self.regeneratedOrganizations = regeneratedOrganizations
+    }
+}
+
+// MARK: - Reference Model Directory
+
+/// A directory used as a reference for organization structure and naming conventions.
+/// Sorty scans these directories (structure and folder names only) to learn how the user
+/// prefers to organize files, then injects that context into AI prompts.
+public struct ReferenceModelDirectory: Codable, Identifiable, Hashable, Sendable {
+    public let id: String
+    public let path: String
+    public var displayName: String
+    public var isEnabled: Bool
+    public var bookmarkData: Data?
+    public var lastScannedAt: Date?
+    public var scanSnapshot: ReferenceDirectorySnapshot?
+    
+    public init(
+        id: String = UUID().uuidString,
+        path: String,
+        displayName: String? = nil,
+        isEnabled: Bool = true,
+        bookmarkData: Data? = nil,
+        lastScannedAt: Date? = nil,
+        scanSnapshot: ReferenceDirectorySnapshot? = nil
+    ) {
+        self.id = id
+        self.path = path
+        self.displayName = displayName ?? URL(fileURLWithPath: path).lastPathComponent
+        self.isEnabled = isEnabled
+        self.bookmarkData = bookmarkData
+        self.lastScannedAt = lastScannedAt
+        self.scanSnapshot = scanSnapshot
+    }
+    
+    /// Canonical path for deduplication (resolves symlinks, trailing slashes)
+    public var canonicalPath: String {
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        return url.path
+    }
+    
+    /// Whether the directory currently exists on disk
+    public var isAccessible: Bool {
+        var isDir: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDir) && isDir.boolValue
+    }
+}
+
+// MARK: - Reference Directory Snapshot
+
+/// Cached scan results for a reference model directory
+public struct ReferenceDirectorySnapshot: Codable, Hashable, Sendable {
+    public let scannedAt: Date
+    public let folderHierarchy: [ReferenceFolder]
+    public let namingConventions: [String]
+    public let totalFolderCount: Int
+    public let totalFileCount: Int
+    
+    public init(
+        scannedAt: Date,
+        folderHierarchy: [ReferenceFolder],
+        namingConventions: [String],
+        totalFolderCount: Int,
+        totalFileCount: Int
+    ) {
+        self.scannedAt = scannedAt
+        self.folderHierarchy = folderHierarchy
+        self.namingConventions = namingConventions
+        self.totalFolderCount = totalFolderCount
+        self.totalFileCount = totalFileCount
+    }
+}
+
+/// A single folder entry within a reference directory scan
+public struct ReferenceFolder: Codable, Hashable, Sendable {
+    public let relativePath: String
+    public let name: String
+    public let depth: Int
+    public let fileCount: Int
+    public let fileTypeDistribution: [String: Int]
+    public let sampleFileNames: [String]
+    
+    public init(
+        relativePath: String,
+        name: String,
+        depth: Int,
+        fileCount: Int,
+        fileTypeDistribution: [String: Int],
+        sampleFileNames: [String]
+    ) {
+        self.relativePath = relativePath
+        self.name = name
+        self.depth = depth
+        self.fileCount = fileCount
+        self.fileTypeDistribution = fileTypeDistribution
+        self.sampleFileNames = sampleFileNames
+    }
+}
+
+public struct LearningsModelSelection: Codable, Sendable, Equatable {
+    public var provider: AIProvider
+    public var model: String
+
+    public init(provider: AIProvider, model: String) {
+        self.provider = provider
+        self.model = model
+    }
+}
+
+// MARK: - Inline Learning Moments
+
+/// A contextual, folder-specific question shown after organization completes
+public struct InlineLearningMoment: Identifiable, Codable, Sendable {
+    public let id: String
+    public let sessionId: String?
+    public let folderPath: String
+    public let prompt: String
+    public let options: [String]
+    public let kind: Kind
+    public let relatedFilePath: String?
+    public let timestamp: Date
+    
+    public enum Kind: String, Codable, Sendable {
+        case folderPlacement    // "Should X go in A or B?"
+        case folderNaming       // "Is 'Invoices' or 'Financial Documents' better?"
+        case fileGrouping       // "Should these be kept together?"
+    }
+    
+    public init(
+        id: String = UUID().uuidString,
+        sessionId: String? = nil,
+        folderPath: String,
+        prompt: String,
+        options: [String],
+        kind: Kind,
+        relatedFilePath: String? = nil,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.sessionId = sessionId
+        self.folderPath = folderPath
+        self.prompt = prompt
+        self.options = options
+        self.kind = kind
+        self.relatedFilePath = relatedFilePath
+        self.timestamp = timestamp
+    }
+}
+
+/// The user's answer to an inline learning moment
+public struct InlineLearningMomentAnswer: Codable, Sendable, Identifiable {
+    public let id: String
+    public let momentId: String
+    public let sessionId: String?
+    public let selectedOption: String
+    public let timestamp: Date
+    
+    public init(
+        id: String = UUID().uuidString,
+        momentId: String,
+        sessionId: String? = nil,
+        selectedOption: String,
+        timestamp: Date = Date()
+    ) {
+        self.id = id
+        self.momentId = momentId
+        self.sessionId = sessionId
+        self.selectedOption = selectedOption
+        self.timestamp = timestamp
     }
 }
 

@@ -19,6 +19,53 @@ final class FinderIntegrationStatusTests: XCTestCase {
         XCTAssertEqual(status.overallStatus, "Active")
     }
 
+    func testFinderIntegrationAvailabilityStatusReflectsDisabledFeatureFlag() {
+        let status = ExtensionCommunication.finderIntegrationAvailabilityStatus(
+            featureFlagEnabled: false,
+            diagnostics: nil
+        )
+
+        XCTAssertEqual(status.state, .featureDisabled)
+        XCTAssertEqual(status.title, "Feature Flag Disabled")
+    }
+
+    func testFinderIntegrationAvailabilityStatusFlagsIncompleteFinderSyncSetup() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: false)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: nil
+        )
+
+        let status = ExtensionCommunication.finderIntegrationAvailabilityStatus(
+            featureFlagEnabled: true,
+            diagnostics: diagnostics
+        )
+
+        XCTAssertEqual(status.state, .setupPending)
+        XCTAssertTrue(status.detail.contains("currently disabled"))
+    }
+
+    func testFinderIntegrationAvailabilityStatusReflectsReadyFinderSync() {
+        let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
+            entries: [.init(path: preferredExtensionPath, isEnabled: true)],
+            preferredPath: preferredExtensionPath,
+            heartbeat: .init(
+                event: "launch",
+                bundleIdentifier: "com.sorty.app.SortyFinderSync",
+                path: preferredExtensionPath,
+                reportedAt: Date()
+            )
+        )
+
+        let status = ExtensionCommunication.finderIntegrationAvailabilityStatus(
+            featureFlagEnabled: true,
+            diagnostics: diagnostics
+        )
+
+        XCTAssertEqual(status.state, .ready)
+        XCTAssertEqual(status.title, "Finder Sync Verified")
+    }
+
     func testAsyncIntegrationStatusReturnsWithoutThrowing() async {
         let status = await ExtensionCommunication.getIntegrationStatusAsync()
         XCTAssertGreaterThanOrEqual(status.integrationCount, 0)

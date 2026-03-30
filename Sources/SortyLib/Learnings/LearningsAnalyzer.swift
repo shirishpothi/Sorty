@@ -22,6 +22,7 @@ public class LearningsAnalyzer: ObservableObject {
     // MARK: - Dependencies
     
     private let ruleInducer = RuleInducer() // Legacy pattern matcher
+    private let localRuleInferenceEngine = LocalRuleInferenceEngine()
     private var llmInducer: LLMRuleInducer?
     private let contentAnalyzer = ContentAnalyzer()
     
@@ -49,8 +50,8 @@ public class LearningsAnalyzer: ObservableObject {
             currentStatus = ""
         }
         
-        // Step 1: LLM Rule Induction (Primary) if available
-        currentStatus = "Asking AI to find patterns..."
+        // Step 1: Gather rules from the strongest available signals.
+        currentStatus = "Reviewing recent learnings..."
         progress = 0.1
         
         var rules: [InferredRule] = []
@@ -58,9 +59,13 @@ public class LearningsAnalyzer: ObservableObject {
         
         // Combine manual corrections/rejections/positive examples into training set
         let trainingExamples = profile.corrections + profile.rejections + profile.positiveExamples
+
+        let localRules = await localRuleInferenceEngine.inferRules(from: profile)
+        rules.append(contentsOf: localRules)
         
         if let llm = llmInducer {
             // Enhanced rule induction with steering prompts and guiding instructions
+            currentStatus = "Asking AI to find patterns..."
             let aiRules = await llm.induceRules(
                 from: trainingExamples,
                 exampleFolders: exampleFolderURLs,
@@ -71,57 +76,56 @@ public class LearningsAnalyzer: ObservableObject {
             rules.append(contentsOf: aiRules)
         }
         
-        // Fallback/Supplement: Pattern Rule Induction
-        if rules.isEmpty {
-            currentStatus = "Scanning for regex patterns..."
-            let legacyRules = await ruleInducer.induceRules(
-                from: trainingExamples,
-                exampleFolders: exampleFolderURLs
-            )
-            rules.append(contentsOf: legacyRules)
-        }
+        // Legacy pattern induction still adds value for template extraction from examples.
+        currentStatus = "Scanning for structural patterns..."
+        let legacyRules = await ruleInducer.induceRules(
+            from: trainingExamples,
+            exampleFolders: exampleFolderURLs
+        )
+        rules.append(contentsOf: legacyRules)
+        rules = mergeRules(rules)
         
         progress = 0.3
         
-        // Step 2: Scan root paths for files to organize
-        currentStatus = "Scanning files..."
-        var allFiles: [URL] = []
-        
-        for rootPath in rootPaths {
-            let rootURL = URL(fileURLWithPath: rootPath)
-            let files = await scanDirectory(rootURL, sampleSize: 100) // Hardcoded sample size for now or pass in config
-            allFiles.append(contentsOf: files)
-        }
-        
-        progress = 0.5
-        
-        // Step 3: Generate proposals for each file
-        currentStatus = "Generating proposals..."
         var mappings: [ProposedMapping] = []
         var conflicts: [MappingConflict] = []
-        var destinationCounts: [String: [String]] = [:]  // dst -> [src paths]
         
-        guard let primaryRootPath = rootPaths.first else {
-            throw LearningsError.emptyRootPaths
-        }
-        
-        for (index, fileURL) in allFiles.enumerated() {
-            let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: primaryRootPath)
-            mappings.append(mapping)
+        if let primaryRootPath = rootPaths.first {
+            // Step 2: Scan root paths for files to organize
+            currentStatus = "Scanning files..."
+            var allFiles: [URL] = []
             
-            // Track for conflict detection
-            destinationCounts[mapping.proposedDstPath, default: []].append(mapping.srcPath)
+            for rootPath in rootPaths {
+                let rootURL = URL(fileURLWithPath: rootPath)
+                let files = await scanDirectory(rootURL, sampleSize: 100)
+                allFiles.append(contentsOf: files)
+            }
             
-            progress = 0.5 + (Double(index + 1) / Double(allFiles.count)) * 0.4
-        }
-        
-        // Step 4: Detect conflicts
-        for (dst, srcs) in destinationCounts where srcs.count > 1 {
-            conflicts.append(MappingConflict(
-                srcPaths: srcs,
-                proposedDstPath: dst,
-                suggestedResolution: .autoSuffix
-            ))
+            progress = 0.5
+            
+            // Step 3: Generate proposals for each file
+            currentStatus = "Generating proposals..."
+            var destinationCounts: [String: [String]] = [:]
+            
+            for (index, fileURL) in allFiles.enumerated() {
+                let mapping = await proposeMapping(for: fileURL, using: rules, rootPath: primaryRootPath)
+                mappings.append(mapping)
+                
+                destinationCounts[mapping.proposedDstPath, default: []].append(mapping.srcPath)
+                
+                progress = 0.5 + (Double(index + 1) / Double(allFiles.count)) * 0.4
+            }
+            
+            // Step 4: Detect conflicts
+            for (dst, srcs) in destinationCounts where srcs.count > 1 {
+                conflicts.append(MappingConflict(
+                    srcPaths: srcs,
+                    proposedDstPath: dst,
+                    suggestedResolution: .autoSuffix
+                ))
+            }
+        } else {
+            currentStatus = "Finalizing insights..."
         }
         
         progress = 0.95
@@ -350,10 +354,50 @@ public class LearningsAnalyzer: ObservableObject {
             summary.append("• \(rule.explanation)")
         }
         
-        // Confidence overview
-        let confidenceSummary = calculateConfidenceSummary(mappings)
-        summary.append("Proposal confidence: \(confidenceSummary.high) high, \(confidenceSummary.medium) medium, \(confidenceSummary.low) low")
+        // Confidence overview (only when proposals were generated)
+        if !mappings.isEmpty {
+            let confidenceSummary = calculateConfidenceSummary(mappings)
+            summary.append("Proposal confidence: \(confidenceSummary.high) high, \(confidenceSummary.medium) medium, \(confidenceSummary.low) low")
+        }
         
         return summary
+    }
+
+    private func mergeRules(_ rules: [InferredRule]) -> [InferredRule] {
+        guard !rules.isEmpty else { return [] }
+
+        var merged: [String: InferredRule] = [:]
+
+        for rule in rules {
+            let key = "\(rule.pattern)|\(rule.template)"
+
+            if let existing = merged[key] {
+                merged[key] = InferredRule(
+                    id: existing.id,
+                    pattern: existing.pattern,
+                    template: existing.template,
+                    metadataCues: Array(Set(existing.metadataCues + rule.metadataCues)),
+                    priority: max(existing.priority, rule.priority),
+                    exampleIds: Array(Set(existing.exampleIds + rule.exampleIds)),
+                    explanation: existing.explanation.count >= rule.explanation.count ? existing.explanation : rule.explanation,
+                    successCount: max(existing.successCount, rule.successCount),
+                    failureCount: max(existing.failureCount, rule.failureCount),
+                    isEnabled: existing.isEnabled && rule.isEnabled,
+                    lastAppliedAt: [existing.lastAppliedAt, rule.lastAppliedAt].compactMap { $0 }.max(),
+                    supportCount: max(existing.supportCount, rule.supportCount),
+                    initialConfidence: rule.initialConfidence ?? existing.initialConfidence,
+                    scope: existing.scope == .global ? rule.scope : existing.scope,
+                    status: existing.status == .active ? .active : rule.status,
+                    evidenceIds: Array(Set(existing.evidenceIds + rule.evidenceIds)),
+                    evidenceDescription: existing.evidenceDescription ?? rule.evidenceDescription,
+                    rejectedAt: existing.rejectedAt,
+                    cooldownUntil: existing.cooldownUntil
+                )
+            } else {
+                merged[key] = rule
+            }
+        }
+
+        return merged.values.sorted { $0.priority > $1.priority }
     }
 }

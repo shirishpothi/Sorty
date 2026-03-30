@@ -378,43 +378,31 @@ public extension Animation {
     static var sortySpringStandard: Animation { SortyDesignSystem.Animation.springStandard }
     static var sortySpringBouncy: Animation { SortyDesignSystem.Animation.springBouncy }
     static var sortySpringSnappy: Animation { SortyDesignSystem.Animation.springSnappy }
-    static var sortyPageTransition: Animation { .easeInOut(duration: SortyDesignSystem.Animation.pageTransition) }
+    static var sortyPageTransition: Animation { .spring(response: 0.3, dampingFraction: 0.88) }
 }
 
 // MARK: - Transition Extensions
 public extension AnyTransition {
     static var sortyScaleAndFade: AnyTransition {
-        .asymmetric(
-            insertion: .scale(scale: 0.97).combined(with: .opacity),
-            removal: .scale(scale: 0.97).combined(with: .opacity)
-        )
+        .opacity
     }
     
     static var sortySlideFromRight: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .offset(x: 20)),
-            removal: .opacity.combined(with: .offset(x: -20))
-        )
+        .opacity
     }
     
     static var sortySlideFromLeft: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .offset(x: -20)),
-            removal: .opacity.combined(with: .offset(x: 20))
-        )
+        .opacity
     }
     
     static var sortySlideFromBottom: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .offset(y: 15)),
-            removal: .opacity.combined(with: .offset(y: -15))
-        )
+        .opacity
     }
     
     static var sortyModal: AnyTransition {
         .asymmetric(
-            insertion: .scale(scale: 0.95).combined(with: .opacity),
-            removal: .scale(scale: 0.98).combined(with: .opacity)
+            insertion: .scale(scale: 0.97).combined(with: .opacity),
+            removal: .scale(scale: 0.97).combined(with: .opacity)
         )
     }
 }

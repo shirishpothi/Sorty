@@ -28,15 +28,13 @@ struct DirectorySelectionView: View {
                         .font(.title)
                         .fontWeight(.bold)
                         .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 10)
 
                     Text("Drag and drop a folder here, or click to browse")
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 10)
                 }
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+                .animation(.easeOut(duration: 0.2).delay(0.05), value: hasAppeared)
                 
                 dropZone
                 
@@ -61,8 +59,7 @@ struct DirectorySelectionView: View {
                     if hovering { HapticFeedbackManager.shared.selection() }
                 }
                 .opacity(hasAppeared ? 1 : 0)
-                .offset(y: hasAppeared ? 0 : 10)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+                .animation(.easeOut(duration: 0.2).delay(0.1), value: hasAppeared)
                 .accessibilityIdentifier("BrowseForFolderButton")
                 
                 if settingsViewModel.config.enableSmartRename {
@@ -100,8 +97,7 @@ struct DirectorySelectionView: View {
                     }
                     .padding(.top, 8)
                     .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 10)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.35), value: hasAppeared)
+                    .animation(.easeOut(duration: 0.2).delay(0.13), value: hasAppeared)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -111,7 +107,7 @@ struct DirectorySelectionView: View {
             
             quickTips
                 .opacity(hasAppeared ? 1 : 0)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.4), value: hasAppeared)
+                .animation(.easeOut(duration: 0.2).delay(0.15), value: hasAppeared)
         }
         .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)

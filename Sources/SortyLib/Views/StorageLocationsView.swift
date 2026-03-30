@@ -14,7 +14,7 @@ struct StorageLocationsView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var selectedLocationForEdit: StorageLocation?
-    @State private var contentOpacity: Double = 0
+    @State private var contentOpacity: Double = 1
     @State private var suggestedLocationName: String? = nil
     @State private var addLocationErrorMessage: String?
 
@@ -101,10 +101,6 @@ struct StorageLocationsView: View {
         }
         .opacity(contentOpacity)
         .onAppear {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                contentOpacity = 1.0
-            }
-            // Restore security-scoped access on appear
             storageLocationsManager.restoreSecurityScopedAccess()
         }
         .navigationTitle("Storage Locations")

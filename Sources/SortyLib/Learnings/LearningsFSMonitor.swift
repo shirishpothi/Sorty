@@ -146,6 +146,9 @@ public class LearningsFSMonitor: ObservableObject {
     
     /// Callback for files removed from monitored scope (moved outside or deleted)
     public var onFileRemoved: ((String) -> Void)?
+
+    /// Callback when the correlation window expires for a monitored directory.
+    public var onMonitoringWindowExpired: ((URL) -> Void)?
     
     /// Correlation window in seconds (default 30 minutes)
     public var correlationWindowSeconds: TimeInterval = 30 * 60
@@ -336,6 +339,7 @@ public class LearningsFSMonitor: ObservableObject {
             guard !Task.isCancelled else { return }
             
             LogManager.shared.log("Correlation window expired for: \(directory.lastPathComponent)", category: "LearningsFSMonitor")
+            self.onMonitoringWindowExpired?(directory)
             self.stopMonitoring(directory: directory)
         }
     }
