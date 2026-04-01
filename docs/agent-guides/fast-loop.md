@@ -104,3 +104,11 @@ SortyLib is a monolithic target (199 files, ~85K lines). Clean builds take ~160s
 - **Use `make test-fast`** to run only unit tests (excludes slow integration tests)
 - **Close Xcode** when using SPM builds — Xcode's indexer competes for resources
 - **For liquid glass changes, do a visual check** — compile/test success is not enough. Compare against `AboutView` if the goal is “system liquid glass”, because native `.popover` or `.sheet` chrome can look wrong even when `glassEffect` compiles.
+
+### Liquid Glass Regression Guard
+
+Before merging any dropdown/popover changes that should be "system liquid glass":
+- Verify no custom material was introduced in that path (`.regularMaterial`, `.thinMaterial`, `.ultraThinMaterial`).
+- Verify the implementation uses system presentation and `glassEffect` where available.
+- If `glassEffect` is unavailable on the target OS, keep default system presentation (no custom material simulation).
+- Do a runtime visual check; build success alone is not sufficient.

@@ -12,6 +12,7 @@ import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 import CryptoKit
+import PDFKit
 
 public final class ImageVisionAnalyzer: Sendable {
     private let maxDimension: CGFloat = 1024.0
@@ -98,6 +99,61 @@ public final class ImageVisionAnalyzer: Sendable {
         }
     }
 
+    /// Prepares supported files for multimodal analysis.
+    /// Images are resized/compressed, while PDFs are rendered into per-page JPEG assets.
+    public func prepareFilesForVision(
+        files: [FileItem],
+        baseDirectoryURL: URL? = nil,
+        pdfPageLimit: Int = 2
+    ) async -> [String: Data] {
+        await withTaskGroup(of: [String: Data].self) { group in
+            for file in files {
+                group.addTask {
+                    guard let url = file.url else { return [:] }
+                    let ext = file.extension.lowercased()
+                    let attachmentName = self.attachmentLabel(for: file, baseDirectoryURL: baseDirectoryURL)
+
+                    if ["jpg", "jpeg", "png", "heic", "webp", "tiff", "tif", "bmp", "gif"].contains(ext),
+                       let data = await self.prepareImageForVision(at: url) {
+                        return [attachmentName: data]
+                    }
+
+                    if ext == "pdf" {
+                        return await self.preparePDFForVision(at: url, displayName: attachmentName, maxPages: pdfPageLimit)
+                    }
+
+                    return [:]
+                }
+            }
+
+            var results: [String: Data] = [:]
+            for await partial in group {
+                results.merge(partial) { _, new in new }
+            }
+            return results
+        }
+    }
+
+    private func attachmentLabel(for file: FileItem, baseDirectoryURL: URL?) -> String {
+        guard let baseDirectoryURL else {
+            return file.displayName
+        }
+
+        let filePath = file.path
+        let basePath = baseDirectoryURL.path
+        let resolvedFilePath = URL(fileURLWithPath: filePath).resolvingSymlinksInPath().path
+        let resolvedBasePath = baseDirectoryURL.resolvingSymlinksInPath().path
+
+        if resolvedFilePath.hasPrefix(resolvedBasePath + "/") {
+            return String(resolvedFilePath.dropFirst(resolvedBasePath.count + 1))
+        }
+        if filePath.hasPrefix(basePath + "/") {
+            return String(filePath.dropFirst(basePath.count + 1))
+        }
+
+        return file.displayName
+    }
+
     public func clearVisionCache() {
         Self.clearSharedCache()
     }
@@ -138,6 +194,69 @@ public final class ImageVisionAnalyzer: Sendable {
         guard CGImageDestinationFinalize(destination) else { return nil }
         
         return data as Data
+    }
+
+    private func preparePDFForVision(
+        at url: URL,
+        displayName: String,
+        maxPages: Int
+    ) async -> [String: Data] {
+        await Task.detached(priority: .userInitiated) {
+            guard let document = PDFDocument(url: url) else {
+                DebugLogger.log("ImageVisionAnalyzer: failed to open PDF \(url.lastPathComponent)")
+                return [:]
+            }
+
+            let pagesToRender = min(document.pageCount, maxPages)
+            guard pagesToRender > 0 else {
+                return [:]
+            }
+
+            var rendered: [String: Data] = [:]
+            for pageIndex in 0..<pagesToRender {
+                guard let page = document.page(at: pageIndex),
+                      let image = self.renderPDFPage(page),
+                      let jpegData = self.convertToJPEG(image) else {
+                    continue
+                }
+                rendered["\(displayName) [Page \(pageIndex + 1)]"] = jpegData
+            }
+
+            return rendered
+        }.value
+    }
+
+    private func renderPDFPage(_ page: PDFPage) -> CGImage? {
+        let bounds = page.bounds(for: .mediaBox)
+        guard bounds.width > 0, bounds.height > 0 else { return nil }
+
+        let scale = min(maxDimension / max(bounds.width, bounds.height), 2.0)
+        let renderSize = CGSize(
+            width: max(1, bounds.width * scale),
+            height: max(1, bounds.height * scale)
+        )
+
+        guard let context = CGContext(
+            data: nil,
+            width: Int(renderSize.width),
+            height: Int(renderSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        context.setFillColor(NSColor.white.cgColor)
+        context.fill(CGRect(origin: .zero, size: renderSize))
+        context.saveGState()
+        context.translateBy(x: 0, y: renderSize.height)
+        context.scaleBy(x: scale, y: -scale)
+        page.draw(with: .mediaBox, to: context)
+        context.restoreGState()
+
+        return context.makeImage()
     }
 
     private func cachedImageData(for url: URL) -> Data? {

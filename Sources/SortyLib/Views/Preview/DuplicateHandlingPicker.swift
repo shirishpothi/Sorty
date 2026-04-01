@@ -21,6 +21,7 @@ struct DuplicateHandlingPicker: View {
         .buttonStyle(.plain)
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             popoverContent
+                .systemLiquidGlassPopover(cornerRadius: 12)
         }
         .fixedSize(horizontal: compact, vertical: false)
         .accessibilityLabel("Duplicate handling")

@@ -78,6 +78,23 @@ User preference learning stored in `LearningsProfile`. Secured with biometric au
 - If a view needs to look like the About window, do not assume SwiftUI `.popover` or `.sheet` chrome will preserve that look. The presenter shell can make system glass read like a dark AppKit panel even when `glassEffect` is applied correctly.
 - `ModelSelectionPopover` in Settings and Automation Settings intentionally does **not** use the native popover presenter. It is anchored with `modelSelectorTriggerBounds()` and rendered via `modelSelectionOverlay(...)` from `Sources/SortyLib/Views/ModelSelector.swift`.
 - When updating liquid glass UI, separate the **glass surface** from the **presentation shell**. If the shell is visually wrong, replace the presenter first instead of stacking more material/glass modifiers.
+- For any UI described as "system liquid glass" (especially dropdowns/popovers), use system presentation + system glass only. Do not simulate with custom material.
+- **Do not use** `.regularMaterial`, `.thinMaterial`, `.ultraThinMaterial`, or custom gradient/blur backgrounds to approximate glass in these surfaces.
+- If `glassEffect` is unavailable for the deployment target, prefer default system chrome (no custom material fallback) instead of trying to mimic glass.
+- Reuse shared liquid-glass helpers and keep them system-only; do not add custom material fallback branches.
+
+### Button Styles
+All interactive buttons must use Sorty's pill-style button system defined in `Sources/SortyLib/Utilities/ButtonStyles.swift`. Do **not** use `.buttonStyle(.bordered)` or plain system button styles for action buttons.
+
+| Style | Usage | Example |
+|-------|-------|---------|
+| `.tintedPill(.red, size: .small)` | Destructive/cancel actions | Cancel, Delete |
+| `.tintedPill(.indigo, size: .small)` | Model/AI actions | Model picker |
+| `.onboardingPill(size: .small)` | Primary/positive actions | Regenerate, Choose Folder |
+| `.sortyPrimary` | Main CTA (e.g., Apply) | Apply button |
+| `.sortySecondary(size: .small, color:)` | Secondary actions | Reset |
+
+Always pair buttons with `HapticFeedbackManager.shared.tap()` on press, and use `HStack(spacing: 4)` with an SF Symbol icon + `.caption.bold()` text for compact pill button labels.
 
 ## Common Tasks
 - **Add AI provider**: Create client in `AI/`, implement `AIClientProtocol`, add to `AIProvider` enum + `AIClientFactory`

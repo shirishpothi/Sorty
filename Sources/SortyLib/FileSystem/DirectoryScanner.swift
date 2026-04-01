@@ -160,6 +160,9 @@ actor DirectoryScanner {
         if deepScan {
             contentMetadata = await contentAnalyzer.analyze(fileURL: url)
         }
+
+        let extractedOCRText = contentMetadata?.ocrText
+        let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
         
         // Hash computation for duplicate detection
         var sha256Hash: String?
@@ -178,6 +181,9 @@ actor DirectoryScanner {
             lastAccessDate: lastAccessDate,
             contentMetadata: contentMetadata,
             sha256Hash: sha256Hash,
+            ocrText: extractedOCRText,
+            imageWidth: extractedDimensions?.width,
+            imageHeight: extractedDimensions?.height,
             finderComment: finderComment,
             finderTags: finderTags
         )
@@ -287,6 +293,9 @@ actor DirectoryScanner {
                 deepScanAnalyzedCount += 1
                 deepScanProgressCallback?(deepScanAnalyzedCount, 0)
             }
+
+            let extractedOCRText = contentMetadata?.ocrText
+            let extractedDimensions = Self.extractImageDimensions(from: contentMetadata)
             
             // Hash computation for duplicate detection (skipped under memory pressure)
             var sha256Hash: String?
@@ -305,6 +314,9 @@ actor DirectoryScanner {
                 lastAccessDate: lastAccessDate,
                 contentMetadata: contentMetadata,
                 sha256Hash: sha256Hash,
+                ocrText: extractedOCRText,
+                imageWidth: extractedDimensions?.width,
+                imageHeight: extractedDimensions?.height,
                 cloudStatus: cloudStatus,
                 finderComment: finderComment,
                 finderTags: finderTags
@@ -348,6 +360,21 @@ actor DirectoryScanner {
     }
     
     // MARK: - Finder Metadata
+
+    private static func extractImageDimensions(from metadata: ContentMetadata?) -> (width: Int, height: Int)? {
+        guard let dimensionsString = metadata?.exifData?["dimensions"] else {
+            return nil
+        }
+
+        let parts = dimensionsString.split(separator: "x", maxSplits: 1).map(String.init)
+        guard parts.count == 2,
+              let width = Int(parts[0]),
+              let height = Int(parts[1]) else {
+            return nil
+        }
+
+        return (width, height)
+    }
     
     private static func readFinderComment(at url: URL) -> String? {
         let path = url.path

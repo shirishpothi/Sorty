@@ -264,6 +264,7 @@ final class NotificationActionTests: XCTestCase {
     
     func testNotificationActions() {
         // Verify all action cases exist
+        let apply = NotificationAction.apply
         let undo = NotificationAction.undo
         let openFolder = NotificationAction.openFolder(path: "/test")
         let showDetails = NotificationAction.showDetails
@@ -272,6 +273,12 @@ final class NotificationActionTests: XCTestCase {
         let dismiss = NotificationAction.dismiss
         
         // Basic check that actions are distinct
+        if case .apply = apply {
+            XCTAssertTrue(true)
+        } else {
+            XCTFail("apply action should match .apply")
+        }
+
         if case .undo = undo {
             XCTAssertTrue(true)
         } else {
@@ -546,21 +553,29 @@ final class NotificationManagerNamesTests: XCTestCase {
     
     func testOrganizationNotificationNamesExist() {
         XCTAssertNotNil(NSNotification.Name.undoLastOrganization)
+        XCTAssertNotNil(NSNotification.Name.requestUndoOrganizationConfirmation)
         XCTAssertNotNil(NSNotification.Name.retryLastOrganization)
+        XCTAssertNotNil(NSNotification.Name.requestRetryOrganizationConfirmation)
         XCTAssertNotNil(NSNotification.Name.showOrganizationDetails)
         XCTAssertNotNil(NSNotification.Name.showOrganizationPreview)
+        XCTAssertNotNil(NSNotification.Name.requestApplyOrganizationConfirmation)
         XCTAssertNotNil(NSNotification.Name.openOrganizedFolder)
         XCTAssertNotNil(NSNotification.Name.redoOrganizationWithModel)
+        XCTAssertNotNil(NSNotification.Name.requestRedoOrganizationWithModelConfirmation)
     }
     
     func testOrganizationNotificationNamesAreUnique() {
         let names: [NSNotification.Name] = [
             .undoLastOrganization,
+            .requestUndoOrganizationConfirmation,
             .retryLastOrganization,
+            .requestRetryOrganizationConfirmation,
             .showOrganizationDetails,
             .showOrganizationPreview,
+            .requestApplyOrganizationConfirmation,
             .openOrganizedFolder,
-            .redoOrganizationWithModel
+            .redoOrganizationWithModel,
+            .requestRedoOrganizationWithModelConfirmation
         ]
         
         let uniqueNames = Set(names.map { $0.rawValue })
@@ -780,8 +795,9 @@ final class NotificationTypeExtendedTests: XCTestCase {
             canRetry: true
         )
         
-        if case .processingError(let msg, let critical, let retry, _) = type {
+        if case .processingError(let msg, let folderPath, let critical, let retry, _) = type {
             XCTAssertEqual(msg, "Network timeout")
+            XCTAssertNil(folderPath)
             XCTAssertFalse(critical)
             XCTAssertTrue(retry)
         } else {
@@ -856,5 +872,58 @@ final class NotificationSettingsExtendedTests: XCTestCase {
         XCTAssertEqual(decoded.notifiCLISound, "Hero")
         XCTAssertEqual(decoded.customNotificationIcon, "test-icon")
         XCTAssertTrue(decoded.persistentNotifications)
+    }
+}
+
+// MARK: - Notification Action Curation Tests
+
+@MainActor
+final class NotificationActionCurationTests: XCTestCase {
+
+    func testPreviewReadyActionsPrioritizeReviewThenApply() {
+        let labels = NotificationManager.shared.notificationActionLabels(
+            for: .previewReady(folderName: "Inbox", folderPath: "/tmp/Inbox")
+        )
+
+        XCTAssertEqual(labels, ["Review Plan", "Apply Now", "Try Another Model"])
+    }
+
+    func testProcessingCompleteActionsStayShortAndUseful() {
+        let labels = NotificationManager.shared.notificationActionLabels(
+            for: .processingComplete(
+                fileCount: 24,
+                folderName: "Downloads",
+                folderPath: "/tmp/Downloads",
+                canUndo: true
+            )
+        )
+
+        XCTAssertEqual(labels, ["Open Folder", "Show Details", "Undo", "Try Another Model"])
+    }
+
+    func testConfigurationErrorsSkipRetryAndRedo() {
+        let labels = NotificationManager.shared.notificationActionLabels(
+            for: .processingError(
+                message: "No AI provider configured",
+                folderPath: "/tmp/Downloads",
+                isCritical: false,
+                canRetry: true
+            )
+        )
+
+        XCTAssertEqual(labels, ["Show Details", "Open Folder"])
+    }
+
+    func testTimeoutErrorsPrioritizeRecovery() {
+        let labels = NotificationManager.shared.notificationActionLabels(
+            for: .processingError(
+                message: "Request timed out after 60 seconds",
+                folderPath: "/tmp/Downloads",
+                isCritical: false,
+                canRetry: true
+            )
+        )
+
+        XCTAssertEqual(labels, ["Show Details", "Retry", "Open Folder", "Try Another Model"])
     }
 }

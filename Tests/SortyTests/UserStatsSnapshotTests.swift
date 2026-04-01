@@ -4,21 +4,26 @@ import XCTest
 final class UserStatsSnapshotTests: XCTestCase {
     private var defaults: UserDefaults!
     private let suiteName = "com.sorty.tests.user-stats-snapshot"
+    private var storageDirectory: URL!
 
     override func setUp() {
         super.setUp()
         defaults = UserDefaults(suiteName: suiteName)
         defaults.removePersistentDomain(forName: suiteName)
+        storageDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try? FileManager.default.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
     }
 
     override func tearDown() {
         defaults.removePersistentDomain(forName: suiteName)
+        try? FileManager.default.removeItem(at: storageDirectory)
         defaults = nil
+        storageDirectory = nil
         super.tearDown()
     }
 
     func testLoadReturnsZerosWhenNoHistoryExists() {
-        let stats = UserStatsSnapshot.load(userDefaults: defaults)
+        let stats = UserStatsSnapshot.load(userDefaults: defaults, storageDirectory: storageDirectory)
 
         XCTAssertEqual(stats.sessions, 0)
         XCTAssertEqual(stats.filesOrganized, 0)
@@ -27,6 +32,7 @@ final class UserStatsSnapshotTests: XCTestCase {
         XCTAssertEqual(stats.successRatePercent, 0)
     }
 
+    @MainActor
     func testLoadAggregatesCompletedEntriesAndActiveDays() throws {
         let calendar = Calendar.current
         let dayOne = calendar.startOfDay(for: Date())
@@ -38,9 +44,10 @@ final class UserStatsSnapshotTests: XCTestCase {
             makeEntry(timestamp: dayTwo.addingTimeInterval(120), status: .completed, filesOrganized: 8)
         ]
 
-        defaults.set(try JSONEncoder().encode(entries), forKey: "organizationHistory")
+        let history = OrganizationHistory(userDefaults: defaults, storageDirectory: storageDirectory)
+        entries.forEach { history.addEntry($0) }
 
-        let stats = UserStatsSnapshot.load(userDefaults: defaults)
+        let stats = UserStatsSnapshot.load(userDefaults: defaults, storageDirectory: storageDirectory)
 
         XCTAssertEqual(stats.sessions, 3)
         XCTAssertEqual(stats.filesOrganized, 20)

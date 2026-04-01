@@ -483,12 +483,7 @@ struct BatchOrganizationView: View {
         }
         .frame(maxHeight: 280)
         .animation(.pageTransition, value: batchManager.selectedFolders.count)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(isDropTargeted ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
-        .animation(.easeInOut(duration: 0.2), value: isDropTargeted)
-        .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTargeted) { providers in
+        .siriDropZone(cornerRadius: 8, isTargeted: $isDropTargeted) { providers in
             handleDrop(providers: providers)
         }
     }

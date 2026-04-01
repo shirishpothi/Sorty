@@ -94,6 +94,7 @@ public enum OrganizationSessionEventKind: String, Codable, Sendable {
     case guidingInstruction
     case steeringPrompt
     case renameFeedback
+    case feedback // Quick outcome feedback from history view
 }
 
 public struct OrganizationSessionEvent: Codable, Identifiable, Sendable {

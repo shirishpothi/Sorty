@@ -6,6 +6,8 @@ import SortyLib
 
 struct MainWindowRootView: View {
     @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var openAIAuth: SubscriptionAuthManager
+    @EnvironmentObject private var codexAuth: CodexCLIAuthManager
     @EnvironmentObject private var personaManager: PersonaManager
     @EnvironmentObject private var customPersonaStore: CustomPersonaStore
     @EnvironmentObject private var watchedFoldersManager: WatchedFoldersManager
@@ -23,8 +25,10 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var menuBarController: MenuBarController
 
     @StateObject private var windowSession = WindowSession()
+    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     @State private var handledLaunchRequestID: UUID?
     @State private var handledUITestDeepLink = false
+    @State private var setupRepairTask: Task<Void, Never>?
 
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
@@ -56,6 +60,18 @@ struct MainWindowRootView: View {
                     }
                     windowSession.appState.currentView = .organize
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .requestApplyOrganizationConfirmation)) { notification in
+                routeNotificationActionRequest(
+                    kind: .applyConfirmation,
+                    notification: notification
+                )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .requestRedoOrganizationWithModelConfirmation)) { notification in
+                routeNotificationActionRequest(
+                    kind: .redoWithModelConfirmation,
+                    notification: notification
+                )
             }
             .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { _ in
                 withAnimation(.pageTransition) {
@@ -98,6 +114,7 @@ struct MainWindowRootView: View {
                     automationManager: automationManager,
                     calibrateAction: calibrate
                 )
+                scheduleSetupRepairReconciliation()
                 processLaunchRequestIfNeeded()
                 processUITestDeeplinkIfNeeded()
             }
@@ -108,6 +125,19 @@ struct MainWindowRootView: View {
                 Task { @MainActor in
                     await windowSession.applyConfiguration(newConfig, learningsManager: learningsManager)
                 }
+                scheduleSetupRepairReconciliation()
+            }
+            .onChange(of: windowSession.appState.hasCompletedOnboarding) { _, _ in
+                scheduleSetupRepairReconciliation()
+            }
+            .onChange(of: windowSession.appState.requiresSetupRepair) { _, _ in
+                scheduleSetupRepairReconciliation()
+            }
+            .onChange(of: codexAuth.isAuthenticated) { _, _ in
+                scheduleSetupRepairReconciliation()
+            }
+            .onChange(of: copilotAuth.isAuthenticated) { _, _ in
+                scheduleSetupRepairReconciliation()
             }
             .onChange(of: windowSession.organizer.isAIConfigured) { oldValue, newValue in
                 if oldValue == true && newValue == false {
@@ -210,5 +240,87 @@ struct MainWindowRootView: View {
         deeplinkHandler.clearPending()
     }
 
+    private func routeNotificationActionRequest(
+        kind: AppState.PendingNotificationActionRequest.Kind,
+        notification: Notification
+    ) {
+        let folderPath = notification.userInfo?["folderPath"] as? String
+        let notificationType = notification.userInfo?["notificationType"] as? String
+
+        withAnimation(.pageTransition) {
+            if let folderPath {
+                windowSession.appState.selectedDirectory = URL(fileURLWithPath: folderPath)
+            } else if windowSession.appState.selectedDirectory == nil,
+                      let currentDirectory = windowSession.organizer.currentDirectory {
+                windowSession.appState.selectedDirectory = currentDirectory
+            }
+
+            switch kind {
+            case .applyConfirmation:
+                windowSession.appState.currentView = .organize
+            case .redoWithModelConfirmation:
+                if notificationType == "previewReady" {
+                    windowSession.appState.currentView = .organize
+                } else {
+                    windowSession.appState.currentView = .history
+                }
+            }
+        }
+
+        windowSession.appState.queueNotificationActionRequest(
+            kind,
+            folderPath: folderPath,
+            notificationType: notificationType
+        )
+    }
+
+    private var providerSetupContext: ProviderSetupContext {
+        ProviderSetupContext(
+            config: settingsViewModel.config,
+            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+            isCodexAuthenticated: codexAuth.isAuthenticated,
+            isCodexInstalled: codexAuth.isCodexInstalled,
+            isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
+            appleFoundationModelStatus: settingsViewModel.appleModelStatus
+        )
+    }
+
+    private func scheduleSetupRepairReconciliation() {
+        setupRepairTask?.cancel()
+        setupRepairTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            await reconcileSetupRepairState()
+        }
+    }
+
+    @MainActor
+    private func reconcileSetupRepairState() async {
+        let appState = windowSession.appState
+
+        guard appState.hasCompletedOnboarding else { return }
+
+        codexAuth.checkStatus()
+        openAIAuth.checkAuthenticationStatus()
+        copilotAuth.checkAuthenticationStatus()
+        settingsViewModel.refreshAppleModelStatus()
+
+        let providerStatus = OnboardingSetupValidator.providerStatus(context: providerSetupContext)
+        if !providerStatus.isReady {
+            appState.startSetupRepair(message: providerStatus.message)
+            return
+        }
+
+        guard appState.requiresSetupRepair else { return }
+
+        do {
+            try await settingsViewModel.testConnection()
+            appState.clearSetupRepairState()
+        } catch {
+            appState.startSetupRepair(
+                message: "Sorty could not verify \(settingsViewModel.config.provider.displayName): \(error.localizedDescription)"
+            )
+        }
+    }
 
 }

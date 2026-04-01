@@ -298,7 +298,8 @@ struct DuplicatesView: View {
                 let files = try await resolveFilesForScan(
                     scanner: scanner,
                     directory: directory,
-                    handoffPaths: handoffPaths
+                    handoffPaths: handoffPaths,
+                    deepScan: settingsManager.settings.includeSemanticDuplicates
                 )
 
                 // Verify directory hasn't changed since scan started
@@ -326,11 +327,12 @@ struct DuplicatesView: View {
     private func resolveFilesForScan(
         scanner: DirectoryScanner,
         directory: URL,
-        handoffPaths: [String]
+        handoffPaths: [String],
+        deepScan: Bool
     ) async throws -> [FileItem] {
         guard !handoffPaths.isEmpty else {
             // Pass false for computeHashes because we compute them in detectionManager with progress.
-            return try await scanner.scanDirectory(at: directory, computeHashes: false)
+            return try await scanner.scanDirectory(at: directory, deepScan: deepScan, computeHashes: false)
         }
 
         var targetedFiles: [FileItem] = []
@@ -340,7 +342,7 @@ struct DuplicatesView: View {
             let fileURL = URL(fileURLWithPath: path).standardizedFileURL
             guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
 
-            if let scannedFile = try? await scanner.scanFile(at: fileURL, computeHashes: false), !scannedFile.isDirectory {
+            if let scannedFile = try? await scanner.scanFile(at: fileURL, deepScan: deepScan, computeHashes: false), !scannedFile.isDirectory {
                 targetedFiles.append(scannedFile)
             }
         }
@@ -350,7 +352,7 @@ struct DuplicatesView: View {
         }
 
         // Fallback when history paths no longer exist or are insufficient.
-        return try await scanner.scanDirectory(at: directory, computeHashes: false)
+        return try await scanner.scanDirectory(at: directory, deepScan: deepScan, computeHashes: false)
     }
 
     private func cancelScan() {
@@ -544,7 +546,7 @@ struct DuplicatesHeaderNew: View {
                     .foregroundStyle(enableSafeDeletion ? .green : .orange)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(.ultraThinMaterial)
+                    .systemLiquidGlassBackground(cornerRadius: 999)
                     .clipShape(Capsule())
                     .overlay(
                         Capsule()
@@ -566,6 +568,7 @@ struct DuplicatesHeaderNew: View {
                 .buttonStyle(.plain)
                 .popover(isPresented: $showInfo) {
                     SafeDeletionInfoPopover(isEnabled: enableSafeDeletion)
+                        .systemLiquidGlassPopover(cornerRadius: 12)
                 }
                 
                 Divider()
@@ -1375,6 +1378,5 @@ struct SafeDeletionInfoPopover: View {
         }
         .padding(16)
         .frame(width: 280)
-        .background(.ultraThinMaterial)
     }
 }

@@ -6,6 +6,7 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        TestSynchronization.networkPrivacyModeLock.lock()
         previousValue = UserDefaults.standard.object(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
         UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
     }
@@ -16,6 +17,7 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
         } else {
             UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
         }
+        TestSynchronization.networkPrivacyModeLock.unlock()
         super.tearDown()
     }
 

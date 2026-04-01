@@ -292,17 +292,6 @@ public struct MenuBarDropZoneView: View {
 
     public var body: some View {
         ZStack {
-            // Drop target indicator
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isTargeted ? Color.blue.opacity(0.3) : Color.clear)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(
-                            isTargeted ? Color.blue : Color.clear,
-                            style: StrokeStyle(lineWidth: 2, dash: [5])
-                        )
-                )
-
             // Icon
             if controller.isProcessing {
                 SortyGradientCircularLoader(size: 12, lineWidth: 2.1)
@@ -314,7 +303,7 @@ public struct MenuBarDropZoneView: View {
             }
         }
         .frame(width: 22, height: 22)
-        .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
+        .siriDropZone(cornerRadius: 8, isTargeted: $isTargeted) { providers in
             Task {
                 await controller.handleDrop(providers: providers)
             }
@@ -322,6 +311,7 @@ public struct MenuBarDropZoneView: View {
         }
         .popover(isPresented: $controller.showPopover, arrowEdge: .bottom) {
             LiquidGlassPopover(controller: controller)
+                .systemLiquidGlassPopover(cornerRadius: 12)
         }
     }
 }
@@ -353,7 +343,6 @@ struct LiquidGlassPopover: View {
                 .buttonStyle(.plain)
             }
             .padding()
-            .background(.ultraThinMaterial)
 
             Divider()
 
@@ -507,7 +496,6 @@ struct LiquidGlassPopover: View {
             }
         }
         .frame(width: 320)
-        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 20, y: 10)
     }

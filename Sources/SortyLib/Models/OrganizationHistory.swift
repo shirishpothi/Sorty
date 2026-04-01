@@ -151,15 +151,306 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     }
 }
 
+private struct OrganizationHistorySnapshot: Codable {
+    let schemaVersion: Int
+    let entries: [OrganizationHistoryEntry]
+}
+
+private final class OrganizationHistoryRepository {
+    static let legacyHistoryKey = "organizationHistory"
+    static let fileName = "organization-history.json"
+    static let backupFileName = "organization-history.json.bak"
+    private static let schemaVersion = 1
+
+    private let userDefaults: UserDefaults
+    private let fileManager: FileManager
+    private let storageDirectory: URL?
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(
+        userDefaults: UserDefaults = .standard,
+        storageDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) {
+        self.userDefaults = userDefaults
+        self.fileManager = fileManager
+        self.storageDirectory = storageDirectory ?? Self.defaultStorageDirectory(fileManager: fileManager)
+    }
+
+    var primaryFileURL: URL? {
+        storageDirectory?.appendingPathComponent(Self.fileName)
+    }
+
+    var backupFileURL: URL? {
+        storageDirectory?.appendingPathComponent(Self.backupFileName)
+    }
+
+    func loadEntries() -> [OrganizationHistoryEntry] {
+        guard let primaryFileURL else {
+            LogManager.shared.log(
+                "History file store unavailable; using legacy UserDefaults fallback",
+                level: .warning,
+                category: "OrganizationHistory"
+            )
+            return loadLegacyEntries()
+        }
+
+        if fileManager.fileExists(atPath: primaryFileURL.path) {
+            do {
+                return try readEntries(from: primaryFileURL)
+            } catch {
+                LogManager.shared.log(
+                    "Primary history store unreadable at \(primaryFileURL.path): \(error.localizedDescription)",
+                    level: .warning,
+                    category: "OrganizationHistory"
+                )
+
+                if let recoveredEntries = recoverFromBackup() {
+                    return recoveredEntries
+                }
+
+                return []
+            }
+        }
+
+        if let recoveredEntries = recoverFromBackup() {
+            return recoveredEntries
+        }
+
+        let legacyEntries = loadLegacyEntries()
+        guard !legacyEntries.isEmpty else {
+            return []
+        }
+
+        if saveEntries(legacyEntries) {
+            userDefaults.removeObject(forKey: Self.legacyHistoryKey)
+            LogManager.shared.log(
+                "Migrated \(legacyEntries.count) history entr\(legacyEntries.count == 1 ? "y" : "ies") from UserDefaults to file store",
+                category: "OrganizationHistory"
+            )
+        } else {
+            LogManager.shared.log(
+                "History migration fell back to UserDefaults because file storage could not be written",
+                level: .warning,
+                category: "OrganizationHistory"
+            )
+        }
+
+        return legacyEntries
+    }
+
+    @discardableResult
+    func saveEntries(_ entries: [OrganizationHistoryEntry]) -> Bool {
+        guard let primaryFileURL, let backupFileURL else {
+            persistLegacyFallback(entries)
+            return false
+        }
+
+        do {
+            try ensureStorageDirectoryExists()
+
+            let snapshot = OrganizationHistorySnapshot(
+                schemaVersion: Self.schemaVersion,
+                entries: entries
+            )
+            let data = try encoder.encode(snapshot)
+            let tempURL = primaryFileURL.deletingLastPathComponent()
+                .appendingPathComponent(".\(Self.fileName).\(UUID().uuidString).tmp")
+
+            do {
+                try writeVerifiedTemp(data, to: tempURL)
+                try replacePrimary(with: tempURL, at: primaryFileURL)
+                let verifiedEntries = try readEntries(from: primaryFileURL)
+                guard verifiedEntries == entries else {
+                    throw CocoaError(.coderReadCorrupt)
+                }
+                try mirrorBackup(from: primaryFileURL, to: backupFileURL)
+                userDefaults.removeObject(forKey: Self.legacyHistoryKey)
+                return true
+            } catch {
+                try? cleanupFileIfPresent(at: tempURL)
+                if let recoveredEntries = recoverFromBackup() {
+                    LogManager.shared.log(
+                        "Recovered history store from backup after failed write; preserved \(recoveredEntries.count) entries",
+                        level: .warning,
+                        category: "OrganizationHistory"
+                    )
+                }
+                throw error
+            }
+        } catch {
+            LogManager.shared.log(
+                "Failed to persist history file store, using UserDefaults fallback: \(error.localizedDescription)",
+                level: .warning,
+                category: "OrganizationHistory"
+            )
+            persistLegacyFallback(entries)
+            return false
+        }
+    }
+
+    func clear() {
+        if let primaryFileURL {
+            try? cleanupFileIfPresent(at: primaryFileURL)
+        }
+        if let backupFileURL {
+            try? cleanupFileIfPresent(at: backupFileURL)
+        }
+        userDefaults.removeObject(forKey: Self.legacyHistoryKey)
+    }
+
+    private func loadLegacyEntries() -> [OrganizationHistoryEntry] {
+        guard
+            let data = userDefaults.data(forKey: Self.legacyHistoryKey),
+            let decoded = try? decoder.decode([OrganizationHistoryEntry].self, from: data)
+        else {
+            return []
+        }
+        return decoded
+    }
+
+    private func persistLegacyFallback(_ entries: [OrganizationHistoryEntry]) {
+        guard let encoded = try? encoder.encode(entries) else {
+            return
+        }
+        userDefaults.set(encoded, forKey: Self.legacyHistoryKey)
+    }
+
+    private func ensureStorageDirectoryExists() throws {
+        guard let storageDirectory else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+
+        if !fileManager.fileExists(atPath: storageDirectory.path) {
+            try fileManager.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
+        }
+    }
+
+    private func writeVerifiedTemp(_ data: Data, to tempURL: URL) throws {
+        try cleanupFileIfPresent(at: tempURL)
+
+        guard fileManager.createFile(atPath: tempURL.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+
+        let handle = try FileHandle(forWritingTo: tempURL)
+        do {
+            try handle.write(contentsOf: data)
+            try handle.synchronize()
+            try handle.close()
+        } catch {
+            try? handle.close()
+            throw error
+        }
+
+        _ = try readEntries(from: tempURL)
+    }
+
+    private func replacePrimary(with tempURL: URL, at primaryFileURL: URL) throws {
+        if fileManager.fileExists(atPath: primaryFileURL.path) {
+            _ = try fileManager.replaceItemAt(
+                primaryFileURL,
+                withItemAt: tempURL,
+                backupItemName: nil,
+                options: [.usingNewMetadataOnly]
+            )
+        } else {
+            try fileManager.moveItem(at: tempURL, to: primaryFileURL)
+        }
+    }
+
+    private func mirrorBackup(from primaryFileURL: URL, to backupFileURL: URL) throws {
+        let stagingURL = backupFileURL.deletingLastPathComponent()
+            .appendingPathComponent(".\(Self.backupFileName).\(UUID().uuidString).tmp")
+
+        try cleanupFileIfPresent(at: stagingURL)
+        try fileManager.copyItem(at: primaryFileURL, to: stagingURL)
+
+        do {
+            if fileManager.fileExists(atPath: backupFileURL.path) {
+                _ = try fileManager.replaceItemAt(
+                    backupFileURL,
+                    withItemAt: stagingURL,
+                    backupItemName: nil,
+                    options: [.usingNewMetadataOnly]
+                )
+            } else {
+                try fileManager.moveItem(at: stagingURL, to: backupFileURL)
+            }
+        } catch {
+            try? cleanupFileIfPresent(at: stagingURL)
+            throw error
+        }
+    }
+
+    private func recoverFromBackup() -> [OrganizationHistoryEntry]? {
+        guard let primaryFileURL, let backupFileURL,
+              fileManager.fileExists(atPath: backupFileURL.path) else {
+            return nil
+        }
+
+        do {
+            let entries = try readEntries(from: backupFileURL)
+            try ensureStorageDirectoryExists()
+
+            let recoveryTempURL = primaryFileURL.deletingLastPathComponent()
+                .appendingPathComponent(".\(Self.fileName).recovery.\(UUID().uuidString).tmp")
+            try cleanupFileIfPresent(at: recoveryTempURL)
+            try fileManager.copyItem(at: backupFileURL, to: recoveryTempURL)
+            try replacePrimary(with: recoveryTempURL, at: primaryFileURL)
+
+            LogManager.shared.log(
+                "Recovered history store from backup at \(backupFileURL.path)",
+                level: .warning,
+                category: "OrganizationHistory"
+            )
+            return entries
+        } catch {
+            LogManager.shared.log(
+                "Failed to recover history store from backup: \(error.localizedDescription)",
+                level: .error,
+                category: "OrganizationHistory"
+            )
+            return nil
+        }
+    }
+
+    private func readEntries(from fileURL: URL) throws -> [OrganizationHistoryEntry] {
+        let data = try Data(contentsOf: fileURL)
+
+        if let snapshot = try? decoder.decode(OrganizationHistorySnapshot.self, from: data) {
+            return snapshot.entries
+        }
+
+        return try decoder.decode([OrganizationHistoryEntry].self, from: data)
+    }
+
+    private func cleanupFileIfPresent(at url: URL) throws {
+        guard fileManager.fileExists(atPath: url.path) else {
+            return
+        }
+        try fileManager.removeItem(at: url)
+    }
+
+    private static func defaultStorageDirectory(fileManager: FileManager) -> URL? {
+        fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Sorty/History", isDirectory: true)
+    }
+}
+
 @MainActor
 public class OrganizationHistory: ObservableObject {
     @Published public private(set) var entries: [OrganizationHistoryEntry] = []
-    private let userDefaults: UserDefaults
-    private let historyKey = "organizationHistory"
+    private let repository: OrganizationHistoryRepository
     private let maxEntries = 100
     
-    public init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
+    public init(userDefaults: UserDefaults = .standard, storageDirectory: URL? = nil) {
+        self.repository = OrganizationHistoryRepository(
+            userDefaults: userDefaults,
+            storageDirectory: storageDirectory
+        )
         loadHistory()
         setupNotificationObservers()
     }
@@ -189,7 +480,25 @@ public class OrganizationHistory: ObservableObject {
     
     public func clearHistory() {
         entries.removeAll()
+        repository.clear()
+    }
+
+    @discardableResult
+    public func importEntries(_ importedEntries: [OrganizationHistoryEntry]) -> Int {
+        guard !importedEntries.isEmpty else { return 0 }
+
+        var mergedByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        var importedCount = 0
+
+        for entry in importedEntries {
+            mergedByID[entry.id] = entry
+            importedCount += 1
+        }
+
+        let sorted = mergedByID.values.sorted { $0.timestamp > $1.timestamp }
+        entries = Array(sorted.prefix(maxEntries))
         saveHistory()
+        return importedCount
     }
     
     public var totalFilesOrganized: Int {
@@ -239,16 +548,29 @@ public class OrganizationHistory: ObservableObject {
     }
 
     private func loadHistory() {
-        if let data = userDefaults.data(forKey: historyKey),
-           let decoded = try? JSONDecoder().decode([OrganizationHistoryEntry].self, from: data) {
-            entries = decoded
-        }
+        entries = repository.loadEntries()
     }
     
     private func saveHistory() {
-        if let encoded = try? JSONEncoder().encode(entries) {
-            userDefaults.set(encoded, forKey: historyKey)
-        }
+        _ = repository.saveEntries(entries)
+    }
+
+    public nonisolated static func loadPersistedEntries(
+        userDefaults: UserDefaults = .standard,
+        storageDirectory: URL? = nil
+    ) -> [OrganizationHistoryEntry] {
+        OrganizationHistoryRepository(
+            userDefaults: userDefaults,
+            storageDirectory: storageDirectory
+        ).loadEntries()
+    }
+
+    var storageFileURL: URL? {
+        repository.primaryFileURL
+    }
+
+    var backupStorageFileURL: URL? {
+        repository.backupFileURL
     }
 }
 
@@ -278,4 +600,3 @@ public struct RestorableDuplicate: Codable, Identifiable, Sendable, Hashable, Eq
         self.metadata = metadata
     }
 }
-

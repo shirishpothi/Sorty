@@ -137,6 +137,9 @@ public struct ProviderSelectionStepView: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     
+                    providerReadinessView
+                        .frame(maxWidth: 380)
+
                     // Connection status
                     connectionStatusView
                         .frame(maxWidth: 380)
@@ -158,6 +161,7 @@ public struct ProviderSelectionStepView: View {
                 openAIAuth.checkAuthenticationStatus()
                 codexAuth.checkStatus()
             }
+            settingsViewModel.refreshAppleModelStatus()
         }
         .onChange(of: settingsViewModel.config.provider) { _, newProvider in
             if newProvider == .githubCopilot {
@@ -167,6 +171,7 @@ public struct ProviderSelectionStepView: View {
                 openAIAuth.checkAuthenticationStatus()
                 codexAuth.checkStatus()
             }
+            settingsViewModel.refreshAppleModelStatus()
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Provider Selection Step")
@@ -731,6 +736,47 @@ public struct ProviderSelectionStepView: View {
                 .fill(connectionStatusBackgroundColor)
         )
     }
+
+    @ViewBuilder
+    private var providerReadinessView: some View {
+        let status = providerSetupStatus
+
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: status.isReady ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(status.isReady ? .green : .orange)
+                .font(.system(size: 16))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(status.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(status.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let recoverySuggestion = status.recoverySuggestion {
+                    Text(recoverySuggestion)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(status.isReady ? Color.green.opacity(0.08) : Color.orange.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(status.isReady ? Color.green.opacity(0.18) : Color.orange.opacity(0.18), lineWidth: 1)
+        )
+        .accessibilityIdentifier("OnboardingProviderConfigurationStatus")
+    }
     
     private var connectionStatusBackgroundColor: Color {
         switch connectionStatus {
@@ -753,6 +799,19 @@ public struct ProviderSelectionStepView: View {
             return true // Ollama doesn't require API key
         }
         return ProviderAuthResolver.hasRequiredCredential(for: provider, config: settingsViewModel.config)
+    }
+
+    private var providerSetupStatus: ProviderSetupStatus {
+        OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: settingsViewModel.config,
+                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+                isCodexAuthenticated: codexAuth.isAuthenticated,
+                isCodexInstalled: codexAuth.isCodexInstalled,
+                isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
+                appleFoundationModelStatus: settingsViewModel.appleModelStatus
+            )
+        )
     }
     
     private func selectProvider(_ provider: AIProvider) {
@@ -1074,6 +1133,7 @@ struct OnboardingProviderRow: View {
         }
         .buttonStyle(.plain)
         .opacity(provider.isAvailable ? 1.0 : 0.6)
+        .accessibilityIdentifier("OnboardingProvider_\(provider.rawValue)")
     }
 }
 

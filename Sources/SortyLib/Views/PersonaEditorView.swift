@@ -236,6 +236,7 @@ struct PersonaEditorView: View {
         }
         .padding()
         .frame(width: 240)
+        .systemLiquidGlassPopover(cornerRadius: 12)
     }
     
     private func tipRow(icon: String, text: String) -> some View {

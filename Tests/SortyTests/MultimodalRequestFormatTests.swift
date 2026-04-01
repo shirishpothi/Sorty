@@ -5,7 +5,9 @@ import Foundation
 final class MultimodalRequestFormatTests: XCTestCase {
     private var previousInternetPrivacyModeValue: Any?
 
-    override func setUp() async throws {
+    override func setUp() {
+        super.setUp()
+        TestSynchronization.networkPrivacyModeLock.lock()
         previousInternetPrivacyModeValue = UserDefaults.standard.object(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
         UserDefaults.standard.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
 
@@ -25,6 +27,8 @@ final class MultimodalRequestFormatTests: XCTestCase {
         } else {
             UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
         }
+
+        TestSynchronization.networkPrivacyModeLock.unlock()
 
         super.tearDown()
     }

@@ -99,7 +99,7 @@ extension AIProvider {
     var description: String {
         switch self {
         case .openAI:
-            return "GPT-5.2, GPT-5 mini, and more"
+            return "GPT-5.4, GPT-5 mini, and more"
         case .anthropic:
             return "Claude 4.6 Sonnet, Claude 4.6 Opus, and more"
         case .groq:
@@ -107,7 +107,7 @@ extension AIProvider {
         case .ollama:
             return "Local models on your machine"
         case .githubCopilot:
-            return "Use your Copilot subscription"
+            return "Use your Github Copilot subscription"
         case .appleFoundationModel:
             return "On-device Apple Foundation Models"
         case .openAICompatible:

@@ -17,21 +17,33 @@ import SwiftUI
 public extension NSNotification.Name {
     /// Posted when user clicks "Undo" on a notification
     static let undoLastOrganization = NSNotification.Name("SortyUndoLastOrganization")
+
+    /// Posted when a notification action should open an in-app undo confirmation first
+    static let requestUndoOrganizationConfirmation = NSNotification.Name("SortyRequestUndoOrganizationConfirmation")
     
     /// Posted when user clicks "Retry" on an error notification
     static let retryLastOrganization = NSNotification.Name("SortyRetryLastOrganization")
+
+    /// Posted when a notification action should open an in-app retry confirmation first
+    static let requestRetryOrganizationConfirmation = NSNotification.Name("SortyRequestRetryOrganizationConfirmation")
     
     /// Posted when user clicks "Show Details" on a notification
     static let showOrganizationDetails = NSNotification.Name("SortyShowOrganizationDetails")
 
     /// Posted when user clicks "Review/Preview" on a notification
     static let showOrganizationPreview = NSNotification.Name("SortyShowOrganizationPreview")
+
+    /// Posted when a notification action should open an in-app apply confirmation first
+    static let requestApplyOrganizationConfirmation = NSNotification.Name("SortyRequestApplyOrganizationConfirmation")
     
     /// Posted when user clicks "Open Folder" on a notification
     static let openOrganizedFolder = NSNotification.Name("SortyOpenOrganizedFolder")
 
     /// Posted when user wants to redo the last organization using a different model
     static let redoOrganizationWithModel = NSNotification.Name("SortyRedoOrganizationWithModel")
+
+    /// Posted when a notification action should open an in-app redo confirmation first
+    static let requestRedoOrganizationWithModelConfirmation = NSNotification.Name("SortyRequestRedoOrganizationWithModelConfirmation")
 }
 
 /// Detailed statistics for batch organization summary
@@ -89,6 +101,7 @@ public struct BatchSummaryStats: Sendable {
 
 /// Actions that can be performed from notification buttons
 public enum NotificationAction: Sendable {
+    case apply
     case undo
     case openFolder(path: String)
     case showDetails
@@ -100,14 +113,8 @@ public enum NotificationAction: Sendable {
 /// Callback type for handling notification actions
 public typealias NotificationActionHandler = @Sendable (NotificationAction) async -> Void
 
-private enum NativeNotificationCategory {
-    static let processingComplete = "SORTY_PROCESSING_COMPLETE"
-    static let processingError = "SORTY_PROCESSING_ERROR"
-    static let batchSummary = "SORTY_BATCH_SUMMARY"
-    static let previewReady = "SORTY_PREVIEW_READY"
-}
-
 private enum NativeNotificationActionIdentifier {
+    static let apply = "SORTY_APPLY"
     static let undo = "SORTY_UNDO"
     static let undoAll = "SORTY_UNDO_ALL"
     static let openFolder = "SORTY_OPEN_FOLDER"
@@ -119,6 +126,81 @@ private enum NativeNotificationActionIdentifier {
 
 private enum NativeNotificationUserInfoKey {
     static let folderPath = "folderPath"
+    static let notificationType = "notificationType"
+}
+
+private enum CuratedNotificationActionRole {
+    case safeImmediate
+    case guardedConfirmation
+    case deferredNavigation
+}
+
+private struct CuratedNotificationAction {
+    let label: String
+    let identifier: String
+    let action: NotificationAction
+    let role: CuratedNotificationActionRole
+    let confirmationNotificationName: NSNotification.Name?
+}
+
+private enum NotificationFailureClass {
+    case timeout
+    case configuration
+    case permissions
+    case filesystem
+    case aiModel
+    case unknown
+
+    init(message: String) {
+        let normalized = message.lowercased()
+
+        if normalized.contains("timed out") || normalized.contains("timeout") {
+            self = .timeout
+        } else if normalized.contains("no ai provider") ||
+                    normalized.contains("api key") ||
+                    normalized.contains("not configured") ||
+                    normalized.contains("configuration") ||
+                    normalized.contains("model") && normalized.contains("unavailable") {
+            self = .configuration
+        } else if normalized.contains("permission") ||
+                    normalized.contains("access denied") ||
+                    normalized.contains("security scoped") ||
+                    normalized.contains("not authorized") {
+            self = .permissions
+        } else if normalized.contains("file") ||
+                    normalized.contains("folder") ||
+                    normalized.contains("directory") ||
+                    normalized.contains("disk") ||
+                    normalized.contains("exist") {
+            self = .filesystem
+        } else if normalized.contains("rate limit") ||
+                    normalized.contains("server") ||
+                    normalized.contains("network") ||
+                    normalized.contains("overloaded") ||
+                    normalized.contains("context") {
+            self = .aiModel
+        } else {
+            self = .unknown
+        }
+    }
+
+    var shouldOfferRetry: Bool {
+        switch self {
+        case .configuration, .permissions:
+            return false
+        case .timeout, .filesystem, .aiModel, .unknown:
+            return true
+        }
+    }
+
+    var shouldOfferRedoWithModel: Bool {
+        switch self {
+        case .timeout, .aiModel, .unknown:
+            return true
+        case .configuration, .permissions, .filesystem:
+            return false
+        }
+    }
 }
 
 private final class NativeNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
@@ -149,8 +231,8 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
     /// Types of notifications the app can show
     public enum NotificationType: Sendable {
         case processingComplete(fileCount: Int, folderName: String, folderPath: String?, canUndo: Bool, isAutomated: Bool = false)
-        case previewReady(folderName: String)
-        case processingError(message: String, isCritical: Bool, canRetry: Bool, isAutomated: Bool = false)
+        case previewReady(folderName: String, folderPath: String? = nil)
+        case processingError(message: String, folderPath: String? = nil, isCritical: Bool, canRetry: Bool, isAutomated: Bool = false)
         case batchSummary(stats: BatchSummaryStats, isAutomated: Bool = false)
         case info(title: String, message: String)
         
@@ -160,7 +242,7 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
         }
         
         public static func processingError(message: String, isCritical: Bool = false) -> NotificationType {
-            return .processingError(message: message, isCritical: isCritical, canRetry: false, isAutomated: false)
+            return .processingError(message: message, folderPath: nil, isCritical: isCritical, canRetry: false, isAutomated: false)
         }
         
         public static func batchSummary(processed: Int, errors: Int, duration: TimeInterval) -> NotificationType {
@@ -172,10 +254,36 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
         }
         
         var isCritical: Bool {
-            if case .processingError(_, let critical, _, _) = self {
+            if case .processingError(_, _, let critical, _, _) = self {
                 return critical
             }
             return false
+        }
+
+        var folderPath: String? {
+            switch self {
+            case .processingComplete(_, _, let folderPath, _, _):
+                return folderPath
+            case .previewReady(_, let folderPath):
+                return folderPath
+            case .processingError(_, let folderPath, _, _, _):
+                return folderPath
+            case .batchSummary(let stats, _):
+                return stats.folderPath
+            case .info:
+                return nil
+            }
+        }
+
+        var isAutomated: Bool {
+            switch self {
+            case .processingComplete(_, _, _, _, let isAutomated),
+                 .processingError(_, _, _, _, let isAutomated),
+                 .batchSummary(_, let isAutomated):
+                return isAutomated
+            case .previewReady, .info:
+                return false
+            }
         }
         
         /// Whether the app is currently in the foreground
@@ -267,11 +375,13 @@ public class NotificationManager: ObservableObject {
     private var permissionCached: Bool = false
     private let nativeNotificationDelegate = NativeNotificationDelegate()
     private var pendingNativeActionHandlers: [String: NotificationActionHandler] = [:]
+    private var pendingNativeNotificationTypes: [String: NotificationType] = [:]
+    private var pendingNativeActions: [String: [CuratedNotificationAction]] = [:]
+    private var registeredNativeCategories: [String: UNNotificationCategory] = [:]
     
     private init() {
         if isSafeToUseSystemNotifications {
             UNUserNotificationCenter.current().delegate = nativeNotificationDelegate
-            registerNativeNotificationCategories()
         }
         // Start setup immediately
         notifiCLISetupTask = Task {
@@ -416,7 +526,7 @@ public class NotificationManager: ObservableObject {
                 trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "automated notifications disabled")
                 return
             }
-        case .processingError(_, _, _, let isAutomated):
+        case .processingError(_, _, _, _, let isAutomated):
             if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
                 print("NotificationManager: Automated organization error suppressed by settings")
                 trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "automated notifications disabled")
@@ -440,7 +550,7 @@ public class NotificationManager: ObservableObject {
                 trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "preview ready disabled")
                 return
             }
-        case .processingError(_, let isCritical, _, _):
+        case .processingError(_, _, let isCritical, _, _):
             if isCritical && settingsValue.alwaysShowCriticalErrors {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
@@ -488,7 +598,6 @@ public class NotificationManager: ObservableObject {
                     playSound: settingsValue.systemNotificationSounds
                 )
             }
-            trackAnalytics(.shown, type: type, backend: settingsValue.notificationBackend, detail: "system notification sent")
         } else {
             print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem), critical=\(isCriticalError))")
             trackAnalytics(.shown, type: type, backend: settingsValue.notificationBackend, detail: "hud only")
@@ -525,7 +634,6 @@ public class NotificationManager: ObservableObject {
                     actionHandler: actionHandler
                 )
             }
-            trackAnalytics(.shown, type: type, backend: settingsValue.notificationBackend, detail: "system notification sent with actions")
         }
     }
     
@@ -570,6 +678,7 @@ public class NotificationManager: ObservableObject {
     /// Show processing error notification with retry option
     public func showError(
         message: String,
+        folderPath: String? = nil,
         isCritical: Bool = false,
         canRetry: Bool = false,
         isAutomated: Bool = false,
@@ -577,6 +686,7 @@ public class NotificationManager: ObservableObject {
     ) {
         let type = NotificationType.processingError(
             message: message,
+            folderPath: folderPath,
             isCritical: isCritical,
             canRetry: canRetry,
             isAutomated: isAutomated
@@ -616,6 +726,16 @@ public class NotificationManager: ObservableObject {
 
     public func clearAnalytics() {
         analyticsEvents = []
+    }
+
+    public func recordActionLifecycle(_ action: String, stage: String, failed: Bool = false, detail: String = "") {
+        let stageDetail = detail.isEmpty ? stage : "\(stage): \(detail)"
+        trackAnalytics(
+            failed ? .failed : .action,
+            type: .info(title: "action", message: action),
+            backend: settings.settings.notificationBackend,
+            detail: stageDetail
+        )
     }
 
     public func sendInFlowPreviewSample() {
@@ -700,14 +820,14 @@ public class NotificationManager: ObservableObject {
                 "checkmark.circle.fill",
                 .green
             )
-        case .previewReady(let folderName):
+        case .previewReady(let folderName, _):
             return (
                 "Preview Ready",
                 "Your organization preview for \(folderName) is ready to review",
                 "eye.fill",
                 .blue
             )
-        case .processingError(let message, let isCritical, _, _):
+        case .processingError(let message, _, let isCritical, _, _):
             return (
                 isCritical ? "Critical Error" : "Processing Error",
                 message,
@@ -902,66 +1022,13 @@ public class NotificationManager: ObservableObject {
         actionHandler: NotificationActionHandler?
     ) async {
         let settingsValue = settings.settings
-        
-        // Build actions based on notification type and settings
-        var actions: [String] = []
-        var folderPath: String? = nil
-        var canUndo = false
-        var canRetry = false
-        
-        if settingsValue.showActionButtons {
-            switch type {
-            case .processingComplete(_, _, let path, let undo, _):
-                folderPath = path
-                canUndo = undo
-                if undo {
-                    actions.append("Undo")
-                }
-                if let _ = path {
-                    actions.append("Open Folder")
-                }
-                actions.append("Redo with Model")
-                actions.append("Dismiss")
-                
-            case .processingError(_, _, let retry, _):
-                canRetry = retry
-                if retry {
-                    actions.append("Retry")
-                }
-                actions.append("Show Details")
-                actions.append("Dismiss")
-                
-            case .batchSummary(let stats, _):
-                folderPath = stats.folderPath
-                canUndo = stats.canUndo
-                if stats.canUndo {
-                    actions.append("Undo All")
-                }
-                if let _ = stats.folderPath {
-                    actions.append("Open Folder")
-                }
-                actions.append("Redo with Model")
-                if stats.hasErrors {
-                    actions.append("Show Details")
-                }
-                actions.append("Dismiss")
-                
-            case .info:
-                // Simple info notifications don't need action buttons
-                break
-                
-            case .previewReady:
-                actions.append("Review")
-                actions.append("Redo with Model")
-                actions.append("Dismiss")
-            }
-        }
+        let actions = settingsValue.showActionButtons ? notificationActions(for: type) : []
         
         // Build NotifiCLI config
         let config = NotifiCLIConfig(
             title: title,
             message: message,
-            actions: actions.isEmpty ? nil : actions,
+            actions: actions.isEmpty ? nil : actions.map(\.label),
             icon: settingsValue.customNotificationIcon.isEmpty ? nil : settingsValue.customNotificationIcon,
             sound: playSound ? settingsValue.notifiCLISound : nil,
             persistent: settingsValue.persistentNotifications && !actions.isEmpty
@@ -984,14 +1051,14 @@ public class NotificationManager: ObservableObject {
         }
 
         print("NotificationManager: NotifiCLI response: \(response)")
-        trackAnalytics(.shown, type: type, backend: .notifiCLI, detail: "sent via NotifiCLI")
+        let actionSummary = actions.isEmpty ? "no actions" : actions.map(\.label).joined(separator: ", ")
+        trackAnalytics(.shown, type: type, backend: .notifiCLI, detail: "sent via NotifiCLI [\(actionSummary)]")
         
         // Handle the response
         await handleNotifiCLIResponse(
             response,
-            folderPath: folderPath,
-            canUndo: canUndo,
-            canRetry: canRetry,
+            type: type,
+            actions: actions,
             actionHandler: actionHandler
         )
     }
@@ -999,76 +1066,25 @@ public class NotificationManager: ObservableObject {
     /// Handle response from NotifiCLI notification
     private func handleNotifiCLIResponse(
         _ response: NotifiCLIResponse,
-        folderPath: String?,
-        canUndo: Bool,
-        canRetry: Bool,
+        type: NotificationType,
+        actions: [CuratedNotificationAction],
         actionHandler: NotificationActionHandler?
     ) async {
         switch response {
         case .action(let actionLabel):
-            switch actionLabel {
-            case "Undo", "Undo All":
-                if canUndo {
-                    await actionHandler?(.undo)
-                    // Post notification for undo action
-                    NotificationCenter.default.post(name: .undoLastOrganization, object: nil)
-                    trackAnalytics(.action, type: .info(title: "action", message: "undo"), backend: .notifiCLI, detail: actionLabel)
-                }
-                
-            case "Open Folder":
-                if let path = folderPath {
-                    await actionHandler?(.openFolder(path: path))
-                    // Post notification for open folder action
-                    NotificationCenter.default.post(
-                        name: .openOrganizedFolder,
-                        object: nil,
-                        userInfo: ["folderPath": path]
-                    )
-                    // Open folder in Finder
-                    let url = URL(fileURLWithPath: path)
-                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
-                    trackAnalytics(.action, type: .info(title: "action", message: "openFolder"), backend: .notifiCLI, detail: actionLabel)
-                }
-                
-            case "Show Details":
-                await actionHandler?(.showDetails)
-                // Post notification to show details
-                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
-                trackAnalytics(.action, type: .info(title: "action", message: "showDetails"), backend: .notifiCLI, detail: actionLabel)
-
-            case "Review":
-                await actionHandler?(.showDetails)
-                // Post notification to show preview workflow
-                NotificationCenter.default.post(name: .showOrganizationPreview, object: nil)
-                trackAnalytics(.action, type: .info(title: "action", message: "review"), backend: .notifiCLI, detail: actionLabel)
-                
-            case "Retry":
-                if canRetry {
-                    await actionHandler?(.retry)
-                    // Post notification for retry
-                    NotificationCenter.default.post(name: .retryLastOrganization, object: nil)
-                    trackAnalytics(.action, type: .info(title: "action", message: "retry"), backend: .notifiCLI, detail: actionLabel)
-                }
-
-            case "Redo with Model":
-                await actionHandler?(.redoWithModel)
-                NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil)
-                trackAnalytics(.action, type: .info(title: "action", message: "redoWithModel"), backend: .notifiCLI, detail: actionLabel)
-                
-            case "Dismiss":
-                await actionHandler?(.dismiss)
-                
-            default:
-                // Unknown action, treat as custom action
+            if let action = actions.first(where: { $0.label == actionLabel }) {
+                await handleCuratedActionSelection(
+                    action,
+                    type: type,
+                    actionHandler: actionHandler,
+                    backend: .notifiCLI
+                )
+            } else {
                 print("NotificationManager: Unknown action: \(actionLabel)")
             }
             
         case .defaultClick:
-            // User clicked the notification body - open folder if available
-            if let path = folderPath {
-                let url = URL(fileURLWithPath: path)
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
-            }
+            await handleDefaultNotificationActivation(for: type, actionHandler: actionHandler, backend: .notifiCLI)
             
         case .dismissed, .timeout:
             // User dismissed or notification timed out
@@ -1137,7 +1153,8 @@ public class NotificationManager: ObservableObject {
         content.interruptionLevel = .timeSensitive
         content.relevanceScore = 1.0
 
-        if let categoryIdentifier = nativeCategoryIdentifier(for: type) {
+        let actions = settings.settings.showActionButtons ? notificationActions(for: type) : []
+        if let categoryIdentifier = ensureNativeCategoryIdentifier(for: actions) {
             content.categoryIdentifier = categoryIdentifier
         }
 
@@ -1160,10 +1177,16 @@ public class NotificationManager: ObservableObject {
         if let actionHandler = actionHandler {
             pendingNativeActionHandlers[requestIdentifier] = actionHandler
         }
+        if !actions.isEmpty {
+            pendingNativeActions[requestIdentifier] = actions
+        }
+        pendingNativeNotificationTypes[requestIdentifier] = type
         
         do {
             try await UNUserNotificationCenter.current().add(request)
+            let actionSummary = actions.isEmpty ? "no actions" : actions.map(\.label).joined(separator: ", ")
             print("NotificationManager: Native system notification sent successfully")
+            trackAnalytics(.shown, type: type, backend: .native, detail: "native notification sent [\(actionSummary)]")
         } catch {
             print("NotificationManager: Failed to send system notification: \(error), trying NotifiCLI fallback")
             trackAnalytics(.failed, type: type, backend: .native, detail: error.localizedDescription)
@@ -1174,184 +1197,357 @@ public class NotificationManager: ObservableObject {
         }
     }
 
-    private func nativeCategoryIdentifier(for type: NotificationType) -> String? {
-        let settingsValue = settings.settings
-        guard settingsValue.showActionButtons else { return nil }
-
-        switch type {
-        case .processingComplete(_, _, let folderPath, let canUndo, _):
-            guard canUndo || folderPath != nil else { return nil }
-            return NativeNotificationCategory.processingComplete
-        case .processingError(_, _, let canRetry, _):
-            guard canRetry else { return NativeNotificationCategory.processingError }
-            return NativeNotificationCategory.processingError
-        case .batchSummary(let stats, _):
-            guard stats.canUndo || stats.folderPath != nil || stats.hasErrors else { return nil }
-            return NativeNotificationCategory.batchSummary
-        case .previewReady:
-            return NativeNotificationCategory.previewReady
-        case .info:
-            return nil
-        }
-    }
-
     private func nativeUserInfo(for type: NotificationType) -> [AnyHashable: Any] {
+        var userInfo: [AnyHashable: Any] = [
+            NativeNotificationUserInfoKey.notificationType: analyticsTypeLabel(for: type)
+        ]
+
         switch type {
         case .processingComplete(_, _, let folderPath, _, _):
             if let path = folderPath {
-                return [NativeNotificationUserInfoKey.folderPath: path]
+                userInfo[NativeNotificationUserInfoKey.folderPath] = path
+            }
+        case .previewReady(_, let folderPath):
+            if let path = folderPath {
+                userInfo[NativeNotificationUserInfoKey.folderPath] = path
+            }
+        case .processingError(_, let folderPath, _, _, _):
+            if let path = folderPath {
+                userInfo[NativeNotificationUserInfoKey.folderPath] = path
             }
         case .batchSummary(let stats, _):
             if let path = stats.folderPath {
-                return [NativeNotificationUserInfoKey.folderPath: path]
+                userInfo[NativeNotificationUserInfoKey.folderPath] = path
             }
         default:
             break
         }
-        return [:]
+        return userInfo
     }
 
-    private func registerNativeNotificationCategories() {
-        let undoAction = UNNotificationAction(
-            identifier: NativeNotificationActionIdentifier.undo,
-            title: "Undo",
-            options: [.foreground]
-        )
-        let undoAllAction = UNNotificationAction(
-            identifier: NativeNotificationActionIdentifier.undoAll,
-            title: "Undo All",
-            options: [.foreground]
-        )
-        let openFolderAction = UNNotificationAction(
-            identifier: NativeNotificationActionIdentifier.openFolder,
-            title: "Open Folder",
-            options: [.foreground]
-        )
-        let retryAction = UNNotificationAction(
-            identifier: NativeNotificationActionIdentifier.retry,
-            title: "Retry",
-            options: [.foreground]
-        )
-        let showDetailsAction = UNNotificationAction(
-            identifier: NativeNotificationActionIdentifier.showDetails,
-            title: "Show Details",
-            options: [.foreground]
-        )
-        let reviewAction = UNNotificationAction(
-            identifier: NativeNotificationActionIdentifier.review,
-            title: "Review",
-            options: [.foreground]
-        )
-        let redoModelAction = UNNotificationAction(
-            identifier: NativeNotificationActionIdentifier.redoModel,
-            title: "Redo Model",
-            options: [.foreground]
-        )
+    private func ensureNativeCategoryIdentifier(for actions: [CuratedNotificationAction]) -> String? {
+        guard !actions.isEmpty else { return nil }
 
-        let processingComplete = UNNotificationCategory(
-            identifier: NativeNotificationCategory.processingComplete,
-            actions: [undoAction, openFolderAction, redoModelAction],
-            intentIdentifiers: [],
-            options: [.customDismissAction]
-        )
-        let processingError = UNNotificationCategory(
-            identifier: NativeNotificationCategory.processingError,
-            actions: [retryAction, showDetailsAction],
-            intentIdentifiers: [],
-            options: [.customDismissAction]
-        )
-        let batchSummary = UNNotificationCategory(
-            identifier: NativeNotificationCategory.batchSummary,
-            actions: [undoAllAction, openFolderAction, redoModelAction, showDetailsAction],
-            intentIdentifiers: [],
-            options: [.customDismissAction]
-        )
-        let previewReady = UNNotificationCategory(
-            identifier: NativeNotificationCategory.previewReady,
-            actions: [reviewAction, redoModelAction],
-            intentIdentifiers: [],
-            options: [.customDismissAction]
-        )
+        let identifier = "SORTY_" + actions.map(\.identifier).joined(separator: "_")
+        if registeredNativeCategories[identifier] == nil {
+            let category = UNNotificationCategory(
+                identifier: identifier,
+                actions: actions.map(nativeNotificationAction(for:)),
+                intentIdentifiers: [],
+                options: [.customDismissAction]
+            )
+            registeredNativeCategories[identifier] = category
+            UNUserNotificationCenter.current().setNotificationCategories(Set(registeredNativeCategories.values))
+        }
 
-        UNUserNotificationCenter.current().setNotificationCategories([
-            processingComplete,
-            processingError,
-            batchSummary,
-            previewReady
-        ])
+        return identifier
+    }
+
+    private func nativeNotificationAction(for action: CuratedNotificationAction) -> UNNotificationAction {
+        UNNotificationAction(
+            identifier: action.identifier,
+            title: action.label,
+            options: [.foreground]
+        )
     }
 
     func handleNativeNotificationResponse(_ response: UNNotificationResponse) {
         let identifier = response.notification.request.identifier
-        let userInfo = response.notification.request.content.userInfo
-        let categoryIdentifier = response.notification.request.content.categoryIdentifier
-        let folderPath = userInfo[NativeNotificationUserInfoKey.folderPath] as? String
         let actionHandler = pendingNativeActionHandlers.removeValue(forKey: identifier)
+        let notificationType = pendingNativeNotificationTypes.removeValue(forKey: identifier)
+        let actions = pendingNativeActions.removeValue(forKey: identifier) ?? []
 
         switch response.actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
-            if let path = folderPath {
-                NotificationCenter.default.post(
-                    name: .openOrganizedFolder,
-                    object: nil,
-                    userInfo: [NativeNotificationUserInfoKey.folderPath: path]
-                )
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
-                Task { await actionHandler?(.openFolder(path: path)) }
-                trackAnalytics(.action, type: .info(title: "action", message: "defaultOpen"), backend: .native, detail: "default click")
-            } else if categoryIdentifier == NativeNotificationCategory.previewReady {
-                NotificationCenter.default.post(name: .showOrganizationPreview, object: nil)
-                Task { await actionHandler?(.showDetails) }
-                trackAnalytics(.action, type: .info(title: "action", message: "defaultPreview"), backend: .native, detail: "default click")
-            } else {
-                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
-                Task { await actionHandler?(.showDetails) }
-                trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: .native, detail: "default click")
+            if let notificationType {
+                Task {
+                    await handleDefaultNotificationActivation(for: notificationType, actionHandler: actionHandler, backend: .native)
+                }
             }
 
         case UNNotificationDismissActionIdentifier:
             Task { await actionHandler?(.dismiss) }
             trackAnalytics(.action, type: .info(title: "action", message: "dismiss"), backend: .native, detail: "dismiss")
 
-        case NativeNotificationActionIdentifier.undo, NativeNotificationActionIdentifier.undoAll:
-            NotificationCenter.default.post(name: .undoLastOrganization, object: nil)
-            Task { await actionHandler?(.undo) }
-            trackAnalytics(.action, type: .info(title: "action", message: "undo"), backend: .native, detail: response.actionIdentifier)
-
-        case NativeNotificationActionIdentifier.openFolder:
-            if let path = folderPath {
-                NotificationCenter.default.post(
-                    name: .openOrganizedFolder,
-                    object: nil,
-                    userInfo: [NativeNotificationUserInfoKey.folderPath: path]
-                )
-                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
-                Task { await actionHandler?(.openFolder(path: path)) }
-                trackAnalytics(.action, type: .info(title: "action", message: "openFolder"), backend: .native, detail: response.actionIdentifier)
-            }
-
-        case NativeNotificationActionIdentifier.retry:
-            NotificationCenter.default.post(name: .retryLastOrganization, object: nil)
-            Task { await actionHandler?(.retry) }
-            trackAnalytics(.action, type: .info(title: "action", message: "retry"), backend: .native, detail: response.actionIdentifier)
-
-        case NativeNotificationActionIdentifier.redoModel:
-            NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil)
-            Task { await actionHandler?(.redoWithModel) }
-            trackAnalytics(.action, type: .info(title: "action", message: "redoWithModel"), backend: .native, detail: response.actionIdentifier)
-
-        case NativeNotificationActionIdentifier.showDetails,
-             NativeNotificationActionIdentifier.review:
-            if response.actionIdentifier == NativeNotificationActionIdentifier.review {
-                NotificationCenter.default.post(name: .showOrganizationPreview, object: nil)
-            } else {
-                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil)
-            }
-            Task { await actionHandler?(.showDetails) }
-            trackAnalytics(.action, type: .info(title: "action", message: "showDetails"), backend: .native, detail: response.actionIdentifier)
-
         default:
+            guard let notificationType,
+                  let action = actions.first(where: { $0.identifier == response.actionIdentifier }) else {
+                return
+            }
+
+            Task {
+                await handleCuratedActionSelection(
+                    action,
+                    type: notificationType,
+                    actionHandler: actionHandler,
+                    backend: .native
+                )
+            }
+        }
+    }
+
+    func notificationActionLabels(for type: NotificationType) -> [String] {
+        notificationActions(for: type).map(\.label)
+    }
+
+    private func notificationActions(for type: NotificationType) -> [CuratedNotificationAction] {
+        let maxActions = 4
+        var candidates: [(priority: Int, action: CuratedNotificationAction)] = []
+
+        func add(_ priority: Int, _ action: CuratedNotificationAction?) {
+            guard let action else { return }
+            candidates.append((priority, action))
+        }
+        switch type {
+        case .processingComplete(let fileCount, _, let folderPath, let canUndo, let isAutomated):
+            add(100, folderPath.map(openFolderAction))
+            add(90, deferredDetailsAction())
+            add(isAutomated ? 70 : 80, canUndo ? undoAction() : nil)
+            add(isAutomated ? 50 : (fileCount > 200 ? 55 : 65), redoWithModelAction())
+
+        case .batchSummary(let stats, let isAutomated):
+            if stats.hasErrors {
+                add(100, deferredDetailsAction())
+                add(stats.folderPath != nil ? 90 : 0, stats.folderPath.map(openFolderAction))
+                add(stats.canUndo ? 80 : 0, stats.canUndo ? undoAction(label: "Undo All", identifier: NativeNotificationActionIdentifier.undoAll) : nil)
+                add(isAutomated ? 40 : 60, redoWithModelAction())
+            } else {
+                add(100, stats.folderPath.map(openFolderAction))
+                add(90, deferredDetailsAction())
+                add(stats.canUndo ? 80 : 0, stats.canUndo ? undoAction(label: "Undo All", identifier: NativeNotificationActionIdentifier.undoAll) : nil)
+                add(isAutomated ? 45 : 65, redoWithModelAction())
+            }
+
+        case .previewReady:
+            add(100, reviewAction())
+            add(90, applyAction())
+            add(75, redoWithModelAction())
+
+        case .processingError(let message, let folderPath, _, let canRetry, let isAutomated):
+            let failureClass = NotificationFailureClass(message: message)
+            add(100, deferredDetailsAction())
+            add(canRetry && failureClass.shouldOfferRetry ? 90 : 0, canRetry && failureClass.shouldOfferRetry ? retryAction() : nil)
+            add(folderPath != nil ? 70 : 0, folderPath.map(openFolderAction))
+            add(isAutomated || !failureClass.shouldOfferRedoWithModel ? 0 : 65, !isAutomated && failureClass.shouldOfferRedoWithModel ? redoWithModelAction() : nil)
+
+        case .info:
             break
+        }
+
+        var seenIdentifiers: Set<String> = []
+        return candidates
+            .sorted { lhs, rhs in
+                if lhs.priority == rhs.priority {
+                    return lhs.action.label < rhs.action.label
+                }
+                return lhs.priority > rhs.priority
+            }
+            .compactMap { candidate in
+                guard seenIdentifiers.insert(candidate.action.identifier).inserted else { return nil }
+                return candidate.action
+            }
+            .prefix(maxActions)
+            .map { $0 }
+    }
+
+    private func applyAction() -> CuratedNotificationAction {
+        CuratedNotificationAction(
+            label: "Apply Now",
+            identifier: NativeNotificationActionIdentifier.apply,
+            action: .apply,
+            role: .guardedConfirmation,
+            confirmationNotificationName: .requestApplyOrganizationConfirmation
+        )
+    }
+
+    private func undoAction(label: String = "Undo", identifier: String = NativeNotificationActionIdentifier.undo) -> CuratedNotificationAction {
+        CuratedNotificationAction(
+            label: label,
+            identifier: identifier,
+            action: .undo,
+            role: .guardedConfirmation,
+            confirmationNotificationName: .requestUndoOrganizationConfirmation
+        )
+    }
+
+    private func openFolderAction(path: String) -> CuratedNotificationAction {
+        CuratedNotificationAction(
+            label: "Open Folder",
+            identifier: NativeNotificationActionIdentifier.openFolder,
+            action: .openFolder(path: path),
+            role: .safeImmediate,
+            confirmationNotificationName: nil
+        )
+    }
+
+    private func deferredDetailsAction() -> CuratedNotificationAction {
+        CuratedNotificationAction(
+            label: "Show Details",
+            identifier: NativeNotificationActionIdentifier.showDetails,
+            action: .showDetails,
+            role: .deferredNavigation,
+            confirmationNotificationName: nil
+        )
+    }
+
+    private func reviewAction() -> CuratedNotificationAction {
+        CuratedNotificationAction(
+            label: "Review Plan",
+            identifier: NativeNotificationActionIdentifier.review,
+            action: .showDetails,
+            role: .deferredNavigation,
+            confirmationNotificationName: nil
+        )
+    }
+
+    private func retryAction() -> CuratedNotificationAction {
+        CuratedNotificationAction(
+            label: "Retry",
+            identifier: NativeNotificationActionIdentifier.retry,
+            action: .retry,
+            role: .guardedConfirmation,
+            confirmationNotificationName: .requestRetryOrganizationConfirmation
+        )
+    }
+
+    private func redoWithModelAction() -> CuratedNotificationAction {
+        CuratedNotificationAction(
+            label: "Try Another Model",
+            identifier: NativeNotificationActionIdentifier.redoModel,
+            action: .redoWithModel,
+            role: .guardedConfirmation,
+            confirmationNotificationName: .requestRedoOrganizationWithModelConfirmation
+        )
+    }
+
+    private func handleCuratedActionSelection(
+        _ curatedAction: CuratedNotificationAction,
+        type: NotificationType,
+        actionHandler: NotificationActionHandler?,
+        backend: NotificationBackend
+    ) async {
+        switch curatedAction.role {
+        case .safeImmediate:
+            await dispatchImmediateAction(curatedAction.action, type: type, actionHandler: actionHandler, backend: backend, label: curatedAction.label)
+        case .deferredNavigation:
+            await dispatchDeferredAction(curatedAction, type: type, actionHandler: actionHandler, backend: backend)
+        case .guardedConfirmation:
+            activateAppForNotificationAction()
+            if let confirmationNotificationName = curatedAction.confirmationNotificationName {
+                NotificationCenter.default.post(
+                    name: confirmationNotificationName,
+                    object: nil,
+                    userInfo: notificationUserInfo(for: type)
+                )
+            }
+            trackAnalytics(.action, type: .info(title: "action", message: String(describing: curatedAction.action)), backend: backend, detail: "requested confirmation: \(curatedAction.label)")
+        }
+    }
+
+    private func dispatchImmediateAction(
+        _ action: NotificationAction,
+        type: NotificationType,
+        actionHandler: NotificationActionHandler?,
+        backend: NotificationBackend,
+        label: String
+    ) async {
+        switch action {
+        case .apply:
+            await actionHandler?(.apply)
+            activateAppForNotificationAction()
+            NotificationCenter.default.post(
+                name: .requestApplyOrganizationConfirmation,
+                object: nil,
+                userInfo: notificationUserInfo(for: type)
+            )
+        case .undo:
+            await actionHandler?(.undo)
+            NotificationCenter.default.post(name: .undoLastOrganization, object: nil, userInfo: notificationUserInfo(for: type))
+        case .openFolder(let path):
+            await actionHandler?(.openFolder(path: path))
+            NotificationCenter.default.post(name: .openOrganizedFolder, object: nil, userInfo: [NativeNotificationUserInfoKey.folderPath: path])
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+        case .showDetails:
+            await actionHandler?(.showDetails)
+            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+        case .retry:
+            await actionHandler?(.retry)
+            NotificationCenter.default.post(name: .retryLastOrganization, object: nil, userInfo: notificationUserInfo(for: type))
+        case .redoWithModel:
+            await actionHandler?(.redoWithModel)
+            NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil, userInfo: notificationUserInfo(for: type))
+        case .dismiss:
+            await actionHandler?(.dismiss)
+        }
+
+        trackAnalytics(.action, type: .info(title: "action", message: String(describing: action)), backend: backend, detail: label)
+    }
+
+    private func dispatchDeferredAction(
+        _ curatedAction: CuratedNotificationAction,
+        type: NotificationType,
+        actionHandler: NotificationActionHandler?,
+        backend: NotificationBackend
+    ) async {
+        activateAppForNotificationAction()
+
+        switch curatedAction.identifier {
+        case NativeNotificationActionIdentifier.review:
+            await actionHandler?(.showDetails)
+            NotificationCenter.default.post(name: .showOrganizationPreview, object: nil, userInfo: notificationUserInfo(for: type))
+        default:
+            await actionHandler?(.showDetails)
+            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+        }
+
+        trackAnalytics(.action, type: .info(title: "action", message: "navigation"), backend: backend, detail: curatedAction.label)
+    }
+
+    private func handleDefaultNotificationActivation(
+        for type: NotificationType,
+        actionHandler: NotificationActionHandler?,
+        backend: NotificationBackend
+    ) async {
+        switch type {
+        case .previewReady:
+            activateAppForNotificationAction()
+            NotificationCenter.default.post(name: .showOrganizationPreview, object: nil, userInfo: notificationUserInfo(for: type))
+            await actionHandler?(.showDetails)
+            trackAnalytics(.action, type: .info(title: "action", message: "defaultPreview"), backend: backend, detail: "default click")
+        case .processingError:
+            activateAppForNotificationAction()
+            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+            await actionHandler?(.showDetails)
+            trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: backend, detail: "default click")
+        default:
+            if let path = type.folderPath {
+                NotificationCenter.default.post(name: .openOrganizedFolder, object: nil, userInfo: [NativeNotificationUserInfoKey.folderPath: path])
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
+                await actionHandler?(.openFolder(path: path))
+                trackAnalytics(.action, type: .info(title: "action", message: "defaultOpen"), backend: backend, detail: "default click")
+            } else {
+                activateAppForNotificationAction()
+                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+                await actionHandler?(.showDetails)
+                trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: backend, detail: "default click")
+            }
+        }
+    }
+
+    private func notificationUserInfo(for type: NotificationType) -> [AnyHashable: Any] {
+        var userInfo: [AnyHashable: Any] = [
+            NativeNotificationUserInfoKey.notificationType: analyticsTypeLabel(for: type)
+        ]
+        if let path = type.folderPath {
+            userInfo[NativeNotificationUserInfoKey.folderPath] = path
+        }
+        return userInfo
+    }
+
+    private func activateAppForNotificationAction() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        if let keyWindow = NSApplication.shared.windows.first(where: { $0.canBecomeMain }) {
+            keyWindow.makeKeyAndOrderFront(nil)
         }
     }
     

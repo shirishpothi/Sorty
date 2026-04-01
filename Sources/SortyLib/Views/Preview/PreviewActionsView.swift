@@ -13,6 +13,8 @@ struct PreviewActionsView: View {
     let hasCustomInstructions: Bool
     let isRedoingWithModel: Bool
     let shouldDisableButtons: Bool
+    let editsCapturedCount: Int
+    let editsCapturedPulse: Bool
     
     let onCancel: () -> Void
     let onReset: () -> Void
@@ -21,6 +23,8 @@ struct PreviewActionsView: View {
     let onApply: () -> Void
     
     @State private var isHoveringCancel = false
+    @State private var isHoveringEditsCaptured = false
+    @State private var showEditsCapturedPopover = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -28,6 +32,11 @@ struct PreviewActionsView: View {
             cancelAndResetSection
             
             Spacer()
+            
+            // Center-left: Edits captured badge (shows user their corrections are being learned)
+            if editsCapturedCount > 0 {
+                editsCapturedBadge
+            }
             
             // Center: Regeneration controls
             regenerationSection
@@ -42,6 +51,57 @@ struct PreviewActionsView: View {
         .background(Color(NSColor.controlBackgroundColor))
     }
     
+    // MARK: - Edits Captured Badge
+    
+    private var editsCapturedBadge: some View {
+        Button {
+            HapticFeedbackManager.shared.selection()
+            showEditsCapturedPopover.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "pencil.and.outline")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.green)
+                
+                Text("\(editsCapturedCount)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.green)
+                Text(editsCapturedCount == 1 ? "edit" : "edits")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.green.opacity(0.1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                    )
+            )
+            .scaleEffect(editsCapturedPulse ? 1.08 : (isHoveringEditsCaptured ? 1.02 : 1.0))
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: editsCapturedPulse)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHoveringEditsCaptured = hovering
+            }
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
+        .popover(isPresented: $showEditsCapturedPopover, arrowEdge: .bottom) {
+            EditsCapturedPopoverContent(editsCapturedCount: editsCapturedCount)
+                .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+        .help("\(editsCapturedCount) manual \(editsCapturedCount == 1 ? "edit" : "edits") captured for learning")
+        .accessibilityIdentifier("EditsCapturedBadge")
+        .accessibilityLabel("\(editsCapturedCount) edits captured for learning")
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+    }
+    
     private var cancelAndResetSection: some View {
         HStack(spacing: 8) {
             // Prominent Cancel Button with keyboard shortcut
@@ -51,12 +111,12 @@ struct PreviewActionsView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 11))
+                        .font(.system(size: 10, weight: .semibold))
                     Text("Cancel")
-                        .font(.system(size: 12))
+                        .font(.caption.bold())
                 }
             }
-            .buttonStyle(.sortySecondary(size: .small))
+            .buttonStyle(.tintedPill(.red, size: .small))
             .keyboardShortcut(.cancelAction)
             .keyboardShortcut(".", modifiers: .command)  // Cmd+.
             .help("Cancel this organization session")
@@ -95,9 +155,9 @@ struct PreviewActionsView: View {
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 11))
+                        .font(.system(size: 10, weight: .semibold))
                     Text("Regenerate")
-                        .font(.system(size: 12))
+                        .font(.caption.bold())
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                     if hasCustomInstructions {
@@ -107,7 +167,7 @@ struct PreviewActionsView: View {
                     }
                 }
             }
-            .buttonStyle(.sortySecondary(size: .small))
+            .buttonStyle(.onboardingPill(size: .small))
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(shouldDisableButtons || isRedoingWithModel)
             .help("Regenerate organization plan with current instructions")
@@ -122,12 +182,12 @@ struct PreviewActionsView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "wand.and.stars")
-                        .font(.system(size: 10))
+                        .font(.system(size: 10, weight: .semibold))
                     Text("Model")
-                        .font(.system(size: 12))
+                        .font(.caption.bold())
                 }
             }
-            .buttonStyle(.sortySecondary(size: .small))
+            .buttonStyle(.tintedPill(.indigo, size: .small))
             .disabled(shouldDisableButtons || isRedoingWithModel)
             .help("Choose a different AI model and regenerate")
             .accessibilityIdentifier("ChooseModelButton")
@@ -329,6 +389,61 @@ struct PreviewInstructionsRow: View {
     }
 }
 
+// MARK: - Edits Captured Popover Content
+
+private struct EditsCapturedPopoverContent: View {
+    let editsCapturedCount: Int
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "pencil.and.outline")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.green)
+                
+                Text("Edits Captured")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            
+            Text("Your \(editsCapturedCount) manual \(editsCapturedCount == 1 ? "correction has" : "corrections have") been recorded. When you apply this organization, \(editsCapturedCount == 1 ? "it" : "they") will help improve future suggestions.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            
+            Divider()
+            
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.green.opacity(0.7))
+                    Text("File moves to different folders")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.green.opacity(0.7))
+                    Text("Rename edits & rejections")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.green.opacity(0.7))
+                    Text("Files moved to unorganized")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(12)
+        .frame(width: 240)
+    }
+}
+
 // MARK: - Previews
 
 #Preview("Preview Actions - Standard") {
@@ -338,6 +453,8 @@ struct PreviewInstructionsRow: View {
         hasCustomInstructions: false,
         isRedoingWithModel: false,
         shouldDisableButtons: false,
+        editsCapturedCount: 0,
+        editsCapturedPulse: false,
         onCancel: {},
         onReset: {},
         onRegenerate: {},
@@ -347,13 +464,51 @@ struct PreviewInstructionsRow: View {
     .frame(width: 800)
 }
 
-#Preview("Preview Actions - With Edits") {
+#Preview("Preview Actions - With Learnings") {
     PreviewActionsView(
         isApplying: false,
-        hasEdits: true,
+        hasEdits: false,
         hasCustomInstructions: true,
         isRedoingWithModel: false,
         shouldDisableButtons: false,
+        editsCapturedCount: 3,
+        editsCapturedPulse: false,
+        onCancel: {},
+        onReset: {},
+        onRegenerate: {},
+        onChooseModel: {},
+        onApply: {}
+    )
+    .frame(width: 800)
+}
+
+#Preview("Preview Actions - Learning Paused") {
+    PreviewActionsView(
+        isApplying: false,
+        hasEdits: true,
+        hasCustomInstructions: false,
+        isRedoingWithModel: false,
+        shouldDisableButtons: false,
+        editsCapturedCount: 0,
+        editsCapturedPulse: false,
+        onCancel: {},
+        onReset: {},
+        onRegenerate: {},
+        onChooseModel: {},
+        onApply: {}
+    )
+    .frame(width: 800)
+}
+
+#Preview("Preview Actions - With Edits Captured") {
+    PreviewActionsView(
+        isApplying: false,
+        hasEdits: true,
+        hasCustomInstructions: false,
+        isRedoingWithModel: false,
+        shouldDisableButtons: false,
+        editsCapturedCount: 7,
+        editsCapturedPulse: true,
         onCancel: {},
         onReset: {},
         onRegenerate: {},

@@ -52,6 +52,12 @@ class PreviewStore: ObservableObject {
     /// Duplicate file mappings - maps file ID to its duplicate info
     @Published private(set) var duplicateMappings: [UUID: DuplicateInfo] = [:]
     
+    /// Count of user edits captured for learning this session (moves, rejections, renames)
+    @Published private(set) var editsCapturedCount: Int = 0
+    
+    /// Triggers a brief pulse animation when a new edit is captured
+    @Published private(set) var editCapturedPulse: Bool = false
+    
     /// Cached folder counts to avoid recalculation during scrolling
     private var folderCountCache: [UUID: Int] = [:]
     private var folderCountCacheValid = false
@@ -135,6 +141,33 @@ class PreviewStore: ObservableObject {
             throttledTotalFileCount = plan.totalFiles
             workItem.cancel()
         }
+    }
+    
+    /// Record that a user edit was captured for learning
+    /// Increments counter and triggers a brief pulse animation
+    private func recordEditCaptured() {
+        guard learningsManager?.consentManager.canCollectData == true else { return }
+        guard learningsManager?.sessionLearningPaused != true else { return }
+        editsCapturedCount += 1
+        
+        // Trigger pulse animation
+        withAnimation(.easeOut(duration: 0.15)) {
+            editCapturedPulse = true
+        }
+        
+        // Reset pulse after brief delay
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+            withAnimation(.easeIn(duration: 0.1)) {
+                editCapturedPulse = false
+            }
+        }
+    }
+    
+    /// Reset edit capture count (called when plan resets or regenerates)
+    func resetEditsCaptured() {
+        editsCapturedCount = 0
+        editCapturedPulse = false
     }
     
     private func expandAllFolders() {
@@ -458,6 +491,7 @@ class PreviewStore: ObservableObject {
         
         // Record rejection before mutating the plan
         learningsManager?.recordRejection(originalPath: file.path)
+        recordEditCaptured()
         
         var updatedPlan = plan
         for i in 0..<updatedPlan.suggestions.count {
@@ -483,6 +517,7 @@ class PreviewStore: ObservableObject {
                 action: .edit,
                 confidence: mapping.renameConfidence
             )
+            recordEditCaptured()
         }
         
         var updatedPlan = plan
@@ -507,6 +542,7 @@ class PreviewStore: ObservableObject {
                 action: .reject,
                 confidence: mapping.renameConfidence
             )
+            recordEditCaptured()
         }
         
         var updatedPlan = plan
@@ -662,6 +698,7 @@ class PreviewStore: ObservableObject {
         let destFolderPath = folderIDToPath[toFolderID] ?? ""
         let destPath = destFolderPath.isEmpty ? file.displayName : "\(destFolderPath)/\(file.displayName)"
         learningsManager?.recordCorrection(originalPath: file.path, newPath: destPath)
+        recordEditCaptured()
         
         var updatedPlan = plan
         
@@ -1063,6 +1100,7 @@ struct FlatFolderRowView: View {
                     NSPasteboard.general.setString(usedStoragePath, forType: .string)
                 }
             )
+            .systemLiquidGlassPopover(cornerRadius: 12)
         }
     }
 

@@ -53,7 +53,7 @@
 	<key>GitCommitHash</key>
 	<string>253451e</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
+	<string>15.0</string>
 	<key>LSMultipleInstancesProhibited</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>

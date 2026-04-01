@@ -159,7 +159,7 @@ public enum SortyResources {
     public static func image(named name: String, withExtension ext: String = "png") -> NSImage? {
         // Try 1: Asset catalog (if compiled .car exists)
         if usesCompiledAssetCatalog {
-            if let nsImage = bundle.image(forResource: name) {
+            if let nsImage = bundle.image(forResource: name), isUsableImage(nsImage) {
                 logger.debug("Loaded image '\(name)' from asset catalog")
                 return nsImage
             }
@@ -174,39 +174,52 @@ public enum SortyResources {
         }
         
         // Try 3: Direct bundle resource lookup (works for Xcode builds with asset catalog)
-        if let nsImage = bundle.image(forResource: name) {
+        if let nsImage = bundle.image(forResource: name), isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from bundle resource")
             return nsImage
         }
 
         // Try 4: Main bundle fallback (covers app-level asset catalogs)
-        if bundle != Bundle.main, let nsImage = Bundle.main.image(forResource: name) {
+        if bundle != Bundle.main,
+           let nsImage = Bundle.main.image(forResource: name),
+           isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from main bundle")
             return nsImage
         }
 
         // Try 5: Images subdirectory (SPM .copy() resources)
         if let imageURL = bundle.url(forResource: name, withExtension: ext, subdirectory: "Images"),
-           let nsImage = NSImage(contentsOf: imageURL) {
+              let nsImage = NSImage(contentsOf: imageURL),
+              isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from Images subdirectory")
             return nsImage
         }
 
         // Try 6: Direct bundle resource with extension
         if let imageURL = bundle.url(forResource: name, withExtension: ext),
-           let nsImage = NSImage(contentsOf: imageURL) {
+              let nsImage = NSImage(contentsOf: imageURL),
+              isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from bundle root")
             return nsImage
         }
 
         // Try 7: Bundle image resource helper (covers non-asset bundled images)
         if let imageURL = bundle.urlForImageResource(name),
-           let nsImage = NSImage(contentsOf: imageURL) {
+           let nsImage = NSImage(contentsOf: imageURL),
+           isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' via urlForImageResource")
             return nsImage
         }
+
+        // Try 8: Nested Sorty_SortyLib bundle fallback (covers builds where
+        // this process resolves Bundle.main but the copied Images/ assets live
+        // in a sibling Sorty_SortyLib.bundle inside app resources).
+        if let nsImage = loadImageFromEmbeddedSortyLibBundle(named: name, withExtension: ext) {
+            logger.debug("Loaded image '\(name)' from embedded Sorty_SortyLib.bundle")
+            return nsImage
+        }
         
-        // Try 8: Look in source tree Assets.xcassets imageset directories (development fallback)
+        // Try 9: Look in source tree Assets.xcassets imageset directories (development fallback)
         // This handles the case where Xcode hasn't compiled the asset catalog yet
         let extensions = [ext, "png", "svg", "pdf"]
         let basePaths = [
@@ -218,7 +231,8 @@ public enum SortyResources {
             for fileExt in extensions {
                 let path = basePath.appendingPathComponent("\(name).\(fileExt)")
                 if FileManager.default.fileExists(atPath: path.path),
-                   let nsImage = NSImage(contentsOf: path) {
+                   let nsImage = NSImage(contentsOf: path),
+                   isUsableImage(nsImage) {
                     logger.debug("Loaded image '\(name)' from Assets.xcassets imageset at \(path.path)")
                     return nsImage
                 }
@@ -226,6 +240,38 @@ public enum SortyResources {
         }
 
         logger.warning("Failed to load image '\(name)' from any source")
+        return nil
+    }
+
+    private static func isUsableImage(_ image: NSImage) -> Bool {
+        image.size.width > 2 && image.size.height > 2
+    }
+
+    private static func loadImageFromEmbeddedSortyLibBundle(named name: String, withExtension ext: String) -> NSImage? {
+        let bundleCandidates: [URL] = [
+            Bundle.main.resourceURL?.appendingPathComponent("Sorty_SortyLib.bundle"),
+            Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/Sorty_SortyLib.bundle"),
+            bundle.resourceURL?.appendingPathComponent("Sorty_SortyLib.bundle")
+        ].compactMap { $0 }
+
+        for bundleURL in bundleCandidates where FileManager.default.fileExists(atPath: bundleURL.path) {
+            guard let embeddedBundle = Bundle(url: bundleURL) else {
+                continue
+            }
+
+            if let imageURL = embeddedBundle.url(forResource: name, withExtension: ext, subdirectory: "Images"),
+               let nsImage = NSImage(contentsOf: imageURL),
+               isUsableImage(nsImage) {
+                return nsImage
+            }
+
+            if let imageURL = embeddedBundle.url(forResource: name, withExtension: ext),
+               let nsImage = NSImage(contentsOf: imageURL),
+               isUsableImage(nsImage) {
+                return nsImage
+            }
+        }
+
         return nil
     }
 
@@ -275,6 +321,9 @@ public enum SortyResources {
                let pngImage = NSImage(contentsOf: pngFallback) {
                 return pngImage
             }
+
+            // Treat tiny SVG decodes as invalid so higher-level fallback lookups can run.
+            return nil
         }
 
         return nsImage

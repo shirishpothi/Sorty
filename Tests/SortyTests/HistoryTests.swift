@@ -7,6 +7,7 @@ class HistoryTests: XCTestCase {
     var history: OrganizationHistory!
     private var testSuiteName: String!
     private var testDefaults: UserDefaults!
+    private var storageDirectory: URL!
     
     @MainActor
     override func setUp() async throws {
@@ -14,14 +15,20 @@ class HistoryTests: XCTestCase {
         testSuiteName = "com.sorty.tests.history.\(name)"
         testDefaults = UserDefaults(suiteName: testSuiteName)!
         testDefaults.removePersistentDomain(forName: testSuiteName)
-        history = OrganizationHistory(userDefaults: testDefaults)
+        storageDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: storageDirectory, withIntermediateDirectories: true)
+        history = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
         history.clearHistory() // Start with clean slate
     }
     
     @MainActor
     override func tearDown() async throws {
         testDefaults?.removePersistentDomain(forName: testSuiteName)
+        if let storageDirectory {
+            try? FileManager.default.removeItem(at: storageDirectory)
+        }
         testDefaults = nil
+        storageDirectory = nil
         history = nil
         
     }
@@ -64,10 +71,55 @@ class HistoryTests: XCTestCase {
         let entry = OrganizationHistoryEntry(directoryPath: "/persist", filesOrganized: 1, foldersCreated: 1)
         history.addEntry(entry)
 
-        // Create a new instance using the same isolated UserDefaults suite
-        // This is deterministic and doesn't rely on flaky synchronize() calls
-        let newHistory = OrganizationHistory(userDefaults: testDefaults)
+        let newHistory = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
 
         XCTAssertTrue(newHistory.entries.contains(where: { $0.directoryPath == "/persist" }))
+    }
+
+    @MainActor
+    func testMigratesLegacyUserDefaultsIntoFileStore() throws {
+        let legacyEntry = OrganizationHistoryEntry(
+            directoryPath: "/legacy",
+            filesOrganized: 3,
+            foldersCreated: 1,
+            status: .completed
+        )
+        let encoded = try JSONEncoder().encode([legacyEntry])
+        testDefaults.set(encoded, forKey: "organizationHistory")
+
+        let migratedHistory = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
+
+        XCTAssertEqual(migratedHistory.entries.count, 1)
+        XCTAssertEqual(migratedHistory.entries.first?.directoryPath, "/legacy")
+        XCTAssertNil(testDefaults.data(forKey: "organizationHistory"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(migratedHistory.storageFileURL).path))
+    }
+
+    @MainActor
+    func testCorruptedPrimaryRecoversLatestSnapshotFromBackup() throws {
+        let first = OrganizationHistoryEntry(directoryPath: "/one", filesOrganized: 1, foldersCreated: 1, status: .completed)
+        let second = OrganizationHistoryEntry(directoryPath: "/two", filesOrganized: 2, foldersCreated: 1, status: .completed)
+
+        history.addEntry(first)
+        history.addEntry(second)
+
+        let primaryURL = try XCTUnwrap(history.storageFileURL)
+        let backupURL = try XCTUnwrap(history.backupStorageFileURL)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: backupURL.path))
+
+        let corruptData = Data("{\"entries\": [".utf8)
+        try corruptData.write(to: primaryURL)
+
+        let recoveredHistory = OrganizationHistory(userDefaults: testDefaults, storageDirectory: storageDirectory)
+
+        XCTAssertEqual(recoveredHistory.entries.count, 2)
+        XCTAssertEqual(Set(recoveredHistory.entries.map(\.directoryPath)), Set(["/one", "/two"]))
+
+        let recoveredEntries = OrganizationHistory.loadPersistedEntries(
+            userDefaults: testDefaults,
+            storageDirectory: storageDirectory
+        )
+        XCTAssertEqual(recoveredEntries.count, 2)
     }
 }

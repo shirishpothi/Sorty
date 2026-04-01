@@ -126,7 +126,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .troubleshooting:
             return ["troubleshoot", "errors", "reset", "logs", "repair", "recovery", "diagnose"]
         case .help:
-            return ["help", "support", "documentation", "faq", "guide", "tips", "contact"]
+            return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "deeplink", "sorty://", "automation"]
         case .experimental:
             return ["experimental", "labs", "beta", "feature flags", "defaults", "finder integration", "batch organization"]
         }
@@ -211,6 +211,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .help:
             return [
                 SettingsFeatureSnippet(title: "The Basics", summary: "Walk through the core organize-preview-apply workflow."),
+                SettingsFeatureSnippet(title: "Automation Deeplinks", summary: "Use sorty:// automation and deep link URLs from Finder, scripts, and shortcuts.", keywords: ["deeplink", "sorty://", "automation"]),
                 SettingsFeatureSnippet(title: "Privacy and Support", summary: "Open docs, changelog, and issue reporting links.")
             ]
         case .experimental:

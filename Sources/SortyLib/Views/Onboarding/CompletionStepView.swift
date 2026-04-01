@@ -112,6 +112,11 @@ private struct CompletionGlowRing: View {
 // MARK: - Completion Step View
 
 public struct CompletionStepView: View {
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var codexAuth: CodexCLIAuthManager
+    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
+
     let onFinish: () -> Void
 
     // Entry animation states
@@ -125,10 +130,18 @@ public struct CompletionStepView: View {
     @State private var animationTask: Task<Void, Never>?
 
     @State private var audioPlayer: AVAudioPlayer?
+    @State private var audioFadeTask: Task<Void, Never>?
+    @State private var readinessState: ReadinessState = .idle
 
     // Exit animation states
     @State private var exitTriggered = false
     @State private var contentDismissed = false
+
+    private enum ReadinessState: Equatable {
+        case idle
+        case checking
+        case failed(String)
+    }
 
     public init(onFinish: @escaping () -> Void) {
         self.onFinish = onFinish
@@ -260,19 +273,32 @@ public struct CompletionStepView: View {
 
                 // Start button
                 Button {
-                    startTransition()
+                    verifyAndFinish()
                 } label: {
                     HStack(spacing: 8) {
-                        Text("Start Using Sorty")
-                        Image(systemName: "arrow.right.circle.fill")
-                            .font(.system(size: 16))
+                        if readinessState == .checking {
+                            BouncingSpinner(size: 12, color: .white)
+                            Text("Checking Provider...")
+                        } else {
+                            Text("Start Using Sorty")
+                            Image(systemName: "arrow.right.circle.fill")
+                                .font(.system(size: 16))
+                        }
                     }
                 }
                 .buttonStyle(.onboardingPill)
                 .keyboardShortcut(.defaultAction)
+                .disabled(readinessState == .checking)
                 .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
                 .offset(y: tipsAppeared ? (contentDismissed ? 50 : 0) : 20)
                 .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.4), value: tipsAppeared)
+                .accessibilityIdentifier("OnboardingCompleteButton")
+
+                if case .failed(let message) = readinessState {
+                    completionFailureCard(message: message)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .accessibilityIdentifier("OnboardingCompletionHealthError")
+                }
 
                 Spacer()
             }
@@ -284,6 +310,7 @@ public struct CompletionStepView: View {
         .onDisappear {
             animationTask?.cancel()
             animationTask = nil
+            fadeOutAndStopAudio(duration: 0.25)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Completion Step")
@@ -345,6 +372,9 @@ public struct CompletionStepView: View {
     // MARK: - Audio
 
     private func playFinalOnboardingSound() {
+        audioFadeTask?.cancel()
+        audioFadeTask = nil
+
         let soundURL: URL? = {
             if let url = SortyResources.finalOnboardingSoundURL() {
                 return url
@@ -368,12 +398,125 @@ public struct CompletionStepView: View {
         }
     }
 
+    private func fadeOutAndStopAudio(duration: TimeInterval) {
+        audioFadeTask?.cancel()
+
+        guard let player = audioPlayer else { return }
+
+        player.setVolume(0, fadeDuration: duration)
+        audioFadeTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+
+            player.stop()
+            audioPlayer = nil
+            audioFadeTask = nil
+        }
+    }
+
     // MARK: - Exit Transition
+
+    @ViewBuilder
+    private func completionFailureCard(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Provider check failed")
+                        .font(.headline)
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+            }
+
+            Text("Retry now, or skip verification and land in provider setup repair before your first organization.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                Button("Retry") {
+                    verifyAndFinish()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .accessibilityIdentifier("OnboardingCompletionRetryButton")
+
+                Button("Skip for Now") {
+                    skipVerificationAndFinish()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("OnboardingCompletionSkipButton")
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.orange.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private var providerSetupStatus: ProviderSetupStatus {
+        OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: settingsViewModel.config,
+                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+                isCodexAuthenticated: codexAuth.isAuthenticated,
+                isCodexInstalled: codexAuth.isCodexInstalled,
+                isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
+                appleFoundationModelStatus: settingsViewModel.appleModelStatus
+            )
+        )
+    }
+
+    private func verifyAndFinish() {
+        let configurationStatus = providerSetupStatus
+        guard configurationStatus.isReady else {
+            readinessState = .failed(configurationStatus.message)
+            HapticFeedbackManager.shared.error()
+            return
+        }
+
+        readinessState = .checking
+
+        Task { @MainActor in
+            do {
+                try await settingsViewModel.testConnection()
+                appState.clearSetupRepairState()
+                readinessState = .idle
+                startTransition()
+            } catch {
+                readinessState = .failed(error.localizedDescription)
+                HapticFeedbackManager.shared.error()
+            }
+        }
+    }
+
+    private func skipVerificationAndFinish() {
+        appState.startSetupRepair(
+            message: "Sorty could not verify \(settingsViewModel.config.provider.displayName) during onboarding. Finish provider setup in Settings before organizing files.",
+            navigateToSettings: true
+        )
+        readinessState = .idle
+        startTransition()
+    }
 
     private func startTransition() {
         guard !exitTriggered else { return }
         exitTriggered = true
         HapticFeedbackManager.shared.success()
+        fadeOutAndStopAudio(duration: 0.45)
 
         // Fade out all content smoothly
         withAnimation(.easeIn(duration: 0.4)) {
@@ -413,5 +556,10 @@ struct QuickTipRow: View {
 // MARK: - Preview
 
 #Preview {
+    let codexAuthManager = CodexCLIAuthManager()
+
     CompletionStepView(onFinish: {})
+        .environmentObject(SettingsViewModel())
+        .environmentObject(AppState())
+        .environmentObject(codexAuthManager)
 }

@@ -38,6 +38,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             includeContentMetadata: true,
             customInstructions: customInstructions
         )
+        let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         
         // Build request body
         var requestBody: [String: Any] = [
@@ -56,9 +57,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         
         // Use streaming if enabled
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
         } else {
-            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, systemPrompt: systemPrompt, userPrompt: userPrompt)
+            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
         }
     }
     
@@ -83,6 +84,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
             customInstructions: customInstructions,
             analyzedImageFilenames: orderedImageNames
         )
+        let estimatedPromptTokens = PromptBuilder.estimateTokens(systemPrompt + userPrompt)
         
         // Build multimodal content
         var contentArray: [[String: Any]] = [
@@ -118,9 +120,9 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
         // Multimodal usually doesn't work well with streaming in some implementations, 
         // but we'll follow the config if possible.
         if config.enableStreaming {
-            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files)
+            return try await analyzeWithStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
         } else {
-            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, systemPrompt: systemPrompt, userPrompt: userPrompt)
+            return try await analyzeNonStreaming(url: url, requestBody: requestBody, files: files, promptTokens: estimatedPromptTokens)
         }
     }
 
@@ -199,7 +201,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     
     // MARK: - Non-Streaming Implementation
     
-    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], systemPrompt: String, userPrompt: String) async throws -> OrganizationPlan {
+    private func analyzeNonStreaming(url: URL, requestBody: [String: Any], files: [FileItem], promptTokens: Int?) async throws -> OrganizationPlan {
         let startTime = Date()
         let headers = authHeaders()
 
@@ -240,7 +242,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 model: config.model,
                 filesScanned: files.count,
                 totalFileSize: files.reduce(0) { $0 + $1.size },
-                promptTokens: PromptBuilder.estimateTokens(systemPrompt + userPrompt)
+                promptTokens: promptTokens
             )
             
             var plan = try ResponseParser.parseResponse(content, originalFiles: files, mode: config.mode)
@@ -255,7 +257,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
     
     // MARK: - Streaming Implementation
     
-    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem]) async throws -> OrganizationPlan {
+    private func analyzeWithStreaming(url: URL, requestBody: [String: Any], files: [FileItem], promptTokens: Int?) async throws -> OrganizationPlan {
         var streamingRequestBody = requestBody
         streamingRequestBody["stream"] = true
         
@@ -334,7 +336,7 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
                 model: config.model,
                 filesScanned: files.count,
                 totalFileSize: files.reduce(0) { $0 + $1.size },
-                promptTokens: PromptBuilder.estimateTokens(accumulatedContent) // We don't have the exact prompt tokens here easily
+                promptTokens: promptTokens
             )
             
             // Notify completion

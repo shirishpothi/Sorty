@@ -60,6 +60,183 @@ public class LearningsManager: ObservableObject {
         }
     }
     
+    // MARK: - Learnings Summary for UI
+    
+    /// A summary of the learnings state for UI consumption
+    public struct LearningsSummary: Sendable {
+        /// The overall state of learnings
+        public enum State: String, Sendable {
+            case noConsent      // User hasn't granted consent
+            case locked         // Learnings exist but access is locked
+            case paused         // Learning collection is temporarily paused
+            case empty          // Consent granted but no data yet
+            case building       // Some data, but still learning
+            case established    // Rich learnings profile available
+        }
+        
+        /// Profile maturity level for adaptive UX
+        public enum Maturity: String, Sendable {
+            case new            // < 3 sessions
+            case growing        // 3-10 sessions
+            case established    // > 10 sessions with rules
+        }
+        
+        public let state: State
+        public let maturity: Maturity
+        public let sessionCount: Int
+        public let activeRuleCount: Int
+        public let honingAnswerCount: Int
+        public let recentSessionCount: Int // Sessions in last 7 days
+        public let hasActiveRules: Bool
+        public let statusText: String
+        public let shortStatusText: String
+        
+        /// Whether learnings are actively contributing to organization
+        public var isActive: Bool {
+            state == .building || state == .established
+        }
+        
+        /// Whether the badge should be visible in the UI
+        public var shouldShowBadge: Bool {
+            state != .noConsent
+        }
+        
+        /// Whether feedback controls should be enabled
+        public var canProvideFeedback: Bool {
+            state != .noConsent && state != .locked && state != .paused
+        }
+    }
+    
+    /// Computed summary for UI display - updated reactively when profile changes
+    public var summary: LearningsSummary {
+        computeSummary()
+    }
+    
+    private func computeSummary() -> LearningsSummary {
+        // Check consent first
+        guard consentManager.canCollectData else {
+            return LearningsSummary(
+                state: .noConsent,
+                maturity: .new,
+                sessionCount: 0,
+                activeRuleCount: 0,
+                honingAnswerCount: 0,
+                recentSessionCount: 0,
+                hasActiveRules: false,
+                statusText: "Learning disabled",
+                shortStatusText: "Off"
+            )
+        }
+        
+        // Check locked state
+        if isLocked && consentManager.hasCompletedInitialSetup {
+            return LearningsSummary(
+                state: .locked,
+                maturity: .new,
+                sessionCount: 0,
+                activeRuleCount: 0,
+                honingAnswerCount: 0,
+                recentSessionCount: 0,
+                hasActiveRules: false,
+                statusText: "Learnings locked",
+                shortStatusText: "Locked"
+            )
+        }
+        
+        // Check paused state
+        if sessionLearningPaused {
+            let profile = currentProfile
+            let sessionCount = profile?.sessions.count ?? 0
+            let activeRuleCount = profile?.inferredRules.filter { $0.isEnabled && $0.status == .active }.count ?? 0
+            let weekAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+            let recentSessionCount = profile?.sessions.filter { ($0.completedAt ?? $0.timestamp) > weekAgo }.count ?? 0
+            return LearningsSummary(
+                state: .paused,
+                maturity: computeMaturity(sessionCount: sessionCount, ruleCount: activeRuleCount),
+                sessionCount: sessionCount,
+                activeRuleCount: activeRuleCount,
+                honingAnswerCount: profile?.honingAnswers.count ?? 0,
+                recentSessionCount: recentSessionCount,
+                hasActiveRules: activeRuleCount > 0,
+                statusText: activeRuleCount > 0 ? "Learning paused (\(activeRuleCount) active pattern\(activeRuleCount == 1 ? "" : "s"))" : "Learning paused",
+                shortStatusText: "Paused"
+            )
+        }
+        
+        // Profile-based states
+        guard let profile = currentProfile else {
+            return LearningsSummary(
+                state: .empty,
+                maturity: .new,
+                sessionCount: 0,
+                activeRuleCount: 0,
+                honingAnswerCount: 0,
+                recentSessionCount: 0,
+                hasActiveRules: false,
+                statusText: "Ready to learn",
+                shortStatusText: "Ready"
+            )
+        }
+        
+        let sessionCount = profile.sessions.count
+        let activeRules = profile.inferredRules.filter { $0.isEnabled && $0.status == .active }
+        let activeRuleCount = activeRules.count
+        let honingAnswerCount = profile.honingAnswers.count
+        
+        // Count recent sessions (last 7 days)
+        let weekAgo = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        let recentSessionCount = profile.sessions.filter { ($0.completedAt ?? $0.timestamp) > weekAgo }.count
+        
+        let maturity = computeMaturity(sessionCount: sessionCount, ruleCount: activeRuleCount)
+        
+        // Determine state based on data richness
+        let state: LearningsSummary.State
+        let statusText: String
+        let shortStatusText: String
+        
+        if sessionCount == 0 && honingAnswerCount == 0 {
+            state = .empty
+            statusText = "Ready to learn from your organization"
+            shortStatusText = "Ready"
+        } else if activeRuleCount == 0 && sessionCount < 5 {
+            state = .building
+            let remaining = 5 - sessionCount
+            statusText = "Learning... \(remaining) more session\(remaining == 1 ? "" : "s") to build patterns"
+            shortStatusText = "Learning"
+        } else {
+            state = .established
+            if activeRuleCount > 0 {
+                statusText = "\(activeRuleCount) learned pattern\(activeRuleCount == 1 ? "" : "s") active"
+                shortStatusText = "\(activeRuleCount) pattern\(activeRuleCount == 1 ? "" : "s")"
+            } else {
+                statusText = "\(sessionCount) session\(sessionCount == 1 ? "" : "s") learned"
+                shortStatusText = "\(sessionCount) session\(sessionCount == 1 ? "" : "s")"
+            }
+        }
+        
+        return LearningsSummary(
+            state: state,
+            maturity: maturity,
+            sessionCount: sessionCount,
+            activeRuleCount: activeRuleCount,
+            honingAnswerCount: honingAnswerCount,
+            recentSessionCount: recentSessionCount,
+            hasActiveRules: activeRuleCount > 0,
+            statusText: statusText,
+            shortStatusText: shortStatusText
+        )
+    }
+    
+    private func computeMaturity(sessionCount: Int, ruleCount: Int) -> LearningsSummary.Maturity {
+        if sessionCount < 3 {
+            return .new
+        } else if sessionCount < 10 || ruleCount == 0 {
+            return .growing
+        } else {
+            return .established
+        }
+    }
+    
     // MARK: - Dependencies
     
     private let userDefaults: UserDefaults
@@ -820,6 +997,69 @@ public class LearningsManager: ObservableObject {
         profile.historyReverts.append(event)
         currentProfile = profile
         debouncedSave()
+    }
+    
+    // MARK: - Session Outcome Feedback
+    
+    /// Outcome feedback for a completed organization session
+    public enum SessionOutcome: String, Sendable {
+        case useful
+        case notUseful
+    }
+    
+    /// Record quick outcome feedback for a session from history view
+    public func recordSessionOutcomeFeedback(sessionId: String, outcome: SessionOutcome, folderPath: String? = nil) {
+        guard consentManager.canCollectData else { return }
+        guard !sessionLearningPaused else { return }
+        if let folderPath, isPathExcludedFromLearning(folderPath) { return }
+        loadProfileIfNeededForCollection()
+        guard var profile = currentProfile else { return }
+
+        let resolvedSessionID: String
+        if profile.sessions.contains(where: { $0.id == sessionId }) {
+            resolvedSessionID = sessionId
+        } else if let matchedSession = profile.sessions.first(where: { $0.historyEntryId == sessionId }) {
+            resolvedSessionID = matchedSession.id
+        } else {
+            resolvedSessionID = sessionId
+        }
+        
+        mutateSession(in: &profile, sessionId: resolvedSessionID, folderPath: folderPath, createIfMissing: false) { session in
+            switch outcome {
+            case .useful:
+                // Mark as accepted if not already corrected/reverted
+                if session.reaction == .inProgress {
+                    session.reaction = .accepted
+                }
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: Date(),
+                        kind: .feedback,
+                        summary: "User marked session as useful"
+                    )
+                )
+            case .notUseful:
+                session.events.append(
+                    OrganizationSessionEvent(
+                        timestamp: Date(),
+                        kind: .feedback,
+                        summary: "User marked session as not useful"
+                    )
+                )
+            }
+        }
+        
+        currentProfile = profile
+        debouncedSave()
+    }
+    
+    /// Get the count of active rules applicable to a specific folder
+    public func activeRuleCount(forFolder folderPath: String) -> Int {
+        guard let profile = currentProfile else { return 0 }
+        return profile.inferredRules
+            .filter { $0.isEnabled && $0.status == .active }
+            .filter { ruleMatchesScope(rule: $0, folderPath: folderPath, personaId: nil) }
+            .count
     }
     
     /// Record a successfully completed organization run
@@ -1912,11 +2152,13 @@ public class LearningsManager: ObservableObject {
     /// Add a path exclusion pattern (learning will be skipped for matching paths)
     public func addLearningExclusion(_ pattern: String) async {
         guard var profile = currentProfile else { return }
-        let trimmedPattern = normalizedLearningPattern(pattern)
-        guard !trimmedPattern.isEmpty else { return }
+        let storedPattern = normalizedLearningPatternForStorage(pattern)
+        guard !storedPattern.isEmpty else { return }
 
-        if !profile.learningExclusionPatterns.map(normalizedLearningPattern).contains(trimmedPattern) {
-            profile.learningExclusionPatterns.append(trimmedPattern)
+        let normalizedPattern = normalizedLearningPattern(storedPattern)
+
+        if !profile.learningExclusionPatterns.map(normalizedLearningPattern).contains(normalizedPattern) {
+            profile.learningExclusionPatterns.append(storedPattern)
             currentProfile = profile
             analysisResult = nil
             await pruneExcludedLearningData()
@@ -2298,6 +2540,26 @@ public class LearningsManager: ObservableObject {
         var normalized = pattern
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+            .replacingOccurrences(of: "\\", with: "/")
+
+        while normalized.contains("//") {
+            normalized = normalized.replacingOccurrences(of: "//", with: "/")
+        }
+
+        if normalized.hasPrefix("./") {
+            normalized.removeFirst(2)
+        }
+
+        if normalized.hasSuffix("/") {
+            normalized.removeLast()
+        }
+
+        return normalized
+    }
+
+    private func normalizedLearningPatternForStorage(_ pattern: String) -> String {
+        var normalized = pattern
+            .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "\\", with: "/")
 
         while normalized.contains("//") {

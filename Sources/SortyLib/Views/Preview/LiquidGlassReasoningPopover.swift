@@ -47,6 +47,7 @@ struct LiquidGlassReasoningButton: View {
                     suggestion: suggestion,
                     matchedRule: matchedRule
                 )
+                .systemLiquidGlassPopover(cornerRadius: 12)
             }
         }
     }

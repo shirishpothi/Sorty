@@ -166,7 +166,6 @@ struct AnalysisView: View {
     @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
     @StateObject private var refreshManager = AnalysisRefreshManager()
     @State private var hasAppeared = false
-    @State private var isCancelHovered = false
     @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
     @State private var pendingModelSwitch: PendingModelSwitch?
@@ -199,78 +198,49 @@ struct AnalysisView: View {
         return .none
     }
 
+    /// Whether the scan found zero files (empty directory or all files excluded)
+    private var isEmptyDirectory: Bool {
+        let stage = organizer.organizationStage
+        return stage.contains("Filtered to 0 files")
+            || stage.contains("No files found to organize")
+            || (stage.contains("Found 0 files") && !organizer.isStreaming)
+    }
+
     var body: some View {
         WorkflowContainer(currentStep: .analyze) {
             Spacer(minLength: 20)
 
-            VStack(spacing: 24) {
-                progressSection
-                    .opacity(hasAppeared ? 1 : 0)
-                    .scaleEffect(hasAppeared ? 1 : 0.9)
-                    .animation(
-                        .spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+            if isEmptyDirectory {
+                emptyDirectoryView
+            } else {
+                VStack(spacing: 24) {
+                    progressSection
+                        .opacity(hasAppeared ? 1 : 0)
+                        .scaleEffect(hasAppeared ? 1 : 0.9)
+                        .animation(
+                            .spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
 
-                stageIndicator
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 10)
-                    .animation(
-                        .spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+                    stageIndicator
+                        .opacity(hasAppeared ? 1 : 0)
+                        .offset(y: hasAppeared ? 0 : 10)
+                        .animation(
+                            .spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
 
-                tieredNoticeView
+                    tieredNoticeView
 
-                if organizer.isStreaming {
-                    aiInsightsView
-                        .transition(
-                            .asymmetric(
-                                insertion: .move(edge: .bottom).combined(with: .opacity),
-                                removal: .opacity
-                            ))
-                }
-
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    showCancelConfirmation = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 12, weight: .medium))
-                        Text("Cancel Generation")
+                    if organizer.isStreaming {
+                        aiInsightsView
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
                     }
-                    .padding(.horizontal, 4)
+
+                    analysisActionButtons
                 }
-                .buttonStyle(.bordered)
-                .tint(.red)
-                .foregroundStyle(.red)
-                .scaleEffect(isCancelHovered ? 1.03 : 1.0)
-                .animation(.easeInOut(duration: 0.15), value: isCancelHovered)
-                .onHover { hovering in
-                    isCancelHovered = hovering
-                }
-                .keyboardShortcut(.escape, modifiers: [])
-                .opacity(hasAppeared ? 1 : 0)
-                .animation(
-                    .spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared
-                )
-                .accessibilityIdentifier("AnalysisCancelButton")
-                .confirmationDialog(
-                    "Cancel Organization?",
-                    isPresented: $showCancelConfirmation,
-                    titleVisibility: .visible
-                ) {
-                    Button("Cancel Generation", role: .destructive) {
-                        recordCancelledAnalysis()
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            organizer.reset()
-                        }
-                    }
-                    Button("Continue", role: .cancel) {}
-                } message: {
-                    Text(
-                        "This will stop the AI analysis and return to folder selection. Your progress will not be saved."
-                    )
-                }
+                .frame(maxHeight: .infinity)
             }
-            .frame(maxHeight: .infinity)
 
             Spacer(minLength: 20)
         }
@@ -378,13 +348,19 @@ struct AnalysisView: View {
     private var timeoutMessage: some View {
         InlineNotice(
             icon: "folder.badge.gearshape",
-            title: "This folder is taking longer than usual",
+            title: "This organisation is taking a while",
             message: "Large folders can take 1-3 minutes. You can keep working in other apps. ",
             severity: .info,
             actions: [
                 InlineNoticeAction(title: "Try Faster Model", systemImage: "bolt.circle") {
                     HapticFeedbackManager.shared.tap()
                     showFasterModelPicker = true
+                },
+                InlineNoticeAction(title: "Cancel and Exit", systemImage: "xmark.circle") {
+                    HapticFeedbackManager.shared.tap()
+                    recordCancelledAnalysis()
+                    organizer.reset()
+                    appState.selectedDirectory = nil
                 }
             ],
             isCentered: true
@@ -402,6 +378,145 @@ struct AnalysisView: View {
         )
         .accessibilityLabel("Background processing")
         .accessibilityHint("You will be notified when the preview is ready")
+    }
+
+    // MARK: - Empty Directory View
+
+    private var emptyDirectoryView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.orange.opacity(0.1))
+                    .frame(width: 100, height: 100)
+
+                Image(systemName: "folder.badge.questionmark")
+                    .font(.system(size: 44))
+                    .foregroundColor(.orange)
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .scaleEffect(hasAppeared ? 1 : 0.9)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+
+            VStack(spacing: 8) {
+                Text("No Files to Organize")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+
+                Text("This folder is empty or all files were excluded by your exclusion rules. Try a different folder or adjust your exclusions.")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 400)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+
+            HStack(spacing: 14) {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    recordCancelledAnalysis()
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        organizer.reset()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Cancel")
+                            .font(.callout.weight(.semibold))
+                    }
+                }
+                .buttonStyle(.tintedPill(.red))
+                .accessibilityIdentifier("AnalysisEmptyCancelButton")
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    recordCancelledAnalysis()
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        organizer.reset()
+                        appState.selectedDirectory = nil
+                    }
+                    appState.showDirectoryPicker = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Change Folder")
+                            .font(.callout.weight(.semibold))
+                    }
+                }
+                .buttonStyle(.onboardingPill)
+                .accessibilityIdentifier("AnalysisEmptyChooseFolderButton")
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("No files to organize: This folder is empty or all files were excluded.")
+    }
+
+    // MARK: - Analysis Action Buttons
+
+    private var analysisActionButtons: some View {
+        HStack(spacing: 12) {
+            Button {
+                HapticFeedbackManager.shared.tap()
+                showCancelConfirmation = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("Cancel")
+                        .font(.caption.bold())
+                }
+            }
+            .buttonStyle(.tintedPill(.red, size: .small))
+            .keyboardShortcut(.escape, modifiers: [])
+            .accessibilityIdentifier("AnalysisCancelButton")
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                showFasterModelPicker = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("Model")
+                        .font(.caption.bold())
+                }
+            }
+            .buttonStyle(.tintedPill(.indigo, size: .small))
+            .accessibilityIdentifier("AnalysisModelButton")
+            .modelSelectorTriggerBounds()
+        }
+        .opacity(hasAppeared ? 1 : 0)
+        .animation(
+            .spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared
+        )
+        .confirmationDialog(
+            "Cancel Organization?",
+            isPresented: $showCancelConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Cancel Generation", role: .destructive) {
+                recordCancelledAnalysis()
+                withAnimation(.easeOut(duration: 0.3)) {
+                    organizer.reset()
+                }
+            }
+            Button("Continue", role: .cancel) {}
+        } message: {
+            Text(
+                "This will stop the AI analysis and return to folder selection. Your progress will not be saved."
+            )
+        }
     }
 
     // MARK: - AI Insights View
@@ -817,6 +932,7 @@ private struct InsightHistorySection: View {
                             }
                             .padding(12)
                             .frame(width: 300)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
                         }
                     }
 

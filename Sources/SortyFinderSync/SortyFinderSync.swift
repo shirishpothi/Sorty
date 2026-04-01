@@ -209,9 +209,6 @@ final class SortyFinderSync: FIFinderSync {
     }
 
     private static func prefersDarkAppearance() -> Bool {
-        if NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
-            return true
-        }
         guard let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") else {
             return false
         }

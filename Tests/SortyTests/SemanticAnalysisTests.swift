@@ -288,6 +288,14 @@ class FileItemSemanticTests: XCTestCase {
         )
         XCTAssertTrue(fileWithMetadata.hasSemanticContent)
 
+        let fileWithMetadataOCR = FileItem(
+            path: "/test/scan.jpg",
+            name: "scan",
+            extension: "jpg",
+            contentMetadata: ContentMetadata(ocrText: "Invoice #123")
+        )
+        XCTAssertTrue(fileWithMetadataOCR.hasSemanticContent)
+
         let fileWithoutContent = FileItem(
             path: "/test/empty.txt",
             name: "empty",
@@ -314,6 +322,21 @@ class FileItemSemanticTests: XCTestCase {
         XCTAssertTrue(semanticContent!.contains("OCR:"))
         XCTAssertTrue(semanticContent!.contains("Title:"))
         XCTAssertTrue(semanticContent!.contains("Keywords:"))
+
+        let metadataOCRFile = FileItem(
+            path: "/test/scan.jpg",
+            name: "scan",
+            extension: "jpg",
+            contentMetadata: ContentMetadata(
+                ocrText: "Invoice 2026",
+                detectedKeywords: ["invoice", "2026"]
+            )
+        )
+
+        let metadataOCRContent = metadataOCRFile.semanticTextContent
+        XCTAssertNotNil(metadataOCRContent)
+        XCTAssertTrue(metadataOCRContent!.contains("OCR: Invoice 2026"))
+        XCTAssertTrue(metadataOCRContent!.contains("Detected: invoice, 2026"))
     }
 
     func testResolutionString() {

@@ -95,7 +95,7 @@ struct ModelSelectionPopover: View {
     let popoverSize: CGSize
     let onSelect: (AIProvider, String) -> Void
 
-    private let cornerRadius: CGFloat = 18
+    private let cornerRadius: CGFloat = 12
     
     @StateObject private var modelCatalog = ModelCatalog.shared
     
@@ -607,7 +607,7 @@ struct ModelSelectionPopover: View {
     @ViewBuilder
     private var chromeBackground: some View {
         if #available(macOS 26.0, *) {
-            Color.clear
+            Color.white.opacity(0.02)
         } else {
             LinearGradient(
                 colors: [
@@ -623,7 +623,7 @@ struct ModelSelectionPopover: View {
     @ViewBuilder
     private var sidebarBackground: some View {
         if #available(macOS 26.0, *) {
-            Color.clear
+            Color.white.opacity(0.015)
         } else {
             LinearGradient(
                 colors: [
@@ -660,24 +660,34 @@ private struct ModelSelectionPopoverGlassModifier: ViewModifier {
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(fallbackSurfaceFill)
+            }
+            .systemLiquidGlassBackground(cornerRadius: cornerRadius)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.1), radius: 14, y: 8)
+            .presentationCornerRadius(cornerRadius)
+    }
+
+    private var fallbackSurfaceFill: AnyShapeStyle {
         if #available(macOS 26.0, *) {
-            content
-                .presentationCornerRadius(cornerRadius)
-                .presentationBackground(.clear)
-                .background {
-                    Color.clear
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
-                }
+            return AnyShapeStyle(Color.clear)
         } else {
-            content
-                .presentationCornerRadius(cornerRadius)
-                .presentationBackground(.clear)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.12), radius: 18, y: 10)
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color(nsColor: .windowBackgroundColor),
+                        Color(nsColor: .controlBackgroundColor)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
         }
     }
 }
@@ -692,17 +702,20 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
 
     private let contentPadding: CGFloat = 12
     private let verticalSpacing: CGFloat = 12
+    private let idealPopoverSize = CGSize(width: 500, height: 420)
+    private let minimumUsableHostSize = CGSize(width: 420, height: 320)
 
     func body(content: Content) -> some View {
         content
             .overlayPreferenceValue(ModelSelectionTriggerBoundsPreferenceKey.self) { anchor in
                 GeometryReader { proxy in
-                    if isPresented, let anchor {
-                        let frame = proxy[anchor]
+                    if isPresented {
+                        let frame = anchor.map { proxy[$0] }
                         let popoverSize = resolvedPopoverSize(in: proxy.size)
 
                         ZStack(alignment: .topLeading) {
-                            Color.clear
+                            Color.black
+                                .opacity(0.05)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     isPresented = false
@@ -718,10 +731,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                                 onSelect: onSelect
                             )
                             .shadow(color: .black.opacity(0.22), radius: 28, y: 14)
-                            .offset(
-                                x: resolvedX(for: frame, popoverSize: popoverSize, in: proxy.size),
-                                y: resolvedY(for: frame, popoverSize: popoverSize, in: proxy.size)
-                            )
+                            .offset(x: resolvedX(for: frame, popoverSize: popoverSize, in: proxy.size), y: resolvedY(for: frame, popoverSize: popoverSize, in: proxy.size))
                             .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)))
                         }
                         .zIndex(1000)
@@ -731,22 +741,44 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     }
 
     private func resolvedPopoverSize(in containerSize: CGSize) -> CGSize {
-        let availableWidth = max(0, containerSize.width - (contentPadding * 2))
-        let availableHeight = max(0, containerSize.height - (contentPadding * 2))
+        let hostAvailableWidth = max(0, containerSize.width - (contentPadding * 2))
+        let hostAvailableHeight = max(0, containerSize.height - (contentPadding * 2))
+
+        let hostCanFitPopoverComfortably = hostAvailableWidth >= minimumUsableHostSize.width && hostAvailableHeight >= minimumUsableHostSize.height
+
+        if hostCanFitPopoverComfortably {
+            return CGSize(
+                width: min(idealPopoverSize.width, hostAvailableWidth),
+                height: min(idealPopoverSize.height, hostAvailableHeight)
+            )
+        }
+
+        // Fallback to screen bounds so compact hosts (like history cards) don't collapse the selector UI.
+        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        let screenAvailableWidth = max(0, screenFrame.width - (contentPadding * 2))
+        let screenAvailableHeight = max(0, screenFrame.height - (contentPadding * 2))
 
         return CGSize(
-            width: min(500, availableWidth),
-            height: min(420, availableHeight)
+            width: min(idealPopoverSize.width, screenAvailableWidth > 0 ? screenAvailableWidth : hostAvailableWidth),
+            height: min(idealPopoverSize.height, screenAvailableHeight > 0 ? screenAvailableHeight : hostAvailableHeight)
         )
     }
 
-    private func resolvedX(for frame: CGRect, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
+    private func resolvedX(for frame: CGRect?, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
+        guard let frame else {
+            return max(contentPadding, (containerSize.width - popoverSize.width) / 2)
+        }
+
         let preferredX = frame.maxX - popoverSize.width
         let maxX = max(contentPadding, containerSize.width - popoverSize.width - contentPadding)
         return min(max(preferredX, contentPadding), maxX)
     }
 
-    private func resolvedY(for frame: CGRect, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
+    private func resolvedY(for frame: CGRect?, popoverSize: CGSize, in containerSize: CGSize) -> CGFloat {
+        guard let frame else {
+            return max(contentPadding, (containerSize.height - popoverSize.height) / 2)
+        }
+
         let belowY = frame.maxY + verticalSpacing
         let maxY = containerSize.height - popoverSize.height - contentPadding
 
@@ -756,6 +788,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
 
         return max(frame.minY - popoverSize.height - verticalSpacing, contentPadding)
     }
+
 }
 
 // MARK: - Preview

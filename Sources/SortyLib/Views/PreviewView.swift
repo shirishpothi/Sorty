@@ -25,6 +25,8 @@ struct PreviewView: View {
     @State private var showRedoModelPicker = false
     @State private var isRedoingWithModel = false
     @State private var viewingHistoryIndex: Int? = nil
+    @State private var activeNotificationApplyRequestID: UUID?
+    @State private var activeNotificationRedoRequestID: UUID?
     @FocusState private var instructionsFocused: Bool
 
     private var displayedPlan: OrganizationPlan {
@@ -51,6 +53,10 @@ struct PreviewView: View {
         if editablePlan.totalFiles == 0 { return .emptyDirectory }
         if editablePlan.suggestions.isEmpty && !editablePlan.unorganizedFiles.isEmpty { return .allUnorganized(editablePlan.unorganizedFiles.count) }
         return .none
+    }
+    
+    private var learningsSummary: LearningsManager.LearningsSummary {
+        learningsManager.summary
     }
     
     init(plan: OrganizationPlan, baseURL: URL) {
@@ -98,28 +104,69 @@ struct PreviewView: View {
                 PreviewStatsView(stats: editablePlan.generationStats, showStatsForNerds: true, estimatedTimeRemaining: nil, currentFile: Int(organizer.progress * Double(editablePlan.totalFiles)), totalFiles: editablePlan.totalFiles, stage: organizer.organizationStage)
             }
             Divider()
-            PreviewListView(store: previewStore, dragDropManager: dragDropManager, onPlanChanged: { hasEdits = true; editablePlan = previewStore.plan }, emptyStateType: emptyStateType, onFocusInstructions: { instructionsFocused = true }, onRegenerate: regeneratePreview)
+            PreviewListView(
+                store: previewStore,
+                dragDropManager: dragDropManager,
+                onPlanChanged: {
+                    hasEdits = true
+                    editablePlan = previewStore.plan
+                },
+                emptyStateType: emptyStateType,
+                onFocusInstructions: { instructionsFocused = true },
+                onRegenerate: regeneratePreview,
+                onChooseFolder: {
+                    HapticFeedbackManager.shared.selection()
+                    appState.showDirectoryPicker = true
+                },
+                onExitPreview: {
+                    HapticFeedbackManager.shared.tap()
+                    organizer.reset()
+                    appState.selectedDirectory = nil
+                }
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             bottomToolbar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .alert("Apply Organization?", isPresented: $showApplyConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Apply") { applyOrganization() }
+            Button("Cancel", role: .cancel) {
+                if let requestID = activeNotificationApplyRequestID {
+                    NotificationManager.shared.recordActionLifecycle("apply", stage: "cancelled", detail: "preview confirmation")
+                    activeNotificationApplyRequestID = nil
+                    appState.clearNotificationActionRequest(id: requestID)
+                }
+            }
+            Button("Apply") {
+                if activeNotificationApplyRequestID != nil {
+                    NotificationManager.shared.recordActionLifecycle("apply", stage: "confirmed", detail: "preview confirmation")
+                }
+                applyOrganization()
+            }
         } message: { Text("\(editablePlan.totalFiles) files will be organized. \(editablePlan.unorganizedFiles.count) files will remain in place.") }
         .onChange(of: organizer.state) { _, newState in
             if case .completed = newState {
                 isApplying = false
+                if activeNotificationApplyRequestID != nil {
+                    NotificationManager.shared.recordActionLifecycle("apply", stage: "completed", detail: baseURL.path)
+                    activeNotificationApplyRequestID = nil
+                }
                 if learningsManager.consentManager.canCollectData { Task { @MainActor in try? await Task.sleep(nanoseconds: 500_000_000); showPostOrganizationHoning = true } }
-            } else if case .error = newState { isApplying = false }
+            } else if case .error(let error) = newState {
+                isApplying = false
+                if activeNotificationApplyRequestID != nil {
+                    NotificationManager.shared.recordActionLifecycle("apply", stage: "failed", failed: true, detail: error.localizedDescription)
+                    activeNotificationApplyRequestID = nil
+                }
+            }
         }
         .onAppear {
             previewStore.dragDropManager = dragDropManager
             previewStore.learningsManager = learningsManager
             learningsManager.loadProfileIfNeededForCollection()
+            consumePendingNotificationActionIfNeeded()
         }
-        .onChange(of: plan) { _, newPlan in editablePlan = newPlan; previewStore.updatePlan(newPlan); hasEdits = false }
+        .onChange(of: plan) { _, newPlan in editablePlan = newPlan; previewStore.updatePlan(newPlan); previewStore.resetEditsCaptured(); hasEdits = false }
         .onChange(of: viewingHistoryIndex) { _, newIndex in
             if let idx = newIndex, idx < organizer.planHistory.count {
                 previewStore.updatePlan(organizer.planHistory[idx])
@@ -127,11 +174,19 @@ struct PreviewView: View {
                 previewStore.updatePlan(editablePlan)
             }
         }
+        .onChange(of: appState.pendingNotificationActionRequest?.id) { _, _ in
+            consumePendingNotificationActionIfNeeded()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { _ in
             guard organizer.state == .ready else { return }
             showRedoModelPicker = true
         }
-        .sheet(isPresented: $showPostOrganizationHoning) { PostOrganizationHoningView(fileCount: editablePlan.totalFiles, folderCount: editablePlan.totalFolders, config: settingsViewModel.config, onComplete: { answers in Task { await learningsManager.saveHoningResults(answers); showPostOrganizationHoning = false } }, onSkip: { showPostOrganizationHoning = false }) }
+        .onChange(of: showRedoModelPicker) { oldValue, newValue in
+            guard oldValue, !newValue, activeNotificationRedoRequestID != nil else { return }
+            NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "cancelled", detail: "preview picker")
+            activeNotificationRedoRequestID = nil
+        }
+        .sheet(isPresented: $showPostOrganizationHoning) { PostOrganizationHoningView(fileCount: editablePlan.totalFiles, folderCount: editablePlan.totalFolders, config: settingsViewModel.config, learningsMaturity: learningsSummary.maturity, onComplete: { answers in Task { await learningsManager.saveHoningResults(answers); showPostOrganizationHoning = false } }, onSkip: { showPostOrganizationHoning = false }) }
         .modelSelectionOverlay(
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
@@ -158,8 +213,10 @@ struct PreviewView: View {
                     hasCustomInstructions: !organizer.customInstructions.isEmpty,
                     isRedoingWithModel: isRedoingWithModel,
                     shouldDisableButtons: shouldDisableButtons,
+                    editsCapturedCount: previewStore.editsCapturedCount,
+                    editsCapturedPulse: previewStore.editCapturedPulse,
                     onCancel: { recordCancelledOrganization(); organizer.cancel() },
-                    onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); hasEdits = false },
+                    onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
                     onRegenerate: regeneratePreview,
                     onChooseModel: { showRedoModelPicker = true },
                     onApply: { HapticFeedbackManager.shared.tap(); showApplyConfirmation = true }
@@ -179,17 +236,66 @@ struct PreviewView: View {
     
     private func redoWithProviderAndModel(_ provider: AIProvider, _ model: String) {
         showRedoModelPicker = false; isRedoingWithModel = true; HapticFeedbackManager.shared.tap()
+        if activeNotificationRedoRequestID != nil {
+            NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "confirmed", detail: "\(provider.displayName):\(model)")
+            NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "executing", detail: baseURL.path)
+        }
         Task {
-            do { try await organizer.regenerateWithModel(provider: provider, model: model); await MainActor.run { HapticFeedbackManager.shared.success(); isRedoingWithModel = false } }
-            catch { await MainActor.run { HapticFeedbackManager.shared.error(); isRedoingWithModel = false; organizer.state = .error(error) } }
+            do {
+                try await organizer.regenerateWithModel(provider: provider, model: model)
+                await MainActor.run {
+                    HapticFeedbackManager.shared.success()
+                    isRedoingWithModel = false
+                    if activeNotificationRedoRequestID != nil {
+                        NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "completed", detail: "\(provider.displayName):\(model)")
+                        activeNotificationRedoRequestID = nil
+                    }
+                }
+            }
+            catch {
+                await MainActor.run {
+                    HapticFeedbackManager.shared.error()
+                    isRedoingWithModel = false
+                    if activeNotificationRedoRequestID != nil {
+                        NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "failed", failed: true, detail: error.localizedDescription)
+                        activeNotificationRedoRequestID = nil
+                    }
+                    organizer.state = .error(error)
+                }
+            }
         }
     }
     
     private func applyOrganization() {
         isApplying = true; if hasEdits { organizer.currentPlan = editablePlan }
+        if activeNotificationApplyRequestID != nil {
+            NotificationManager.shared.recordActionLifecycle("apply", stage: "executing", detail: baseURL.path)
+        }
         recordAcceptedPlacements()
         let resolvedURL = appState.resolveSelectedDirectoryWithAccess() ?? baseURL
         Task { @MainActor in do { try await organizer.apply(at: resolvedURL, dryRun: false, enableTagging: settingsViewModel.config.enableFileTagging); if case .completed = organizer.state { isApplying = false } } catch { organizer.state = .error(error); isApplying = false } }
+    }
+
+    private func consumePendingNotificationActionIfNeeded() {
+        guard let request = appState.pendingNotificationActionRequest else { return }
+        guard request.folderPath == nil || URL(fileURLWithPath: request.folderPath!).standardizedFileURL == baseURL.standardizedFileURL else {
+            return
+        }
+        guard organizer.state == .ready else { return }
+
+        switch request.kind {
+        case .applyConfirmation:
+            activeNotificationApplyRequestID = request.id
+            NotificationManager.shared.recordActionLifecycle("apply", stage: "confirmation_shown", detail: baseURL.path)
+            showApplyConfirmation = true
+        case .redoWithModelConfirmation:
+            guard request.notificationType == "previewReady" else { return }
+            activeNotificationRedoRequestID = request.id
+            NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "confirmation_shown", detail: baseURL.path)
+            showRedoModelPicker = true
+        }
+
+        appState.clearNotificationActionRequest(id: request.id)
     }
     
     /// Record accepted file placements and rename decisions before applying

@@ -36,10 +36,8 @@ struct FileOrganizationValidator {
         // Validate file existence
         try validateFileExistence(plan)
         
-        // Warn about large operations
-        if plan.totalFiles > 1000 {
-            throw ValidationError.largeOperation(plan.totalFiles)
-        }
+        // Large operations are allowed. We keep validation focused on correctness
+        // constraints (conflicts, missing files, storage safety, folder limits).
     }
 
     private static func validateDestinations(_ plan: OrganizationPlan, at baseURL: URL, allowedLocations: [StorageLocation]) throws {

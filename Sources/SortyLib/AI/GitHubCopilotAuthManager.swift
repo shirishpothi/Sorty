@@ -52,12 +52,12 @@ extension GitHubAuthError: LocalizedError {
     }
 }
 
-struct DeviceCodeResponse: Codable {
-    let deviceCode: String
-    let userCode: String
-    let verificationUri: String
-    let expiresIn: Int
-    let interval: Int
+public struct DeviceCodeResponse: Codable {
+    public let deviceCode: String
+    public let userCode: String
+    public let verificationUri: String
+    public let expiresIn: Int
+    public let interval: Int
     
     enum CodingKeys: String, CodingKey {
         case deviceCode = "device_code"
@@ -91,17 +91,17 @@ struct CopilotTokenResponse: Codable {
 }
 
 @MainActor
-class GitHubCopilotAuthManager: ObservableObject {
-    static let shared = GitHubCopilotAuthManager()
+public class GitHubCopilotAuthManager: ObservableObject {
+    public static let shared = GitHubCopilotAuthManager()
     
     // Client ID for VS Code's Copilot integration
     private let clientID = "Iv1.b507a08c87ecfe98"
     
-    @Published var deviceCodeResponse: DeviceCodeResponse?
-    @Published var isAuthenticated = false
-    @Published var username: String?
-    @Published var isPolling = false
-    @Published var authError: String?
+    @Published public var deviceCodeResponse: DeviceCodeResponse?
+    @Published public var isAuthenticated = false
+    @Published public var username: String?
+    @Published public var isPolling = false
+    @Published public var authError: String?
     
     private let session = URLSession.shared
     private var pollTask: Task<Void, Never>?
@@ -140,7 +140,7 @@ class GitHubCopilotAuthManager: ObservableObject {
         }
     }
     
-    func checkAuthenticationStatus() {
+    public func checkAuthenticationStatus() {
         let hadPersistedSignedInState = defaults.bool(forKey: persistedAuthStateKey)
 
         let hasAccessToken = {

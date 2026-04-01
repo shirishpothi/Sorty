@@ -11,6 +11,7 @@ struct PostOrganizationHoningView: View {
     let fileCount: Int
     let folderCount: Int
     let config: AIConfig
+    let learningsMaturity: LearningsManager.LearningsSummary.Maturity
     let onComplete: ([HoningAnswer]) -> Void
     let onSkip: () -> Void
     
@@ -20,10 +21,18 @@ struct PostOrganizationHoningView: View {
     @State private var hasAppeared = false
     @State private var selectedOption: String?
     
-    init(fileCount: Int, folderCount: Int, config: AIConfig, onComplete: @escaping ([HoningAnswer]) -> Void, onSkip: @escaping () -> Void) {
+    init(
+        fileCount: Int,
+        folderCount: Int,
+        config: AIConfig,
+        learningsMaturity: LearningsManager.LearningsSummary.Maturity = .new,
+        onComplete: @escaping ([HoningAnswer]) -> Void,
+        onSkip: @escaping () -> Void
+    ) {
         self.fileCount = fileCount
         self.folderCount = folderCount
         self.config = config
+        self.learningsMaturity = learningsMaturity
         self.onComplete = onComplete
         self.onSkip = onSkip
         _engine = StateObject(wrappedValue: LearningsHoningEngine(config: config))
@@ -81,11 +90,42 @@ struct PostOrganizationHoningView: View {
                 hasAppeared = true
             }
             Task {
-                await engine.startSession(questionCount: 1)
+                await engine.startSession(questionCount: adaptiveQuestionCount)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Post-organization feedback")
+    }
+
+    private var adaptiveQuestionCount: Int {
+        switch learningsMaturity {
+        case .new, .growing:
+            return 1
+        case .established:
+            return 2
+        }
+    }
+
+    private var feedbackTitle: String {
+        switch learningsMaturity {
+        case .new:
+            return "Help Sorty Learn"
+        case .growing:
+            return "Improve Your Preferences"
+        case .established:
+            return "Fine-Tune Your Rules"
+        }
+    }
+
+    private var feedbackSubtitle: String {
+        switch learningsMaturity {
+        case .new:
+            return "Answer one quick question so Sorty can learn your style"
+        case .growing:
+            return "Share one preference to sharpen upcoming suggestions"
+        case .established:
+            return "Answer two short prompts to keep your learned rules accurate"
+        }
     }
     
     private var headerSection: some View {
@@ -126,11 +166,11 @@ struct PostOrganizationHoningView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(.purple)
                 
-                Text("Help Sorty Learn")
+                Text(feedbackTitle)
                     .font(.headline)
             }
             
-            Text("Answer a quick question to improve future organizations")
+            Text(feedbackSubtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }

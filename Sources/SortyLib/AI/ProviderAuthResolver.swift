@@ -3,6 +3,7 @@ import Foundation
 enum ProviderAuthResolver {
     typealias Header = (field: String, value: String)
     private static let subscriptionAuthFlagKey = "subscriptionAuthEnabled"
+    private static let disableStoredCredentialsForUITestsKey = "uitestDisableStoredProviderCredentials"
 
     static func authHeaders(for provider: AIProvider, config: AIConfig) -> [String: String] {
         guard let header = authHeader(for: provider, config: config) else {
@@ -40,7 +41,11 @@ enum ProviderAuthResolver {
 
     static func hasRequiredCredential(for provider: AIProvider, config: AIConfig) -> Bool {
         switch provider {
-        case .githubCopilot, .ollama, .appleFoundationModel:
+        case .githubCopilot:
+            return KeychainManager.get(key: provider.keychainKey)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty == false
+        case .ollama, .appleFoundationModel:
             return true
         default:
             let method = effectiveAuthMethod(for: provider, config: config)
@@ -87,6 +92,9 @@ enum ProviderAuthResolver {
     private static func configuredOrStoredAPIKey(for provider: AIProvider, config: AIConfig) -> String? {
         if let key = config.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
             return key
+        }
+        if UserDefaults.standard.bool(forKey: disableStoredCredentialsForUITestsKey) {
+            return nil
         }
         return KeychainManager.get(key: provider.keychainKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
     }

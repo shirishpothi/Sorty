@@ -15,11 +15,27 @@ struct OrganizeView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
+    @EnvironmentObject var codexAuth: CodexCLIAuthManager
+    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
 
     @State private var previousState: OrganizationState?
+    @State private var showSmarterRetryModelPicker = false
 
     var body: some View {
         VStack(spacing: 0) {
+            if let setupRepairMessage = activeSetupRepairMessage {
+                SetupRepairBanner(
+                    message: setupRepairMessage,
+                    onOpenSettings: {
+                        HapticFeedbackManager.shared.selection()
+                        appState.startSetupRepair(message: setupRepairMessage)
+                    }
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             // Header with selected directory
             if let directory = appState.selectedDirectory {
                 DirectoryHeader(
@@ -110,6 +126,14 @@ struct OrganizeView: View {
                 }
             }
         }
+        .modelSelectionOverlay(
+            isPresented: $showSmarterRetryModelPicker,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model,
+            contextMessage: "Select a stronger model to retry this failed organization attempt. Your selection also becomes the active model for future runs.",
+            selectionActionTitle: "Retry with Model",
+            onSelect: retryWithSelectedModel
+        )
     }
 
     @ViewBuilder
@@ -123,7 +147,19 @@ struct OrganizeView: View {
     private var stateContentInner: some View {
         switch organizer.state {
         case .idle:
-            ReadyToOrganizeView(onStart: startOrganization)
+            if needsSetupRepair {
+                SetupRepairGateView(
+                    message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files.",
+                    onOpenSettings: {
+                        HapticFeedbackManager.shared.selection()
+                        appState.startSetupRepair(
+                            message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files."
+                        )
+                    }
+                )
+            } else {
+                ReadyToOrganizeView(onStart: startOrganization)
+            }
         case .scanning:
             AnalysisView()
         case .organizing:
@@ -153,12 +189,18 @@ struct OrganizeView: View {
                 )
             }
         case .error(let error):
-            ErrorView(error: error) {
-                HapticFeedbackManager.shared.tap()
-                withAnimation(.pageTransition) {
-                    organizer.reset()
+            ErrorView(
+                error: error,
+                onRetry: {
+                    HapticFeedbackManager.shared.tap()
+                    withAnimation(.pageTransition) {
+                        organizer.reset()
+                    }
+                },
+                onRetryWithSmarterModel: {
+                    showSmarterRetryModelPicker = true
                 }
-            }
+            )
         }
     }
 
@@ -202,6 +244,13 @@ struct OrganizeView: View {
 
     private func startOrganization() {
         guard let directory = appState.selectedDirectory else { return }
+        guard !needsSetupRepair else {
+            HapticFeedbackManager.shared.error()
+            appState.startSetupRepair(
+                message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files."
+            )
+            return
+        }
 
         HapticFeedbackManager.shared.tap()
 
@@ -219,12 +268,55 @@ struct OrganizeView: View {
             }
         }
     }
+
+    private func retryWithSelectedModel(provider: AIProvider, model: String) {
+        Task {
+            do {
+                settingsViewModel.config.provider = provider
+                settingsViewModel.config.model = model
+                try await organizer.configure(with: settingsViewModel.config)
+                try await organizer.regenerateWithModel(provider: provider, model: model)
+            } catch {
+                await MainActor.run {
+                    organizer.state = .error(error)
+                }
+            }
+        }
+    }
     
     private func prewarmAIConnection() async {
         let provider = settingsViewModel.config.provider
         let config = settingsViewModel.config
         await AISessionManager.shared.prewarm(provider: provider, config: config)
     }
+
+    private var providerSetupStatus: ProviderSetupStatus {
+        OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: settingsViewModel.config,
+                isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+                isCodexAuthenticated: codexAuth.isAuthenticated,
+                isCodexInstalled: codexAuth.isCodexInstalled,
+                isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
+                appleFoundationModelStatus: settingsViewModel.appleModelStatus
+            )
+        )
+    }
+
+    private var needsSetupRepair: Bool {
+        appState.requiresSetupRepair || !providerSetupStatus.isReady
+    }
+
+    private var activeSetupRepairMessage: String? {
+        if appState.requiresSetupRepair {
+            return appState.setupRepairMessage ?? providerSetupStatus.message
+        }
+        if !providerSetupStatus.isReady {
+            return providerSetupStatus.message
+        }
+        return nil
+    }
+
 }
 
 // MARK: - Directory Header
@@ -265,6 +357,72 @@ struct DirectoryHeader: View {
     }
 }
 
+private struct SetupRepairBanner: View {
+    let message: String
+    let onOpenSettings: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Setup Repair Needed")
+                    .font(.subheadline.weight(.semibold))
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            Button("Open Provider Settings", action: onOpenSettings)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.orange.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+        )
+        .accessibilityIdentifier("SetupRepairBanner")
+    }
+}
+
+private struct SetupRepairGateView: View {
+    let message: String
+    let onOpenSettings: () -> Void
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 36))
+                .foregroundStyle(.orange)
+
+            Text("Finish Provider Setup")
+                .font(.title3.weight(.semibold))
+
+            Text(message)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 420)
+
+            Button("Open Provider Settings", action: onOpenSettings)
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("OpenProviderSettingsForRepairButton")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(32)
+    }
+}
+
 // MARK: - Ready to Organize View
 
 struct ReadyToOrganizeView: View {
@@ -286,7 +444,6 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
-    @FocusState private var textFieldFocus: Bool
     
     private var isConnecting: Bool {
         sessionManager.prewarmingProvider != nil
@@ -536,9 +693,18 @@ struct ReadyToOrganizeView: View {
                         
                         Spacer()
                         
-                        Text("More in Settings")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                        Button("More in Settings") {
+                            HapticFeedbackManager.shared.selection()
+                            appState.selectedSettingsSection = .rules
+                            appState.settingsFocusTarget = .rulesStorageLocations
+                            appState.currentView = .settings
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .help("Open Storage Locations in Settings")
+                        .accessibilityIdentifier("OpenStorageLocationsInSettingsButton")
+                        .accessibilityHint("Opens Settings and focuses the Storage Locations section")
                     }
                 }
                 .transition(.asymmetric(
@@ -604,15 +770,6 @@ struct ReadyToOrganizeView: View {
     private var instructionsContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topLeading) {
-                if organizer.customInstructions.isEmpty {
-                    Text("e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"...")
-                        .font(.body)
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
-                        .allowsHitTesting(false)
-                }
-
                 if isImprovingPrompt {
                     HStack {
                         Spacer()
@@ -624,11 +781,22 @@ struct ReadyToOrganizeView: View {
                     }
                     .padding(.vertical, 20)
                 } else {
-                    SubmittableTextEditor(text: $organizer.customInstructions) {
+                    SubmittableTextEditor(
+                        text: $organizer.customInstructions,
+                        isFocused: $isTextFieldFocused
+                    ) {
                         onStart()
                     }
                     .padding(.horizontal, 4)
                     .padding(.vertical, 2)
+                }
+                if organizer.customInstructions.isEmpty {
+                    Text("e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"...")
+                        .font(.body)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .allowsHitTesting(false)
                 }
             }
             .frame(minHeight: 60, maxHeight: 80)
@@ -705,6 +873,7 @@ struct ReadyToOrganizeView: View {
                         }
                         .padding(16)
                         .frame(width: 280)
+                        .systemLiquidGlassPopover(cornerRadius: 12)
                     }
                 }
 
@@ -1054,8 +1223,23 @@ struct CompactStorageLocationRow: View {
 struct ErrorView: View {
     let error: Error
     let onRetry: () -> Void
+    let onRetryWithSmarterModel: () -> Void
+
+    private enum ErrorActionFeedback {
+        case cancel
+        case retry
+        case settings
+        case copy
+    }
+
+    @State private var showRetryOptions = false
+    @State private var showCopiedFeedback = false
+    @State private var copyResetTask: Task<Void, Never>?
+    @State private var activeActionFeedback: ErrorActionFeedback?
+    @State private var actionFeedbackResetTask: Task<Void, Never>?
     
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var organizer: FolderOrganizer
     
     private enum ErrorCategory {
         case apiKey
@@ -1113,15 +1297,23 @@ struct ErrorView: View {
         case .permissions:
             return "Grant file access for this folder and try again."
         case .generic:
-            return "Try again. If this keeps happening, open Help & Support with the copied error details."
+            return "Try again, or retry with a smarter model. If this keeps happening, open Help & Support with the copied error details."
         }
     }
 
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: errorIcon)
-                .font(.system(size: 48))
-                .foregroundStyle(.red)
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.red.opacity(0.1))
+                    .frame(width: 100, height: 100)
+
+                Image(systemName: errorIcon)
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundStyle(.red)
+            }
 
             VStack(spacing: 8) {
                 Text(errorTitle)
@@ -1132,43 +1324,147 @@ struct ErrorView: View {
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
-                
+                    .frame(maxWidth: 460)
+
                 Text(recoveryText)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 440)
+                    .frame(maxWidth: 500)
             }
 
-            HStack(spacing: 10) {
-                Button("Try Again", action: onRetry)
-                    .buttonStyle(.borderedProminent)
-                    .help("Retry the organization workflow")
-                    .accessibilityHint("Attempts the last operation again")
-                
+            HStack(spacing: 12) {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    animateActionFeedback(.cancel)
+                    organizer.reset()
+                    appState.selectedDirectory = nil
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .symbolEffect(.bounce, value: activeActionFeedback == .cancel)
+                        Text("Cancel")
+                            .font(.caption.bold())
+                    }
+                }
+                .buttonStyle(.tintedPill(.red, size: .small))
+                .scaleEffect(activeActionFeedback == .cancel ? 1.04 : 1.0)
+                .help("Return to folder selection")
+                .accessibilityIdentifier("ErrorBackToFolderPickerButton")
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    animateActionFeedback(.retry)
+                    showRetryOptions = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10, weight: .semibold))
+                            .symbolEffect(.bounce, value: activeActionFeedback == .retry)
+                        Text("Retry")
+                            .font(.caption.bold())
+                    }
+                }
+                .buttonStyle(.onboardingPill(size: .small))
+                .scaleEffect(activeActionFeedback == .retry ? 1.04 : 1.0)
+                .help("Choose how to retry this organization")
+                .accessibilityIdentifier("ErrorTryAgainButton")
+                .modelSelectorTriggerBounds()
+
                 if category == .apiKey || category == .permissions {
-                    Button("Open Settings") {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        animateActionFeedback(.settings)
                         appState.selectedSettingsSection = category == .apiKey ? .provider : .troubleshooting
                         appState.navigatedFromSettings = true
                         appState.currentView = .settings
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 10, weight: .semibold))
+                                .symbolEffect(.bounce, value: activeActionFeedback == .settings)
+                            Text("Settings")
+                                .font(.caption.bold())
+                        }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.tintedPill(.indigo, size: .small))
+                    .scaleEffect(activeActionFeedback == .settings ? 1.04 : 1.0)
                     .help("Open Settings to resolve this issue")
-                    .accessibilityHint("Navigates to relevant settings section")
+                    .accessibilityIdentifier("ErrorOpenSettingsButton")
                 }
-                
-                Button("Copy Details") {
+
+                Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(error.localizedDescription, forType: .string)
                     HapticFeedbackManager.shared.selection()
+                    animateActionFeedback(.copy)
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                        showCopiedFeedback = true
+                    }
+                    copyResetTask?.cancel()
+                    copyResetTask = Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_200_000_000)
+                        guard !Task.isCancelled else { return }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                            showCopiedFeedback = false
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: showCopiedFeedback ? "checkmark.circle.fill" : "doc.on.doc")
+                            .font(.system(size: 10, weight: .semibold))
+                            .contentTransition(.symbolEffect(.replace))
+                            .symbolEffect(.bounce, value: activeActionFeedback == .copy)
+                        Text(showCopiedFeedback ? "Copied" : "Copy")
+                            .font(.caption.bold())
+                            .contentTransition(.opacity)
+                    }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.tintedPill(.orange, size: .small))
+                .scaleEffect(showCopiedFeedback || activeActionFeedback == .copy ? 1.04 : 1.0)
                 .help("Copy error details for support")
-                .accessibilityHint("Copies this error message to clipboard")
+                .accessibilityIdentifier("ErrorCopyDetailsButton")
+            }
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+        .confirmationDialog(
+            "Retry Options",
+            isPresented: $showRetryOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Retry with Current Model") {
+                HapticFeedbackManager.shared.tap()
+                onRetry()
+            }
+
+            Button("Choose Smarter Model") {
+                HapticFeedbackManager.shared.tap()
+                onRetryWithSmarterModel()
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Retry using your current model, or choose a smarter model first.")
+        }
+    }
+
+    private func animateActionFeedback(_ action: ErrorActionFeedback) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+            activeActionFeedback = action
+        }
+
+        actionFeedbackResetTask?.cancel()
+        actionFeedbackResetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 240_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.8)) {
+                activeActionFeedback = nil
             }
         }
-        .padding(.horizontal, 20)
     }
 }
 
@@ -1177,7 +1473,14 @@ struct ErrorView: View {
 /// A TextEditor that treats Cmd+Enter as submit and Enter as new line
 struct SubmittableTextEditor: NSViewRepresentable {
     @Binding var text: String
+    var isFocused: Binding<Bool>?
     var onSubmit: () -> Void
+
+    init(text: Binding<String>, isFocused: Binding<Bool>? = nil, onSubmit: @escaping () -> Void) {
+        self._text = text
+        self.isFocused = isFocused
+        self.onSubmit = onSubmit
+    }
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSTextView.scrollableTextView()
@@ -1194,6 +1497,18 @@ struct SubmittableTextEditor: NSViewRepresentable {
         textView.textContainerInset = NSSize(width: 4, height: 4)
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
+
+        context.coordinator.selectionObserver = NotificationCenter.default.addObserver(
+            forName: NSTextView.didChangeSelectionNotification,
+            object: textView,
+            queue: .main
+        ) { [weak textView, weak coordinator = context.coordinator] _ in
+            guard let textView, let coordinator, let isFocused = coordinator.isFocused else { return }
+            let currentlyFocused = textView.window?.firstResponder === textView
+            if isFocused.wrappedValue != currentlyFocused {
+                isFocused.wrappedValue = currentlyFocused
+            }
+        }
         
         let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak textView] event in
             guard let tv = textView, tv.window?.firstResponder === tv else { return event }
@@ -1228,19 +1543,30 @@ struct SubmittableTextEditor: NSViewRepresentable {
         }
         
         context.coordinator.onSubmit = onSubmit
+        context.coordinator.isFocused = isFocused
+
+        if let isFocused {
+            let currentlyFocused = textView.window?.firstResponder === textView
+            if isFocused.wrappedValue != currentlyFocused {
+                isFocused.wrappedValue = currentlyFocused
+            }
+        }
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, onSubmit: onSubmit)
+        Coordinator(text: $text, isFocused: isFocused, onSubmit: onSubmit)
     }
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
+        var isFocused: Binding<Bool>?
         var onSubmit: () -> Void
         var eventMonitor: Any?
+        var selectionObserver: NSObjectProtocol?
         
-        init(text: Binding<String>, onSubmit: @escaping () -> Void) {
+        init(text: Binding<String>, isFocused: Binding<Bool>?, onSubmit: @escaping () -> Void) {
             self.text = text
+            self.isFocused = isFocused
             self.onSubmit = onSubmit
         }
         
@@ -1248,11 +1574,22 @@ struct SubmittableTextEditor: NSViewRepresentable {
             if let monitor = eventMonitor {
                 NSEvent.removeMonitor(monitor)
             }
+            if let selectionObserver {
+                NotificationCenter.default.removeObserver(selectionObserver)
+            }
         }
         
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            isFocused?.wrappedValue = true
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            isFocused?.wrappedValue = false
         }
     }
 }
@@ -1297,38 +1634,53 @@ private enum OrganizePreviewObjects {
 }
 
 #Preview("Organize View - Idle") {
+    let codexAuthManager = CodexCLIAuthManager()
+
     OrganizeView()
         .environmentObject(OrganizePreviewObjects.idleOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(AppState.preview)
         .environmentObject(CustomPersonaStore.preview)
+        .environmentObject(LearningsManager.preview)
+        .environmentObject(codexAuthManager)
         .frame(width: 900, height: 600)
 }
 
 #Preview("Organize View - Scanning") {
+    let codexAuthManager = CodexCLIAuthManager()
+
     OrganizeView()
         .environmentObject(OrganizePreviewObjects.scanningOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(AppState.preview)
         .environmentObject(CustomPersonaStore.preview)
+        .environmentObject(LearningsManager.preview)
+        .environmentObject(codexAuthManager)
         .frame(width: 900, height: 600)
 }
 
 #Preview("Organize View - Ready") {
+    let codexAuthManager = CodexCLIAuthManager()
+
     OrganizeView()
         .environmentObject(OrganizePreviewObjects.readyOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(OrganizePreviewObjects.readyAppState)
         .environmentObject(CustomPersonaStore.preview)
         .environmentObject(LearningsManager.preview)
+        .environmentObject(codexAuthManager)
         .frame(width: 900, height: 700)
 }
 
 #Preview("Organize View - Error") {
+    let codexAuthManager = CodexCLIAuthManager()
+
     OrganizeView()
         .environmentObject(OrganizePreviewObjects.errorOrganizer)
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(AppState.preview)
         .environmentObject(CustomPersonaStore.preview)
+        .environmentObject(LearningsManager.preview)
+        .environmentObject(codexAuthManager)
         .frame(width: 900, height: 600)
 }

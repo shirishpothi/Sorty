@@ -229,6 +229,38 @@ public struct SortyCommands: Commands {
             .disabled(appState == nil)
         }
 
+        // History menu
+        CommandMenu("History") {
+            Button("Open History") {
+                appState?.currentView = .history
+            }
+            .disabled(appState == nil)
+
+            Divider()
+
+            Button("Export History as CSV...") {
+                appState?.exportHistory(format: .csv)
+            }
+            .disabled(!(appState?.hasHistoryEntries ?? false))
+
+            Button("Export History as JSON...") {
+                appState?.exportHistory(format: .json)
+            }
+            .disabled(!(appState?.hasHistoryEntries ?? false))
+
+            Button("Import History...") {
+                appState?.importHistory()
+            }
+            .disabled(appState == nil)
+
+            Divider()
+
+            Button("Clear History...") {
+                appState?.clearHistoryWithConfirmation()
+            }
+            .disabled(!(appState?.hasHistoryEntries ?? false))
+        }
+
         CommandGroup(replacing: .help) {
             Button("Accreditations") {
                 appState?.showAccreditations(entryPoint: .help)
@@ -349,7 +381,8 @@ private final class HelpMenuHoverHapticsController: NSObject, NSMenuDelegate {
     }
 
     private func installDelegateOnHelpMenuIfNeeded() {
-        guard let mainMenu = NSApp.mainMenu else { return }
+        let mainMenu = NSApplication.shared.mainMenu
+        guard let mainMenu else { return }
 
         for menu in allMenus(in: mainMenu) where menu.item(withTitle: targetItemTitle) != nil {
             installDelegate(on: menu)
@@ -377,6 +410,23 @@ private final class HelpMenuHoverHapticsController: NSObject, NSMenuDelegate {
 
 @MainActor
 public class AppState: ObservableObject {
+    public enum HistoryExportFormat {
+        case csv
+        case json
+
+        var fileExtension: String {
+            switch self {
+            case .csv:
+                return "csv"
+            case .json:
+                return "json"
+            }
+        }
+    }
+
+    private static let requiresSetupRepairKey = "requiresSetupRepair"
+    private static let setupRepairMessageKey = "setupRepairMessage"
+
     @Published public var currentView: AppView = .organize
     @Published public var showingSidebar: Bool = true
     @Published public var showDirectoryPicker: Bool = false
@@ -407,6 +457,21 @@ public class AppState: ObservableObject {
     @Published public var showDeleteUsageDataConfirmation: Bool = false
     @Published public var pendingDuplicatesHandoff: DuplicatesHandoff?
     @Published public var highlightedWatchedFolderID: UUID?
+    @Published public var pendingNotificationActionRequest: PendingNotificationActionRequest?
+    @Published public var requiresSetupRepair: Bool {
+        didSet {
+            UserDefaults.standard.set(requiresSetupRepair, forKey: Self.requiresSetupRepairKey)
+        }
+    }
+    @Published public var setupRepairMessage: String? {
+        didSet {
+            if let setupRepairMessage, !setupRepairMessage.isEmpty {
+                UserDefaults.standard.set(setupRepairMessage, forKey: Self.setupRepairMessageKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.setupRepairMessageKey)
+            }
+        }
+    }
     
     /// Trigger update check with visible UI feedback.
     /// In debug builds this rebuilds and relaunches from source via `make now`.
@@ -490,6 +555,30 @@ public class AppState: ObservableObject {
         }
     }
 
+    public struct PendingNotificationActionRequest: Identifiable, Equatable, Sendable {
+        public enum Kind: String, Equatable, Sendable {
+            case applyConfirmation
+            case redoWithModelConfirmation
+        }
+
+        public let id: UUID
+        public let kind: Kind
+        public let folderPath: String?
+        public let notificationType: String?
+
+        public init(
+            id: UUID = UUID(),
+            kind: Kind,
+            folderPath: String? = nil,
+            notificationType: String? = nil
+        ) {
+            self.id = id
+            self.kind = kind
+            self.folderPath = folderPath
+            self.notificationType = notificationType
+        }
+    }
+
     public init(updateManager: SparkleUpdateManager = SparkleUpdateManager()) {
         self.updateManager = updateManager
 
@@ -499,6 +588,8 @@ public class AppState: ObservableObject {
         let previousVersion = UserDefaults.standard.string(forKey: "lastLaunchedVersion")
         let onboardingCompleted = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
         let featureTourCompleted = UserDefaults.standard.bool(forKey: "hasCompletedFeatureTour")
+        let requiresSetupRepair = UserDefaults.standard.bool(forKey: Self.requiresSetupRepairKey)
+        let setupRepairMessage = UserDefaults.standard.string(forKey: Self.setupRepairMessageKey)
         let currentVersion = BuildInfo.version
         
         if previousVersion == nil {
@@ -510,6 +601,8 @@ public class AppState: ObservableObject {
             self.hasCompletedOnboarding = true
         }
         self.hasCompletedFeatureTour = featureTourCompleted
+        self.requiresSetupRepair = requiresSetupRepair
+        self.setupRepairMessage = setupRepairMessage
         
         // Always store current version for future launches
         UserDefaults.standard.set(currentVersion, forKey: "lastLaunchedVersion")
@@ -521,6 +614,10 @@ public class AppState: ObservableObject {
 
     public var hasFiles: Bool {
         organizer?.currentPlan != nil
+    }
+
+    public var hasHistoryEntries: Bool {
+        !(organizer?.history.entries.isEmpty ?? true)
     }
 
     public var canStartOrganization: Bool {
@@ -647,13 +744,57 @@ public class AppState: ObservableObject {
 
         return normalizedPaths
     }
+
+    public func queueNotificationActionRequest(
+        _ kind: PendingNotificationActionRequest.Kind,
+        folderPath: String? = nil,
+        notificationType: String? = nil
+    ) {
+        pendingNotificationActionRequest = PendingNotificationActionRequest(
+            kind: kind,
+            folderPath: folderPath,
+            notificationType: notificationType
+        )
+    }
+
+    public func clearNotificationActionRequest(id: UUID? = nil) {
+        guard let id else {
+            pendingNotificationActionRequest = nil
+            return
+        }
+
+        if pendingNotificationActionRequest?.id == id {
+            pendingNotificationActionRequest = nil
+        }
+    }
     
     /// Show the onboarding flow again (for revisiting setup)
     public func showOnboarding() {
         withAnimation(.spring()) {
             isFeatureTourPresented = false
+            clearSetupRepairState()
             hasCompletedOnboarding = false
         }
+    }
+
+    public func openProviderSettingsForRepair() {
+        selectedSettingsSection = .provider
+        settingsFocusTarget = nil
+        navigatedFromSettings = false
+        currentView = .settings
+    }
+
+    public func startSetupRepair(message: String, navigateToSettings: Bool = true) {
+        requiresSetupRepair = true
+        setupRepairMessage = message
+        if navigateToSettings {
+            openProviderSettingsForRepair()
+        }
+    }
+
+    public func clearSetupRepairState() {
+        requiresSetupRepair = false
+        setupRepairMessage = nil
     }
     
     public func showFeatureTour() {
@@ -715,6 +856,93 @@ public class AppState: ObservableObject {
                 DebugLogger.log("Failed to export results: \(error)")
                 HapticFeedbackManager.shared.error()
             }
+        }
+    }
+
+    public func exportHistory(format: HistoryExportFormat) {
+        guard let history = organizer?.history.entries, !history.isEmpty else { return }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = format == .csv ? [.commaSeparatedText] : [.json]
+        panel.nameFieldStringValue = "sorty-history.\(format.fileExtension)"
+        panel.title = "Export History"
+        panel.message = "Choose where to save your history export"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let content: String
+            switch format {
+            case .csv:
+                content = generateHistoryCSV(from: history)
+            case .json:
+                content = try generateHistoryJSON(from: history)
+            }
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            HapticFeedbackManager.shared.success()
+        } catch {
+            DebugLogger.log("Failed to export history: \(error.localizedDescription)")
+            HapticFeedbackManager.shared.error()
+            presentHistoryAlert(
+                title: "Export Failed",
+                message: "Sorty couldn't export history. Please try again."
+            )
+        }
+    }
+
+    public func importHistory() {
+        guard let historyStore = organizer?.history else { return }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        panel.title = "Import History"
+        panel.message = "Choose a history JSON file exported from Sorty"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let importedEntries = try decodeHistoryImportEntries(from: data)
+            guard !importedEntries.isEmpty else {
+                throw HistoryImportError.noEntries
+            }
+
+            let importedCount = historyStore.importEntries(importedEntries)
+            currentView = .history
+            HapticFeedbackManager.shared.success()
+
+            presentHistoryAlert(
+                title: "Import Complete",
+                message: "Imported \(importedCount) history entr\(importedCount == 1 ? "y" : "ies")."
+            )
+        } catch {
+            DebugLogger.log("Failed to import history: \(error.localizedDescription)")
+            HapticFeedbackManager.shared.error()
+
+            presentHistoryAlert(
+                title: "Import Failed",
+                message: (error as? LocalizedError)?.errorDescription ?? "Sorty couldn't import this file."
+            )
+        }
+    }
+
+    public func clearHistoryWithConfirmation() {
+        guard let historyStore = organizer?.history, !historyStore.entries.isEmpty else { return }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Clear History?"
+        alert.informativeText = "This will permanently remove all history entries. This cannot be undone."
+        alert.addButton(withTitle: "Clear All History")
+        alert.addButton(withTitle: "Cancel")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            historyStore.clearHistory()
+            currentView = .history
+            HapticFeedbackManager.shared.success()
         }
     }
 
@@ -886,6 +1114,122 @@ public class AppState: ObservableObject {
 
     public func selectAllFiles() {
         // Select all implementation handled by focused view via responder chain
+    }
+
+    private enum HistoryImportError: LocalizedError {
+        case unsupportedFormat
+        case noEntries
+
+        var errorDescription: String? {
+            switch self {
+            case .unsupportedFormat:
+                return "This file isn't a supported Sorty history export."
+            case .noEntries:
+                return "This history file does not contain any entries."
+            }
+        }
+    }
+
+    private struct HistoryArchiveExport: Codable {
+        let schemaVersion: Int
+        let exportedAt: String
+        let entries: [OrganizationHistoryEntry]
+    }
+
+    private struct LegacyHistoryExportEntry: Decodable {
+        let id: String?
+        let timestamp: String?
+        let folderPath: String
+        let status: String?
+        let source: String?
+        let filesOrganized: Int
+        let foldersCreated: Int
+        let errorMessage: String?
+
+        func toHistoryEntry(dateFormatter: ISO8601DateFormatter) -> OrganizationHistoryEntry {
+            let parsedID = id.flatMap(UUID.init(uuidString:)) ?? UUID()
+            let parsedTimestamp = timestamp.flatMap { dateFormatter.date(from: $0) } ?? Date()
+            let parsedStatus = status.flatMap(OrganizationStatus.init(rawValue:)) ?? .completed
+            let parsedSource = source.flatMap(OrganizationEntrySource.init(rawValue:)) ?? .manual
+
+            return OrganizationHistoryEntry(
+                id: parsedID,
+                timestamp: parsedTimestamp,
+                directoryPath: folderPath,
+                filesOrganized: filesOrganized,
+                foldersCreated: foldersCreated,
+                success: parsedStatus == .completed,
+                status: parsedStatus,
+                errorMessage: errorMessage,
+                source: parsedSource
+            )
+        }
+    }
+
+    private func presentHistoryAlert(title: String, message: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = title
+        alert.informativeText = message
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    private func decodeHistoryImportEntries(from data: Data) throws -> [OrganizationHistoryEntry] {
+        let decoder = JSONDecoder()
+
+        if let archive = try? decoder.decode(HistoryArchiveExport.self, from: data) {
+            return archive.entries
+        }
+
+        if let entries = try? decoder.decode([OrganizationHistoryEntry].self, from: data) {
+            return entries
+        }
+
+        if let legacyEntries = try? decoder.decode([LegacyHistoryExportEntry].self, from: data) {
+            let dateFormatter = ISO8601DateFormatter()
+            return legacyEntries.map { $0.toHistoryEntry(dateFormatter: dateFormatter) }
+        }
+
+        throw HistoryImportError.unsupportedFormat
+    }
+
+    private func generateHistoryCSV(from entries: [OrganizationHistoryEntry]) -> String {
+        var lines: [String] = []
+        lines.append("ID,Timestamp,Folder Path,Folder Name,Status,Source,Files Organized,Folders Created,Error Message")
+
+        let dateFormatter = ISO8601DateFormatter()
+
+        for entry in entries {
+            let folderName = URL(fileURLWithPath: entry.directoryPath).lastPathComponent
+            let row = [
+                entry.id.uuidString,
+                dateFormatter.string(from: entry.timestamp),
+                csvEscape(entry.directoryPath),
+                csvEscape(folderName),
+                entry.status.rawValue,
+                entry.source.rawValue,
+                String(entry.filesOrganized),
+                String(entry.foldersCreated),
+                csvEscape(entry.errorMessage ?? "")
+            ].joined(separator: ",")
+            lines.append(row)
+        }
+
+        return lines.joined(separator: "\n")
+    }
+
+    private func generateHistoryJSON(from entries: [OrganizationHistoryEntry]) throws -> String {
+        let payload = HistoryArchiveExport(
+            schemaVersion: 1,
+            exportedAt: ISO8601DateFormatter().string(from: Date()),
+            entries: entries
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(payload)
+        return String(data: data, encoding: .utf8) ?? "{}"
     }
 
     public func startOrganization() {

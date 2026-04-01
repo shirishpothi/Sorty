@@ -1,7 +1,7 @@
 import XCTest
 import AppKit
 import ImageIO
-import CryptoKit
+import PDFKit
 @testable import SortyLib
 
 final class ImageVisionAnalyzerTests: XCTestCase {
@@ -86,14 +86,77 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         let first = await analyzer.prepareImageForVision(at: imageURL)
         XCTAssertNotNil(first)
 
-        guard let cachedFileURL = cacheFileURL(for: imageURL) else {
-            XCTFail("Failed to resolve expected cache file path")
-            return
-        }
-        XCTAssertTrue(FileManager.default.fileExists(atPath: cachedFileURL.path))
-
         analyzer.clearVisionCache()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: cachedFileURL.path))
+
+        let second = await analyzer.prepareImageForVision(at: imageURL)
+        XCTAssertNotNil(second)
+        XCTAssertEqual(imageDimensions(from: first)?.width, imageDimensions(from: second)?.width)
+    }
+
+    func testPrepareFilesForVisionRendersPDFPages() async throws {
+        let pdfURL = tempDirectory.appendingPathComponent("report.pdf")
+        try createPDF(at: pdfURL, pageCount: 2)
+
+        let analyzer = ImageVisionAnalyzer()
+        let result = await analyzer.prepareFilesForVision(files: [
+            FileItem(path: pdfURL.path, name: "report", extension: "pdf", size: 0)
+        ])
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result.keys.contains("report.pdf [Page 1]"))
+        XCTAssertTrue(result.keys.contains("report.pdf [Page 2]"))
+        XCTAssertNotNil(imageDimensions(from: result["report.pdf [Page 1]"]))
+    }
+
+    func testPrepareFilesForVisionUsesRelativeAttachmentNamesWhenBaseDirectoryProvided() async throws {
+        let nestedDirectory = tempDirectory.appendingPathComponent("Invoices")
+        try FileManager.default.createDirectory(at: nestedDirectory, withIntermediateDirectories: true)
+
+        let imageURL = nestedDirectory.appendingPathComponent("receipt.png")
+        try createPNG(at: imageURL, width: 120, height: 120)
+
+        let analyzer = ImageVisionAnalyzer()
+        let result = await analyzer.prepareFilesForVision(
+            files: [
+                FileItem(path: imageURL.path, name: "receipt", extension: "png", size: 0)
+            ],
+            baseDirectoryURL: tempDirectory
+        )
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertNotNil(result["Invoices/receipt.png"])
+    }
+
+    func testPrepareFilesForVisionRespectsPDFPageLimit() async throws {
+        let pdfURL = tempDirectory.appendingPathComponent("booklet.pdf")
+        try createPDF(at: pdfURL, pageCount: 4)
+
+        let analyzer = ImageVisionAnalyzer()
+        let result = await analyzer.prepareFilesForVision(
+            files: [
+                FileItem(path: pdfURL.path, name: "booklet", extension: "pdf", size: 0)
+            ],
+            pdfPageLimit: 2
+        )
+
+        XCTAssertEqual(result.count, 2)
+        XCTAssertTrue(result.keys.contains("booklet.pdf [Page 1]"))
+        XCTAssertTrue(result.keys.contains("booklet.pdf [Page 2]"))
+        XCTAssertFalse(result.keys.contains("booklet.pdf [Page 3]"))
+    }
+
+    func testPrepareFilesForVisionIgnoresUnsupportedTypes() async throws {
+        let textURL = tempDirectory.appendingPathComponent("notes.txt")
+        try "hello".write(to: textURL, atomically: true, encoding: .utf8)
+
+        let analyzer = ImageVisionAnalyzer()
+        let result = await analyzer.prepareFilesForVision(
+            files: [
+                FileItem(path: textURL.path, name: "notes", extension: "txt", size: 5)
+            ]
+        )
+
+        XCTAssertTrue(result.isEmpty)
     }
 
     private func createPNG(at url: URL, width: Int, height: Int) throws {
@@ -127,6 +190,38 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         try data.write(to: url)
     }
 
+    private func createPDF(at url: URL, pageCount: Int) throws {
+        let document = PDFDocument()
+
+        for index in 0..<pageCount {
+            let image = NSImage(size: NSSize(width: 600, height: 800))
+            image.lockFocus()
+            NSColor.white.setFill()
+            NSBezierPath(rect: NSRect(x: 0, y: 0, width: 600, height: 800)).fill()
+            let text = NSString(string: "Page \(index + 1)")
+            text.draw(
+                at: NSPoint(x: 40, y: 400),
+                withAttributes: [
+                    .font: NSFont.systemFont(ofSize: 48),
+                    .foregroundColor: NSColor.black
+                ]
+            )
+            image.unlockFocus()
+
+            guard let page = PDFPage(image: image) else {
+                XCTFail("Failed to create PDF page")
+                return
+            }
+            document.insert(page, at: index)
+        }
+
+        guard let data = document.dataRepresentation() else {
+            XCTFail("Failed to create PDF data")
+            return
+        }
+        try data.write(to: url)
+    }
+
     private func imageDimensions(from data: Data?) -> (width: Int, height: Int)? {
         guard let data,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -138,19 +233,4 @@ final class ImageVisionAnalyzerTests: XCTestCase {
         return (width, height)
     }
 
-    private func cacheFileURL(for imageURL: URL) -> URL? {
-        let values = try? imageURL.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
-        let modTime = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
-        let fileSize = values?.fileSize ?? 0
-        let input = "\(imageURL.path)|\(modTime)|\(fileSize)"
-        let digest = SHA256.hash(data: Data(input.utf8))
-        let key = digest.compactMap { String(format: "%02x", $0) }.joined()
-
-        guard let cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Sorty")
-            .appendingPathComponent("VisionCache", isDirectory: true) else {
-            return nil
-        }
-        return cacheDirectory.appendingPathComponent("\(key).jpg")
-    }
 }

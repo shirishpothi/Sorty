@@ -17,6 +17,7 @@ public struct DemoStepView: View {
     @State private var demoState: DemoState = .intro
     @State private var showPreviewTree = false
     @State private var showSimulatedDemo = true
+    @State private var isDropTargeted = false
     
     enum DemoState {
         case intro
@@ -108,8 +109,23 @@ public struct DemoStepView: View {
                 .offset(x: hasAppeared ? 0 : 20)
                 .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
             }
+            .siriDropZone(
+                cornerRadius: 22,
+                isEnabled: demoState == .selectDirectory,
+                glowPresentation: .window,
+                glowLineWidth: 2.2,
+                glowRadius: 16,
+                isTargeted: $isDropTargeted
+            ) { providers in
+                handleDrop(providers: providers)
+            }
             .onAppear {
                 withAnimation { hasAppeared = true }
+            }
+            .onChange(of: demoState) { _, newState in
+                if newState != .selectDirectory {
+                    isDropTargeted = false
+                }
             }
             .onChange(of: organizer.state) { _, newState in
                 handleStateChange(newState)
@@ -253,21 +269,18 @@ public struct DemoStepView: View {
                     ZStack {
                         RoundedRectangle(cornerRadius: 20)
                             .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [10]))
-                            .foregroundStyle(Color.secondary.opacity(0.3))
+                            .foregroundStyle(isDropTargeted ? Color.accentColor : Color.secondary.opacity(0.3))
                             .frame(width: 200, height: 140)
                         
                         VStack(spacing: 12) {
-                            Image(systemName: "folder.badge.plus")
+                            Image(systemName: isDropTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
                                 .font(.system(size: 40))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(isDropTargeted ? Color.accentColor : Color.secondary)
                             
-                            Text("Drop a folder here")
+                            Text(isDropTargeted ? "Drop to select" : "Drop a folder here")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                    }
-                    .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                        handleDrop(providers: providers)
                     }
                     
                     Text("or")

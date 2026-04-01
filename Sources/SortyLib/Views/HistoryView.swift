@@ -11,15 +11,25 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var learningsManager: LearningsManager
     @State private var selectedEntry: OrganizationHistoryEntry?
     @State private var isProcessing = false
     @State private var alertMessage: String?
     @State private var showAlert = false
     @State private var selectedFilter: HistoryFilter = .all
+    @State private var searchText: String = ""
     @State private var contentOpacity: Double = 0
     @State private var showingDetail = false
     @State private var showWatchedAutomations = true
-    
+    @State private var showRedoModelPicker = false
+    @State private var redoModelEntry: OrganizationHistoryEntry?
+    @State private var activeNotificationRedoRequestID: UUID?
+
+    // Partial result state for inline undo
+    @State private var showPartialResultSheet = false
+    @State private var partialUndoResult: PartialUndoResult?
+
     // Lazy loading state
     @State private var displayedEntryCount: Int = 50
     @State private var isLoadingMore: Bool = false
@@ -27,19 +37,27 @@ struct HistoryView: View {
     private let loadMoreThreshold: Int = 10 // Load more when within 10 items of end
 
     private var allFilteredEntries: [OrganizationHistoryEntry] {
+        let statusFiltered: [OrganizationHistoryEntry]
         switch selectedFilter {
         case .all:
-            return organizer.history.entries
+            statusFiltered = organizer.history.entries
         case .success:
-            return organizer.history.entries.filter { $0.status == .completed }
+            statusFiltered = organizer.history.entries.filter { $0.status == .completed }
         case .failed:
-            return organizer.history.entries.filter { $0.status == .failed }
+            statusFiltered = organizer.history.entries.filter { $0.status == .failed }
         case .skipped:
-            return organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }
+            statusFiltered = organizer.history.entries.filter { $0.status == .skipped || $0.status == .cancelled }
         case .manual:
-            return organizer.history.entries.filter { $0.source == .manual }
+            statusFiltered = organizer.history.entries.filter { $0.source == .manual }
         case .watched:
-            return organizer.history.entries.filter { $0.source == .watchedFolder }
+            statusFiltered = organizer.history.entries.filter { $0.source == .watchedFolder }
+        }
+
+        guard !searchText.isEmpty else { return statusFiltered }
+        let query = searchText.lowercased()
+        return statusFiltered.filter { entry in
+            entry.directoryPath.lowercased().contains(query) ||
+            URL(fileURLWithPath: entry.directoryPath).lastPathComponent.lowercased().contains(query)
         }
     }
 
@@ -58,7 +76,7 @@ struct HistoryView: View {
     private var totalWatchedFilteredCount: Int {
         allFilteredEntries.filter { $0.source == .watchedFolder }.count
     }
-    
+
     private var hasMoreEntries: Bool {
         switch selectedFilter {
         case .manual:
@@ -69,6 +87,10 @@ struct HistoryView: View {
             return manualEntries.count < totalManualFilteredCount ||
                 watchedEntries.count < totalWatchedFilteredCount
         }
+    }
+
+    private var canProvideSessionFeedback: Bool {
+        learningsManager.summary.canProvideFeedback
     }
 
     enum HistoryFilter: String, CaseIterable, Identifiable {
@@ -88,7 +110,8 @@ struct HistoryView: View {
             HistoryHeader(
                 manager: organizer,
                 selectedFilter: $selectedFilter,
-                onClearHistory: clearHistory
+                searchText: $searchText,
+                allFilteredEntries: allFilteredEntries
             )
 
             Divider()
@@ -96,6 +119,9 @@ struct HistoryView: View {
             ZStack {
                 if organizer.history.entries.isEmpty {
                     HistoryEmptyStateView()
+                        .transition(TransitionStyles.scaleAndFade)
+                } else if !searchText.isEmpty && allFilteredEntries.isEmpty {
+                    HistorySearchEmptyStateView(searchText: searchText, onClear: { searchText = "" })
                         .transition(TransitionStyles.scaleAndFade)
                 } else {
                     ScrollView {
@@ -120,17 +146,20 @@ struct HistoryView: View {
                                     HistorySessionCard(
                                         entry: entry,
                                         isSelected: selectedEntry == entry,
+                                        isModelPickerAnchorActive: showRedoModelPicker && redoModelEntry?.id == entry.id,
                                         onSelect: {
                                             HapticFeedbackManager.shared.selection()
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                selectedEntry = entry
-                                                showingDetail = true
-                                            }
+                                            selectEntry(entry)
                                         },
                                         onUndo: { handleUndo(entry) },
                                         onRedo: { handleRedo(entry) },
-                                        onRedoWithModel: { provider, model in
-                                            handleRedoWithModel(entry, provider: provider, model: model)
+                                        onOpenModelPicker: {
+                                            redoModelEntry = entry
+                                            showRedoModelPicker = true
+                                        },
+                                        canProvideFeedback: canProvideSessionFeedback,
+                                        onFeedback: { outcome in
+                                            handleFeedback(entry, outcome: outcome)
                                         }
                                     )
                                     .animatedAppearance(delay: Double(index) * 0.03)
@@ -169,10 +198,7 @@ struct HistoryView: View {
                                         ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
                                             WatchedAutomationRow(entry: entry) {
                                                 HapticFeedbackManager.shared.selection()
-                                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                                    selectedEntry = entry
-                                                    showingDetail = true
-                                                }
+                                                selectEntry(entry)
                                             }
                                             .animatedAppearance(delay: Double(index) * 0.02)
                                             .onAppear {
@@ -187,7 +213,7 @@ struct HistoryView: View {
                                 .background(.ultraThinMaterial)
                                 .clipShape(RoundedRectangle(cornerRadius: 16))
                             }
-                            
+
                             // Load More Button
                             if hasMoreEntries {
                                 LoadMoreButton(isLoading: isLoadingMore) {
@@ -242,10 +268,29 @@ struct HistoryView: View {
                 .environmentObject(organizer)
             }
         }
+        .modelSelectionOverlay(
+            isPresented: $showRedoModelPicker,
+            currentProvider: settingsViewModel.config.provider,
+            currentModel: settingsViewModel.config.model,
+            onSelect: { provider, model in
+                guard let entry = redoModelEntry else { return }
+                showRedoModelPicker = false
+                handleRedoWithModel(entry, provider: provider, model: model)
+            }
+        )
+        .sheet(isPresented: $showPartialResultSheet) {
+            if let result = partialUndoResult {
+                PartialUndoResultSheet(result: result) {
+                    showPartialResultSheet = false
+                    partialUndoResult = nil
+                }
+            }
+        }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 contentOpacity = 1.0
             }
+            consumePendingNotificationActionIfNeeded()
         }
         .onChange(of: selectedFilter) { _, _ in
             // Reset pagination when filter changes
@@ -254,25 +299,37 @@ struct HistoryView: View {
                 showWatchedAutomations = true
             }
         }
+        .onChange(of: searchText) { _, _ in
+            displayedEntryCount = pageSize
+        }
+        .onChange(of: appState.pendingNotificationActionRequest?.id) { _, _ in
+            consumePendingNotificationActionIfNeeded()
+        }
+        .onChange(of: showRedoModelPicker) { oldValue, newValue in
+            guard oldValue, !newValue, activeNotificationRedoRequestID != nil else { return }
+            NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "cancelled", detail: "history picker")
+            activeNotificationRedoRequestID = nil
+        }
     }
 
-    private func clearHistory() {
-        HapticFeedbackManager.shared.tap()
-        organizer.history.clearHistory()
-        displayedEntryCount = pageSize // Reset pagination
-    }
-    
     private func loadMoreEntries() {
         guard !isLoadingMore && hasMoreEntries else { return }
-        
+
         isLoadingMore = true
-        
+
         // Simulate a small delay for better UX (shows loading state)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
-            
+
             displayedEntryCount += pageSize
             isLoadingMore = false
+        }
+    }
+
+    private func selectEntry(_ entry: OrganizationHistoryEntry) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            selectedEntry = entry
+            showingDetail = true
         }
     }
 
@@ -283,19 +340,46 @@ struct HistoryView: View {
                 let result = try await organizer.undoHistoryEntry(entry)
                 if result.hasIssues {
                     HapticFeedbackManager.shared.tap()
-                    alertMessage = "Partially restored: \(result.successfulOperations) file(s) reversed, \(result.missingFiles.count) could not be found."
+                    // Show detailed partial result sheet instead of generic alert
+                    partialUndoResult = PartialUndoResult(
+                        successCount: result.successfulOperations,
+                        missingFiles: result.missingFiles,
+                        failedOperationCount: result.retryableFailedOperationIDs.count,
+                        directoryPath: entry.directoryPath
+                    )
+                    isProcessing = false
+                    showPartialResultSheet = true
                 } else {
                     HapticFeedbackManager.shared.success()
-                    alertMessage = "Operations reversed successfully."
+                    alertMessage = "All \(result.successfulOperations) operations reversed successfully."
+                    showAlert = true
                 }
-                showAlert = true
             } catch {
                 HapticFeedbackManager.shared.error()
-                alertMessage = "Error: \(error.localizedDescription)"
+                alertMessage = friendlyUndoErrorMessage(for: error)
                 showAlert = true
             }
             isProcessing = false
         }
+    }
+
+    private func friendlyUndoErrorMessage(for error: Error) -> String {
+        let nsError = error as NSError
+
+        if nsError.domain == NSCocoaErrorDomain {
+            switch nsError.code {
+            case NSFileNoSuchFileError:
+                return "Some files were moved or deleted since this organization. Open the session details to undo individual operations."
+            case NSFileWriteNoPermissionError:
+                return "Permission denied. Check that Sorty has access to this folder in System Settings > Privacy & Security."
+            case NSFileWriteOutOfSpaceError:
+                return "Not enough disk space available. Free up some space and try again."
+            default:
+                break
+            }
+        }
+
+        return "Could not undo: \(error.localizedDescription)"
     }
 
     private func handleRedo(_ entry: OrganizationHistoryEntry) {
@@ -314,27 +398,77 @@ struct HistoryView: View {
             isProcessing = false
         }
     }
-    
+
     private func handleRedoWithModel(_ entry: OrganizationHistoryEntry, provider: AIProvider, model: String) {
         isProcessing = true
+        if activeNotificationRedoRequestID != nil {
+            NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "confirmed", detail: "\(provider.displayName):\(model)")
+            NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "executing", detail: entry.directoryPath)
+        }
         Task { @MainActor in
             do {
                 // First set up the folder context from history entry
                 let directoryURL = URL(fileURLWithPath: entry.directoryPath)
                 organizer.currentDirectory = directoryURL
-                
+
                 // Generate new plan with specified provider/model
                 try await organizer.regenerateWithModel(provider: provider, model: model)
                 HapticFeedbackManager.shared.success()
                 alertMessage = "New organization generated with \(provider.displayName) (\(model))."
                 showAlert = true
+                if activeNotificationRedoRequestID != nil {
+                    NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "completed", detail: entry.directoryPath)
+                    activeNotificationRedoRequestID = nil
+                }
             } catch {
                 HapticFeedbackManager.shared.error()
                 alertMessage = "Error: \(error.localizedDescription)"
                 showAlert = true
+                if activeNotificationRedoRequestID != nil {
+                    NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "failed", failed: true, detail: error.localizedDescription)
+                    activeNotificationRedoRequestID = nil
+                }
             }
             isProcessing = false
         }
+    }
+
+    private func handleFeedback(_ entry: OrganizationHistoryEntry, outcome: LearningsManager.SessionOutcome) {
+        learningsManager.recordSessionOutcomeFeedback(
+            sessionId: entry.id.uuidString,
+            outcome: outcome,
+            folderPath: entry.directoryPath
+        )
+
+        DebugLogger.log(
+            "Session feedback recorded: \(outcome.rawValue) for session \(entry.id.uuidString)"
+        )
+    }
+
+    private func consumePendingNotificationActionIfNeeded() {
+        guard let request = appState.pendingNotificationActionRequest else { return }
+        guard request.kind == .redoWithModelConfirmation else { return }
+        guard request.notificationType != "previewReady" else { return }
+        guard let targetEntry = notificationRedoTargetEntry(for: request.folderPath) else { return }
+
+        redoModelEntry = targetEntry
+        activeNotificationRedoRequestID = request.id
+        NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "confirmation_shown", detail: targetEntry.directoryPath)
+        showRedoModelPicker = true
+        appState.clearNotificationActionRequest(id: request.id)
+    }
+
+    private func notificationRedoTargetEntry(for folderPath: String?) -> OrganizationHistoryEntry? {
+        if let folderPath {
+            let normalizedPath = URL(fileURLWithPath: folderPath).standardizedFileURL.path
+            if let matchingEntry = organizer.history.entries.first(where: {
+                URL(fileURLWithPath: $0.directoryPath).standardizedFileURL.path == normalizedPath
+            }) {
+                return matchingEntry
+            }
+        }
+
+        return organizer.history.entries.first
     }
 }
 
@@ -343,19 +477,20 @@ struct HistoryView: View {
 struct HistoryHeader: View {
     @ObservedObject var manager: FolderOrganizer
     @Binding var selectedFilter: HistoryView.HistoryFilter
-    let onClearHistory: () -> Void
-
-    @State private var showClearConfirmation = false
+    @Binding var searchText: String
+    let allFilteredEntries: [OrganizationHistoryEntry]
 
     var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
                 HStack(spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.title2)
                         .foregroundStyle(.blue.gradient)
                     Text("Organization History")
                         .font(.title2.bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.9)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Organization History")
@@ -363,43 +498,41 @@ struct HistoryHeader: View {
                 Text("\(manager.history.totalSessions) sessions recorded")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                     .accessibilityLabel("\(manager.history.totalSessions) sessions recorded")
+
+                Spacer()
+
+                Text("\(allFilteredEntries.count) shown")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .accessibilityHidden(true)
             }
 
-            Spacer()
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    searchField
+                        .frame(minWidth: 220, idealWidth: 320, maxWidth: 380)
 
-            // Filter Picker
-            Picker("Filter", selection: $selectedFilter) {
-                ForEach(HistoryView.HistoryFilter.allCases) { filter in
-                    Text(filter.rawValue).tag(filter)
+                    filterControlRow
+                        .frame(minWidth: 360, idealWidth: 520)
+
+                    Spacer(minLength: 0)
                 }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 420)
-            .accessibilityLabel("Filter history sessions")
-            .accessibilityIdentifier("HistoryFilterPicker")
-            .onChange(of: selectedFilter) { _, _ in
-                HapticFeedbackManager.shared.selection()
-            }
 
-            Button {
-                showClearConfirmation = true
-            } label: {
-                Label("Clear", systemImage: "trash")
-                    .foregroundColor(.red)
-            }
-            .buttonStyle(.bordered)
-            .tint(.red)
-            .disabled(manager.history.entries.isEmpty)
-            .accessibilityLabel("Clear all history")
-            .accessibilityIdentifier("ClearHistoryButton")
-            .confirmationDialog("Clear History?", isPresented: $showClearConfirmation, titleVisibility: .visible) {
-                Button("Clear All History", role: .destructive) {
-                    onClearHistory()
+                VStack(alignment: .leading, spacing: 10) {
+                    searchField
+
+                    HStack(spacing: 10) {
+                        Text("Filter")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        filterPicker
+                    }
                 }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will permanently remove all history entries. This cannot be undone.")
             }
         }
         .padding(.horizontal, 24)
@@ -407,6 +540,59 @@ struct HistoryHeader: View {
         .background(.bar)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("History controls")
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Search folders...", text: $searchText)
+                .textFieldStyle(.plain)
+                .accessibilityIdentifier("HistorySearchField")
+
+            if !searchText.isEmpty {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        searchText = ""
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var filterControlRow: some View {
+        HStack(spacing: 10) {
+            Text("Filter")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            filterPicker
+        }
+    }
+
+    private var filterPicker: some View {
+        Picker("Filter", selection: $selectedFilter) {
+            ForEach(HistoryView.HistoryFilter.allCases) { filter in
+                Text(filter.rawValue).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Filter history sessions")
+        .accessibilityIdentifier("HistoryFilterPicker")
+        .onChange(of: selectedFilter) { _, _ in
+            HapticFeedbackManager.shared.selection()
+        }
     }
 }
 
@@ -580,15 +766,44 @@ private struct HistoryStatItem: View {
 struct HistorySessionCard: View {
     let entry: OrganizationHistoryEntry
     let isSelected: Bool
+    let isModelPickerAnchorActive: Bool
     let onSelect: () -> Void
     let onUndo: () -> Void
     let onRedo: () -> Void
-    var onRedoWithModel: ((AIProvider, String) -> Void)? = nil
+    let onOpenModelPicker: () -> Void
+    let canProvideFeedback: Bool
+    var onFeedback: ((LearningsManager.SessionOutcome) -> Void)?
 
     @State private var isExpanded = false
     @State private var isHovered = false
-    @State private var showRedoModelPicker = false
-    @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @State private var feedbackGiven: LearningsManager.SessionOutcome?
+    @State private var showFeedbackConfirmation = false
+
+    // MARK: - Operations Breakdown
+
+    private var operationsBreakdown: (moves: Int, renames: Int, folderCreates: Int) {
+        guard let operations = entry.operations else {
+            return (0, 0, 0)
+        }
+        let moves = operations.filter { $0.type == .moveFile }.count
+        let renames = operations.filter { $0.type == .renameFile }.count
+        let folderCreates = operations.filter { $0.type == .createFolder }.count
+        return (moves, renames, folderCreates)
+    }
+
+    private var hasOperationsData: Bool {
+        let breakdown = operationsBreakdown
+        return breakdown.moves > 0 || breakdown.renames > 0 || breakdown.folderCreates > 0
+    }
+
+    private var modelBadgeText: String? {
+        guard let stats = entry.plan?.generationStats else { return nil }
+        let modelName = stats.compactModelName
+        if stats.hasBillableCost {
+            return "\(modelName) · \(GenerationStats.formatCost(stats.computedCost))"
+        }
+        return modelName
+    }
 
     private var statusColor: Color {
         switch entry.status {
@@ -663,8 +878,21 @@ struct HistorySessionCard: View {
 
                     Spacer()
 
-                    // Timestamp
-                    VStack(alignment: .trailing, spacing: 2) {
+                    // Model Badge + Timestamp Column
+                    VStack(alignment: .trailing, spacing: 4) {
+                        // Model & Cost Badge (compact)
+                        if let badge = modelBadgeText {
+                            Text(badge)
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.1))
+                                .clipShape(Capsule())
+                                .accessibilityLabel("Model: \(badge)")
+                        }
+
+                        // Timestamp
                         Text(entry.timestamp.formatted(date: .abbreviated, time: .omitted))
                             .font(.caption)
                         Text(entry.timestamp.formatted(date: .omitted, time: .shortened))
@@ -718,6 +946,15 @@ struct HistorySessionCard: View {
                         .accessibilityLabel("This organization included moves to external storage locations")
                     }
 
+                    // Operations Breakdown Bar
+                    if hasOperationsData && entry.status == .completed {
+                        OperationsBreakdownBar(
+                            moves: operationsBreakdown.moves,
+                            renames: operationsBreakdown.renames,
+                            folderCreates: operationsBreakdown.folderCreates
+                        )
+                    }
+
                     // Actions
                     HStack(spacing: 12) {
                         Button {
@@ -752,11 +989,11 @@ struct HistorySessionCard: View {
                                 .accessibilityLabel("Undo organization")
                                 .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
                             }
-                            
+
                             // Try with different model button
                             Button {
                                 HapticFeedbackManager.shared.tap()
-                                showRedoModelPicker = true
+                                onOpenModelPicker()
                             } label: {
                                 Label("Try Different Model", systemImage: "wand.and.stars")
                             }
@@ -764,10 +1001,25 @@ struct HistorySessionCard: View {
                             .controlSize(.small)
                             .accessibilityLabel("Try organization with a different AI model")
                             .accessibilityIdentifier("TryModelButton-\(entry.id.uuidString)")
-                            .modelSelectorTriggerBounds()
+                            .background {
+                                if isModelPickerAnchorActive {
+                                    Color.clear.modelSelectorTriggerBounds()
+                                }
+                            }
                         }
 
                         Spacer()
+
+                        // Quick Feedback Buttons
+                        if canProvideFeedback && entry.status == .completed && !entry.isUndone && onFeedback != nil {
+                            QuickFeedbackButtons(
+                                feedbackGiven: $feedbackGiven,
+                                showConfirmation: $showFeedbackConfirmation,
+                                onFeedback: { outcome in
+                                    onFeedback?(outcome)
+                                }
+                            )
+                        }
                     }
                 }
                 .padding(16)
@@ -786,14 +1038,211 @@ struct HistorySessionCard: View {
         .onHover { hovering in
             isHovered = hovering
         }
-        .modelSelectionOverlay(
-            isPresented: $showRedoModelPicker,
-            currentProvider: settingsViewModel.config.provider,
-            currentModel: settingsViewModel.config.model,
-            onSelect: { provider, model in
-                onRedoWithModel?(provider, model)
+    }
+}
+
+// MARK: - Quick Feedback Buttons
+
+/// Compact feedback buttons for session outcome (useful / not useful)
+private struct QuickFeedbackButtons: View {
+    @Binding var feedbackGiven: LearningsManager.SessionOutcome?
+    @Binding var showConfirmation: Bool
+    let onFeedback: (LearningsManager.SessionOutcome) -> Void
+
+    @State private var usefulHovered = false
+    @State private var notUsefulHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if feedbackGiven == nil {
+                Text("Helpful?")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
+                // Thumbs up
+                Button {
+                    HapticFeedbackManager.shared.success()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        feedbackGiven = .useful
+                        showConfirmation = true
+                    }
+                    onFeedback(.useful)
+
+                    // Auto-hide confirmation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showConfirmation = false
+                        }
+                    }
+                } label: {
+                    Image(systemName: "hand.thumbsup")
+                        .font(.caption)
+                        .foregroundStyle(usefulHovered ? .green : .secondary)
+                }
+                .buttonStyle(.plain)
+                .scaleEffect(usefulHovered ? 1.15 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: usefulHovered)
+                .onHover { hovering in
+                    usefulHovered = hovering
+                    if hovering { HapticFeedbackManager.shared.selection() }
+                }
+                .accessibilityLabel("Mark as helpful")
+                .accessibilityIdentifier("FeedbackUsefulButton")
+
+                // Thumbs down
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        feedbackGiven = .notUseful
+                        showConfirmation = true
+                    }
+                    onFeedback(.notUseful)
+
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showConfirmation = false
+                        }
+                    }
+                } label: {
+                    Image(systemName: "hand.thumbsdown")
+                        .font(.caption)
+                        .foregroundStyle(notUsefulHovered ? .orange : .secondary)
+                }
+                .buttonStyle(.plain)
+                .scaleEffect(notUsefulHovered ? 1.15 : 1.0)
+                .animation(.spring(response: 0.2, dampingFraction: 0.6), value: notUsefulHovered)
+                .onHover { hovering in
+                    notUsefulHovered = hovering
+                    if hovering { HapticFeedbackManager.shared.selection() }
+                }
+                .accessibilityLabel("Mark as not helpful")
+                .accessibilityIdentifier("FeedbackNotUsefulButton")
+            } else {
+                // Feedback confirmation
+                HStack(spacing: 4) {
+                    Image(systemName: feedbackGiven == .useful ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(feedbackGiven == .useful ? .green : .orange)
+
+                    Text(feedbackGiven == .useful ? "Thanks!" : "Noted")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .transition(.scale.combined(with: .opacity))
             }
-        )
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(feedbackGiven == nil ? "Rate this organization" : "Feedback recorded")
+    }
+}
+
+// MARK: - Operations Breakdown Bar
+
+/// A compact horizontal bar showing the breakdown of file operations (moves, renames, folder creates)
+/// with colored segments proportional to each operation type.
+private struct OperationsBreakdownBar: View {
+    let moves: Int
+    let renames: Int
+    let folderCreates: Int
+
+    @State private var isHovered = false
+
+    private var total: Int {
+        moves + renames + folderCreates
+    }
+
+    private var moveFraction: CGFloat {
+        total > 0 ? CGFloat(moves) / CGFloat(total) : 0
+    }
+
+    private var renameFraction: CGFloat {
+        total > 0 ? CGFloat(renames) / CGFloat(total) : 0
+    }
+
+    private var folderFraction: CGFloat {
+        total > 0 ? CGFloat(folderCreates) / CGFloat(total) : 0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // Segmented Bar
+            GeometryReader { geometry in
+                HStack(spacing: 2) {
+                    if moves > 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.blue.gradient)
+                            .frame(width: max(geometry.size.width * moveFraction - 1, 4))
+                    }
+                    if renames > 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.purple.gradient)
+                            .frame(width: max(geometry.size.width * renameFraction - 1, 4))
+                    }
+                    if folderCreates > 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.green.gradient)
+                            .frame(width: max(geometry.size.width * folderFraction - 1, 4))
+                    }
+                }
+            }
+            .frame(height: 6)
+            .clipShape(Capsule())
+            .background(
+                Capsule()
+                    .fill(Color.secondary.opacity(0.1))
+            )
+
+            // Legend (inline, compact)
+            HStack(spacing: 12) {
+                if moves > 0 {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 6, height: 6)
+                        Text("\(moves) moved")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if renames > 0 {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.purple)
+                            .frame(width: 6, height: 6)
+                        Text("\(renames) renamed")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if folderCreates > 0 {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("\(folderCreates) folders")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.secondary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .animation(.subtleBounce, value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Operations breakdown: \(moves) files moved, \(renames) files renamed, \(folderCreates) folders created")
     }
 }
 
@@ -857,32 +1306,231 @@ struct WatchedAutomationRow: View {
     }
 }
 
-// MARK: - History Empty State
+// MARK: - History Search Empty State
 
-struct HistoryEmptyStateView: View {
+struct HistorySearchEmptyStateView: View {
+    let searchText: String
+    let onClear: () -> Void
+
+    @State private var hasAppeared = false
+    @State private var isHovered = false
+
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
-                .opacity(0.8)
-                .accessibilityHidden(true)
+        VStack(spacing: 24) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(width: 80, height: 80)
+
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 36))
+                    .foregroundStyle(.secondary)
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .scaleEffect(hasAppeared ? 1 : 0.8)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: hasAppeared)
 
             VStack(spacing: 8) {
-                Text("No History Yet")
-                    .font(.title2.bold())
+                Text("No Results Found")
+                    .font(.title3.bold())
 
-                Text("Your organization sessions will appear here. Start by organizing a folder.")
+                Text("No history entries match \"\(searchText)\"")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 350)
             }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
+
+            Button {
+                HapticFeedbackManager.shared.tap()
+                onClear()
+            } label: {
+                Label("Clear Search", systemImage: "xmark.circle")
+            }
+            .buttonStyle(.bordered)
+            .scaleEffect(isHovered ? 1.03 : 1.0)
+            .animation(.spring(response: 0.2), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            .accessibilityIdentifier("ClearSearchButton")
+
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            hasAppeared = true
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("No search results for \(searchText)")
+    }
+}
+
+// MARK: - History Empty State
+
+struct HistoryEmptyStateView: View {
+    @EnvironmentObject var appState: AppState
+    @State private var isHovered = false
+    @State private var hasAppeared = false
+
+    private let previewFeatures: [(icon: String, title: String, description: String, color: Color)] = [
+        ("arrow.uturn.backward.circle.fill", "Undo & Redo", "Reverse any organization with one click", .orange),
+        ("chart.bar.fill", "Impact Stats", "Track files organized and time saved", .blue),
+        ("wand.and.stars", "Try Different Models", "Re-run with different AI for better results", .purple),
+        ("clock.arrow.circlepath", "Full Timeline", "See every change made to your folders", .green)
+    ]
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Spacer()
+
+            // Hero section
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.1))
+                        .frame(width: 100, height: 100)
+
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 44))
+                        .foregroundStyle(Color.accentColor.gradient)
+                }
+                .opacity(hasAppeared ? 1 : 0)
+                .scaleEffect(hasAppeared ? 1 : 0.8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+                .accessibilityHidden(true)
+
+                VStack(spacing: 8) {
+                    Text("Your Organization History")
+                        .font(.title2.bold())
+
+                    Text("Every organization session is recorded here so you can track, undo, or improve past results.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 400)
+                }
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 10)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
+            }
+
+            // Feature preview cards
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(Array(previewFeatures.enumerated()), id: \.offset) { index, feature in
+                    HistoryFeaturePreviewCard(
+                        icon: feature.icon,
+                        title: feature.title,
+                        description: feature.description,
+                        color: feature.color
+                    )
+                    .opacity(hasAppeared ? 1 : 0)
+                    .offset(y: hasAppeared ? 0 : 20)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3 + Double(index) * 0.08), value: hasAppeared)
+                }
+            }
+            .frame(maxWidth: 500)
+
+            // CTA button
+            Button {
+                HapticFeedbackManager.shared.tap()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    appState.currentView = .organize
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder.badge.gearshape")
+                    Text("Start Organizing")
+                    Image(systemName: "arrow.right")
+                        .font(.caption)
+                }
+                .font(.headline)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 14)
+            }
+            .buttonStyle(.onboardingPill)
+            .scaleEffect(isHovered ? 1.03 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+            .onHover { hovering in
+                isHovered = hovering
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+            }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5), value: hasAppeared)
+            .accessibilityLabel("Start organizing a folder")
+            .accessibilityHint("Navigate to the organize view to begin")
+            .accessibilityIdentifier("HistoryEmptyStateCTA")
+
+            Spacer()
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.windowBackgroundColor))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("No history yet. Organize a folder to start tracking your sessions.")
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                hasAppeared = true
+            }
+        }
+    }
+}
+
+private struct HistoryFeaturePreviewCard: View {
+    let icon: String
+    let title: String
+    let description: String
+    let color: Color
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color.gradient)
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.secondary.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isHovered)
+        .onHover { hovering in
+            isHovered = hovering
+        }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("No history yet. Your organization sessions will appear here.")
+        .accessibilityLabel("\(title): \(description)")
     }
 }
 
@@ -900,8 +1548,18 @@ struct HistoryDetailSheet: View {
     @State private var failedOperationIDs: Set<UUID> = []
     @State private var undoingOperationID: UUID?
     @State private var highlightedFileID: UUID? = nil
+
+    // Pre-flight validation state
+    @State private var showUndoConfirmation = false
+    @State private var showRestoreConfirmation = false
+    @State private var showRedoConfirmation = false
+    @State private var preflightResult: PreflightValidationResult?
+    @State private var showPartialResultSheet = false
+    @State private var partialUndoResult: PartialUndoResult?
+
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var learningsManager: LearningsManager
 
     private var currentEntry: OrganizationHistoryEntry {
         organizer.history.entries.first { $0.id == entry.id } ?? entry
@@ -992,73 +1650,111 @@ struct HistoryDetailSheet: View {
                             }
 
                             // Nerd Stats Grid (if available)
-                            if let stats = entry.plan?.generationStats {
+                            if settingsViewModel.config.showStatsForNerds,
+                               let stats = entry.plan?.generationStats {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    Text("Generation Metrics")
+                                    Text("Stats for Nerds")
                                         .font(.headline)
                                         .padding(.top, 4)
 
                                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 160), spacing: 8)], spacing: 8) {
                                             NerdStatCard(
+                                                icon: "clock.fill",
+                                                iconColor: .blue,
+                                                title: "AI Time",
+                                                value: GenerationStats.formatDuration(stats.duration),
+                                                unit: nil,
+                                                description: "Model response time"
+                                            )
+
+                                            NerdStatCard(
                                                 icon: "bolt.fill",
                                                 iconColor: .orange,
-                                                title: "Speed",
+                                                title: "Throughput",
                                                 value: String(format: "%.1f", stats.tps),
                                                 unit: "tok/s",
-                                                description: "Processing throughput"
+                                                description: "Response throughput"
                                             )
 
                                             NerdStatCard(
                                                 icon: "timer",
-                                                iconColor: .blue,
-                                                title: "Latency",
-                                                value: String(format: "%.2f", stats.ttft),
-                                                unit: "s",
+                                                iconColor: .green,
+                                                title: "TTFT",
+                                                value: GenerationStats.formatDuration(stats.ttft),
+                                                unit: nil,
                                                 description: "Time to first token"
                                             )
 
                                             NerdStatCard(
-                                                icon: "sum",
+                                                icon: "text.bubble",
                                                 iconColor: .purple,
-                                                title: "Total",
-                                                value: "\(stats.totalTokens)",
+                                                title: "Response",
+                                                value: GenerationStats.formatCount(stats.responseTokens),
                                                 unit: "tok",
-                                                description: "Context consumption"
+                                                description: "Estimated output tokens"
                                             )
+
+                                            if let promptTokens = stats.promptTokens {
+                                                NerdStatCard(
+                                                    icon: "text.alignleft",
+                                                    iconColor: .indigo,
+                                                    title: "Prompt",
+                                                    value: GenerationStats.formatCount(promptTokens),
+                                                    unit: "tok",
+                                                    description: "Estimated input tokens"
+                                                )
+                                            }
+
+                                            if let totalContextTokens = stats.totalContextTokens {
+                                                NerdStatCard(
+                                                    icon: "sum",
+                                                    iconColor: .mint,
+                                                    title: "Context",
+                                                    value: GenerationStats.formatCount(totalContextTokens),
+                                                    unit: "tok",
+                                                    description: "Prompt plus response"
+                                                )
+                                            }
 
                                             if let scanned = stats.filesScanned {
                                                 NerdStatCard(
                                                     icon: "doc.text.magnifyingglass",
                                                     iconColor: .green,
-                                                    title: "Scanned",
-                                                    value: "\(scanned)",
+                                                    title: "Files",
+                                                    value: GenerationStats.formatCount(scanned),
                                                     unit: "files",
-                                                    description: "Total files processed"
+                                                    description: "Items reviewed by AI"
                                                 )
                                             }
 
-                                            if let size = stats.totalFileSize {
-                                                let formatted = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
-                                                let components = formatted.components(separatedBy: " ")
-                                                let value = components.first ?? formatted
-                                                let unit = components.count > 1 ? components.last : nil
-
+                                            if let size = stats.formattedTotalFileSize {
                                                 NerdStatCard(
                                                     icon: "internaldrive",
                                                     iconColor: .cyan,
                                                     title: "Volume",
-                                                    value: value,
-                                                    unit: unit,
+                                                    value: size,
+                                                    unit: nil,
                                                     description: "Data footprint"
                                                 )
                                             }
 
-                                            if let dups = stats.duplicatesFound {
+                                            if stats.hasBillableCost {
+                                                NerdStatCard(
+                                                    icon: "dollarsign.circle",
+                                                    iconColor: .yellow,
+                                                    title: "Cost",
+                                                    value: GenerationStats.formatCost(stats.computedCost),
+                                                    unit: nil,
+                                                    description: "Estimated API spend"
+                                                )
+                                            }
+
+                                            if let dups = stats.duplicatesFound, dups > 0 {
                                                 NerdStatCard(
                                                     icon: "doc.on.doc",
                                                     iconColor: .red,
                                                     title: "Duplicates",
-                                                    value: "\(dups)",
+                                                    value: GenerationStats.formatCount(dups),
                                                     unit: nil,
                                                     description: "Content matches"
                                                 )
@@ -1172,59 +1868,7 @@ struct HistoryDetailSheet: View {
 
                     // Learnings Applied
                     if let plan = entry.plan {
-                        let ruledSuggestions = plan.suggestions.flatMap { collectRuledSuggestions($0) }
-                        if !ruledSuggestions.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "sparkles")
-                                        .foregroundStyle(.orange)
-                                    Text("Learnings Applied")
-                                        .font(.headline)
-                                    Text("\(ruledSuggestions.count)")
-                                        .font(.caption2)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Capsule().fill(Color.orange))
-                                }
-                                .accessibilityAddTraits(.isHeader)
-
-                                ForEach(ruledSuggestions, id: \.id) { suggestion in
-                                    HStack(spacing: 10) {
-                                        ZStack {
-                                            Circle()
-                                                .fill(Color.orange.opacity(0.12))
-                                                .frame(width: 28, height: 28)
-                                            Image(systemName: "sparkles")
-                                                .font(.system(size: 12, weight: .semibold))
-                                                .foregroundStyle(.orange)
-                                        }
-
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            PrivacySensitivePathText(path: suggestion.folderName)
-                                                .font(.callout)
-                                                .fontWeight(.medium)
-                                            if !suggestion.reasoning.isEmpty {
-                                                Text(suggestion.reasoning)
-                                                    .font(.caption)
-                                                    .foregroundStyle(.secondary)
-                                                    .lineLimit(2)
-                                            }
-                                        }
-
-                                        Spacer()
-                                    }
-                                    .padding(10)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.orange.opacity(0.15), lineWidth: 1)
-                                    )
-                                }
-                            }
-                        }
+                        HistoryLiquidGlassLearningsCard(plan: plan)
                     }
 
                     // AI Reasoning
@@ -1268,7 +1912,7 @@ struct HistoryDetailSheet: View {
                                                 FileThumbnailView(url: URL(fileURLWithPath: fileItem.path), size: CGSize(width: 20, height: 20))
                                                 Text(fileItem.displayName)
                                                 Spacer()
-                                                
+
                                                 if let hash = fileItem.sha256Hash, !hash.isEmpty {
                                                     let others = plan.unorganizedFiles.filter { $0.id != fileItem.id && $0.sha256Hash == hash }
                                                     if !others.isEmpty {
@@ -1355,8 +1999,10 @@ struct HistoryDetailSheet: View {
                         }
                     }
 
-                    // Raw AI Response
-                    if let raw = entry.rawAIResponse {
+                    // Raw AI Response (Stats for Nerds)
+                    if settingsViewModel.config.showStatsForNerds,
+                       let raw = currentEntry.rawAIResponse,
+                       !raw.isEmpty {
                         rawAIResponseSection(raw)
                     }
                     }
@@ -1394,6 +2040,73 @@ struct HistoryDetailSheet: View {
                 handleRedoWithModel(provider: provider, model: model)
             }
         )
+        .confirmationDialog(
+            "Undo Organization?",
+            isPresented: $showUndoConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Undo \(preflightResult?.availableCount ?? 0) Operations", role: .destructive) {
+                executeUndo()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let result = preflightResult {
+                Text(undoConfirmationMessage(result))
+            }
+        }
+        .confirmationDialog(
+            "Restore to This State?",
+            isPresented: $showRestoreConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Restore", role: .destructive) {
+                executeRestore()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will undo all organization sessions after this point for this folder. Some files may have been modified or moved since.")
+        }
+        .confirmationDialog(
+            "Re-Apply Organization?",
+            isPresented: $showRedoConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Re-Apply") {
+                executeRedo()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let result = preflightResult {
+                Text(redoConfirmationMessage(result))
+            }
+        }
+        .sheet(isPresented: $showPartialResultSheet) {
+            if let result = partialUndoResult {
+                PartialUndoResultSheet(result: result) {
+                    showPartialResultSheet = false
+                    partialUndoResult = nil
+                }
+            }
+        }
+    }
+
+    private func undoConfirmationMessage(_ result: PreflightValidationResult) -> String {
+        var message = "This will move \(result.availableCount) file(s) back to their original locations."
+        if !result.missingFiles.isEmpty {
+            message += "\n\n⚠️ \(result.missingFiles.count) file(s) cannot be restored because they were moved or deleted."
+        }
+        if !result.directoryIssues.isEmpty {
+            message += "\n\n⚠️ \(result.directoryIssues.count) original folder(s) no longer exist and will be recreated."
+        }
+        return message
+    }
+
+    private func redoConfirmationMessage(_ result: PreflightValidationResult) -> String {
+        var message = "This will reorganize \(result.availableCount) file(s) according to the original plan."
+        if !result.missingFiles.isEmpty {
+            message += "\n\n⚠️ \(result.missingFiles.count) file(s) are no longer available."
+        }
+        return message
     }
 
     @ViewBuilder
@@ -1453,16 +2166,39 @@ struct HistoryDetailSheet: View {
 
     private func handleUndo() {
         HapticFeedbackManager.shared.tap()
+        // Perform pre-flight validation before showing confirmation
+        Task { @MainActor in
+            let result = performPreflightValidation(for: .undo)
+            preflightResult = result
+            showUndoConfirmation = true
+        }
+    }
+
+    private func executeUndo() {
+        HapticFeedbackManager.shared.tap()
         isProcessing = true
         Task {
             do {
-                try await organizer.undoHistoryEntry(entry)
-                HapticFeedbackManager.shared.success()
-                onAction("Operations reversed successfully.")
-                onDismiss()
+                let result = try await organizer.undoHistoryEntry(entry)
+                if result.hasIssues {
+                    HapticFeedbackManager.shared.tap()
+                    // Show detailed partial result sheet
+                    partialUndoResult = PartialUndoResult(
+                        successCount: result.successfulOperations,
+                        missingFiles: result.missingFiles,
+                        failedOperationCount: result.retryableFailedOperationIDs.count,
+                        directoryPath: entry.directoryPath
+                    )
+                    isProcessing = false
+                    showPartialResultSheet = true
+                } else {
+                    HapticFeedbackManager.shared.success()
+                    onAction("All \(result.successfulOperations) operations reversed successfully.")
+                    onDismiss()
+                }
             } catch {
                 HapticFeedbackManager.shared.error()
-                onAction("Error: \(error.localizedDescription)")
+                onAction(friendlyErrorMessage(for: error, operation: "undo"))
             }
             isProcessing = false
         }
@@ -1470,16 +2206,33 @@ struct HistoryDetailSheet: View {
 
     private func handleRestore() {
         HapticFeedbackManager.shared.tap()
+        showRestoreConfirmation = true
+    }
+
+    private func executeRestore() {
+        HapticFeedbackManager.shared.tap()
         isProcessing = true
         Task {
             do {
-                try await organizer.restoreToState(targetEntry: entry)
-                HapticFeedbackManager.shared.success()
-                onAction("Folder state restored.")
-                onDismiss()
+                let result = try await organizer.restoreToState(targetEntry: entry)
+                if result.hasIssues {
+                    HapticFeedbackManager.shared.tap()
+                    partialUndoResult = PartialUndoResult(
+                        successCount: result.successfulOperations,
+                        missingFiles: result.missingFiles,
+                        failedOperationCount: result.retryableFailedOperationIDs.count,
+                        directoryPath: entry.directoryPath
+                    )
+                    isProcessing = false
+                    showPartialResultSheet = true
+                } else {
+                    HapticFeedbackManager.shared.success()
+                    onAction("Folder state restored successfully.")
+                    onDismiss()
+                }
             } catch {
                 HapticFeedbackManager.shared.error()
-                onAction("Error: \(error.localizedDescription)")
+                onAction(friendlyErrorMessage(for: error, operation: "restore"))
             }
             isProcessing = false
         }
@@ -1487,19 +2240,110 @@ struct HistoryDetailSheet: View {
 
     private func handleRedo() {
         HapticFeedbackManager.shared.tap()
+        // Perform pre-flight validation before showing confirmation
+        Task { @MainActor in
+            let result = performPreflightValidation(for: .redo)
+            preflightResult = result
+            showRedoConfirmation = true
+        }
+    }
+
+    private func executeRedo() {
+        HapticFeedbackManager.shared.tap()
         isProcessing = true
         Task {
             do {
                 try await organizer.redoOrganization(from: entry)
                 HapticFeedbackManager.shared.success()
-                onAction("Organization re-applied.")
+                onAction("Organization re-applied successfully.")
                 onDismiss()
             } catch {
                 HapticFeedbackManager.shared.error()
-                onAction("Error: \(error.localizedDescription)")
+                onAction(friendlyErrorMessage(for: error, operation: "redo"))
             }
             isProcessing = false
         }
+    }
+
+    private enum PreflightOperation {
+        case undo
+        case redo
+    }
+
+    private func performPreflightValidation(for operation: PreflightOperation) -> PreflightValidationResult {
+        var missingFiles: [String] = []
+        var directoryIssues: [String] = []
+        var availableCount = 0
+
+        let fileManager = FileManager.default
+
+        switch operation {
+        case .undo:
+            // Check if files at destination paths still exist (for undo, we move from destination back to source)
+            guard let operations = entry.operations else {
+                return PreflightValidationResult(availableCount: 0, missingFiles: [], directoryIssues: [])
+            }
+
+            for op in operations where op.type == .moveFile || op.type == .renameFile {
+                if let destPath = op.destinationPath {
+                    if fileManager.fileExists(atPath: destPath) {
+                        availableCount += 1
+                        // Check if source directory still exists
+                        let sourceDir = URL(fileURLWithPath: op.sourcePath).deletingLastPathComponent().path
+                        if !fileManager.fileExists(atPath: sourceDir) && !directoryIssues.contains(sourceDir) {
+                            directoryIssues.append(sourceDir)
+                        }
+                    } else {
+                        let fileName = URL(fileURLWithPath: destPath).lastPathComponent
+                        missingFiles.append(fileName)
+                    }
+                }
+            }
+
+        case .redo:
+            // For redo, check if source files exist at their original locations
+            guard let operations = entry.operations else {
+                return PreflightValidationResult(availableCount: 0, missingFiles: [], directoryIssues: [])
+            }
+
+            for op in operations where op.type == .moveFile || op.type == .renameFile {
+                if fileManager.fileExists(atPath: op.sourcePath) {
+                    availableCount += 1
+                } else {
+                    let fileName = URL(fileURLWithPath: op.sourcePath).lastPathComponent
+                    missingFiles.append(fileName)
+                }
+            }
+        }
+
+        return PreflightValidationResult(
+            availableCount: availableCount,
+            missingFiles: missingFiles,
+            directoryIssues: directoryIssues
+        )
+    }
+
+    private func friendlyErrorMessage(for error: Error, operation: String) -> String {
+        let nsError = error as NSError
+
+        // Handle common file system errors with actionable guidance
+        if nsError.domain == NSCocoaErrorDomain {
+            switch nsError.code {
+            case NSFileNoSuchFileError:
+                return "Some files were moved or deleted since this organization. Try using 'Undo' on individual operations instead."
+            case NSFileWriteNoPermissionError:
+                return "Permission denied. Check that Sorty has access to this folder in System Settings > Privacy & Security > Files and Folders."
+            case NSFileWriteOutOfSpaceError:
+                return "Not enough disk space. Free up some space and try again."
+            case NSFileWriteVolumeReadOnlyError:
+                return "This volume is read-only. Check that the disk is not locked or in read-only mode."
+            default:
+                break
+            }
+        }
+
+        // Default to the localized description with operation context
+        return "Could not \(operation): \(error.localizedDescription)"
     }
 
     private func handleRestoreDuplicates() {
@@ -1525,7 +2369,7 @@ struct HistoryDetailSheet: View {
             onDismiss()
         }
     }
-    
+
     private func handleUndoSingleOperation(_ operation: FileSystemManager.FileOperation) {
         HapticFeedbackManager.shared.tap()
         undoingOperationID = operation.id
@@ -1556,7 +2400,7 @@ struct HistoryDetailSheet: View {
                 // Set up folder context from history entry
                 let directoryURL = URL(fileURLWithPath: entry.directoryPath)
                 organizer.currentDirectory = directoryURL
-                
+
                 // Generate new plan with specified provider/model
                 try await organizer.regenerateWithModel(provider: provider, model: model)
                 HapticFeedbackManager.shared.success()
@@ -1570,16 +2414,6 @@ struct HistoryDetailSheet: View {
         }
     }
 
-    private func collectRuledSuggestions(_ suggestion: FolderSuggestion) -> [FolderSuggestion] {
-        var results: [FolderSuggestion] = []
-        if suggestion.ruleId != nil {
-            results.append(suggestion)
-        }
-        for sub in suggestion.subfolders {
-            results.append(contentsOf: collectRuledSuggestions(sub))
-        }
-        return results
-    }
 }
 
 // MARK: - Operation Row View
@@ -1996,7 +2830,7 @@ struct FolderHistoryDetailRow: View {
                             .accessibilityElement(children: .combine)
                             .accessibilityLabel("\(fileItem.displayName), \(fileItem.formattedSize)")
                         }
-                        
+
                         if suggestion.files.count > visibleFileCount {
                             Button {
                                 HapticFeedbackManager.shared.tap()
@@ -2067,6 +2901,7 @@ struct FolderHistoryDetailRow: View {
                     NSPasteboard.general.setString(storageLocationPath, forType: .string)
                 }
             )
+            .systemLiquidGlassPopover(cornerRadius: 12)
         }
     }
 }
@@ -2076,7 +2911,7 @@ struct FolderHistoryDetailRow: View {
 struct LoadMoreButton: View {
     let isLoading: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -2088,7 +2923,7 @@ struct LoadMoreButton: View {
                     Image(systemName: "chevron.down.circle.fill")
                         .font(.system(size: 16))
                 }
-                
+
                 Text(isLoading ? "Loading..." : "Load More History")
                     .font(.subheadline)
                     .fontWeight(.medium)
@@ -2114,6 +2949,179 @@ struct LoadMoreButton: View {
 
 // MARK: - Liquid Glass AI Reasoning Card (History)
 
+private struct HistoryLearningsFileContext: Identifiable {
+    let file: FileItem
+    let suggestion: FolderSuggestion
+
+    var id: UUID { file.id }
+}
+
+struct HistoryLiquidGlassLearningsCard: View {
+    let plan: OrganizationPlan
+
+    @EnvironmentObject var learningsManager: LearningsManager
+    @State private var showPopover = false
+    @State private var hoveredFileID: UUID?
+
+    private var ruledSuggestions: [FolderSuggestion] {
+        flattenSuggestions(plan.suggestions).filter(hasRuleContext(_:))
+    }
+
+    private var fileContexts: [HistoryLearningsFileContext] {
+        var contexts: [HistoryLearningsFileContext] = []
+        var seenIDs: Set<UUID> = []
+
+        for suggestion in ruledSuggestions {
+            for file in suggestion.files where seenIDs.insert(file.id).inserted {
+                contexts.append(HistoryLearningsFileContext(file: file, suggestion: suggestion))
+            }
+        }
+
+        return contexts
+    }
+
+    var body: some View {
+        if !fileContexts.isEmpty {
+            Button {
+                showPopover.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "brain.head.profile")
+                        .foregroundStyle(.teal)
+                    Text("Learnings Applied")
+                        .font(.headline)
+                    Text("\(fileContexts.count)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.teal))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .systemLiquidGlassBackground(cornerRadius: 999)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.05)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Learnings applied to \(fileContexts.count) files")
+            .accessibilityHint("Tap to view file-specific learnings")
+            .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+                learningsPopover
+                    .systemLiquidGlassPopover(cornerRadius: 12)
+            }
+        }
+    }
+
+    private var learningsPopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.teal.opacity(0.12))
+                        .frame(width: 28, height: 28)
+
+                    Image(systemName: "brain.head.profile")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.teal)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Learnings Applied")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                    Text("\(fileContexts.count) file\(fileContexts.count == 1 ? "" : "s") with learnings context")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+            }
+            .padding(.bottom, 10)
+
+            Divider()
+                .opacity(0.4)
+                .padding(.bottom, 10)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(fileContexts) { context in
+                        learningsFileRow(context)
+                    }
+                }
+            }
+            .frame(maxHeight: 320)
+        }
+        .padding(14)
+        .frame(minWidth: 320, maxWidth: 430)
+    }
+
+    private func learningsFileRow(_ context: HistoryLearningsFileContext) -> some View {
+        HStack(spacing: 10) {
+            FileThumbnailView(url: URL(fileURLWithPath: context.file.path), size: CGSize(width: 24, height: 24))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(context.file.displayName)
+                    .font(.callout)
+                    .lineLimit(1)
+
+                PrivacySensitivePathText(path: context.suggestion.folderName)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            LiquidGlassLearningsButton(
+                file: context.file,
+                suggestion: context.suggestion,
+                learningsManager: learningsManager
+            )
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(hoveredFileID == context.file.id ? Color.secondary.opacity(0.1) : Color.clear)
+        )
+        .onHover { isHovering in
+            hoveredFileID = isHovering ? context.file.id : nil
+        }
+    }
+
+    private func flattenSuggestions(_ suggestions: [FolderSuggestion]) -> [FolderSuggestion] {
+        suggestions.flatMap { suggestion in
+            [suggestion] + flattenSuggestions(suggestion.subfolders)
+        }
+    }
+
+    private func hasRuleContext(_ suggestion: FolderSuggestion) -> Bool {
+        if let ruleID = suggestion.ruleId?.trimmingCharacters(in: .whitespacesAndNewlines), !ruleID.isEmpty {
+            return true
+        }
+
+        return suggestion.semanticTags.contains { tag in
+            tag.lowercased().hasPrefix("rule:")
+        }
+    }
+}
+
 struct HistoryLiquidGlassReasoningCard: View {
     let notes: String
     @State private var showPopover = false
@@ -2130,7 +3138,7 @@ struct HistoryLiquidGlassReasoningCard: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(.ultraThinMaterial)
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .clipShape(Capsule())
             .overlay(
                 Capsule()
@@ -2186,6 +3194,7 @@ struct HistoryLiquidGlassReasoningCard: View {
             }
             .padding(14)
             .frame(minWidth: 280, maxWidth: 400)
+            .systemLiquidGlassPopover(cornerRadius: 12)
         }
     }
 }
@@ -2261,7 +3270,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(.ultraThinMaterial)
+                .systemLiquidGlassBackground(cornerRadius: 999)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
@@ -2284,6 +3293,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
             .accessibilityHint("Tap to view duplicate file groups")
             .popover(isPresented: $showPopover, arrowEdge: .bottom) {
                 historyDuplicatePopover
+                    .systemLiquidGlassPopover(cornerRadius: 12)
             }
         }
     }
@@ -2372,7 +3382,7 @@ struct HistoryDuplicateGroupRow: View {
     var handoffDirectory: URL? = nil
     @Binding var highlightedFileID: UUID?
     @EnvironmentObject var appState: AppState
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
@@ -2448,7 +3458,7 @@ struct HistoryDuplicateGroupRow: View {
         .background(Color.secondary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
-    
+
     @ViewBuilder
     private func contextMenu(for path: String) -> some View {
         let groupPaths = [group.file.path] + group.duplicates.map(\.path)
@@ -2482,6 +3492,182 @@ struct HistoryDuplicateGroupRow: View {
         } label: {
             Label("Move to Trash", systemImage: "trash")
         }
+    }
+}
+
+// MARK: - Pre-flight Validation Models
+
+/// Result of pre-flight validation before undo/redo operations
+struct PreflightValidationResult {
+    let availableCount: Int
+    let missingFiles: [String]
+    let directoryIssues: [String]
+
+    var hasIssues: Bool { !missingFiles.isEmpty || !directoryIssues.isEmpty }
+}
+
+/// Result shown when an undo operation partially succeeds
+struct PartialUndoResult {
+    let successCount: Int
+    let missingFiles: [String]
+    let failedOperationCount: Int
+    let directoryPath: String
+
+    var folderName: String {
+        URL(fileURLWithPath: directoryPath).lastPathComponent
+    }
+}
+
+// MARK: - Partial Undo Result Sheet
+
+struct PartialUndoResultSheet: View {
+    let result: PartialUndoResult
+    let onDismiss: () -> Void
+
+    @State private var isHoveredOpenFolder = false
+    @State private var contentOpacity: Double = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.orange.gradient)
+                    .accessibilityHidden(true)
+
+                Text("Partial Undo Complete")
+                    .font(.title2.bold())
+
+                Text("Some files could not be restored")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+
+            Divider()
+
+            // Stats
+            HStack(spacing: 24) {
+                VStack(spacing: 4) {
+                    Text("\(result.successCount)")
+                        .font(.title.bold())
+                        .foregroundStyle(.green)
+                    Text("Restored")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Divider()
+                    .frame(height: 40)
+
+                VStack(spacing: 4) {
+                    Text("\(result.missingFiles.count)")
+                        .font(.title.bold())
+                        .foregroundStyle(.orange)
+                    Text("Missing")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if result.failedOperationCount > 0 {
+                    Divider()
+                        .frame(height: 40)
+
+                    VStack(spacing: 4) {
+                        Text("\(result.failedOperationCount)")
+                            .font(.title.bold())
+                            .foregroundStyle(.red)
+                        Text("Failed")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.vertical, 16)
+
+            Divider()
+
+            // Missing files list
+            if !result.missingFiles.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Files Not Found", systemImage: "questionmark.folder")
+                            .font(.headline)
+                        Spacer()
+                        Text("\(result.missingFiles.count) file\(result.missingFiles.count == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text("These files may have been moved, renamed, or deleted:")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 6) {
+                            ForEach(result.missingFiles, id: \.self) { fileName in
+                                let displayName = FeatureFlags.privacyModeEnabled
+                                    ? PrivacyPathMasker.redactedText(fileName)
+                                    : fileName
+                                HStack(spacing: 8) {
+                                    Image(systemName: "doc.questionmark")
+                                        .foregroundStyle(.orange)
+                                        .font(.caption)
+                                    Text(displayName)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.orange.opacity(0.08))
+                                .cornerRadius(6)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 200)
+                }
+                .padding(16)
+            }
+
+            Spacer(minLength: 0)
+
+            // Actions
+            VStack(spacing: 12) {
+                Button {
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: result.directoryPath)
+                } label: {
+                    Label("Open Folder in Finder", systemImage: "folder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .scaleEffect(isHoveredOpenFolder ? 1.02 : 1.0)
+                .animation(.subtleBounce, value: isHoveredOpenFolder)
+                .onHover { isHoveredOpenFolder = $0 }
+                .accessibilityIdentifier("OpenFolderButton")
+
+                Button("Done") {
+                    HapticFeedbackManager.shared.tap()
+                    onDismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityIdentifier("DismissPartialResultButton")
+            }
+            .padding(20)
+        }
+        .frame(minWidth: 400, idealWidth: 400, maxWidth: 400, minHeight: 450)
+        .opacity(contentOpacity)
+        .onAppear {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Partial undo complete. \(result.successCount) files restored, \(result.missingFiles.count) files not found.")
     }
 }
 

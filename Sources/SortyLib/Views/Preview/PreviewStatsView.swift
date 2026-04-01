@@ -16,7 +16,6 @@ struct PreviewStatsView: View {
     let stage: String
     
     @State private var isExpanded = false
-    @State private var showTooltip = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -39,15 +38,28 @@ struct PreviewStatsView: View {
                         Spacer()
                         
                         // Summary pills
-                        HStack(spacing: 16) {
-                            NerdStatPill(icon: "bolt.fill", value: String(format: "%.1f", stats.tps), unit: "tok/s", color: .orange)
-                            NerdStatPill(icon: "clock.fill", value: String(format: "%.2f", stats.duration), unit: "s", color: .blue)
+                        HStack(spacing: 12) {
+                            if let fileCount = stats.filesScanned ?? (totalFiles > 0 ? totalFiles : nil) {
+                                NerdStatPill(icon: "doc.text.magnifyingglass", value: GenerationStats.formatCount(fileCount), unit: "files", color: .indigo)
+                            }
+
+                            if let totalContextTokens = stats.totalContextTokens {
+                                NerdStatPill(icon: "sum", value: GenerationStats.formatCount(totalContextTokens), unit: "ctx", color: .teal)
+                            } else {
+                                NerdStatPill(icon: "text.bubble", value: GenerationStats.formatCount(stats.responseTokens), unit: "resp", color: .teal)
+                            }
+
+                            NerdStatPill(icon: "clock.fill", value: GenerationStats.formatDuration(stats.duration), unit: nil, color: .blue)
+
+                            if stats.hasBillableCost {
+                                NerdStatPill(icon: "dollarsign.circle", value: GenerationStats.formatCost(stats.computedCost), unit: nil, color: .green)
+                            }
                             
                             // Time remaining estimate
                             if let estimatedTime = estimatedTimeRemaining, estimatedTime > 0 {
                                 NerdStatPill(
                                     icon: "hourglass",
-                                    value: formatTime(estimatedTime),
+                                    value: GenerationStats.formatDuration(estimatedTime),
                                     unit: "left",
                                     color: .purple
                                 )
@@ -79,7 +91,7 @@ struct PreviewStatsView: View {
                 HStack {
                     Spacer()
                     if let estimatedTime = estimatedTimeRemaining {
-                        Label(formatTime(estimatedTime) + " remaining", systemImage: "hourglass")
+                        Label(GenerationStats.formatDuration(estimatedTime) + " remaining", systemImage: "hourglass")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -99,6 +111,14 @@ struct PreviewStatsView: View {
             GridItem(.flexible(), spacing: 12)
         ], spacing: 12) {
             NerdStatPillExpanded(
+                icon: "clock.fill",
+                color: .blue,
+                title: "AI Time",
+                value: GenerationStats.formatDuration(stats.duration),
+                unit: nil
+            )
+
+            NerdStatPillExpanded(
                 icon: "bolt.fill",
                 color: .orange,
                 title: "Throughput",
@@ -109,67 +129,89 @@ struct PreviewStatsView: View {
             NerdStatPillExpanded(
                 icon: "timer",
                 color: .green,
-                title: "Latency",
-                value: String(format: "%.2f", stats.ttft),
-                unit: "s TTFT"
-            )
-            
-            NerdStatPillExpanded(
-                icon: "clock.fill",
-                color: .blue,
-                title: "Total Duration",
-                value: String(format: "%.2f", stats.duration),
-                unit: "s"
-            )
-            
-            NerdStatPillExpanded(
-                icon: "number",
-                color: .teal,
-                title: "Total Tokens",
-                value: "\(stats.totalTokens)",
+                title: "TTFT",
+                value: GenerationStats.formatDuration(stats.ttft),
                 unit: nil
             )
-            
+
             if let promptTokens = stats.promptTokens {
                 NerdStatPillExpanded(
-                    icon: "text.bubble",
+                    icon: "text.alignleft",
                     color: .purple,
-                    title: "Prompt Tokens",
-                    value: "\(promptTokens)",
-                    unit: nil
+                    title: "Prompt",
+                    value: GenerationStats.formatCount(promptTokens),
+                    unit: "tok"
                 )
             }
-            
+
+            NerdStatPillExpanded(
+                icon: "text.bubble",
+                color: .teal,
+                title: "Response",
+                value: GenerationStats.formatCount(stats.responseTokens),
+                unit: "tok"
+            )
+
+            if let totalContextTokens = stats.totalContextTokens {
+                NerdStatPillExpanded(
+                    icon: "sum",
+                    color: .mint,
+                    title: "Context",
+                    value: GenerationStats.formatCount(totalContextTokens),
+                    unit: "tok"
+                )
+            }
+
             if let filesScanned = stats.filesScanned {
                 NerdStatPillExpanded(
                     icon: "doc.text.magnifyingglass",
                     color: .indigo,
-                    title: "Files Scanned",
-                    value: "\(filesScanned)",
+                    title: "Files Reviewed",
+                    value: GenerationStats.formatCount(filesScanned),
+                    unit: "files"
+                )
+            }
+
+            if let totalFileSize = stats.formattedTotalFileSize {
+                NerdStatPillExpanded(
+                    icon: "internaldrive",
+                    color: .cyan,
+                    title: "Data Volume",
+                    value: totalFileSize,
                     unit: nil
                 )
             }
-            
+
             if let scanDuration = stats.scanDuration {
                 NerdStatPillExpanded(
                     icon: "stopwatch",
                     color: .cyan,
                     title: "Scan Duration",
-                    value: String(format: "%.2f", scanDuration),
-                    unit: "s"
-                )
-            }
-            
-            if let estimatedCost = stats.estimatedCost {
-                NerdStatPillExpanded(
-                    icon: "dollarsign.circle",
-                    color: .green,
-                    title: "Est. Cost",
-                    value: String(format: "$%.4f", NSDecimalNumber(decimal: estimatedCost).doubleValue),
+                    value: GenerationStats.formatDuration(scanDuration),
                     unit: nil
                 )
             }
-            
+
+            if stats.hasBillableCost {
+                NerdStatPillExpanded(
+                    icon: "dollarsign.circle",
+                    color: .green,
+                    title: "Estimated Cost",
+                    value: GenerationStats.formatCost(stats.computedCost),
+                    unit: nil
+                )
+            }
+
+            if let duplicatesFound = stats.duplicatesFound, duplicatesFound > 0 {
+                NerdStatPillExpanded(
+                    icon: "doc.on.doc",
+                    color: .red,
+                    title: "Duplicates",
+                    value: GenerationStats.formatCount(duplicatesFound),
+                    unit: "files"
+                )
+            }
+
             if let provider = stats.provider {
                 NerdStatPillExpanded(
                     icon: "network",
@@ -187,20 +229,6 @@ struct PreviewStatsView: View {
                 value: stats.model,
                 unit: nil
             )
-        }
-    }
-    
-    private func formatTime(_ interval: TimeInterval) -> String {
-        if interval < 60 {
-            return String(format: "%.0fs", interval)
-        } else if interval < 3600 {
-            let minutes = Int(interval / 60)
-            let seconds = Int(interval.truncatingRemainder(dividingBy: 60))
-            return "\(minutes)m \(seconds)s"
-        } else {
-            let hours = Int(interval / 3600)
-            let minutes = Int((interval.truncatingRemainder(dividingBy: 3600)) / 60)
-            return "\(hours)h \(minutes)m"
         }
     }
 }

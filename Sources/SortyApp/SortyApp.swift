@@ -10,7 +10,9 @@ import SwiftUI
 import SortyLib
 #endif
 
+@MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
+    private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
     @MainActor static var forceQuit = false
 
     override init() {
@@ -27,8 +29,121 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if Self.forceQuit {
+            Self.forceQuit = false
+            return .terminateNow
+        }
+
+        #if canImport(SortyLib)
+        guard shouldWarnBeforeQuitForActiveAutomation,
+              let warningContext = quitWarningContext else {
+            return .terminateNow
+        }
+
+        return presentQuitWarning(for: warningContext)
+        #else
         return .terminateNow
+        #endif
     }
+
+    #if canImport(SortyLib)
+    private enum QuitWarningContext {
+        case runningOrganizations(Int)
+        case watchedFolders(Int)
+    }
+
+    private var shouldWarnBeforeQuitForActiveAutomation: Bool {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: Self.confirmQuitWhileOrganizingKey) == nil {
+            return true
+        }
+        return defaults.bool(forKey: Self.confirmQuitWhileOrganizingKey)
+    }
+
+    private var quitWarningContext: QuitWarningContext? {
+        if FolderOrganizer.hasRunningOrganizations {
+            return .runningOrganizations(FolderOrganizer.runningOrganizationCount)
+        }
+
+        guard shouldContinueRunningWhenLastWindowCloses else {
+            return nil
+        }
+
+        let watchedCount = activeWatchedAutoOrganizeFolderCount
+        guard watchedCount > 0 else {
+            return nil
+        }
+
+        return .watchedFolders(watchedCount)
+    }
+
+    private var activeWatchedAutoOrganizeFolderCount: Int {
+        guard let data = UserDefaults.standard.data(forKey: "watchedFolders"),
+              let folders = try? JSONDecoder().decode([WatchedFolder].self, from: data) else {
+            return 0
+        }
+
+        return folders.filter { $0.isEnabled && $0.autoOrganize }.count
+    }
+
+    private var shouldContinueRunningWhenLastWindowCloses: Bool {
+        let defaults = UserDefaults.standard
+        let keepInBackground = defaults.bool(forKey: "keepInBackground")
+        let showMenuBarExtra = defaults.bool(forKey: "showMenuBarExtra")
+        return keepInBackground || showMenuBarExtra
+    }
+
+    private func presentQuitWarning(for context: QuitWarningContext) -> NSApplication.TerminateReply {
+        let alert = NSAlert()
+        let backgroundHint = shouldContinueRunningWhenLastWindowCloses
+            ? " To keep automation running, close the window instead of quitting."
+            : ""
+
+        alert.alertStyle = .warning
+        switch context {
+        case .runningOrganizations(let runningCount):
+            let areIs = runningCount == 1 ? "is" : "are"
+            let noun = runningCount == 1 ? "organization" : "organizations"
+            alert.messageText = "Quit Sorty while \(noun) \(areIs) running?"
+            alert.informativeText = "\(runningCount) \(noun) \(areIs) still in progress. Quitting now will interrupt active work and stop watched-folder automations until Sorty is reopened.\(backgroundHint)"
+
+        case .watchedFolders(let watchedCount):
+            let areIs = watchedCount == 1 ? "is" : "are"
+            let noun = watchedCount == 1 ? "watched folder" : "watched folders"
+            alert.messageText = "Quit Sorty and stop watched-folder automation?"
+            alert.informativeText = "\(watchedCount) \(noun) \(areIs) currently active for auto-organization. Quitting now will stop monitoring until Sorty is reopened.\(backgroundHint)"
+        }
+
+        alert.addButton(withTitle: "Quit Sorty")
+        alert.addButton(withTitle: "Cancel")
+
+        let checkboxTitle: String
+        switch context {
+        case .runningOrganizations:
+            checkboxTitle = "Don't ask again while organization is running"
+        case .watchedFolders:
+            checkboxTitle = "Don't ask again while watched-folder automation is active"
+        }
+
+        let dontAskAgainCheckbox = NSButton(
+            checkboxWithTitle: checkboxTitle,
+            target: nil,
+            action: nil
+        )
+        dontAskAgainCheckbox.state = .off
+        alert.accessoryView = dontAskAgainCheckbox
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            if dontAskAgainCheckbox.state == .on {
+                UserDefaults.standard.set(false, forKey: Self.confirmQuitWhileOrganizingKey)
+            }
+            return .terminateNow
+        }
+
+        return .terminateCancel
+    }
+    #endif
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         let keepInBackground = UserDefaults.standard.bool(forKey: "keepInBackground")
@@ -69,7 +184,7 @@ struct SortyApp: App {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
 
-    @StateObject private var settingsViewModel = SettingsViewModel()
+    @StateObject private var settingsViewModel: SettingsViewModel
     @StateObject private var personaManager = PersonaManager()
     @StateObject private var customPersonaStore = CustomPersonaStore()
     @StateObject private var watchedFoldersManager = WatchedFoldersManager()
@@ -96,6 +211,8 @@ struct SortyApp: App {
     private var backgroundActivity: NSObjectProtocol?
 
     init() {
+        _settingsViewModel = StateObject(wrappedValue: SettingsViewModel())
+
         let codexAuthManager = CodexCLIAuthManager()
         _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
         _openAIAuthManager = StateObject(
@@ -106,13 +223,16 @@ struct SortyApp: App {
             "showMenuBarExtra": true,
             "keepInBackground": false,
             "hideDockIcon": false,
-            "launchAtLogin": false
+            "launchAtLogin": false,
+            "confirmQuitWhileOrganizing": true
         ])
 
         backgroundActivity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .automaticTerminationDisabled, .suddenTerminationDisabled],
             reason: "Monitoring watched folders for automatic organization"
         )
+        
+        configureUITestStateIfNeeded()
     }
 
     @SceneBuilder
@@ -135,6 +255,9 @@ struct SortyApp: App {
                 .environmentObject(loginItemManager)
                 .environmentObject(notificationSettings)
                 .environmentObject(menuBarController)
+                .task {
+                    configureGlobalsIfNeeded()
+                }
         } label: {
             MenuBarLabel()
         }
@@ -272,5 +395,131 @@ struct SortyApp: App {
             keepInBackground: keepInBackground,
             showMenuBarExtra: showMenuBarExtra
         )
+    }
+
+    private func configureUITestStateIfNeeded() {
+        guard ProcessInfo.processInfo.arguments.contains("--uitesting") else { return }
+
+        let env = ProcessInfo.processInfo.environment
+        let defaults = UserDefaults.standard
+        let aiConfigKey = "aiConfig"
+
+        defaults.set(
+            env["XCUITEST_DISABLE_STORED_PROVIDER_CREDENTIALS"] == "1",
+            forKey: "uitestDisableStoredProviderCredentials"
+        )
+        defaults.set(
+            env["XCUITEST_ASSUME_FILES_PERMISSION"] == "1",
+            forKey: "uitestAssumeFilesAndFoldersPermission"
+        )
+        defaults.removeObject(forKey: "uitestProviderHealthCheckFailedOnce")
+
+        if let healthCheckMode = env["XCUITEST_PROVIDER_HEALTHCHECK"], !healthCheckMode.isEmpty {
+            defaults.set(healthCheckMode, forKey: "uitestProviderHealthCheckMode")
+        } else {
+            defaults.removeObject(forKey: "uitestProviderHealthCheckMode")
+        }
+
+        if env["XCUITEST_FORCE_ONBOARDING"] == "1" {
+            defaults.removeObject(forKey: "lastLaunchedVersion")
+            defaults.set(false, forKey: "hasCompletedOnboarding")
+            defaults.set(false, forKey: "requiresSetupRepair")
+            defaults.removeObject(forKey: "setupRepairMessage")
+
+            var config = AIConfig.default
+            config.provider = .openAICompatible
+            config.apiKey = nil
+            config.apiURL = AIProvider.openAICompatible.defaultAPIURL
+            config.requiresAPIKey = true
+            if let encoded = try? JSONEncoder().encode(config) {
+                defaults.set(encoded, forKey: aiConfigKey)
+            }
+        }
+
+        if env["XCUITEST_FORCE_SETUP_REPAIR"] == "1" {
+            defaults.set(BuildInfo.version, forKey: "lastLaunchedVersion")
+            defaults.set(true, forKey: "hasCompletedOnboarding")
+            defaults.set(true, forKey: "requiresSetupRepair")
+            defaults.set(
+                "Finish setting up your AI provider before organizing files.",
+                forKey: "setupRepairMessage"
+            )
+
+            var config = AIConfig.default
+            config.provider = .openAICompatible
+            config.apiKey = nil
+            config.apiURL = AIProvider.openAICompatible.defaultAPIURL
+            config.requiresAPIKey = true
+            if let encoded = try? JSONEncoder().encode(config) {
+                defaults.set(encoded, forKey: aiConfigKey)
+            }
+        }
+
+        if let consentValue = env["XCUITEST_LEARNINGS_CONSENT"] {
+            defaults.set(consentValue == "1", forKey: "learnings_consent_granted")
+        }
+
+        if let setupCompleteValue = env["XCUITEST_LEARNINGS_SETUP_COMPLETE"] {
+            defaults.set(setupCompleteValue == "1", forKey: "learnings_initial_setup_complete")
+        }
+
+        if env["XCUITEST_SEED_LEARNINGS_PROFILE"] == "active_rule" {
+            defaults.set(true, forKey: "learnings_consent_granted")
+
+            var seededProfile = LearningsProfile()
+            seededProfile.consentGranted = true
+            seededProfile.sessions = [
+                OrganizationSession(
+                    id: "ui-seed-session",
+                    folderPath: "/tmp",
+                    historyEntryId: "ui-seed-history"
+                )
+            ]
+            seededProfile.inferredRules = [
+                InferredRule(
+                    pattern: ".*\\.pdf$",
+                    template: "Documents/{filename}",
+                    priority: 80,
+                    explanation: "Seeded UI test rule",
+                    scope: .folder("/tmp"),
+                    status: .active
+                )
+            ]
+
+            try? LearningsFileManager.save(profile: seededProfile)
+        }
+
+        if env["XCUITEST_SEED_HISTORY_ENTRY"] == "1" {
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            let historyDirectory = appSupport?.appendingPathComponent("Sorty/History", isDirectory: true)
+            let historyURL = historyDirectory?.appendingPathComponent("organization-history.json")
+            let backupHistoryURL = historyDirectory?.appendingPathComponent("organization-history.json.bak")
+
+            if let historyDirectory {
+                try? FileManager.default.createDirectory(at: historyDirectory, withIntermediateDirectories: true)
+            }
+
+            let seededEntries = [
+                OrganizationHistoryEntry(
+                    id: UUID(uuidString: "11111111-2222-3333-4444-555555555555") ?? UUID(),
+                    timestamp: Date(),
+                    directoryPath: "/tmp",
+                    filesOrganized: 4,
+                    foldersCreated: 2,
+                    success: true,
+                    status: .completed,
+                    source: .manual
+                )
+            ]
+
+            if let data = try? JSONEncoder().encode(seededEntries) {
+                if let historyURL {
+                    try? data.write(to: historyURL)
+                }
+                if let backupHistoryURL {
+                    try? data.write(to: backupHistoryURL)
+                }
+            }
+        }
     }
 }

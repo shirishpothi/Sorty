@@ -22,6 +22,7 @@ struct OrganizationResultView: View {
 struct GenerationStatsView: View {
     let stats: GenerationStats
     var duplicatesFound: Int = 0
+    @State private var isExpanded = false
     
     private var gridColumns: [GridItem] {
         [
@@ -33,115 +34,166 @@ struct GenerationStatsView: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "chart.bar.doc.horizontal")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.purple)
-                
-                Text("Stats for Nerds")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                
-                Spacer()
-                
-                if let model = stats.model.description.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: ".").first {
-                    Text(model)
+            Button {
+                HapticFeedbackManager.shared.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.purple)
+                    
+                    Text("Stats for Nerds")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Spacer()
+                    
+                    Text(stats.compactModelName)
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.purple.opacity(0.1))
                         .cornerRadius(6)
                         .foregroundStyle(.purple)
+                    
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 4)
+            .onHover { hovering in
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
                 }
             }
-            .padding(.horizontal, 4)
-            
-            LazyVGrid(columns: gridColumns, spacing: 16) {
-                NerdStatPillExpanded(
-                    icon: "bolt.fill",
-                    color: .orange,
-                    title: "Throughput",
-                    value: String(format: "%.1f", stats.tps),
-                    unit: "t/s"
+            .accessibilityLabel(
+                Text(
+                    isExpanded
+                        ? "Stats for nerds. Collapse for details"
+                        : "Stats for nerds. Expand for details"
                 )
-                
-                NerdStatPillExpanded(
-                    icon: "timer",
-                    color: .green,
-                    title: "Latency",
-                    value: String(format: "%.2f", stats.ttft),
-                    unit: "s"
-                )
-                
-                let timeSaved = stats.estimatedTimeSaved
-                NerdStatPillExpanded(
-                    icon: "hourglass.badge.plus",
-                    color: .blue,
-                    title: "Time Saved",
-                    value: timeSaved >= 60 ? String(format: "%.1f", timeSaved / 60.0) : String(format: "%.0f", timeSaved),
-                    unit: timeSaved >= 60 ? "min" : "sec"
-                )
-                
-                NerdStatPillExpanded(
-                    icon: "dollarsign.circle.fill",
-                    color: .green,
-                    title: "Total Cost",
-                    value: "$\(stats.computedCost)",
-                    unit: "USD"
-                )
-                
-                NerdStatPillExpanded(
-                    icon: "number",
-                    color: .teal,
-                    title: "Output",
-                    value: "\(stats.totalTokens)",
-                    unit: "tok"
-                )
-                
-                if let promptTokens = stats.promptTokens {
+            )
+
+            if isExpanded {
+                LazyVGrid(columns: gridColumns, spacing: 16) {
                     NerdStatPillExpanded(
-                        icon: "text.alignleft",
-                        color: .indigo,
-                        title: "Input",
-                        value: "\(promptTokens)",
-                        unit: "tok"
+                        icon: "clock.fill",
+                        color: .blue,
+                        title: "AI Time",
+                        value: GenerationStats.formatDuration(stats.duration),
+                        unit: nil
                     )
-                }
-                
-                if let scanned = stats.filesScanned {
+
                     NerdStatPillExpanded(
-                        icon: "doc.text.magnifyingglass",
-                        color: .cyan,
-                        title: "Scanned",
-                        value: "\(scanned)",
-                        unit: "files"
+                        icon: "bolt.fill",
+                        color: .orange,
+                        title: "Throughput",
+                        value: String(format: "%.1f", stats.tps),
+                        unit: "t/s"
                     )
-                }
-                
-                if let size = stats.totalFileSize {
-                    let formatted = ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
-                    let components = formatted.components(separatedBy: " ")
-                    let value = components.first ?? formatted
-                    let unit = components.count > 1 ? components.last : nil
                     
                     NerdStatPillExpanded(
-                        icon: "sdcard.fill",
-                        color: .gray,
-                        title: "Total Size",
-                        value: value,
-                        unit: unit
+                        icon: "timer",
+                        color: .green,
+                        title: "TTFT",
+                        value: GenerationStats.formatDuration(stats.ttft),
+                        unit: nil
                     )
-                }
-                
-                let dups = duplicatesFound > 0 ? duplicatesFound : (stats.duplicatesFound ?? 0)
-                if dups > 0 {
+
                     NerdStatPillExpanded(
-                        icon: "square.on.square",
-                        color: .red,
-                        title: "Duplicates",
-                        value: "\(dups)",
-                        unit: "files"
+                        icon: "text.bubble",
+                        color: .teal,
+                        title: "Response",
+                        value: GenerationStats.formatCount(stats.responseTokens),
+                        unit: "tok"
                     )
+                    
+                    if let promptTokens = stats.promptTokens {
+                        NerdStatPillExpanded(
+                            icon: "text.alignleft",
+                            color: .indigo,
+                            title: "Prompt",
+                            value: GenerationStats.formatCount(promptTokens),
+                            unit: "tok"
+                        )
+                    }
+
+                    if let totalContextTokens = stats.totalContextTokens {
+                        NerdStatPillExpanded(
+                            icon: "sum",
+                            color: .mint,
+                            title: "Context",
+                            value: GenerationStats.formatCount(totalContextTokens),
+                            unit: "tok"
+                        )
+                    }
+                    
+                    if let scanned = stats.filesScanned {
+                        NerdStatPillExpanded(
+                            icon: "doc.text.magnifyingglass",
+                            color: .cyan,
+                            title: "Files Reviewed",
+                            value: GenerationStats.formatCount(scanned),
+                            unit: "files"
+                        )
+                    }
+                    
+                    if let size = stats.formattedTotalFileSize {
+                        NerdStatPillExpanded(
+                            icon: "internaldrive",
+                            color: .gray,
+                            title: "Data Volume",
+                            value: size,
+                            unit: nil
+                        )
+                    }
+
+                    if let scanDuration = stats.scanDuration {
+                        NerdStatPillExpanded(
+                            icon: "stopwatch",
+                            color: .blue,
+                            title: "Scan Time",
+                            value: GenerationStats.formatDuration(scanDuration),
+                            unit: nil
+                        )
+                    }
+
+                    if stats.hasBillableCost {
+                        NerdStatPillExpanded(
+                            icon: "dollarsign.circle.fill",
+                            color: .green,
+                            title: "Estimated Cost",
+                            value: GenerationStats.formatCost(stats.computedCost),
+                            unit: nil
+                        )
+                    }
+
+                    if let provider = stats.provider {
+                        NerdStatPillExpanded(
+                            icon: "network",
+                            color: .secondary,
+                            title: "Provider",
+                            value: provider,
+                            unit: nil
+                        )
+                    }
+                    
+                    let dups = duplicatesFound > 0 ? duplicatesFound : (stats.duplicatesFound ?? 0)
+                    if dups > 0 {
+                        NerdStatPillExpanded(
+                            icon: "square.on.square",
+                            color: .red,
+                            title: "Duplicates",
+                            value: GenerationStats.formatCount(dups),
+                            unit: "files"
+                        )
+                    }
                 }
             }
         }

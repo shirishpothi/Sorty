@@ -16,8 +16,12 @@ class AppStateTests: XCTestCase {
     
     var appState: AppState!
     var organizer: FolderOrganizer!
+    private let requiresSetupRepairKey = "requiresSetupRepair"
+    private let setupRepairMessageKey = "setupRepairMessage"
     
     override func setUp() async throws {
+        UserDefaults.standard.removeObject(forKey: requiresSetupRepairKey)
+        UserDefaults.standard.removeObject(forKey: setupRepairMessageKey)
         
         appState = AppState()
         organizer = FolderOrganizer()
@@ -25,6 +29,8 @@ class AppStateTests: XCTestCase {
     }
     
     override func tearDown() async throws {
+        UserDefaults.standard.removeObject(forKey: requiresSetupRepairKey)
+        UserDefaults.standard.removeObject(forKey: setupRepairMessageKey)
         appState = nil
         organizer = nil
         
@@ -103,6 +109,99 @@ class AppStateTests: XCTestCase {
         // Verify state
         XCTAssertFalse(userDefaults.bool(forKey: onboardingKey), "Fresh install should show onboarding")
         XCTAssertNil(userDefaults.string(forKey: versionKey), "Fresh install should have no version")
+    }
+
+    func testStartSetupRepairRoutesToProviderSettingsAndPersistsMessage() {
+        appState.currentView = .history
+
+        appState.startSetupRepair(message: "Provider setup is incomplete.")
+
+        XCTAssertTrue(appState.requiresSetupRepair)
+        XCTAssertEqual(appState.setupRepairMessage, "Provider setup is incomplete.")
+        XCTAssertEqual(appState.currentView, .settings)
+        XCTAssertEqual(appState.selectedSettingsSection, .provider)
+        XCTAssertEqual(UserDefaults.standard.string(forKey: setupRepairMessageKey), "Provider setup is incomplete.")
+    }
+
+    func testClearSetupRepairStateRemovesPersistence() {
+        appState.startSetupRepair(message: "Repair me.")
+
+        appState.clearSetupRepairState()
+
+        XCTAssertFalse(appState.requiresSetupRepair)
+        XCTAssertNil(appState.setupRepairMessage)
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: requiresSetupRepairKey))
+        XCTAssertNil(UserDefaults.standard.string(forKey: setupRepairMessageKey))
+    }
+
+    func testProviderSetupValidatorBlocksMissingAPIKey() {
+        let config = AIConfig(
+            provider: .openAICompatible,
+            apiURL: "https://api.example.com",
+            apiKey: nil,
+            model: AIProvider.openAICompatible.defaultModel,
+            requiresAPIKey: true
+        )
+
+        let status = OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: config,
+                isGitHubCopilotAuthenticated: false,
+                isCodexAuthenticated: false,
+                isCodexInstalled: false,
+                isAppleFoundationModelAvailable: false
+            )
+        )
+
+        XCTAssertFalse(status.isReady)
+        XCTAssertEqual(status.title, "Credentials required")
+        XCTAssertTrue(status.message.contains("API key"))
+    }
+
+    func testProviderSetupValidatorAllowsConfiguredOllama() {
+        let config = AIConfig(
+            provider: .ollama,
+            apiURL: "http://localhost:11434",
+            apiKey: nil,
+            model: AIProvider.ollama.defaultModel,
+            requiresAPIKey: false
+        )
+
+        let status = OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: config,
+                isGitHubCopilotAuthenticated: false,
+                isCodexAuthenticated: false,
+                isCodexInstalled: false,
+                isAppleFoundationModelAvailable: false
+            )
+        )
+
+        XCTAssertTrue(status.isReady)
+    }
+
+    func testProviderSetupValidatorRequiresCodexSignInForOpenAIAccountAuth() {
+        var config = AIConfig(
+            provider: .openAI,
+            apiURL: AIProvider.openAI.defaultAPIURL,
+            apiKey: nil,
+            model: AIProvider.openAI.defaultModel,
+            requiresAPIKey: true
+        )
+        config.setAuthMethod(.accountSignIn, for: .openAI)
+
+        let status = OnboardingSetupValidator.providerStatus(
+            context: ProviderSetupContext(
+                config: config,
+                isGitHubCopilotAuthenticated: false,
+                isCodexAuthenticated: false,
+                isCodexInstalled: true,
+                isAppleFoundationModelAvailable: false
+            )
+        )
+
+        XCTAssertFalse(status.isReady)
+        XCTAssertTrue(status.message.contains("Codex CLI"))
     }
     
     // MARK: - View Navigation Tests

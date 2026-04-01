@@ -7,9 +7,9 @@
 
 import Foundation
 
-struct BuildInfo {
+public struct BuildInfo {
     /// App version from Info.plist (e.g., "1.0.0")
-    static var version: String {
+    public static var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
     

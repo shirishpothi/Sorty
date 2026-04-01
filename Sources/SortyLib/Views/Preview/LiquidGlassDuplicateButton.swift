@@ -65,34 +65,33 @@ struct LiquidGlassDuplicateButton: View {
             showPopover.toggle()
         } label: {
             ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 22, height: 22)
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(showPopover ? 0.5 : 0.3),
-                                        Color.white.opacity(0.05)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 0.5
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-
                 Image(systemName: "doc.on.doc")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(showPopover ? accentColor : Color.secondary)
             }
+            .frame(width: 22, height: 22)
+            .systemLiquidGlassBackground(cornerRadius: 11)
+            .overlay(
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(showPopover ? 0.5 : 0.3),
+                                Color.white.opacity(0.05)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 0.5
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
         }
         .buttonStyle(.plain)
         .help("\(duplicateInfo.duplicateCount) duplicate\(duplicateInfo.duplicateCount == 1 ? "" : "s") found")
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             duplicatePopoverContent
+                .systemLiquidGlassPopover(cornerRadius: 12)
         }
         .contextMenu {
             contextMenuItems

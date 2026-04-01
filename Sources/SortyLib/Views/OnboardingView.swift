@@ -17,9 +17,19 @@ public struct OnboardingView: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var codexAuth: CodexCLIAuthManager
+    @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     
     @State private var currentStep: OnboardingStep = .welcome
     @State private var hasFilesAndFoldersPermission = false
+    @State private var advanceValidationMessage: String?
+    @State private var isAdvancing = false
+    @State private var swipeMonitor: Any?
+    @State private var isHoveringStepIndicator = false
+    @State private var swipeAccumulatedTranslation: CGFloat = 0
+    @State private var hasTriggeredSwipeForGesture = false
+
+    private let swipeThreshold: CGFloat = 42
     
     public init(hasCompletedOnboarding: Binding<Bool>) {
         self._hasCompletedOnboarding = hasCompletedOnboarding
@@ -53,6 +63,20 @@ public struct OnboardingView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Onboarding")
         .accessibilityIdentifier("OnboardingView")
+        .onChange(of: currentStep) { _, _ in
+            advanceValidationMessage = nil
+        }
+        .onChange(of: currentStepValidation.canAdvance) { _, canAdvance in
+            if canAdvance {
+                advanceValidationMessage = nil
+            }
+        }
+        .onAppear {
+            installSwipeMonitorIfNeeded()
+        }
+        .onDisappear {
+            removeSwipeMonitor()
+        }
     }
     
     @ViewBuilder
@@ -94,93 +118,104 @@ public struct OnboardingView: View {
     private var navigationControls: some View {
         let sideControlWidth: CGFloat = 180
 
-        return ZStack {
-            HStack(spacing: 16) {
+        return VStack(spacing: 8) {
+            ZStack {
+                HStack(spacing: 16) {
                 // Back button - show for all steps except welcome and completion
-                Group {
-                    if currentStep != .welcome && currentStep != .completion {
-                        Button {
-                            HapticFeedbackManager.shared.selection()
-                            withAnimation(.pageTransition) {
-                                currentStep = currentStep.previous
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "chevron.left")
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text("Back")
-                            }
-                            .frame(minWidth: 80)
-                        }
-                        .buttonStyle(.bordered)
-                        .keyboardShortcut(.leftArrow, modifiers: [])
-                    }
-                }
-                .frame(width: sideControlWidth, alignment: .leading)
-
-                Spacer(minLength: 0)
-
-                // Next/Skip button
-                Group {
-                    if currentStep != .completion {
-                        if currentStep == .demo {
+                    Group {
+                        if currentStep != .welcome && currentStep != .completion {
                             Button {
-                                HapticFeedbackManager.shared.selection()
-                                withAnimation(.pageTransition) {
-                                    currentStep = .completion
-                                }
+                                navigateToPreviousStep()
                             } label: {
-                                Text("Skip Demo")
-                                    .frame(minWidth: 80)
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("Back")
+                                }
+                                .frame(minWidth: 80)
                             }
                             .buttonStyle(.bordered)
-                        } else if currentStep == .welcome {
-                            Button {
-                                HapticFeedbackManager.shared.selection()
-                                withAnimation(.pageTransition) {
-                                    currentStep = currentStep.next
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text("Get Started")
-                                    Image(systemName: "arrow.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                            }
-                            .buttonStyle(.onboardingPill)
-                            .keyboardShortcut(.defaultAction)
-                        } else {
-                            // Determine if Continue should be disabled on permissions step
-                            let canProceed = currentStep != .permissions || hasFilesAndFoldersPermission
-
-                            Button {
-                                HapticFeedbackManager.shared.selection()
-                                withAnimation(.pageTransition) {
-                                    currentStep = currentStep.next
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text(currentStep == .permissions ? "Continue" : "Next")
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 12, weight: .semibold))
-                                }
-                            }
-                            .buttonStyle(.onboardingPill)
-                            .keyboardShortcut(.rightArrow, modifiers: [])
-                            .disabled(!canProceed)
-                            .opacity(canProceed ? 1.0 : 0.5)
+                            .keyboardShortcut(.leftArrow, modifiers: [])
+                            .accessibilityIdentifier("OnboardingBackButton")
                         }
                     }
+                    .frame(width: sideControlWidth, alignment: .leading)
+
+                    Spacer(minLength: 0)
+
+                    // Next/Skip button
+                    Group {
+                        if currentStep != .completion {
+                            if currentStep == .demo {
+                                Button {
+                                    navigateForwardFromControls()
+                                } label: {
+                                    Text("Skip Demo")
+                                        .frame(minWidth: 80)
+                                }
+                                .buttonStyle(.bordered)
+                                .accessibilityIdentifier("OnboardingSkipDemoButton")
+                            } else if currentStep == .welcome {
+                                Button {
+                                    navigateForwardFromControls()
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text("Get Started")
+                                        Image(systemName: "arrow.right")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                }
+                                .buttonStyle(.onboardingPill)
+                                .keyboardShortcut(.defaultAction)
+                                .accessibilityIdentifier("OnboardingAdvanceButton")
+                            } else {
+                                Button {
+                                    navigateForwardFromControls()
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        if isAdvancing {
+                                            BouncingSpinner(size: 10, color: .white)
+                                        }
+                                        Text(currentStep == .permissions ? "Continue" : "Next")
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                }
+                                .buttonStyle(.onboardingPill)
+                                .keyboardShortcut(.rightArrow, modifiers: [])
+                                .disabled(!currentStepValidation.canAdvance || isAdvancing)
+                                .opacity(currentStepValidation.canAdvance && !isAdvancing ? 1.0 : 0.5)
+                                .accessibilityIdentifier("OnboardingAdvanceButton")
+                            }
+                        }
+                    }
+                    .frame(width: sideControlWidth, alignment: .trailing)
                 }
-                .frame(width: sideControlWidth, alignment: .trailing)
+                .frame(maxWidth: .infinity)
+
+                // Step indicators - always centered in the navigation row
+                stepIndicator
+                    .frame(width: 340, height: 84)
+                    .contentShape(Rectangle())
+                    .background(Color.clear)
+                    .onHover { isHovering in
+                        isHoveringStepIndicator = isHovering
+                        if !isHovering {
+                            resetSwipeTracking()
+                        }
+                    }
             }
             .frame(maxWidth: .infinity)
+            .frame(minHeight: 44)
 
-            // Step indicators - always centered in the navigation row
-            stepIndicator
+            if let advanceValidationMessage, !advanceValidationMessage.isEmpty, currentStep != .provider {
+                Text(advanceValidationMessage)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("OnboardingValidationMessage")
+            }
         }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 44)
     }
     
     private var stepIndicator: some View {
@@ -199,6 +234,152 @@ public struct OnboardingView: View {
                     .animation(.subtleBounce, value: currentStep)
             }
         }
+    }
+
+    private var providerSetupContext: ProviderSetupContext {
+        ProviderSetupContext(
+            config: settingsViewModel.config,
+            isGitHubCopilotAuthenticated: copilotAuth.isAuthenticated,
+            isCodexAuthenticated: codexAuth.isAuthenticated,
+            isCodexInstalled: codexAuth.isCodexInstalled,
+            isAppleFoundationModelAvailable: settingsViewModel.isAppleModelAvailable,
+            appleFoundationModelStatus: settingsViewModel.appleModelStatus
+        )
+    }
+
+    private var currentStepValidation: OnboardingStepValidationResult {
+        currentStep.synchronousValidation(
+            in: OnboardingStepValidationContext(
+                providerSetupStatus: OnboardingSetupValidator.providerStatus(context: providerSetupContext),
+                hasRequiredPermissions: hasFilesAndFoldersPermission
+            )
+        )
+    }
+
+    private func navigateToPreviousStep() {
+        guard currentStep != .welcome && currentStep != .completion else { return }
+        HapticFeedbackManager.shared.selection()
+        withAnimation(.pageTransition) {
+            currentStep = currentStep.previous
+        }
+    }
+
+    private func navigateForwardFromControls() {
+        guard currentStep != .completion else { return }
+
+        switch currentStep {
+        case .welcome:
+            HapticFeedbackManager.shared.selection()
+            withAnimation(.pageTransition) {
+                currentStep = currentStep.next
+            }
+        case .demo:
+            HapticFeedbackManager.shared.selection()
+            withAnimation(.pageTransition) {
+                currentStep = .completion
+            }
+        case .provider, .permissions, .workflow:
+            attemptAdvance()
+        case .completion:
+            break
+        }
+    }
+
+    private func attemptAdvance() {
+        guard !isAdvancing else { return }
+
+        let validationContext = OnboardingStepValidationContext(
+            providerSetupStatus: OnboardingSetupValidator.providerStatus(context: providerSetupContext),
+            hasRequiredPermissions: hasFilesAndFoldersPermission
+        )
+
+        Task { @MainActor in
+            isAdvancing = true
+            let validation = await currentStep.validateAdvance(in: validationContext)
+            isAdvancing = false
+
+            guard validation.canAdvance else {
+                advanceValidationMessage = validation.message
+                HapticFeedbackManager.shared.error()
+                return
+            }
+
+            advanceValidationMessage = nil
+            HapticFeedbackManager.shared.selection()
+            withAnimation(.pageTransition) {
+                currentStep = currentStep.next
+            }
+        }
+    }
+
+    private func installSwipeMonitorIfNeeded() {
+        guard swipeMonitor == nil else { return }
+
+        swipeMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            handleSwipeEvent(event)
+        }
+    }
+
+    private func removeSwipeMonitor() {
+        if let monitor = swipeMonitor {
+            NSEvent.removeMonitor(monitor)
+            swipeMonitor = nil
+        }
+        resetSwipeTracking()
+        isHoveringStepIndicator = false
+    }
+
+    private func resetSwipeTracking() {
+        swipeAccumulatedTranslation = 0
+        hasTriggeredSwipeForGesture = false
+    }
+
+    private func handleSwipeEvent(_ event: NSEvent) -> NSEvent? {
+        guard isHoveringStepIndicator else { return event }
+
+        let deltaX = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 8
+        let deltaY = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 8
+
+        guard abs(deltaX) > abs(deltaY) else { return event }
+
+        if event.phase == .began {
+            resetSwipeTracking()
+        }
+
+        if event.momentumPhase != [] {
+            if event.momentumPhase == .ended {
+                resetSwipeTracking()
+            }
+            return nil
+        }
+
+        guard !hasTriggeredSwipeForGesture else {
+            if event.phase == .ended || event.phase == .cancelled {
+                resetSwipeTracking()
+            }
+            return nil
+        }
+
+        let physicalDeltaX = event.isDirectionInvertedFromDevice ? deltaX : -deltaX
+        swipeAccumulatedTranslation += physicalDeltaX
+
+        if swipeAccumulatedTranslation <= -swipeThreshold {
+            hasTriggeredSwipeForGesture = true
+            navigateForwardFromControls()
+            return nil
+        }
+
+        if swipeAccumulatedTranslation >= swipeThreshold {
+            hasTriggeredSwipeForGesture = true
+            navigateToPreviousStep()
+            return nil
+        }
+
+        if event.phase == .ended || event.phase == .cancelled {
+            resetSwipeTracking()
+        }
+
+        return nil
     }
 }
 
@@ -247,6 +428,25 @@ enum OnboardingStep: Int, CaseIterable {
         guard let currentIndex = active.firstIndex(of: self) else { return self }
         let prevIndex = max(currentIndex - 1, 0)
         return active[prevIndex]
+    }
+}
+
+extension OnboardingStep: OnboardingStepValidating {
+    func synchronousValidation(in context: OnboardingStepValidationContext) -> OnboardingStepValidationResult {
+        switch self {
+        case .provider:
+            if context.providerSetupStatus.isReady {
+                return .valid
+            }
+            return .blocked(context.providerSetupStatus.message)
+        case .permissions:
+            if context.hasRequiredPermissions {
+                return .valid
+            }
+            return .blocked("Grant Files & Folders access before continuing.")
+        case .welcome, .workflow, .demo, .completion:
+            return .valid
+        }
     }
 }
 
@@ -306,9 +506,12 @@ struct OnboardingProgressBar: View {
 // MARK: - Preview
 
 #Preview {
+    let codexAuthManager = CodexCLIAuthManager()
+
     OnboardingView(hasCompletedOnboarding: .constant(false))
         .environmentObject(SettingsViewModel())
         .environmentObject(PersonaManager())
         .environmentObject(FolderOrganizer())
         .environmentObject(AppState())
+        .environmentObject(codexAuthManager)
 }

@@ -34,6 +34,15 @@ Sorty is a polished, detail-oriented Mac app. Be thoughtful about the small thin
 - **Layout polish**: Consistent spacing, proper alignment, and compact designs. Prefer icon+label rows or icon grids over verbose lists when space is tight.
 - When adding or modifying any interactive UI, always consider whether it needs haptics, hover states, and smooth transitions — don't wait to be asked.
 
+## System Liquid Glass Rule (Critical)
+- For UI that is explicitly "system liquid glass" (dropdowns, popovers, floating selectors), use only system presentation + system glass APIs.
+- Do **NOT** use custom materials (`.regularMaterial`, `.thinMaterial`, `.ultraThinMaterial`, `.thickMaterial`) or custom blur/gradient approximations as a substitute for system glass. These are NOT the same as liquid glass.
+- **Popovers**: Never use `.presentationBackground(.clear)` + manual `.glassEffect()` on popover content. The system popover already provides its own glass chrome. Just apply `.systemLiquidGlassPopover(cornerRadius: 12)` to the outermost view inside every `.popover { }` block and let the system handle the material.
+- **Inline badges/pills**: Use `.systemLiquidGlassBackground(cornerRadius:)` instead of `.background(.ultraThinMaterial)` + manual `.cornerRadius()` + `.overlay` strokes.
+- **Every new popover** must use `.systemLiquidGlassPopover(cornerRadius: 12)`. No exceptions.
+- If system glass APIs are unavailable on the deployment target, use default system chrome instead of visual imitation.
+- Before finalizing, do a visual check to confirm it matches the system glass reference used in `AboutView`.
+
 ## Detailed Guides
 - [Architecture & Patterns](docs/agent-guides/architecture.md)
 - [Feature Flags](docs/agent-guides/feature-flags.md)

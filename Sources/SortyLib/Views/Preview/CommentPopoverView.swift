@@ -20,6 +20,7 @@ struct CommentBubbleButton: View {
         .buttonStyle(.plain)
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             CommentPopoverView(comment: comment)
+                .systemLiquidGlassPopover(cornerRadius: 12)
         }
         .help("View comment")
     }

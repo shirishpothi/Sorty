@@ -10,10 +10,10 @@ import AppKit
 
 @MainActor
 public final class CodexCLIAuthManager: ObservableObject {
-    @Published var isAuthenticated = false
-    @Published var accountEmail: String?
-    @Published var authError: String?
-    @Published var isCodexInstalled = false
+    @Published public var isAuthenticated = false
+    @Published public var accountEmail: String?
+    @Published public var authError: String?
+    @Published public var isCodexInstalled = false
 
     enum CredentialStoreMode: String {
         case file
@@ -98,7 +98,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         }
     }
 
-    func checkStatus() {
+    public func checkStatus() {
         isCodexInstalled = checkCodexInstalled()
         let fileExists = FileManager.default.fileExists(atPath: authFilePath)
 

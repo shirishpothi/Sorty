@@ -130,4 +130,76 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(result.contains("Projects"))
         XCTAssertTrue(result.contains("REFERENCE MODEL DIRECTORIES"))
     }
+
+    func testDirectoryManifestContextIncludesRelativePathsAndExtensionSummary() throws {
+        let invoicesDir = tempDir.appendingPathComponent("Invoices")
+        try FileManager.default.createDirectory(at: invoicesDir, withIntermediateDirectories: true)
+
+        let invoiceFile = invoicesDir.appendingPathComponent("march.pdf")
+        let noteFile = tempDir.appendingPathComponent("notes.txt")
+        try Data("pdf".utf8).write(to: invoiceFile)
+        try "hello".write(to: noteFile, atomically: true, encoding: .utf8)
+
+        let files = [
+            FileItem(path: invoiceFile.path, name: "march", extension: "pdf", size: 3),
+            FileItem(path: noteFile.path, name: "notes", extension: "txt", size: 5)
+        ]
+
+        let context = PromptBuilder.buildDirectoryManifestContext(
+            baseDirectoryURL: tempDir,
+            files: files
+        )
+
+        XCTAssertNotNil(context)
+        XCTAssertTrue(context?.contains("DIRECTORY MANIFEST") ?? false)
+        XCTAssertTrue(context?.contains("Invoices/march.pdf") ?? false)
+        XCTAssertTrue(context?.contains("notes.txt") ?? false)
+        XCTAssertTrue(context?.contains("pdf:1") ?? false)
+        XCTAssertTrue(context?.contains("txt:1") ?? false)
+    }
+
+    func testDirectoryManifestContextReturnsNilWhenNoFiles() {
+        let context = PromptBuilder.buildDirectoryManifestContext(
+            baseDirectoryURL: tempDir,
+            files: []
+        )
+
+        XCTAssertNil(context)
+    }
+
+    func testDirectoryManifestContextTruncatesWhenExceedingMaxEntries() {
+        let files = (1...5).map { index in
+            FileItem(
+                path: tempDir.appendingPathComponent("item\(index).txt").path,
+                name: "item\(index)",
+                extension: "txt",
+                size: 1
+            )
+        }
+
+        let context = PromptBuilder.buildDirectoryManifestContext(
+            baseDirectoryURL: tempDir,
+            files: files,
+            maxEntries: 3
+        )
+
+        XCTAssertNotNil(context)
+        XCTAssertTrue(context?.contains("... and 2 more files in scope") ?? false)
+        XCTAssertTrue(context?.contains("item1.txt") ?? false)
+        XCTAssertTrue(context?.contains("item3.txt") ?? false)
+        XCTAssertFalse(context?.contains("item5.txt") ?? true)
+    }
+
+    func testDirectoryManifestContextFallsBackToFilenameOutsideBaseDirectory() {
+        let externalFilePath = "/tmp/external-report.pdf"
+        let context = PromptBuilder.buildDirectoryManifestContext(
+            baseDirectoryURL: tempDir,
+            files: [
+                FileItem(path: externalFilePath, name: "external-report", extension: "pdf", size: 128)
+            ]
+        )
+
+        XCTAssertNotNil(context)
+        XCTAssertTrue(context?.contains("external-report.pdf") ?? false)
+    }
 }

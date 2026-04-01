@@ -88,29 +88,27 @@ struct PreviewHeaderView: View {
                         showNotesPopover.toggle()
                     } label: {
                         ZStack {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .frame(width: 22, height: 22)
-                                .overlay(
-                                    Circle()
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color.white.opacity(showNotesPopover ? 0.5 : 0.3),
-                                                    Color.white.opacity(0.05)
-                                                ],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            lineWidth: 0.5
-                                        )
-                                )
-                                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
-
                             Image(systemName: "brain")
                                 .font(.system(size: 10, weight: .medium))
                                 .foregroundStyle(showNotesPopover ? Color.purple : Color.secondary)
                         }
+                        .frame(width: 22, height: 22)
+                        .systemLiquidGlassBackground(cornerRadius: 11)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(showNotesPopover ? 0.5 : 0.3),
+                                            Color.white.opacity(0.05)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 0.5
+                                )
+                        )
+                        .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
                     }
                     .buttonStyle(.plain)
                     .help("View AI reasoning")
@@ -151,6 +149,7 @@ struct PreviewHeaderView: View {
                         }
                         .padding(14)
                         .frame(minWidth: 240, maxWidth: 340)
+                        .systemLiquidGlassPopover(cornerRadius: 12)
                     }
                 }
             }
@@ -168,13 +167,7 @@ struct PreviewHeaderView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(.ultraThinMaterial)
-                .cornerRadius(6)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-                )
-                .shadow(color: Color.black.opacity(0.08), radius: 2, x: 0, y: 1)
+                .systemLiquidGlassBackground(cornerRadius: 6)
             }
 
             Text("\(totalFiles) files • \(totalFolders) folders")
@@ -191,12 +184,7 @@ struct PreviewHeaderView: View {
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
-                .background(.ultraThinMaterial)
-                .cornerRadius(4)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.white.opacity(0.2), lineWidth: 0.5)
-                )
+                .systemLiquidGlassBackground(cornerRadius: 4)
             }
         }
         .padding()

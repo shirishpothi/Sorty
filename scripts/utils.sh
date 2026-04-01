@@ -81,14 +81,25 @@ get_version() {
 }
 
 get_build_number() {
-    # 1. Use Git Commit Count (Reliable for automation)
-    local commit_count=$(git rev-list --count HEAD 2>/dev/null)
-    if [ -n "$commit_count" ] && [ "$commit_count" -gt 0 ]; then
-        echo "$commit_count"
+    # 1. Allow CI/manual overrides when a release pipeline wants an explicit build.
+    if [ -n "${BUILD_NUMBER_OVERRIDE:-}" ]; then
+        echo "${BUILD_NUMBER_OVERRIDE}"
         return
     fi
 
-    # 2. Fallback to Info.plist
+    # 2. Use Git commit count only when the repository is not shallow.
+    # In shallow CI checkouts this frequently collapses to "1", which breaks
+    # Sparkle version ordering in the published appcast.
+    local is_shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo "false")
+    if [ "$is_shallow" != "true" ]; then
+        local commit_count=$(git rev-list --count HEAD 2>/dev/null)
+        if [ -n "$commit_count" ] && [ "$commit_count" -gt 0 ]; then
+            echo "$commit_count"
+            return
+        fi
+    fi
+
+    # 3. Fallback to Info.plist
     /usr/libexec/PlistBuddy -c "Print CFBundleVersion" "${PROJECT_DIR}/Info.plist" 2>/dev/null || echo "1"
 }
 

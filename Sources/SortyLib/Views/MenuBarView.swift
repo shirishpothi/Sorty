@@ -94,15 +94,7 @@ public struct MenuBarView: View {
         }
         .padding(.vertical, 8)
         .frame(width: 280)
-        .overlay {
-            if isDropTargeted {
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.accentColor, lineWidth: 2)
-                    .background(Color.accentColor.opacity(0.05))
-                    .allowsHitTesting(false)
-            }
-        }
-        .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
+        .siriDropZone(cornerRadius: 10, isTargeted: $isDropTargeted) { providers in
             Task {
                 await menuBarController.handleDrop(providers: providers)
             }
@@ -110,6 +102,7 @@ public struct MenuBarView: View {
         }
         .popover(isPresented: $menuBarController.showPopover) {
             LiquidGlassPopover(controller: menuBarController)
+                .systemLiquidGlassPopover(cornerRadius: 12)
         }
     }
     
@@ -329,12 +322,10 @@ public struct MenuBarView: View {
                 }
 
                 MenuBarButton(title: "Quit Sorty", icon: "power") {
-                    NotificationCenter.default.post(name: .forceQuitSorty, object: nil)
                     NSApplication.shared.terminate(nil)
                 }
             } else {
                 MenuBarButton(title: "Quit Sorty", icon: "power") {
-                    NotificationCenter.default.post(name: .forceQuitSorty, object: nil)
                     NSApplication.shared.terminate(nil)
                 }
             }

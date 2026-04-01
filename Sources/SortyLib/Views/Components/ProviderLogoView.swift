@@ -14,12 +14,34 @@ public struct ProviderLogoView: View {
             return Image(systemName: provider.logoImageName)
         }
 
-        if let nsImage = SortyResources.image(named: provider.logoImageName) {
+        if let nsImage = resolvedProviderImage() {
             nsImage.isTemplate = !provider.hasColorLogo
             return Image(nsImage: nsImage)
         }
 
         return Image(systemName: "cpu")
+    }
+
+    private func resolvedProviderImage() -> NSImage? {
+        if let image = SortyResources.image(named: provider.logoImageName), isUsableProviderImage(image) {
+            return image
+        }
+
+        // AppKit named lookup covers assets compiled into the app-level catalog.
+        if let image = NSImage(named: NSImage.Name(provider.logoImageName)), isUsableProviderImage(image) {
+            return image
+        }
+
+        // Last fallback: ask resource loader for explicit PNG file lookup.
+        if let image = SortyResources.image(named: provider.logoImageName, withExtension: "png"), isUsableProviderImage(image) {
+            return image
+        }
+
+        return nil
+    }
+
+    private func isUsableProviderImage(_ image: NSImage) -> Bool {
+        image.size.width > 2 && image.size.height > 2
     }
 
     private var renderingMode: Image.TemplateRenderingMode {

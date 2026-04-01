@@ -127,8 +127,11 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
 
     /// Check if this file has semantic content (OCR or extracted text)
     public var hasSemanticContent: Bool {
-        if let ocr = ocrText, !ocr.isEmpty { return true }
-        if let metadata = contentMetadata, metadata.textPreview != nil { return true }
+        if let ocr = ocrText, !ocr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        if let metadata = contentMetadata {
+            if let preview = metadata.textPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+            if let metadataOCR = metadata.ocrText, !metadataOCR.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+        }
         return false
     }
 
@@ -147,8 +150,14 @@ public struct FileItem: Identifiable, Codable, Hashable, Sendable {
             if let preview = metadata.textPreview {
                 parts.append("Content: \(preview)")
             }
+            if let metadataOCR = metadata.ocrText, !metadataOCR.isEmpty {
+                parts.append("OCR: \(metadataOCR)")
+            }
             if let keywords = metadata.keywords {
                 parts.append("Keywords: \(keywords.joined(separator: ", "))")
+            }
+            if let detected = metadata.detectedKeywords, !detected.isEmpty {
+                parts.append("Detected: \(detected.joined(separator: ", "))")
             }
         }
 

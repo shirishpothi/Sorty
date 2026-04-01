@@ -672,6 +672,20 @@ final class EnhancedLearningsTests: XCTestCase {
         XCTAssertFalse(manager.isPathExcludedFromLearning("/Users/test/Documents/report.pdf"))
     }
 
+    func testLearningExclusionStorageNormalizationPreservesReadablePath() async {
+        await manager.addLearningExclusion("  ./Downloads//Cache/  ")
+
+        XCTAssertEqual(manager.currentProfile?.learningExclusionPatterns, ["Downloads/Cache"])
+    }
+
+    func testLearningExclusionDeduplicatesCaseInsensitivePatterns() async {
+        await manager.addLearningExclusion("Downloads/Cache")
+        await manager.addLearningExclusion("downloads/cache")
+
+        XCTAssertEqual(manager.currentProfile?.learningExclusionPatterns.count, 1)
+        XCTAssertEqual(manager.currentProfile?.learningExclusionPatterns.first, "Downloads/Cache")
+    }
+
     func testExcludedPathsAreIgnoredWhenRecordingLearnings() async {
         await manager.addLearningExclusion("Temp")
 
@@ -771,6 +785,120 @@ final class EnhancedLearningsTests: XCTestCase {
         
         manager.sessionLearningPaused = false
         XCTAssertFalse(manager.sessionLearningPaused)
+    }
+
+    func testSummaryReflectsNoConsentState() async {
+        await manager.withdrawConsent()
+
+        let summary = manager.summary
+        XCTAssertEqual(summary.state, .noConsent)
+        XCTAssertFalse(summary.shouldShowBadge)
+        XCTAssertFalse(summary.canProvideFeedback)
+    }
+
+    func testSummaryPausedRetainsActiveRuleCounts() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.sessions = [OrganizationSession(folderPath: "/Users/test/Work")]
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*\\.pdf$",
+                template: "Documents/{filename}",
+                priority: 80,
+                explanation: "PDF rule",
+                scope: .global,
+                status: .active
+            )
+        ]
+        manager.currentProfile = profile
+        manager.sessionLearningPaused = true
+
+        let summary = manager.summary
+        XCTAssertEqual(summary.state, .paused)
+        XCTAssertEqual(summary.activeRuleCount, 1)
+        XCTAssertTrue(summary.hasActiveRules)
+        XCTAssertFalse(summary.canProvideFeedback)
+    }
+
+    func testSummaryEstablishedUsesSessionAndRuleMaturity() {
+        var sessions: [OrganizationSession] = []
+        for index in 0..<12 {
+            sessions.append(
+                OrganizationSession(
+                    id: "session-\(index)",
+                    timestamp: Date().addingTimeInterval(TimeInterval(-index * 3600)),
+                    folderPath: "/Users/test/Projects"
+                )
+            )
+        }
+
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.sessions = sessions
+        profile.inferredRules = [
+            InferredRule(
+                pattern: ".*",
+                template: "General/{filename}",
+                priority: 90,
+                explanation: "General rule",
+                scope: .global,
+                status: .active
+            )
+        ]
+        manager.currentProfile = profile
+
+        let summary = manager.summary
+        XCTAssertEqual(summary.state, .established)
+        XCTAssertEqual(summary.maturity, .established)
+        XCTAssertTrue(summary.isActive)
+    }
+
+    func testSessionOutcomeFeedbackResolvesByHistoryEntryId() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.sessions = [
+            OrganizationSession(
+                id: "session-1",
+                folderPath: "/Users/test/Work",
+                historyEntryId: "history-1",
+                reaction: .inProgress
+            )
+        ]
+        manager.currentProfile = profile
+
+        manager.recordSessionOutcomeFeedback(
+            sessionId: "history-1",
+            outcome: .useful,
+            folderPath: "/Users/test/Work"
+        )
+
+        let updatedSession = manager.currentProfile?.sessions.first(where: { $0.id == "session-1" })
+        XCTAssertEqual(updatedSession?.reaction, .accepted)
+        XCTAssertTrue(updatedSession?.events.contains(where: { $0.kind == .feedback }) ?? false)
+    }
+
+    func testSessionOutcomeFeedbackIgnoredWhenPaused() {
+        var profile = LearningsProfile()
+        profile.consentGranted = true
+        profile.sessions = [
+            OrganizationSession(
+                id: "session-1",
+                folderPath: "/Users/test/Work",
+                reaction: .inProgress
+            )
+        ]
+        manager.currentProfile = profile
+        manager.sessionLearningPaused = true
+
+        manager.recordSessionOutcomeFeedback(
+            sessionId: "session-1",
+            outcome: .useful,
+            folderPath: "/Users/test/Work"
+        )
+
+        let pausedSession = manager.currentProfile?.sessions.first(where: { $0.id == "session-1" })
+        XCTAssertEqual(pausedSession?.reaction, .inProgress)
+        XCTAssertFalse(pausedSession?.events.contains(where: { $0.kind == .feedback }) ?? false)
     }
     
     // MARK: - Scope Display Names

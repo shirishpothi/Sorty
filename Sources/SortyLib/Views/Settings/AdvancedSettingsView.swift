@@ -119,6 +119,7 @@ struct AdvancedSettingsView: View {
                             }
                             .padding(12)
                             .frame(width: 320, alignment: .leading)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
                         }
                         .accessibilityIdentifier("FinderAutoRevealInfoButton")
                         .accessibilityLabel("Finder auto-reveal recommendation")
@@ -188,7 +189,7 @@ struct AdvancedSettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.showStatsForNerds,
                         title: "Stats for Nerds",
-                        description: "Show detailed generation metrics"
+                        description: "Show AI timing, token, and cost metrics in preview, history, and results"
                     )
                     
                     Divider()

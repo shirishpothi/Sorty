@@ -619,17 +619,18 @@ struct LearningsView: View {
                         manager.sessionLearningPaused ? "Resume Learning" : "Pause Learning",
                         systemImage: manager.sessionLearningPaused ? "play.fill" : "pause.fill"
                     )
-                        .font(.subheadline)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .pauseResume ? 0.12 : 0.0))
-                        )
-                        .offset(x: hoveredStatusPopoverAction == .pauseResume ? 1 : 0)
+                    .font(.subheadline)
                 }
                 .buttonStyle(.plain)
+                .frame(width: 204, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .pauseResume ? 0.12 : 0.0))
+                )
+                .offset(x: hoveredStatusPopoverAction == .pauseResume ? 1 : 0)
                 .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
                 .onHover { hovering in
                     withAnimation(.easeInOut(duration: 0.14)) {
@@ -649,16 +650,17 @@ struct LearningsView: View {
                 } label: {
                     Label("Withdraw Consent", systemImage: "hand.raised")
                         .font(.subheadline)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .withdrawConsent ? 0.12 : 0.0))
-                        )
-                        .offset(x: hoveredStatusPopoverAction == .withdrawConsent ? 1 : 0)
                 }
                 .buttonStyle(.plain)
+                .frame(width: 204, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .withdrawConsent ? 0.12 : 0.0))
+                )
+                .offset(x: hoveredStatusPopoverAction == .withdrawConsent ? 1 : 0)
                 .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
                 .onHover { hovering in
                     withAnimation(.easeInOut(duration: 0.14)) {
@@ -678,16 +680,17 @@ struct LearningsView: View {
                 } label: {
                     Label("Delete All Data", systemImage: "trash")
                         .font(.subheadline)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .deleteData ? 0.12 : 0.0))
-                        )
-                        .offset(x: hoveredStatusPopoverAction == .deleteData ? 1 : 0)
                 }
                 .buttonStyle(.plain)
+                .frame(width: 204, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .deleteData ? 0.12 : 0.0))
+                )
+                .offset(x: hoveredStatusPopoverAction == .deleteData ? 1 : 0)
                 .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
                 .onHover { hovering in
                     withAnimation(.easeInOut(duration: 0.14)) {
@@ -705,6 +708,7 @@ struct LearningsView: View {
               }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learning status quick actions")
+            .systemLiquidGlassPopover(cornerRadius: 12)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Learning status: \(statusLabel). Open quick actions")

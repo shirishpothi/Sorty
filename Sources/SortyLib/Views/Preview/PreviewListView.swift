@@ -14,6 +14,8 @@ struct PreviewListView: View {
     let emptyStateType: EmptyStateType
     var onFocusInstructions: (() -> Void)? = nil
     var onRegenerate: (() -> Void)? = nil
+    var onChooseFolder: (() -> Void)? = nil
+    var onExitPreview: (() -> Void)? = nil
     
     enum EmptyStateType {
         case allUnorganized(Int)  // Int is the file count
@@ -50,7 +52,21 @@ struct PreviewListView: View {
                 icon: "folder.badge.questionmark",
                 iconColor: .orange,
                 title: "Empty Directory",
-                message: "This folder doesn't contain any files to organize."
+                message: "This folder doesn't contain any files to organize.",
+                actions: [
+                    EmptyAction(
+                        title: "Choose Folder",
+                        icon: "folder.badge.plus",
+                        accessibilityID: "PreviewEmptyStateChooseFolder",
+                        action: { onChooseFolder?() }
+                    ),
+                    EmptyAction(
+                        title: "Back",
+                        icon: "chevron.left",
+                        accessibilityID: "PreviewEmptyStateBack",
+                        action: { onExitPreview?() }
+                    )
+                ]
             )
             
         case .allUnorganized(let count):
@@ -126,16 +142,14 @@ struct EmptyPreviewState: View {
                             HapticFeedbackManager.shared.tap()
                             action.action()
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: 4) {
                                 Image(systemName: action.icon)
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 10, weight: .semibold))
                                 Text(action.title)
-                                    .font(.subheadline)
+                                    .font(.caption.bold())
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.onboardingPill(size: .small))
                         .accessibilityIdentifier(action.accessibilityID ?? "")
                     }
                 }

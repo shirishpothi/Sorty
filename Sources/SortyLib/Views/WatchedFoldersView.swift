@@ -15,6 +15,7 @@ struct WatchedFoldersView: View {
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var contentOpacity: Double = 1
+    @State private var isDropTargeted = false
     
     // Check if AI is available
     private var isAIConfigured: Bool {
@@ -103,8 +104,37 @@ struct WatchedFoldersView: View {
                 DebugLogger.log("Failed to select folder: \(error)")
             }
         }
+        .siriDropZone(cornerRadius: 12, isTargeted: $isDropTargeted) { providers in
+            handleFolderDrop(providers: providers)
+        }
         .opacity(contentOpacity)
         .navigationTitle("Watched Folders")
+    }
+    
+    private func handleFolderDrop(providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, error in
+            if let data = item as? Data,
+               let url = URL(dataRepresentation: data, relativeTo: nil),
+               url.hasDirectoryPath {
+                Task { @MainActor in
+                    HapticFeedbackManager.shared.success()
+                    let bookmarkData = try? url.bookmarkData(
+                        options: .withSecurityScope,
+                        includingResourceValuesForKeys: nil,
+                        relativeTo: nil
+                    )
+                    let folder = WatchedFolder(
+                        path: url.path,
+                        bookmarkData: bookmarkData
+                    )
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        watchedFoldersManager.addFolder(folder)
+                    }
+                }
+            }
+        }
+        return true
     }
     
     private var headerView: some View {

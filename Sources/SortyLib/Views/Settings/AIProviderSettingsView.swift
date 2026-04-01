@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AIProviderSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @EnvironmentObject var appState: AppState
     @EnvironmentObject var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
@@ -29,6 +30,21 @@ struct AIProviderSettingsView: View {
     
     var body: some View {
         VStack(spacing: 16) {
+            if let setupRepairMessage = appState.setupRepairMessage, appState.requiresSetupRepair {
+                SettingsCard(title: "Setup Repair", icon: "wrench.and.screwdriver", color: .orange) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(setupRepairMessage)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("Update your provider settings below, then use Test Connection to verify the setup.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
             // Provider Selection
             SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
                 VStack(spacing: 8) {
@@ -715,6 +731,7 @@ struct AIProviderSettingsView: View {
                 try await viewModel.testConnection()
                 HapticFeedbackManager.shared.success()
                 await MainActor.run {
+                    appState.clearSetupRepairState()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         testConnectionStatus = "Success: Connection test passed"
                         testConnectionDetails = nil

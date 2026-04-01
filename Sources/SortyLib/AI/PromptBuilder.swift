@@ -707,6 +707,80 @@ struct PromptBuilder {
         
         return context
     }
+
+    static func buildDirectoryManifestContext(
+        baseDirectoryURL: URL,
+        files: [FileItem],
+        maxEntries: Int = 400
+    ) -> String? {
+        guard !files.isEmpty else { return nil }
+
+        let sortedFiles = files.sorted {
+            let lhs = relativePath(for: $0, baseDirectoryURL: baseDirectoryURL)
+            let rhs = relativePath(for: $1, baseDirectoryURL: baseDirectoryURL)
+            return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+        }
+
+        let extensionSummary = Dictionary(grouping: sortedFiles) { file in
+            file.extension.isEmpty ? "(none)" : file.extension.lowercased()
+        }
+        .sorted { $0.value.count > $1.value.count }
+        .prefix(12)
+        .map { "\($0.key):\($0.value.count)" }
+        .joined(separator: ", ")
+
+        let parentSummary = Dictionary(grouping: sortedFiles) { file in
+            let relative = relativePath(for: file, baseDirectoryURL: baseDirectoryURL)
+            let parent = URL(fileURLWithPath: relative).deletingLastPathComponent().path
+            return parent == "/" || parent == "." ? "(root)" : parent
+        }
+        .sorted { $0.value.count > $1.value.count }
+        .prefix(10)
+        .map { "\($0.key): \($0.value.count)" }
+        .joined(separator: ", ")
+
+        let manifestLines = sortedFiles.prefix(maxEntries).map { file in
+            let relative = relativePath(for: file, baseDirectoryURL: baseDirectoryURL)
+            var line = "- \(relative) | \(file.extension.isEmpty ? "no-ext" : file.extension.lowercased()) | \(file.formattedSize)"
+            if let modified = file.modificationDate {
+                let formatter = ISO8601DateFormatter()
+                formatter.formatOptions = [.withFullDate]
+                line += " | modified \(formatter.string(from: modified))"
+            }
+            return line
+        }
+
+        var context = """
+        ## DIRECTORY MANIFEST
+        Source directory: \(baseDirectoryURL.lastPathComponent)
+        Files in current organization scope: \(files.count)
+        Extension mix: \(extensionSummary.isEmpty ? "n/a" : extensionSummary)
+        Folder distribution: \(parentSummary.isEmpty ? "(root only)" : parentSummary)
+        Relative paths in scope:
+        \(manifestLines.joined(separator: "\n"))
+        """
+
+        if files.count > maxEntries {
+            context += "\n- ... and \(files.count - maxEntries) more files in scope"
+        }
+
+        context += "\nUse this manifest to understand the whole directory before deciding on folder structure."
+        return context
+    }
+
+    private static func relativePath(for file: FileItem, baseDirectoryURL: URL) -> String {
+        let path = file.path
+        let basePath = baseDirectoryURL.path
+        let resolvedPath = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        let resolvedBasePath = baseDirectoryURL.resolvingSymlinksInPath().path
+        if resolvedPath.hasPrefix(resolvedBasePath + "/") {
+            return String(resolvedPath.dropFirst(resolvedBasePath.count + 1))
+        }
+        if path.hasPrefix(basePath + "/") {
+            return String(path.dropFirst(basePath.count + 1))
+        }
+        return URL(fileURLWithPath: path).lastPathComponent
+    }
     
     // MARK: - Reference Model Directory Context
     

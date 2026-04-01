@@ -353,7 +353,7 @@ final class ContentAnalyzerTests: XCTestCase {
         let analyzer = ContentAnalyzer()
         
         let textFile = tempDirectory.appendingPathComponent("large.txt")
-        // Create content larger than maxBytesToRead (4KB) and maxPreviewLength (800)
+        // Create content larger than the analyzer's read/preview limits.
         let content = String(repeating: "A", count: 5000)
         try content.write(to: textFile, atomically: true, encoding: .utf8)
         
@@ -361,7 +361,7 @@ final class ContentAnalyzerTests: XCTestCase {
         
         XCTAssertNotNil(result)
         // Should be truncated to maxPreviewLength
-        XCTAssertLessThanOrEqual(result?.textPreview?.count ?? 0, 800)
+        XCTAssertLessThanOrEqual(result?.textPreview?.count ?? 0, ContentAnalyzer.defaultTextPreviewLength)
     }
     
     // MARK: - Batch Analysis

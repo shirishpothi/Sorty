@@ -30,7 +30,7 @@ public final class SubscriptionAuthManager: ObservableObject {
         return "Signed in via Codex CLI"
     }
 
-    func checkAuthenticationStatus() {
+    public func checkAuthenticationStatus() {
         guard provider == .openAI else {
             isAuthenticated = false
             accountLabel = nil

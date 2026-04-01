@@ -152,6 +152,7 @@ public enum OrganizationError: LocalizedError, Equatable {
     case noCurrentPlan
     case fileMoveFailed(String)
     case cancelled
+    case revertAlreadyInProgress(String)
 
     public var errorDescription: String? {
         switch self {
@@ -165,6 +166,32 @@ public enum OrganizationError: LocalizedError, Equatable {
             return "Failed to move file: \(details)"
         case .cancelled:
             return "Operation was cancelled."
+        case .revertAlreadyInProgress(let path):
+            return "A revert is already in progress for \(path)."
+        }
+    }
+}
+
+private actor RevertOperationTracker {
+    private var activeEntryIDs: Set<UUID> = []
+    private var activePaths: Set<String> = []
+
+    func begin(entryIDs: [UUID], path: String) -> Bool {
+        let normalizedIDs = Set(entryIDs)
+        guard activePaths.contains(path) == false,
+              activeEntryIDs.isDisjoint(with: normalizedIDs) else {
+            return false
+        }
+
+        activePaths.insert(path)
+        activeEntryIDs.formUnion(normalizedIDs)
+        return true
+    }
+
+    func end(entryIDs: [UUID], path: String) {
+        activePaths.remove(path)
+        for id in entryIDs {
+            activeEntryIDs.remove(id)
         }
     }
 }
@@ -316,12 +343,35 @@ public struct VisionAnalysisSummary: Equatable, Sendable {
 
 @MainActor
 public class FolderOrganizer: ObservableObject, StreamingDelegate {
+    nonisolated(unsafe) private static var runningOrganizerIDs: Set<ObjectIdentifier> = []
+
+    public nonisolated static var runningOrganizationCount: Int {
+        runningOrganizerIDs.count
+    }
+
+    public nonisolated static var hasRunningOrganizations: Bool {
+        !runningOrganizerIDs.isEmpty
+    }
+
+    private nonisolated static func isTrackedRunningState(_ state: OrganizationState) -> Bool {
+        switch state {
+        case .scanning, .organizing, .applying:
+            return true
+        case .idle, .ready, .completed, .error:
+            return false
+        }
+    }
+
+    private var isRegisteredAsRunningOrganizer = false
+
     @Published public var state: OrganizationState = .idle {
         didSet {
             // Request user attention for any error state
             if case .error = state {
                 NotificationManager.shared.requestAttention()
             }
+
+            syncRunningOrganizationRegistrationIfNeeded(from: oldValue, to: state)
         }
     }
     @Published public var progress: Double = 0.0
@@ -494,10 +544,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     var scanner = DirectoryScanner()
     public private(set) var aiClient: AIClientProtocol?
-    private let fileSystemManager = FileSystemManager()
+    private let fileSystemManager: FileSystemManager
     private var aiConfig: AIConfig?
     private let validator = FileOrganizationValidator.self
-    public let history = OrganizationHistory()
+    public let history: OrganizationHistory
     public var exclusionRules: ExclusionRulesManager?
     public var personaManager: PersonaManager?
     public var customPersonaStore: CustomPersonaStore?
@@ -510,11 +560,45 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     /// Learning observer reference for rule tracking
     public var learningsObserver: ContinuousLearningObserver?
+    private let revertOperationTracker = RevertOperationTracker()
     
     private let visionAnalyzer = ImageVisionAnalyzer()
     private let visionImageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "webp"]
+
+    #if DEBUG
+    private var revertOperationTestHook: (@Sendable () async -> Void)?
+    #endif
     
-    public init() {}
+    public init(
+        history: OrganizationHistory = OrganizationHistory(),
+        fileSystemManager: FileSystemManager = FileSystemManager()
+    ) {
+        self.history = history
+        self.fileSystemManager = fileSystemManager
+        syncRunningOrganizationRegistrationIfNeeded(from: .idle, to: state)
+    }
+
+    deinit {
+        if isRegisteredAsRunningOrganizer {
+            Self.runningOrganizerIDs.remove(ObjectIdentifier(self))
+        }
+    }
+
+    @MainActor
+    private func syncRunningOrganizationRegistrationIfNeeded(from oldState: OrganizationState, to newState: OrganizationState) {
+        let wasTracked = Self.isTrackedRunningState(oldState)
+        let shouldTrack = Self.isTrackedRunningState(newState)
+        guard wasTracked != shouldTrack else { return }
+
+        let id = ObjectIdentifier(self)
+        if shouldTrack {
+            Self.runningOrganizerIDs.insert(id)
+            isRegisteredAsRunningOrganizer = true
+        } else {
+            Self.runningOrganizerIDs.remove(id)
+            isRegisteredAsRunningOrganizer = false
+        }
+    }
 
     #if DEBUG
     /// Test-only method to inject a mock AI client for unit testing
@@ -523,6 +607,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         if client != nil {
             self.isAIConfigured = true
         }
+    }
+
+    func setRevertOperationHookForTesting(_ hook: (@Sendable () async -> Void)?) {
+        revertOperationTestHook = hook
     }
     #endif
 
@@ -1121,6 +1209,13 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     
     public nonisolated func didComplete(content: String) {
         Task { @MainActor in
+            if !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // Prefer the provider's finalized completion payload so history stores full output.
+                self.streamingContent = content
+                if self.liveInsightsEnabled {
+                    self.syncDisplayContentImmediately()
+                }
+            }
             self.isStreaming = false
             self.organizationStage = "Building organization plan..."
             self.stopTimeoutTimer()
@@ -1231,6 +1326,27 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             currentDirectory = directory
 
             let files = try await scanPhase(directory: directory)
+
+            if files.isEmpty {
+                stopTimeoutTimer()
+
+                updateState(.ready, stage: "No files found to organize", progress: 1.0)
+                await MainActor.run {
+                    currentPlan = OrganizationPlan(
+                        notes: "This folder is empty. Add files and try again."
+                    )
+                }
+
+                NotificationManager.shared.show(
+                    .previewReady(
+                        folderName: directory.lastPathComponent,
+                        folderPath: directory.path
+                    )
+                )
+
+                return
+            }
+
             let (filesWithHashes, duplicateContext) = try await duplicateDetectionPhase(files: files)
             let (plan, instructions, personaPrompt, imagePayload) = try await aiAnalysisPhase(
                 files: filesWithHashes,
@@ -1254,7 +1370,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 currentPlan = validatedPlan
             }
 
-            NotificationManager.shared.show(.previewReady(folderName: directory.lastPathComponent))
+            NotificationManager.shared.show(
+                .previewReady(
+                    folderName: directory.lastPathComponent,
+                    folderPath: directory.path
+                )
+            )
 
             if let learningsObserver = learningsObserver {
                 learningsObserver.startSession(folderPath: directory.path, historyEntryId: nil)
@@ -1873,6 +1994,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         // Show error notification
         NotificationManager.shared.showError(
             message: displayMessage,
+            folderPath: currentDirectory?.path,
             isCritical: true
         )
     }
@@ -3138,11 +3260,60 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     // MARK: - Multi-State Undo/Redo
 
-    /// Undoes a specific historical session
-    /// Pre-checks file existence, recovers from per-file errors, and tracks partial success
+    private func normalizedRevertPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
+    }
+
+    private func retainedOperations(
+        from operations: [FileSystemManager.FileOperation]?,
+        retryableFailedOperationIDs: [UUID]
+    ) -> [FileSystemManager.FileOperation]? {
+        guard let operations, !operations.isEmpty else {
+            return nil
+        }
+
+        let failedIDs = Set(retryableFailedOperationIDs)
+        guard !failedIDs.isEmpty else {
+            return nil
+        }
+
+        let remaining = operations.filter { failedIDs.contains($0.id) }
+        return remaining.isEmpty ? nil : remaining
+    }
+
+    private func withRevertGuard<T>(
+        entryIDs: [UUID],
+        path: String,
+        operation: @escaping () async throws -> T
+    ) async throws -> T {
+        let normalizedPath = normalizedRevertPath(path)
+        let didAcquire = await revertOperationTracker.begin(entryIDs: entryIDs, path: normalizedPath)
+        guard didAcquire else {
+            throw OrganizationError.revertAlreadyInProgress(normalizedPath)
+        }
+
+        #if DEBUG
+        if let revertOperationTestHook {
+            await revertOperationTestHook()
+        }
+        #endif
+
+        do {
+            let result = try await operation()
+            await revertOperationTracker.end(entryIDs: entryIDs, path: normalizedPath)
+            return result
+        } catch {
+            await revertOperationTracker.end(entryIDs: entryIDs, path: normalizedPath)
+            throw error
+        }
+    }
+
     @discardableResult
-    public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
-        guard let operations = entry.operations, !entry.isUndone else { 
+    private func performUndoHistoryEntry(
+        _ entry: OrganizationHistoryEntry,
+        shouldPostNotification: Bool
+    ) async throws -> FileSystemManager.RestoreResult {
+        guard let operations = entry.operations, !operations.isEmpty, !entry.isUndone else {
             return FileSystemManager.RestoreResult(successfulOperations: 0, missingFiles: [])
         }
 
@@ -3151,12 +3322,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let moveOps = operations.filter { $0.type == .moveFile || $0.type == .renameFile }
         var preCheckMissing: [String] = []
         for op in moveOps {
-            if let dest = op.destinationPath {
-                if !FileManager.default.fileExists(atPath: dest) {
-                    let filename = URL(fileURLWithPath: dest).lastPathComponent
-                    preCheckMissing.append(filename)
-                    DebugLogger.log("Pre-check: file missing at \(dest)")
-                }
+            if let dest = op.destinationPath, !FileManager.default.fileExists(atPath: dest) {
+                let filename = URL(fileURLWithPath: dest).lastPathComponent
+                preCheckMissing.append(filename)
+                DebugLogger.log("Pre-check: file missing at \(dest)")
             }
         }
 
@@ -3171,15 +3340,17 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let result = try await fileSystemManager.reverseOperations(operations)
 
             var updatedEntry = entry
-            updatedEntry.isUndone = true
-            updatedEntry.undoRestoredCount = result.successfulOperations
-            updatedEntry.undoFailedFiles = result.missingFiles.isEmpty ? nil : result.missingFiles
+            let remainingOperations = retainedOperations(
+                from: updatedEntry.operations,
+                retryableFailedOperationIDs: result.retryableFailedOperationIDs
+            )
 
-            if result.hasIssues {
-                updatedEntry.status = .partiallyUndone
-            } else {
-                updatedEntry.status = .undo
-            }
+            updatedEntry.operations = remainingOperations
+            updatedEntry.isUndone = !result.hasIssues && remainingOperations == nil
+            updatedEntry.undoRestoredCount = (entry.undoRestoredCount ?? 0) + result.successfulOperations
+            updatedEntry.undoFailedFiles = result.hasIssues ? result.missingFiles : nil
+            updatedEntry.status = remainingOperations == nil && !result.hasIssues ? .undo : .partiallyUndone
+
             history.updateEntry(updatedEntry)
 
             await MainActor.run {
@@ -3192,16 +3363,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 transition(to: .idle, force: true)
             }
 
-            NotificationCenter.default.post(
-                name: .organizationDidRevert,
-                object: nil,
-                userInfo: [
-                    "url": URL(fileURLWithPath: entry.directoryPath),
-                    "entry": updatedEntry,
-                    "restoreResult": result
-                ]
-            )
-            
+            if shouldPostNotification {
+                NotificationCenter.default.post(
+                    name: .organizationDidRevert,
+                    object: nil,
+                    userInfo: [
+                        "url": URL(fileURLWithPath: entry.directoryPath),
+                        "entry": updatedEntry,
+                        "restoreResult": result
+                    ]
+                )
+            }
+
             return result
 
         } catch {
@@ -3210,6 +3383,15 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 errorMessage = error.localizedDescription
             }
             throw error
+        }
+    }
+
+    /// Undoes a specific historical session
+    /// Pre-checks file existence, recovers from per-file errors, and tracks partial success
+    @discardableResult
+    public func undoHistoryEntry(_ entry: OrganizationHistoryEntry) async throws -> FileSystemManager.RestoreResult {
+        try await withRevertGuard(entryIDs: [entry.id], path: entry.directoryPath) {
+            try await self.performUndoHistoryEntry(entry, shouldPostNotification: true)
         }
     }
 
@@ -3222,66 +3404,78 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let entriesToUndo = history.entries.filter {
             $0.directoryPath == path &&
             $0.timestamp > targetEntry.timestamp &&
-            $0.status == .completed &&
-            !$0.isUndone
+            !$0.isUndone &&
+            ($0.status == .completed || $0.status == .partiallyUndone) &&
+            !($0.operations?.isEmpty ?? true)
         }.sorted { $0.timestamp > $1.timestamp } // Undo most recent first
 
-        updateState(.applying, stage: "Rolling back states...", progress: 0.1)
+        return try await withRevertGuard(
+            entryIDs: entriesToUndo.map(\.id),
+            path: path
+        ) {
+            self.updateState(.applying, stage: "Rolling back states...", progress: 0.1)
 
-        let total = Double(entriesToUndo.count)
-        var combinedSuccessCount = 0
-        var combinedMissingFiles: [String] = []
+            let total = Double(max(entriesToUndo.count, 1))
+            var combinedSuccessCount = 0
+            var combinedMissingFiles: [String] = []
+            var combinedRetryableFailures: [UUID] = []
 
-        for (index, entry) in entriesToUndo.enumerated() {
-            updateProgress(Double(index) / total, stage: "Undoing session from \(entry.timestamp.formatted())...")
+            for (index, entry) in entriesToUndo.enumerated() {
+                self.updateProgress(Double(index) / total, stage: "Undoing session from \(entry.timestamp.formatted())...")
 
-            let result = try await undoHistoryEntry(entry)
-            combinedSuccessCount += result.successfulOperations
-            combinedMissingFiles.append(contentsOf: result.missingFiles)
+                let result = try await self.performUndoHistoryEntry(entry, shouldPostNotification: true)
+                combinedSuccessCount += result.successfulOperations
+                combinedMissingFiles.append(contentsOf: result.missingFiles)
+                combinedRetryableFailures.append(contentsOf: result.retryableFailedOperationIDs)
+            }
+
+            let combinedResult = FileSystemManager.RestoreResult(
+                successfulOperations: combinedSuccessCount,
+                missingFiles: combinedMissingFiles,
+                retryableFailedOperationIDs: combinedRetryableFailures
+            )
+
+            await MainActor.run { [self] in
+                self.organizationStage = combinedResult.hasIssues ? "Restoration complete (some files skipped)" : "Restoration complete"
+                self.progress = 1.0
+                self.transition(to: .idle, force: true)
+            }
+
+            return combinedResult
         }
-
-        let combinedResult = FileSystemManager.RestoreResult(
-            successfulOperations: combinedSuccessCount,
-            missingFiles: combinedMissingFiles
-        )
-
-        await MainActor.run {
-            organizationStage = combinedResult.hasIssues ? "Restoration complete (some files skipped)" : "Restoration complete"
-            progress = 1.0
-            transition(to: .idle, force: true)
-        }
-        
-        return combinedResult
     }
 
     /// Undoes a single file operation within a history entry
     @discardableResult
     public func undoSingleOperation(from entry: OrganizationHistoryEntry, operation: FileSystemManager.FileOperation) async throws -> FileSystemManager.RestoreResult {
-        let result = try await fileSystemManager.restoreSingleOperation(operation)
+        try await withRevertGuard(entryIDs: [entry.id], path: entry.directoryPath) {
+            let siblingOperations = (entry.operations ?? []).filter { $0.id != operation.id }
+            let result = try await self.fileSystemManager.restoreSingleOperation(
+                operation,
+                protectedSiblingOperations: siblingOperations
+            )
 
-        await MainActor.run {
-            var updatedEntry = entry
-            updatedEntry.operations?.removeAll { $0.id == operation.id }
+            await MainActor.run {
+                var updatedEntry = entry
+                let shouldRetainOperation = result.retryableFailedOperationIDs.contains(operation.id)
+                if !shouldRetainOperation {
+                    updatedEntry.operations?.removeAll { $0.id == operation.id }
+                    if updatedEntry.operations?.isEmpty == true {
+                        updatedEntry.operations = nil
+                    }
+                }
 
-            let remainingUndoable = updatedEntry.operations?.filter { $0.type == .moveFile || $0.type == .renameFile } ?? []
-            if remainingUndoable.isEmpty {
-                updatedEntry.isUndone = true
-                updatedEntry.status = result.hasIssues ? .partiallyUndone : .undo
-            } else {
-                updatedEntry.status = .partiallyUndone
+                let fullyUndone = updatedEntry.operations == nil && !result.hasIssues
+                updatedEntry.isUndone = fullyUndone
+                updatedEntry.status = fullyUndone ? .undo : .partiallyUndone
+                updatedEntry.undoRestoredCount = (entry.undoRestoredCount ?? 0) + result.successfulOperations
+                updatedEntry.undoFailedFiles = result.hasIssues ? result.missingFiles : nil
+
+                self.history.updateEntry(updatedEntry)
             }
 
-            updatedEntry.undoRestoredCount = (updatedEntry.undoRestoredCount ?? 0) + result.successfulOperations
-            if !result.missingFiles.isEmpty {
-                var existing = updatedEntry.undoFailedFiles ?? []
-                existing.append(contentsOf: result.missingFiles)
-                updatedEntry.undoFailedFiles = existing
-            }
-
-            history.updateEntry(updatedEntry)
+            return result
         }
-
-        return result
     }
 
     // MARK: - Reset

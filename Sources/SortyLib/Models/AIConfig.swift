@@ -323,7 +323,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
 
     public var hasColorLogo: Bool {
         switch self {
-        case .gemini:
+        case .gemini, .openAI:
             return true
         default:
             return false

@@ -281,6 +281,7 @@ struct TruncatedInsightPill: View {
                         .font(.body)
                         .padding()
                         .frame(maxWidth: 300)
+                        .systemLiquidGlassPopover(cornerRadius: 12)
                 }
             }
         }

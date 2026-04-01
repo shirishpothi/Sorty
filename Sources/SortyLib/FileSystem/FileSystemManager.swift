@@ -237,8 +237,19 @@ public actor FileSystemManager {
     public struct RestoreResult: Sendable {
         public let successfulOperations: Int
         public let missingFiles: [String]  // File paths that couldn't be restored because they no longer exist
-        
-        public var hasIssues: Bool { !missingFiles.isEmpty }
+        public let retryableFailedOperationIDs: [UUID]
+
+        public init(
+            successfulOperations: Int,
+            missingFiles: [String],
+            retryableFailedOperationIDs: [UUID] = []
+        ) {
+            self.successfulOperations = successfulOperations
+            self.missingFiles = missingFiles
+            self.retryableFailedOperationIDs = retryableFailedOperationIDs
+        }
+
+        public var hasIssues: Bool { !missingFiles.isEmpty || !retryableFailedOperationIDs.isEmpty }
         
         public var summaryMessage: String {
             if missingFiles.isEmpty {
@@ -247,6 +258,50 @@ public actor FileSystemManager {
                 return "Restored \(successfulOperations) operations. \(missingFiles.count) file(s) couldn't be restored because they no longer exist."
             }
         }
+    }
+
+    private func normalizedPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
+    }
+
+    private func protectedCleanupFolders(
+        for operations: [FileOperation],
+        protectedOperationIDs: Set<UUID>
+    ) -> Set<String> {
+        guard !protectedOperationIDs.isEmpty else {
+            return []
+        }
+
+        var protectedFolders: Set<String> = []
+
+        for operation in operations where protectedOperationIDs.contains(operation.id) {
+            let folderPath: String?
+            switch operation.type {
+            case .moveFile, .renameFile, .copyFile:
+                folderPath = operation.destinationPath.map {
+                    URL(fileURLWithPath: $0).deletingLastPathComponent().path
+                }
+            case .createFolder:
+                folderPath = operation.sourcePath
+            case .deleteFile, .tagFile:
+                folderPath = nil
+            }
+
+            guard var currentPath = folderPath.map(normalizedPath) else {
+                continue
+            }
+
+            while true {
+                protectedFolders.insert(currentPath)
+                let parentPath = normalizedPath((currentPath as NSString).deletingLastPathComponent)
+                if parentPath == currentPath {
+                    break
+                }
+                currentPath = parentPath
+            }
+        }
+
+        return protectedFolders
     }
 
     public init() {}
@@ -1197,6 +1252,7 @@ public actor FileSystemManager {
         // Track results
         var successCount = 0
         var missingFiles: [String] = []
+        var retryableFailedOperationIDs: [UUID] = []
 
         // First pass: move files back
         for operation in reversedOps {
@@ -1230,6 +1286,7 @@ public actor FileSystemManager {
                         // File no longer exists - track as missing
                         let filename = URL(fileURLWithPath: destinationPath).lastPathComponent
                         missingFiles.append(filename)
+                        retryableFailedOperationIDs.append(operation.id)
                         DebugLogger.log("Cannot restore - file no longer exists: \(destinationPath)")
                     }
                 }
@@ -1259,16 +1316,27 @@ public actor FileSystemManager {
                        let nsURL = url as NSURL
                        try? nsURL.setResourceValue(originalTags, forKey: .tagNamesKey)
                        successCount += 1
+                   } else {
+                       missingFiles.append(url.lastPathComponent)
+                       retryableFailedOperationIDs.append(operation.id)
                    }
                 }
                 if operation.metadata?.newComment != nil {
                     let url = URL(fileURLWithPath: operation.sourcePath)
                     if fileManager.fileExists(atPath: url.path) {
                         try? setFinderComment(operation.metadata?.originalComment, for: url)
+                    } else if !missingFiles.contains(url.lastPathComponent) {
+                        missingFiles.append(url.lastPathComponent)
+                        retryableFailedOperationIDs.append(operation.id)
                     }
                 }
             }
         }
+
+        let protectedFolders = protectedCleanupFolders(
+            for: operations,
+            protectedOperationIDs: Set(retryableFailedOperationIDs)
+        )
 
         // Second pass: cleanup empty folders (sorted by depth, deepest first)
         let sortedFolders = foldersToCleanup.sorted { path1, path2 in
@@ -1276,14 +1344,24 @@ public actor FileSystemManager {
         }
 
         for folderPath in sortedFolders {
+            if protectedFolders.contains(normalizedPath(folderPath)) {
+                continue
+            }
             try? removeEmptyFolder(at: folderPath)
         }
         
-        return RestoreResult(successfulOperations: successCount, missingFiles: missingFiles)
+        return RestoreResult(
+            successfulOperations: successCount,
+            missingFiles: missingFiles,
+            retryableFailedOperationIDs: retryableFailedOperationIDs
+        )
     }
 
     /// Undoes a single file operation (move file back, remove created folder if empty, restore tags)
-    public func restoreSingleOperation(_ operation: FileOperation) async throws -> RestoreResult {
+    public func restoreSingleOperation(
+        _ operation: FileOperation,
+        protectedSiblingOperations: [FileOperation] = []
+    ) async throws -> RestoreResult {
         _ = startAccessing(URL(fileURLWithPath: operation.sourcePath))
         if let dest = operation.destinationPath {
             _ = startAccessing(URL(fileURLWithPath: dest))
@@ -1292,6 +1370,11 @@ public actor FileSystemManager {
 
         var successCount = 0
         var missingFiles: [String] = []
+        var retryableFailedOperationIDs: [UUID] = []
+        let protectedFolders = protectedCleanupFolders(
+            for: protectedSiblingOperations,
+            protectedOperationIDs: Set(protectedSiblingOperations.map(\.id))
+        )
 
         switch operation.type {
         case .moveFile, .renameFile:
@@ -1312,10 +1395,13 @@ public actor FileSystemManager {
                     successCount += 1
 
                     let parentFolder = URL(fileURLWithPath: destinationPath).deletingLastPathComponent().path
-                    try? removeEmptyFolder(at: parentFolder)
+                    if !protectedFolders.contains(normalizedPath(parentFolder)) {
+                        try? removeEmptyFolder(at: parentFolder)
+                    }
                 } else {
                     let filename = URL(fileURLWithPath: destinationPath).lastPathComponent
                     missingFiles.append(filename)
+                    retryableFailedOperationIDs.append(operation.id)
                 }
             }
 
@@ -1346,10 +1432,15 @@ public actor FileSystemManager {
                 successCount += 1
             } else {
                 missingFiles.append(url.lastPathComponent)
+                retryableFailedOperationIDs.append(operation.id)
             }
         }
 
-        return RestoreResult(successfulOperations: successCount, missingFiles: missingFiles)
+        return RestoreResult(
+            successfulOperations: successCount,
+            missingFiles: missingFiles,
+            retryableFailedOperationIDs: retryableFailedOperationIDs
+        )
     }
 
     /// Remove a folder only if it's empty (including cleaning up parent folders)

@@ -16,6 +16,7 @@ struct AutomationSettingsView: View {
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
+    @AppStorage("confirmQuitWhileOrganizing") private var confirmQuitWhileOrganizing = true
     
     @State private var useSeparateModel = false
     @State private var selectedProvider: AIProvider = .openAI
@@ -214,6 +215,17 @@ struct AutomationSettingsView: View {
                             Text("Automation Notifications")
                                 .font(.subheadline)
                             Text("Show a system notification when files are automatically organized")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+
+                    Toggle(isOn: $confirmQuitWhileOrganizing) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Warn Before Quitting During Organization")
+                                .font(.subheadline)
+                            Text("Show a confirmation before quitting while active organization is in progress")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

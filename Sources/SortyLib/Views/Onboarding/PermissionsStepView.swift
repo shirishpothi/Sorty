@@ -9,6 +9,7 @@ import SwiftUI
 import UserNotifications
 
 public struct PermissionsStepView: View {
+    private let assumeFilesPermissionForUITestsKey = "uitestAssumeFilesAndFoldersPermission"
     @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
@@ -131,6 +132,11 @@ public struct PermissionsStepView: View {
     }
     
     private func checkPermissions() {
+        if UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey) {
+            permissionStates[.filesAndFolders] = .granted
+            hasRequiredPermissions = true
+        }
+
         // Check notification permission
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             let status = settings.authorizationStatus
@@ -148,19 +154,21 @@ public struct PermissionsStepView: View {
         
         // Check Files & Folders permission by testing access to user's home directory
         // If we can list the contents of Documents, we likely have access
-        let documentsPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents")
-        if FileManager.default.isReadableFile(atPath: documentsPath.path) {
-            // Try to actually list contents to confirm access
-            if let _ = try? FileManager.default.contentsOfDirectory(atPath: documentsPath.path) {
-                permissionStates[.filesAndFolders] = .granted
-                hasRequiredPermissions = true
+        if !UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey) {
+            let documentsPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents")
+            if FileManager.default.isReadableFile(atPath: documentsPath.path) {
+                // Try to actually list contents to confirm access
+                if let _ = try? FileManager.default.contentsOfDirectory(atPath: documentsPath.path) {
+                    permissionStates[.filesAndFolders] = .granted
+                    hasRequiredPermissions = true
+                } else {
+                    permissionStates[.filesAndFolders] = .unknown
+                    hasRequiredPermissions = false
+                }
             } else {
                 permissionStates[.filesAndFolders] = .unknown
                 hasRequiredPermissions = false
             }
-        } else {
-            permissionStates[.filesAndFolders] = .unknown
-            hasRequiredPermissions = false
         }
         
         // Check Full Disk Access by probing a protected directory

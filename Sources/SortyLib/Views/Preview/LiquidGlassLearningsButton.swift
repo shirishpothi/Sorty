@@ -54,6 +54,12 @@ struct LiquidGlassLearningsButton: View {
         attribution.hasContent
     }
 
+    private var displayFileName: String {
+        FeatureFlags.privacyModeEnabled
+            ? PrivacyPathMasker.redactedText(file.displayName)
+            : file.displayName
+    }
+
     var body: some View {
         if hasContent {
             Button {
@@ -80,7 +86,7 @@ struct LiquidGlassLearningsButton: View {
 
                         Spacer()
 
-                        Text(file.displayName)
+                        Text(displayFileName)
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .lineLimit(1)
@@ -102,6 +108,7 @@ struct LiquidGlassLearningsButton: View {
                 }
                 .padding(12)
                 .frame(minWidth: 240, maxWidth: 340)
+                .systemLiquidGlassPopover(cornerRadius: 12)
             }
         }
     }
@@ -114,7 +121,11 @@ struct LiquidGlassLearningsButton: View {
     }
 
     private func insightRow(_ row: LearningsInsightRow) -> some View {
-        HStack(alignment: .top, spacing: 6) {
+        let displayDetail = FeatureFlags.privacyModeEnabled
+            ? PrivacyPathMasker.redactedText(row.detail)
+            : row.detail
+
+        return HStack(alignment: .top, spacing: 6) {
             Image(systemName: row.icon)
                 .font(.caption2)
                 .foregroundStyle(row.color)
@@ -127,7 +138,7 @@ struct LiquidGlassLearningsButton: View {
                     .fontWeight(.medium)
                     .foregroundStyle(.primary)
 
-                Text(row.detail)
+                Text(displayDetail)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

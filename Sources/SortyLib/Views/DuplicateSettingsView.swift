@@ -38,6 +38,7 @@ struct DuplicateSettingsView: View {
                 
                 HStack(spacing: SortyDesignSystem.Spacing.md) {
                     Button(action: {
+                        HapticFeedbackManager.shared.tap()
                         settingsManager.reset()
                         syncFromSettings()
                     }) {
@@ -64,27 +65,68 @@ struct DuplicateSettingsView: View {
                     // Comparison Strategy
                     SettingsSection(title: "Matching Strategy", icon: "doc.text.magnifyingglass") {
                         VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.lg) {
-                            Picker("Comparison Method:", selection: $settingsManager.settings.comparisonMethod) {
-                                ForEach(ComparisonMethod.allCases, id: \.self) { method in
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(method.displayName)
-                                            .font(SortyDesignSystem.Typography.body(weight: .medium))
-                                        Text(method.description)
-                                            .font(SortyDesignSystem.Typography.caption())
-                                            .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                            Text("Comparison Method")
+                                .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
+                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+
+                            ForEach(ComparisonMethod.allCases, id: \.self) { method in
+                                let isSelected = settingsManager.settings.comparisonMethod == method
+
+                                Button {
+                                    guard settingsManager.settings.comparisonMethod != method else { return }
+                                    HapticFeedbackManager.shared.selection()
+                                    settingsManager.settings.comparisonMethod = method
+                                } label: {
+                                    HStack(alignment: .top, spacing: SortyDesignSystem.Spacing.md) {
+                                        Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(isSelected ? SortyDesignSystem.Colors.primary : SortyDesignSystem.Colors.textTertiary)
+
+                                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxs) {
+                                            Text(method.displayName)
+                                                .font(SortyDesignSystem.Typography.body(weight: .medium))
+                                                .foregroundStyle(SortyDesignSystem.Colors.textPrimary)
+                                            Text(method.description)
+                                                .font(SortyDesignSystem.Typography.caption())
+                                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                        }
+
+                                        Spacer(minLength: 0)
                                     }
-                                    .tag(method)
-                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, SortyDesignSystem.Spacing.md)
+                                    .padding(.vertical, SortyDesignSystem.Spacing.sm)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
+                                            .fill(isSelected ? SortyDesignSystem.Colors.primary.opacity(0.12) : SortyDesignSystem.Colors.backgroundTertiary.opacity(0.25))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
+                                            .stroke(isSelected ? SortyDesignSystem.Colors.primary.opacity(0.35) : SortyDesignSystem.Colors.glassBorder, lineWidth: 1)
+                                    )
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(method.displayName)
+                                .accessibilityValue(isSelected ? "Selected" : "Not selected")
                             }
-                            .pickerStyle(.radioGroup)
-                            
+
                             Divider()
                                 .opacity(0.5)
-                            
-                            // Auto start
-                            Toggle("Auto-start scan when opening Duplicates view", isOn: $settingsManager.settings.autoStartScan)
-                                .font(SortyDesignSystem.Typography.subheadline())
+
+                            Toggle(isOn: $settingsManager.settings.autoStartScan) {
+                                VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxxs) {
+                                    Text("Auto-start scan when opening Duplicates view")
+                                        .font(SortyDesignSystem.Typography.subheadline(weight: .medium))
+                                    Text("Immediately begins analysis after opening the duplicates page.")
+                                        .font(SortyDesignSystem.Typography.caption())
+                                        .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .toggleStyle(.switch)
+                            .padding(SortyDesignSystem.Spacing.sm)
+                            .background(SortyDesignSystem.Colors.backgroundTertiary.opacity(0.2))
+                            .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium))
                         }
                     }
 
@@ -132,6 +174,7 @@ struct DuplicateSettingsView: View {
                                         Text("5 Levels").tag(5)
                                     }
                                     .labelsHidden()
+                                    .pickerStyle(.menu)
                                     .frame(width: 120)
                                 }
                                 
@@ -152,21 +195,45 @@ struct DuplicateSettingsView: View {
                                 .font(SortyDesignSystem.Typography.subheadline())
                                 .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
                             
-                            Picker("", selection: $settingsManager.settings.defaultKeepStrategy) {
-                                ForEach(KeepStrategy.allCases, id: \.self) { strategy in
-                                    HStack {
-                                        Text(strategy.displayName)
-                                            .font(SortyDesignSystem.Typography.body(weight: .medium))
-                                        Spacer()
-                                        Text(strategy.description)
-                                            .font(SortyDesignSystem.Typography.caption2())
-                                            .foregroundStyle(SortyDesignSystem.Colors.textTertiary)
+                            ForEach(KeepStrategy.allCases, id: \.self) { strategy in
+                                let isSelected = settingsManager.settings.defaultKeepStrategy == strategy
+
+                                Button {
+                                    guard settingsManager.settings.defaultKeepStrategy != strategy else { return }
+                                    HapticFeedbackManager.shared.selection()
+                                    settingsManager.settings.defaultKeepStrategy = strategy
+                                } label: {
+                                    HStack(alignment: .center, spacing: SortyDesignSystem.Spacing.md) {
+                                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundStyle(isSelected ? SortyDesignSystem.Colors.primary : SortyDesignSystem.Colors.textTertiary)
+
+                                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxxs) {
+                                            Text(strategy.displayName)
+                                                .font(SortyDesignSystem.Typography.body(weight: .medium))
+                                                .foregroundStyle(SortyDesignSystem.Colors.textPrimary)
+                                            Text(strategy.description)
+                                                .font(SortyDesignSystem.Typography.caption2())
+                                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
+                                        }
+
+                                        Spacer(minLength: 0)
                                     }
-                                    .tag(strategy)
-                                    .padding(.vertical, 2)
+                                    .padding(.horizontal, SortyDesignSystem.Spacing.md)
+                                    .padding(.vertical, SortyDesignSystem.Spacing.sm)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
+                                            .fill(isSelected ? SortyDesignSystem.Colors.primary.opacity(0.12) : SortyDesignSystem.Colors.backgroundTertiary.opacity(0.25))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
+                                            .stroke(isSelected ? SortyDesignSystem.Colors.primary.opacity(0.35) : SortyDesignSystem.Colors.glassBorder, lineWidth: 1)
+                                    )
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(strategy.displayName)
+                                .accessibilityValue(isSelected ? "Selected" : "Not selected")
                             }
-                            .pickerStyle(.radioGroup)
                             
                             Divider()
                                 .opacity(0.5)
@@ -257,7 +324,7 @@ struct DuplicateSettingsView: View {
                 .padding(SortyDesignSystem.Spacing.xxl)
             }
         }
-        .frame(width: 600, height: 750)
+        .frame(width: 700, height: 760)
         .background(SortyDesignSystem.Colors.backgroundPrimary)
         .animation(.sortySpringStandard, value: settingsManager.settings.includeSemanticDuplicates)
     }
@@ -299,6 +366,7 @@ struct DuplicateSettingsView: View {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         
+        HapticFeedbackManager.shared.light()
         settingsManager.save()
         dismiss()
     }
@@ -331,7 +399,7 @@ struct SettingsSection<Content: View>: View {
             
             content
                 .padding(SortyDesignSystem.Spacing.lg)
-                .background(SortyDesignSystem.Colors.backgroundSecondary.opacity(0.5))
+                .background(SortyDesignSystem.Colors.backgroundSecondary.opacity(0.35))
                 .clipShape(RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.large))
                 .overlay(
                     RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.large)

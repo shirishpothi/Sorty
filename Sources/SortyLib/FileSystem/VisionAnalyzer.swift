@@ -154,16 +154,32 @@ public actor VisionAnalyzer {
     }
 
     private func performOCR(on cgImage: CGImage) async -> OCRResult? {
+        let minimumConfidence = self.minimumConfidence
+        let maxTextLength = self.maxTextLength
+        let recognitionLanguages = self.recognitionLanguages
+
         return await withCheckedContinuation { continuation in
+            let lock = NSLock()
+            var didResume = false
+
+            func resumeOnce(_ result: OCRResult?) {
+                lock.lock()
+                defer { lock.unlock() }
+
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(returning: result)
+            }
+
             let request = VNRecognizeTextRequest { request, error in
                 if let error = error {
                     DebugLogger.log("OCR error: \(error.localizedDescription)")
-                    continuation.resume(returning: nil)
+                    resumeOnce(nil)
                     return
                 }
 
                 guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                    continuation.resume(returning: nil)
+                    resumeOnce(nil)
                     return
                 }
 
@@ -178,7 +194,7 @@ public actor VisionAnalyzer {
                     }
 
                     // Only include text above minimum confidence
-                    if topCandidate.confidence >= self.minimumConfidence {
+                    if topCandidate.confidence >= minimumConfidence {
                         allText.append(topCandidate.string)
                         boundingBoxes.append(observation.boundingBox)
                         totalConfidence += topCandidate.confidence
@@ -187,12 +203,12 @@ public actor VisionAnalyzer {
                 }
 
                 guard !allText.isEmpty else {
-                    continuation.resume(returning: nil)
+                    resumeOnce(nil)
                     return
                 }
 
                 let combinedText = allText.joined(separator: " ")
-                let truncatedText = String(combinedText.prefix(self.maxTextLength))
+                let truncatedText = String(combinedText.prefix(maxTextLength))
                 let avgConfidence = totalConfidence / Float(max(observationCount, 1))
                 let wordCount = combinedText.split(separator: " ").count
 
@@ -203,13 +219,13 @@ public actor VisionAnalyzer {
                     wordCount: wordCount
                 )
 
-                continuation.resume(returning: result)
+                resumeOnce(result)
             }
 
             // Configure the request for better accuracy
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.recognitionLanguages = self.recognitionLanguages
+            request.recognitionLanguages = recognitionLanguages
 
             // Perform the request
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -218,7 +234,7 @@ public actor VisionAnalyzer {
                 try handler.perform([request])
             } catch {
                 DebugLogger.log("Failed to perform OCR: \(error.localizedDescription)")
-                continuation.resume(returning: nil)
+                resumeOnce(nil)
             }
         }
     }

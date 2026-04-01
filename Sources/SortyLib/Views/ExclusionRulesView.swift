@@ -53,6 +53,13 @@ struct ExclusionRulesView: View {
                     EmptyExclusionRulesView(onAddRule: {
                         HapticFeedbackManager.shared.tap()
                         showingAddRule = true
+                    }, onAddSuggestedRule: { type, pattern in
+                        HapticFeedbackManager.shared.success()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            rulesManager.addRule(
+                                ExclusionRule(type: type, pattern: pattern)
+                            )
+                        }
                     })
                     .transition(TransitionStyles.scaleAndFade)
                 } else {
@@ -300,6 +307,7 @@ struct ExclusionRulesView: View {
 
 struct EmptyExclusionRulesView: View {
     let onAddRule: () -> Void
+    let onAddSuggestedRule: (ExclusionRuleType, String) -> Void
 
     var body: some View {
         VStack(spacing: 24) {
@@ -320,8 +328,12 @@ struct EmptyExclusionRulesView: View {
             }
             
             HStack(spacing: 6) {
-                RuleExamplePill(icon: "doc.badge.gearshape", text: ".DS_Store")
-                RuleExamplePill(icon: "folder", text: "node_modules", useSystemFolderIcon: true)
+                RuleExamplePill(icon: "doc.badge.gearshape", text: ".DS_Store") {
+                    onAddSuggestedRule(.fileName, ".DS_Store")
+                }
+                RuleExamplePill(icon: "folder", text: "node_modules", useSystemFolderIcon: true) {
+                    onAddSuggestedRule(.folderName, "node_modules")
+                }
             }
 
             Button {
@@ -339,29 +351,44 @@ struct RuleExamplePill: View {
     let icon: String
     let text: String
     var useSystemFolderIcon: Bool = false
+    let action: () -> Void
+    @State private var isHovered = false
     
     private static let folderIcon: NSImage = {
         NSWorkspace.shared.icon(forFile: "/tmp")
     }()
     
     var body: some View {
-        HStack(spacing: 4) {
-            if useSystemFolderIcon {
-                Image(nsImage: Self.folderIcon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 12, height: 12)
-            } else {
-                Image(systemName: icon)
-                    .font(.caption2)
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if useSystemFolderIcon {
+                    Image(nsImage: Self.folderIcon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 12, height: 12)
+                } else {
+                    Image(systemName: icon)
+                        .font(.caption2)
+                }
+                Text(text)
+                    .font(.caption)
             }
-            Text(text)
-                .font(.caption)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.secondary.opacity(isHovered ? 0.18 : 0.1))
+            .clipShape(Capsule())
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Color.secondary.opacity(0.1))
-        .clipShape(Capsule())
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+        .onHover { hovered in
+            guard hovered != isHovered else { return }
+            if hovered {
+                HapticFeedbackManager.shared.selection()
+            }
+            isHovered = hovered
+        }
+        .help("Add \(text) exclusion rule")
     }
 }
 

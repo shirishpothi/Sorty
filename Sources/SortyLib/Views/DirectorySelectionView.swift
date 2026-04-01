@@ -109,7 +109,7 @@ struct DirectorySelectionView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.easeOut(duration: 0.2).delay(0.15), value: hasAppeared)
         }
-        .onDrop(of: [.fileURL], isTargeted: $isTargeted) { providers in
+        .siriDropZone(isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
         }
         .onAppear {
@@ -161,7 +161,7 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
                                 isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
-                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: isTargeted ? [] : [6, 6])
+                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
                             )
                     }
             } else {
@@ -178,7 +178,7 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
                                 isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
-                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: isTargeted ? [] : [6, 6])
+                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
                             )
                     }
             }

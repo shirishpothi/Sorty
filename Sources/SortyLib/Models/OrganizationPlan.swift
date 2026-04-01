@@ -89,6 +89,67 @@ public struct GenerationStats: Codable, Sendable, Hashable {
             outputTokens: totalTokens
         )
     }
+
+    public var responseTokens: Int {
+        totalTokens
+    }
+
+    public var totalContextTokens: Int? {
+        guard let promptTokens else { return nil }
+        return promptTokens + totalTokens
+    }
+
+    public var hasBillableCost: Bool {
+        computedCost > 0
+    }
+
+    public var formattedTotalFileSize: String? {
+        guard let totalFileSize else { return nil }
+        return ByteCountFormatter.string(fromByteCount: totalFileSize, countStyle: .file)
+    }
+
+    public var compactModelName: String {
+        model
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: ".")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty ?? model
+    }
+
+    public static func formatDuration(_ interval: TimeInterval) -> String {
+        let normalizedInterval = max(interval, 0)
+        if normalizedInterval < 10 {
+            return String(format: "%.1fs", normalizedInterval)
+        }
+        if normalizedInterval < 60 {
+            return String(format: "%.0fs", normalizedInterval)
+        }
+        if normalizedInterval < 3600 {
+            let minutes = Int(normalizedInterval / 60)
+            let seconds = Int(normalizedInterval.truncatingRemainder(dividingBy: 60))
+            return "\(minutes)m \(seconds)s"
+        }
+
+        let hours = Int(normalizedInterval / 3600)
+        let minutes = Int((normalizedInterval.truncatingRemainder(dividingBy: 3600)) / 60)
+        return "\(hours)h \(minutes)m"
+    }
+
+    public static func formatCount(_ value: Int) -> String {
+        NumberFormatter.localizedString(from: NSNumber(value: value), number: .decimal)
+    }
+
+    public static func formatCost(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        let number = NSDecimalNumber(decimal: value)
+        let usesExtendedPrecision = number.doubleValue < 0.01
+        formatter.minimumFractionDigits = usesExtendedPrecision ? 4 : 2
+        formatter.maximumFractionDigits = usesExtendedPrecision ? 4 : 2
+        return formatter.string(from: number) ?? "$0.00"
+    }
     
     public init(
         duration: TimeInterval, 
@@ -121,3 +182,8 @@ public struct GenerationStats: Codable, Sendable, Hashable {
     }
 }
 
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+}

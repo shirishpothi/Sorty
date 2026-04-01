@@ -8,24 +8,29 @@ final class ContinuousLearningObserverTests: XCTestCase {
     private var observer: ContinuousLearningObserver!
     private var defaults: UserDefaults!
     private var suiteName: String!
+    private var historyStorageDirectory: URL!
 
     override func setUp() async throws {
         suiteName = "ContinuousLearningObserverTests-\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
         defaults.removePersistentDomain(forName: suiteName)
+        historyStorageDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: historyStorageDirectory, withIntermediateDirectories: true)
         manager = LearningsManager(userDefaults: defaults)
         manager.currentProfile = LearningsProfile()
         await manager.grantConsent()
-        history = OrganizationHistory(userDefaults: defaults)
+        history = OrganizationHistory(userDefaults: defaults, storageDirectory: historyStorageDirectory)
         observer = ContinuousLearningObserver(history: history, learningsManager: manager)
     }
 
     override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suiteName)
+        try? FileManager.default.removeItem(at: historyStorageDirectory)
         manager = nil
         history = nil
         observer = nil
         defaults = nil
+        historyStorageDirectory = nil
         suiteName = nil
     }
 

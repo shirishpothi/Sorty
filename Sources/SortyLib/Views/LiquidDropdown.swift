@@ -19,6 +19,7 @@ struct LiquidDropdown<T: Identifiable & RawRepresentable & Hashable>: View where
         triggerButton
             .popover(isPresented: $isExpanded, arrowEdge: .bottom) {
                 optionsList
+                    .systemLiquidGlassPopover(cornerRadius: 12)
             }
             .fixedSize()
     }
@@ -58,7 +59,7 @@ struct LiquidDropdown<T: Identifiable & RawRepresentable & Hashable>: View where
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .systemLiquidGlassBackground(cornerRadius: 12)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(isHovered ? 0.1 : 0.05), radius: isHovered ? 6 : 4, y: 2)
         .overlay(

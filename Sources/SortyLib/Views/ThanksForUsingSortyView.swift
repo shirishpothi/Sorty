@@ -199,11 +199,13 @@ struct UserStatsSnapshot {
         Int((successRate * 100).rounded())
     }
 
-    static func load(userDefaults: UserDefaults = .standard) -> UserStatsSnapshot {
-        guard
-            let data = userDefaults.data(forKey: "organizationHistory"),
-            let entries = try? JSONDecoder().decode([OrganizationHistoryEntry].self, from: data)
-        else {
+    static func load(userDefaults: UserDefaults = .standard, storageDirectory: URL? = nil) -> UserStatsSnapshot {
+        let entries = OrganizationHistory.loadPersistedEntries(
+            userDefaults: userDefaults,
+            storageDirectory: storageDirectory
+        )
+
+        guard !entries.isEmpty else {
             return UserStatsSnapshot(sessions: 0, filesOrganized: 0, foldersCreated: 0, successRate: 0, activeDays: 0)
         }
 

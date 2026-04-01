@@ -22,6 +22,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     let continuousLearningObserver: ContinuousLearningObserver
     let learningsFSMonitor: LearningsFSMonitor
     private let notificationManager = NotificationManager.shared
+    private var watchedFoldersSubscription: AnyCancellable?
     private var pendingFiles: [UUID: (folder: WatchedFolder, files: Set<String>, resolvedURL: URL)] = [:]
     private var ignoredWatchEventsUntil: [UUID: Date] = [:]
     private var retryTask: Task<Void, Never>?
@@ -42,6 +43,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         // Initial sync
         self.folderWatcher.syncWithFolders(watchedFoldersManager.folders)
+        self.watchedFoldersSubscription = watchedFoldersManager.$folders
+            .dropFirst()
+            .sink { [weak self] folders in
+                self?.folderWatcher.syncWithFolders(folders)
+            }
         
         setupNotifications()
         requestNotificationPermission()
@@ -139,6 +145,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 await self.handleUndoAction(folderPath: folderPath)
             }
         }
+
+        NotificationCenter.default.addObserver(forName: .requestUndoOrganizationConfirmation, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self else { return }
+            let folderPath = notification.userInfo?["folderPath"] as? String
+
+            Task { @MainActor in
+                await self.handleUndoConfirmationRequest(folderPath: folderPath)
+            }
+        }
         
         // Handle "Open Folder" action from notification
         NotificationCenter.default.addObserver(forName: .openOrganizedFolder, object: nil, queue: .main) { [weak self] notification in
@@ -157,6 +172,15 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             
             Task { @MainActor in
                 await self.handleRetryAction(folderPath: folderPath)
+            }
+        }
+
+        NotificationCenter.default.addObserver(forName: .requestRetryOrganizationConfirmation, object: nil, queue: .main) { [weak self] notification in
+            guard let self = self else { return }
+            let folderPath = notification.userInfo?["folderPath"] as? String
+
+            Task { @MainActor in
+                await self.handleRetryConfirmationRequest(folderPath: folderPath)
             }
         }
         
@@ -183,16 +207,19 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     
     /// Handle undo action from notification
     private func handleUndoAction(folderPath: String?) async {
+        notificationManager.recordActionLifecycle("undo", stage: "executing", detail: folderPath ?? "latest")
         
         // Find the entry to undo
         guard let entryToUndo = findEntryToUndo(folderPath: folderPath) else {
             print("Coordinator: No entry found to undo")
+            notificationManager.recordActionLifecycle("undo", stage: "no-op", failed: true, detail: folderPath ?? "latest")
             notificationManager.showError(message: "Nothing to undo", isCritical: false)
             return
         }
         
         guard !entryToUndo.isUndone else {
             print("Coordinator: Entry already undone")
+            notificationManager.recordActionLifecycle("undo", stage: "already-undone", failed: true, detail: entryToUndo.directoryPath)
             notificationManager.showError(message: "Already undone", isCritical: false)
             return
         }
@@ -213,9 +240,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 title: "Undo Successful",
                 message: message
             )
+            notificationManager.recordActionLifecycle("undo", stage: "completed", detail: entryToUndo.directoryPath)
             
         } catch {
             print("Coordinator: Undo failed: \(error)")
+            notificationManager.recordActionLifecycle("undo", stage: "failed", failed: true, detail: error.localizedDescription)
             notificationManager.showError(message: "Undo failed: \(error.localizedDescription)", isCritical: false)
         }
     }
@@ -257,6 +286,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     
     /// Handle retry action from notification
     private func handleRetryAction(folderPath: String?) async {
+        notificationManager.recordActionLifecycle("retry", stage: "executing", detail: folderPath ?? "latestFailed")
         // Get folder path from parameter or last failed entry
         let path: String?
         if let fp = folderPath {
@@ -269,6 +299,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         guard let path = path else {
             print("Coordinator: No folder path to retry")
+            notificationManager.recordActionLifecycle("retry", stage: "no-op", failed: true, detail: "missing folder path")
             notificationManager.showError(message: "No failed operation to retry", isCritical: false)
             return
         }
@@ -276,6 +307,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         // Check if we're already busy
         guard organizer.state == .idle else {
             print("Coordinator: Cannot retry - organizer is busy")
+            notificationManager.recordActionLifecycle("retry", stage: "busy", failed: true, detail: path)
             notificationManager.showError(message: "Organizer is busy, try again later", isCritical: false)
             return
         }
@@ -291,11 +323,68 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 title: "Retry Successful",
                 message: "Organization completed for \(url.lastPathComponent)"
             )
+            notificationManager.recordActionLifecycle("retry", stage: "completed", detail: path)
             
         } catch {
             print("Coordinator: Retry failed: \(error)")
+            notificationManager.recordActionLifecycle("retry", stage: "failed", failed: true, detail: error.localizedDescription)
             notificationManager.showError(message: "Retry failed: \(error.localizedDescription)", isCritical: false)
         }
+    }
+
+    private func handleUndoConfirmationRequest(folderPath: String?) async {
+        let targetName = notificationFolderName(for: folderPath) ?? "your last organization"
+        notificationManager.recordActionLifecycle("undo", stage: "confirmation_shown", detail: targetName)
+
+        let confirmed = presentNotificationConfirmation(
+            title: "Undo Organization?",
+            message: "Restore the previous organization for \(targetName)?",
+            confirmButtonTitle: "Undo"
+        )
+
+        if confirmed {
+            notificationManager.recordActionLifecycle("undo", stage: "confirmed", detail: targetName)
+            await handleUndoAction(folderPath: folderPath)
+        } else {
+            notificationManager.recordActionLifecycle("undo", stage: "cancelled", detail: targetName)
+        }
+    }
+
+    private func handleRetryConfirmationRequest(folderPath: String?) async {
+        let targetName = notificationFolderName(for: folderPath) ?? "the failed organization"
+        notificationManager.recordActionLifecycle("retry", stage: "confirmation_shown", detail: targetName)
+
+        let confirmed = presentNotificationConfirmation(
+            title: "Retry Organization?",
+            message: "Run Sorty again for \(targetName)?",
+            confirmButtonTitle: "Retry"
+        )
+
+        if confirmed {
+            notificationManager.recordActionLifecycle("retry", stage: "confirmed", detail: targetName)
+            await handleRetryAction(folderPath: folderPath)
+        } else {
+            notificationManager.recordActionLifecycle("retry", stage: "cancelled", detail: targetName)
+        }
+    }
+
+    private func presentNotificationConfirmation(
+        title: String,
+        message: String,
+        confirmButtonTitle: String
+    ) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: confirmButtonTitle)
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func notificationFolderName(for folderPath: String?) -> String? {
+        guard let folderPath, !folderPath.isEmpty else { return nil }
+        return URL(fileURLWithPath: folderPath).lastPathComponent
     }
     
     /// Handle show details action from notifications by activating the app.
@@ -452,7 +541,12 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             
         } catch {
             print("Coordinator: Auto-organize failed for \(folder.name): \(error)")
-            notificationManager.showError(message: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)", isCritical: false, isAutomated: true)
+            notificationManager.showError(
+                message: "Failed to organize \"\(folder.name)\": \(error.localizedDescription)",
+                folderPath: resolvedURL.path,
+                isCritical: false,
+                isAutomated: true
+            )
             organizer.state = .idle
         }
     }

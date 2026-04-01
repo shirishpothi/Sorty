@@ -282,7 +282,7 @@ final class StreamingLogicTests: XCTestCase {
             provider: .openAI,
             apiURL: "https://api.openai.com",
             apiKey: "test-key",
-            model: "gpt-5.2"
+            model: "gpt-5.4"
         )
         try await organizer.configure(with: config)
 

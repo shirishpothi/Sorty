@@ -129,6 +129,9 @@ public class SettingsViewModel: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let configKey = "aiConfig"
+    private let disableStoredCredentialsForUITestsKey = "uitestDisableStoredProviderCredentials"
+    private let providerHealthCheckModeForUITestsKey = "uitestProviderHealthCheckMode"
+    private let providerHealthCheckFailedOnceForUITestsKey = "uitestProviderHealthCheckFailedOnce"
     private var saveTask: Task<Void, Never>?
 
     private func modelSelectionKey(for provider: AIProvider) -> String {
@@ -162,7 +165,8 @@ public class SettingsViewModel: ObservableObject {
             }
             
             // 2. Load API key from provider-specific Keychain key
-            if decoded.authMethod(for: decoded.provider) == .apiKey,
+            if !userDefaults.bool(forKey: disableStoredCredentialsForUITestsKey),
+               decoded.authMethod(for: decoded.provider) == .apiKey,
                let apiKey = KeychainManager.get(key: decoded.provider.keychainKey) {
                 decoded.apiKey = apiKey
             } else {
@@ -247,6 +251,23 @@ public class SettingsViewModel: ObservableObject {
     }
     
     public func testConnection() async throws {
+        if let uiTestOverride = userDefaults.string(forKey: providerHealthCheckModeForUITestsKey) {
+            switch uiTestOverride {
+            case "always_succeed":
+                return
+            case "always_fail":
+                throw AIClientError.apiError(statusCode: 503, message: "UI test forced provider health-check failure.")
+            case "fail_once_then_succeed":
+                if !userDefaults.bool(forKey: providerHealthCheckFailedOnceForUITestsKey) {
+                    userDefaults.set(true, forKey: providerHealthCheckFailedOnceForUITestsKey)
+                    throw AIClientError.apiError(statusCode: 503, message: "UI test forced provider health-check failure.")
+                }
+                return
+            default:
+                break
+            }
+        }
+
         let clientConfig = config
         let client = try AIClientFactory.createClient(config: clientConfig)
         try await client.checkHealth()

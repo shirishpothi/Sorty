@@ -118,8 +118,11 @@ public struct ContentMetadata: Codable, Hashable, Sendable {
 
 /// Actor that analyzes file content
 public actor ContentAnalyzer {
-    private let maxPreviewLength = 800
-    private let maxBytesToRead = 4096 // 4KB
+    static let defaultTextPreviewLength = 1600
+
+    private let maxPreviewLength = ContentAnalyzer.defaultTextPreviewLength
+    private let maxTextBytesToRead = 262_144 // 256KB
+    private let maxDocumentTextLength = 12_000
     private let visionAnalyzer = VisionAnalyzer()
 
     // Configuration
@@ -258,8 +261,6 @@ public actor ContentAnalyzer {
             result = await extractImageContent(from: fileURL, performOCR: enableOCR)
         case "docx":
             result = enableDeepDocumentScan ? await extractDOCXContent(from: fileURL) : nil
-        case "txt", "md":
-            result = enableDeepDocumentScan ? extractTextContent(from: fileURL) : nil
         case "rtf":
             result = enableDeepDocumentScan ? extractRTFContent(from: fileURL) : nil
         case "mp3", "mp4", "m4a", "mov", "avi", "mkv", "wav", "aac", "flac", "m4v", "webm":
@@ -271,7 +272,7 @@ public actor ContentAnalyzer {
         case "pptx":
             result = enableDeepDocumentScan ? await extractPPTXContent(from: fileURL) : nil
         default:
-            result = nil
+            result = enableDeepDocumentScan && isTextLikeFile(fileURL) ? extractTextContent(from: fileURL) : nil
         }
 
         // Cache the result
@@ -347,22 +348,23 @@ public actor ContentAnalyzer {
 
         metadata.pageCount = document.pageCount
 
-        // Extract text from first page(s)
+        // Extract text from all pages up to a reasonable ceiling so deep scan
+        // has materially better context without producing unbounded payloads.
         var extractedText = ""
-        let pagesToScan = min(document.pageCount, 2)
+        let pagesToScan = document.pageCount
 
         for i in 0..<pagesToScan {
             if let page = document.page(at: i),
                let text = page.string {
                 extractedText += text + " "
-                if extractedText.count > maxPreviewLength {
+                if extractedText.count >= maxDocumentTextLength {
                     break
                 }
             }
         }
 
         if !extractedText.isEmpty {
-            metadata.textPreview = String(extractedText.prefix(maxPreviewLength))
+            metadata.textPreview = String(extractedText.prefix(maxDocumentTextLength))
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
@@ -521,7 +523,7 @@ public actor ContentAnalyzer {
         let text = extractTextFromXML(xmlString)
         guard !text.isEmpty else { return nil }
 
-        var metadata = ContentMetadata(textPreview: String(text.prefix(maxPreviewLength)))
+        var metadata = ContentMetadata(textPreview: String(text.prefix(maxDocumentTextLength)))
 
         // Also try to extract core.xml for metadata
         if let coreXML = extractFileFromZip(data: zipData, fileName: "docProps/core.xml") {
@@ -562,17 +564,17 @@ public actor ContentAnalyzer {
             return nil
         }
 
-        // Only read first few KB
-        let bytesToRead = min(data.count, maxBytesToRead)
+        let bytesToRead = min(data.count, maxTextBytesToRead)
         let subset = data.prefix(bytesToRead)
 
-        guard let text = String(data: subset, encoding: .utf8) else {
+        guard let text = decodeText(from: Data(subset)) else {
             return nil
         }
 
         let preview = String(text.prefix(maxPreviewLength))
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
+        guard !preview.isEmpty else { return nil }
         return ContentMetadata(textPreview: preview)
     }
 
@@ -709,7 +711,7 @@ public actor ContentAnalyzer {
                 metadata.pageCount = pages
             }
             if let text = attrDict[kMDItemTextContent as String] as? String, !text.isEmpty {
-                metadata.textPreview = String(text.prefix(maxPreviewLength))
+                metadata.textPreview = String(text.prefix(maxDocumentTextLength))
             }
             if let keywords = attrDict[kMDItemKeywords as String] as? [String] {
                 metadata.keywords = keywords
@@ -727,7 +729,7 @@ public actor ContentAnalyzer {
 
         let text = extractTextFromXML(xmlString)
         guard !text.isEmpty else { return nil }
-        return ContentMetadata(textPreview: String(text.prefix(maxPreviewLength)))
+        return ContentMetadata(textPreview: String(text.prefix(maxDocumentTextLength)))
     }
 
     // MARK: - Native ZIP Reading
@@ -843,6 +845,56 @@ public actor ContentAnalyzer {
             return nil
         }
         return String(xml[range])
+    }
+
+    private func isTextLikeFile(_ url: URL) -> Bool {
+        let ext = url.pathExtension.lowercased()
+        let textLikeExtensions: Set<String> = [
+            "txt", "md", "markdown", "csv", "tsv", "json", "jsonl", "yaml", "yml",
+            "xml", "html", "htm", "css", "scss", "js", "jsx", "ts", "tsx",
+            "swift", "py", "rb", "go", "rs", "java", "kt", "c", "cc", "cpp",
+            "h", "hpp", "m", "mm", "php", "pl", "sh", "zsh", "bash", "fish",
+            "toml", "ini", "cfg", "conf", "sql", "log"
+        ]
+        if textLikeExtensions.contains(ext) {
+            return true
+        }
+
+        guard let type = UTType(filenameExtension: ext) else {
+            return false
+        }
+
+        return type.conforms(to: .plainText)
+            || type.conforms(to: .sourceCode)
+            || type.conforms(to: .script)
+            || type.conforms(to: .xml)
+            || type.conforms(to: .json)
+            || type.conforms(to: .commaSeparatedText)
+    }
+
+    private func decodeText(from data: Data) -> String? {
+        let candidateEncodings: [String.Encoding] = [
+            .utf8,
+            .utf16,
+            .utf16LittleEndian,
+            .utf16BigEndian,
+            .windowsCP1252,
+            .isoLatin1
+        ]
+
+        for encoding in candidateEncodings {
+            guard let text = String(data: data, encoding: encoding) else {
+                continue
+            }
+            let normalized = text
+                .replacingOccurrences(of: "\u{0000}", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !normalized.isEmpty {
+                return normalized
+            }
+        }
+
+        return nil
     }
 }
 

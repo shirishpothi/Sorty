@@ -180,6 +180,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -200,7 +202,9 @@ jobs:
       - name: Run Unit Tests
         run: |
           set -o pipefail
-          swift test --parallel 2>&1 | tail -100
+          CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
+          swift build --disable-sandbox -j "$CORES"
+          swift test --disable-sandbox --parallel --skip-build -j "$CORES" 2>&1 | tail -100
 
   build-universal:
     runs-on: macos-15
