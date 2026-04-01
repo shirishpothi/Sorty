@@ -16,24 +16,31 @@ class AppStateTests: XCTestCase {
     
     var appState: AppState!
     var organizer: FolderOrganizer!
+    var testDefaults: UserDefaults!
+    var testDefaultsSuiteName: String!
     private let requiresSetupRepairKey = "requiresSetupRepair"
     private let setupRepairMessageKey = "setupRepairMessage"
     
     override func setUp() async throws {
-        UserDefaults.standard.removeObject(forKey: requiresSetupRepairKey)
-        UserDefaults.standard.removeObject(forKey: setupRepairMessageKey)
+        testDefaultsSuiteName = "test.appstate.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: testDefaultsSuiteName)!
+        testDefaults.removeObject(forKey: requiresSetupRepairKey)
+        testDefaults.removeObject(forKey: setupRepairMessageKey)
         
-        appState = AppState()
+        appState = AppState(userDefaults: testDefaults)
         organizer = FolderOrganizer()
         appState.organizer = organizer
     }
     
     override func tearDown() async throws {
-        UserDefaults.standard.removeObject(forKey: requiresSetupRepairKey)
-        UserDefaults.standard.removeObject(forKey: setupRepairMessageKey)
+        if let testDefaultsSuiteName {
+            testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        }
+
+        testDefaults = nil
+        testDefaultsSuiteName = nil
         appState = nil
         organizer = nil
-        
     }
     
     // MARK: - Initialization Tests
@@ -120,7 +127,7 @@ class AppStateTests: XCTestCase {
         XCTAssertEqual(appState.setupRepairMessage, "Provider setup is incomplete.")
         XCTAssertEqual(appState.currentView, .settings)
         XCTAssertEqual(appState.selectedSettingsSection, .provider)
-        XCTAssertEqual(UserDefaults.standard.string(forKey: setupRepairMessageKey), "Provider setup is incomplete.")
+        XCTAssertEqual(testDefaults.string(forKey: setupRepairMessageKey), "Provider setup is incomplete.")
     }
 
     func testClearSetupRepairStateRemovesPersistence() {
@@ -130,8 +137,8 @@ class AppStateTests: XCTestCase {
 
         XCTAssertFalse(appState.requiresSetupRepair)
         XCTAssertNil(appState.setupRepairMessage)
-        XCTAssertFalse(UserDefaults.standard.bool(forKey: requiresSetupRepairKey))
-        XCTAssertNil(UserDefaults.standard.string(forKey: setupRepairMessageKey))
+        XCTAssertFalse(testDefaults.bool(forKey: requiresSetupRepairKey))
+        XCTAssertNil(testDefaults.string(forKey: setupRepairMessageKey))
     }
 
     func testProviderSetupValidatorBlocksMissingAPIKey() {

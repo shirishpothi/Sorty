@@ -426,6 +426,7 @@ public class AppState: ObservableObject {
 
     private static let requiresSetupRepairKey = "requiresSetupRepair"
     private static let setupRepairMessageKey = "setupRepairMessage"
+    private let userDefaults: UserDefaults
 
     @Published public var currentView: AppView = .organize
     @Published public var showingSidebar: Bool = true
@@ -460,15 +461,15 @@ public class AppState: ObservableObject {
     @Published public var pendingNotificationActionRequest: PendingNotificationActionRequest?
     @Published public var requiresSetupRepair: Bool {
         didSet {
-            UserDefaults.standard.set(requiresSetupRepair, forKey: Self.requiresSetupRepairKey)
+            userDefaults.set(requiresSetupRepair, forKey: Self.requiresSetupRepairKey)
         }
     }
     @Published public var setupRepairMessage: String? {
         didSet {
             if let setupRepairMessage, !setupRepairMessage.isEmpty {
-                UserDefaults.standard.set(setupRepairMessage, forKey: Self.setupRepairMessageKey)
+                userDefaults.set(setupRepairMessage, forKey: Self.setupRepairMessageKey)
             } else {
-                UserDefaults.standard.removeObject(forKey: Self.setupRepairMessageKey)
+                userDefaults.removeObject(forKey: Self.setupRepairMessageKey)
             }
         }
     }
@@ -491,12 +492,12 @@ public class AppState: ObservableObject {
     
     @Published public var hasCompletedOnboarding: Bool {
         didSet {
-            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+            userDefaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
         }
     }
     @Published public var hasCompletedFeatureTour: Bool {
         didSet {
-            UserDefaults.standard.set(hasCompletedFeatureTour, forKey: "hasCompletedFeatureTour")
+            userDefaults.set(hasCompletedFeatureTour, forKey: "hasCompletedFeatureTour")
         }
     }
     @Published public var isFeatureTourPresented: Bool = false
@@ -579,17 +580,21 @@ public class AppState: ObservableObject {
         }
     }
 
-    public init(updateManager: SparkleUpdateManager = SparkleUpdateManager()) {
+    public init(
+        updateManager: SparkleUpdateManager = SparkleUpdateManager(),
+        userDefaults: UserDefaults = .standard
+    ) {
         self.updateManager = updateManager
+        self.userDefaults = userDefaults
 
         // Detect fresh install vs in-app update
         // Fresh install: no previous version stored AND onboarding not completed
         // In-app update: previous version exists, so skip onboarding even if flag was reset
-        let previousVersion = UserDefaults.standard.string(forKey: "lastLaunchedVersion")
-        let onboardingCompleted = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding")
-        let featureTourCompleted = UserDefaults.standard.bool(forKey: "hasCompletedFeatureTour")
-        let requiresSetupRepair = UserDefaults.standard.bool(forKey: Self.requiresSetupRepairKey)
-        let setupRepairMessage = UserDefaults.standard.string(forKey: Self.setupRepairMessageKey)
+        let previousVersion = userDefaults.string(forKey: "lastLaunchedVersion")
+        let onboardingCompleted = userDefaults.bool(forKey: "hasCompletedOnboarding")
+        let featureTourCompleted = userDefaults.bool(forKey: "hasCompletedFeatureTour")
+        let requiresSetupRepair = userDefaults.bool(forKey: Self.requiresSetupRepairKey)
+        let setupRepairMessage = userDefaults.string(forKey: Self.setupRepairMessageKey)
         let currentVersion = BuildInfo.version
         
         if previousVersion == nil {
@@ -605,7 +610,7 @@ public class AppState: ObservableObject {
         self.setupRepairMessage = setupRepairMessage
         
         // Always store current version for future launches
-        UserDefaults.standard.set(currentVersion, forKey: "lastLaunchedVersion")
+        userDefaults.set(currentVersion, forKey: "lastLaunchedVersion")
     }
 
     public var hasResults: Bool {
@@ -1309,7 +1314,7 @@ public class AppState: ObservableObject {
         
         // 3. Clear core infrastructure data
         DuplicateRestorationManager.shared.clearAllData()
-        UserDefaults.standard.removeObject(forKey: "organizationHistory")
+        userDefaults.removeObject(forKey: "organizationHistory")
         
         // 4. Notify all managers to reset their state and clear their storage
         NotificationCenter.default.post(name: .clearLearningsData, object: nil)

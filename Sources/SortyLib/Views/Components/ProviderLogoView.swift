@@ -15,11 +15,15 @@ public struct ProviderLogoView: View {
         }
 
         if let nsImage = resolvedProviderImage() {
-            nsImage.isTemplate = !provider.hasColorLogo
+            nsImage.isTemplate = usesTemplateRendering
             return Image(nsImage: nsImage)
         }
 
         return Image(systemName: "cpu")
+    }
+
+    private var usesTemplateRendering: Bool {
+        provider.usesSystemImage || !provider.hasColorLogo || provider == .openAI
     }
 
     private func resolvedProviderImage() -> NSImage? {
@@ -45,14 +49,14 @@ public struct ProviderLogoView: View {
     }
 
     private var renderingMode: Image.TemplateRenderingMode {
-        if provider.usesSystemImage || !provider.hasColorLogo {
+        if usesTemplateRendering {
             return .template
         }
         return .original
     }
 
     private var foregroundColor: Color {
-        provider.brandColor
+        provider == .openAI || provider == .openRouter || provider == .githubCopilot ? .primary : provider.brandColor
     }
 
     public var body: some View {

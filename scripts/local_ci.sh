@@ -206,7 +206,7 @@ step_test() {
     fi
 
     cd "$PROJECT_DIR"
-    swift test --disable-sandbox --parallel --skip-build -j "$CORES"
+    swift test --disable-sandbox --parallel -j "$CORES"
 }
 
 step_app_build() {
