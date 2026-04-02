@@ -3,13 +3,17 @@ import Foundation
 @testable import SortyLib
 
 final class MultimodalRequestFormatTests: XCTestCase {
-    private var previousInternetPrivacyModeValue: Any?
+    private var testDefaultsSuiteName = ""
+    private var testDefaults: UserDefaults!
 
     override func setUp() {
         super.setUp()
         TestSynchronization.networkPrivacyModeLock.lock()
-        previousInternetPrivacyModeValue = UserDefaults.standard.object(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
-        UserDefaults.standard.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        testDefaultsSuiteName = "Sorty.MultimodalRequestFormatTests.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: testDefaultsSuiteName)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        NetworkPrivacyPolicy.setTestDefaultsSuiteName(testDefaultsSuiteName)
+        testDefaults.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
 
         MockHTTPURLProtocol.reset()
         AIRequestSupport.sessionOverride = { _ in
@@ -21,12 +25,10 @@ final class MultimodalRequestFormatTests: XCTestCase {
 
     override func tearDown() {
         AIRequestSupport.sessionOverride = nil
-
-        if let previousInternetPrivacyModeValue {
-            UserDefaults.standard.set(previousInternetPrivacyModeValue, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
-        }
+        NetworkPrivacyPolicy.setTestDefaultsSuiteName(nil)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        testDefaults = nil
+        testDefaultsSuiteName = ""
 
         TestSynchronization.networkPrivacyModeLock.unlock()
 

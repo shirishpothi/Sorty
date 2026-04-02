@@ -2,32 +2,35 @@ import XCTest
 @testable import SortyLib
 
 final class NetworkPrivacyPolicyTests: XCTestCase {
-    private var previousValue: Any?
+    private var testDefaultsSuiteName = ""
+    private var testDefaults: UserDefaults!
 
     override func setUp() {
         super.setUp()
         TestSynchronization.networkPrivacyModeLock.lock()
-        previousValue = UserDefaults.standard.object(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
-        UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        testDefaultsSuiteName = "Sorty.NetworkPrivacyPolicyTests.\(UUID().uuidString)"
+        testDefaults = UserDefaults(suiteName: testDefaultsSuiteName)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        NetworkPrivacyPolicy.setTestDefaultsSuiteName(testDefaultsSuiteName)
+        testDefaults.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
     }
 
     override func tearDown() {
-        if let previousValue {
-            UserDefaults.standard.set(previousValue, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
-        }
+        NetworkPrivacyPolicy.setTestDefaultsSuiteName(nil)
+        testDefaults.removePersistentDomain(forName: testDefaultsSuiteName)
+        testDefaults = nil
+        testDefaultsSuiteName = ""
         TestSynchronization.networkPrivacyModeLock.unlock()
         super.tearDown()
     }
 
     func testInternetPrivacyModeDefaultsToDisabledWhenUnset() {
-        UserDefaults.standard.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        testDefaults.removeObject(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
         XCTAssertFalse(NetworkPrivacyPolicy.isInternetPrivacyModeEnabled)
     }
 
     func testAllRequestsAllowedWhenPrivacyModeDisabled() {
-        UserDefaults.standard.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        testDefaults.set(false, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
 
         let remote = URL(string: "https://api.openai.com/v1/models")!
         let localhost = URL(string: "http://localhost:11434/api/tags")!
@@ -37,7 +40,7 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
     }
 
     func testOnlyLoopbackAllowedWhenPrivacyModeEnabled() {
-        UserDefaults.standard.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
 
         let localhost = URL(string: "http://localhost:11434/api/tags")!
         let loopbackV4 = URL(string: "http://127.0.0.1:11434/api/tags")!
@@ -57,7 +60,7 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
     }
 
     func testAIRequestSupportBlocksRemoteRequestsWhenPrivacyModeEnabled() throws {
-        UserDefaults.standard.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
 
         let remote = URL(string: "https://api.openai.com/v1/models")!
 
@@ -71,7 +74,7 @@ final class NetworkPrivacyPolicyTests: XCTestCase {
     }
 
     func testAIRequestSupportAllowsLoopbackRequestsWhenPrivacyModeEnabled() throws {
-        UserDefaults.standard.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
+        testDefaults.set(true, forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
 
         let local = URL(string: "http://localhost:11434/api/tags")!
 

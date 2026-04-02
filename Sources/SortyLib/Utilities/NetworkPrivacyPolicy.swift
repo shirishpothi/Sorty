@@ -10,11 +10,20 @@ import Darwin
 
 public enum NetworkPrivacyPolicy {
     public static let internetPrivacyModeKey = "internetPrivacyModeEnabled"
+    private static let testDefaultsSuiteLock = NSLock()
+    private nonisolated(unsafe) static var testDefaultsSuiteName: String?
 
     /// Dedicated privacy mode for network traffic.
     /// When enabled, only loopback hosts are allowed.
     public static var isInternetPrivacyModeEnabled: Bool {
-        UserDefaults.standard.bool(forKey: internetPrivacyModeKey)
+        activeDefaults().bool(forKey: internetPrivacyModeKey)
+    }
+
+    // Allows tests to isolate privacy mode state from process-shared UserDefaults.standard.
+    static func setTestDefaultsSuiteName(_ suiteName: String?) {
+        testDefaultsSuiteLock.lock()
+        testDefaultsSuiteName = suiteName
+        testDefaultsSuiteLock.unlock()
     }
 
     public static var blockedMessage: String {
@@ -24,6 +33,15 @@ public enum NetworkPrivacyPolicy {
     public static func isRequestAllowed(url: URL) -> Bool {
         guard isInternetPrivacyModeEnabled else { return true }
         return isLoopbackURL(url)
+    }
+
+    private static func activeDefaults() -> UserDefaults {
+        testDefaultsSuiteLock.lock()
+        let suiteName = testDefaultsSuiteName
+        testDefaultsSuiteLock.unlock()
+
+        guard let suiteName else { return .standard }
+        return UserDefaults(suiteName: suiteName) ?? .standard
     }
 
     public static func isLoopbackURL(_ url: URL) -> Bool {
