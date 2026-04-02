@@ -202,6 +202,7 @@ struct SortyApp: App {
     @StateObject private var globalShortcutManager = GlobalShortcutManager.shared
     @StateObject private var steeringPromptManager = SteeringPromptManager.shared
     @StateObject private var menuBarController = MenuBarController()
+    @StateObject private var updateManager = SparkleUpdateManager()
 
     @StateObject private var automationOrganizer = FolderOrganizer()
 
@@ -305,7 +306,8 @@ struct SortyApp: App {
     private func mainWindowRootView(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
         MainWindowRootView(
             launchRequest: launchRequest.wrappedValue,
-            coordinator: coordinator
+            coordinator: coordinator,
+            updateManager: updateManager
         )
         .environmentObject(settingsViewModel)
         .environmentObject(personaManager)

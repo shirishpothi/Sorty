@@ -177,7 +177,8 @@ struct PreviewView: View {
         .onChange(of: appState.pendingNotificationActionRequest?.id) { _, _ in
             consumePendingNotificationActionIfNeeded()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { notification in
+            guard notification.targetsWindowSession(appState.windowSessionID) else { return }
             guard organizer.state == .ready else { return }
             showRedoModelPicker = true
         }

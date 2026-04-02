@@ -427,6 +427,7 @@ public class AppState: ObservableObject {
     private static let requiresSetupRepairKey = "requiresSetupRepair"
     private static let setupRepairMessageKey = "setupRepairMessage"
     private let userDefaults: UserDefaults
+    public let windowSessionID: UUID
 
     @Published public var currentView: AppView = .organize
     @Published public var showingSidebar: Bool = true
@@ -581,9 +582,11 @@ public class AppState: ObservableObject {
     }
 
     public init(
+        windowSessionID: UUID = UUID(),
         updateManager: SparkleUpdateManager = SparkleUpdateManager(),
         userDefaults: UserDefaults = .standard
     ) {
+        self.windowSessionID = windowSessionID
         self.updateManager = updateManager
         self.userDefaults = userDefaults
 
@@ -1275,34 +1278,40 @@ public class AppState: ObservableObject {
     }
     
     // MARK: - Learnings Actions
+
+    private func postWindowScopedNotification(
+        _ name: Notification.Name,
+        userInfo: [AnyHashable: Any] = [:]
+    ) {
+        NotificationCenter.default.post(
+            name: name,
+            object: nil,
+            userInfo: MainWindowRouter.scopedUserInfo(userInfo, targetSessionID: windowSessionID)
+        )
+    }
     
     public func startHoningSession() {
         currentView = .learnings
-        // Post notification to trigger honing in the Learnings view
-        NotificationCenter.default.post(name: .startHoningSession, object: nil)
+        postWindowScopedNotification(.startHoningSession)
     }
     
     public func showLearningsStats() {
         currentView = .learnings
-        // Post notification to show stats tab
-        NotificationCenter.default.post(name: .showLearningsStats, object: nil)
+        postWindowScopedNotification(.showLearningsStats)
     }
     
     public func pauseLearning() {
-        // Post notification to pause learning
-        NotificationCenter.default.post(name: .pauseLearning, object: nil)
+        postWindowScopedNotification(.pauseLearning)
     }
     
     public func exportLearningsProfile() {
         currentView = .learnings
-        // Post notification to trigger export
-        NotificationCenter.default.post(name: .exportLearningsProfile, object: nil)
+        postWindowScopedNotification(.exportLearningsProfile)
     }
     
     public func importLearningsProfile() {
         currentView = .learnings
-        // Post notification to trigger import
-        NotificationCenter.default.post(name: .importLearningsProfile, object: nil)
+        postWindowScopedNotification(.importLearningsProfile)
     }
     
     public func deleteUsageData() {
@@ -1317,7 +1326,7 @@ public class AppState: ObservableObject {
         userDefaults.removeObject(forKey: "organizationHistory")
         
         // 4. Notify all managers to reset their state and clear their storage
-        NotificationCenter.default.post(name: .clearLearningsData, object: nil)
+        postWindowScopedNotification(.clearLearningsData)
         NotificationCenter.default.post(name: .clearAllUsageData, object: nil)
         
         // 5. Reset primary engine

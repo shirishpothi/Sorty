@@ -345,15 +345,18 @@ struct LearningsView: View {
         } message: {
             Text("Learning will stop but your existing data will be preserved. You can re-enable learning later.")
         }
-        .onReceive(NotificationCenter.default.publisher(for: .startHoningSession)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .startHoningSession)) { notification in
+            guard notification.targetsWindowSession(appState.windowSessionID) else { return }
             if !manager.isLocked && manager.consentManager.hasConsented {
                 showingHoningSheet = true
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .pauseLearning)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .pauseLearning)) { notification in
+            guard notification.targetsWindowSession(appState.windowSessionID) else { return }
             showingWithdrawConfirmation = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) { notification in
+            guard notification.targetsWindowSession(appState.windowSessionID) else { return }
             exportProfile()
         }
         .onChange(of: manager.showingImportPicker) { showing in

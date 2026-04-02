@@ -1455,11 +1455,7 @@ public class NotificationManager: ObservableObject {
         case .apply:
             await actionHandler?(.apply)
             activateAppForNotificationAction()
-            NotificationCenter.default.post(
-                name: .requestApplyOrganizationConfirmation,
-                object: nil,
-                userInfo: notificationUserInfo(for: type)
-            )
+            postMainWindowNotification(.requestApplyOrganizationConfirmation, type: type)
         case .undo:
             await actionHandler?(.undo)
             NotificationCenter.default.post(name: .undoLastOrganization, object: nil, userInfo: notificationUserInfo(for: type))
@@ -1469,13 +1465,13 @@ public class NotificationManager: ObservableObject {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
         case .showDetails:
             await actionHandler?(.showDetails)
-            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+            postMainWindowNotification(.showOrganizationDetails, type: type)
         case .retry:
             await actionHandler?(.retry)
             NotificationCenter.default.post(name: .retryLastOrganization, object: nil, userInfo: notificationUserInfo(for: type))
         case .redoWithModel:
             await actionHandler?(.redoWithModel)
-            NotificationCenter.default.post(name: .redoOrganizationWithModel, object: nil, userInfo: notificationUserInfo(for: type))
+            postMainWindowNotification(.redoOrganizationWithModel, type: type)
         case .dismiss:
             await actionHandler?(.dismiss)
         }
@@ -1494,10 +1490,10 @@ public class NotificationManager: ObservableObject {
         switch curatedAction.identifier {
         case NativeNotificationActionIdentifier.review:
             await actionHandler?(.showDetails)
-            NotificationCenter.default.post(name: .showOrganizationPreview, object: nil, userInfo: notificationUserInfo(for: type))
+            postMainWindowNotification(.showOrganizationPreview, type: type)
         default:
             await actionHandler?(.showDetails)
-            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+            postMainWindowNotification(.showOrganizationDetails, type: type)
         }
 
         trackAnalytics(.action, type: .info(title: "action", message: "navigation"), backend: backend, detail: curatedAction.label)
@@ -1511,12 +1507,12 @@ public class NotificationManager: ObservableObject {
         switch type {
         case .previewReady:
             activateAppForNotificationAction()
-            NotificationCenter.default.post(name: .showOrganizationPreview, object: nil, userInfo: notificationUserInfo(for: type))
+            postMainWindowNotification(.showOrganizationPreview, type: type)
             await actionHandler?(.showDetails)
             trackAnalytics(.action, type: .info(title: "action", message: "defaultPreview"), backend: backend, detail: "default click")
         case .processingError:
             activateAppForNotificationAction()
-            NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+            postMainWindowNotification(.showOrganizationDetails, type: type)
             await actionHandler?(.showDetails)
             trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: backend, detail: "default click")
         default:
@@ -1527,11 +1523,20 @@ public class NotificationManager: ObservableObject {
                 trackAnalytics(.action, type: .info(title: "action", message: "defaultOpen"), backend: backend, detail: "default click")
             } else {
                 activateAppForNotificationAction()
-                NotificationCenter.default.post(name: .showOrganizationDetails, object: nil, userInfo: notificationUserInfo(for: type))
+                postMainWindowNotification(.showOrganizationDetails, type: type)
                 await actionHandler?(.showDetails)
                 trackAnalytics(.action, type: .info(title: "action", message: "defaultDetails"), backend: backend, detail: "default click")
             }
         }
+    }
+
+    private func postMainWindowNotification(_ name: Notification.Name, type: NotificationType) {
+        let userInfo = notificationUserInfo(for: type)
+        if MainWindowRouter.shared.post(name: name, userInfo: userInfo) {
+            return
+        }
+
+        NotificationCenter.default.post(name: name, object: nil, userInfo: userInfo)
     }
 
     private func notificationUserInfo(for type: NotificationType) -> [AnyHashable: Any] {
@@ -1545,6 +1550,10 @@ public class NotificationManager: ObservableObject {
     }
 
     private func activateAppForNotificationAction() {
+        if MainWindowRouter.shared.activatePreferredWindow() {
+            return
+        }
+
         NSApplication.shared.activate(ignoringOtherApps: true)
         if let keyWindow = NSApplication.shared.windows.first(where: { $0.canBecomeMain }) {
             keyWindow.makeKeyAndOrderFront(nil)

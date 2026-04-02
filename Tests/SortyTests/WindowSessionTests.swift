@@ -50,6 +50,65 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertFalse(ExternalDeeplinkDeduper.shouldHandle(url))
     }
 
+    func testWindowSessionUsesInjectedSharedUpdateManager() {
+        let updateManager = SparkleUpdateManager()
+        let session = WindowSession(updateManager: updateManager)
+
+        XCTAssertTrue(session.appState.updateManager === updateManager)
+        XCTAssertEqual(session.appState.windowSessionID, session.id)
+    }
+
+    func testWindowScopedNotificationMatchesOnlyTargetWindowSession() {
+        let targetSessionID = UUID()
+        let otherSessionID = UUID()
+        let notification = Notification(
+            name: .importLearningsProfile,
+            object: nil,
+            userInfo: MainWindowRouter.scopedUserInfo(targetSessionID: targetSessionID)
+        )
+
+        XCTAssertTrue(notification.targetsWindowSession(targetSessionID))
+        XCTAssertFalse(notification.targetsWindowSession(otherSessionID))
+    }
+
+    func testImportLearningsProfilePostsTargetedNotification() {
+        final class TargetCapture: @unchecked Sendable {
+            var value: String?
+        }
+
+        let targetSessionID = UUID()
+        let defaultsSuiteName = "WindowSessionTests-\(UUID().uuidString)"
+        let userDefaults = UserDefaults(suiteName: defaultsSuiteName)!
+        defer {
+            userDefaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+
+        let appState = AppState(
+            windowSessionID: targetSessionID,
+            updateManager: SparkleUpdateManager(),
+            userDefaults: userDefaults
+        )
+
+        let expectation = expectation(description: "import notification posted")
+        let capture = TargetCapture()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .importLearningsProfile,
+            object: nil,
+            queue: .main
+        ) { notification in
+            capture.value = notification.userInfo?[WindowRoutingUserInfoKey.targetSessionID] as? String
+            expectation.fulfill()
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        appState.importLearningsProfile()
+
+        wait(for: [expectation], timeout: 1.0)
+        XCTAssertEqual(capture.value, targetSessionID.uuidString)
+    }
+
     func testWatchedAddMarksFolderAsLostWhenBookmarkMissing() {
         let missingPath = "/tmp/sorty-missing-\(UUID().uuidString)"
 

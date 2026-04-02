@@ -24,7 +24,7 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var steeringPromptManager: SteeringPromptManager
     @EnvironmentObject private var menuBarController: MenuBarController
 
-    @StateObject private var windowSession = WindowSession()
+    @StateObject private var windowSession: WindowSession
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     @State private var handledLaunchRequestID: UUID?
     @State private var handledUITestDeepLink = false
@@ -33,26 +33,48 @@ struct MainWindowRootView: View {
     let launchRequest: WindowLaunchRequest?
     let coordinator: AppCoordinator?
 
+    init(
+        launchRequest: WindowLaunchRequest?,
+        coordinator: AppCoordinator?,
+        updateManager: SparkleUpdateManager
+    ) {
+        self.launchRequest = launchRequest
+        self.coordinator = coordinator
+        _windowSession = StateObject(wrappedValue: WindowSession(updateManager: updateManager))
+    }
+
     var body: some View {
         contentWithLifecycle
-            .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .routeDeeplinkInMainWindow)) { notification in
+                guard notification.targetsWindowSession(windowSession.id),
+                      let url = notification.routedDeeplinkURL else {
+                    return
+                }
+
+                processDeeplink(url)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
                 windowSession.appState.currentView = .learnings
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 100_000_000)
                     learningsManager.showingImportPicker = true
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .clearLearningsData)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .clearLearningsData)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
                 Task { @MainActor in
                     await learningsManager.clearAllData()
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationDetails)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationDetails)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
                 withAnimation(.pageTransition) {
                     windowSession.appState.currentView = .history
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationPreview)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .showOrganizationPreview)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
                 withAnimation(.pageTransition) {
                     if windowSession.appState.selectedDirectory == nil,
                        let currentDirectory = windowSession.organizer.currentDirectory {
@@ -62,18 +84,21 @@ struct MainWindowRootView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .requestApplyOrganizationConfirmation)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
                 routeNotificationActionRequest(
                     kind: .applyConfirmation,
                     notification: notification
                 )
             }
             .onReceive(NotificationCenter.default.publisher(for: .requestRedoOrganizationWithModelConfirmation)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
                 routeNotificationActionRequest(
                     kind: .redoWithModelConfirmation,
                     notification: notification
                 )
             }
-            .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
                 withAnimation(.pageTransition) {
                     if windowSession.appState.selectedDirectory == nil,
                        let currentDirectory = windowSession.organizer.currentDirectory {
@@ -180,6 +205,7 @@ struct MainWindowRootView: View {
             .environmentObject(windowSession.appState.duplicateSettings)
             .focusedSceneValue(\.appState, windowSession.appState)
             .focusedSceneValue(\.organizer, windowSession.organizer)
+            .background(MainWindowSessionTracker(sessionID: windowSession.id).frame(width: 0, height: 0))
             .trafficLightInactiveBorders()
             .trafficLightUpdateButton(updateManager: windowSession.appState.updateManager)
     }
@@ -213,10 +239,8 @@ struct MainWindowRootView: View {
     private func handleExternalDeeplink(_ url: URL) {
         guard ExternalDeeplinkDeduper.shouldHandle(url) else { return }
 
-        // Always reuse this window for deeplink navigation — never open a second one.
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.isVisible }) {
-            window.makeKeyAndOrderFront(nil)
+        if MainWindowRouter.shared.routeDeeplink(url) {
+            return
         }
 
         processDeeplink(url)

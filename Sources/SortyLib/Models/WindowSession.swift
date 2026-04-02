@@ -4,14 +4,24 @@ import Combine
 
 @MainActor
 public final class WindowSession: ObservableObject {
-    @Published public var appState = AppState()
-    @Published public var organizer = FolderOrganizer()
-    @Published public var healthManager = WorkspaceHealthManager()
-    @Published public var batchManager = BatchOrganizationManager()
+    public let id: UUID
+    @Published public var appState: AppState
+    @Published public var organizer: FolderOrganizer
+    @Published public var healthManager: WorkspaceHealthManager
+    @Published public var batchManager: BatchOrganizationManager
 
     private var didConfigure = false
 
-    public init() {}
+    public init(
+        id: UUID = UUID(),
+        updateManager: SparkleUpdateManager = SparkleUpdateManager()
+    ) {
+        self.id = id
+        self.appState = AppState(windowSessionID: id, updateManager: updateManager)
+        self.organizer = FolderOrganizer()
+        self.healthManager = WorkspaceHealthManager()
+        self.batchManager = BatchOrganizationManager()
+    }
 
     public func configureIfNeeded(
         settingsViewModel: SettingsViewModel,
@@ -119,10 +129,7 @@ public final class WindowSession: ObservableObject {
             appState.showHelp()
 
         case .open(let path):
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: { $0.canBecomeMain }) {
-                window.makeKeyAndOrderFront(nil)
-            }
+            _ = MainWindowRouter.shared.activateWindow(for: id)
             if let path {
                 var isDirectory = ObjCBool(false)
                 if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
