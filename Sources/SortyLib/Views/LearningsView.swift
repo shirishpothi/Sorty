@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import LocalAuthentication
 import AppKit
 import UniformTypeIdentifiers
 
@@ -87,10 +86,7 @@ struct LearningsView: View {
 
     var body: some View {
         ZStack {
-            if manager.isLocked {
-                authenticationGateView
-                    .transition(.opacity)
-            } else if !manager.consentManager.hasConsented {
+            if !manager.consentManager.hasConsented {
                 onboardingView
                     .transition(.opacity.combined(with: .scale(scale: 0.985)))
             } else {
@@ -98,75 +94,18 @@ struct LearningsView: View {
                     .transition(.opacity.combined(with: .scale(scale: 1.015)))
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: manager.isLocked)
         .animation(.easeInOut(duration: 0.36), value: manager.consentManager.hasConsented)
         .frame(minWidth: 700, minHeight: 600)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings Dashboard")
         .onAppear {
-            Task { await manager.unlock() }
+            manager.isLocked = false
             if settingsViewModel.availableModels.isEmpty {
                 settingsViewModel.updateAvailableModels()
             }
             exclusionRules.removeLegacyLearningsLinkedRules()
         }
         .navigationTitle("Learnings")
-    }
-
-    // MARK: - Authentication Gate
-
-    private var authenticationGateView: some View {
-        WorkflowContainer(currentStep: .configure) {
-            Spacer()
-
-            Image(systemName: manager.securityManager.biometryType == .touchID ? "touchid" :
-                  manager.securityManager.biometryType == .faceID ? "faceid" : "lock.shield.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(.blue)
-                .padding(32)
-                .background(Color.blue.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 24))
-                .accessibilityHidden(true)
-
-            VStack(spacing: 8) {
-                Text("Authentication Required")
-                    .font(.title2.bold())
-                Text("Use \(manager.securityManager.biometryDisplayName) to access your learning data.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
-            }
-
-            Button(action: {
-                Task {
-                    HapticFeedbackManager.shared.tap()
-                    await manager.unlock()
-                }
-            }) {
-                Label("Unlock with \(manager.securityManager.biometryDisplayName)", systemImage: "lock.open.fill")
-                    .font(.headline)
-            }
-            .buttonStyle(.onboardingPill)
-            .keyboardShortcut(.return)
-            .accessibilityLabel("Unlock Learnings")
-            .accessibilityHint("Authenticate to view your learning data")
-
-            if let error = manager.securityManager.error {
-                Text(error)
-                    .font(.caption.bold())
-                    .foregroundColor(.red)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(8)
-                    .accessibilityLabel("Authentication error: \(error)")
-            }
-
-            Spacer()
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Authentication required to access Learnings")
     }
 
     // MARK: - Onboarding
@@ -208,7 +147,7 @@ struct LearningsView: View {
             HStack(spacing: 12) {
                 Image(systemName: "lock.shield.fill")
                     .foregroundColor(.green)
-                Text("Encrypted locally • Biometric Protection • Delete anytime")
+                Text("Encrypted locally • On-device only • Delete anytime")
                     .font(.caption.bold())
                     .foregroundColor(.secondary)
             }
@@ -347,7 +286,7 @@ struct LearningsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .startHoningSession)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
-            if !manager.isLocked && manager.consentManager.hasConsented {
+            if manager.consentManager.hasConsented {
                 showingHoningSheet = true
             }
         }
@@ -357,7 +296,11 @@ struct LearningsView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
-            exportProfile()
+            requestSensitiveAction(
+                reason: "Authenticate to export your learnings profile."
+            ) {
+                exportProfile()
+            }
         }
         .onChange(of: manager.showingImportPicker) { showing in
             guard showing else { return }
@@ -469,13 +412,21 @@ struct LearningsView: View {
                         Divider()
 
                         Button {
-                            exportProfile()
+                            requestSensitiveAction(
+                                reason: "Authenticate to export your learnings profile."
+                            ) {
+                                exportProfile()
+                            }
                         } label: {
                             Label("Export Profile…", systemImage: "square.and.arrow.up")
                         }
 
                         Button {
-                            presentFileImporter(.learningsProfile)
+                            requestSensitiveAction(
+                                reason: "Authenticate to import a learnings profile."
+                            ) {
+                                presentFileImporter(.learningsProfile)
+                            }
                         } label: {
                             Label("Import Profile…", systemImage: "square.and.arrow.down")
                         }
@@ -483,8 +434,12 @@ struct LearningsView: View {
                         Divider()
 
                         Button(role: .destructive) {
-                            HapticFeedbackManager.shared.error()
-                            showingDeleteConfirmation = true
+                            requestSensitiveAction(
+                                reason: "Authenticate to delete all learning data."
+                            ) {
+                                HapticFeedbackManager.shared.error()
+                                showingDeleteConfirmation = true
+                            }
                         } label: {
                             Label("Delete All Data…", systemImage: "trash")
                         }
@@ -571,15 +526,19 @@ struct LearningsView: View {
     }
 
     private func toggleSessionLearningPaused() {
-        HapticFeedbackManager.shared.light()
-        let isPausing = !manager.sessionLearningPaused
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            manager.sessionLearningPaused.toggle()
-        }
-        if isPausing {
-            HapticFeedbackManager.shared.selection()
-        } else {
-            HapticFeedbackManager.shared.success()
+        requestSensitiveAction(
+            reason: "Authenticate to change learning collection for this session."
+        ) {
+            HapticFeedbackManager.shared.light()
+            let isPausing = !manager.sessionLearningPaused
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                manager.sessionLearningPaused.toggle()
+            }
+            if isPausing {
+                HapticFeedbackManager.shared.selection()
+            } else {
+                HapticFeedbackManager.shared.success()
+            }
         }
     }
     private var statusBadge: some View {
@@ -678,8 +637,12 @@ struct LearningsView: View {
 
                 Button(role: .destructive) {
                     showingStatusPopover = false
-                    HapticFeedbackManager.shared.error()
-                    showingDeleteConfirmation = true
+                    requestSensitiveAction(
+                        reason: "Authenticate to delete all learning data."
+                    ) {
+                        HapticFeedbackManager.shared.error()
+                        showingDeleteConfirmation = true
+                    }
                 } label: {
                     Label("Delete All Data", systemImage: "trash")
                         .font(.subheadline)
@@ -1079,8 +1042,12 @@ struct LearningsView: View {
                 .accessibilityHint("Learning will stop but data is preserved")
 
                 Button(role: .destructive, action: {
-                    HapticFeedbackManager.shared.error()
-                    showingDeleteConfirmation = true
+                    requestSensitiveAction(
+                        reason: "Authenticate to delete all learning data."
+                    ) {
+                        HapticFeedbackManager.shared.error()
+                        showingDeleteConfirmation = true
+                    }
                 }) {
                     Label("Delete All Data", systemImage: "trash")
                         .font(.caption.bold())
@@ -1306,6 +1273,25 @@ struct LearningsView: View {
         HapticFeedbackManager.shared.tap()
         activeFileImporter = importer
         isShowingFileImporter = true
+    }
+
+    private func requestSensitiveAction(
+        reason: String,
+        onSuccess: @escaping @MainActor () -> Void
+    ) {
+        if !FeatureFlags.sensitiveActionAuthenticationEnabled {
+            onSuccess()
+            return
+        }
+
+        Task { @MainActor in
+            let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(reason: reason)
+            guard didAuthenticate else {
+                HapticFeedbackManager.shared.error()
+                return
+            }
+            onSuccess()
+        }
     }
 
     private var usesDedicatedLearningsModel: Bool {

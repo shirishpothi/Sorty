@@ -55,7 +55,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return "OpenRouter"
         case .ollama:
-            return "Ollama (Local)"
+            return "Ollama"
         case .anthropic:
             return "Anthropic (Claude)"
         case .gemini:

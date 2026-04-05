@@ -656,6 +656,7 @@ struct RollingCreditsView: View {
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .accessibilityIdentifier("RollingCreditRow_\(rowKey)")
+        .trackHoveredURL(item.url)
         .onHover { hovering in
             if hovering {
                 hoveredRowKey = rowKey

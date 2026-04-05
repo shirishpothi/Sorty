@@ -9,8 +9,10 @@ import SwiftUI
 import AppKit
 
 struct ThanksForUsingSortyView: View {
-    static let preferredWindowWidth: CGFloat = 500
-    static let preferredWindowHeight: CGFloat = 620
+    static let preferredWindowWidth: CGFloat = 560
+    static let preferredWindowHeight: CGFloat = 700
+
+    private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
 
     @State private var iconHovered = false
     @State private var heartHovered = false
@@ -18,16 +20,19 @@ struct ThanksForUsingSortyView: View {
     @State private var selectedStatID: String?
     @State private var stats = UserStatsSnapshot.load()
     @State private var isHeartBeating = false
+    @State private var supportHovered = false
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 22) {
             header
+            supportButton
             beatingHeart
             statsTable
         }
-        .padding(22)
+        .padding(28)
         .frame(width: Self.preferredWindowWidth, height: Self.preferredWindowHeight)
         .modifier(WindowGlassBackground())
+        .windowLinkHoverPillHost()
         .accessibilityIdentifier("ThanksForUsingSortyView")
         .onAppear {
             stats = UserStatsSnapshot.load()
@@ -40,8 +45,8 @@ struct ThanksForUsingSortyView: View {
         VStack(spacing: 8) {
             Image(nsImage: NSApplication.shared.applicationIconImage)
                 .resizable()
-                .frame(width: 82, height: 82)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .frame(width: 140, height: 140)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                 .scaleEffect(iconHovered ? 1.04 : 1.0)
                 .animation(.easeInOut(duration: 0.18), value: iconHovered)
                 .onHover { hovering in
@@ -52,21 +57,50 @@ struct ThanksForUsingSortyView: View {
                 }
 
             Text("Thanks for using Sorty")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
                 .multilineTextAlignment(.center)
         }
+    }
+
+    private var supportButton: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            NSWorkspace.shared.open(sponsorsURL)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "heart.fill")
+                    .foregroundStyle(.red)
+                Text("Support the Developer")
+                    .foregroundStyle(.white)
+            }
+            .font(.system(size: 16, weight: .semibold, design: .rounded))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .trackHoveredURL(sponsorsURL)
+        .scaleEffect(supportHovered ? 1.04 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: supportHovered)
+        .onHover { hovering in
+            supportHovered = hovering
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
+        .accessibilityIdentifier("thanksSupportDeveloperButton")
     }
 
     private var beatingHeart: some View {
         Circle()
             .fill(Color.clear)
-            .frame(width: 130, height: 130)
+            .frame(width: 144, height: 144)
             .modifier(LiquidSurface(cornerRadius: 65))
             .overlay(alignment: .center) {
                 Image(systemName: "heart.fill")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 72, height: 72)
+                    .frame(width: 84, height: 84)
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(heartHovered ? Color.pink : Color.red)
                     .scaleEffect(isHeartBeating ? (heartHovered ? 1.14 : 1.04) : 0.92)
@@ -92,7 +126,7 @@ struct ThanksForUsingSortyView: View {
     private var statsTable: some View {
         VStack(alignment: .center, spacing: 10) {
             Text("Your Key Stats")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(size: 20, weight: .semibold, design: .rounded))
                 .frame(maxWidth: .infinity, alignment: .center)
 
             VStack(spacing: 0) {
@@ -117,7 +151,7 @@ struct ThanksForUsingSortyView: View {
             Divider()
             statsCell(item: right)
         }
-        .frame(height: 76)
+        .frame(height: 88)
     }
 
     private func statsCell(item: StatItem) -> some View {
@@ -125,12 +159,12 @@ struct ThanksForUsingSortyView: View {
 
         return VStack(alignment: .leading, spacing: 4) {
             Text(item.value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
             Text(item.title)
-                .font(.caption)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(isHighlighted ? Color.white.opacity(0.09) : Color.clear)
         .animation(.easeInOut(duration: 0.16), value: isHighlighted)

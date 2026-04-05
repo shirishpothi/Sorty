@@ -11,290 +11,252 @@ public struct FeatureTourView: View {
     @EnvironmentObject var appState: AppState
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var isKeyboardFocused: Bool
 
     @State private var currentIndex = 0
     @State private var isForwardTransition = true
-    @State private var mockupPhase = 0
-    @State private var phaseTask: Task<Void, Never>?
-    @State private var hasAppeared = false
+    @State private var contentBlur: CGFloat = 16
+    @State private var contentOffset: CGFloat = 24
+    @State private var contentScale: CGFloat = 0.985
+    @State private var contentOpacity = 0.0
+    @State private var stageOpacity = 0.0
+    @State private var stageOffset: CGFloat = 30
+    @State private var stageScale: CGFloat = 0.98
 
     private var step: FeatureTourStep { FeatureTourStep.all[currentIndex] }
+    private var nextAccent: Color {
+        FeatureTourStep.all[(currentIndex + 1) % FeatureTourStep.all.count].accent
+    }
 
     public init() {}
 
     public var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                backgroundLayer
+
+                VStack(spacing: 28) {
+                    header
+                        .padding(.top, max(24, geometry.safeAreaInsets.top + 8))
+
+                    deviceShowcase
+
+                    footer
+                }
+                .padding(.horizontal, 40)
+                .padding(.bottom, max(28, geometry.safeAreaInsets.bottom + 12))
+                .frame(maxWidth: 1180)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(stageOpacity)
+                .offset(y: stageOffset)
+                .scaleEffect(stageScale)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(minWidth: 1080, minHeight: 760)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("FeatureTourView")
+        .accessibilityLabel("Feature Tour")
+        .focusable()
+        .focused($isKeyboardFocused)
+        .onAppear {
+            isKeyboardFocused = true
+            animateInitialEntrance()
+            animateCurrentStep()
+        }
+        .onMoveCommand(perform: handleMoveCommand)
+        .onExitCommand {
+            skipTour()
+        }
+        .onChange(of: currentIndex) { _, _ in
+            animateCurrentStep()
+        }
+    }
+
+    private var backgroundLayer: some View {
         ZStack {
-            Color(NSColor.windowBackgroundColor)
+            Color(red: 0.05, green: 0.07, blue: 0.11)
                 .ignoresSafeArea()
 
             AnimatedGradientBackground(
                 revealed: true,
-                color1: .blue,
-                color2: .cyan,
-                color3: .mint
+                color1: step.accent,
+                color2: nextAccent,
+                color3: .white.opacity(0.25)
+            )
+            .blur(radius: 28)
+            .opacity(0.9)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.2),
+                    Color.black.opacity(0.48),
+                    Color.black.opacity(0.72)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
             )
             .ignoresSafeArea()
             .allowsHitTesting(false)
 
-            ambientBlobs
-                .allowsHitTesting(false)
-
-            HStack(spacing: 0) {
-                leftPanel
-                rightPanel
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(.white.opacity(0.22), lineWidth: 1)
+            RadialGradient(
+                colors: [step.accent.opacity(0.28), .clear],
+                center: .top,
+                startRadius: 60,
+                endRadius: 680
             )
-            .padding(24)
-            .shadow(color: .black.opacity(0.22), radius: 28, x: 0, y: 14)
-            .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.98)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: hasAppeared)
-        }
-        .frame(minWidth: 1080, minHeight: 760)
-        .onAppear {
-            hasAppeared = true
-            startMockupPhaseAnimation()
-        }
-        .onDisappear {
-            phaseTask?.cancel()
-        }
-        .onChange(of: currentIndex) { _, _ in
-            startMockupPhaseAnimation()
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("FeatureTourView")
-        .accessibilityLabel("Feature Tour")
-    }
-
-    private var ambientBlobs: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [.cyan.opacity(0.18), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 260
-                    )
-                )
-                .frame(width: 420, height: 420)
-                .offset(x: -380, y: -220)
-                .blur(radius: 60)
-
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [.mint.opacity(0.14), .clear],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 280
-                    )
-                )
-                .frame(width: 520, height: 520)
-                .offset(x: 440, y: 240)
-                .blur(radius: 70)
+            .ignoresSafeArea()
+            .blendMode(.screen)
+            .allowsHitTesting(false)
         }
     }
 
-    private var leftPanel: some View {
-        VStack(alignment: .leading, spacing: 22) {
+    private var header: some View {
+        HStack(alignment: .center, spacing: 16) {
             HStack(spacing: 10) {
-                Image(systemName: "sparkles.rectangle.stack")
+                Image(systemName: "sparkles.tv")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Feature Tour")
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundStyle(.secondary)
+                    .foregroundStyle(step.accent)
+                    .frame(width: 28, height: 28)
+                    .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            ZStack(alignment: .leading) {
-                stepText
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Feature Tour")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                    Text("A guided pass through Sorty's core surfaces")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                }
+            }
+
+            Spacer(minLength: 12)
+
+            Text("Use Left/Right arrows to move. Press Escape to skip.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.white.opacity(0.06), in: Capsule(style: .continuous))
+        }
+    }
+
+    private var deviceShowcase: some View {
+        MacBookShowcase(accent: step.accent) {
+            TourWindowScaffold(selectedStepID: step.id) {
+                screenView
                     .id(step.id)
-                    .transition(isForwardTransition ? TransitionStyles.slideFromRight : TransitionStyles.slideFromLeft)
-            }
-            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentIndex)
-
-            progressPips
-
-            Spacer(minLength: 8)
-
-            navigationButtons
-        }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 30)
-        .frame(width: 410)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
-    }
-
-    private var stepText: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(step.title)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
-
-            Text(step.description)
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(step.howItWorks, id: \.self) { item in
-                    HStack(alignment: .top, spacing: 8) {
-                        Circle()
-                            .fill(step.accent.opacity(0.8))
-                            .frame(width: 7, height: 7)
-                            .padding(.top, 6)
-                        Text(item)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-            .padding(.top, 2)
-        }
-    }
-
-    private var progressPips: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(FeatureTourStep.all.enumerated()), id: \.offset) { index, item in
-                Capsule(style: .continuous)
-                    .fill(index == currentIndex ? item.accent : Color.secondary.opacity(0.2))
-                    .frame(width: index == currentIndex ? 26 : 8, height: 8)
-                    .animation(.subtleBounce, value: currentIndex)
+                    .blur(radius: reduceMotion ? 0 : contentBlur)
+                    .scaleEffect(contentScale)
+                    .offset(x: reduceMotion ? 0 : contentOffset)
+                    .opacity(contentOpacity)
             }
         }
+        .frame(maxWidth: 980)
+        .frame(maxWidth: .infinity)
+        .shadow(color: step.accent.opacity(0.18), radius: 80, x: 0, y: 30)
     }
 
-    private var navigationButtons: some View {
-        HStack(spacing: 12) {
-            Button {
-                goBack()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "chevron.left")
-                    Text("Back")
-                }
-                .frame(minWidth: 82)
-            }
-            .buttonStyle(.bordered)
-            .disabled(currentIndex == 0)
-            .keyboardShortcut(.leftArrow, modifiers: [])
-
-            Button {
-                skipTour()
-            } label: {
-                Text("Skip")
-                    .frame(minWidth: 66)
-            }
-            .buttonStyle(.bordered)
-            .keyboardShortcut(.escape, modifiers: [])
-
-            Spacer(minLength: 0)
-
-            Button {
-                goNext()
-            } label: {
-                HStack(spacing: 6) {
-                    Text(currentIndex == FeatureTourStep.all.count - 1 ? "Finish" : "Next")
-                    Image(systemName: "chevron.right")
-                }
-                .frame(minWidth: 92)
-            }
-            .buttonStyle(.onboardingPill)
-            .keyboardShortcut(.defaultAction)
-        }
-    }
-
-    private var rightPanel: some View {
-        VStack(alignment: .leading, spacing: 16) {
+    private var footer: some View {
+        VStack(spacing: 18) {
             HStack(spacing: 8) {
-                Image(systemName: "cursorarrow.rays")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text("Live Demo")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(.ultraThinMaterial)
-
-                HStack(spacing: 0) {
-                    simulatedSidebar
-
-                    Divider()
-                        .overlay(.white.opacity(0.1))
-
-                    ZStack {
-                        mockupArea
-                            .id(step.id)
-                            .transition(isForwardTransition ? TransitionStyles.slideFromRight : TransitionStyles.slideFromLeft)
+                ForEach(Array(FeatureTourStep.all.enumerated()), id: \.offset) { index, item in
+                    Button {
+                        guard index != currentIndex else { return }
+                        isForwardTransition = index > currentIndex
+                        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                            currentIndex = index
+                        }
+                        HapticFeedbackManager.shared.selection()
+                    } label: {
+                        Capsule(style: .continuous)
+                            .fill(index == currentIndex ? item.accent : .white.opacity(0.16))
+                            .frame(width: index == currentIndex ? 38 : 10, height: 10)
+                            .overlay(
+                                Capsule(style: .continuous)
+                                    .stroke(.white.opacity(index == currentIndex ? 0.2 : 0.08), lineWidth: 1)
+                            )
                     }
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentIndex)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(20)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Go to \(item.title)")
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(.white.opacity(0.2), lineWidth: 1)
-            )
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 22)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.white.opacity(0.06), in: Capsule(style: .continuous))
 
-    private var simulatedSidebar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Sidebar")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+            VStack(spacing: 10) {
+                Text(step.title)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
 
-            ForEach(FeatureTourStep.all) { item in
-                FeatureSidebarRow(item: item, isCurrent: item.id == step.id)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentIndex)
+                Text(step.subtitle)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 720)
             }
 
-            Spacer(minLength: 0)
+            VStack(spacing: 12) {
+                Text("\(currentIndex + 1) of \(FeatureTourStep.all.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .textCase(.uppercase)
+
+                Button {
+                    goNext()
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(currentIndex == FeatureTourStep.all.count - 1 ? "Get Started" : "Continue")
+                        Image(systemName: currentIndex == FeatureTourStep.all.count - 1 ? "arrow.up.right" : "arrow.right")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .frame(minWidth: 220)
+                }
+                .buttonStyle(TourPrimaryButtonStyle(accent: step.accent))
+                .keyboardShortcut(.defaultAction)
+            }
         }
-        .frame(width: 216, alignment: .topLeading)
-        .frame(maxHeight: .infinity, alignment: .topLeading)
-        .padding(14)
-        .background(
-            Rectangle()
-                .fill(Color.black.opacity(0.08))
-        )
     }
 
     @ViewBuilder
-    private var mockupArea: some View {
-        switch step.mockupKind {
-        case .workspaceHealthGauge:
-            WorkspaceHealthMockup(step: step, phase: mockupPhase)
-        case .duplicateClusterMerge:
-            DuplicatesMockup(step: step, phase: mockupPhase)
-        case .historyTimeline:
-            HistoryMockup(step: step, phase: mockupPhase)
-        case .batchQueueProgress:
-            BatchMockup(step: step, phase: mockupPhase)
-        case .exclusionFilterBuilder:
-            ExclusionMockup(step: step, phase: mockupPhase)
-        case .watchFolderLiveFeed:
-            WatchFolderMockup(step: step, phase: mockupPhase)
-        case .learningsRuleCards:
-            LearningsMockup(step: step, phase: mockupPhase)
+    private var screenView: some View {
+        switch step.id {
+        case .workspaceHealth:
+            WorkspaceHealthScreenMockup(step: step)
+        case .duplicates:
+            DuplicatesScreenMockup(step: step)
+        case .history:
+            HistoryScreenMockup(step: step)
+        case .batch:
+            BatchScreenMockup(step: step)
+        case .exclusions:
+            ExclusionScreenMockup(step: step)
+        case .watchFolders:
+            WatchFolderScreenMockup(step: step)
+        case .learnings:
+            LearningsScreenMockup(step: step)
+        }
+    }
+
+    private func handleMoveCommand(_ direction: MoveCommandDirection) {
+        switch direction {
+        case .left:
+            goBack()
+        case .right:
+            goNext()
+        default:
+            break
         }
     }
 
     private func goBack() {
         guard currentIndex > 0 else { return }
         isForwardTransition = false
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
             currentIndex -= 1
         }
         HapticFeedbackManager.shared.selection()
@@ -303,14 +265,13 @@ public struct FeatureTourView: View {
     private func goNext() {
         isForwardTransition = true
         if currentIndex < FeatureTourStep.all.count - 1 {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
                 currentIndex += 1
             }
-            HapticFeedbackManager.shared.selection()
-            return
+            HapticFeedbackManager.shared.tap()
+        } else {
+            finishTour()
         }
-
-        finishTour()
     }
 
     private func skipTour() {
@@ -325,44 +286,39 @@ public struct FeatureTourView: View {
         dismiss()
     }
 
-    private func startMockupPhaseAnimation() {
-        phaseTask?.cancel()
-        mockupPhase = 0
-
-        guard !reduceMotion else {
-            mockupPhase = 2
-            return
+    private func animateInitialEntrance() {
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+            stageOpacity = 1
+            stageOffset = 0
+            stageScale = 1
         }
+    }
 
-        phaseTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 700_000_000)
-                await MainActor.run {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.82)) {
-                        mockupPhase = (mockupPhase + 1) % 3
-                    }
-                }
+    private func animateCurrentStep() {
+        let directionalOffset: CGFloat = isForwardTransition ? 38 : -38
+        contentBlur = reduceMotion ? 0 : 18
+        contentOffset = reduceMotion ? 0 : directionalOffset
+        contentScale = reduceMotion ? 1 : 0.975
+        contentOpacity = reduceMotion ? 1 : 0.15
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: reduceMotion ? 0 : 45_000_000)
+            withAnimation(.easeOut(duration: reduceMotion ? 0.01 : 0.28)) {
+                contentBlur = 0
+                contentOffset = 0
+                contentScale = 1
+                contentOpacity = 1
             }
         }
     }
-}
-
-private enum FeatureMockupKind {
-    case workspaceHealthGauge
-    case duplicateClusterMerge
-    case historyTimeline
-    case batchQueueProgress
-    case exclusionFilterBuilder
-    case watchFolderLiveFeed
-    case learningsRuleCards
 }
 
 private enum FeatureTourStepID: String, CaseIterable, Identifiable {
     case workspaceHealth
     case duplicates
     case history
-    case batchOrganize
-    case exclusionRules
+    case batch
+    case exclusions
     case watchFolders
     case learnings
 
@@ -371,686 +327,1092 @@ private enum FeatureTourStepID: String, CaseIterable, Identifiable {
 
 private struct FeatureTourStep: Identifiable {
     let id: FeatureTourStepID
-    let sidebarTitle: String
-    let sidebarIcon: String
     let title: String
-    let description: String
-    let howItWorks: [String]
-    let ctaHint: String
-    let mockupKind: FeatureMockupKind
+    let subtitle: String
     let accent: Color
-    let sidebarAccessibilityIdentifier: String
+    let icon: String
 
     static let all: [FeatureTourStep] = [
         FeatureTourStep(
             id: .workspaceHealth,
-            sidebarTitle: "Workspace Health",
-            sidebarIcon: "heart.text.square",
             title: "Workspace Health",
-            description: "Scan a folder to detect clutter, stale files, and cleanup opportunities with a single health score.",
-            howItWorks: [
-                "Sorty scores each workspace on freshness, structure, and duplicates.",
-                "Actionable recommendations prioritize the highest-impact cleanups.",
-                "Use the highlighted entry to open health diagnostics quickly."
-            ],
-            ctaHint: "Scan Health",
-            mockupKind: .workspaceHealthGauge,
+            subtitle: "Spot stale folders, duplicate pressure, and cleanup work before your workspace drifts.",
             accent: .mint,
-            sidebarAccessibilityIdentifier: "FeatureTourSidebarWorkspaceHealth"
+            icon: "heart.text.square"
         ),
         FeatureTourStep(
             id: .duplicates,
-            sidebarTitle: "Duplicates",
-            sidebarIcon: "doc.on.doc",
             title: "Duplicates",
-            description: "Group exact and near-duplicate files, preview differences, and keep the best copy with confidence.",
-            howItWorks: [
-                "Sorty clusters duplicates by checksum and semantic similarity.",
-                "You can review each group before applying any move or delete action.",
-                "The highlighted navigation target takes you directly to duplicate review."
-            ],
-            ctaHint: "Review Duplicates",
-            mockupKind: .duplicateClusterMerge,
+            subtitle: "Review matched files side by side and keep the strongest copy without guessing.",
             accent: .orange,
-            sidebarAccessibilityIdentifier: "FeatureTourSidebarDuplicates"
+            icon: "doc.on.doc"
         ),
         FeatureTourStep(
             id: .history,
-            sidebarTitle: "History",
-            sidebarIcon: "clock",
             title: "History",
-            description: "Track every organization run, inspect what changed, and undo safely when you need to roll back.",
-            howItWorks: [
-                "Each run stores a timeline with moved, renamed, and skipped files.",
-                "Open a run to inspect details before undoing.",
-                "The highlighted entry is your control center for past sessions."
-            ],
-            ctaHint: "Undo Last Run",
-            mockupKind: .historyTimeline,
+            subtitle: "Reopen any run, inspect every move, and undo with context when you need to roll back.",
             accent: .blue,
-            sidebarAccessibilityIdentifier: "FeatureTourSidebarHistory"
+            icon: "clock.arrow.circlepath"
         ),
         FeatureTourStep(
-            id: .batchOrganize,
-            sidebarTitle: "Batch Organize",
-            sidebarIcon: "square.stack.3d.up.fill",
+            id: .batch,
             title: "Batch Organize",
-            description: "Queue multiple folders and run a coordinated organization pass with progress and per-folder results.",
-            howItWorks: [
-                "Add multiple folders and assign one strategy to all or tune per folder.",
-                "Sorty processes the queue with per-job status and completion metrics.",
-                "Use the highlighted sidebar item when you need large-scale cleanup."
-            ],
-            ctaHint: "Start Batch",
-            mockupKind: .batchQueueProgress,
+            subtitle: "Queue multiple folders, watch progress live, and finish large cleanup sessions in one pass.",
             accent: .indigo,
-            sidebarAccessibilityIdentifier: "FeatureTourSidebarBatchOrganize"
+            icon: "square.stack.3d.up.fill"
         ),
         FeatureTourStep(
-            id: .exclusionRules,
-            sidebarTitle: "Exclusions",
-            sidebarIcon: "eye.slash",
-            title: "Exclusion Rules",
-            description: "Define patterns and folders Sorty should never touch, keeping sensitive or system files out of runs.",
-            howItWorks: [
-                "Create path, extension, or wildcard rules in one place.",
-                "Rules are applied before scanning so excluded content is never planned.",
-                "The highlighted navigation target opens rule management instantly."
-            ],
-            ctaHint: "Add Rule",
-            mockupKind: .exclusionFilterBuilder,
+            id: .exclusions,
+            title: "Exclusions",
+            subtitle: "Protect folders, patterns, and extensions that should never be touched during organization.",
             accent: .red,
-            sidebarAccessibilityIdentifier: "FeatureTourSidebarExclusions"
+            icon: "eye.slash"
         ),
         FeatureTourStep(
             id: .watchFolders,
-            sidebarTitle: "Watched Folders",
-            sidebarIcon: "eye",
-            title: "Watch Folders",
-            description: "Continuously monitor selected folders and trigger automation when new files arrive.",
-            howItWorks: [
-                "Choose watched locations and set auto-organize behavior.",
-                "Incoming file events stream in real time so automation remains visible.",
-                "Use the highlighted section to control monitoring and schedules."
-            ],
-            ctaHint: "Auto-Organize",
-            mockupKind: .watchFolderLiveFeed,
+            title: "Watched Folders",
+            subtitle: "Let Sorty monitor intake folders and launch workflows as new files land.",
             accent: .teal,
-            sidebarAccessibilityIdentifier: "FeatureTourSidebarWatchedFolders"
+            icon: "eye"
         ),
         FeatureTourStep(
             id: .learnings,
-            sidebarTitle: "Learnings",
-            sidebarIcon: "brain",
             title: "Learnings",
-            description: "Capture your manual corrections and convert them into reusable rules that improve future organization runs.",
-            howItWorks: [
-                "Sorty observes accepted and rejected suggestions from your workflows.",
-                "Proposed rules are surfaced for review before activation.",
-                "Open the highlighted destination to tune long-term behavior."
-            ],
-            ctaHint: "Apply Suggestions",
-            mockupKind: .learningsRuleCards,
+            subtitle: "Turn your corrections into reusable rules that sharpen future organization runs.",
             accent: .purple,
-            sidebarAccessibilityIdentifier: "FeatureTourSidebarLearnings"
+            icon: "brain"
         )
     ]
 }
 
-private struct MockupShell<Content: View>: View {
-    let step: FeatureTourStep
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(step.title)
-                        .font(.headline)
-                    Text("Relevant action: \(step.ctaHint)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Label("Simulated", systemImage: "sparkles")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.black.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(step.accent.opacity(0.32), lineWidth: 1)
-        )
-    }
-}
-
-private struct HighlightButton: View {
-    let title: String
-    let icon: String
+private struct MacBookShowcase<Content: View>: View {
     let accent: Color
-    let emphasized: Bool
+    @ViewBuilder var content: Content
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-            Text(title)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-        }
-        .font(.subheadline.weight(.semibold))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .foregroundStyle(emphasized ? .white : accent)
-        .background(
-            Capsule(style: .continuous)
-                .fill(emphasized ? accent : accent.opacity(0.18))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(accent.opacity(0.9), lineWidth: emphasized ? 0 : 1)
-                .shadow(color: emphasized ? accent.opacity(0.45) : .clear, radius: 10, x: 0, y: 0)
-        )
-        .scaleEffect(emphasized ? 1.02 : 1)
-    }
-}
-
-private struct FeatureSidebarRow: View {
-    let item: FeatureTourStep
-    let isCurrent: Bool
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: item.sidebarIcon)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 16)
-            Text(item.sidebarTitle)
-                .font(.subheadline.weight(isCurrent ? .semibold : .regular))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .allowsTightening(true)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .foregroundStyle(isCurrent ? item.accent : Color.secondary)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isCurrent ? item.accent.opacity(0.18) : .clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(isCurrent ? item.accent.opacity(0.9) : .clear, lineWidth: 1)
-                .shadow(color: isCurrent ? item.accent.opacity(0.45) : .clear, radius: 10, x: 0, y: 0)
-        )
-        .scaleEffect(isCurrent ? 1.02 : 1)
-        .accessibilityIdentifier(item.sidebarAccessibilityIdentifier)
-        .accessibilityValue(isCurrent ? "Highlighted" : "Not highlighted")
-    }
-}
-
-private struct WorkspaceHealthMockup: View {
-    let step: FeatureTourStep
-    let phase: Int
-
-    var body: some View {
-        MockupShell(step: step) {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(spacing: 20) {
-                    ZStack {
-                        SortyGradientCircularProgress(
-                            progress: phase == 0 ? 0.35 : phase == 1 ? 0.58 : 0.84,
-                            accent: step.accent,
-                            size: 130,
-                            lineWidth: 12
+        VStack(spacing: 0) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.02),
+                                Color.black.opacity(0.28)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
+                    )
 
-                        Text(phase == 0 ? "42" : phase == 1 ? "67" : "89")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color(red: 0.06, green: 0.08, blue: 0.11))
+                    .padding(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                            .stroke(.white.opacity(0.1), lineWidth: 1)
+                            .padding(14)
+                    )
+                    .overlay(alignment: .top) {
+                        Capsule(style: .continuous)
+                            .fill(.black.opacity(0.78))
+                            .frame(width: 116, height: 18)
+                            .padding(.top, 12)
                     }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        metricRow("Large files", value: phase == 0 ? "17" : "9")
-                        metricRow("Stale files", value: phase == 0 ? "63" : "18")
-                        metricRow("Duplicate risk", value: phase == 2 ? "Low" : "Medium")
-                    }
-                }
-
-                HighlightButton(
-                    title: "Scan Health",
-                    icon: "heart.text.square.fill",
-                    accent: step.accent,
-                    emphasized: phase == 2
-                )
+                    .overlay(
+                        content
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .padding(28)
+                    )
             }
+            .frame(height: 560)
+            .overlay(
+                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                    .stroke(accent.opacity(0.18), lineWidth: 1)
+            )
+
+            ZStack(alignment: .top) {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.82),
+                                Color.white.opacity(0.62),
+                                Color.gray.opacity(0.45)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 720, height: 24)
+
+                Capsule(style: .continuous)
+                    .fill(.black.opacity(0.45))
+                    .frame(width: 150, height: 6)
+                    .padding(.top, 5)
+            }
+            .padding(.top, -2)
         }
     }
+}
 
-    private func metricRow(_ name: String, value: String) -> some View {
-        HStack {
-            Text(name)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .minimumScaleFactor(0.85)
+private struct TourWindowScaffold<Content: View>: View {
+    let selectedStepID: FeatureTourStepID
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Circle().fill(Color.red.opacity(0.9)).frame(width: 10, height: 10)
+                    Circle().fill(Color.orange.opacity(0.9)).frame(width: 10, height: 10)
+                    Circle().fill(Color.green.opacity(0.9)).frame(width: 10, height: 10)
+                }
+
+                Spacer()
+
+                Text("Sorty")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.75))
+
+                Spacer()
+
+                TourGlassBadge(text: "Preview")
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(.white.opacity(0.03))
+
+            Divider().overlay(.white.opacity(0.06))
+
+            HStack(spacing: 0) {
+                TourSidebarSnapshot(selectedStepID: selectedStepID)
+                    .frame(width: 220)
+
+                Divider().overlay(.white.opacity(0.06))
+
+                content
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(22)
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.035),
+                                Color.clear,
+                                Color.black.opacity(0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(red: 0.08, green: 0.1, blue: 0.14))
+        )
+    }
+}
+
+private struct TourSidebarSnapshot: View {
+    let selectedStepID: FeatureTourStepID
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.white.opacity(0.08))
+                    .frame(width: 34, height: 34)
+                    .overlay {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(.white.opacity(0.9))
+                    }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Sorty")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                    Text("Your organization cockpit")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(FeatureTourStep.all) { item in
+                    let isSelected = item.id == selectedStepID
+                    HStack(spacing: 10) {
+                        Image(systemName: item.icon)
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(width: 16)
+                        Text(item.title)
+                            .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(isSelected ? .white : .white.opacity(0.56))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(isSelected ? item.accent.opacity(0.22) : .clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(isSelected ? item.accent.opacity(0.42) : .clear, lineWidth: 1)
+                    )
+                }
+            }
+
             Spacer()
-            Text(value)
-                .fontWeight(.semibold)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Guided across the app")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                Text("Each stop reflects the screen you'll use, so the tour follows the real product instead of abstract motion.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.52))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.white.opacity(0.06))
-        )
+        .padding(16)
+        .background(Color.black.opacity(0.16))
     }
 }
 
-private struct DuplicatesMockup: View {
+private struct WorkspaceHealthScreenMockup: View {
     let step: FeatureTourStep
-    let phase: Int
 
     var body: some View {
-        MockupShell(step: step) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    duplicateCard("Invoice.pdf", tone: .orange, active: phase != 0)
-                    duplicateCard("Invoice (1).pdf", tone: .yellow, active: phase == 2)
-                    duplicateCard("Invoice-final.pdf", tone: .pink, active: phase == 1 || phase == 2)
-                }
-                .frame(minHeight: 76)
+        VStack(alignment: .leading, spacing: 18) {
+            TourSectionHeader(
+                eyebrow: "Health snapshot",
+                title: "Projects / Client Archive",
+                detail: "Three high-impact issues are pushing this workspace toward cleanup."
+            )
 
-                HStack(spacing: 10) {
-                    duplicateCard("Photo_2044.jpg", tone: .mint, active: phase == 2)
-                    duplicateCard("Photo_2044-copy.jpg", tone: .teal, active: phase != 0)
-                }
-                .frame(minHeight: 70)
+            HStack(spacing: 18) {
+                VStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .stroke(.white.opacity(0.08), lineWidth: 16)
+                        Circle()
+                            .trim(from: 0, to: 0.79)
+                            .stroke(
+                                AngularGradient(colors: [step.accent.opacity(0.4), step.accent, .white.opacity(0.85)], center: .center),
+                                style: StrokeStyle(lineWidth: 16, lineCap: .round)
+                            )
+                            .rotationEffect(.degrees(-90))
+                        VStack(spacing: 2) {
+                            Text("79")
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                            Text("Healthy")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.62))
+                        }
+                    }
+                    .frame(width: 170, height: 170)
 
-                HStack {
-                    Text("2 duplicate groups selected")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    HighlightButton(
-                        title: "Review Duplicates",
-                        icon: "doc.on.doc.fill",
-                        accent: step.accent,
-                        emphasized: phase == 2
-                    )
+                    TourGlassBadge(text: "25 GB reclaimed if resolved")
+                }
+                .frame(width: 220)
+
+                VStack(spacing: 12) {
+                    TourInsightCard(color: .orange, title: "Old installer cache", detail: "14.2 GB unused for 142 days", action: "Review cleanup")
+                    TourInsightCard(color: step.accent, title: "Duplicate exports", detail: "7 matching file clusters in Design", action: "Open Duplicates")
+                    TourInsightCard(color: .blue, title: "Stale review folders", detail: "11 folders untouched in the last quarter", action: "Archive candidates")
                 }
             }
         }
     }
-
-    private func duplicateCard(_ name: String, tone: Color, active: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(name)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .minimumScaleFactor(0.75)
-            Text(active ? "Matched" : "Analyzing")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(tone.opacity(active ? 0.25 : 0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(tone.opacity(active ? 0.9 : 0.2), lineWidth: 1)
-        )
-    }
 }
 
-private struct HistoryMockup: View {
+private struct DuplicatesScreenMockup: View {
     let step: FeatureTourStep
-    let phase: Int
 
     var body: some View {
-        MockupShell(step: step) {
+        HStack(alignment: .top, spacing: 18) {
             VStack(alignment: .leading, spacing: 12) {
-                historyEntry("Today 9:41 AM", detail: "Desktop cleanup", status: phase == 2 ? "Undo Ready" : "Completed", accent: step.accent)
-                historyEntry("Yesterday 7:14 PM", detail: "Downloads organization", status: "Completed", accent: .cyan)
-                historyEntry("Yesterday 9:02 AM", detail: "Project archive", status: "Completed", accent: .mint)
+                TourSectionHeader(
+                    eyebrow: "Matched groups",
+                    title: "12 duplicate clusters",
+                    detail: "Sorty ranks the best version by quality, recency, and folder relevance."
+                )
 
-                Spacer(minLength: 0)
-
-                HStack {
-                    Text("All actions are reversible from here.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    HighlightButton(
-                        title: "Undo Last Run",
-                        icon: "arrow.uturn.backward.circle.fill",
-                        accent: step.accent,
-                        emphasized: phase == 2
-                    )
+                VStack(spacing: 10) {
+                    DuplicateClusterRow(title: "Brand deck exports", files: "4 files", note: "Best copy in Marketing / Decks", color: step.accent, selected: true)
+                    DuplicateClusterRow(title: "Invoice scans", files: "3 files", note: "2 exact, 1 near-duplicate", color: .white, selected: false)
+                    DuplicateClusterRow(title: "Meeting recordings", files: "5 files", note: "Two trimmed versions detected", color: .white, selected: false)
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Preview")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.58))
+                    Spacer()
+                    TourGlassBadge(text: "Keep original")
+                }
+
+                HStack(spacing: 12) {
+                    DuplicatePreviewCard(title: "Deck_v12.pdf", subtitle: "Latest edits · 18 MB", accent: step.accent)
+                    DuplicatePreviewCard(title: "Deck_final.pdf", subtitle: "Approved copy · 18 MB", accent: .white.opacity(0.18))
+                }
+
+                VStack(spacing: 10) {
+                    DuplicateMetricRow(label: "Text content", value: "100% match")
+                    DuplicateMetricRow(label: "Visual diff", value: "2 slides changed")
+                    DuplicateMetricRow(label: "Recommended action", value: "Archive older export")
+                }
+                .padding(14)
+                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .frame(width: 280, alignment: .topLeading)
+        }
+    }
+}
+
+private struct HistoryScreenMockup: View {
+    let step: FeatureTourStep
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 12) {
+                TourSectionHeader(
+                    eyebrow: "Run timeline",
+                    title: "Wednesday afternoon cleanup",
+                    detail: "Every session keeps its plan, applied moves, and undo entry points together."
+                )
+
+                VStack(spacing: 10) {
+                    HistoryEntryRow(title: "Downloads cleanup", time: "2:14 PM", status: "Applied", detail: "48 files organized into 9 folders", color: step.accent)
+                    HistoryEntryRow(title: "Reference docs", time: "1:42 PM", status: "Preview only", detail: "Kept for review before apply", color: .blue)
+                    HistoryEntryRow(title: "Client handoff", time: "Yesterday", status: "Undone", detail: "Restored 16 files to original paths", color: .orange)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                TourGlassBadge(text: "Undo available")
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Run summary")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    TimelineStatRow(label: "Folders created", value: "9")
+                    TimelineStatRow(label: "Files moved", value: "48")
+                    TimelineStatRow(label: "Renames applied", value: "6")
+                    TimelineStatRow(label: "Warnings", value: "1 skipped alias")
+                }
+                .padding(16)
+                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Highlighted action")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.58))
+                    TourActionPill(title: "Undo run", systemImage: "arrow.uturn.backward", accent: step.accent)
+                }
+            }
+            .frame(width: 260, alignment: .topLeading)
+        }
+    }
+}
+
+private struct BatchScreenMockup: View {
+    let step: FeatureTourStep
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            TourSectionHeader(
+                eyebrow: "Queue overview",
+                title: "5 folders organized in one batch",
+                detail: "Progress stays visible per folder so you can see what is queued, running, or waiting on review."
+            )
+
+            VStack(spacing: 12) {
+                BatchQueueRow(title: "Downloads", subtitle: "Preview complete", progress: 1.0, color: .green)
+                BatchQueueRow(title: "Invoices", subtitle: "Applying changes", progress: 0.72, color: step.accent)
+                BatchQueueRow(title: "Project Assets", subtitle: "Scanning structure", progress: 0.48, color: .blue)
+                BatchQueueRow(title: "Receipts", subtitle: "Waiting in queue", progress: 0.14, color: .orange)
+            }
+
+            HStack(spacing: 14) {
+                BatchSummaryCard(title: "Total files", value: "1,284", accent: step.accent)
+                BatchSummaryCard(title: "ETA", value: "4 min", accent: .blue)
+                BatchSummaryCard(title: "Ready to apply", value: "2 folders", accent: .green)
             }
         }
     }
+}
 
-    private func historyEntry(_ date: String, detail: String, status: String, accent: Color) -> some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(accent.opacity(0.8))
-                .frame(width: 8, height: 8)
+private struct ExclusionScreenMockup: View {
+    let step: FeatureTourStep
+
+    private let chips = [
+        "*.photoslibrary",
+        "Client Archive",
+        "System Backups",
+        "*.pkg",
+        "Legal Holds",
+        "Reference Models",
+        "node_modules",
+        "Finance / Taxes"
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            TourSectionHeader(
+                eyebrow: "Protection rules",
+                title: "Keep fragile areas out of Sorty runs",
+                detail: "Rules are readable, layered, and visible before a plan touches the file system."
+            )
+
+            TourFlowLayout(horizontalSpacing: 10, verticalSpacing: 10) {
+                ForEach(chips, id: \.self) { chip in
+                    Text(chip)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(step.accent.opacity(0.16), in: Capsule(style: .continuous))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(step.accent.opacity(0.32), lineWidth: 1)
+                        )
+                }
+            }
+            .padding(16)
+            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            HStack(spacing: 14) {
+                TourRulePanel(title: "Path rules", detail: "Protect deep folders, archives, or synced volumes.", accent: step.accent)
+                TourRulePanel(title: "Pattern rules", detail: "Exclude file types and generated assets in one place.", accent: .blue)
+                TourRulePanel(title: "Review banner", detail: "Plans surface matched exclusions before you apply.", accent: .orange)
+            }
+        }
+    }
+}
+
+private struct WatchFolderScreenMockup: View {
+    let step: FeatureTourStep
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 12) {
+                TourSectionHeader(
+                    eyebrow: "Live automation",
+                    title: "Watched folders are active",
+                    detail: "Incoming events stream in so you can see exactly what triggered a workflow."
+                )
+
+                VStack(spacing: 10) {
+                    WatchFolderCard(title: "Downloads / Intake", badge: "Auto-organize", accent: step.accent)
+                    WatchFolderCard(title: "Scans", badge: "Needs review", accent: .orange)
+                    WatchFolderCard(title: "Team Handoff", badge: "Paused", accent: .white.opacity(0.16))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Recent events")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                VStack(spacing: 10) {
+                    WatchEventRow(title: "New file detected", detail: "Receipt_0428.pdf arrived in Scans", color: step.accent)
+                    WatchEventRow(title: "Plan ready", detail: "Downloads / Intake organized 7 items", color: .blue)
+                    WatchEventRow(title: "Skipped by rule", detail: "Project build folder matched exclusion", color: .orange)
+                    WatchEventRow(title: "Notification sent", detail: "Batch summary delivered to Notification Center", color: .white.opacity(0.4))
+                }
+                .padding(14)
+                .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .frame(width: 310, alignment: .topLeading)
+        }
+    }
+}
+
+private struct LearningsScreenMockup: View {
+    let step: FeatureTourStep
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            TourSectionHeader(
+                eyebrow: "Behavior signals",
+                title: "Sorty is learning from your corrections",
+                detail: "Accepted edits, rejected moves, and refined rules stay visible so you can steer future runs."
+            )
+
+            HStack(spacing: 14) {
+                LearningsMetricCard(title: "Sessions observed", value: "42", accent: step.accent)
+                LearningsMetricCard(title: "Rules suggested", value: "7", accent: .blue)
+                LearningsMetricCard(title: "Confidence", value: "High", accent: .green)
+            }
+
+            HStack(alignment: .top, spacing: 16) {
+                VStack(spacing: 12) {
+                    LearningsRuleCard(
+                        title: "Invoices stay grouped by month",
+                        detail: "Derived from 13 accepted corrections in Finance.",
+                        accent: step.accent,
+                        status: "Ready to apply"
+                    )
+                    LearningsRuleCard(
+                        title: "Screenshots move into dated subfolders",
+                        detail: "Based on repeated manual edits in Downloads.",
+                        accent: .blue,
+                        status: "Watching for one more signal"
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Latest feedback")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    VStack(spacing: 10) {
+                        WatchEventRow(title: "Accepted", detail: "Draft invoice matched Accounts / 2026 / April", color: .green)
+                        WatchEventRow(title: "Corrected", detail: "Presentation moved from Archive back to Active", color: step.accent)
+                        WatchEventRow(title: "New instruction", detail: "Keep client deliverables flat after approval", color: .blue)
+                    }
+                    .padding(14)
+                    .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .frame(width: 300, alignment: .topLeading)
+            }
+        }
+    }
+}
+
+private struct TourSectionHeader: View {
+    let eyebrow: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(eyebrow)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .textCase(.uppercase)
+            Text(title)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            Text(detail)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.64))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct TourInsightCard: View {
+    let color: Color
+    let title: String
+    let detail: String
+    let action: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(color.opacity(0.2))
+                .frame(width: 44, height: 44)
+                .overlay {
+                    Image(systemName: "sparkle.magnifyingglass")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(color)
+                }
 
             VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
                 Text(detail)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                Text(date)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
             }
 
             Spacer()
 
-            Text(status)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(accent.opacity(0.2))
-                )
+            Text(action)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(color)
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.white.opacity(0.06))
+        .padding(14)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(color.opacity(0.18), lineWidth: 1)
         )
     }
 }
 
-private struct BatchMockup: View {
-    let step: FeatureTourStep
-    let phase: Int
+private struct DuplicateClusterRow: View {
+    let title: String
+    let files: String
+    let note: String
+    let color: Color
+    let selected: Bool
 
     var body: some View {
-        MockupShell(step: step) {
-            VStack(alignment: .leading, spacing: 14) {
-                batchRow("Design Assets", progress: phase == 0 ? 0.2 : phase == 1 ? 0.6 : 1.0, accent: step.accent)
-                batchRow("Downloads", progress: phase == 0 ? 0.0 : phase == 1 ? 0.4 : 0.9, accent: .blue)
-                batchRow("Client Archive", progress: phase == 0 ? 0.0 : phase == 1 ? 0.2 : 0.7, accent: .purple)
-
-                Spacer(minLength: 0)
-
-                HStack {
-                    Text("Queue: 3 folders")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    HighlightButton(
-                        title: "Start Batch",
-                        icon: "play.fill",
-                        accent: step.accent,
-                        emphasized: phase == 2
-                    )
-                }
-            }
-        }
-    }
-
-    private func batchRow(_ title: String, progress: Double, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .minimumScaleFactor(0.82)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
                 Spacer()
-                Text("\(Int(progress * 100))%")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+                Text(files)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(selected ? color : .white.opacity(0.48))
             }
-
-            SortyGradientProgressBar(progress: progress, accent: accent, height: 8)
+            Text(note)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.white.opacity(0.06))
+        .padding(14)
+        .background(selected ? color.opacity(0.16) : .white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(selected ? color.opacity(0.34) : .white.opacity(0.06), lineWidth: 1)
         )
     }
 }
 
-private struct ExclusionMockup: View {
-    let step: FeatureTourStep
-    let phase: Int
+private struct DuplicatePreviewCard: View {
+    let title: String
+    let subtitle: String
+    let accent: Color
 
     var body: some View {
-        MockupShell(step: step) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 10) {
-                    ruleChip("*.tmp", active: phase != 0, accent: step.accent)
-                    ruleChip(".DS_Store", active: phase == 2, accent: .orange)
-                    ruleChip("node_modules", active: true, accent: .pink)
+        VStack(alignment: .leading, spacing: 12) {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(accent)
+                .frame(height: 124)
+                .overlay {
+                    VStack(spacing: 10) {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(.black.opacity(0.12))
+                            .frame(width: 92, height: 10)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(.black.opacity(0.18))
+                            .frame(width: 120, height: 58)
+                    }
                 }
 
-                HStack(spacing: 10) {
-                    ruleChip("Private/*", active: phase == 2, accent: .purple)
-                    ruleChip("Screenshots/*", active: phase != 0, accent: .indigo)
-                }
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+            Text(subtitle)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+        }
+        .padding(12)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
 
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.white.opacity(0.07))
-                    .frame(height: 44)
-                    .overlay(
-                        HStack(spacing: 8) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                .foregroundStyle(.secondary)
-                            Text("Path, extension, or wildcard")
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.82)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 12)
-                    )
+private struct DuplicateMetricRow: View {
+    let label: String
+    let value: String
 
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.56))
+            Spacer()
+            Text(value)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
+private struct HistoryEntryRow: View {
+    let title: String
+    let time: String
+    let status: String
+    let detail: String
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle()
+                .fill(color)
+                .frame(width: 10, height: 10)
+                .padding(.top, 5)
+
+            VStack(alignment: .leading, spacing: 4) {
                 HStack {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
                     Spacer()
-                    HighlightButton(
-                        title: "Add Rule",
-                        icon: "plus",
-                        accent: step.accent,
-                        emphasized: phase == 2
-                    )
+                    Text(time)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.44))
                 }
+                Text(status)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(color)
+                Text(detail)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+            }
+        }
+        .padding(14)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct TimelineStatRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.56))
+            Spacer()
+            Text(value)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
+private struct TourActionPill: View {
+    let title: String
+    let systemImage: String
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+        .font(.system(size: 12, weight: .semibold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(accent.opacity(0.24), in: Capsule(style: .continuous))
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(accent.opacity(0.34), lineWidth: 1)
+        )
+    }
+}
+
+private struct BatchQueueRow: View {
+    let title: String
+    let subtitle: String
+    let progress: Double
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(color)
+            }
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(.white.opacity(0.07))
+                    .frame(height: 10)
+                Capsule(style: .continuous)
+                    .fill(color)
+                    .frame(width: max(36, 560 * progress), height: 10)
+            }
+        }
+        .padding(14)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct BatchSummaryCard: View {
+    let title: String
+    let value: String
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.56))
+            Text(value)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(accent.opacity(0.22), lineWidth: 1)
+        )
+    }
+}
+
+private struct TourRulePanel: View {
+    let title: String
+    let detail: String
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+            Text(detail)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(accent.opacity(0.18), lineWidth: 1)
+        )
+    }
+}
+
+private struct WatchFolderCard: View {
+    let title: String
+    let badge: String
+    let accent: Color
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Monitoring 24/7 for new arrivals")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.56))
+            }
+            Spacer()
+            TourGlassBadge(text: badge, accent: accent)
+        }
+        .padding(14)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+}
+
+private struct WatchEventRow: View {
+    let title: String
+    let detail: String
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color)
+                .frame(width: 10, height: 10)
+                .padding(.top, 4)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(detail)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
+}
 
-    private func ruleChip(_ text: String, active: Bool, accent: Color) -> some View {
+private struct LearningsMetricCard: View {
+    let title: String
+    let value: String
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.56))
+            Text(value)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(accent.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+private struct LearningsRuleCard: View {
+    let title: String
+    let detail: String
+    let accent: Color
+    let status: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(status)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(accent)
+                Spacer()
+                Image(systemName: "brain.head.profile")
+                    .foregroundStyle(accent)
+            }
+            Text(title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+            Text(detail)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.58))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(accent.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+private struct TourGlassBadge: View {
+    let text: String
+    var accent: Color = .white.opacity(0.14)
+
+    var body: some View {
         Text(text)
-            .font(.caption.weight(.semibold))
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.86))
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .foregroundStyle(active ? accent : Color.secondary)
-            .background(
+            .background(accent, in: Capsule(style: .continuous))
+            .overlay(
                 Capsule(style: .continuous)
-                    .fill(active ? accent.opacity(0.2) : .white.opacity(0.08))
+                    .stroke(.white.opacity(0.08), lineWidth: 1)
+            )
+    }
+}
+
+private struct TourPrimaryButtonStyle: ButtonStyle {
+    let accent: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 26)
+            .padding(.vertical, 16)
+            .background(
+                LinearGradient(
+                    colors: [
+                        accent.opacity(configuration.isPressed ? 0.82 : 1),
+                        accent.opacity(configuration.isPressed ? 0.66 : 0.82),
+                        .white.opacity(configuration.isPressed ? 0.14 : 0.2)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                in: Capsule(style: .continuous)
             )
             .overlay(
                 Capsule(style: .continuous)
-                    .stroke(active ? accent.opacity(0.9) : .white.opacity(0.15), lineWidth: 1)
+                    .stroke(.white.opacity(0.18), lineWidth: 1)
             )
+            .shadow(color: accent.opacity(configuration.isPressed ? 0.18 : 0.34), radius: configuration.isPressed ? 12 : 24, x: 0, y: configuration.isPressed ? 8 : 14)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
+            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }
 
-private struct WatchFolderMockup: View {
-    let step: FeatureTourStep
-    let phase: Int
+private struct TourFlowLayout: Layout {
+    let horizontalSpacing: CGFloat
+    let verticalSpacing: CGFloat
 
-    var body: some View {
-        MockupShell(step: step) {
-            VStack(alignment: .leading, spacing: 12) {
-                folderStatus(name: "Downloads", event: phase == 0 ? "Idle" : "4 files detected", accent: step.accent)
-                folderStatus(name: "Screenshots", event: phase == 2 ? "Auto-organized" : "Watching...", accent: .cyan)
-                folderStatus(name: "Client Intake", event: phase == 1 ? "2 files queued" : "Watching...", accent: .mint)
-
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.white.opacity(0.07))
-                    .frame(height: 54)
-                    .overlay(
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Live Event")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            Text(phase == 2 ? "Moved 12 files into /Receipts" : "Detected 3 new files in Downloads")
-                                .font(.caption)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .minimumScaleFactor(0.82)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 12)
-                    )
-
-                HStack {
-                    Spacer()
-                    HighlightButton(
-                        title: "Auto-Organize",
-                        icon: "bolt.fill",
-                        accent: step.accent,
-                        emphasized: phase == 2
-                    )
-                }
-            }
-        }
+    init(horizontalSpacing: CGFloat = 8, verticalSpacing: CGFloat = 8) {
+        self.horizontalSpacing = horizontalSpacing
+        self.verticalSpacing = verticalSpacing
     }
 
-    private func folderStatus(name: String, event: String, accent: Color) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text(event)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let maxWidth = proposal.width ?? 0
+        guard maxWidth > 0 else {
+            let totalWidth = subviews.reduce(CGFloat.zero) { partialResult, subview in
+                partialResult + subview.sizeThatFits(.unspecified).width
             }
-            Spacer()
-            Circle()
-                .fill(accent)
-                .frame(width: 9, height: 9)
-                .shadow(color: accent.opacity(0.5), radius: 6, x: 0, y: 0)
+            let maxHeight = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
+            return CGSize(width: totalWidth, height: maxHeight)
         }
-        .padding(10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.white.opacity(0.06))
-        )
-    }
-}
 
-private struct LearningsMockup: View {
-    let step: FeatureTourStep
-    let phase: Int
+        var x: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var totalHeight: CGFloat = 0
 
-    var body: some View {
-        MockupShell(step: step) {
-            VStack(alignment: .leading, spacing: 12) {
-                ruleCard(
-                    title: "When filename contains 'Invoice'",
-                    action: "Move to Finance/Receipts",
-                    confidence: phase == 0 ? "72%" : "91%",
-                    accent: step.accent
-                )
-                ruleCard(
-                    title: "When source is Screenshots",
-                    action: "Move to Visuals/Screenshots",
-                    confidence: phase == 2 ? "88%" : "76%",
-                    accent: .indigo
-                )
-
-                HStack {
-                    buttonTag("Accept", icon: "hand.thumbsup.fill", accent: .green, active: phase == 2)
-                    buttonTag("Reject", icon: "hand.thumbsdown.fill", accent: .red, active: phase == 0)
-                    Spacer()
-                    HighlightButton(
-                        title: "Apply Suggestions",
-                        icon: "brain.head.profile",
-                        accent: step.accent,
-                        emphasized: phase == 2
-                    )
-                }
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0 && x + size.width > maxWidth {
+                totalHeight += rowHeight + verticalSpacing
+                x = 0
+                rowHeight = 0
             }
+
+            x += size.width + horizontalSpacing
+            rowHeight = max(rowHeight, size.height)
         }
+
+        totalHeight += rowHeight
+        return CGSize(width: maxWidth, height: totalHeight)
     }
 
-    private func ruleCard(title: String, action: String, confidence: String, accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-            Text(action)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .minimumScaleFactor(0.82)
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var rowHeight: CGFloat = 0
 
-            HStack {
-                Text("Confidence")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(confidence)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(accent)
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX && x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + verticalSpacing
+                rowHeight = 0
             }
-        }
-        .padding(11)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.white.opacity(0.06))
-        )
-    }
 
-    private func buttonTag(_ text: String, icon: String, accent: Color, active: Bool) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-            Text(text)
+            subview.place(
+                at: CGPoint(x: x, y: y),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+
+            x += size.width + horizontalSpacing
+            rowHeight = max(rowHeight, size.height)
         }
-        .font(.caption.weight(.semibold))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .foregroundStyle(active ? .white : accent)
-        .background(
-            Capsule(style: .continuous)
-                .fill(active ? accent : accent.opacity(0.16))
-        )
     }
 }
 

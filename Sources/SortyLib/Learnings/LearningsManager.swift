@@ -22,10 +22,10 @@ public class LearningsManager: ObservableObject {
     @Published public var analysisResult: LearningsAnalysisResult?
     
     // Security & Consent
-    @Published public var isLocked: Bool = true
+    @Published public var isLocked: Bool = false
     @Published public var requiresInitialSetup: Bool = false
     @Published public var showingImportPicker: Bool = false
-    public let securityManager = SecurityManager()
+    public let securityManager = SecurityManager.shared
     public let consentManager = LearningsConsentManager()
     
     // Learning Controls
@@ -265,18 +265,8 @@ public class LearningsManager: ObservableObject {
     
     /// Unlock with Touch ID / password (required after initial setup)
     public func unlock() async {
-        // If initial setup not complete, skip authentication
-        if requiresInitialSetup {
-            isLocked = false
-            await loadProfile()
-            return
-        }
-        
-        await securityManager.authenticateForLearningsAccess()
-        isLocked = !securityManager.isUnlocked
-        if !isLocked {
-            await loadProfile()
-        }
+        isLocked = false
+        await loadProfile()
     }
     
     public func lock() {
@@ -322,8 +312,6 @@ public class LearningsManager: ObservableObject {
     /// - Returns: `true` when data was deleted, `false` when the operation could not run.
     @discardableResult
     public func clearAllData() async -> Bool {
-        guard !isLocked else { return false }
-        
         do {
             try await consentManager.deleteAllData()
             try LearningsFileManager.secureDelete()
@@ -1481,8 +1469,6 @@ public class LearningsManager: ObservableObject {
     
     /// Import profile from file
     public func importProfile(from url: URL) async throws {
-        guard !isLocked else { return }
-        
         // Start accessing security scoped resource
         guard url.startAccessingSecurityScopedResource() else {
             throw LearningsError.saveFailed("Permission denied to access file")

@@ -99,7 +99,7 @@ extension AIProvider {
     var description: String {
         switch self {
         case .openAI:
-            return "GPT-5.4, GPT-5 mini, and more"
+            return "GPT-5.4, GPT-5.4 mini, and more"
         case .anthropic:
             return "Claude 4.6 Sonnet, Claude 4.6 Opus, and more"
         case .groq:

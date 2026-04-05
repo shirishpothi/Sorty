@@ -69,6 +69,21 @@ public enum FeatureFlags {
         UserDefaults.standard.bool(forKey: NetworkPrivacyPolicy.internetPrivacyModeKey)
     }
 
+    /// Controls whether Sorty requires authentication for sensitive actions such as
+    /// deleting usage data, changing network privacy mode, and revealing secrets.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app sensitiveActionAuthenticationEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app sensitiveActionAuthenticationEnabled -bool false
+    /// ```
+    public static var sensitiveActionAuthenticationEnabled: Bool {
+        UserDefaults.standard.bool(forKey: "sensitiveActionAuthenticationEnabled")
+    }
+
     /// Controls whether Finder file tagging is enabled during organization.
     /// Tags may not apply correctly in all macOS sandboxed environments.
     ///

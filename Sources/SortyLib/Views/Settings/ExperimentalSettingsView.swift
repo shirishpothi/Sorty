@@ -23,6 +23,14 @@ struct ExperimentalSettingsView: View {
     private var experimentalFlags: [ExperimentalFlag] {
         [
             ExperimentalFlag(
+                name: "Sensitive Action Authentication",
+                description: "Require Touch ID or your system password before revealing secrets, changing network privacy mode, or opening destructive confirmations.",
+                defaultsKey: "sensitiveActionAuthenticationEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app sensitiveActionAuthenticationEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app sensitiveActionAuthenticationEnabled -bool false"
+            ),
+            ExperimentalFlag(
                 name: "Finder Integration",
                 description: "Show Sorty's Finder integration UI and repair flow. macOS still controls whether the Finder Sync extension is actually enabled.",
                 defaultsKey: "finderIntegrationEnabled",
@@ -100,25 +108,17 @@ struct ExperimentalFlagRow: View {
                     isOn: Binding(
                         get: { isEnabled },
                         set: { newValue in
-                            UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
-
-                            if flag.defaultsKey == "finderIntegrationEnabled" {
-                                if newValue {
-                                    let quickActionResult = ExtensionCommunication.ensureQuickActionInstalled()
-                                    setupMessage = quickActionResult.message
-                                    Task {
-                                        await refreshFinderIntegrationRuntimeState()
-                                    }
-                                } else {
-                                    setupMessage = nil
-                                    finderSyncDiagnostics = nil
+                            guard isEnabled != newValue else { return }
+                            Task {
+                                let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(
+                                    reason: "Authenticate to change the \(flag.name) experimental setting."
+                                )
+                                guard didAuthenticate else {
+                                    HapticFeedbackManager.shared.error()
+                                    return
                                 }
+                                await applyFlagValue(newValue)
                             }
-
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                isEnabled = newValue
-                            }
-                            HapticFeedbackManager.shared.selection()
                         }
                     )
                 )
@@ -294,6 +294,27 @@ struct ExperimentalFlagRow: View {
 
         ExtensionCommunication.beginMonitoringFinderSyncRuntime()
         finderSyncDiagnostics = await ExtensionCommunication.getFinderSyncDiagnosticsAsync()
+    }
+
+    @MainActor
+    private func applyFlagValue(_ newValue: Bool) async {
+        UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
+
+        if flag.defaultsKey == "finderIntegrationEnabled" {
+            if newValue {
+                let quickActionResult = ExtensionCommunication.ensureQuickActionInstalled()
+                setupMessage = quickActionResult.message
+                await refreshFinderIntegrationRuntimeState()
+            } else {
+                setupMessage = nil
+                finderSyncDiagnostics = nil
+            }
+        }
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            isEnabled = newValue
+        }
+        HapticFeedbackManager.shared.selection()
     }
 }
 

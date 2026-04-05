@@ -95,19 +95,21 @@ struct InternetAccessPolicyView: View {
 
                 Spacer(minLength: 0)
 
-                Button("Open Website") {
-                    HapticFeedbackManager.shared.tap()
-                    guard let url = URL(string: policy.website) else { return }
-                    openURL(url)
-                }
-                .buttonStyle(.bordered)
-                .scaleEffect(websiteHovered ? 1.03 : 1.0)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        websiteHovered = hovering
+                if let websiteURL = URL(string: policy.website) {
+                    Button("Open Website") {
+                        HapticFeedbackManager.shared.tap()
+                        openURL(websiteURL)
                     }
-                    if hovering {
-                        HapticFeedbackManager.shared.selection()
+                    .buttonStyle(.bordered)
+                    .trackHoveredURL(websiteURL)
+                    .scaleEffect(websiteHovered ? 1.03 : 1.0)
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            websiteHovered = hovering
+                        }
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
                     }
                 }
             }

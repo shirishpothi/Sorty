@@ -8,6 +8,11 @@
 import SwiftUI
 
 struct AboutView: View {
+    private let sponsorsURL = URL(string: "https://github.com/sponsors/shirishpothi")!
+    private let docsURL = URL(string: "https://github.com/shirishpothi/Sorty#readme")!
+    private let githubURL = URL(string: "https://github.com/shirishpothi/Sorty")!
+
+    @State private var supportHovered = false
     @State private var docsHovered = false
     @State private var githubHovered = false
     @State private var accreditationsHovered = false
@@ -60,12 +65,11 @@ struct AboutView: View {
                     .foregroundColor(.secondary)
                 
                 // Commit link
-                if BuildInfo.hasValidCommit {
+                if BuildInfo.hasValidCommit,
+                   let commitURL = URL(string: "https://github.com/shirishpothi/Sorty/commit/\(BuildInfo.commit)") {
                     Button {
                         HapticFeedbackManager.shared.tap()
-                        if let url = URL(string: "https://github.com/shirishpothi/Sorty/commit/\(BuildInfo.commit)") {
-                            NSWorkspace.shared.open(url)
-                        }
+                        NSWorkspace.shared.open(commitURL)
                     } label: {
                         Text("Commit \(BuildInfo.shortCommit)")
                             .font(.system(.caption, design: .monospaced))
@@ -73,6 +77,7 @@ struct AboutView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("AboutCommitButton")
+                    .trackHoveredURL(commitURL)
                     .scaleEffect(commitHovered ? 1.02 : 1.0)
                     .onHover { hovering in
                         withAnimation(.easeInOut(duration: 0.15)) { commitHovered = hovering }
@@ -88,15 +93,38 @@ struct AboutView: View {
             Spacer().frame(height: 8)
             
             // Buttons
-            VStack(spacing: 10) {
+            VStack(spacing: 12) {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    NSWorkspace.shared.open(sponsorsURL)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "heart.fill")
+                            .foregroundStyle(.red)
+                        Text("Support the Developer")
+                            .foregroundStyle(.white)
+                    }
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .padding(.vertical, 2)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .trackHoveredURL(sponsorsURL)
+                .scaleEffect(supportHovered ? 1.04 : 1.0)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.15)) { supportHovered = hovering }
+                    if hovering { HapticFeedbackManager.shared.selection() }
+                }
+
                 HStack(spacing: 12) {
                     Button("Docs") {
                         HapticFeedbackManager.shared.tap()
-                        if let url = URL(string: "https://github.com/shirishpothi/Sorty#readme") {
-                            NSWorkspace.shared.open(url)
-                        }
+                        NSWorkspace.shared.open(docsURL)
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .trackHoveredURL(docsURL)
                     .scaleEffect(docsHovered ? 1.04 : 1.0)
                     .onHover { hovering in
                         withAnimation(.easeInOut(duration: 0.15)) { docsHovered = hovering }
@@ -105,11 +133,12 @@ struct AboutView: View {
                     
                     Button("GitHub") {
                         HapticFeedbackManager.shared.tap()
-                        if let url = URL(string: "https://github.com/shirishpothi/Sorty") {
-                            NSWorkspace.shared.open(url)
-                        }
+                        NSWorkspace.shared.open(githubURL)
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .trackHoveredURL(githubURL)
                     .scaleEffect(githubHovered ? 1.04 : 1.0)
                     .onHover { hovering in
                         withAnimation(.easeInOut(duration: 0.15)) { githubHovered = hovering }
@@ -122,6 +151,8 @@ struct AboutView: View {
                     openAccreditations?()
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.large)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .accessibilityIdentifier("AboutAccreditationsButton")
                 .scaleEffect(accreditationsHovered ? 1.04 : 1.0)
                 .onHover { hovering in
@@ -136,9 +167,10 @@ struct AboutView: View {
                 .font(.caption2)
                 .foregroundColor(.secondary.opacity(0.6))
         }
-        .padding(24)
-        .frame(width: 360, height: 420)
+        .padding(26)
+        .frame(width: 390, height: 470)
         .modifier(AboutGlassBackground())
+        .windowLinkHoverPillHost()
     }
 }
 

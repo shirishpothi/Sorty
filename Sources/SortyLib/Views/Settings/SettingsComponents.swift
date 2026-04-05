@@ -213,8 +213,29 @@ struct SettingsSecureField: View {
                 
                 if FeatureFlags.privacyModeEnabled {
                     Button {
-                        isShowingText.toggle()
-                        HapticFeedbackManager.shared.tap()
+                        guard FeatureFlags.privacyModeEnabled else {
+                            isShowingText.toggle()
+                            HapticFeedbackManager.shared.tap()
+                            return
+                        }
+
+                        if isShowingText {
+                            isShowingText = false
+                            HapticFeedbackManager.shared.tap()
+                            return
+                        }
+
+                        Task { @MainActor in
+                            let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(
+                                reason: "Authenticate to reveal a hidden secret."
+                            )
+                            guard didAuthenticate else {
+                                HapticFeedbackManager.shared.error()
+                                return
+                            }
+                            isShowingText = true
+                            HapticFeedbackManager.shared.tap()
+                        }
                     } label: {
                         Image(systemName: isShowingText ? "eye.slash" : "eye")
                             .font(.caption)

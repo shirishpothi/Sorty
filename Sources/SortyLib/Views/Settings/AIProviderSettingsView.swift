@@ -188,6 +188,7 @@ struct AIProviderSettingsView: View {
                                 .underline()
                                 .foregroundColor(.blue)
                         }
+                        .trackHoveredURL(URL(string: code.verificationUri)!)
                     }
                     
                     StepCard(number: 2, title: "Enter this code") {
@@ -306,6 +307,7 @@ struct AIProviderSettingsView: View {
                                 .font(.caption)
                                 .underline()
                         }
+                        .trackHoveredURL(url)
                     }
                 } else {
                     Text(viewModel.config.provider.apiKeyHelpText)

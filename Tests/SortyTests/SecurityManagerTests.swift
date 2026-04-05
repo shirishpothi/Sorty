@@ -17,13 +17,13 @@ final class SecurityManagerTests: XCTestCase {
     var manager: SecurityManager!
     
     override func setUp() async throws {
-        
+        UserDefaults.standard.removeObject(forKey: "sensitiveActionAuthenticationEnabled")
         manager = SecurityManager()
     }
     
     override func tearDown() async throws {
         manager = nil
-        
+        UserDefaults.standard.removeObject(forKey: "sensitiveActionAuthenticationEnabled")
     }
     
     // MARK: - Initialization Tests
@@ -250,5 +250,24 @@ final class SecurityManagerTests: XCTestCase {
         manager.error = "Previous error"
         manager.lock()
         XCTAssertEqual(manager.error, "Previous error", "Lock should not clear error state")
+    }
+
+    func testSensitiveActionAuthenticationBypassesWhenFeatureFlagDisabled() async {
+        UserDefaults.standard.removeObject(forKey: "sensitiveActionAuthenticationEnabled")
+
+        let didAuthenticate = await manager.authenticateForSensitiveAction(reason: "Authenticate for test.")
+
+        XCTAssertTrue(didAuthenticate)
+        XCTAssertNil(manager.error)
+        XCTAssertFalse(manager.isUnlocked, "Bypass should not create a secure session")
+    }
+
+    func testLearningsAuthenticationBypassesWhenFeatureFlagDisabled() async {
+        UserDefaults.standard.removeObject(forKey: "sensitiveActionAuthenticationEnabled")
+
+        let didAuthenticate = await manager.authenticateForLearningsAccess()
+
+        XCTAssertTrue(didAuthenticate)
+        XCTAssertNil(manager.error)
     }
 }

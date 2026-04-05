@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sensitive Action Authentication Toggle** — Added optional authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets.
 - **Finder Sync Runtime Diagnostics** — New diagnostic system (`FinderSyncDiagnostics`) with status kinds (`verified`, `registered`, `activeElsewhere`, `needsCleanup`, etc.) for precise Finder extension health reporting.
 - **Finder Sync Heartbeat Monitoring** — Extension now posts distributed notifications on launch; the main app caches heartbeats to verify the correct build is loaded into Finder.
 - **Finder Sync Auto-Repair on Launch** — App automatically repairs stale or mismatched Finder Sync registrations on startup without user intervention.
@@ -25,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Navigation and Link Hover Polish** — Sidebar commands now share a single navigation item source, and About/support surfaces gained hover-aware external-link pills with updated spacing and interactions.
+- **Learnings and History Flow** — Learnings authentication now uses shared security handling, and history clears now route through the app-level confirmation flow.
 - **Finder Sync Registration Parsing** — `parseFinderSyncRegistrationEntries` now deduplicates entries and prefers explicit enabled/disabled markers over ambiguous states.
 - **Extension Host Eligibility** — Registration repair only targets app bundles in `/Applications` or `~/Applications`; workspace builds are staged to `~/Applications` automatically.
 

@@ -57,7 +57,11 @@ struct TroubleshootingSettingsView: View {
                         .foregroundColor(.secondary)
                     
                     Button {
-                        showingDeleteDataConfirmation = true
+                        requestSensitiveConfirmation(
+                            reason: "Authenticate to delete all learning data."
+                        ) {
+                            showingDeleteDataConfirmation = true
+                        }
                     } label: {
                         HStack {
                             Image(systemName: "trash")
@@ -94,7 +98,11 @@ struct TroubleshootingSettingsView: View {
                         .foregroundColor(.secondary)
                     
                     Button {
-                        showingResetConfirmation = true
+                        requestSensitiveConfirmation(
+                            reason: "Authenticate to reset all Sorty settings."
+                        ) {
+                            showingResetConfirmation = true
+                        }
                     } label: {
                         HStack {
                             Image(systemName: "arrow.counterclockwise")
@@ -221,6 +229,25 @@ struct TroubleshootingSettingsView: View {
         
         // Recalculate size
         calculateCacheSize()
+    }
+
+    private func requestSensitiveConfirmation(
+        reason: String,
+        onSuccess: @escaping @MainActor () -> Void
+    ) {
+        if !FeatureFlags.sensitiveActionAuthenticationEnabled {
+            onSuccess()
+            return
+        }
+
+        Task { @MainActor in
+            let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(reason: reason)
+            guard didAuthenticate else {
+                HapticFeedbackManager.shared.error()
+                return
+            }
+            onSuccess()
+        }
     }
     
     private func resetAllSettings() {

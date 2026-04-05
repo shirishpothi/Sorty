@@ -1,0 +1,105 @@
+//
+//  SidebarNavigationItem.swift
+//  Sorty
+//
+
+import Foundation
+
+struct SidebarNavigationItem: Identifiable, Hashable {
+    let view: AppState.AppView
+    let title: String
+    let systemImage: String
+    let accessibilityIdentifier: String
+    let accessibilityHint: String
+    let helpText: String
+
+    var id: AppState.AppView { view }
+
+    @MainActor
+    static var mainItems: [SidebarNavigationItem] {
+        var items: [SidebarNavigationItem] = [
+            SidebarNavigationItem(
+                view: .organize,
+                title: "Organize",
+                systemImage: "folder.badge.gearshape",
+                accessibilityIdentifier: "OrganizeSidebarItem",
+                accessibilityHint: "Open the main organization workflow",
+                helpText: "Organize files with AI suggestions"
+            )
+        ]
+
+        if FeatureFlags.batchOrganizationEnabled {
+            items.append(
+                SidebarNavigationItem(
+                    view: .batchOrganization,
+                    title: "Batch Organize",
+                    systemImage: "square.stack.3d.up.fill",
+                    accessibilityIdentifier: "BatchOrganizeSidebarItem",
+                    accessibilityHint: "Organize multiple folders in one run",
+                    helpText: "Run organization for multiple folders"
+                )
+            )
+        }
+
+        items.append(contentsOf: [
+            SidebarNavigationItem(
+                view: .watchedFolders,
+                title: "Watched Folders",
+                systemImage: "eye",
+                accessibilityIdentifier: "WatchedFoldersSidebarItem",
+                accessibilityHint: "Configure folders monitored for automation",
+                helpText: "Manage watched folders and triggers"
+            ),
+            SidebarNavigationItem(
+                view: .duplicates,
+                title: "Duplicates",
+                systemImage: "doc.on.doc",
+                accessibilityIdentifier: "DuplicatesSidebarItem",
+                accessibilityHint: "Find and review duplicate files",
+                helpText: "Detect and manage duplicate files"
+            ),
+            SidebarNavigationItem(
+                view: .workspaceHealth,
+                title: "Workspace Health",
+                systemImage: "heart.text.square",
+                accessibilityIdentifier: "WorkspaceHealthSidebarItem",
+                accessibilityHint: "Inspect workspace quality and cleanup opportunities",
+                helpText: "Check workspace health insights"
+            ),
+            SidebarNavigationItem(
+                view: .history,
+                title: "History",
+                systemImage: "clock",
+                accessibilityIdentifier: "HistorySidebarItem",
+                accessibilityHint: "Review past organization sessions",
+                helpText: "View organization history and outcomes"
+            ),
+            SidebarNavigationItem(
+                view: .learnings,
+                title: "Learnings",
+                systemImage: "brain",
+                accessibilityIdentifier: "LearningsSidebarItem",
+                accessibilityHint: "Review and manage learned preferences",
+                helpText: "See what Sorty has learned from your edits"
+            ),
+            SidebarNavigationItem(
+                view: .exclusions,
+                title: "Exclusions",
+                systemImage: "eye.slash",
+                accessibilityIdentifier: "ExclusionsSidebarItem",
+                accessibilityHint: "Define files and folders Sorty should skip",
+                helpText: "Manage exclusion rules"
+            ),
+            SidebarNavigationItem(
+                view: .settings,
+                title: "Settings",
+                systemImage: "gear",
+                accessibilityIdentifier: "SettingsSidebarItem",
+                accessibilityHint: "Configure Sorty behavior and AI providers",
+                helpText: "Adjust provider, strategy, and system settings"
+            )
+        ])
+
+        return items
+    }
+}

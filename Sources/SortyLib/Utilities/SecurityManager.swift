@@ -13,6 +13,7 @@ import SwiftUI
 
 @MainActor
 public class SecurityManager: ObservableObject {
+    public static let shared = SecurityManager()
     
     // MARK: - Published State
     
@@ -81,92 +82,125 @@ public class SecurityManager: ObservableObject {
         }
     }
     
-    /// Requests authentication specifically for Learnings access
-    /// Uses biometrics if available, falls back to system password
-    public func authenticateForLearningsAccess() async {
-        // Check if session is still valid
+    /// Requests authentication specifically for Learnings access.
+    /// Returns `true` when access is granted.
+    @discardableResult
+    public func authenticateForLearningsAccess() async -> Bool {
+        await authenticateForSensitiveAction(
+            reason: "Authenticate to access your personal organization learnings."
+        )
+    }
+
+    /// Central authentication entry point for any sensitive action in the app.
+    /// Returns `true` when the action should proceed.
+    @discardableResult
+    public func authenticateForSensitiveAction(reason: String) async -> Bool {
+        guard FeatureFlags.sensitiveActionAuthenticationEnabled else {
+            error = nil
+            return true
+        }
+
         if !isSessionExpired && isUnlocked {
             refreshSession()
-            return
+            error = nil
+            return true
         }
-        
+
+        checkBiometryType()
+
+        if let biometricResult = await authenticateWithBiometrics(reason: reason) {
+            return biometricResult
+        }
+
+        return await authenticateWithPassword(reason: reason)
+    }
+
+    private func authenticateWithBiometrics(reason: String) async -> Bool? {
+        guard biometryType != .none else {
+            return nil
+        }
+
         let context = LAContext()
         context.localizedFallbackTitle = "Use Password"
-        
-        let reason = "Authenticate to access your personal organization learnings."
-        
-        // Try biometrics first, then fall back to password
-        let policy: LAPolicy = biometryType != .none 
-            ? .deviceOwnerAuthenticationWithBiometrics 
-            : .deviceOwnerAuthentication
-        
+
         var authError: NSError?
-        guard context.canEvaluatePolicy(policy, error: &authError) else {
-            // If biometrics not available, try password-only
-            await authenticateWithPassword(reason: reason)
-            return
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &authError) else {
+            return nil
         }
-        
+
         do {
-            let success = try await context.evaluatePolicy(policy, localizedReason: reason)
+            let success = try await context.evaluatePolicy(
+                .deviceOwnerAuthenticationWithBiometrics,
+                localizedReason: reason
+            )
             if success {
-                self.isUnlocked = true
-                self.error = nil
-                self.authenticationMethod = biometryType != .none ? .biometric : .password
-                self.lastAuthenticationTime = Date()
-                startSessionTimer()
-                startSessionTimer()
+                completeSuccessfulAuthentication(method: .biometric)
                 LogManager.shared.log("Authentication successful via \(authenticationMethod.rawValue)", category: "SecurityManager")
+                return true
             }
         } catch let error as LAError {
             switch error.code {
             case .userFallback:
-                // User chose password fallback
-                await authenticateWithPassword(reason: reason)
+                return nil
+            case .biometryLockout, .biometryNotAvailable, .biometryNotEnrolled:
+                return nil
             case .userCancel:
                 self.error = "Authentication cancelled"
                 self.isUnlocked = false
+                return false
             default:
                 self.error = "Authentication failed: \(error.localizedDescription)"
                 self.isUnlocked = false
+                return false
             }
         } catch {
             self.error = "Authentication failed: \(error.localizedDescription)"
             self.isUnlocked = false
+            return false
         }
+
+        return false
     }
-    
-    /// Authenticate using system password (fallback for non-biometric devices)
-    private func authenticateWithPassword(reason: String) async {
+
+    /// Authenticate using system password (fallback for non-biometric devices).
+    private func authenticateWithPassword(reason: String) async -> Bool {
         let context = LAContext()
-        
-        // Use deviceOwnerAuthentication which allows password
+
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: nil) else {
             self.error = "No authentication method available on this device."
             self.isUnlocked = false
-            return
+            return false
         }
-        
+
         do {
             let success = try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
             if success {
-                self.isUnlocked = true
-                self.error = nil
-                self.authenticationMethod = .password
-                self.lastAuthenticationTime = Date()
-                startSessionTimer()
-                startSessionTimer()
+                completeSuccessfulAuthentication(method: .password)
                 LogManager.shared.log("Authentication successful via password", category: "SecurityManager")
+                return true
             }
+            self.error = "Authentication failed."
+            self.isUnlocked = false
+            return false
+        } catch let error as LAError {
+            switch error.code {
+            case .userCancel, .systemCancel, .appCancel:
+                self.error = "Authentication cancelled"
+            default:
+                self.error = "Password authentication failed: \(error.localizedDescription)"
+            }
+            self.isUnlocked = false
+            return false
         } catch {
             self.error = "Password authentication failed: \(error.localizedDescription)"
             self.isUnlocked = false
+            return false
         }
     }
-    
+
     /// Legacy authenticate method - uses biometrics only
     public func authenticate() async {
-        await authenticateForLearningsAccess()
+        _ = await authenticateForSensitiveAction(reason: "Authenticate to continue.")
     }
     
     /// Locks the secure features again
@@ -181,6 +215,14 @@ public class SecurityManager: ObservableObject {
     /// Refresh the session timer (call on user activity)
     public func refreshSession() {
         lastAuthenticationTime = Date()
+    }
+
+    private func completeSuccessfulAuthentication(method: AuthenticationMethod) {
+        isUnlocked = true
+        error = nil
+        authenticationMethod = method
+        lastAuthenticationTime = Date()
+        startSessionTimer()
     }
     
     // MARK: - Session Timer

@@ -287,6 +287,7 @@ public struct ProviderSelectionStepView: View {
                             }
                             .font(.caption)
                         }
+                        .trackHoveredURL(URL(string: code.verificationUri)!)
                         .buttonStyle(.link)
                     }
                     
@@ -499,6 +500,7 @@ public struct ProviderSelectionStepView: View {
                         .font(.caption)
                         .underline()
                 }
+                .trackHoveredURL(url)
 
                 Image(systemName: "arrow.up.right.square")
                     .font(.caption2)

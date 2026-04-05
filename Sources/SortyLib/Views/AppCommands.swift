@@ -35,6 +35,10 @@ public extension FocusedValues {
 public struct SortyCommands: Commands {
     @FocusedValue(\.appState) private var appState
 
+    private var sidebarItems: [SidebarNavigationItem] {
+        SidebarNavigationItem.mainItems
+    }
+
     public init() {}
 
     public var body: some Commands {
@@ -100,57 +104,14 @@ public struct SortyCommands: Commands {
             // Main Views section
             Text("Navigation")
                 .font(.caption)
-            
-            Button("Organize") {
-                appState?.currentView = .organize
-            }
-            .keyboardShortcut("1", modifiers: .command)
-            .disabled(appState == nil)
 
-            Button("Workspace Health") {
-                appState?.currentView = .workspaceHealth
+            ForEach(Array(sidebarItems.prefix(9).enumerated()), id: \.element.id) { index, item in
+                Button(item.title) {
+                    appState?.currentView = item.view
+                }
+                .keyboardShortcut(Self.commandKeyEquivalent(for: index), modifiers: .command)
+                .disabled(appState == nil)
             }
-            .keyboardShortcut("2", modifiers: .command)
-            .disabled(appState == nil)
-
-            Button("Duplicates") {
-                appState?.currentView = .duplicates
-            }
-            .keyboardShortcut("3", modifiers: .command)
-            .disabled(appState == nil)
-            
-            Button("The Learnings") {
-                appState?.currentView = .learnings
-            }
-            .keyboardShortcut("l", modifiers: [.command, .shift])
-            .disabled(appState == nil)
-
-            Divider()
-
-            // Configuration Views section
-            Button("Settings") {
-                appState?.currentView = .settings
-            }
-            .keyboardShortcut(",", modifiers: .command)
-            .disabled(appState == nil)
-
-            Button("History") {
-                appState?.currentView = .history
-            }
-            .keyboardShortcut("h", modifiers: [.command, .shift])
-            .disabled(appState == nil)
-
-            Button("Exclusions") {
-                appState?.currentView = .exclusions
-            }
-            .keyboardShortcut("4", modifiers: .command)
-            .disabled(appState == nil)
-
-            Button("Watched Folders") {
-                appState?.currentView = .watchedFolders
-            }
-            .keyboardShortcut("5", modifiers: .command)
-            .disabled(appState == nil)
         }
 
         // Organize menu
@@ -299,7 +260,7 @@ public struct SortyCommands: Commands {
             .disabled(appState == nil)
 
             Button("Delete All Usage Data...") {
-                appState?.showDeleteUsageDataConfirmation = true
+                appState?.requestDeleteUsageDataConfirmation()
             }
             .disabled(appState == nil)
             
@@ -320,6 +281,10 @@ public struct SortyCommands: Commands {
             .keyboardShortcut("♥", modifiers: .command)
             .disabled(appState == nil)
         }
+    }
+
+    private static func commandKeyEquivalent(for index: Int) -> KeyEquivalent {
+        KeyEquivalent(Character("\(index + 1)"))
     }
 }
 
@@ -427,6 +392,7 @@ public class AppState: ObservableObject {
     private static let requiresSetupRepairKey = "requiresSetupRepair"
     private static let setupRepairMessageKey = "setupRepairMessage"
     private let userDefaults: UserDefaults
+    private let sensitiveActionSecurityManager = SecurityManager.shared
     public let windowSessionID: UUID
 
     @Published public var currentView: AppView = .organize
@@ -515,7 +481,7 @@ public class AppState: ObservableObject {
     private var thanksWindowController: NSWindowController?
     private let helpMenuHoverHapticsController = HelpMenuHoverHapticsController()
 
-    public enum AppView: Equatable, Sendable {
+    public enum AppView: Hashable, Sendable {
         case settings
         case organize
         case history
@@ -1301,17 +1267,37 @@ public class AppState: ObservableObject {
     }
     
     public func pauseLearning() {
-        postWindowScopedNotification(.pauseLearning)
+        authenticateForSensitiveAction(
+            reason: "Authenticate to pause learning and review your learnings controls."
+        ) { [weak self] in
+            self?.postWindowScopedNotification(.pauseLearning)
+        }
     }
     
     public func exportLearningsProfile() {
-        currentView = .learnings
-        postWindowScopedNotification(.exportLearningsProfile)
+        authenticateForSensitiveAction(
+            reason: "Authenticate to export your learnings profile."
+        ) { [weak self] in
+            self?.currentView = .learnings
+            self?.postWindowScopedNotification(.exportLearningsProfile)
+        }
     }
     
     public func importLearningsProfile() {
-        currentView = .learnings
-        postWindowScopedNotification(.importLearningsProfile)
+        authenticateForSensitiveAction(
+            reason: "Authenticate to import a learnings profile."
+        ) { [weak self] in
+            self?.currentView = .learnings
+            self?.postWindowScopedNotification(.importLearningsProfile)
+        }
+    }
+
+    public func requestDeleteUsageDataConfirmation() {
+        authenticateForSensitiveAction(
+            reason: "Authenticate to delete all Sorty usage data."
+        ) { [weak self] in
+            self?.showDeleteUsageDataConfirmation = true
+        }
     }
     
     public func deleteUsageData() {
@@ -1340,6 +1326,26 @@ public class AppState: ObservableObject {
         }
         
         HapticFeedbackManager.shared.success()
+    }
+
+    public func authenticateForSensitiveAction(
+        reason: String,
+        onSuccess: @escaping @MainActor () -> Void
+    ) {
+        if !FeatureFlags.sensitiveActionAuthenticationEnabled {
+            onSuccess()
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let didAuthenticate = await sensitiveActionSecurityManager.authenticateForSensitiveAction(reason: reason)
+            guard didAuthenticate else {
+                HapticFeedbackManager.shared.error()
+                return
+            }
+            onSuccess()
+        }
     }
     
     public func showAbout() {

@@ -17,20 +17,33 @@ public struct ContentView: View {
     @EnvironmentObject var extensionListener: ExtensionListener
 
     @State private var previousView: AppState.AppView?
+    @State private var showCommandNumbers = false
+    @State private var commandFlagsMonitor: Any?
+    @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
     public init() {}
 
     public var body: some View {
-        if !appState.hasCompletedOnboarding {
-            OnboardingView(hasCompletedOnboarding: $appState.hasCompletedOnboarding)
-                .transition(TransitionStyles.scaleAndFade)
-        } else {
-            ZStack {
-                mainContent
+        ZStack {
+            if !appState.hasCompletedOnboarding {
+                OnboardingView(hasCompletedOnboarding: $appState.hasCompletedOnboarding)
+                    .transition(TransitionStyles.scaleAndFade)
+            } else {
+                ZStack {
+                    mainContent
 
-                // HUD notification overlay (bottom-left)
-                HUDNotificationOverlay()
+                    // HUD notification overlay (bottom-left)
+                    HUDNotificationOverlay()
+                }
             }
+
+            WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
+        }
+        .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
+            windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
+        }
+        .onDisappear {
+            windowLinkHoverState.clearAllHover()
         }
     }
 
@@ -57,73 +70,14 @@ public struct ContentView: View {
                     }
                 }
             )) {
-                // Primary actions
-                NavigationLink(value: AppState.AppView.organize) {
-                    Label("Organize", systemImage: "folder.badge.gearshape")
-                }
-                .accessibilityIdentifier("OrganizeSidebarItem")
-                .accessibilityHint("Open the main organization workflow")
-                .help("Organize files with AI suggestions")
-
-                if FeatureFlags.batchOrganizationEnabled {
-                    NavigationLink(value: AppState.AppView.batchOrganization) {
-                        Label("Batch Organize", systemImage: "square.stack.3d.up.fill")
+                ForEach(Array(sidebarItems.enumerated()), id: \.element.id) { index, item in
+                    NavigationLink(value: item.view) {
+                        sidebarRow(item: item, commandNumber: index + 1)
                     }
-                    .accessibilityIdentifier("BatchOrganizeSidebarItem")
-                    .accessibilityHint("Organize multiple folders in one run")
-                    .help("Run organization for multiple folders")
+                    .accessibilityIdentifier(item.accessibilityIdentifier)
+                    .accessibilityHint(item.accessibilityHint)
+                    .help(item.helpText)
                 }
-
-                NavigationLink(value: AppState.AppView.watchedFolders) {
-                    Label("Watched Folders", systemImage: "eye")
-                }
-                .accessibilityIdentifier("WatchedFoldersSidebarItem")
-                .accessibilityHint("Configure folders monitored for automation")
-                .help("Manage watched folders and triggers")
-
-                NavigationLink(value: AppState.AppView.duplicates) {
-                    Label("Duplicates", systemImage: "doc.on.doc")
-                }
-                .accessibilityIdentifier("DuplicatesSidebarItem")
-                .accessibilityHint("Find and review duplicate files")
-                .help("Detect and manage duplicate files")
-
-                // Insights
-                NavigationLink(value: AppState.AppView.workspaceHealth) {
-                    Label("Workspace Health", systemImage: "heart.text.square")
-                }
-                .accessibilityIdentifier("WorkspaceHealthSidebarItem")
-                .accessibilityHint("Inspect workspace quality and cleanup opportunities")
-                .help("Check workspace health insights")
-
-                NavigationLink(value: AppState.AppView.history) {
-                    Label("History", systemImage: "clock")
-                }
-                .accessibilityIdentifier("HistorySidebarItem")
-                .accessibilityHint("Review past organization sessions")
-                .help("View organization history and outcomes")
-
-                NavigationLink(value: AppState.AppView.learnings) {
-                    Label("Learnings", systemImage: "brain")
-                }
-                .accessibilityIdentifier("LearningsSidebarItem")
-                .accessibilityHint("Review and manage learned preferences")
-                .help("See what Sorty has learned from your edits")
-
-                // Configuration
-                NavigationLink(value: AppState.AppView.exclusions) {
-                    Label("Exclusions", systemImage: "eye.slash")
-                }
-                .accessibilityIdentifier("ExclusionsSidebarItem")
-                .accessibilityHint("Define files and folders Sorty should skip")
-                .help("Manage exclusion rules")
-
-                NavigationLink(value: AppState.AppView.settings) {
-                    Label("Settings", systemImage: "gear")
-                }
-                .accessibilityIdentifier("SettingsSidebarItem")
-                .accessibilityHint("Configure Sorty behavior and AI providers")
-                .help("Adjust provider, strategy, and system settings")
             }
             .navigationTitle("Sorty")
             .listStyle(.sidebar)
@@ -161,6 +115,17 @@ public struct ContentView: View {
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in
             if showPicker {
                 openDirectoryPicker()
+            }
+        }
+        .onAppear {
+            installCommandKeyMonitorIfNeeded()
+        }
+        .onDisappear {
+            removeCommandKeyMonitor()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.12)) {
+                showCommandNumbers = false
             }
         }
         .onReceive(extensionListener.$incomingURL) { url in
@@ -204,6 +169,58 @@ public struct ContentView: View {
         case .batchOrganization:
             BatchOrganizationView()
         }
+    }
+
+    private var sidebarItems: [SidebarNavigationItem] {
+        SidebarNavigationItem.mainItems
+    }
+
+    @ViewBuilder
+    private func sidebarRow(item: SidebarNavigationItem, commandNumber: Int) -> some View {
+        Label(item.title, systemImage: item.systemImage)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, showCommandNumbers ? 38 : 0)
+            .overlay(alignment: .trailing) {
+                Text("\(commandNumber)")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 18)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(.quaternary)
+                    }
+                    .opacity(showCommandNumbers ? 1 : 0)
+                    .offset(x: showCommandNumbers ? 0 : 14)
+                    .scaleEffect(showCommandNumbers ? 1 : 0.96)
+            }
+            .animation(
+                .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08),
+                value: showCommandNumbers
+            )
+    }
+
+    private func installCommandKeyMonitorIfNeeded() {
+        guard commandFlagsMonitor == nil else { return }
+
+        commandFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            let isCommandHeld = event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command)
+            if isCommandHeld != showCommandNumbers {
+                withAnimation(.spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08)) {
+                    showCommandNumbers = isCommandHeld
+                }
+            }
+            return event
+        }
+    }
+
+    private func removeCommandKeyMonitor() {
+        guard let monitor = commandFlagsMonitor else { return }
+        NSEvent.removeMonitor(monitor)
+        commandFlagsMonitor = nil
+        showCommandNumbers = false
     }
 
     private func openDirectoryPicker() {

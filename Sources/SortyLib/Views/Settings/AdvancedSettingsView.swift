@@ -34,13 +34,32 @@ struct AdvancedSettingsView: View {
             }
         )
     }
+
+    private var internetPrivacyModeBinding: Binding<Bool> {
+        Binding(
+            get: { internetPrivacyModeEnabled },
+            set: { newValue in
+                guard internetPrivacyModeEnabled != newValue else { return }
+                Task { @MainActor in
+                    let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(
+                        reason: "Authenticate to change Sorty's internet access policy."
+                    )
+                    guard didAuthenticate else {
+                        HapticFeedbackManager.shared.error()
+                        return
+                    }
+                    internetPrivacyModeEnabled = newValue
+                }
+            }
+        )
+    }
     
     var body: some View {
         VStack(spacing: 16) {
             SettingsCard(title: "Privacy", icon: "eye.slash", color: .indigo) {
                 VStack(spacing: 12) {
                     SettingsToggle(
-                        isOn: $internetPrivacyModeEnabled,
+                        isOn: internetPrivacyModeBinding,
                         title: "Block Internet Connections",
                         description: "When enabled, Sorty blocks all internet requests and only allows loopback localhost traffic for local models."
                     )

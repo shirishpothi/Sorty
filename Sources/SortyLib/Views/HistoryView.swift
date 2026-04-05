@@ -111,7 +111,9 @@ struct HistoryView: View {
                 manager: organizer,
                 selectedFilter: $selectedFilter,
                 searchText: $searchText,
-                allFilteredEntries: allFilteredEntries
+                onClearHistory: {
+                    appState.clearHistoryWithConfirmation()
+                }
             )
 
             Divider()
@@ -478,7 +480,7 @@ struct HistoryHeader: View {
     @ObservedObject var manager: FolderOrganizer
     @Binding var selectedFilter: HistoryView.HistoryFilter
     @Binding var searchText: String
-    let allFilteredEntries: [OrganizationHistoryEntry]
+    let onClearHistory: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -502,37 +504,17 @@ struct HistoryHeader: View {
                     .accessibilityLabel("\(manager.history.totalSessions) sessions recorded")
 
                 Spacer()
-
-                Text("\(allFilteredEntries.count) shown")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .accessibilityHidden(true)
             }
 
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    searchField
-                        .frame(minWidth: 220, idealWidth: 320, maxWidth: 380)
+            HStack(spacing: 12) {
+                searchField
+                    .frame(width: 300)
 
-                    filterControlRow
-                        .frame(minWidth: 360, idealWidth: 520)
+                filterControlRow
 
-                    Spacer(minLength: 0)
-                }
+                Spacer(minLength: 0)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    searchField
-
-                    HStack(spacing: 10) {
-                        Text("Filter")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        filterPicker
-                    }
-                }
+                clearHistoryButton
             }
         }
         .padding(.horizontal, 24)
@@ -588,11 +570,25 @@ struct HistoryHeader: View {
             }
         }
         .pickerStyle(.segmented)
+        .labelsHidden()
         .accessibilityLabel("Filter history sessions")
         .accessibilityIdentifier("HistoryFilterPicker")
         .onChange(of: selectedFilter) { _, _ in
             HapticFeedbackManager.shared.selection()
         }
+    }
+
+    private var clearHistoryButton: some View {
+        Button {
+            onClearHistory()
+        } label: {
+            Label("Clear History", systemImage: "trash")
+        }
+        .buttonStyle(.tintedPill(.red, size: .small))
+        .controlSize(.small)
+        .disabled(manager.history.entries.isEmpty)
+        .accessibilityLabel("Clear all history")
+        .accessibilityIdentifier("ClearHistoryButton")
     }
 }
 

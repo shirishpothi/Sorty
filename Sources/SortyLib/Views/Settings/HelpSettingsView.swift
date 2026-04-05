@@ -173,6 +173,7 @@ private struct HelpIconLink: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .contentShape(Rectangle())
         }
+        .trackHoveredURL(URL(string: url)!)
         .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
