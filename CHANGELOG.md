@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Hero Artwork Asset** — Added a reusable Sorty header/hero image under `Assets/Hero/` for branding and documentation surfaces.
 - **Sensitive Action Authentication Toggle** — Added optional authentication for sensitive actions such as deleting usage data, changing network privacy mode, and revealing secrets.
 - **Finder Sync Runtime Diagnostics** — New diagnostic system (`FinderSyncDiagnostics`) with status kinds (`verified`, `registered`, `activeElsewhere`, `needsCleanup`, etc.) for precise Finder extension health reporting.
 - **Finder Sync Heartbeat Monitoring** — Extension now posts distributed notifications on launch; the main app caches heartbeats to verify the correct build is loaded into Finder.
