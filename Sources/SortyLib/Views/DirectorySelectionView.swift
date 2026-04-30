@@ -44,19 +44,18 @@ struct DirectorySelectionView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 15, weight: .medium))
                         Text("Browse for Folder")
-                            .font(.system(size: 15, weight: .semibold))
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.glossyCallToAction(.accentColor, size: .large, isHovering: browseHovered))
                 .keyboardShortcut("o", modifiers: .command)
-                .scaleEffect(browseHovered ? 1.04 : 1.0)
+                .scaleEffect(browseHovered ? 1.03 : 1.0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: browseHovered)
                 .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.15)) { browseHovered = hovering }
-                    if hovering { HapticFeedbackManager.shared.selection() }
+                    if hovering && !browseHovered {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                    browseHovered = hovering
                 }
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.easeOut(duration: 0.2).delay(0.1), value: hasAppeared)
@@ -125,16 +124,17 @@ struct DirectorySelectionView: View {
     private var dropZone: some View {
         let dropZoneHeight: CGFloat = settingsViewModel.config.enableSmartRename ? 120 : 150
         let dropZoneCornerRadius: CGFloat = 16
+        let folderAccent = Color.accentColor
         let dropZoneContent = VStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isTargeted ? Color.accentColor.opacity(0.1) : Color.blue.opacity(0.08))
+                    .fill(isTargeted ? folderAccent.opacity(0.16) : folderAccent.opacity(0.08))
                     .frame(width: 64, height: 64)
                     .scaleEffect(isTargeted ? 1.1 : 1.0)
 
                 Image(systemName: isTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
                     .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(isTargeted ? Color.accentColor : .blue)
+                    .foregroundStyle(isTargeted ? folderAccent : folderAccent.opacity(0.9))
                     .scaleEffect(iconBounce ? 1.1 : 1.0)
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isTargeted)

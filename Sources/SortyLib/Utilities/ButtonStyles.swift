@@ -383,3 +383,216 @@ extension ButtonStyle where Self == HapticBounceButtonStyle {
         HapticBounceButtonStyle(feedbackType: type)
     }
 }
+
+// MARK: - Glossy Call-To-Action Button Style
+
+/// A glossy, sculpted pill button style for prominent call-to-action buttons.
+/// Features a raised outer bezel, radial glow center, and glass-like inner highlight.
+public struct GlossyCallToActionButtonStyle: ButtonStyle {
+    var baseColor: Color
+    var size: ControlSize
+    var isHovering: Bool
+
+    public init(baseColor: Color, size: ControlSize = .regular, isHovering: Bool = false) {
+        self.baseColor = baseColor
+        self.size = size
+        self.isHovering = isHovering
+    }
+
+    private var fontSize: CGFloat {
+        switch size {
+        case .mini: 12
+        case .small: 13
+        case .large: 16
+        default: 16
+        }
+    }
+
+    private var hPad: CGFloat {
+        switch size {
+        case .mini: 16
+        case .small: 20
+        case .large: 32
+        default: 28
+        }
+    }
+
+    private var vPad: CGFloat {
+        switch size {
+        case .mini: 8
+        case .small: 10
+        case .large: 12
+        default: 13
+        }
+    }
+
+    private var bezelInset: CGFloat {
+        switch size {
+        case .mini: 3
+        case .small: 3.5
+        case .large: 4.8
+        default: 4.5
+        }
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+
+        configuration.label
+            .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+            .lineLimit(1)
+            .foregroundStyle(.white)
+            .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
+            .padding(.horizontal, hPad)
+            .padding(.vertical, vPad)
+            .background {
+                ZStack {
+                    // 1. Outer bezel — uniform solid darker shade
+                    Capsule()
+                        .fill(baseColor.opacity(0.55))
+
+                    // 2. Outer bezel 3D emboss — light top edge, dark bottom edge
+                    Capsule()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.28),
+                                    Color.white.opacity(0.08),
+                                    Color.clear,
+                                    Color.black.opacity(0.15)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+
+                    // 3. Outer bezel inner shadow — soft dark edge inside bezel
+                    Capsule()
+                        .stroke(Color.black.opacity(0.15), lineWidth: 2.5)
+                        .blur(radius: 2)
+                        .mask(Capsule().padding(1))
+
+                    // 4. Inner capsule — main fill with warm radial gradient
+                    Capsule()
+                        .fill(baseColor)
+                        .padding(bezelInset)
+
+                    // 5. Warm radial glow — bright center fading to darker edges
+                    Capsule()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    Color.white.opacity(isHovering ? 0.40 : 0.32),
+                                    Color.white.opacity(isHovering ? 0.18 : 0.12),
+                                    Color.white.opacity(0.02),
+                                    Color.clear
+                                ],
+                                center: UnitPoint(x: 0.5, y: 0.55),
+                                startRadius: 0,
+                                endRadius: size == .small ? 70 : (size == .large ? 110 : 100)
+                            )
+                        )
+                        .padding(bezelInset)
+
+                    // 6. Edge darkening — vignette effect on inner capsule edges
+                    Capsule()
+                        .stroke(
+                            Color.black.opacity(pressed ? 0.30 : (size == .large ? 0.10 : 0.14)),
+                            lineWidth: size == .small ? 8 : (size == .large ? 9 : 12)
+                        )
+                        .blur(radius: size == .small ? 6 : (size == .large ? 6 : 8))
+                        .mask(Capsule().padding(bezelInset))
+
+                    // 7. Top inner shadow — dark lip at top for inset look, deepens on press
+                    Capsule()
+                        .stroke(Color.black.opacity(pressed ? 0.30 : (isHovering ? 0.10 : 0.16)), lineWidth: pressed ? 5 : 3)
+                        .blur(radius: pressed ? 5 : 3)
+                        .mask(Capsule().padding(bezelInset))
+                        .mask {
+                            VStack(spacing: 0) {
+                                Rectangle().frame(height: pressed ? 18 : 12)
+                                Spacer()
+                            }
+                        }
+
+                    // 8. Glass highlight — wide glossy band across top ~45%
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(pressed ? 0.25 : (isHovering ? 0.52 : 0.42)),
+                                    Color.white.opacity(pressed ? 0.12 : (isHovering ? 0.28 : 0.20)),
+                                    Color.white.opacity(pressed ? 0.02 : (isHovering ? 0.06 : 0.04)),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: UnitPoint(x: 0.5, y: 0.65)
+                            )
+                        )
+                        .padding(bezelInset + 0.5)
+
+                    // 9. Bottom inner highlight — subtle light catchlight on lower edge
+                    Capsule()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    Color.clear,
+                                    Color.clear,
+                                    Color.clear,
+                                    Color.white.opacity(isHovering ? 0.20 : 0.10)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: isHovering ? 1.2 : 0.8
+                        )
+                        .padding(bezelInset)
+
+                    // 10. Prominent inner ring — bright border separating bezel from inner capsule
+                    Capsule()
+                        .strokeBorder(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(isHovering ? 0.55 : 0.45),
+                                    Color.white.opacity(isHovering ? 0.30 : 0.22),
+                                    Color.white.opacity(isHovering ? 0.22 : 0.15),
+                                    Color.white.opacity(isHovering ? 0.28 : 0.18)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1.2
+                        )
+                        .padding(bezelInset)
+                }
+                .animation(.easeOut(duration: 0.18), value: isHovering)
+                .animation(.easeOut(duration: 0.1), value: pressed)
+            }
+            // Drop shadows — lift on hover, flatten on press
+            .shadow(
+                color: baseColor.opacity(pressed ? 0.10 : (isHovering ? 0.28 : (size == .large ? 0.18 : 0.25))),
+                radius: pressed ? 3 : (isHovering ? 11 : (size == .large ? 6 : 8)),
+                y: pressed ? 1 : (isHovering ? 6 : (size == .large ? 4 : 5))
+            )
+            .shadow(color: Color.black.opacity(pressed ? 0.06 : (isHovering ? 0.14 : 0.10)), radius: pressed ? 1 : (isHovering ? 5 : 3), y: pressed ? 1 : (isHovering ? 3 : 2))
+            .scaleEffect(pressed ? 0.97 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: pressed)
+            .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isHovering)
+            .onChange(of: pressed) { _, newValue in
+                if newValue {
+                    HapticFeedbackManager.shared.tap()
+                }
+            }
+    }
+}
+
+extension ButtonStyle where Self == GlossyCallToActionButtonStyle {
+    public static func glossyCallToAction(
+        _ baseColor: Color,
+        size: ControlSize = .regular,
+        isHovering: Bool = false
+    ) -> GlossyCallToActionButtonStyle {
+        GlossyCallToActionButtonStyle(baseColor: baseColor, size: size, isHovering: isHovering)
+    }
+}

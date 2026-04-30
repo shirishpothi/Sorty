@@ -11,6 +11,310 @@ BACKGROUND_AGENT_SERVICE_LABEL="com.sorty.app.background-agent"
 BACKGROUND_AGENT_BUNDLE_PROGRAM="MacOS/Sorty"
 UNSUPPORTED_ADHOC_ENTITLEMENT="com.apple.developer.usernotifications.time-sensitive"
 
+BUILD_LOG_DIR="${BUILD_LOG_DIR:-${BUILD_DIR}/logs}"
+BUILD_TAIL_LINES="${BUILD_TAIL_LINES:-40}"
+AUTO_CLOSE_SORTY_ON_BUILD="${AUTO_CLOSE_SORTY_ON_BUILD:-true}"
+SORTY_QUIT_WAIT_SECONDS="${SORTY_QUIT_WAIT_SECONDS:-6}"
+KEYCHAIN_UNLOCK_TIMEOUT_SECONDS="${KEYCHAIN_UNLOCK_TIMEOUT_SECONDS:-43200}"
+AUTO_UNLOCK_SIGNING_KEYCHAIN="${AUTO_UNLOCK_SIGNING_KEYCHAIN:-true}"
+BUILD_AUTO_CLOSE_REQUEST_KEY="buildAutoCloseRequest"
+AUTO_PRUNE_BUILD_CACHE="${AUTO_PRUNE_BUILD_CACHE:-true}"
+BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-12288}"
+BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-8192}"
+BUILD_CACHE_STALE_DAYS="${BUILD_CACHE_STALE_DAYS:-14}"
+
+sorty_processes_are_running() {
+    pgrep -x "Sorty" >/dev/null 2>&1
+}
+
+count_running_sorty_instances() {
+    pgrep -x "Sorty" 2>/dev/null | wc -l | tr -d ' '
+}
+
+set_build_auto_close_request() {
+    local enabled="$1"
+    if is_truthy "${enabled}"; then
+        defaults write "${APP_BUNDLE_ID}" "${BUILD_AUTO_CLOSE_REQUEST_KEY}" -bool true >/dev/null 2>&1 || true
+    else
+        defaults delete "${APP_BUNDLE_ID}" "${BUILD_AUTO_CLOSE_REQUEST_KEY}" >/dev/null 2>&1 || true
+    fi
+}
+
+wait_for_sorty_exit() {
+    local timeout_seconds="$1"
+    local elapsed=0
+    while [ "${elapsed}" -lt "${timeout_seconds}" ]; do
+        if ! sorty_processes_are_running; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    ! sorty_processes_are_running
+}
+
+request_sorty_quit() {
+    if command -v osascript >/dev/null 2>&1; then
+        osascript -e 'tell application id "com.sorty.app" to quit' >/dev/null 2>&1 || true
+    else
+        pkill -TERM -x "Sorty" >/dev/null 2>&1 || true
+    fi
+}
+
+terminate_running_sorty_if_safe() {
+    if ! is_truthy "${AUTO_CLOSE_SORTY_ON_BUILD}"; then
+        log_detail "Skipping Sorty auto-close (AUTO_CLOSE_SORTY_ON_BUILD=${AUTO_CLOSE_SORTY_ON_BUILD})"
+        return
+    fi
+
+    if ! sorty_processes_are_running; then
+        return
+    fi
+
+    local instance_count
+    instance_count=$(count_running_sorty_instances)
+    log_item "Closing ${instance_count} running Sorty instance(s) after build"
+
+    set_build_auto_close_request true
+    request_sorty_quit
+    if wait_for_sorty_exit "${SORTY_QUIT_WAIT_SECONDS}"; then
+        set_build_auto_close_request false
+        log_detail "Sorty closed gracefully"
+        return
+    fi
+
+    set_build_auto_close_request false
+    log_warning "Sorty stayed open (likely active organization). Build continues without force-kill."
+}
+
+get_directory_size_mb() {
+    local dir_path="$1"
+    if [ ! -e "${dir_path}" ]; then
+        echo "0"
+        return
+    fi
+
+    du -sm "${dir_path}" 2>/dev/null | awk '{print $1+0}'
+}
+
+prune_path_if_exists() {
+    local path="$1"
+    [ -e "${path}" ] || return
+    rm -rf "${path}"
+}
+
+manage_build_cache() {
+    if ! is_truthy "${AUTO_PRUNE_BUILD_CACHE}"; then
+        log_detail "Skipping build cache pruning (AUTO_PRUNE_BUILD_CACHE=${AUTO_PRUNE_BUILD_CACHE})"
+        return
+    fi
+
+    local max_size_mb="${BUILD_CACHE_MAX_SIZE_MB}"
+    local target_size_mb="${BUILD_CACHE_TARGET_SIZE_MB}"
+    local stale_days="${BUILD_CACHE_STALE_DAYS}"
+
+    if ! [[ "${max_size_mb}" =~ ^[0-9]+$ ]]; then
+        max_size_mb=12288
+    fi
+    if ! [[ "${target_size_mb}" =~ ^[0-9]+$ ]]; then
+        target_size_mb=8192
+    fi
+    if ! [[ "${stale_days}" =~ ^[0-9]+$ ]]; then
+        stale_days=14
+    fi
+    if [ "${target_size_mb}" -gt "${max_size_mb}" ]; then
+        target_size_mb="${max_size_mb}"
+    fi
+
+    mkdir -p "${BUILD_DIR}"
+
+    if [ -d "${BUILD_LOG_DIR}" ]; then
+        find "${BUILD_LOG_DIR}" -type f -mtime +"${stale_days}" -exec rm -f {} + 2>/dev/null || true
+    fi
+
+    local initial_size_mb
+    initial_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
+    if [ "${initial_size_mb}" -le "${max_size_mb}" ]; then
+        return
+    fi
+
+    log_item "Pruning .build cache (${initial_size_mb}MB > ${max_size_mb}MB)"
+
+    find "${BUILD_DIR}" -mindepth 1 -maxdepth 1 -type d -mtime +"${stale_days}" \
+        ! -name "artifacts" ! -name "checkouts" ! -name "repositories" \
+        -exec rm -rf {} + 2>/dev/null || true
+
+    local current_size_mb
+    current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
+
+    if [ "${current_size_mb}" -gt "${target_size_mb}" ]; then
+        prune_path_if_exists "${BUILD_DIR}/DerivedData"
+        prune_path_if_exists "${BUILD_DIR}/FinderSyncDerivedData"
+        current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
+    fi
+
+    if [ "${current_size_mb}" -gt "${target_size_mb}" ]; then
+        run_with_log --optional "swift_package_clean" swift package --package-path "${PROJECT_DIR}" clean
+        current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
+    fi
+
+    if [ "${current_size_mb}" -gt "${target_size_mb}" ]; then
+        if [ -d "${BUILD_DIR}/artifacts" ]; then
+            find "${BUILD_DIR}/artifacts" -mindepth 1 -maxdepth 1 -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+        fi
+        if [ -d "${BUILD_DIR}/repositories" ]; then
+            find "${BUILD_DIR}/repositories" -mindepth 1 -maxdepth 1 -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
+        fi
+        current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
+    fi
+
+    local reclaimed_mb=$((initial_size_mb - current_size_mb))
+    if [ "${reclaimed_mb}" -gt 0 ]; then
+        log_item "Reclaimed ${reclaimed_mb}MB from .build cache (now ${current_size_mb}MB)"
+    fi
+
+    if [ "${current_size_mb}" -gt "${max_size_mb}" ]; then
+        log_warning ".build remains large (${current_size_mb}MB). Lower BUILD_CACHE_STALE_DAYS or run make clean if needed."
+    fi
+}
+
+resolve_signing_identity() {
+    if [ -n "${SIGNING_IDENTITY:-}" ] && [ "${SIGNING_IDENTITY}" != "auto" ]; then
+        echo "${SIGNING_IDENTITY}"
+        return
+    fi
+
+    local detected_identity=""
+    detected_identity=$(security find-identity -v -p codesigning 2>/dev/null | awk -F '"' '/Apple Development:|Mac Developer:|Developer ID Application:/ { print $2; exit }')
+
+    if [ -n "${detected_identity}" ]; then
+        echo "${detected_identity}"
+        return
+    fi
+
+    echo "-"
+}
+
+configure_keychain_session_for_signing() {
+    if [ "${SIGNING_IDENTITY}" = "-" ]; then
+        return
+    fi
+
+    if ! is_truthy "${AUTO_UNLOCK_SIGNING_KEYCHAIN}"; then
+        log_detail "Skipping keychain auto-unlock (AUTO_UNLOCK_SIGNING_KEYCHAIN=${AUTO_UNLOCK_SIGNING_KEYCHAIN})"
+        return
+    fi
+
+    local keychain_path="${SIGNING_KEYCHAIN_PATH:-}"
+    if [ -z "${keychain_path}" ]; then
+        keychain_path=$(security default-keychain -d user 2>/dev/null | tr -d '"' | xargs)
+    fi
+
+    if [ -z "${keychain_path}" ]; then
+        log_warning "Unable to determine default keychain path"
+        return
+    fi
+
+    security set-keychain-settings -lut "${KEYCHAIN_UNLOCK_TIMEOUT_SECONDS}" "${keychain_path}" >/dev/null 2>&1 || true
+
+    if security show-keychain-info "${keychain_path}" >/dev/null 2>&1; then
+        log_detail "Keychain already unlocked for signing"
+    else
+        if [ -n "${KEYCHAIN_PASSWORD:-}" ]; then
+            log_item "Unlocking keychain for signing (${KEYCHAIN_UNLOCK_TIMEOUT_SECONDS}s timeout)"
+            if security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${keychain_path}" >/dev/null 2>&1; then
+                log_detail "Keychain unlocked"
+            else
+                log_warning "Keychain unlock failed. Signing may prompt."
+            fi
+        else
+            log_detail "Keychain is locked; set KEYCHAIN_PASSWORD to unlock non-interactively"
+        fi
+    fi
+
+    if [ -n "${KEYCHAIN_PASSWORD:-}" ]; then
+        if security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${KEYCHAIN_PASSWORD}" "${keychain_path}" >/dev/null 2>&1; then
+            log_detail "Updated keychain partition list for codesign"
+        else
+            log_warning "Could not update keychain partition list for codesign"
+        fi
+    else
+        log_detail "Set KEYCHAIN_PASSWORD to avoid repeated key access prompts"
+    fi
+}
+
+resolve_codesign_identity() {
+    local requested_identity="$1"
+
+    if [ -n "${requested_identity}" ] && [ "${requested_identity}" != "auto" ]; then
+        echo "${requested_identity}"
+        return
+    fi
+
+    resolve_signing_identity
+}
+
+codesign_cmd() {
+    local -a cmd=(codesign --force --sign "${SIGNING_IDENTITY}")
+    cmd+=("$@")
+    "${cmd[@]}"
+}
+
+codesign_cmd_allow_failure() {
+    local -a cmd=(codesign --force --sign "${SIGNING_IDENTITY}")
+    cmd+=("$@")
+    "${cmd[@]}" || true
+}
+
+run_with_log() {
+    local mode="required"
+    if [ "${1:-}" = "--optional" ]; then
+        mode="optional"
+        shift
+    fi
+
+    local log_name="$1"
+    shift
+
+    if is_truthy "${SORTY_VERBOSE}"; then
+        "$@"
+        return $?
+    fi
+
+    mkdir -p "${BUILD_LOG_DIR}"
+    local log_file="${BUILD_LOG_DIR}/${log_name}.log"
+
+    if "$@" >"${log_file}" 2>&1; then
+        return 0
+    fi
+
+    if [ "${mode}" = "optional" ]; then
+        log_warning "${log_name} failed (non-fatal)"
+    else
+        log_failure "${log_name} failed"
+    fi
+    log_item "Last ${BUILD_TAIL_LINES} log lines (${log_file}):"
+    tail -n "${BUILD_TAIL_LINES}" "${log_file}" || true
+    return 1
+}
+
+run_quiet() {
+    if is_truthy "${SORTY_VERBOSE}"; then
+        "$@"
+    else
+        "$@" >/dev/null 2>&1
+    fi
+}
+
+run_quiet_allow_failure() {
+    if is_truthy "${SORTY_VERBOSE}"; then
+        "$@" || true
+    else
+        "$@" >/dev/null 2>&1 || true
+    fi
+}
+
 # MARK: - Resource Copying Helpers
 
 # Safely copies resources with integrity checks and conflict detection
@@ -28,22 +332,22 @@ copy_resources_safely() {
     # Priority 1: SPM bundle (if available)
     if [ -n "${spm_bundle}" ] && [ -d "${spm_bundle}" ]; then
         if [ "$(find "${spm_bundle}" -type f | wc -l)" -gt 0 ]; then
-            log_item "Syncing resources from SPM bundle"
+            log_detail "Syncing resources from SPM bundle"
             rsync -a "${spm_bundle}/" "${dest_dir}/"
         else
-            log_item "Warning: SPM bundle is empty"
+            log_warning "SPM bundle is empty"
         fi
     fi
     
     # Priority 2: Resources folder (sync updates from source)
     if [ -d "${resources_dir}" ]; then
-        log_item "Syncing additional resources from Resources folder"
+        log_detail "Syncing additional resources from Resources folder"
         rsync -a "${resources_dir}/" "${dest_dir}/"
     fi
 
     # Priority 2b: SortyLib source resources (audio/svg not in top-level Resources)
     if [ -d "${source_resources_dir}" ]; then
-        log_item "Syncing additional resources from SortyLib source resources"
+        log_detail "Syncing additional resources from SortyLib source resources"
         rsync -a --exclude "Images/" "${source_resources_dir}/" "${dest_dir}/"
     fi
     
@@ -51,10 +355,10 @@ copy_resources_safely() {
     if [ -d "${fallback_images}" ]; then
         local images_dest="${dest_dir}/Images"
         if [ ! -d "${images_dest}" ]; then
-            log_item "Syncing fallback images"
+            log_detail "Syncing fallback images"
             rsync -a "${fallback_images}/" "${images_dest}/"
         else
-            log_item "Images folder already present from higher priority source, skipping fallback"
+            log_detail "Images folder already present from higher priority source, skipping fallback"
         fi
     fi
     
@@ -62,9 +366,35 @@ copy_resources_safely() {
     local total_resources
     total_resources=$(find "${dest_dir}" -type f | wc -l)
     if [ "${total_resources}" -eq 0 ]; then
-        log_item "Warning: No resources copied to app bundle"
+        log_warning "No resources copied to app bundle"
     else
-        log_item "Total resources in app bundle: ${total_resources}"
+        log_detail "Total resources in app bundle: ${total_resources}"
+    fi
+}
+
+compile_asset_catalog() {
+    local resources_dir="$1"
+    local app_path="$2"
+    local xcassets_path="${resources_dir}/Assets.xcassets"
+
+    if [ ! -d "${xcassets_path}" ]; then
+        log_detail "No Assets.xcassets found, skipping asset catalog compilation"
+        return
+    fi
+
+    log_detail "Compiling Assets.xcassets with actool..."
+    if xcrun actool "${xcassets_path}" \
+        --compile "${resources_dir}" \
+        --platform macosx \
+        --minimum-deployment-target 15.0 \
+        --app-icon AppIcon \
+        --accent-color AccentColor \
+        --output-partial-info-plist /dev/null >/dev/null 2>&1; then
+        # Remove the raw xcassets directory now that it's compiled
+        rm -rf "${xcassets_path}"
+        log_detail "Asset catalog compiled to Assets.car"
+    else
+        log_warning "actool compilation failed, falling back to raw xcassets"
     fi
 }
 
@@ -75,7 +405,7 @@ bundle_cli_tools() {
     local cli_arch="$4"
 
     if [ "${ENABLE_CLI_BUNDLE}" != "true" ]; then
-        log_item "Skipping CLI bundle (ENABLE_CLI_BUNDLE=${ENABLE_CLI_BUNDLE})"
+        log_detail "Skipping CLI bundle (ENABLE_CLI_BUNDLE=${ENABLE_CLI_BUNDLE})"
         return
     fi
 
@@ -95,8 +425,8 @@ bundle_cli_tools() {
         cli_build_cmd+=("${extra_flags[@]}")
     fi
 
-    log_item "Building learnings CLI..."
-    if "${cli_build_cmd[@]}" 2>/dev/null; then
+    log_detail "Building learnings CLI..."
+    if run_with_log --optional "learnings_cli" "${cli_build_cmd[@]}"; then
         local learnings_bin=""
         if [ -n "${cli_arch}" ]; then
             learnings_bin="${PROJECT_DIR}/.build/${cli_arch}-apple-macosx/${build_config}/learnings"
@@ -110,14 +440,12 @@ bundle_cli_tools() {
 
         if [ -f "${learnings_bin}" ]; then
             cp "${learnings_bin}" "${cli_dir}/learnings"
-            strip -x "${cli_dir}/learnings"
+            run_quiet strip -x "${cli_dir}/learnings"
             chmod 755 "${cli_dir}/learnings"
-            log_item "Bundled learnings CLI"
+            log_detail "Bundled learnings CLI"
         else
-            log_item "Note: learnings CLI binary not found after build"
+            log_detail "learnings CLI binary not found after build"
         fi
-    else
-        log_item "Note: learnings CLI build skipped"
     fi
 
     # Bundle the sorty shell script
@@ -125,7 +453,7 @@ bundle_cli_tools() {
     if [ -f "${sorty_script}" ]; then
         cp "${sorty_script}" "${cli_dir}/sorty"
         chmod 755 "${cli_dir}/sorty"
-        log_item "Bundled sorty CLI script"
+        log_detail "Bundled sorty CLI script"
     fi
 }
 
@@ -140,7 +468,7 @@ bundle_background_agent_plist() {
     rm -f "${legacy_plist}" "${bundled_plist}"
 
     if [ ! -f "${source_plist}" ]; then
-        log_item "Warning: Background agent plist not found at ${source_plist}"
+        log_warning "Background agent plist not found at ${source_plist}"
         return
     fi
 
@@ -171,7 +499,7 @@ bundle_background_agent_plist() {
         exit 1
     fi
 
-    log_item "Copied background agent plist"
+    log_detail "Copied background agent plist"
 }
 
 validate_adhoc_entitlements() {
@@ -182,6 +510,76 @@ validate_adhoc_entitlements() {
         log_failure "${description} cannot request ${UNSUPPORTED_ADHOC_ENTITLEMENT} when Sorty is ad-hoc signed."
         exit 1
     fi
+}
+
+sparkle_resources_dir() {
+    local framework_path="$1"
+    local current_resources="${framework_path}/Versions/Current/Resources"
+    if [ -d "${current_resources}" ]; then
+        echo "${current_resources}"
+        return 0
+    fi
+
+    local fallback_resources
+    fallback_resources=$(find "${framework_path}/Versions" -mindepth 2 -maxdepth 2 -type d -name Resources 2>/dev/null | head -1)
+    if [ -n "${fallback_resources}" ]; then
+        echo "${fallback_resources}"
+        return 0
+    fi
+
+    return 1
+}
+
+sparkle_framework_has_valid_layout() {
+    local framework_path="$1"
+    [ -d "${framework_path}" ] || return 1
+    [ -L "${framework_path}/Versions/Current" ] || return 1
+    sparkle_resources_dir "${framework_path}" >/dev/null 2>&1
+}
+
+embed_sparkle_framework() {
+    local source_framework="$1"
+    local target_framework="$2"
+    local preserve_existing="$3"
+
+    if [ ! -d "${source_framework}" ]; then
+        return 1
+    fi
+
+    if [ "${preserve_existing}" = "true" ] && sparkle_framework_has_valid_layout "${target_framework}"; then
+        log_detail "Sparkle.framework already present, preserving valid bundle"
+        return 0
+    fi
+
+    rm -rf "${target_framework}"
+    ditto "${source_framework}" "${target_framework}"
+    log_detail "Embedded Sparkle.framework"
+}
+
+sign_sparkle_framework() {
+    local framework_path="$1"
+    [ -d "${framework_path}" ] || return 0
+
+    local resources_dir=""
+    resources_dir=$(sparkle_resources_dir "${framework_path}" || true)
+
+    if [ -n "${resources_dir}" ]; then
+        for helper in "Autoupdate.app" "Updater.app"; do
+            local helper_path="${resources_dir}/${helper}"
+            if [ -d "${helper_path}" ]; then
+                run_quiet codesign_cmd "${helper_path}"
+            fi
+        done
+    fi
+
+    local xpc_dir="${framework_path}/XPCServices"
+    if [ -d "${xpc_dir}" ]; then
+        find "${xpc_dir}" -maxdepth 1 -name "*.xpc" -type d -print0 | while IFS= read -r -d '' xpc_service; do
+            run_quiet codesign_cmd "${xpc_service}"
+        done
+    fi
+
+    run_quiet codesign_cmd "${framework_path}"
 }
 
 # Build and embed the SortyFinderSync Finder extension (.appex)
@@ -217,16 +615,16 @@ bundle_finder_extension() {
             mkdir -p "${plugins_dir}"
             rm -rf "${plugins_dir}/${appex_name}"
             cp -R "${cached_appex}" "${plugins_dir}/${appex_name}"
-            codesign --force --sign - "${plugins_dir}/${appex_name}" 2>/dev/null || true
-            log_item "SortyFinderSync.appex unchanged, using cache"
+            run_quiet_allow_failure codesign_cmd_allow_failure "${plugins_dir}/${appex_name}"
+            log_detail "SortyFinderSync.appex unchanged, using cache"
             return
         fi
     fi
 
-    log_item "Building SortyFinderSync extension..."
+    log_detail "Building SortyFinderSync extension..."
     start_step_timer "finder_ext"
 
-    if xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
+    if run_with_log --optional "finder_extension" xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
         -target "SortyFinderSync" \
         -configuration "${xcode_config}" \
         -parallelizeTargets \
@@ -240,7 +638,7 @@ bundle_finder_extension() {
         CODE_SIGNING_REQUIRED=NO \
         ENABLE_APP_SANDBOX=NO \
         ${arch_setting} \
-        build 2>&1 | tail -5; then
+        build; then
 
         local built_appex
         built_appex=$(find "${derived_data}/Build/Products/${xcode_config}" -name "${appex_name}" -type d 2>/dev/null | head -1)
@@ -252,13 +650,13 @@ bundle_finder_extension() {
             mkdir -p "${plugins_dir}"
             rm -rf "${plugins_dir}/${appex_name}"
             cp -R "${built_appex}" "${plugins_dir}/${appex_name}"
-            codesign --force --sign - "${plugins_dir}/${appex_name}" 2>/dev/null || true
-            log_item "Embedded SortyFinderSync.appex in PlugIns ($(get_step_duration "finder_ext"))"
+            run_quiet_allow_failure codesign_cmd_allow_failure "${plugins_dir}/${appex_name}"
+            log_detail "Embedded SortyFinderSync.appex in PlugIns ($(get_step_duration "finder_ext"))"
         else
-            log_item "Warning: SortyFinderSync.appex not found after build"
+            log_warning "SortyFinderSync.appex not found after build"
         fi
     else
-        log_item "Warning: SortyFinderSync extension build failed (non-fatal, $(get_step_duration "finder_ext"))"
+        log_detail "Continuing without Finder extension ($(get_step_duration "finder_ext"))"
     fi
 }
 
@@ -277,28 +675,50 @@ ENABLE_FINDER_EXTENSION="${ENABLE_FINDER_EXTENSION:-true}"
 ENABLE_ADHOC_SIGNING="${ENABLE_ADHOC_SIGNING:-true}"
 ENABLE_SPARKLE_SIGNING="${ENABLE_SPARKLE_SIGNING:-true}"
 PRESERVE_APP_BUNDLE="${PRESERVE_APP_BUNDLE:-false}"
+SORTY_VERBOSE="${SORTY_VERBOSE:-${VERBOSE:-false}}"
+SIGNING_IDENTITY="${SIGNING_IDENTITY:-auto}"
+SIGNING_IDENTITY=$(resolve_codesign_identity "${SIGNING_IDENTITY}")
 
-print_summary "Build Configuration" \
-    "Version" "${VERSION}" \
-    "Build" "${BUILD_NUM}" \
-    "Scheme" "${SCHEME}" \
-    "Method" "${BUILD_METHOD}" \
-    "Archs" "${BUILD_ARCHS}" \
-    "Xcode Jobs" "${XCODE_BUILD_JOBS}" \
-    "Bundle CLI" "${ENABLE_CLI_BUNDLE}" \
-    "Finder Extension" "${ENABLE_FINDER_EXTENSION}" \
-    "Ad-hoc Signing" "${ENABLE_ADHOC_SIGNING}" \
-    "Sparkle Signing" "${ENABLE_SPARKLE_SIGNING}" \
-    "Preserve Bundle" "${PRESERVE_APP_BUNDLE}" \
-    "Output" "${BUILD_DIR}"
+if [ "${SIGNING_IDENTITY}" = "-" ]; then
+    log_detail "Using ad-hoc code signing identity"
+    log_warning "No certificate signing identity found; keychain access prompts may repeat between builds"
+fi
+
+if [ "${ENABLE_ADHOC_SIGNING}" = "true" ] || [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
+    configure_keychain_session_for_signing
+fi
+
+if is_truthy "${SORTY_VERBOSE}"; then
+    print_summary "Build Configuration" \
+        "Version" "${VERSION}" \
+        "Build" "${BUILD_NUM}" \
+        "Scheme" "${SCHEME}" \
+        "Method" "${BUILD_METHOD}" \
+        "Archs" "${BUILD_ARCHS}" \
+        "Xcode Jobs" "${XCODE_BUILD_JOBS}" \
+        "Signing Identity" "${SIGNING_IDENTITY}" \
+        "Bundle CLI" "${ENABLE_CLI_BUNDLE}" \
+        "Finder Extension" "${ENABLE_FINDER_EXTENSION}" \
+        "Code Signing" "${ENABLE_ADHOC_SIGNING}" \
+        "Sparkle Signing" "${ENABLE_SPARKLE_SIGNING}" \
+        "Preserve Bundle" "${PRESERVE_APP_BUNDLE}" \
+        "Output" "${BUILD_DIR}"
+else
+    print_summary "Build" \
+        "Version" "${VERSION} (${BUILD_NUM})" \
+        "Config" "${BUILD_CONFIG:-release}/${BUILD_METHOD}" \
+        "Signing" "${SIGNING_IDENTITY}" \
+        "Output" "${APP_PATH}"
+fi
 
 if [ "${BUILD_METHOD}" = "xcodebuild" ]; then
-    log_item "xcodebuild flags: ${XCODE_EXTRA_FLAGS}"
+    log_detail "xcodebuild flags: ${XCODE_EXTRA_FLAGS}"
 fi
 
 # Cleanup and setup
 mkdir -p "${BUILD_DIR}"
 mkdir -p "${RELEASE_DIR}"
+manage_build_cache
 
 # Binary and App names from config if needed, or hardcoded for reliability
 BINARY_NAME="Sorty"
@@ -309,27 +729,36 @@ TOTAL_STEPS=4
 
 # Build configuration
 BUILD_CONFIG="${BUILD_CONFIG:-release}"
-log_item "Configuration: ${BUILD_CONFIG}"
+log_detail "Configuration: ${BUILD_CONFIG}"
 
 if [ "$SKIP_TESTS" != "true" ]; then
     print_step 1 $TOTAL_STEPS "Running Unit Tests"
     start_step_timer "test"
     TEST_FLAGS="${BUILD_FLAGS:-}"
-    if ! swift test $TEST_FLAGS --disable-sandbox; then
+    TEST_FLAGS_ARRAY=()
+    if [ -n "${TEST_FLAGS}" ]; then
+        # shellcheck disable=SC2206
+        TEST_FLAGS_ARRAY=( ${TEST_FLAGS} )
+    fi
+    if ! run_with_log "unit_tests" swift test "${TEST_FLAGS_ARRAY[@]}" --disable-sandbox; then
         log_failure "Tests failed ($(get_step_duration "test")). Set SKIP_TESTS=true to bypass."
         exit 1
     fi
     log_success "Tests passed ($(get_step_duration "test"))"
 else
     print_step 1 $TOTAL_STEPS "Skipping Unit Tests"
-    log_item "SKIP_TESTS is set."
+    log_detail "SKIP_TESTS is set."
 fi
 
 # Inject Git Info (skippable for fast dev loops)
 if [ "${SKIP_GIT_INJECT}" != "true" ]; then
-    "${SCRIPT_DIR}/inject_git_info.sh" "${PROJECT_DIR}/Resources"
+    if is_truthy "${SORTY_VERBOSE}"; then
+        "${SCRIPT_DIR}/inject_git_info.sh" "${PROJECT_DIR}/Resources"
+    else
+        "${SCRIPT_DIR}/inject_git_info.sh" "${PROJECT_DIR}/Resources" >/dev/null
+    fi
 else
-    log_item "Skipping git info injection (SKIP_GIT_INJECT=true)"
+    log_detail "Skipping git info injection (SKIP_GIT_INJECT=true)"
 fi
 
 print_step 2 $TOTAL_STEPS "Compiling Project"
@@ -342,7 +771,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         XCODE_CONFIG="Debug"
     fi
     
-    log_item "Using xcodebuild with configuration: ${XCODE_CONFIG}"
+    log_detail "Using xcodebuild with configuration: ${XCODE_CONFIG}"
 
     # shellcheck disable=SC2206
     BUILD_ARCH_ARRAY=( ${BUILD_ARCHS} )
@@ -351,7 +780,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     
     # Build with xcodebuild using the Xcode project
     # -destination ensures we build for macOS with proper SDK
-    if ! xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
+    if ! run_with_log "xcodebuild_compile" xcodebuild -project "${PROJECT_DIR}/Sorty.xcodeproj" \
         -scheme "${SCHEME}" \
         -configuration "${XCODE_CONFIG}" \
         -destination "generic/platform=macOS" \
@@ -367,8 +796,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         CODE_SIGNING_REQUIRED=NO \
         ARCHS="${BUILD_ARCHS}" \
         "${XCODE_EXTRA_FLAGS_ARRAY[@]}" \
-        build 2>&1 | tee "${BUILD_DIR}/build_output.log" | tail -50; then
-        log_failure "xcodebuild failed"
+        build; then
         exit 1
     fi
     
@@ -388,8 +816,8 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     MACOS_BIN="${APP_PATH}/Contents/MacOS/${BINARY_NAME}"
     if [ -f "${MACOS_BIN}" ]; then
         chmod +x "${MACOS_BIN}"
-        install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_BIN}" 2>/dev/null || true
-        strip -x "${MACOS_BIN}"
+        run_quiet_allow_failure install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_BIN}"
+        run_quiet strip -x "${MACOS_BIN}"
         chmod +x "${MACOS_BIN}"
     fi
 
@@ -412,7 +840,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         # Also inject version/build from root plist
         /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${BUILT_PLIST}" 2>/dev/null || true
         /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUM}" "${BUILT_PLIST}" 2>/dev/null || true
-        log_item "Injected Sparkle keys and version into bundle Info.plist"
+        log_detail "Injected Sparkle keys and version into bundle Info.plist"
     fi
 
     # Copy Resources with integrity checks and conflict detection
@@ -422,7 +850,8 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
 
-    # Note: Assets.xcassets is in ${PROJECT_DIR}/Resources/ and compiled to Assets.car by xcodebuild
+    # Compile Assets.xcassets into Assets.car (xcodebuild may have already done this)
+    compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"
 
     # Remove stale entitlements file from bundle (entitlements are applied via --entitlements flag during signing)
     rm -f "${APP_PATH}/Contents/Sorty.entitlements"
@@ -441,7 +870,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
     else
         rm -rf "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
-        log_item "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
+        log_detail "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
     fi
 
     log_success "xcodebuild succeeded ($(get_step_duration "build"))"
@@ -457,30 +886,21 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         fi
         
         if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
-            cp -R "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/"
+            embed_sparkle_framework "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/Sparkle.framework" "false"
             
             if [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
                 # Deep sign the framework and its internal helpers for Sandbox compatibility
-                log_item "Deep signing Sparkle.framework for Sandbox compatibility"
-                codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
-                
-                # Specifically sign helpers if they exist (Sparkle 2)
-                for helper in "Autoupdate.app" "Updater.app"; do
-                    HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
-                    if [ -d "${HELPER_PATH}" ]; then
-                        codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
-                    fi
-                done
-                
-                log_item "Embedded and signed Sparkle.framework"
+                log_detail "Signing Sparkle.framework for Sandbox compatibility"
+                sign_sparkle_framework "${FRAMEWORKS_DIR}/Sparkle.framework"
+                log_detail "Embedded and signed Sparkle.framework"
             else
-                log_item "Embedded Sparkle.framework without signing"
+                log_detail "Embedded Sparkle.framework without signing"
             fi
         else
-            log_item "Warning: Sparkle.framework not found, skipping embed"
+            log_warning "Sparkle.framework not found, skipping embed"
         fi
     else
-        log_item "Sparkle.framework already embedded"
+        log_detail "Sparkle.framework already embedded"
     fi
 
     # Verify app bundle structure
@@ -505,8 +925,13 @@ else
     # Use swift build (SPM) for local development
     # BUILD_FLAGS can be set from Makefile for parallel compilation
     BUILD_FLAGS_EXTRA="${BUILD_FLAGS:-}"
-    log_item "Build flags: ${BUILD_FLAGS_EXTRA}"
-    if ! swift build -c "${BUILD_CONFIG}" $BUILD_FLAGS_EXTRA; then
+    log_detail "Build flags: ${BUILD_FLAGS_EXTRA}"
+    BUILD_FLAGS_ARRAY=()
+    if [ -n "${BUILD_FLAGS_EXTRA}" ]; then
+        # shellcheck disable=SC2206
+        BUILD_FLAGS_ARRAY=( ${BUILD_FLAGS_EXTRA} )
+    fi
+    if ! run_with_log "swift_build" swift build -c "${BUILD_CONFIG}" "${BUILD_FLAGS_ARRAY[@]}"; then
         log_failure "Compilation failed"
         exit 1
     fi
@@ -531,8 +956,8 @@ else
         cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
         # Ensure binary has correct RPATH for embedded frameworks
-        install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${BINARY_NAME}" 2>/dev/null || true
-        strip -x "${MACOS_DIR}/${BINARY_NAME}"
+        run_quiet_allow_failure install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${BINARY_NAME}"
+        run_quiet strip -x "${MACOS_DIR}/${BINARY_NAME}"
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
     else
         log_failure "Binary not found at ${BIN_PATH}/${SPM_BINARY_NAME}"
@@ -552,7 +977,7 @@ else
         /usr/libexec/PlistBuddy -c "Delete :GitCommitHash" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true
         /usr/libexec/PlistBuddy -c "Add :GitCommitHash string ${COMMIT_HASH}" "${APP_PATH}/Contents/Info.plist"
         
-        log_item "Injected Version ${VERSION} (Build ${BUILD_NUM}) into bundle Info.plist"
+        log_detail "Injected Version ${VERSION} (Build ${BUILD_NUM}) into bundle Info.plist"
     fi
 
     # Copy Resources with integrity checks and conflict detection
@@ -560,6 +985,9 @@ else
     IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
     
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
+
+    # Compile Assets.xcassets into Assets.car
+    compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"
 
     # Remove stale entitlements file from bundle (entitlements are applied via --entitlements flag during signing)
     rm -f "${APP_PATH}/Contents/Sorty.entitlements"
@@ -582,30 +1010,14 @@ else
     
     if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
         TARGET_SPARKLE_FRAMEWORK="${FRAMEWORKS_DIR}/Sparkle.framework"
-        if [ "${PRESERVE_APP_BUNDLE}" = "true" ] && [ -d "${TARGET_SPARKLE_FRAMEWORK}" ]; then
-            log_item "Sparkle.framework already present, skipping copy"
-        else
-            rm -rf "${TARGET_SPARKLE_FRAMEWORK}"
-            cp -R "${SPARKLE_FRAMEWORK}" "${FRAMEWORKS_DIR}/"
-            log_item "Embedded Sparkle.framework"
-        fi
+        embed_sparkle_framework "${SPARKLE_FRAMEWORK}" "${TARGET_SPARKLE_FRAMEWORK}" "${PRESERVE_APP_BUNDLE}"
 
         if [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
-            # Deep sign the framework and its internal helpers for Sandbox compatibility
-            log_item "Deep signing Sparkle.framework for Sandbox compatibility"
-            codesign --force --deep --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
-            
-            # Specifically sign helpers if they exist (Sparkle 2)
-            for helper in "Autoupdate.app" "Updater.app"; do
-                HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
-                if [ -d "${HELPER_PATH}" ]; then
-                    codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
-                fi
-            done
-            
-            log_item "Signed Sparkle.framework"
+            log_detail "Signing Sparkle.framework for Sandbox compatibility"
+            sign_sparkle_framework "${FRAMEWORKS_DIR}/Sparkle.framework"
+            log_detail "Signed Sparkle.framework"
         else
-            log_item "Skipping Sparkle.framework signing (ENABLE_SPARKLE_SIGNING=${ENABLE_SPARKLE_SIGNING})"
+            log_detail "Skipping Sparkle.framework signing (ENABLE_SPARKLE_SIGNING=${ENABLE_SPARKLE_SIGNING})"
         fi
     else
         log_failure "Required Sparkle.framework not found!"
@@ -625,7 +1037,7 @@ else
         bundle_finder_extension "${APP_PATH}" "${BUILD_CONFIG}"
     else
         rm -rf "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
-        log_item "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
+        log_detail "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
     fi
 
     log_success "App bundle assembled ($(get_step_duration "assemble"))"
@@ -672,14 +1084,18 @@ if [ ! -f "${ICON_SRC}" ]; then
 fi
 if [ -f "${ICON_SRC}" ]; then
     cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
-    log_item "App icon set to ${APP_ICON_VARIANT_KEY} variant"
+    log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
 else
-    log_item "Warning: Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"
+    log_warning "Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"
 fi
 
 # Step 4: Signing (common for both build methods)
 if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
-    print_step 4 $TOTAL_STEPS "Ad-hoc Signing"
+    SIGNING_STEP_LABEL="Ad-hoc Signing"
+    if [ "${SIGNING_IDENTITY}" != "-" ]; then
+        SIGNING_STEP_LABEL="Code Signing"
+    fi
+    print_step 4 $TOTAL_STEPS "${SIGNING_STEP_LABEL}"
     start_step_timer "sign"
 
     ENTITLEMENTS_FILE="${PROJECT_DIR}/Sorty.entitlements"
@@ -696,39 +1112,37 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
     # 1. Sign Sparkle framework helpers (innermost)
     FRAMEWORKS_DIR="${APP_PATH}/Contents/Frameworks"
     if [ -d "${FRAMEWORKS_DIR}/Sparkle.framework" ]; then
-        for helper in "Autoupdate.app" "Updater.app"; do
-            HELPER_PATH="${FRAMEWORKS_DIR}/Sparkle.framework/Versions/A/Resources/${helper}"
-            if [ -d "${HELPER_PATH}" ]; then
-                codesign --force --sign - "${HELPER_PATH}" 2>/dev/null || true
-            fi
-        done
-        codesign --force --sign - "${FRAMEWORKS_DIR}/Sparkle.framework" 2>/dev/null || true
-        log_item "Signed Sparkle.framework"
+        sign_sparkle_framework "${FRAMEWORKS_DIR}/Sparkle.framework"
+        log_detail "Signed Sparkle.framework"
     fi
 
     # 2. Sign the Finder Sync extension
     if [ -d "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" ]; then
         if [ -f "${FINDER_SYNC_ENTITLEMENTS}" ]; then
-            codesign --force --sign - --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
+            run_quiet_allow_failure codesign_cmd_allow_failure --entitlements "${FINDER_SYNC_ENTITLEMENTS}" "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         else
-            codesign --force --sign - "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex" 2>/dev/null || true
+            run_quiet_allow_failure codesign_cmd_allow_failure "${APP_PATH}/Contents/PlugIns/SortyFinderSync.appex"
         fi
-        log_item "Signed SortyFinderSync.appex"
+        log_detail "Signed SortyFinderSync.appex"
     fi
 
     # 3. Sign the main app bundle (outermost — must be last)
     # Finder Sync depends on the containing app carrying the same sandbox/app-group
     # entitlements as the embedded extension. Do not silently strip them.
     if [ -f "${ENTITLEMENTS_FILE}" ]; then
-        codesign --force --sign - --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}"
+        run_quiet codesign_cmd --entitlements "${ENTITLEMENTS_FILE}" "${APP_PATH}"
     else
-        codesign --force --sign - "${APP_PATH}"
+        run_quiet codesign_cmd "${APP_PATH}"
     fi
     log_success "App signed ($(get_step_duration "sign"))"
 else
-    print_step 4 $TOTAL_STEPS "Skipping Ad-hoc Signing"
-    log_item "ENABLE_ADHOC_SIGNING is set to false."
+    print_step 4 $TOTAL_STEPS "Skipping Code Signing"
+    log_detail "ENABLE_ADHOC_SIGNING is set to false."
 fi
+
+# Close existing Sorty app instances unless an organization is active.
+# Do this after build/sign so active work is interrupted only at handoff time.
+terminate_running_sorty_if_safe
 
 APP_SIZE=$(get_file_size "${APP_PATH}")
 

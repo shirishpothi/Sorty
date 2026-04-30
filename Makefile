@@ -14,13 +14,15 @@ PARALLEL_FLAGS := -j $(CORES)
 SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox -Xlinker -no_deduplicate
 SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
 FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
+VERBOSE ?= false
+BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE)
 
 # Disable index store for local debug builds (saves ~10-15% compile time)
 export SWIFTPM_DISABLE_INDEXING ?= 1
 
 build:
 	@chmod +x scripts/build.sh
-	@BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
 
 build-ci-arm64:
 	@echo "[deprecated] build-ci-arm64 now forwards to universal build"
@@ -33,7 +35,7 @@ build-ci-x86_64:
 build-ci-universal:
 	@echo "CI-style xcodebuild (universal)..."
 	@chmod +x scripts/build.sh scripts/package.sh
-	@BUILD_METHOD=xcodebuild SKIP_TESTS=true BUILD_ARCHS="arm64 x86_64" XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) BUILD_METHOD=xcodebuild SKIP_TESTS=true BUILD_ARCHS="arm64 x86_64" XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" ./scripts/build.sh
 	@ZIP_NAME_OVERRIDE="Sorty-universal.zip" ./scripts/package.sh
 
 run: build
@@ -43,14 +45,14 @@ run: build
 # builds with debug symbols and verbose logging
 debug:
 	@echo "🛠️  Building in DEBUG mode with $(CORES) parallel jobs..."
-	@BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@echo "🚀 Launching Debug Build..."
 	@open releases/Sorty.app
 
 # Fastest development build - parallel, no tests, debug mode
 dev:
 	@echo "⚡ Fast development build ($(CORES) parallel jobs)..."
-	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 
 # runs the complete test suite with parallel execution
 test:
@@ -81,12 +83,12 @@ build-profile:
 # runs basic syntax checks and builds (skips tests)
 quick:
 	@echo "⚡ Quick build (skipping tests, DEBUG mode, $(CORES) parallel jobs)..."
-	@SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 
 # skips all checks and builds/runs immediately
 now:
 	@echo "🏎️  Immediate build and run (DEBUG mode, $(CORES) parallel jobs)..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@open releases/Sorty.app
 
 # Local CI - mirrors GitHub Actions CI checks on your machine (faster)
@@ -111,7 +113,7 @@ clean:
 # Clean rebuild - force a full rebuild after cleaning caches
 rebuild: clean
 	@echo "🔁 Full rebuild after clean..."
-	@BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
 
 # Build the learnings CLI tool
 cli:
@@ -194,17 +196,17 @@ benchmark-save:
 # Preview harness — launches a targeted view for rapid iteration
 harness:
 	@echo "🔬 Building preview harness ($(CORES) parallel jobs)..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 open releases/Sorty.app
 
 harness-settings:
 	@echo "🔬 Harness → Settings..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=settings open releases/Sorty.app
 
 harness-organize:
 	@echo "🔬 Harness → Organize..."
-	@$(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug SORTY_HARNESS_MODE=1 BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@SORTY_HARNESS_MODE=1 SORTY_HARNESS_VIEW=organize open releases/Sorty.app
 
 help:
@@ -260,6 +262,18 @@ help:
 	@echo "  make cli         - Build the 'learnings' CLI tool"
 	@echo "  make install-cli - Install 'learnings' CLI to /usr/local/bin"
 	@echo "  make help        - Show this help message"
+	@echo ""
+	@echo "Verbosity:"
+	@echo "  Default output is concise. Use VERBOSE=true for full logs"
+	@echo "  Example: make build VERBOSE=true"
+	@echo ""
+	@echo "Build runtime behavior:"
+	@echo "  AUTO_CLOSE_SORTY_ON_BUILD=true (default) closes idle Sorty instances after build"
+	@echo "  AUTO_PRUNE_BUILD_CACHE=true (default) prunes stale .build data when oversized"
+	@echo "  BUILD_CACHE_MAX_SIZE_MB=12288 triggers pruning above this size"
+	@echo "  BUILD_CACHE_TARGET_SIZE_MB=8192 aims to shrink .build near this size"
+	@echo "  BUILD_CACHE_STALE_DAYS=14 marks old cache data eligible for cleanup"
+	@echo "  KEYCHAIN_UNLOCK_TIMEOUT_SECONDS=43200 keeps keychain unlocked for signing (~12h)"
 	@echo ""
 	@echo "Parallel Jobs: $(CORES) cores detected"
 	@echo ""

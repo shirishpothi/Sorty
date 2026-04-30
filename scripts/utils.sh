@@ -13,6 +13,15 @@ SYM_CROSS="✘"
 SYM_WARN="⚠"
 SYM_SPARKLE="✨"
 
+is_truthy() {
+    case "${1:-}" in
+        1|true|TRUE|yes|YES|on|ON) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+SORTY_VERBOSE="${SORTY_VERBOSE:-false}"
+
 # Timer functions
 # Timer variables
 ARCHIVE_START=0
@@ -105,7 +114,9 @@ get_build_number() {
 
 get_file_size() {
     local file_path=$1
-    du -sh "$file_path" | cut -f1
+    local size_mb
+    size_mb=$(du -sm "$file_path" | cut -f1)
+    echo "${size_mb}MB"
 }
 
 # Logging functions
@@ -158,4 +169,10 @@ log_warning() {
 
 log_item() {
     echo -e "  • $1"
+}
+
+log_detail() {
+    if is_truthy "${SORTY_VERBOSE}"; then
+        echo -e "  • $1"
+    fi
 }

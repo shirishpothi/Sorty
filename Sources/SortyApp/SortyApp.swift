@@ -13,6 +13,7 @@ import SortyLib
 @MainActor
 class SortyAppDelegate: NSObject, NSApplicationDelegate {
     private static let confirmQuitWhileOrganizingKey = "confirmQuitWhileOrganizing"
+    private static let buildAutoCloseRequestKey = "buildAutoCloseRequest"
     @MainActor static var forceQuit = false
 
     override init() {
@@ -60,7 +61,15 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         return defaults.bool(forKey: Self.confirmQuitWhileOrganizingKey)
     }
 
+    private var shouldAllowBuildRequestedQuit: Bool {
+        UserDefaults.standard.bool(forKey: Self.buildAutoCloseRequestKey)
+    }
+
     private var quitWarningContext: QuitWarningContext? {
+        if shouldAllowBuildRequestedQuit && !FolderOrganizer.hasRunningOrganizations {
+            return nil
+        }
+
         if FolderOrganizer.hasRunningOrganizations {
             return .runningOrganizations(FolderOrganizer.runningOrganizationCount)
         }
@@ -209,6 +218,8 @@ struct SortyApp: App {
     @State private var coordinator: AppCoordinator?
     @State private var hasConfiguredGlobals = false
 
+    private let widgetSyncManager = SortyWidgetSyncManager.shared
+
     private var backgroundActivity: NSObjectProtocol?
 
     init() {
@@ -252,6 +263,8 @@ struct SortyApp: App {
             set: { showMenuBarExtra = $0 }
         )) {
             MenuBarView()
+                .tint(SortyDesignSystem.Colors.resolvedAccent)
+                .accentColor(SortyDesignSystem.Colors.resolvedAccent)
                 .environmentObject(watchedFoldersManager)
                 .environmentObject(loginItemManager)
                 .environmentObject(notificationSettings)
@@ -300,6 +313,16 @@ struct SortyApp: App {
             }
             .onChange(of: watchedFoldersManager.folders) { _, _ in
                 coordinator?.syncWatchedFolders()
+                widgetSyncManager.sync(
+                    watchedFoldersManager: watchedFoldersManager,
+                    storageLocationsManager: storageLocationsManager
+                )
+            }
+            .onChange(of: storageLocationsManager.locations) { _, _ in
+                widgetSyncManager.sync(
+                    watchedFoldersManager: watchedFoldersManager,
+                    storageLocationsManager: storageLocationsManager
+                )
             }
     }
 
@@ -309,6 +332,8 @@ struct SortyApp: App {
             coordinator: coordinator,
             updateManager: updateManager
         )
+        .tint(SortyDesignSystem.Colors.resolvedAccent)
+        .accentColor(SortyDesignSystem.Colors.resolvedAccent)
         .environmentObject(settingsViewModel)
         .environmentObject(personaManager)
         .environmentObject(customPersonaStore)
@@ -345,6 +370,10 @@ struct SortyApp: App {
 
         watchedFoldersManager.restoreSecurityScopedAccess()
         storageLocationsManager.restoreSecurityScopedAccess()
+        widgetSyncManager.startIfNeeded(
+            watchedFoldersManager: watchedFoldersManager,
+            storageLocationsManager: storageLocationsManager
+        )
 
         if finderIntegrationEnabled {
             ExtensionCommunication.beginMonitoringFinderSyncRuntime()

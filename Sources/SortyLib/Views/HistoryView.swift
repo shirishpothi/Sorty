@@ -224,7 +224,7 @@ struct HistoryView: View {
                                 .padding(.vertical, 16)
                             }
                         }
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, 28)
                         .padding(.bottom, 24)
                     }
                     .background(Color(NSColor.windowBackgroundColor))
@@ -477,51 +477,59 @@ struct HistoryView: View {
 // MARK: - History Header
 
 struct HistoryHeader: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var manager: FolderOrganizer
     @Binding var selectedFilter: HistoryView.HistoryFilter
     @Binding var searchText: String
     let onClearHistory: () -> Void
+    private let controlsHeight: CGFloat = 31
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.title2)
-                        .foregroundStyle(.blue.gradient)
-                    Text("Organization History")
-                        .font(.title2.bold())
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.9)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Organization History")
-
-                Text("\(manager.history.totalSessions) sessions recorded")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .accessibilityLabel("\(manager.history.totalSessions) sessions recorded")
-
-                Spacer()
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            titleRow
 
             HStack(spacing: 12) {
                 searchField
-                    .frame(width: 300)
+                    .frame(maxWidth: 220)
+                    .frame(height: controlsHeight)
 
-                filterControlRow
+                filterPicker
+                    .frame(height: controlsHeight)
 
                 Spacer(minLength: 0)
 
                 clearHistoryButton
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 10)
         .background(.bar)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("History controls")
+    }
+
+    private var titleRow: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.title2)
+                    .foregroundStyle(.blue.gradient)
+                Text("Organization History")
+                    .font(.title2.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Organization History")
+
+            Text("\(manager.history.totalSessions) sessions recorded")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .accessibilityLabel("\(manager.history.totalSessions) sessions recorded")
+
+            Spacer()
+        }
     }
 
     private var searchField: some View {
@@ -552,30 +560,33 @@ struct HistoryHeader: View {
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var filterControlRow: some View {
-        HStack(spacing: 10) {
-            Text("Filter")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            filterPicker
-        }
-    }
-
     private var filterPicker: some View {
-        Picker("Filter", selection: $selectedFilter) {
-            ForEach(HistoryView.HistoryFilter.allCases) { filter in
-                Text(filter.rawValue).tag(filter)
+        HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            LiquidGlassSegmentedControl(
+                selection: $selectedFilter,
+                options: HistoryView.HistoryFilter.allCases,
+                minSegmentHeight: controlsHeight - 8
+            ) { filter, _ in
+                Text(filter.rawValue)
             }
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.primary.opacity(colorScheme == .dark ? 0.1 : 0.05))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.08), lineWidth: 1)
+        )
         .accessibilityLabel("Filter history sessions")
         .accessibilityIdentifier("HistoryFilterPicker")
-        .onChange(of: selectedFilter) { _, _ in
-            HapticFeedbackManager.shared.selection()
-        }
     }
 
     private var clearHistoryButton: some View {
@@ -687,7 +698,7 @@ struct HistorySummaryCard: View {
                     title: "Total Sessions",
                     value: totalSessionsValue,
                     icon: "list.bullet.rectangle.fill",
-                    color: .purple
+                    color: .accentColor
                 )
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Total sessions: \(totalSessionsValue)")
@@ -809,7 +820,7 @@ struct HistorySessionCard: View {
         case .skipped: return .secondary
         case .undo: return .orange
         case .partiallyUndone: return .yellow
-        case .duplicatesCleanup: return .purple
+        case .duplicatesCleanup: return .accentColor
         }
     }
 
@@ -1175,7 +1186,7 @@ private struct OperationsBreakdownBar: View {
                     }
                     if renames > 0 {
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.purple.gradient)
+                            .fill(Color.accentColor.gradient)
                             .frame(width: max(geometry.size.width * renameFraction - 1, 4))
                     }
                     if folderCreates > 0 {
@@ -1207,7 +1218,7 @@ private struct OperationsBreakdownBar: View {
                 if renames > 0 {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(Color.purple)
+                            .fill(Color.accentColor)
                             .frame(width: 6, height: 6)
                         Text("\(renames) renamed")
                             .font(.caption2)
@@ -1254,7 +1265,7 @@ struct WatchedAutomationRow: View {
         case .skipped: return .secondary
         case .undo: return .orange
         case .partiallyUndone: return .yellow
-        case .duplicatesCleanup: return .purple
+        case .duplicatesCleanup: return .accentColor
         }
     }
 
@@ -1382,7 +1393,7 @@ struct HistoryEmptyStateView: View {
     private let previewFeatures: [(icon: String, title: String, description: String, color: Color)] = [
         ("arrow.uturn.backward.circle.fill", "Undo & Redo", "Reverse any organization with one click", .orange),
         ("chart.bar.fill", "Impact Stats", "Track files organized and time saved", .blue),
-        ("wand.and.stars", "Try Different Models", "Re-run with different AI for better results", .purple),
+        ("wand.and.stars", "Try Different Models", "Re-run with different AI for better results", .accentColor),
         ("clock.arrow.circlepath", "Full Timeline", "See every change made to your folders", .green)
     ]
 
@@ -1448,20 +1459,17 @@ struct HistoryEmptyStateView: View {
                     Image(systemName: "folder.badge.gearshape")
                     Text("Start Organizing")
                     Image(systemName: "arrow.right")
-                        .font(.caption)
+                        .font(.subheadline)
                 }
-                .font(.headline)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 14)
             }
-            .buttonStyle(.onboardingPill)
+            .buttonStyle(.glossyCallToAction(.accentColor, size: .large, isHovering: isHovered))
             .scaleEffect(isHovered ? 1.03 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+            .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isHovered)
             .onHover { hovering in
-                isHovered = hovering
-                if hovering {
+                if hovering && !isHovered {
                     HapticFeedbackManager.shared.selection()
                 }
+                isHovered = hovering
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
@@ -1632,7 +1640,7 @@ struct HistoryDetailSheet: View {
                                         title: "Folders Created",
                                         value: "\(entry.foldersCreated)",
                                         icon: "folder.fill",
-                                        color: .purple
+                                        color: .accentColor
                                     )
                                     if let plan = entry.plan {
                                         DetailStatView(
@@ -1683,7 +1691,7 @@ struct HistoryDetailSheet: View {
 
                                             NerdStatCard(
                                                 icon: "text.bubble",
-                                                iconColor: .purple,
+                                                iconColor: .accentColor,
                                                 title: "Response",
                                                 value: GenerationStats.formatCount(stats.responseTokens),
                                                 unit: "tok",
@@ -2611,7 +2619,7 @@ struct StatusBadge: View {
         case .skipped: return .secondary
         case .undo: return .orange
         case .partiallyUndone: return .yellow
-        case .duplicatesCleanup: return .purple
+        case .duplicatesCleanup: return .accentColor
         }
     }
 
@@ -3128,7 +3136,7 @@ struct HistoryLiquidGlassReasoningCard: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "brain")
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(Color.accentColor)
                 Text("AI Reasoning")
                     .font(.headline)
             }
@@ -3160,12 +3168,12 @@ struct HistoryLiquidGlassReasoningCard: View {
                 HStack(spacing: 8) {
                     ZStack {
                         Circle()
-                            .fill(Color.purple.opacity(0.12))
+                            .fill(Color.accentColor.opacity(0.12))
                             .frame(width: 28, height: 28)
 
                         Image(systemName: "brain")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(Color.accentColor)
                     }
 
                     Text("AI Reasoning")

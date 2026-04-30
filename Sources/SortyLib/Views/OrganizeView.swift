@@ -444,6 +444,7 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
+    @State private var isStartButtonHovering = false
     
     private var isConnecting: Bool {
         sessionManager.prewarmingProvider != nil
@@ -508,10 +509,15 @@ struct ReadyToOrganizeView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(.glossyCallToAction(.accentColor, size: .large, isHovering: isStartButtonHovering))
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)
+            .onHover { hovering in
+                if hovering && !isStartButtonHovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+                isStartButtonHovering = hovering
+            }
             .opacity(hasAppeared ? 1 : 0)
             .animation(.easeOut(duration: 0.2).delay(0.14), value: hasAppeared)
             .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start organizing files using your current settings")

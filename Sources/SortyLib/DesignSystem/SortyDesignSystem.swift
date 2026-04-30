@@ -36,8 +36,19 @@ public enum SortyDesignSystem {
     
     // MARK: - Colors
     public enum Colors {
+        /// Sorty brand accent — rose-pink derived from the app icon.
+        /// Adapts between light and dark appearances.
+        public static let accent: Color = {
+            let light = Color(red: 0.85, green: 0.235, blue: 0.353)
+            let dark  = Color(red: 0.95, green: 0.38,  blue: 0.475)
+            return Color(nsColor: NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                return isDark ? NSColor(dark) : NSColor(light)
+            })
+        }()
+
         // Brand colors
-        public static let primary = Color.accentColor
+        public static var primary: Color { resolvedAccent }
         public static let purple = Color.purple
         public static let purpleLight = Color.purple.opacity(0.1)
         public static let blue = Color.blue
@@ -70,6 +81,22 @@ public enum SortyDesignSystem {
         public static let glassBorder = Color.white.opacity(0.2)
         public static let overlayLight = Color.black.opacity(0.05)
         public static let overlayMedium = Color.black.opacity(0.1)
+
+        /// Returns the system accent color when the user has chosen a specific
+        /// accent in System Settings, or Sorty's custom brand accent when the
+        /// system is set to "Multicolor" (the default).
+        ///
+        /// macOS stores the user's choice in `AppleAccentColor` in the global
+        /// domain.  When "Multicolor" is selected the key is absent, so we
+        /// detect that and fall back to our brand pink.
+        public static var resolvedAccent: Color {
+            if UserDefaults.standard.object(forKey: "AppleAccentColor") != nil {
+                // User chose a specific accent color — respect it
+                return Color.accentColor
+            }
+            // "Multicolor" — enforce Sorty's brand accent
+            return accent
+        }
     }
     
     // MARK: - Typography
