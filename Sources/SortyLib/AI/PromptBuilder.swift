@@ -499,7 +499,7 @@ struct PromptBuilder {
         Rules:
         - Max 3 levels deep
         - HARD LIMIT: You MUST output ≤ \(maxTopLevelFolders) top-level folders. Merge categories if needed.
-        - NEVER create a single top-level folder that contains everything. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
+        - NEVER create a single top-level folder that contains everything UNLESS explicitly requested by the user in custom instructions. If all files belong to a single overarching category, use its subcategories as your top-level folders instead.
         - Never name a folder the same as an existing file in the input.
         - Use clear folder names
         - Prefer using file_ids in compact responses when IDs are provided.
