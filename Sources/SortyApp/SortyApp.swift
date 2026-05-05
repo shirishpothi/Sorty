@@ -6,8 +6,9 @@
 //
 
 import SwiftUI
+
 #if canImport(SortyLib)
-import SortyLib
+    import SortyLib
 #endif
 
 @MainActor
@@ -36,122 +37,129 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         #if canImport(SortyLib)
-        guard shouldWarnBeforeQuitForActiveAutomation,
-              let warningContext = quitWarningContext else {
-            return .terminateNow
-        }
+            guard shouldWarnBeforeQuitForActiveAutomation,
+                let warningContext = quitWarningContext
+            else {
+                return .terminateNow
+            }
 
-        return presentQuitWarning(for: warningContext)
+            return presentQuitWarning(for: warningContext)
         #else
-        return .terminateNow
+            return .terminateNow
         #endif
     }
 
     #if canImport(SortyLib)
-    private enum QuitWarningContext {
-        case runningOrganizations(Int)
-        case watchedFolders(Int)
-    }
-
-    private var shouldWarnBeforeQuitForActiveAutomation: Bool {
-        let defaults = UserDefaults.standard
-        if defaults.object(forKey: Self.confirmQuitWhileOrganizingKey) == nil {
-            return true
-        }
-        return defaults.bool(forKey: Self.confirmQuitWhileOrganizingKey)
-    }
-
-    private var shouldAllowBuildRequestedQuit: Bool {
-        UserDefaults.standard.bool(forKey: Self.buildAutoCloseRequestKey)
-    }
-
-    private var quitWarningContext: QuitWarningContext? {
-        if shouldAllowBuildRequestedQuit && !FolderOrganizer.hasRunningOrganizations {
-            return nil
+        private enum QuitWarningContext {
+            case runningOrganizations(Int)
+            case watchedFolders(Int)
         }
 
-        if FolderOrganizer.hasRunningOrganizations {
-            return .runningOrganizations(FolderOrganizer.runningOrganizationCount)
-        }
-
-        guard shouldContinueRunningWhenLastWindowCloses else {
-            return nil
-        }
-
-        let watchedCount = activeWatchedAutoOrganizeFolderCount
-        guard watchedCount > 0 else {
-            return nil
-        }
-
-        return .watchedFolders(watchedCount)
-    }
-
-    private var activeWatchedAutoOrganizeFolderCount: Int {
-        guard let data = UserDefaults.standard.data(forKey: "watchedFolders"),
-              let folders = try? JSONDecoder().decode([WatchedFolder].self, from: data) else {
-            return 0
-        }
-
-        return folders.filter { $0.isEnabled && $0.autoOrganize }.count
-    }
-
-    private var shouldContinueRunningWhenLastWindowCloses: Bool {
-        let defaults = UserDefaults.standard
-        let keepInBackground = defaults.bool(forKey: "keepInBackground")
-        let showMenuBarExtra = defaults.bool(forKey: "showMenuBarExtra")
-        return keepInBackground || showMenuBarExtra
-    }
-
-    private func presentQuitWarning(for context: QuitWarningContext) -> NSApplication.TerminateReply {
-        let alert = NSAlert()
-        let backgroundHint = shouldContinueRunningWhenLastWindowCloses
-            ? " To keep automation running, close the window instead of quitting."
-            : ""
-
-        alert.alertStyle = .warning
-        switch context {
-        case .runningOrganizations(let runningCount):
-            let areIs = runningCount == 1 ? "is" : "are"
-            let noun = runningCount == 1 ? "organization" : "organizations"
-            alert.messageText = "Quit Sorty while \(noun) \(areIs) running?"
-            alert.informativeText = "\(runningCount) \(noun) \(areIs) still in progress. Quitting now will interrupt active work and stop watched-folder automations until Sorty is reopened.\(backgroundHint)"
-
-        case .watchedFolders(let watchedCount):
-            let areIs = watchedCount == 1 ? "is" : "are"
-            let noun = watchedCount == 1 ? "watched folder" : "watched folders"
-            alert.messageText = "Quit Sorty and stop watched-folder automation?"
-            alert.informativeText = "\(watchedCount) \(noun) \(areIs) currently active for auto-organization. Quitting now will stop monitoring until Sorty is reopened.\(backgroundHint)"
-        }
-
-        alert.addButton(withTitle: "Quit Sorty")
-        alert.addButton(withTitle: "Cancel")
-
-        let checkboxTitle: String
-        switch context {
-        case .runningOrganizations:
-            checkboxTitle = "Don't ask again while organization is running"
-        case .watchedFolders:
-            checkboxTitle = "Don't ask again while watched-folder automation is active"
-        }
-
-        let dontAskAgainCheckbox = NSButton(
-            checkboxWithTitle: checkboxTitle,
-            target: nil,
-            action: nil
-        )
-        dontAskAgainCheckbox.state = .off
-        alert.accessoryView = dontAskAgainCheckbox
-
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            if dontAskAgainCheckbox.state == .on {
-                UserDefaults.standard.set(false, forKey: Self.confirmQuitWhileOrganizingKey)
+        private var shouldWarnBeforeQuitForActiveAutomation: Bool {
+            let defaults = UserDefaults.standard
+            if defaults.object(forKey: Self.confirmQuitWhileOrganizingKey) == nil {
+                return true
             }
-            return .terminateNow
+            return defaults.bool(forKey: Self.confirmQuitWhileOrganizingKey)
         }
 
-        return .terminateCancel
-    }
+        private var shouldAllowBuildRequestedQuit: Bool {
+            UserDefaults.standard.bool(forKey: Self.buildAutoCloseRequestKey)
+        }
+
+        private var quitWarningContext: QuitWarningContext? {
+            if shouldAllowBuildRequestedQuit && !FolderOrganizer.hasRunningOrganizations {
+                return nil
+            }
+
+            if FolderOrganizer.hasRunningOrganizations {
+                return .runningOrganizations(FolderOrganizer.runningOrganizationCount)
+            }
+
+            guard shouldContinueRunningWhenLastWindowCloses else {
+                return nil
+            }
+
+            let watchedCount = activeWatchedAutoOrganizeFolderCount
+            guard watchedCount > 0 else {
+                return nil
+            }
+
+            return .watchedFolders(watchedCount)
+        }
+
+        private var activeWatchedAutoOrganizeFolderCount: Int {
+            guard let data = UserDefaults.standard.data(forKey: "watchedFolders"),
+                let folders = try? JSONDecoder().decode([WatchedFolder].self, from: data)
+            else {
+                return 0
+            }
+
+            return folders.filter { $0.isEnabled && $0.autoOrganize }.count
+        }
+
+        private var shouldContinueRunningWhenLastWindowCloses: Bool {
+            let defaults = UserDefaults.standard
+            let keepInBackground = defaults.bool(forKey: "keepInBackground")
+            let showMenuBarExtra = defaults.bool(forKey: "showMenuBarExtra")
+            return keepInBackground || showMenuBarExtra
+        }
+
+        private func presentQuitWarning(for context: QuitWarningContext)
+            -> NSApplication.TerminateReply
+        {
+            let alert = NSAlert()
+            let backgroundHint =
+                shouldContinueRunningWhenLastWindowCloses
+                ? " To keep automation running, close the window instead of quitting."
+                : ""
+
+            alert.alertStyle = .warning
+            switch context {
+            case .runningOrganizations(let runningCount):
+                let areIs = runningCount == 1 ? "is" : "are"
+                let noun = runningCount == 1 ? "organization" : "organizations"
+                alert.messageText = "Quit Sorty while \(noun) \(areIs) running?"
+                alert.informativeText =
+                    "\(runningCount) \(noun) \(areIs) still in progress. Quitting now will interrupt active work and stop watched-folder automations until Sorty is reopened.\(backgroundHint)"
+
+            case .watchedFolders(let watchedCount):
+                let areIs = watchedCount == 1 ? "is" : "are"
+                let noun = watchedCount == 1 ? "watched folder" : "watched folders"
+                alert.messageText = "Quit Sorty and stop watched-folder automation?"
+                alert.informativeText =
+                    "\(watchedCount) \(noun) \(areIs) currently active for auto-organization. Quitting now will stop monitoring until Sorty is reopened.\(backgroundHint)"
+            }
+
+            alert.addButton(withTitle: "Quit Sorty")
+            alert.addButton(withTitle: "Cancel")
+
+            let checkboxTitle: String
+            switch context {
+            case .runningOrganizations:
+                checkboxTitle = "Don't ask again while organization is running"
+            case .watchedFolders:
+                checkboxTitle = "Don't ask again while watched-folder automation is active"
+            }
+
+            let dontAskAgainCheckbox = NSButton(
+                checkboxWithTitle: checkboxTitle,
+                target: nil,
+                action: nil
+            )
+            dontAskAgainCheckbox.state = .off
+            alert.accessoryView = dontAskAgainCheckbox
+
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                if dontAskAgainCheckbox.state == .on {
+                    UserDefaults.standard.set(false, forKey: Self.confirmQuitWhileOrganizingKey)
+                }
+                return .terminateNow
+            }
+
+            return .terminateCancel
+        }
     #endif
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -165,7 +173,9 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
     /// the extra window that SwiftUI creates when activated via URL scheme.
     @MainActor static var pendingDeeplinkActivation = false
 
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)
+        -> Bool
+    {
         if Self.pendingDeeplinkActivation {
             Self.pendingDeeplinkActivation = false
             // If we already have a visible window, suppress creating another one.
@@ -212,6 +222,7 @@ struct SortyApp: App {
     @StateObject private var steeringPromptManager = SteeringPromptManager.shared
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var updateManager = SparkleUpdateManager()
+    @StateObject private var settingsWindowAppState: AppState
 
     @StateObject private var automationOrganizer = FolderOrganizer()
 
@@ -224,11 +235,13 @@ struct SortyApp: App {
 
     init() {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel())
+        _settingsWindowAppState = StateObject(wrappedValue: AppState())
 
         let codexAuthManager = CodexCLIAuthManager()
         _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
         _openAIAuthManager = StateObject(
-            wrappedValue: SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager)
+            wrappedValue: SubscriptionAuthManager(
+                provider: .openAI, codexAuthManager: codexAuthManager)
         )
 
         UserDefaults.standard.register(defaults: [
@@ -236,14 +249,14 @@ struct SortyApp: App {
             "keepInBackground": false,
             "hideDockIcon": false,
             "launchAtLogin": false,
-            "confirmQuitWhileOrganizing": true
+            "confirmQuitWhileOrganizing": true,
         ])
 
         backgroundActivity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .automaticTerminationDisabled, .suddenTerminationDisabled],
             reason: "Monitoring watched folders for automatic organization"
         )
-        
+
         configureUITestStateIfNeeded()
     }
 
@@ -258,10 +271,17 @@ struct SortyApp: App {
             SortyCommands()
         }
 
-        MenuBarExtra(isInserted: Binding(
-            get: { showMenuBarExtra || keepInBackground },
-            set: { showMenuBarExtra = $0 }
-        )) {
+        Settings {
+            settingsWindowContent
+        }
+        .defaultSize(width: 1080, height: 720)
+
+        MenuBarExtra(
+            isInserted: Binding(
+                get: { showMenuBarExtra || keepInBackground },
+                set: { showMenuBarExtra = $0 }
+            )
+        ) {
             MenuBarView()
                 .tint(SortyDesignSystem.Colors.resolvedAccent)
                 .accentColor(SortyDesignSystem.Colors.resolvedAccent)
@@ -281,6 +301,7 @@ struct SortyApp: App {
     @ViewBuilder
     private func mainWindowContent(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
         mainWindowRootView(launchRequest: launchRequest)
+            .modifier(SettingsWindowRequestHandler(settingsAppState: settingsWindowAppState))
             .task {
                 configureGlobalsIfNeeded()
             }
@@ -324,6 +345,24 @@ struct SortyApp: App {
                     storageLocationsManager: storageLocationsManager
                 )
             }
+    }
+
+    private var settingsWindowContent: some View {
+        SettingsView()
+            .frame(minWidth: 960, idealWidth: 1080, minHeight: 640, idealHeight: 720)
+            .tint(SortyDesignSystem.Colors.resolvedAccent)
+            .accentColor(SortyDesignSystem.Colors.resolvedAccent)
+            .environmentObject(settingsViewModel)
+            .environmentObject(settingsWindowAppState)
+            .environmentObject(personaManager)
+            .environmentObject(customPersonaStore)
+            .environmentObject(watchedFoldersManager)
+            .environmentObject(loginItemManager)
+            .environmentObject(notificationSettings)
+            .environmentObject(openAIAuthManager)
+            .environmentObject(codexAuthManager)
+            .environmentObject(automationManager)
+            .environmentObject(learningsManager)
     }
 
     private func mainWindowRootView(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
@@ -521,13 +560,18 @@ struct SortyApp: App {
         }
 
         if env["XCUITEST_SEED_HISTORY_ENTRY"] == "1" {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            let historyDirectory = appSupport?.appendingPathComponent("Sorty/History", isDirectory: true)
+            let appSupport = FileManager.default.urls(
+                for: .applicationSupportDirectory, in: .userDomainMask
+            ).first
+            let historyDirectory = appSupport?.appendingPathComponent(
+                "Sorty/History", isDirectory: true)
             let historyURL = historyDirectory?.appendingPathComponent("organization-history.json")
-            let backupHistoryURL = historyDirectory?.appendingPathComponent("organization-history.json.bak")
+            let backupHistoryURL = historyDirectory?.appendingPathComponent(
+                "organization-history.json.bak")
 
             if let historyDirectory {
-                try? FileManager.default.createDirectory(at: historyDirectory, withIntermediateDirectories: true)
+                try? FileManager.default.createDirectory(
+                    at: historyDirectory, withIntermediateDirectories: true)
             }
 
             let seededEntries = [
@@ -552,5 +596,29 @@ struct SortyApp: App {
                 }
             }
         }
+    }
+}
+
+private struct SettingsWindowRequestHandler: ViewModifier {
+    @ObservedObject var settingsAppState: AppState
+    @Environment(\.openSettings) private var openSettings
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .openSettingsWindow)) {
+                notification in
+                guard let request = notification.object as? SettingsWindowRequest else {
+                    openSettings()
+                    return
+                }
+
+                settingsAppState.selectedSettingsSection = request.section
+                settingsAppState.settingsFocusTarget = request.focusTarget
+                if let sourceAppState = notification.userInfo?["sourceAppState"] as? AppState {
+                    settingsAppState.requiresSetupRepair = sourceAppState.requiresSetupRepair
+                    settingsAppState.setupRepairMessage = sourceAppState.setupRepairMessage
+                }
+                openSettings()
+            }
     }
 }

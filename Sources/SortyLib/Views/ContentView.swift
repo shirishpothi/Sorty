@@ -17,6 +17,7 @@ public struct ContentView: View {
     @EnvironmentObject var extensionListener: ExtensionListener
 
     @State private var previousView: AppState.AppView?
+    @State private var displayedView: AppState.AppView = .organize
     @State private var showCommandNumbers = false
     @State private var commandFlagsMonitor: Any?
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
@@ -66,7 +67,9 @@ public struct ContentView: View {
                         // Clear navigatedFromSettings when using sidebar
                         appState.navigatedFromSettings = false
 
-                        appState.currentView = newValue
+                        withAnimation(.easeInOut(duration: 0.28)) {
+                            appState.currentView = newValue
+                        }
                     }
                 }
             )) {
@@ -83,11 +86,14 @@ public struct ContentView: View {
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
-            // Keep the detail view lightweight during navigation: only render the active page.
-            contentView(for: appState.currentView)
-                .transition(TransitionStyles.scaleAndFade)
-                .animation(.easeInOut(duration: 0.3), value: appState.currentView)
-                .toolbar {
+            ZStack {
+                // Keep the detail view lightweight during navigation: only render the active page.
+                contentView(for: displayedView)
+                    .id(displayedView)
+                    .transition(TransitionStyles.scaleAndFade)
+            }
+            .animation(.easeInOut(duration: 0.28), value: displayedView)
+            .toolbar {
                     if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
                         ToolbarItem(placement: .navigation) {
                             Button {
@@ -107,9 +113,15 @@ public struct ContentView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Main Navigation")
         .frame(minWidth: 1000, minHeight: 700)
+        .onAppear {
+            displayedView = appState.currentView
+        }
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {
                 previousView = oldValue
+                withAnimation(.easeInOut(duration: 0.28)) {
+                    displayedView = newValue
+                }
             }
         }
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in

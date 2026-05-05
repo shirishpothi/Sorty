@@ -14,9 +14,11 @@ REQUIRE_BUNDLED_CLI="${REQUIRE_BUNDLED_CLI:-true}"
 ZIP_NAME="${ZIP_NAME_OVERRIDE:-${PROJECT_NAME}.zip}"
 ZIP_PATH="${RELEASE_DIR}/${ZIP_NAME}"
 IAP_PATH="${APP_PATH}/Contents/Resources/InternetAccessPolicy.plist"
+BACKGROUND_AGENT_PLIST="${APP_PATH}/Contents/Library/LaunchAgents/com.sorty.app.background-agent.plist"
+BACKGROUND_AGENT_BUNDLE_PROGRAM="Contents/MacOS/Sorty"
 
 # 1. Validate bundled CLI tools exist in app bundle
-print_step 1 3 "Validating Bundled CLI Tools"
+print_step 1 6 "Validating Bundled CLI Tools"
 CLI_DIR="${APP_PATH}/Contents/Resources/CLI"
 if [ "${REQUIRE_BUNDLED_CLI}" = "true" ]; then
     if [ ! -x "${CLI_DIR}/sorty" ] || [ ! -x "${CLI_DIR}/learnings" ]; then
@@ -30,7 +32,7 @@ else
 fi
 
 # 2. Validate Internet Access Policy is bundled
-print_step 2 3 "Validating Internet Access Policy"
+print_step 2 6 "Validating Internet Access Policy"
 if [ ! -f "${IAP_PATH}" ]; then
     log_failure "Missing InternetAccessPolicy.plist in app bundle at ${IAP_PATH}"
     exit 1
@@ -43,8 +45,35 @@ else
     exit 1
 fi
 
-# 3. Create ZIP
-print_step 3 3 "Creating Application Archive (ZIP)"
+# 3. Validate background agent launch path before packaging.
+print_step 3 6 "Validating Background Agent"
+if [ ! -f "${BACKGROUND_AGENT_PLIST}" ]; then
+    log_failure "Missing background agent plist at ${BACKGROUND_AGENT_PLIST}"
+    exit 1
+fi
+
+AGENT_BUNDLE_PROGRAM=$(/usr/libexec/PlistBuddy -c "Print :BundleProgram" "${BACKGROUND_AGENT_PLIST}" 2>/dev/null || true)
+if [ "${AGENT_BUNDLE_PROGRAM}" != "${BACKGROUND_AGENT_BUNDLE_PROGRAM}" ]; then
+    log_failure "Background agent BundleProgram must be ${BACKGROUND_AGENT_BUNDLE_PROGRAM} (found ${AGENT_BUNDLE_PROGRAM:-<missing>})"
+    exit 1
+fi
+log_success "Background agent launch path verified"
+
+# 4. Validate embedded framework linkage before packaging.
+print_step 4 6 "Validating App Linkage"
+validate_sorty_app_linkage "${APP_PATH}"
+
+# 5. Validate code signature before packaging.
+print_step 5 6 "Validating Code Signature"
+if codesign --verify --strict --verbose=2 "${APP_PATH}" >/dev/null 2>&1; then
+    log_success "Code signature verified"
+else
+    log_failure "Code signature is invalid; rebuild or re-sign ${APP_PATH} before packaging"
+    exit 1
+fi
+
+# 6. Create ZIP
+print_step 6 6 "Creating Application Archive (ZIP)"
 start_step_timer "zip"
 rm -f "${ZIP_PATH}"
 
@@ -56,6 +85,11 @@ fi
 ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP_PATH}"
 
 if [ -f "${ZIP_PATH}" ]; then
+    ZIP_CHECK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/sorty-zip-check.XXXXXX")
+    ditto -x -k "${ZIP_PATH}" "${ZIP_CHECK_DIR}"
+    validate_sorty_app_linkage "${ZIP_CHECK_DIR}/${PROJECT_NAME}.app"
+    codesign --verify --strict --verbose=2 "${ZIP_CHECK_DIR}/${PROJECT_NAME}.app" >/dev/null
+    rm -rf "${ZIP_CHECK_DIR}"
     log_success "Created ${ZIP_NAME} ($(get_file_size "${ZIP_PATH}"))"
 else
     log_failure "ZIP creation failed"

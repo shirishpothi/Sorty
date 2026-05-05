@@ -62,7 +62,7 @@ public struct ProviderSelectionStepView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to AI")
                         PrivacyFeatureRow(icon: "folder", text: "File contents stay local (unless Deep Scan is enabled)")
-                        PrivacyFeatureRow(icon: "arrow.uturn.backward", text: "All changes are reversible", badge: "Beta")
+                        PrivacyFeatureRow(icon: "arrow.uturn.backward", text: "All changes are reversible")
                         PrivacyFeatureRow(icon: "server.rack", text: "Use local models for full privacy")
                     }
                     .padding(.top, 8)
@@ -103,16 +103,33 @@ public struct ProviderSelectionStepView: View {
                         // Info Card / Liquid Note style container
                         VStack(spacing: 0) {
                             // Header
-                            HStack {
-                                Image(systemName: "slider.horizontal.3")
-                                    .foregroundStyle(.secondary)
-                                Text("Configuration")
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
+                            HStack(spacing: 10) {
+                                Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
+                                    .foregroundStyle(providerSetupStatus.isReady ? .green : Color.accentColor)
+                                    .font(.system(size: 16, weight: .semibold))
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Configure \(settingsViewModel.config.provider.displayName)")
+                                        .font(.subheadline.weight(.semibold))
+
+                                    Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
                                 Spacer()
+
+                                if !providerSetupStatus.isReady {
+                                    Text("Required")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(.orange)
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 4)
+                                        .background(Color.orange.opacity(0.14), in: Capsule())
+                                }
                             }
                             .padding(12)
-                            .background(Color.secondary.opacity(0.05))
+                            .background(providerSetupStatus.isReady ? Color.green.opacity(0.06) : Color.accentColor.opacity(0.08))
                             
                             Divider()
                             
@@ -135,6 +152,7 @@ public struct ProviderSelectionStepView: View {
                         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
                         .frame(maxWidth: 380)
                         .transition(.opacity.combined(with: .move(edge: .top)))
+                        .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
                     }
                     
                     providerReadinessView

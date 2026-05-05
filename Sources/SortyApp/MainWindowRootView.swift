@@ -53,6 +53,13 @@ struct MainWindowRootView: View {
 
                 processDeeplink(url)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .presentSteeringPromptsInMainWindow)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
+                withAnimation(.pageTransition) {
+                    windowSession.appState.currentView = .organize
+                }
+                windowSession.appState.shouldPresentSteeringPrompts = true
+            }
             .onReceive(NotificationCenter.default.publisher(for: .importLearningsProfile)) { notification in
                 guard notification.targetsWindowSession(windowSession.id) else { return }
                 windowSession.appState.currentView = .learnings

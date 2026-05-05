@@ -118,11 +118,14 @@ public final class WindowSession: ObservableObject {
             }
 
         case .settings(let section):
-            appState.currentView = .settings
             Task { @MainActor in
                 // Avoid mutating @Published navigation state during the same render transaction.
                 await Task.yield()
                 applySettingsDestination(section: section)
+                appState.openSettingsWindow(
+                    section: appState.selectedSettingsSection,
+                    focusTarget: appState.settingsFocusTarget
+                )
             }
 
         case .help:
@@ -144,7 +147,7 @@ public final class WindowSession: ObservableObject {
             appState.currentView = .workspaceHealth
 
         case .persona(let action, let prompt, let generate):
-            appState.currentView = .settings
+            appState.openSettingsWindow(section: .strategy)
             if action == "create" || generate {
                 if generate, let prompt {
                     Task<Void, Never> {

@@ -246,6 +246,8 @@ public struct SortyCommands: Commands {
             Link("Documentation", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!)
             
             Link("Report Issue", destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!)
+
+            Link("Support the Developer", destination: URL(string: "https://github.com/sponsors/shirishpothi")!)
             
             Divider()
             
@@ -468,6 +470,7 @@ public class AppState: ObservableObject {
         }
     }
     @Published public var isFeatureTourPresented: Bool = false
+    @Published public var shouldPresentSteeringPrompts = false
 
     // State derived from FolderOrganizer
     public weak var organizer: FolderOrganizer?
@@ -752,10 +755,21 @@ public class AppState: ObservableObject {
     }
 
     public func openProviderSettingsForRepair() {
-        selectedSettingsSection = .provider
-        settingsFocusTarget = nil
+        openSettingsWindow(section: .provider)
         navigatedFromSettings = false
-        currentView = .settings
+    }
+
+    public func openSettingsWindow(
+        section: SettingsCategory? = nil,
+        focusTarget: SettingsFocusTarget? = nil
+    ) {
+        selectedSettingsSection = section
+        settingsFocusTarget = focusTarget
+        NotificationCenter.default.post(
+            name: .openSettingsWindow,
+            object: SettingsWindowRequest(section: section, focusTarget: focusTarget),
+            userInfo: ["sourceAppState": self]
+        )
     }
 
     public func startSetupRepair(message: String, navigateToSettings: Bool = true) {
@@ -1236,9 +1250,7 @@ public class AppState: ObservableObject {
     }
 
     public func showHelp() {
-        currentView = .settings
-        selectedSettingsSection = .help
-        settingsFocusTarget = nil
+        openSettingsWindow(section: .help)
         navigatedFromSettings = true
         HapticFeedbackManager.shared.selection()
     }

@@ -14,6 +14,7 @@ struct FinderIntegrationSettingsView: View {
     @State private var finderSyncDiagnostics: ExtensionCommunication.FinderSyncDiagnostics?
     @State private var finderSyncMessage: String?
     @State private var frontmostFinderFolder: URL?
+    @State private var openSystemSettingsButtonFrame: CGRect = .zero
     @EnvironmentObject var automationManager: AutomationManager
     
     var body: some View {
@@ -281,9 +282,12 @@ struct FinderIntegrationSettingsView: View {
 
                         if automationManager.automationStatus == .denied {
                             Button("Open System Settings") {
-                                automationManager.openAutomationSettings()
+                                automationManager.openAutomationSettings(
+                                    sourceFrameInScreen: openSystemSettingsButtonFrame.isEmpty ? nil : openSystemSettingsButtonFrame
+                                )
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
+                            .background(ScreenFrameReader(frameInScreen: $openSystemSettingsButtonFrame))
                         }
                     }
 

@@ -6,8 +6,8 @@
 //  Steps: Welcome → Provider Selection → Permissions → Workflow → Demo → Completion
 //
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 // MARK: - Main Onboarding View
 
@@ -19,7 +19,7 @@ public struct OnboardingView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
-    
+
     @State private var currentStep: OnboardingStep = .welcome
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
@@ -30,36 +30,40 @@ public struct OnboardingView: View {
     @State private var hasTriggeredSwipeForGesture = false
 
     private let swipeThreshold: CGFloat = 42
-    
+
     public init(hasCompletedOnboarding: Binding<Bool>) {
         self._hasCompletedOnboarding = hasCompletedOnboarding
     }
-    
+
     public var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Color(NSColor.windowBackgroundColor)
                     .ignoresSafeArea()
-                
+
                 VStack(spacing: 0) {
-                    // Keep the progress row clear of macOS title bar variants.
+                    // Pinned with a fixed top padding so it doesn't shift between steps.
+                    // Opaque background prevents scrolled step content from bleeding behind it.
                     OnboardingProgressBar(currentStep: currentStep)
-                        .padding(.top, max(44, geometry.safeAreaInsets.top + 16))
-                        .padding(.horizontal, 60)
-                    
+                        .padding(.top, 54)
+                        .padding(.bottom, 12)
+                        .padding(.horizontal, 48)
+                        .background(Color(NSColor.windowBackgroundColor))
+
                     // Main content
                     stepContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    
+
                     // Navigation controls
                     navigationControls
                         .padding(.horizontal, 40)
                         .padding(.bottom, 16)
                 }
+                .ignoresSafeArea(.container, edges: .top)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 1000, minHeight: 720)
+        .frame(minWidth: 900, minHeight: 640)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Onboarding")
         .accessibilityIdentifier("OnboardingView")
@@ -71,6 +75,7 @@ public struct OnboardingView: View {
                 advanceValidationMessage = nil
             }
         }
+        .background(OnboardingWindowTitleConfigurator().frame(width: 0, height: 0))
         .onAppear {
             installSwipeMonitorIfNeeded()
         }
@@ -78,7 +83,7 @@ public struct OnboardingView: View {
             removeSwipeMonitor()
         }
     }
-    
+
     @ViewBuilder
     private var stepContent: some View {
         switch currentStep {
@@ -114,38 +119,38 @@ public struct OnboardingView: View {
             .transition(TransitionStyles.scaleAndFade)
         }
     }
-    
+
     private var navigationControls: some View {
         let sideControlWidth: CGFloat = 180
+        let backHidden = (currentStep == .welcome || currentStep == .completion)
 
         return VStack(spacing: 8) {
             ZStack {
                 HStack(spacing: 16) {
-                // Back button - show for all steps except welcome and completion
-                    Group {
-                        if currentStep != .welcome && currentStep != .completion {
-                            Button {
-                                navigateToPreviousStep()
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "chevron.left")
-                                        .font(.system(size: 12, weight: .semibold))
-                                    Text("Back")
-                                }
-                                .frame(minWidth: 80)
-                            }
-                            .buttonStyle(.bordered)
-                            .keyboardShortcut(.leftArrow, modifiers: [])
-                            .accessibilityIdentifier("OnboardingBackButton")
+                    // Back button - kept in layout on all steps to prevent layout shift.
+                    Button {
+                        navigateToPreviousStep()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("Back")
                         }
+                        .frame(minWidth: 80)
                     }
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                    .accessibilityIdentifier("OnboardingBackButton")
+                    .opacity(backHidden ? 0 : 1)
+                    .disabled(backHidden)
+                    .allowsHitTesting(!backHidden)
                     .frame(width: sideControlWidth, alignment: .leading)
 
                     Spacer(minLength: 0)
 
                     // Next/Skip button
                     Group {
-                        if currentStep != .completion {
+                        if currentStep != .completion && currentStep != .welcome {
                             if currentStep == .demo {
                                 Button {
                                     navigateForwardFromControls()
@@ -155,19 +160,6 @@ public struct OnboardingView: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .accessibilityIdentifier("OnboardingSkipDemoButton")
-                            } else if currentStep == .welcome {
-                                Button {
-                                    navigateForwardFromControls()
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Text("Get Started")
-                                        Image(systemName: "arrow.right")
-                                            .font(.system(size: 12, weight: .semibold))
-                                    }
-                                }
-                                .buttonStyle(.onboardingPill)
-                                .keyboardShortcut(.defaultAction)
-                                .accessibilityIdentifier("OnboardingAdvanceButton")
                             } else {
                                 Button {
                                     navigateForwardFromControls()
@@ -184,7 +176,9 @@ public struct OnboardingView: View {
                                 .buttonStyle(.onboardingPill)
                                 .keyboardShortcut(.rightArrow, modifiers: [])
                                 .disabled(!currentStepValidation.canAdvance || isAdvancing)
-                                .opacity(currentStepValidation.canAdvance && !isAdvancing ? 1.0 : 0.5)
+                                .opacity(
+                                    currentStepValidation.canAdvance && !isAdvancing ? 1.0 : 0.5
+                                )
                                 .accessibilityIdentifier("OnboardingAdvanceButton")
                             }
                         }
@@ -193,45 +187,40 @@ public struct OnboardingView: View {
                 }
                 .frame(maxWidth: .infinity)
 
-                // Step indicators - always centered in the navigation row
-                stepIndicator
-                    .frame(width: 340, height: 84)
-                    .contentShape(Rectangle())
-                    .background(Color.clear)
-                    .onHover { isHovering in
-                        isHoveringStepIndicator = isHovering
-                        if !isHovering {
-                            resetSwipeTracking()
+                if currentStep == .welcome {
+                    Button {
+                        navigateForwardFromControls()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("Get Started")
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .semibold))
                         }
                     }
+                    .buttonStyle(.onboardingPill)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("OnboardingAdvanceButton")
+                    .transition(.scale.combined(with: .opacity))
+                }
             }
             .frame(maxWidth: .infinity)
             .frame(minHeight: 44)
+            .contentShape(Rectangle())
+            .onHover { isHovering in
+                isHoveringStepIndicator = isHovering
+                if !isHovering {
+                    resetSwipeTracking()
+                }
+            }
 
-            if let advanceValidationMessage, !advanceValidationMessage.isEmpty, currentStep != .provider {
+            if let advanceValidationMessage, !advanceValidationMessage.isEmpty,
+                currentStep != .provider
+            {
                 Text(advanceValidationMessage)
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("OnboardingValidationMessage")
-            }
-        }
-    }
-    
-    private var stepIndicator: some View {
-        HStack(spacing: 8) {
-            ForEach(OnboardingStep.activeCases, id: \.self) { step in
-                Circle()
-                    .fill(step == currentStep ? Color.accentColor : 
-                          step.rawValue < currentStep.rawValue ? Color.green : Color.secondary.opacity(0.3))
-                    .frame(width: step == currentStep ? 10 : 8, height: step == currentStep ? 10 : 8)
-                    .overlay(
-                        step.rawValue < currentStep.rawValue ?
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 5, weight: .bold))
-                            .foregroundStyle(.white) : nil
-                    )
-                    .animation(.subtleBounce, value: currentStep)
             }
         }
     }
@@ -250,7 +239,8 @@ public struct OnboardingView: View {
     private var currentStepValidation: OnboardingStepValidationResult {
         currentStep.synchronousValidation(
             in: OnboardingStepValidationContext(
-                providerSetupStatus: OnboardingSetupValidator.providerStatus(context: providerSetupContext),
+                providerSetupStatus: OnboardingSetupValidator.providerStatus(
+                    context: providerSetupContext),
                 hasRequiredPermissions: hasFilesAndFoldersPermission
             )
         )
@@ -289,7 +279,8 @@ public struct OnboardingView: View {
         guard !isAdvancing else { return }
 
         let validationContext = OnboardingStepValidationContext(
-            providerSetupStatus: OnboardingSetupValidator.providerStatus(context: providerSetupContext),
+            providerSetupStatus: OnboardingSetupValidator.providerStatus(
+                context: providerSetupContext),
             hasRequiredPermissions: hasFilesAndFoldersPermission
         )
 
@@ -337,8 +328,10 @@ public struct OnboardingView: View {
     private func handleSwipeEvent(_ event: NSEvent) -> NSEvent? {
         guard isHoveringStepIndicator else { return event }
 
-        let deltaX = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 8
-        let deltaY = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 8
+        let deltaX =
+            event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 8
+        let deltaY =
+            event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : event.scrollingDeltaY * 8
 
         guard abs(deltaX) > abs(deltaY) else { return event }
 
@@ -392,7 +385,7 @@ enum OnboardingStep: Int, CaseIterable {
     case workflow = 3
     case demo = 4
     case completion = 5
-    
+
     @MainActor
     static var activeCases: [OnboardingStep] {
         allCases.filter { step in
@@ -402,7 +395,7 @@ enum OnboardingStep: Int, CaseIterable {
             return true
         }
     }
-    
+
     var title: String {
         switch self {
         case .welcome: return "Welcome"
@@ -413,7 +406,7 @@ enum OnboardingStep: Int, CaseIterable {
         case .completion: return "Ready!"
         }
     }
-    
+
     @MainActor
     var next: OnboardingStep {
         let active = OnboardingStep.activeCases
@@ -421,7 +414,7 @@ enum OnboardingStep: Int, CaseIterable {
         let nextIndex = min(currentIndex + 1, active.count - 1)
         return active[nextIndex]
     }
-    
+
     @MainActor
     var previous: OnboardingStep {
         let active = OnboardingStep.activeCases
@@ -432,7 +425,9 @@ enum OnboardingStep: Int, CaseIterable {
 }
 
 extension OnboardingStep: OnboardingStepValidating {
-    func synchronousValidation(in context: OnboardingStepValidationContext) -> OnboardingStepValidationResult {
+    func synchronousValidation(in context: OnboardingStepValidationContext)
+        -> OnboardingStepValidationResult
+    {
         switch self {
         case .provider:
             if context.providerSetupStatus.isReady {
@@ -450,33 +445,127 @@ extension OnboardingStep: OnboardingStepValidating {
     }
 }
 
+// MARK: - Onboarding Title Bar
+
+private struct OnboardingTopBar: View {
+    var body: some View {
+        Color.clear
+        .frame(maxWidth: .infinity)
+        .frame(height: 24)
+        .allowsHitTesting(false)
+    }
+}
+
+private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = WindowAttachedView()
+        view.onWindowAttached = { window in
+            context.coordinator.configure(window: window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let window = nsView.window {
+            context.coordinator.configure(window: window)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator {
+        private weak var configuredWindow: NSWindow?
+        private var originalTitleVisibility: NSWindow.TitleVisibility?
+        private var originalTitlebarAppearsTransparent: Bool?
+        private var originalStyleMask: NSWindow.StyleMask?
+
+        func configure(window: NSWindow) {
+            guard configuredWindow !== window else { return }
+            restore()
+
+            configuredWindow = window
+            originalTitleVisibility = window.titleVisibility
+            originalTitlebarAppearsTransparent = window.titlebarAppearsTransparent
+            originalStyleMask = window.styleMask
+
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.styleMask.insert(.fullSizeContentView)
+            window.isMovableByWindowBackground = true
+
+            // Pin the window to the onboarding minimum content size before the
+            // first paint so it never visibly resizes/reframes after appearing.
+            let targetSize = NSSize(width: 1100, height: 720)
+            if window.frame.size.width < targetSize.width || window.frame.size.height < targetSize.height {
+                window.setContentSize(targetSize)
+                window.center()
+            }
+        }
+
+        private func restore() {
+            guard let window = configuredWindow else { return }
+            if let originalStyleMask {
+                window.styleMask = originalStyleMask
+            }
+            if let originalTitlebarAppearsTransparent {
+                window.titlebarAppearsTransparent = originalTitlebarAppearsTransparent
+            }
+            if let originalTitleVisibility {
+                window.titleVisibility = originalTitleVisibility
+            }
+        }
+
+        deinit {
+            restore()
+        }
+    }
+
+    final class WindowAttachedView: NSView {
+        var onWindowAttached: ((NSWindow) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            onWindowAttached?(window)
+        }
+    }
+}
+
 // MARK: - Progress Bar
 
 struct OnboardingProgressBar: View {
     let currentStep: OnboardingStep
-    
+
     @MainActor
     private var activeSteps: [OnboardingStep] {
         OnboardingStep.activeCases
     }
-    
+
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
             ForEach(0..<activeSteps.count, id: \.self) { index in
                 let step = activeSteps[index]
-                
+
                 if index > 0 {
-                    Rectangle()
-                        .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.2))
-                        .frame(height: 2)
+                    Capsule(style: .continuous)
+                        .fill(
+                            step.rawValue <= currentStep.rawValue
+                                ? Color.accentColor : Color.secondary.opacity(0.2)
+                        )
+                        .frame(width: 56, height: 2)
                 }
-                
+
                 VStack(spacing: 6) {
                     ZStack {
                         Circle()
-                            .fill(step.rawValue <= currentStep.rawValue ? Color.accentColor : Color.secondary.opacity(0.2))
+                            .fill(
+                                step.rawValue <= currentStep.rawValue
+                                    ? Color.accentColor : Color.secondary.opacity(0.2)
+                            )
                             .frame(width: 24, height: 24)
-                        
+
                         if step.rawValue < currentStep.rawValue {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .bold))
@@ -484,10 +573,11 @@ struct OnboardingProgressBar: View {
                         } else {
                             Text("\(index + 1)")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(step.rawValue <= currentStep.rawValue ? .white : .secondary)
+                                .foregroundStyle(
+                                    step.rawValue <= currentStep.rawValue ? .white : .secondary)
                         }
                     }
-                    
+
                     Text(step.title)
                         .font(.caption2)
                         .foregroundStyle(step == currentStep ? .primary : .secondary)
@@ -496,9 +586,10 @@ struct OnboardingProgressBar: View {
                         .multilineTextAlignment(.center)
                         .frame(minHeight: 20)
                 }
-                .frame(width: 80)
+                .frame(width: 82)
             }
         }
+        .frame(maxWidth: 760)
         .frame(maxWidth: .infinity)
     }
 }

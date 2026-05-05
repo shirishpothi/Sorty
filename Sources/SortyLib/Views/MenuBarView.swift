@@ -12,11 +12,11 @@ import AppKit
 
 private struct MenuBarMascotIcon: View {
     var size: CGSize = CGSize(width: 18, height: 18)
-    
+
     private var mascotImage: Image {
         Image(nsImage: SortyResources.menuBarLabelNSImage())
     }
-    
+
     var body: some View {
         mascotImage
             .resizable()
@@ -29,7 +29,7 @@ private struct MenuBarMascotIcon: View {
 
 public struct MenuBarLabel: View {
     public init() {}
-    
+
     private static func menuBarImage() -> NSImage {
         let source = SortyResources.menuBarLabelNSImage()
         let image = (source.copy() as? NSImage) ?? source
@@ -37,7 +37,7 @@ public struct MenuBarLabel: View {
         image.isTemplate = false
         return image
     }
-    
+
     public var body: some View {
         Image(nsImage: Self.menuBarImage())
             .accessibilityLabel("Sorty")
@@ -55,41 +55,41 @@ public struct MenuBarView: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @State private var isAllPaused: Bool = false
     @State private var isDropTargeted: Bool = false
-    
+
     public init() {}
-    
+
     private var activeWatchedCount: Int {
         watchedFoldersManager.folders.filter { $0.isEnabled && $0.autoOrganize }.count
     }
-    
+
     private var foldersWithIssues: [WatchedFolder] {
         watchedFoldersManager.folders.filter { $0.accessStatus == .lost || $0.accessStatus == .stale }
     }
-    
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             statusHeader
-            
+
             Divider()
                 .padding(.vertical, 4)
-            
+
             quickActions
-            
+
             if !watchedFoldersManager.folders.isEmpty {
                 Divider()
                     .padding(.vertical, 4)
-                
+
                 watchedFoldersList
             }
-            
+
             Divider()
                 .padding(.vertical, 4)
-            
+
             backgroundToggle
-            
+
             Divider()
                 .padding(.vertical, 4)
-            
+
             bottomActions
         }
         .padding(.vertical, 8)
@@ -105,17 +105,17 @@ public struct MenuBarView: View {
                 .systemLiquidGlassPopover(cornerRadius: 12)
         }
     }
-    
+
     // MARK: - Status Header
-    
+
     private var statusHeader: some View {
         HStack(spacing: 8) {
             MenuBarMascotIcon(size: CGSize(width: 22, height: 20))
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text("Sorty")
                     .font(.headline)
-                
+
                 if activeWatchedCount > 0 {
                     Text("\(activeWatchedCount) folder\(activeWatchedCount == 1 ? "" : "s") active")
                         .font(.caption)
@@ -126,9 +126,9 @@ public struct MenuBarView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
+
             Spacer()
-            
+
             if !foldersWithIssues.isEmpty {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
@@ -138,27 +138,27 @@ public struct MenuBarView: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
     }
-    
+
     // MARK: - Quick Actions
-    
+
     private var quickActions: some View {
         VStack(spacing: 2) {
             MenuBarButton(title: "Open Sorty", icon: "macwindow") {
                 openMainWindow()
             }
-            
+
             MenuBarButton(title: "View History", icon: "clock") {
                 openDestination(.history)
             }
-            
+
             MenuBarButton(title: "Workspace Health", icon: "heart.text.square") {
                 openDestination(.health)
             }
-            
+
             MenuBarButton(title: "Learnings", icon: "brain") {
                 openDestination(.learnings(action: nil, project: nil))
             }
-            
+
             MenuBarButton(title: "Storage Locations", icon: "externaldrive.fill") {
                 openDestination(.storage(action: nil, path: nil))
             }
@@ -166,11 +166,11 @@ public struct MenuBarView: View {
             MenuBarButton(title: "Watched Folders", icon: "eye") {
                 openDestination(.watched(action: nil, path: nil))
             }
-            
+
             if !watchedFoldersManager.folders.isEmpty {
                 Divider()
                     .padding(.vertical, 2)
-                
+
                 MenuBarButton(
                     title: isAllPaused ? "Resume All" : "Pause All",
                     icon: isAllPaused ? "play.fill" : "pause.fill"
@@ -180,9 +180,9 @@ public struct MenuBarView: View {
             }
         }
     }
-    
+
     // MARK: - Watched Folders List
-    
+
     private var watchedFoldersList: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Watched Folders")
@@ -190,11 +190,11 @@ public struct MenuBarView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 4)
-            
+
             ForEach(watchedFoldersManager.folders.prefix(5)) { folder in
                 WatchedFolderMenuItem(folder: folder)
             }
-            
+
             if watchedFoldersManager.folders.count > 5 {
                 Text("+ \(watchedFoldersManager.folders.count - 5) more...")
                     .font(.caption)
@@ -204,9 +204,9 @@ public struct MenuBarView: View {
             }
         }
     }
-    
+
     // MARK: - Background Toggle
-    
+
     private var backgroundToggle: some View {
         VStack(spacing: 0) {
             Toggle(isOn: Binding(
@@ -286,13 +286,13 @@ public struct MenuBarView: View {
             .controlSize(.small)
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
-            
+
             if keepInBackground || launchAtLogin || hideDockIcon {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Running as Background Activity")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    
+
                     MenuBarButton(title: "System Settings...", icon: "gear.badge") {
                         loginItemManager.openLoginItemsSettings()
                     }
@@ -302,18 +302,34 @@ public struct MenuBarView: View {
             }
         }
     }
-    
+
     // MARK: - Bottom Actions
-    
+
     private var bottomActions: some View {
         VStack(spacing: 2) {
             MenuBarButton(title: "Settings...", icon: "gear") {
                 openSettings()
             }
-            
+
+            MenuBarButton(title: "AI Provider Settings", icon: "cpu") {
+                openSettings(section: "provider")
+            }
+
+            MenuBarButton(title: "Automation Settings", icon: "bolt.circle") {
+                openSettings(section: "automation")
+            }
+
+            MenuBarButton(title: "Notification Settings", icon: "bell") {
+                openSettings(section: "notifications")
+            }
+
+            MenuBarButton(title: "Support the Developer", icon: "heart.fill") {
+                openSupportDeveloper()
+            }
+
             Divider()
                 .padding(.vertical, 4)
-            
+
             if keepInBackground {
                 MenuBarButton(title: "Close Window", icon: "xmark.rectangle") {
                     for window in NSApp.windows where window.canBecomeMain {
@@ -331,27 +347,32 @@ public struct MenuBarView: View {
             }
         }
     }
-    
+
     // MARK: - Actions
-    
+
     private func openMainWindow() {
         openDestination(.open(path: nil))
     }
-    
-    private func openSettings() {
-        openDestination(.settings(section: nil))
+
+    private func openSettings(section: String? = nil) {
+        openDestination(.settings(section: section))
     }
-    
+
+    private func openSupportDeveloper() {
+        guard let url = URL(string: "https://github.com/sponsors/shirishpothi") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     private func togglePauseAll() {
         isAllPaused.toggle()
-        
+
         for folder in watchedFoldersManager.folders {
             var updated = folder
             updated.isEnabled = !isAllPaused
             watchedFoldersManager.updateFolder(updated)
         }
     }
-    
+
     private func openDestination(_ destination: DeeplinkDestination) {
         guard let url = DeeplinkHandler.url(for: destination) else { return }
         if MainWindowRouter.shared.routeDeeplink(url) {
@@ -368,10 +389,10 @@ private struct MenuBarButton: View {
     var icon: String? = nil
     var customImage: Image? = nil
     let action: () -> Void
-    
+
     @State private var isHovered = false
     @Environment(\.isEnabled) private var isEnabled
-    
+
     var body: some View {
         Button {
             HapticFeedbackManager.shared.tap()

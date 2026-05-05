@@ -9,13 +9,15 @@ all: build
 # Auto-detect CPU cores for parallel builds
 CORES := $(shell sysctl -n hw.ncpu 2>/dev/null || echo 4)
 PARALLEL_FLAGS := -j $(CORES)
+SORTY_BUILD_DIR ?= $(HOME)/Library/Caches/Sorty/build
+SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
 
 # Swift build flags for optimization
 SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox -Xlinker -no_deduplicate
 SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
 FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
-BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE)
+BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
 # Disable index store for local debug builds (saves ~10-15% compile time)
 export SWIFTPM_DISABLE_INDEXING ?= 1
@@ -57,18 +59,18 @@ dev:
 # runs the complete test suite with parallel execution
 test:
 	@echo "🧪 Running unit tests in parallel ($(CORES) jobs)..."
-	@swift test $(PARALLEL_FLAGS) --disable-sandbox
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --disable-sandbox
 
 # Quick test run - excludes slow UI/integration tests
 test-fast:
 	@echo "🧪 Running fast unit tests only..."
-	@swift test $(PARALLEL_FLAGS) --disable-sandbox --filter SortyTests
+	@swift test $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) --disable-sandbox --filter SortyTests
 
 test-full:
 	@echo "🧪 Running unit tests with coverage..."
-	@swift test --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
+	@swift test $(SWIFTPM_SCRATCH_FLAG) --enable-code-coverage $(PARALLEL_FLAGS) --disable-sandbox
 	@echo "🖥️  UI tests are currently disabled (skipped)."
-	@echo "✅ All tests completed. Coverage reports available in .build/debug/codecov"
+	@echo "✅ All tests completed. Coverage reports available in $(SORTY_BUILD_DIR)/debug/codecov"
 
 test-ui:
 	@echo "🖥️  UI tests are currently disabled (skipped)."
@@ -77,7 +79,7 @@ test-ui:
 build-profile:
 	@echo "🔍 Profiling build times..."
 	@echo "Building with diagnostics to identify slow type-checking..."
-	@swift build $(PARALLEL_FLAGS) -Xswiftc -Xfrontend -Xswiftc -warn-long-function-bodies=100 -Xswiftc -Xfrontend -Xswiftc -warn-long-expression-type-checking=100 2>&1 | grep -E "(warning:|error:)" || true
+	@swift build $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) -Xswiftc -Xfrontend -Xswiftc -warn-long-function-bodies=100 -Xswiftc -Xfrontend -Xswiftc -warn-long-expression-type-checking=100 2>&1 | grep -E "(warning:|error:)" || true
 	@echo "✅ Profile complete. Look for 'warning: expression took too long to type-check' messages above."
 
 # runs basic syntax checks and builds (skips tests)
@@ -105,8 +107,9 @@ ci-report:
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."
-	@swift package clean
+	@swift package $(SWIFTPM_SCRATCH_FLAG) clean
 	@rm -rf .build
+	@rm -rf "$(SORTY_BUILD_DIR)"
 	@rm -rf releases/
 	@echo "✨ Clean complete"
 
@@ -118,8 +121,8 @@ rebuild: clean
 # Build the learnings CLI tool
 cli:
 	@echo "🔨 Building learnings CLI with $(CORES) parallel jobs..."
-	@swift build --product learnings $(PARALLEL_FLAGS) --disable-sandbox
-	@echo "✅ CLI built at .build/debug/learnings"
+	@swift build $(SWIFTPM_SCRATCH_FLAG) --product learnings $(PARALLEL_FLAGS) --disable-sandbox
+	@echo "✅ CLI built at $(SORTY_BUILD_DIR)/debug/learnings"
 
 # Install app to /Applications
 install: build
@@ -130,14 +133,14 @@ install: build
 # Install CLI to /usr/local/bin
 install-cli: cli
 	@echo "📦 Installing learnings CLI to /usr/local/bin..."
-	@sudo cp .build/debug/learnings /usr/local/bin/learnings
+	@sudo cp "$(SORTY_BUILD_DIR)/debug/learnings" /usr/local/bin/learnings
 	@echo "✅ Installed! Run with: learnings --help"
 
 # Create a release zip for GitHub (manual)
 release:
 	@echo "📦 Creating release package..."
 	@APP_ICON_VARIANT=release $(MAKE) build
-	@cd releases && zip -r Sorty-macOS.zip Sorty.app
+	@ZIP_NAME_OVERRIDE="Sorty-macOS.zip" ./scripts/package.sh
 	@echo "✅ Release package created: releases/Sorty-macOS.zip"
 	@echo ""
 	@echo "📋 Next steps:"

@@ -8,20 +8,23 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+import Beam
+
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var isTargeted = false
     @State private var isHovering = false
+    @State private var isBrowseHovering = false
+
     @State private var iconBounce = false
     @State private var hasAppeared = false
-    @State private var browseHovered = false
 
     var body: some View {
         WorkflowContainer(currentStep: .selectFolder) {
             Spacer()
                 .frame(minHeight: 40, maxHeight: .infinity)
-            
+
             VStack(spacing: 32) {
                 VStack(spacing: 10) {
                     Text("Select a directory to organize")
@@ -35,32 +38,44 @@ struct DirectorySelectionView: View {
                         .opacity(hasAppeared ? 1 : 0)
                 }
                 .animation(.easeOut(duration: 0.2).delay(0.05), value: hasAppeared)
-                
+
                 dropZone
-                
+
                 Button {
                     HapticFeedbackManager.shared.tap()
                     selectDirectory()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 15, weight: .medium))
                         Text("Browse for Folder")
+                            .font(.system(size: 15, weight: .semibold))
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
                 }
-                .buttonStyle(.glossyCallToAction(.accentColor, size: .large, isHovering: browseHovered))
-                .keyboardShortcut("o", modifiers: .command)
-                .scaleEffect(browseHovered ? 1.03 : 1.0)
-                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: browseHovered)
+                .buttonStyle(.onboardingPill)
+                .overlay {
+                    BrowseFolderBeamBorder(
+                        isActive: hasAppeared,
+                        isHovering: isBrowseHovering
+                    )
+                }
+                .contentShape(Capsule())
+                .scaleEffect(isBrowseHovering ? 1.03 : 1.0)
+                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isBrowseHovering)
                 .onHover { hovering in
-                    if hovering && !browseHovered {
+                    let wasHovering = isBrowseHovering
+                    if hovering && !wasHovering {
                         HapticFeedbackManager.shared.selection()
                     }
-                    browseHovered = hovering
+                    isBrowseHovering = hovering
                 }
+                .keyboardShortcut("o", modifiers: .command)
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.easeOut(duration: 0.2).delay(0.1), value: hasAppeared)
                 .accessibilityIdentifier("BrowseForFolderButton")
-                
+
                 if settingsViewModel.config.enableSmartRename {
                     VStack(spacing: 16) {
                         HStack(spacing: 12) {
@@ -75,11 +90,13 @@ struct DirectorySelectionView: View {
                                 .frame(height: 1)
                         }
 
-                        LazyVGrid(columns: [
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12)
-                        ], spacing: 12) {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12),
+                            ], spacing: 12
+                        ) {
                             ForEach(OrganizationMode.allCases, id: \.self) { mode in
                                 OrganizationModeCard(
                                     mode: mode,
@@ -100,10 +117,10 @@ struct DirectorySelectionView: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            
+
             Spacer()
                 .frame(minHeight: 40, maxHeight: .infinity)
-            
+
             quickTips
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.easeOut(duration: 0.2).delay(0.15), value: hasAppeared)
@@ -120,7 +137,7 @@ struct DirectorySelectionView: View {
         .accessibilityLabel("Directory Selection Area")
         .accessibilityHint("Drag and drop a folder here or use the Browse button")
     }
-    
+
     private var dropZone: some View {
         let dropZoneHeight: CGFloat = settingsViewModel.config.enableSmartRename ? 120 : 150
         let dropZoneCornerRadius: CGFloat = 16
@@ -151,7 +168,10 @@ struct DirectorySelectionView: View {
                 dropZoneContent
                     .background {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.05))
+                            .fill(
+                                isTargeted
+                                    ? Color.accentColor.opacity(0.08)
+                                    : Color.secondary.opacity(0.05))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
@@ -161,14 +181,18 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
                                 isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
-                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
+                                style: StrokeStyle(
+                                    lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
                             )
                     }
             } else {
                 dropZoneContent
                     .background {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.05))
+                            .fill(
+                                isTargeted
+                                    ? Color.accentColor.opacity(0.08)
+                                    : Color.secondary.opacity(0.05))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
@@ -178,14 +202,15 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
                                 isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
-                                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
+                                style: StrokeStyle(
+                                    lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
                             )
                     }
             }
         }
-            .scaleEffect(isTargeted ? 1.05 : 1.0)
-            .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
+        .scaleEffect(isTargeted ? 1.05 : 1.0)
+        .shadow(color: isTargeted ? .accentColor.opacity(0.2) : .clear, radius: 12, y: 4)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isTargeted)
         .opacity(hasAppeared ? 1 : 0)
         .scaleEffect(hasAppeared ? 1 : 0.9)
         .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
@@ -197,7 +222,7 @@ struct DirectorySelectionView: View {
                     iconBounce = true
                 }
                 Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 150_000_000) // 0.15s
+                    try? await Task.sleep(nanoseconds: 150_000_000)  // 0.15s
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         iconBounce = false
                     }
@@ -211,7 +236,7 @@ struct DirectorySelectionView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Click to browse for a folder")
     }
-    
+
     private var quickTips: some View {
         HStack(spacing: 32) {
             QuickTipItemCompact(
@@ -275,10 +300,12 @@ struct DirectorySelectionView: View {
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
 
-        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) {
+            item, error in
             if let data = item as? Data,
-               let url = URL(dataRepresentation: data, relativeTo: nil),
-               url.hasDirectoryPath {
+                let url = URL(dataRepresentation: data, relativeTo: nil),
+                url.hasDirectoryPath
+            {
                 Task { @MainActor in
                     HapticFeedbackManager.shared.success()
                     selectedDirectory = url
@@ -287,6 +314,27 @@ struct DirectorySelectionView: View {
         }
 
         return true
+    }
+}
+
+private struct BrowseFolderBeamBorder: View {
+    let isActive: Bool
+    let isHovering: Bool
+
+    var body: some View {
+        Capsule()
+            .strokeBorder(.clear, lineWidth: 1)
+            .beam(
+                .small,
+                palette: .sunset,
+                theme: .dark,
+                active: isActive,
+                shape: .capsule,
+                duration: 1.72,
+                strength: isHovering ? 1.0 : 0.82
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -324,9 +372,9 @@ struct OrganizationModeCard: View {
     let mode: OrganizationMode
     let isSelected: Bool
     let action: () -> Void
-    
+
     @State private var isHovering = false
-    
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
@@ -356,7 +404,10 @@ struct OrganizationModeCard: View {
             .padding(.horizontal, 6)
             .background {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? Color.accentColor : Color.secondary.opacity(isHovering ? 0.12 : 0.06))
+                    .fill(
+                        isSelected
+                            ? Color.accentColor : Color.secondary.opacity(isHovering ? 0.12 : 0.06)
+                    )
                     .overlay {
                         RoundedRectangle(cornerRadius: 16)
                             .strokeBorder(isSelected ? .white.opacity(0.2) : .clear, lineWidth: 1)

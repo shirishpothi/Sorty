@@ -118,8 +118,7 @@ struct ExclusionRulesView: View {
                     GlassyBackButton {
                         HapticFeedbackManager.shared.tap()
                         appState.navigatedFromSettings = false
-                        appState.currentView = .settings
-                        appState.selectedSettingsSection = .rules
+                        appState.openSettingsWindow(section: .rules)
                     }
                 }
                 
@@ -157,7 +156,8 @@ struct ExclusionRulesView: View {
                 } label: {
                     Label("Clear All", systemImage: "trash")
                 }
-                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                .buttonStyle(.tintedPill(.red, size: .small))
+                .controlSize(.small)
                 .accessibilityIdentifier("ClearAllExclusionsButton")
             }
 

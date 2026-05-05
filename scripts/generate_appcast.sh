@@ -43,7 +43,7 @@ if [ -n "$SPARKLE_PRIVATE_KEY" ]; then
     
     # Verify the public key in Info.plist matches the one we are signing with
     # This prevents the "downloaded then failed" error caused by public/private key mismatch
-    SIGN_UPDATE_TOOL=$(find "${PROJECT_DIR}/.build/artifacts" -name "sign_update" -type f -not -path "*/old_dsa_scripts/*" | head -1)
+    SIGN_UPDATE_TOOL=$(find "${BUILD_DIR}/artifacts" -name "sign_update" -type f -not -path "*/old_dsa_scripts/*" | head -1)
     
     if [ -n "$SIGN_UPDATE_TOOL" ] && [ -x "$SIGN_UPDATE_TOOL" ]; then
         log_item "Signing update using $SIGN_UPDATE_TOOL"

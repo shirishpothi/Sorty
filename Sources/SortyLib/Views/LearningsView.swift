@@ -333,8 +333,7 @@ struct LearningsView: View {
                     GlassyBackButton {
                         HapticFeedbackManager.shared.tap()
                         appState.navigatedFromSettings = false
-                        appState.currentView = .settings
-                        appState.selectedSettingsSection = .help
+                        appState.openSettingsWindow(section: .help)
                     }
                 }
 

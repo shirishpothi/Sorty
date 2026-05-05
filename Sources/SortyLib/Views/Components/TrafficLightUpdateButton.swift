@@ -110,15 +110,20 @@ final class UpdateButtonNSView: NSView {
     private let buttonDiameter: CGFloat = 14
     private let collapsedPillWidth: CGFloat = 14
 
+    // Single update accent (orange family). All states are derived from this hue
+    // so the inner glyph and the surrounding ring read as the same color, just at
+    // different opacities/lightness.
+    private static let updateAccent = NSColor(red: 0.92, green: 0.55, blue: 0.20, alpha: 1.0)
+
     private let normalFillColor = NSColor.clear
-    private let hoverFillColor  = NSColor(red: 0.91, green: 0.58, blue: 0.30, alpha: 1.0)
-    private let pressedFillColor = NSColor(red: 0.79, green: 0.43, blue: 0.19, alpha: 1.0)
+    private let hoverFillColor  = UpdateButtonNSView.updateAccent
+    private let pressedFillColor = UpdateButtonNSView.updateAccent.blended(withFraction: 0.18, of: .black) ?? UpdateButtonNSView.updateAccent
 
-    private let normalBorderColor = NSColor(red: 0.76, green: 0.49, blue: 0.24, alpha: 1.0)
-    private let hoverBorderColor  = NSColor(red: 0.70, green: 0.38, blue: 0.15, alpha: 1.0)
-    private let pressedBorderColor = NSColor(red: 0.54, green: 0.27, blue: 0.09, alpha: 1.0)
+    private let normalBorderColor = UpdateButtonNSView.updateAccent
+    private let hoverBorderColor  = UpdateButtonNSView.updateAccent.blended(withFraction: 0.10, of: .black) ?? UpdateButtonNSView.updateAccent
+    private let pressedBorderColor = UpdateButtonNSView.updateAccent.blended(withFraction: 0.25, of: .black) ?? UpdateButtonNSView.updateAccent
 
-    private let normalArrowColor = NSColor(red: 0.76, green: 0.49, blue: 0.24, alpha: 1.0)
+    private let normalArrowColor = UpdateButtonNSView.updateAccent
     private let hoverArrowColor = NSColor.white
 
     private let normalHighlightColor = NSColor.clear

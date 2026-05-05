@@ -160,8 +160,8 @@ public final class AutomationManager: ObservableObject {
     }
     
     /// Open System Settings to Automation permissions
-    public func openAutomationSettings() {
-        FinderAutomation.openAutomationSettings()
+    public func openAutomationSettings(sourceFrameInScreen: CGRect? = nil) {
+        FinderAutomation.openAutomationSettings(sourceFrameInScreen: sourceFrameInScreen)
     }
     
     // MARK: - Finder Selection

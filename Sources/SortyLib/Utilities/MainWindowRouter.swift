@@ -8,6 +8,7 @@ public enum WindowRoutingUserInfoKey {
 
 public extension Notification.Name {
     static let routeDeeplinkInMainWindow = Notification.Name("SortyRouteDeeplinkInMainWindow")
+    static let presentSteeringPromptsInMainWindow = Notification.Name("SortyPresentSteeringPromptsInMainWindow")
 }
 
 public extension Notification {

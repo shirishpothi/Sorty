@@ -47,7 +47,7 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
     printf '%s' "$SPARKLE_PRIVATE_KEY" > "$PRIVATE_KEY_FILE"
     chmod 600 "$PRIVATE_KEY_FILE"
 
-    SIGN_UPDATE_TOOL=$(find "${PROJECT_DIR}/.build/artifacts" -name "sign_update" -type f -not -path "*/old_dsa_scripts/*" | head -1)
+    SIGN_UPDATE_TOOL=$(find "${BUILD_DIR}/artifacts" -name "sign_update" -type f -not -path "*/old_dsa_scripts/*" | head -1)
 
     if [ -n "$SIGN_UPDATE_TOOL" ] && [ -x "$SIGN_UPDATE_TOOL" ]; then
         SIGNATURE_OUTPUT=$("$SIGN_UPDATE_TOOL" -f "$PRIVATE_KEY_FILE" "$ZIP_PATH" 2>/dev/null || true)

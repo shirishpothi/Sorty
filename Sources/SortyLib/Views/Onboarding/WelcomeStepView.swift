@@ -292,8 +292,7 @@ public struct WelcomeStepView: View {
                         icon: "arrow.uturn.backward.circle.fill",
                         iconColor: .blue,
                         title: "Fully Reversible",
-                        description: "Every change can be undone with a single click",
-                        badge: "Beta"
+                        description: "Every change can be undone with a single click"
                     )
                     .opacity(featuresAppeared ? 1 : 0)
                     .offset(x: featuresAppeared ? 0 : -30)

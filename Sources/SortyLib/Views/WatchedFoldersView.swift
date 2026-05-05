@@ -144,8 +144,7 @@ struct WatchedFoldersView: View {
                     GlassyBackButton {
                         HapticFeedbackManager.shared.tap()
                         appState.navigatedFromSettings = false
-                        appState.currentView = .settings
-                        appState.selectedSettingsSection = .rules
+                        appState.openSettingsWindow(section: .rules)
                     }
                 }
                 
@@ -756,7 +755,7 @@ struct WatchedFolderConfigView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     
                                 Button("Open Settings") {
-                                    appState.currentView = .settings
+                                    appState.openSettingsWindow(section: .provider)
                                     dismiss()
                                 }
                                 .controlSize(.small)

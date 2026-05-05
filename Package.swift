@@ -18,12 +18,18 @@ let package = Package(
             targets: ["LearningsCLI"])
     ],
     dependencies: [
+        // Upstream Permiso currently targets macOS 26, so Sorty vendors a local
+        // package variant that preserves the same overlay UI on macOS 15.
+        .package(path: "Packages/Permiso"),
+        .package(url: "https://github.com/tornikegomareli/beam.git", from: "0.1.0"),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
         .target(
             name: "SortyLib",
             dependencies: [
+                .product(name: "Permiso", package: "Permiso"),
+                .product(name: "Beam", package: "beam"),
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/SortyLib",

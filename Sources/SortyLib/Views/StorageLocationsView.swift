@@ -140,7 +140,7 @@ struct StorageLocationsView: View {
             } label: {
                 Label("Add Location", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.onboardingPill)
             .accessibilityIdentifier("AddStorageLocationButton")
         }
         .padding()
@@ -214,7 +214,7 @@ struct EmptyStorageLocationsView: View {
             } label: {
                 Label("Add Storage Location", systemImage: "plus")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.onboardingPill)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

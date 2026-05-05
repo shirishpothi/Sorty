@@ -5,6 +5,7 @@
 //  Workflow/Persona selection step of the onboarding flow
 //
 
+import AppKit
 import SwiftUI
 
 public struct WorkflowSelectionStepView: View {
@@ -105,19 +106,22 @@ public struct WorkflowSelectionStepView: View {
                     .frame(maxWidth: 420)
                     
                     if !customPersonaStore.customPersonas.isEmpty {
-                        ForEach(customPersonaStore.customPersonas) { persona in
-                            OnboardingCustomPersonaCard(
-                                persona: persona,
-                                isSelected: personaManager.selectedCustomPersonaId == persona.id
-                            ) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    personaManager.selectCustomPersona(persona.id)
-                                    isCreatingCustom = false
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            ForEach(customPersonaStore.customPersonas) { persona in
+                                OnboardingCustomPersonaCard(
+                                    persona: persona,
+                                    isSelected: personaManager.selectedCustomPersonaId == persona.id,
+                                    compact: true
+                                ) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        personaManager.selectCustomPersona(persona.id)
+                                        isCreatingCustom = false
+                                    }
                                 }
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
                             }
-                            .frame(maxWidth: 420)
-                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         }
+                        .frame(maxWidth: 420)
 
                         CreatePersonaButton(
                             title: "Generate Another",
@@ -460,6 +464,22 @@ struct OnboardingPersonaCard: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(isSelected ? "Selected Workflow" : "Use as Default", systemImage: isSelected ? "checkmark.circle.fill" : "checkmark.circle") {
+                action()
+            }
+            .disabled(isSelected)
+
+            Divider()
+
+            Button("Copy Workflow Name", systemImage: "doc.on.doc") {
+                copyWorkflowText(persona.displayName)
+            }
+
+            Button("Copy Summary", systemImage: "text.quote") {
+                copyWorkflowText(persona.description)
+            }
+        }
         .shadow(
             color: Color.black.opacity(isHovered && !isSelected ? 0.08 : 0),
             radius: isHovered && !isSelected ? 14 : 0,
@@ -474,6 +494,7 @@ struct OnboardingPersonaCard: View {
 struct OnboardingCustomPersonaCard: View {
     let persona: CustomPersona
     let isSelected: Bool
+    var compact: Bool = false
     let action: () -> Void
 
     @State private var isHovered = false
@@ -483,67 +504,15 @@ struct OnboardingCustomPersonaCard: View {
             HapticFeedbackManager.shared.tap()
             action()
         } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.accentColor.opacity(0.22), Color.teal.opacity(0.16)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 58, height: 58)
-
-                        Image(systemName: persona.icon)
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundStyle(isSelected ? Color.accentColor : .primary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(persona.name)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-
-                            Spacer(minLength: 8)
-
-                            Text(isSelected ? "Selected" : "Custom")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(
-                                    Capsule()
-                                        .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.12))
-                                )
-                        }
-
-                        Text(isSelected ? "Sorty will use this custom workflow by default." : "Custom workflow ready to use as your default persona.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+            Group {
+                if compact {
+                    compactBody
+                } else {
+                    fullBody
                 }
-
-                if !persona.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("\"\(persona.description)\"")
-                        .font(.callout)
-                        .foregroundStyle(.primary.opacity(0.88))
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 10) {
-                    Label("AI-generated persona", systemImage: "sparkles")
-                    Label(isSelected ? "Default workflow" : "Ready to select", systemImage: isSelected ? "checkmark.circle.fill" : "arrow.up.right.circle")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
+            .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
+            .padding(compact ? 14 : 18)
             .background(
                 RoundedRectangle(cornerRadius: 18)
                     .fill(
@@ -573,6 +542,29 @@ struct OnboardingCustomPersonaCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(isSelected ? "Selected Workflow" : "Use as Default", systemImage: isSelected ? "checkmark.circle.fill" : "checkmark.circle") {
+                HapticFeedbackManager.shared.tap()
+                action()
+            }
+            .disabled(isSelected)
+
+            Divider()
+
+            Button("Copy Workflow Name", systemImage: "doc.on.doc") {
+                copyWorkflowText(persona.name)
+            }
+
+            if !persona.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button("Copy Description", systemImage: "text.quote") {
+                    copyWorkflowText(persona.description)
+                }
+            }
+
+            Button("Copy Prompt", systemImage: "doc.text") {
+                copyWorkflowText(persona.promptModifier)
+            }
+        }
         .onHover { hovering in
             if hovering && !isHovered {
                 HapticFeedbackManager.shared.selection()
@@ -580,6 +572,112 @@ struct OnboardingCustomPersonaCard: View {
             isHovered = hovering
         }
         .animation(.easeOut(duration: 0.18), value: isHovered)
+    }
+
+    private var fullBody: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.accentColor.opacity(0.22), Color.teal.opacity(0.16)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 58, height: 58)
+
+                    Image(systemName: persona.icon)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(persona.name)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+
+                        Spacer(minLength: 8)
+
+                        Text(isSelected ? "Selected" : "Custom")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.12))
+                            )
+                    }
+
+                    Text(isSelected ? "Sorty will use this custom workflow by default." : "Custom workflow ready to use as your default persona.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if !persona.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("\"\(persona.description)\"")
+                    .font(.callout)
+                    .foregroundStyle(.primary.opacity(0.88))
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 10) {
+                Label("AI-generated persona", systemImage: "sparkles")
+                Label(isSelected ? "Default workflow" : "Ready to select", systemImage: isSelected ? "checkmark.circle.fill" : "arrow.up.right.circle")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    // Matches the built-in OnboardingPersonaCard's compact 2-column layout.
+    private var compactBody: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(compactIconFill)
+                    .frame(width: 60, height: 60)
+
+                Image(systemName: persona.icon)
+                    .font(.system(size: 28))
+                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+            }
+
+            VStack(spacing: 4) {
+                Text(persona.name)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                Text(isSelected ? "Selected workflow" : "Custom workflow")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+
+    private var compactIconFill: AnyShapeStyle {
+        if isSelected {
+            return AnyShapeStyle(Color.accentColor.opacity(0.18))
+        }
+
+        return AnyShapeStyle(
+            LinearGradient(
+                colors: [Color.accentColor.opacity(0.18), Color.teal.opacity(0.14)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
     }
 }
 
@@ -651,6 +749,13 @@ struct CreatePersonaButton: View {
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
     }
+}
+
+@MainActor
+private func copyWorkflowText(_ value: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(value, forType: .string)
+    HapticFeedbackManager.shared.selection()
 }
 
 // MARK: - Preview

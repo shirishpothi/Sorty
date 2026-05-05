@@ -8,10 +8,10 @@ source "${SCRIPT_DIR}/config.sh"
 BACKGROUND_AGENT_PLIST_NAME="com.sorty.app.background-agent.plist"
 LEGACY_BACKGROUND_AGENT_PLIST_NAME="com.sorty.app.plist"
 BACKGROUND_AGENT_SERVICE_LABEL="com.sorty.app.background-agent"
-BACKGROUND_AGENT_BUNDLE_PROGRAM="MacOS/Sorty"
+BACKGROUND_AGENT_BUNDLE_PROGRAM="Contents/MacOS/Sorty"
 UNSUPPORTED_ADHOC_ENTITLEMENT="com.apple.developer.usernotifications.time-sensitive"
 
-BUILD_LOG_DIR="${BUILD_LOG_DIR:-${BUILD_DIR}/logs}"
+BUILD_LOG_DIR="${BUILD_LOG_DIR:-${WORKSPACE_BUILD_DIR}/logs}"
 BUILD_TAIL_LINES="${BUILD_TAIL_LINES:-40}"
 AUTO_CLOSE_SORTY_ON_BUILD="${AUTO_CLOSE_SORTY_ON_BUILD:-true}"
 SORTY_QUIT_WAIT_SECONDS="${SORTY_QUIT_WAIT_SECONDS:-6}"
@@ -155,7 +155,7 @@ manage_build_cache() {
     fi
 
     if [ "${current_size_mb}" -gt "${target_size_mb}" ]; then
-        run_with_log --optional "swift_package_clean" swift package --package-path "${PROJECT_DIR}" clean
+        run_with_log --optional "swift_package_clean" swift package --package-path "${PROJECT_DIR}" --scratch-path "${BUILD_DIR}" clean
         current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
     fi
 
@@ -315,6 +315,56 @@ run_quiet_allow_failure() {
     fi
 }
 
+normalize_app_executable_linkage() {
+    local executable_path="$1"
+    local sparkle_rpath_load="@rpath/Sparkle.framework/Versions/B/Sparkle"
+    local sparkle_embedded_load="@executable_path/../Frameworks/Sparkle.framework/Versions/B/Sparkle"
+
+    run_quiet_allow_failure install_name_tool -add_rpath "@executable_path/../Frameworks" "${executable_path}"
+
+    if otool -L "${executable_path}" | grep -F "${sparkle_rpath_load}" >/dev/null; then
+        run_quiet install_name_tool -change "${sparkle_rpath_load}" "${sparkle_embedded_load}" "${executable_path}"
+    fi
+}
+
+swiftpm_build_db_error_detected() {
+    local log_name="$1"
+    local log_file="${BUILD_LOG_DIR}/${log_name}.log"
+
+    if [ ! -f "${log_file}" ]; then
+        return 1
+    fi
+
+    grep -Eiq 'accessing build database .* (disk I/O error|database disk image is malformed|readonly database|unable to open database file)' "${log_file}"
+}
+
+reset_swiftpm_build_database() {
+    log_item "Resetting SwiftPM build database"
+    rm -f \
+        "${BUILD_DIR}/.lock" \
+        "${BUILD_DIR}/build.db" \
+        "${BUILD_DIR}/build.db-journal" \
+        "${BUILD_DIR}/build.db-shm" \
+        "${BUILD_DIR}/build.db-wal"
+}
+
+run_with_swiftpm_db_recovery() {
+    local log_name="$1"
+    shift
+
+    if run_with_log "${log_name}" "$@"; then
+        return 0
+    fi
+
+    if ! swiftpm_build_db_error_detected "${log_name}"; then
+        return 1
+    fi
+
+    log_warning "SwiftPM build database hit a transient SQLite error; retrying once with a fresh database."
+    reset_swiftpm_build_database
+    run_with_log "${log_name}_retry" "$@"
+}
+
 # MARK: - Resource Copying Helpers
 
 # Safely copies resources with integrity checks and conflict detection
@@ -413,7 +463,7 @@ bundle_cli_tools() {
     mkdir -p "${cli_dir}"
 
     local -a cli_build_cmd
-    cli_build_cmd=(swift build -c "${build_config}" --product learnings)
+    cli_build_cmd=(swift build --scratch-path "${BUILD_DIR}" -c "${build_config}" --product learnings)
 
     if [ -n "${cli_arch}" ]; then
         cli_build_cmd+=(--arch "${cli_arch}")
@@ -426,15 +476,14 @@ bundle_cli_tools() {
     fi
 
     log_detail "Building learnings CLI..."
-    if run_with_log --optional "learnings_cli" "${cli_build_cmd[@]}"; then
+    if run_with_swiftpm_db_recovery "learnings_cli" "${cli_build_cmd[@]}"; then
         local learnings_bin=""
         if [ -n "${cli_arch}" ]; then
-            learnings_bin="${PROJECT_DIR}/.build/${cli_arch}-apple-macosx/${build_config}/learnings"
+            learnings_bin="${BUILD_DIR}/${cli_arch}-apple-macosx/${build_config}/learnings"
         fi
 
         if [ -z "${learnings_bin}" ] || [ ! -f "${learnings_bin}" ]; then
-            local bin_path=""
-            bin_path=$(swift build -c "${build_config}" --show-bin-path)
+            local bin_path="${BUILD_DIR}/${build_config}"
             learnings_bin="${bin_path}/learnings"
         fi
 
@@ -740,7 +789,7 @@ if [ "$SKIP_TESTS" != "true" ]; then
         # shellcheck disable=SC2206
         TEST_FLAGS_ARRAY=( ${TEST_FLAGS} )
     fi
-    if ! run_with_log "unit_tests" swift test "${TEST_FLAGS_ARRAY[@]}" --disable-sandbox; then
+    if ! run_with_swiftpm_db_recovery "unit_tests" swift test --scratch-path "${BUILD_DIR}" "${TEST_FLAGS_ARRAY[@]}" --disable-sandbox; then
         log_failure "Tests failed ($(get_step_duration "test")). Set SKIP_TESTS=true to bypass."
         exit 1
     fi
@@ -816,7 +865,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     MACOS_BIN="${APP_PATH}/Contents/MacOS/${BINARY_NAME}"
     if [ -f "${MACOS_BIN}" ]; then
         chmod +x "${MACOS_BIN}"
-        run_quiet_allow_failure install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_BIN}"
+        normalize_app_executable_linkage "${MACOS_BIN}"
         run_quiet strip -x "${MACOS_BIN}"
         chmod +x "${MACOS_BIN}"
     fi
@@ -882,7 +931,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         # Search in DerivedData (xcodebuild) or .build/artifacts (SPM fallback)
         SPARKLE_FRAMEWORK=$(find "${BUILD_DIR}/DerivedData" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
         if [ -z "${SPARKLE_FRAMEWORK}" ]; then
-            SPARKLE_FRAMEWORK=$(find "${PROJECT_DIR}/.build/artifacts" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
+            SPARKLE_FRAMEWORK=$(find "${BUILD_DIR}/artifacts" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
         fi
         
         if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
@@ -919,6 +968,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         log_failure "Required Sparkle.framework missing from app bundle!"
         exit 1
     fi
+    validate_sorty_app_linkage "${APP_PATH}"
     
     log_success "App bundle verified ($(get_step_duration "assemble"))"
 else
@@ -931,11 +981,11 @@ else
         # shellcheck disable=SC2206
         BUILD_FLAGS_ARRAY=( ${BUILD_FLAGS_EXTRA} )
     fi
-    if ! run_with_log "swift_build" swift build -c "${BUILD_CONFIG}" "${BUILD_FLAGS_ARRAY[@]}"; then
+    if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" -c "${BUILD_CONFIG}" "${BUILD_FLAGS_ARRAY[@]}"; then
         log_failure "Compilation failed"
         exit 1
     fi
-    BIN_PATH=$(swift build -c "${BUILD_CONFIG}" --show-bin-path)
+    BIN_PATH="${BUILD_DIR}/${BUILD_CONFIG}"
     log_success "Compilation succeeded ($(get_step_duration "build"))"
 
     print_step 3 $TOTAL_STEPS "Assembling App Bundle"
@@ -955,8 +1005,7 @@ else
     if [ -f "${BIN_PATH}/${SPM_BINARY_NAME}" ]; then
         cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
-        # Ensure binary has correct RPATH for embedded frameworks
-        run_quiet_allow_failure install_name_tool -add_rpath "@executable_path/../Frameworks" "${MACOS_DIR}/${BINARY_NAME}"
+        normalize_app_executable_linkage "${MACOS_DIR}/${BINARY_NAME}"
         run_quiet strip -x "${MACOS_DIR}/${BINARY_NAME}"
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
     else
@@ -1005,7 +1054,7 @@ else
         SPARKLE_FRAMEWORK="${BIN_PATH}/Sparkle.framework"
     else
         # Search in .build/artifacts for any architecture-specific Sparkle.framework
-        SPARKLE_FRAMEWORK=$(find "${PROJECT_DIR}/.build/artifacts" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
+        SPARKLE_FRAMEWORK=$(find "${BUILD_DIR}/artifacts" -name "Sparkle.framework" -type d 2>/dev/null | head -1)
     fi
     
     if [ -n "${SPARKLE_FRAMEWORK}" ] && [ -d "${SPARKLE_FRAMEWORK}" ]; then
@@ -1029,6 +1078,7 @@ else
         log_failure "Sparkle.framework missing after assembly!"
         exit 1
     fi
+    validate_sorty_app_linkage "${APP_PATH}"
 
     bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "${BUILD_FLAGS_EXTRA}" ""
 
@@ -1084,6 +1134,8 @@ if [ ! -f "${ICON_SRC}" ]; then
 fi
 if [ -f "${ICON_SRC}" ]; then
     cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
+    mkdir -p "${APP_PATH}/Contents/Resources/AppIcons"
+    cp "${PROJECT_DIR}/Assets/AppIcon/AppIcon-"*.icns "${APP_PATH}/Contents/Resources/AppIcons/" 2>/dev/null || true
     log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
 else
     log_warning "Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"

@@ -176,3 +176,70 @@ log_detail() {
         echo -e "  • $1"
     fi
 }
+
+validate_sorty_app_linkage() {
+    local app_path="$1"
+
+    if [ ! -d "${app_path}" ]; then
+        log_failure "App bundle not found at ${app_path}"
+        return 1
+    fi
+
+    local info_plist="${app_path}/Contents/Info.plist"
+    if [ ! -f "${info_plist}" ]; then
+        log_failure "Info.plist missing from ${app_path}"
+        return 1
+    fi
+
+    local executable_name
+    executable_name=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "${info_plist}" 2>/dev/null || true)
+    if [ -z "${executable_name}" ]; then
+        log_failure "CFBundleExecutable missing from ${info_plist}"
+        return 1
+    fi
+
+    local executable_path="${app_path}/Contents/MacOS/${executable_name}"
+    if [ ! -x "${executable_path}" ]; then
+        log_failure "Executable missing or not executable at ${executable_path}"
+        return 1
+    fi
+
+    local sparkle_install_name
+    sparkle_install_name=$(otool -L "${executable_path}" | awk '/Sparkle.framework\/Versions\/B\/Sparkle/ { print $1; exit }')
+    if [ -z "${sparkle_install_name}" ]; then
+        log_failure "${executable_name} is not linked against Sparkle.framework"
+        return 1
+    fi
+
+    local sparkle_relative_path=""
+    case "${sparkle_install_name}" in
+        @executable_path/../Frameworks/*)
+            sparkle_relative_path="${sparkle_install_name#@executable_path/../Frameworks/}"
+            ;;
+        @rpath/*)
+            sparkle_relative_path="${sparkle_install_name#@rpath/}"
+            ;;
+        *)
+            log_failure "${executable_name} links Sparkle from unexpected path: ${sparkle_install_name}"
+            return 1
+            ;;
+    esac
+
+    if [ "${sparkle_install_name}" = "@rpath/${sparkle_relative_path}" ] && ! otool -l "${executable_path}" | grep -F "@executable_path/../Frameworks" >/dev/null; then
+        log_failure "${executable_name} is missing @executable_path/../Frameworks runpath for embedded frameworks"
+        return 1
+    fi
+
+    local sparkle_binary="${app_path}/Contents/Frameworks/${sparkle_relative_path}"
+    if [ ! -f "${sparkle_binary}" ]; then
+        log_failure "Sparkle binary missing at ${sparkle_binary}"
+        return 1
+    fi
+
+    if ! otool -D "${sparkle_binary}" | grep -F "Sparkle.framework/Versions/B/Sparkle" >/dev/null; then
+        log_failure "Embedded Sparkle install name is invalid"
+        return 1
+    fi
+
+    log_success "App linkage verified"
+}

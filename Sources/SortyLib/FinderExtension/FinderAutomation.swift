@@ -11,6 +11,7 @@ import Foundation
 import AppKit
 import Carbon
 import ApplicationServices
+import Permiso
 
 /// Service for automating Finder interactions
 /// Uses AppleScript which requires Automation permission
@@ -61,16 +62,16 @@ public final class FinderAutomation {
     }
     
     /// Open System Settings to the Automation permission pane
-    public static func openAutomationSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
-            NSWorkspace.shared.open(url)
+    public static func openAutomationSettings(sourceFrameInScreen: CGRect? = nil) {
+        Task { @MainActor in
+            PermisoAssistant.shared.present(panel: .automation, sourceFrameInScreen: sourceFrameInScreen)
         }
     }
     
     /// Open System Settings to the Accessibility permission pane
-    public static func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
+    public static func openAccessibilitySettings(sourceFrameInScreen: CGRect? = nil) {
+        Task { @MainActor in
+            PermisoAssistant.shared.present(panel: .accessibility, sourceFrameInScreen: sourceFrameInScreen)
         }
     }
     

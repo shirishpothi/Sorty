@@ -268,7 +268,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
     func testBackgroundAgentConfigurationRejectsMainAppLabelCollision() {
         let issues = LoginItemManager.backgroundAgentConfigurationIssues(
             label: "com.sorty.app",
-            bundleProgram: "MacOS/Sorty",
+            bundleProgram: "Contents/MacOS/Sorty",
             mainAppServiceLabel: "com.sorty.app"
         )
 
@@ -371,7 +371,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
     func testBackgroundAgentConfigurationRejectsEmptyLabel() {
         let issues = LoginItemManager.backgroundAgentConfigurationIssues(
             label: "",
-            bundleProgram: "MacOS/Sorty",
+            bundleProgram: "Contents/MacOS/Sorty",
             mainAppServiceLabel: "com.sorty.app"
         )
 
@@ -385,7 +385,7 @@ final class FinderIntegrationStatusTests: XCTestCase {
             mainAppServiceLabel: "com.sorty.app"
         )
 
-        XCTAssertTrue(issues.contains("Background agent BundleProgram must remain MacOS/Sorty"))
+        XCTAssertTrue(issues.contains("Background agent BundleProgram must remain Contents/MacOS/Sorty"))
     }
 
     // MARK: - parseFinderSyncRegistrationEntries deduplication

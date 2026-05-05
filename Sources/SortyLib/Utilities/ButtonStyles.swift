@@ -96,12 +96,33 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
     }
     
     public func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: size == .small ? 13 : 15, weight: .semibold))
+        let fontSize: CGFloat = {
+            switch size {
+            case .small: return 13
+            case .large, .extraLarge: return 18
+            default: return 15
+            }
+        }()
+        let horizontalPadding: CGFloat = {
+            switch size {
+            case .small: return 16
+            case .large, .extraLarge: return 32
+            default: return 22
+            }
+        }()
+        let verticalPadding: CGFloat = {
+            switch size {
+            case .small: return 8
+            case .large, .extraLarge: return 16
+            default: return 10
+            }
+        }()
+        return configuration.label
+            .font(.system(size: fontSize, weight: .semibold))
             .lineLimit(1)
             .foregroundColor(isSecondary ? .primary : .white)
-            .padding(.horizontal, size == .small ? 16 : 22)
-            .padding(.vertical, size == .small ? 8 : 10)
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
             .background(
                 ZStack {
                     if isSecondary {

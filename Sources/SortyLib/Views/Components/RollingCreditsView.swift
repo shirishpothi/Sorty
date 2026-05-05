@@ -64,6 +64,16 @@ public enum OpenSourceCredits {
             url: URL(string: "https://github.com/sparkle-project/Sparkle/blob/master/LICENSE")!
         ),
         CreditItem(
+            name: "Beam",
+            license: "MIT",
+            url: URL(string: "https://github.com/tornikegomareli/beam")!
+        ),
+        CreditItem(
+            name: "Permiso",
+            license: "MIT",
+            url: URL(string: "https://github.com/jevonmao/Permiso")!
+        ),
+        CreditItem(
             name: "NotifiCLI",
             license: "MIT",
             url: URL(string: "https://github.com/saihgupr/NotifiCLI")!

@@ -17,9 +17,11 @@ struct OrganizeView: View {
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
+    @StateObject private var steeringManager = SteeringPromptManager.shared
 
     @State private var previousState: OrganizationState?
     @State private var showSmarterRetryModelPicker = false
+    @State private var showSavedPromptsSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -111,6 +113,10 @@ struct OrganizeView: View {
         .accessibilityHint("Select a folder and configure options")
         .onAppear {
             configureOrganizer()
+            presentSteeringPromptsIfRequested()
+        }
+        .onChange(of: appState.shouldPresentSteeringPrompts) { _, _ in
+            presentSteeringPromptsIfRequested()
         }
         .onChange(of: settingsViewModel.config.provider) { oldValue, newValue in
             configureOrganizer()
@@ -134,6 +140,17 @@ struct OrganizeView: View {
             selectionActionTitle: "Retry with Model",
             onSelect: retryWithSelectedModel
         )
+        .sheet(isPresented: $showSavedPromptsSheet) {
+            SavedPromptsSheet(
+                steeringManager: steeringManager,
+                settingsConfig: settingsViewModel.config,
+                onApplyPrompt: { prompt in
+                    organizer.customInstructions = prompt
+                    showSavedPromptsSheet = false
+                    HapticFeedbackManager.shared.tap()
+                }
+            )
+        }
     }
 
     @ViewBuilder
@@ -290,6 +307,12 @@ struct OrganizeView: View {
         await AISessionManager.shared.prewarm(provider: provider, config: config)
     }
 
+    private func presentSteeringPromptsIfRequested() {
+        guard appState.shouldPresentSteeringPrompts else { return }
+        showSavedPromptsSheet = true
+        appState.shouldPresentSteeringPrompts = false
+    }
+
     private var providerSetupStatus: ProviderSetupStatus {
         OnboardingSetupValidator.providerStatus(
             context: ProviderSetupContext(
@@ -444,7 +467,6 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
-    @State private var isStartButtonHovering = false
     
     private var isConnecting: Bool {
         sessionManager.prewarmingProvider != nil
@@ -509,15 +531,10 @@ struct ReadyToOrganizeView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.glossyCallToAction(.accentColor, size: .large, isHovering: isStartButtonHovering))
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)
-            .onHover { hovering in
-                if hovering && !isStartButtonHovering {
-                    HapticFeedbackManager.shared.selection()
-                }
-                isStartButtonHovering = hovering
-            }
             .opacity(hasAppeared ? 1 : 0)
             .animation(.easeOut(duration: 0.2).delay(0.14), value: hasAppeared)
             .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start organizing files using your current settings")
@@ -701,9 +718,10 @@ struct ReadyToOrganizeView: View {
                         
                         Button("More in Settings") {
                             HapticFeedbackManager.shared.selection()
-                            appState.selectedSettingsSection = .rules
-                            appState.settingsFocusTarget = .rulesStorageLocations
-                            appState.currentView = .settings
+                            appState.openSettingsWindow(
+                                section: .rules,
+                                focusTarget: .rulesStorageLocations
+                            )
                         }
                         .buttonStyle(.plain)
                         .font(.caption2)
@@ -937,6 +955,7 @@ struct ReadyToOrganizeView: View {
             HapticFeedbackManager.shared.error()
         }
     }
+
 }
 
 // MARK: - Saved Prompts Sheet
@@ -1382,9 +1401,10 @@ struct ErrorView: View {
                     Button {
                         HapticFeedbackManager.shared.tap()
                         animateActionFeedback(.settings)
-                        appState.selectedSettingsSection = category == .apiKey ? .provider : .troubleshooting
+                        appState.openSettingsWindow(
+                            section: category == .apiKey ? .provider : .troubleshooting
+                        )
                         appState.navigatedFromSettings = true
-                        appState.currentView = .settings
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "gearshape")

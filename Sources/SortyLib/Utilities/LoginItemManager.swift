@@ -17,7 +17,8 @@ public class LoginItemManager: ObservableObject {
     public nonisolated(unsafe) static let backgroundAgentPlistName = "com.sorty.app.background-agent.plist"
     public nonisolated(unsafe) static let legacyBackgroundAgentPlistName = "com.sorty.app.plist"
     public nonisolated(unsafe) static let backgroundAgentServiceLabel = "com.sorty.app.background-agent"
-    public nonisolated(unsafe) static let backgroundAgentBundleProgram = "MacOS/Sorty"
+    public nonisolated(unsafe) static let backgroundAgentBundleProgram = "Contents/MacOS/Sorty"
+    private nonisolated(unsafe) static let registeredBackgroundAgentBundleProgramKey = "registeredBackgroundAgentBundleProgram"
 
     @Published public var isLaunchAtLoginEnabled: Bool = false
     @Published public var isBackgroundAgentEnabled: Bool = false
@@ -155,13 +156,34 @@ public class LoginItemManager: ObservableObject {
         let agent = SMAppService.agent(plistName: Self.backgroundAgentPlistName)
         let shouldBeBackgroundAgent = keepInBackground
         let agentCurrentStatus = agent.status
+        let registeredBundleProgram = UserDefaults.standard.string(forKey: Self.registeredBackgroundAgentBundleProgramKey)
+        let needsAgentRegistrationRefresh = registeredBundleProgram != Self.backgroundAgentBundleProgram
 
-        if shouldBeBackgroundAgent && agentCurrentStatus != .enabled {
-            try? agent.register()
-            DebugLogger.log("Registered agent service (Background Activity)")
+        if shouldBeBackgroundAgent && agentCurrentStatus == .enabled && needsAgentRegistrationRefresh {
+            do {
+                try agent.unregister()
+                try agent.register()
+                UserDefaults.standard.set(Self.backgroundAgentBundleProgram, forKey: Self.registeredBackgroundAgentBundleProgramKey)
+                DebugLogger.log("Refreshed agent service registration (Background Activity)")
+            } catch {
+                DebugLogger.log("Failed to refresh background agent registration: \(error.localizedDescription)")
+            }
+        } else if shouldBeBackgroundAgent && agentCurrentStatus != .enabled {
+            do {
+                try agent.register()
+                UserDefaults.standard.set(Self.backgroundAgentBundleProgram, forKey: Self.registeredBackgroundAgentBundleProgramKey)
+                DebugLogger.log("Registered agent service (Background Activity)")
+            } catch {
+                DebugLogger.log("Failed to register background agent: \(error.localizedDescription)")
+            }
         } else if !shouldBeBackgroundAgent && agentCurrentStatus == .enabled {
-            try? agent.unregister()
-            DebugLogger.log("Unregistered agent service (Background Activity)")
+            do {
+                try agent.unregister()
+                UserDefaults.standard.removeObject(forKey: Self.registeredBackgroundAgentBundleProgramKey)
+                DebugLogger.log("Unregistered agent service (Background Activity)")
+            } catch {
+                DebugLogger.log("Failed to unregister background agent: \(error.localizedDescription)")
+            }
         }
 
         refreshStatus()

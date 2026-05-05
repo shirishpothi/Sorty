@@ -200,6 +200,8 @@ private struct DeeplinkEntry: Identifiable {
 private struct DeeplinkEntryRow: View {
     let entry: DeeplinkEntry
     let onCopy: (String) -> Void
+    @State private var copied = false
+    @State private var resetTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -207,10 +209,27 @@ private struct DeeplinkEntryRow: View {
                 Text(entry.title)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                Button("Copy") {
-                    onCopy(entry.url)
+                Button {
+                    copy()
+                } label: {
+                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(copied ? .green : .primary)
+                        .contentTransition(.symbolEffect(.replace))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(copied ? Color.green.opacity(0.16) : Color(nsColor: .controlBackgroundColor))
+                        )
+                        .overlay {
+                            Capsule()
+                                .strokeBorder(copied ? Color.green.opacity(0.42) : Color.secondary.opacity(0.14), lineWidth: 1)
+                        }
                 }
-                .buttonStyle(.sortySecondary(size: .small))
+                .buttonStyle(.plain)
+                .scaleEffect(copied ? 1.05 : 1)
+                .animation(.spring(response: 0.28, dampingFraction: 0.72), value: copied)
             }
 
             Text(entry.url)
@@ -221,6 +240,22 @@ private struct DeeplinkEntryRow: View {
             Text(entry.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private func copy() {
+        onCopy(entry.url)
+        resetTask?.cancel()
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) {
+            copied = true
+        }
+
+        resetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_250_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.18)) {
+                copied = false
+            }
         }
     }
 }

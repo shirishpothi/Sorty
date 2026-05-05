@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import Permiso
 
 @MainActor
 public class GlobalShortcutManager: ObservableObject {
@@ -22,8 +23,9 @@ public class GlobalShortcutManager: ObservableObject {
 
     // Request accessibility access (shows system prompt)
     public func requestAccessibilityPermission() {
-        let options = [String("AXTrustedCheckOptionPrompt"): true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+        Task { @MainActor in
+            PermisoAssistant.shared.present(panel: .accessibility)
+        }
     }
 
     // Register global shortcut (Cmd+Shift+O by default)

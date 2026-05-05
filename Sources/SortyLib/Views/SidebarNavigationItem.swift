@@ -89,14 +89,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 accessibilityIdentifier: "ExclusionsSidebarItem",
                 accessibilityHint: "Define files and folders Sorty should skip",
                 helpText: "Manage exclusion rules"
-            ),
-            SidebarNavigationItem(
-                view: .settings,
-                title: "Settings",
-                systemImage: "gear",
-                accessibilityIdentifier: "SettingsSidebarItem",
-                accessibilityHint: "Configure Sorty behavior and AI providers",
-                helpText: "Adjust provider, strategy, and system settings"
             )
         ])
 

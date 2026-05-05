@@ -17,17 +17,17 @@ struct PersonaPickerView: View {
     @State private var editingPersona: CustomPersona?
     @State private var localPrompt: String = ""
     @FocusState private var isEditorFocused: Bool
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Default Organization Persona")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 Spacer()
-                
-                Button(action: { 
+
+                Button(action: {
                     showingGenerator = true
                 }) {
                     Label("Generate", systemImage: "sparkles")
@@ -35,20 +35,21 @@ struct PersonaPickerView: View {
                 }
                 .buttonStyle(.borderless)
                 .padding(.trailing, 8)
-                
+
                 Button(action: { showingEditor = true }) {
                     Label("Create", systemImage: "plus")
                         .font(.caption)
                 }
                 .buttonStyle(.borderless)
             }
-            
+
             // Built-in personas
             HStack(spacing: 8) {
                 ForEach(PersonaType.allCases, id: \.self) { persona in
                     PersonaButton(
                         persona: persona,
-                        isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil,
+                        isSelected: personaManager.selectedPersona == persona
+                            && personaManager.selectedCustomPersonaId == nil,
                         isHovering: hoveringPersona == persona
                     ) {
                         saveChangesIfNeeded()
@@ -63,15 +64,15 @@ struct PersonaPickerView: View {
                     }
                 }
             }
-            
+
             // Custom personas
             if !customStore.customPersonas.isEmpty {
                 Divider()
-                
+
                 Text("Custom Personas")
                     .font(.caption2)
                     .foregroundColor(.secondary)
-                
+
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 8) {
                     ForEach(customStore.customPersonas) { custom in
                         CustomPersonaButton(
@@ -102,33 +103,35 @@ struct PersonaPickerView: View {
                     }
                 }
             }
-            
+
             // Description
             Text(currentDescription)
                 .font(.caption2)
                 .foregroundColor(.secondary.opacity(0.6))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .animation(.easeInOut, value: personaManager.selectedPersona)
-            
+
             Divider()
                 .padding(.vertical, 8)
-            
+
             // Custom System Prompt Editor
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(personaName).foregroundColor(.purple).bold() + Text(" System Prompt")
+                    Text(personaName).foregroundColor(.purple).bold()
+                        + Text(" System Prompt")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+
                     Spacer()
-                    
+
                     if personaManager.selectedCustomPersonaId == nil {
                         // Standard Persona Reset
-                        if let _ = personaManager.customPrompts[personaManager.selectedPersona] {
+                        if personaManager.customPrompts[personaManager.selectedPersona] != nil {
                             Button("Reset to Default") {
                                 HapticFeedbackManager.shared.tap()
-                                personaManager.resetCustomPrompt(for: personaManager.selectedPersona)
-                                updateLocalPrompt() // Update local prompt after reset
+                                personaManager.resetCustomPrompt(
+                                    for: personaManager.selectedPersona)
+                                updateLocalPrompt()  // Update local prompt after reset
                             }
                             .font(.caption)
                             .buttonStyle(.borderless)
@@ -136,37 +139,46 @@ struct PersonaPickerView: View {
                         }
                     }
                 }
-                
+
                 if let customId = personaManager.selectedCustomPersonaId,
-                   let index = customStore.customPersonas.firstIndex(where: { $0.id == customId }) {
+                    let index = customStore.customPersonas.firstIndex(where: { $0.id == customId })
+                {
                     // Editing Custom Persona
                     TextEditor(text: $localPrompt)
                         .focused($isEditorFocused)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(height: 120)
-                    .padding(4)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .cornerRadius(6)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                    
-                    Text("Editing prompt for custom persona '\(customStore.customPersonas[index].name)'")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
+                        .font(.system(.body, design: .monospaced))
+                        .frame(height: 120)
+                        .padding(4)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6).stroke(
+                                Color.secondary.opacity(0.2), lineWidth: 1))
+
+Text(
+                        "Editing prompt for custom persona '\(customStore.customPersonas[index].name)'"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
                 } else {
                     // Editing Standard Persona
                     TextEditor(text: $localPrompt)
                         .focused($isEditorFocused)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(height: 120)
-                    .padding(4)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .cornerRadius(6)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-                    
-                    Text("Customize AI instructions for '\(personaManager.selectedPersona.displayName)'")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(height: 120)
+                        .padding(4)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6).stroke(
+                                Color.secondary.opacity(0.2), lineWidth: 1))
+
+Text(
+                        "Customize AI instructions for '\(personaManager.selectedPersona.displayName)'"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.secondary)
                 }
             }
         }
@@ -175,31 +187,35 @@ struct PersonaPickerView: View {
                 .environmentObject(customStore)
         }
         .sheet(isPresented: $showingGenerator) {
-            PersonaGeneratorView(store: customStore, selectedPersonaId: $personaManager.selectedCustomPersonaId)
-                .environmentObject(customStore)
+            PersonaGeneratorView(
+                store: customStore, selectedPersonaId: $personaManager.selectedCustomPersonaId
+            )
+            .environmentObject(customStore)
         }
         .onAppear {
             updateLocalPrompt()
         }
         .onChange(of: isEditorFocused) { oldValue, newValue in
-            if !newValue { // Focus lost
+            if !newValue {  // Focus lost
                 saveChangesIfNeeded()
             }
         }
     }
-    
+
     private func updateLocalPrompt() {
         if let customId = personaManager.selectedCustomPersonaId,
-           let custom = customStore.customPersonas.first(where: { $0.id == customId }) {
+            let custom = customStore.customPersonas.first(where: { $0.id == customId })
+        {
             localPrompt = custom.promptModifier
         } else {
             localPrompt = personaManager.getPrompt(for: personaManager.selectedPersona)
         }
     }
-    
+
     private func saveChangesIfNeeded() {
         if let customId = personaManager.selectedCustomPersonaId,
-           let index = customStore.customPersonas.firstIndex(where: { $0.id == customId }) {
+            let index = customStore.customPersonas.firstIndex(where: { $0.id == customId })
+        {
             var updated = customStore.customPersonas[index]
             if updated.promptModifier != localPrompt {
                 updated.promptModifier = localPrompt
@@ -207,22 +223,25 @@ struct PersonaPickerView: View {
             }
         } else {
             if personaManager.getPrompt(for: personaManager.selectedPersona) != localPrompt {
-                personaManager.saveCustomPrompt(for: personaManager.selectedPersona, prompt: localPrompt)
+                personaManager.saveCustomPrompt(
+                    for: personaManager.selectedPersona, prompt: localPrompt)
             }
         }
     }
-    
+
     private var currentDescription: String {
         if let customId = personaManager.selectedCustomPersonaId,
-           let custom = customStore.customPersonas.first(where: { $0.id == customId }) {
+            let custom = customStore.customPersonas.first(where: { $0.id == customId })
+        {
             return custom.description
         }
         return personaManager.selectedPersona.description
     }
-    
+
     private var personaName: String {
         if let customId = personaManager.selectedCustomPersonaId,
-           let custom = customStore.customPersonas.first(where: { $0.id == customId }) {
+            let custom = customStore.customPersonas.first(where: { $0.id == customId })
+        {
             return custom.name
         }
         return personaManager.selectedPersona.displayName
@@ -238,13 +257,13 @@ struct CustomPersonaButton: View {
     let onSelect: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 6) {
             Image(systemName: persona.icon)
                 .font(.system(size: 18))
                 .symbolRenderingMode(.hierarchical)
-            
+
             Text(persona.name)
                 .font(.system(size: 10, weight: .medium))
                 .lineLimit(1)
@@ -259,7 +278,8 @@ struct CustomPersonaButton: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
-                            isSelected ? Color.purple : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
+                            isSelected
+                                ? Color.purple : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
                             lineWidth: isSelected ? 2 : 1
                         )
                 )
@@ -282,13 +302,13 @@ struct PersonaButton: View {
     let isSelected: Bool
     let isHovering: Bool
     let action: () -> Void
-    
+
     var body: some View {
         VStack(spacing: 6) {
             Image(systemName: persona.icon)
                 .font(.system(size: 18))
                 .symbolRenderingMode(.hierarchical)
-            
+
             Text(persona.displayName)
                 .font(.system(size: 10, weight: .medium))
                 .lineLimit(1)
@@ -303,7 +323,9 @@ struct PersonaButton: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
-                            isSelected ? Color.accentColor : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
+                            isSelected
+                                ? Color.accentColor
+                                : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
                             lineWidth: isSelected ? 2 : 1
                         )
                 )
@@ -323,7 +345,7 @@ struct PersonaButton: View {
 struct CompactPersonaPicker: View {
     @EnvironmentObject var personaManager: PersonaManager
     @EnvironmentObject var customStore: CustomPersonaStore
-    
+
     var body: some View {
         Menu {
             Section("Built-in") {
@@ -345,7 +367,7 @@ struct CompactPersonaPicker: View {
                     }
                 }
             }
-            
+
             if !customStore.customPersonas.isEmpty {
                 Section("Custom") {
                     ForEach(customStore.customPersonas) { custom in
@@ -373,18 +395,20 @@ struct CompactPersonaPicker: View {
         }
         .menuStyle(.borderlessButton)
     }
-    
+
     private var currentIcon: String {
         if let customId = personaManager.selectedCustomPersonaId,
-           let custom = customStore.customPersonas.first(where: { $0.id == customId }) {
+            let custom = customStore.customPersonas.first(where: { $0.id == customId })
+        {
             return custom.icon
         }
         return personaManager.selectedPersona.icon
     }
-    
+
     private var currentName: String {
         if let customId = personaManager.selectedCustomPersonaId,
-           let custom = customStore.customPersonas.first(where: { $0.id == customId }) {
+            let custom = customStore.customPersonas.first(where: { $0.id == customId })
+        {
             return custom.name
         }
         return personaManager.selectedPersona.displayName
@@ -394,6 +418,7 @@ struct CompactPersonaPicker: View {
 #Preview("Persona Picker") {
     PersonaPickerView()
         .environmentObject(PersonaManager())
+        .environmentObject(CustomPersonaStore())
         .padding()
         .frame(width: 400)
 }
@@ -401,5 +426,6 @@ struct CompactPersonaPicker: View {
 #Preview("Compact Picker") {
     CompactPersonaPicker()
         .environmentObject(PersonaManager())
+        .environmentObject(CustomPersonaStore())
         .padding()
 }

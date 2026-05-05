@@ -90,13 +90,13 @@ struct SettingsCard<Content: View>: View {
             
             content
         }
-        .padding(16)
+        .padding(15)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
         )
     }
 }
@@ -139,17 +139,23 @@ struct SettingsNavigationCard: View {
                     .foregroundColor(.secondary)
             }
             .padding(14)
-            .background(isHovered ? Color.primary.opacity(0.05) : Color.clear)
-            .background(.ultraThinMaterial)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.86 : 0.64))
             .contentShape(Rectangle())
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.secondary.opacity(isHovered ? 0.18 : 0.10), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            if hovering && !isHovered {
+                HapticFeedbackManager.shared.selection()
+            }
+            withAnimation(.easeOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+        }
     }
 }
 
@@ -309,6 +315,7 @@ struct URLSchemeRow: View {
     let scheme: String
     let description: String
     @State private var copied = false
+    @State private var resetTask: Task<Void, Never>?
     
     var body: some View {
         HStack(spacing: 8) {
@@ -329,17 +336,27 @@ struct URLSchemeRow: View {
                 pasteboard.clearContents()
                 pasteboard.setString(scheme, forType: .string)
                 HapticFeedbackManager.shared.tap()
-                withAnimation { copied = true }
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
-                    withAnimation { copied = false }
+                resetTask?.cancel()
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                    copied = true
+                }
+                resetTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 1_250_000_000)
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        copied = false
+                    }
                 }
             } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.caption2)
+                Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                    .font(.caption)
                     .foregroundStyle(copied ? .green : .secondary)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 18, height: 18)
             }
             .buttonStyle(.plain)
+            .scaleEffect(copied ? 1.12 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: copied)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

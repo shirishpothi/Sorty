@@ -5,7 +5,7 @@
     <key>Label</key>
     <string>com.sorty.app.background-agent</string>
     <key>BundleProgram</key>
-    <string>MacOS/Sorty</string>
+    <string>Contents/MacOS/Sorty</string>
     <key>RunAtLoad</key>
     <false/>
 </dict>

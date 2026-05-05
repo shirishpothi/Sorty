@@ -37,13 +37,27 @@ public enum SettingsFocusTarget: String, Sendable {
     case rulesOrganizationStyle = "settings.rules.organization-style"
 }
 
-public enum SettingsCategoryGroup: String, CaseIterable {
+public struct SettingsWindowRequest: Sendable {
+    public let section: SettingsCategory?
+    public let focusTarget: SettingsFocusTarget?
+
+    public init(section: SettingsCategory? = nil, focusTarget: SettingsFocusTarget? = nil) {
+        self.section = section
+        self.focusTarget = focusTarget
+    }
+}
+
+public extension Notification.Name {
+    static let openSettingsWindow = Notification.Name("SortyOpenSettingsWindow")
+}
+
+public enum SettingsCategoryGroup: String, CaseIterable, Sendable {
     case aiAndOrganization = "AI & Organization"
     case features = "Features"
     case system = "System"
 }
 
-public enum SettingsCategory: String, CaseIterable, Identifiable {
+public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
     case provider = "AI Provider"
     case strategy = "Organization Strategy"
     case rules = "Organization Rules"

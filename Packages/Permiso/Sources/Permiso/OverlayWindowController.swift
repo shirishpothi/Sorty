@@ -1,0 +1,475 @@
+import AppKit
+import Foundation
+import QuartzCore
+
+final class OverlayWindowController: NSWindowController {
+    private let windowSize = NSSize(width: 530, height: 109)
+    private let launchAnimationDuration: TimeInterval = 0.72
+    private let returnAnimationDuration: TimeInterval = 0.48
+    private let launchAnimationResponse: Double = 0.72
+    private let launchAnimationDampingFraction: Double = 0.72
+    private let flightApexLift: CGFloat = 160
+    private let initialAlpha: CGFloat = 0.9
+    private let flightContentView: OverlayFlightContentView
+    private var launchAnimationTimer: Timer?
+    private var launchStartTime: CFTimeInterval = 0
+    private var launchFromFrame = NSRect.zero
+    private var launchToFrame = NSRect.zero
+    private var sourceFrame = NSRect.zero
+    private var activeAnimationDuration: TimeInterval = 0.72
+    private var isAnimatingLaunch = false
+    private var isAnimatingReturn = false
+    private var returnCompletion: (() -> Void)?
+
+    init(hostApp: PermisoHostApp, panel: PermisoPanel, onBack: @escaping () -> Void) {
+        let window = PassiveOverlayPanel(
+            contentRect: NSRect(origin: .zero, size: windowSize),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        flightContentView = OverlayFlightContentView(hostApp: hostApp, panel: panel, onBack: onBack)
+        super.init(window: window)
+        configureWindow(window)
+        window.contentView = flightContentView
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func close() {
+        stopLaunchAnimation()
+        window?.orderOut(nil)
+        super.close()
+    }
+
+    func present(
+        from sourceFrameInScreen: CGRect?, sourceSnapshot: NSImage?, settingsFrame: CGRect,
+        visibleFrame: CGRect
+    ) {
+        stopLaunchAnimation()
+        guard let window else { return }
+        let targetOrigin = anchoredOrigin(for: settingsFrame, visibleFrame: visibleFrame)
+        let targetFrame = NSRect(origin: targetOrigin, size: windowSize)
+
+        flightContentView.setSourceSnapshot(sourceSnapshot)
+
+        guard let sourceFrameInScreen, !sourceFrameInScreen.isEmpty else {
+            sourceFrame = .zero
+            isAnimatingLaunch = false
+            isAnimatingReturn = false
+            window.alphaValue = 1
+            flightContentView.setFlightProgress(1)
+            window.setFrame(targetFrame, display: false)
+            window.orderFrontRegardless()
+            return
+        }
+
+        sourceFrame = sourceFrameInScreen
+        isAnimatingLaunch = true
+        isAnimatingReturn = false
+        activeAnimationDuration = launchAnimationDuration
+        launchFromFrame = sourceFrameInScreen
+        launchToFrame = targetFrame
+        launchStartTime = CACurrentMediaTime()
+
+        window.alphaValue = initialAlpha
+        window.setFrame(sourceFrameInScreen, display: false)
+        flightContentView.setFlightProgress(0)
+        window.orderFrontRegardless()
+        stepLaunchAnimation()
+
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) {
+            [weak self] _ in
+            Task { @MainActor in
+                self?.stepLaunchAnimation()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        launchAnimationTimer = timer
+    }
+
+    func updatePosition(with settingsFrame: CGRect, visibleFrame: CGRect) {
+        guard let window else { return }
+        let origin = anchoredOrigin(for: settingsFrame, visibleFrame: visibleFrame)
+        launchToFrame.origin = origin
+        guard !isAnimatingLaunch else { return }
+        window.setFrameOrigin(origin)
+        window.orderFrontRegardless()
+    }
+
+    func hide() {
+        isAnimatingLaunch = false
+        isAnimatingReturn = false
+        stopLaunchAnimation()
+        window?.orderOut(nil)
+    }
+
+    func returnToSource(completion: @escaping () -> Void) {
+        stopLaunchAnimation()
+        guard let window, !sourceFrame.isEmpty else {
+            completion()
+            return
+        }
+
+        isAnimatingLaunch = false
+        isAnimatingReturn = true
+        returnCompletion = completion
+        activeAnimationDuration = returnAnimationDuration
+        launchFromFrame = window.frame
+        launchToFrame = sourceFrame
+        launchStartTime = CACurrentMediaTime()
+        window.alphaValue = 1
+        flightContentView.setFlightProgress(1)
+        window.orderFrontRegardless()
+        stepLaunchAnimation()
+
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) {
+            [weak self] _ in
+            Task { @MainActor in
+                self?.stepLaunchAnimation()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        launchAnimationTimer = timer
+    }
+
+    private func configureWindow(_ window: NSWindow) {
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.level = .statusBar
+        window.hasShadow = true
+        window.hidesOnDeactivate = false
+        window.collectionBehavior = [
+            .canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary,
+        ]
+        window.animationBehavior = .none
+    }
+
+    private func stepLaunchAnimation() {
+        guard let window else {
+            stopLaunchAnimation()
+            return
+        }
+
+        let elapsed = max(0, CACurrentMediaTime() - launchStartTime)
+        if elapsed >= activeAnimationDuration {
+            let wasReturning = isAnimatingReturn
+            let completion = returnCompletion
+            isAnimatingLaunch = false
+            isAnimatingReturn = false
+            returnCompletion = nil
+            stopLaunchAnimation()
+            window.alphaValue = wasReturning ? initialAlpha : 1
+            flightContentView.setFlightProgress(wasReturning ? 0 : 1)
+            window.setFrame(launchToFrame, display: true)
+            if wasReturning {
+                window.orderOut(nil)
+                completion?()
+            }
+            return
+        }
+
+        let motionProgress = springProgress(at: elapsed, duration: activeAnimationDuration)
+        let visualProgress = clampedUnit(motionProgress)
+        if isAnimatingReturn {
+            window.alphaValue = 1 - ((1 - initialAlpha) * visualProgress)
+            flightContentView.setFlightProgress(1 - visualProgress)
+        } else {
+            window.alphaValue = initialAlpha + ((1 - initialAlpha) * visualProgress)
+            flightContentView.setFlightProgress(visualProgress)
+        }
+        window.setFrame(
+            curvedFrame(from: launchFromFrame, to: launchToFrame, progress: motionProgress),
+            display: true
+        )
+    }
+
+    private func stopLaunchAnimation() {
+        launchAnimationTimer?.invalidate()
+        launchAnimationTimer = nil
+    }
+
+    private func springProgress(at elapsed: TimeInterval, duration: TimeInterval) -> CGFloat {
+        let normalizedTime = min(max(elapsed / max(duration, 0.001), 0), 1)
+        let easedTime = normalizedTime * normalizedTime * (3 - (2 * normalizedTime))
+        let omega = (2 * Double.pi) / launchAnimationResponse
+        let damping = min(max(launchAnimationDampingFraction, 0.01), 0.99)
+        let dampedFrequency = omega * sqrt(1 - (damping * damping))
+        let envelope = exp(-damping * omega * easedTime)
+        let progress =
+            1 - envelope
+            * (cos(dampedFrequency * easedTime)
+                + ((damping * omega) / dampedFrequency) * sin(dampedFrequency * easedTime))
+
+        return min(max(progress, 0), 1.08)
+    }
+
+    private func clampedUnit(_ value: CGFloat) -> CGFloat {
+        min(max(value, 0), 1)
+    }
+
+    private func curvedFrame(from: NSRect, to: NSRect, progress: CGFloat) -> NSRect {
+        let sizeProgress = clampedUnit(progress)
+        let pathProgress = min(max(progress, 0), 1.08)
+        let size = NSSize(
+            width: from.size.width + ((to.size.width - from.size.width) * sizeProgress),
+            height: from.size.height + ((to.size.height - from.size.height) * sizeProgress)
+        )
+
+        let startCenter = CGPoint(x: from.midX, y: from.midY)
+        let endCenter = CGPoint(x: to.midX, y: to.midY)
+        let midPoint = CGPoint(
+            x: (startCenter.x + endCenter.x) * 0.5,
+            y: max(startCenter.y, endCenter.y)
+        )
+
+        let controlPoint = CGPoint(x: midPoint.x, y: midPoint.y + flightApexLift)
+        let inverse = 1 - pathProgress
+        let center = CGPoint(
+            x: (inverse * inverse * startCenter.x) + (2 * inverse * pathProgress * controlPoint.x)
+                + (pathProgress * pathProgress * endCenter.x),
+            y: (inverse * inverse * startCenter.y) + (2 * inverse * pathProgress * controlPoint.y)
+                + (pathProgress * pathProgress * endCenter.y)
+        )
+
+        return NSRect(
+            x: center.x - (size.width * 0.5),
+            y: center.y - (size.height * 0.5),
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private func anchoredOrigin(for settingsFrame: CGRect, visibleFrame: CGRect) -> NSPoint {
+        let sidebarWidth: CGFloat = 170
+        let contentMinX = settingsFrame.minX + sidebarWidth
+        let contentWidth = max(settingsFrame.width - sidebarWidth, windowSize.width)
+        let preferredX = contentMinX + ((contentWidth - windowSize.width) / 2) - 8
+        let preferredY = settingsFrame.minY + 14
+        let minX = visibleFrame.minX + 8
+        let maxX = visibleFrame.maxX - windowSize.width - 8
+        let minY = visibleFrame.minY + 8
+        let maxY = visibleFrame.maxY - windowSize.height - 8
+
+        return NSPoint(
+            x: min(max(preferredX, minX), maxX),
+            y: min(max(preferredY, minY), maxY)
+        )
+    }
+}
+
+private final class PassiveOverlayPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+private final class OverlayFlightContentView: NSView {
+    private let liveContentView: OverlayContentView
+    private let sourceImageView = NSImageView()
+
+    init(hostApp: PermisoHostApp, panel: PermisoPanel, onBack: @escaping () -> Void) {
+        liveContentView = OverlayContentView(hostApp: hostApp, panel: panel, onBack: onBack)
+        super.init(frame: NSRect(x: 0, y: 0, width: 530, height: 109))
+        translatesAutoresizingMaskIntoConstraints = false
+        setup()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setSourceSnapshot(_ image: NSImage?) {
+        sourceImageView.image = image
+        sourceImageView.isHidden = image == nil
+        if image == nil {
+            liveContentView.alphaValue = 1
+            sourceImageView.alphaValue = 0
+        } else {
+            liveContentView.alphaValue = 0
+            sourceImageView.alphaValue = 1
+        }
+    }
+
+    func setFlightProgress(_ progress: CGFloat) {
+        let clampedProgress = min(max(progress, 0), 1)
+        guard sourceImageView.image != nil else {
+            liveContentView.alphaValue = 1
+            sourceImageView.alphaValue = 0
+            return
+        }
+
+        let crossfade = Self.apexCrossfade(for: clampedProgress)
+        sourceImageView.alphaValue = 1 - crossfade
+        liveContentView.alphaValue = crossfade
+    }
+
+    private func setup() {
+        wantsLayer = true
+
+        sourceImageView.translatesAutoresizingMaskIntoConstraints = false
+        sourceImageView.imageAlignment = .alignCenter
+        sourceImageView.imageScaling = .scaleProportionallyDown
+        sourceImageView.animates = false
+        addSubview(liveContentView)
+        addSubview(sourceImageView)
+
+        NSLayoutConstraint.activate([
+            liveContentView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            liveContentView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            liveContentView.topAnchor.constraint(equalTo: topAnchor),
+            liveContentView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            sourceImageView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            sourceImageView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            sourceImageView.topAnchor.constraint(equalTo: topAnchor),
+            sourceImageView.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    private static func apexCrossfade(for progress: CGFloat) -> CGFloat {
+        if progress <= 0.35 {
+            return 0
+        }
+        if progress >= 0.65 {
+            return 1
+        }
+
+        let localProgress = (progress - 0.35) / 0.3
+        return localProgress * localProgress * (3 - (2 * localProgress))
+    }
+}
+
+private final class OverlayContentView: NSView {
+    private let onBack: () -> Void
+
+    init(hostApp: PermisoHostApp, panel: PermisoPanel, onBack: @escaping () -> Void) {
+        self.onBack = onBack
+        super.init(frame: NSRect(x: 0, y: 0, width: 530, height: 109))
+        translatesAutoresizingMaskIntoConstraints = false
+        setup(hostApp: hostApp, panel: panel)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setup(hostApp: PermisoHostApp, panel: PermisoPanel) {
+        let materialView = NSVisualEffectView()
+        materialView.translatesAutoresizingMaskIntoConstraints = false
+        materialView.material = .popover
+        materialView.blendingMode = .behindWindow
+        materialView.state = .active
+        materialView.wantsLayer = true
+        materialView.layer?.cornerRadius = 18
+        materialView.layer?.masksToBounds = true
+        materialView.layer?.borderWidth = 0.5
+        materialView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.18).cgColor
+        addSubview(materialView)
+
+        let tintView = NSView()
+        tintView.translatesAutoresizingMaskIntoConstraints = false
+        tintView.wantsLayer = true
+        tintView.layer?.backgroundColor =
+            NSColor.windowBackgroundColor.withAlphaComponent(0.78).cgColor
+        materialView.addSubview(tintView)
+
+        let backChrome = NSView()
+        backChrome.translatesAutoresizingMaskIntoConstraints = false
+        backChrome.wantsLayer = true
+        backChrome.layer?.backgroundColor =
+            NSColor.controlBackgroundColor.withAlphaComponent(0.95).cgColor
+        backChrome.layer?.cornerRadius = 16
+        materialView.addSubview(backChrome)
+
+        let backButton = NSButton()
+        backButton.translatesAutoresizingMaskIntoConstraints = false
+        backButton.isBordered = false
+        backButton.image = NSImage(
+            systemSymbolName: "chevron.left", accessibilityDescription: "Back")
+        backButton.contentTintColor = NSColor.labelColor.withAlphaComponent(0.72)
+        backButton.target = self
+        backButton.action = #selector(backPressed)
+        if let cell = backButton.cell as? NSButtonCell {
+            cell.imagePosition = .imageOnly
+        }
+        backChrome.addSubview(backButton)
+
+        let arrowView = NSImageView()
+        arrowView.translatesAutoresizingMaskIntoConstraints = false
+        arrowView.image = NSImage(systemSymbolName: "arrow.up", accessibilityDescription: nil)
+        arrowView.symbolConfiguration = .init(pointSize: 28, weight: .bold)
+        arrowView.contentTintColor = NSColor(calibratedRed: 0.15, green: 0.54, blue: 0.98, alpha: 1)
+        materialView.addSubview(arrowView)
+
+        let titleLabel = NSTextField(
+            labelWithAttributedString: title(hostApp: hostApp, panel: panel))
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.maximumNumberOfLines = 1
+        titleLabel.lineBreakMode = .byTruncatingTail
+        materialView.addSubview(titleLabel)
+
+        let dragSource = AppDragSourceView(hostApp: hostApp)
+        materialView.addSubview(dragSource)
+
+        NSLayoutConstraint.activate([
+            widthAnchor.constraint(equalToConstant: 530),
+            heightAnchor.constraint(equalToConstant: 109),
+
+            materialView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            materialView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            materialView.topAnchor.constraint(equalTo: topAnchor),
+            materialView.bottomAnchor.constraint(equalTo: bottomAnchor),
+
+            tintView.leadingAnchor.constraint(equalTo: materialView.leadingAnchor),
+            tintView.trailingAnchor.constraint(equalTo: materialView.trailingAnchor),
+            tintView.topAnchor.constraint(equalTo: materialView.topAnchor),
+            tintView.bottomAnchor.constraint(equalTo: materialView.bottomAnchor),
+
+            backChrome.leadingAnchor.constraint(equalTo: materialView.leadingAnchor, constant: 18),
+            backChrome.topAnchor.constraint(equalTo: materialView.topAnchor, constant: 52),
+            backChrome.widthAnchor.constraint(equalToConstant: 32),
+            backChrome.heightAnchor.constraint(equalToConstant: 32),
+
+            backButton.centerXAnchor.constraint(equalTo: backChrome.centerXAnchor),
+            backButton.centerYAnchor.constraint(equalTo: backChrome.centerYAnchor),
+            backButton.widthAnchor.constraint(equalToConstant: 14),
+            backButton.heightAnchor.constraint(equalToConstant: 14),
+
+            arrowView.leadingAnchor.constraint(equalTo: materialView.leadingAnchor, constant: 47),
+            arrowView.topAnchor.constraint(equalTo: materialView.topAnchor, constant: 10),
+            arrowView.widthAnchor.constraint(equalToConstant: 28),
+            arrowView.heightAnchor.constraint(equalToConstant: 28),
+
+            titleLabel.leadingAnchor.constraint(equalTo: arrowView.trailingAnchor, constant: 10),
+            titleLabel.centerYAnchor.constraint(equalTo: arrowView.centerYAnchor),
+            titleLabel.trailingAnchor.constraint(
+                equalTo: materialView.trailingAnchor, constant: -22),
+
+            dragSource.leadingAnchor.constraint(equalTo: materialView.leadingAnchor, constant: 64),
+            dragSource.trailingAnchor.constraint(
+                equalTo: materialView.trailingAnchor, constant: -21),
+            dragSource.topAnchor.constraint(equalTo: materialView.topAnchor, constant: 47),
+            dragSource.heightAnchor.constraint(equalToConstant: 43),
+        ])
+    }
+
+    private func title(hostApp: PermisoHostApp, panel: PermisoPanel) -> NSAttributedString {
+        NSAttributedString(
+            string: "Drag \(hostApp.displayName) to the list above to allow \(panel.title)",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 14, weight: .medium),
+                .foregroundColor: NSColor.labelColor.withAlphaComponent(0.82),
+            ]
+        )
+    }
+
+    @objc
+    private func backPressed() {
+        onBack()
+    }
+}

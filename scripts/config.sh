@@ -6,7 +6,8 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCHEME="Sorty"
 
 # Build Paths
-BUILD_DIR="${PROJECT_DIR}/.build"
+WORKSPACE_BUILD_DIR="${PROJECT_DIR}/.build"
+BUILD_DIR="${SORTY_BUILD_DIR:-${HOME}/Library/Caches/${PROJECT_NAME}/build}"
 RELEASE_DIR="${PROJECT_DIR}/releases"
 ARCHIVE_PATH="${BUILD_DIR}/${PROJECT_NAME}.xcarchive"
 APP_PATH="${RELEASE_DIR}/${PROJECT_NAME}.app"

@@ -125,7 +125,7 @@ final class WindowSessionTests: XCTestCase {
     func testSettingsSectionSelectionIsAppliedAfterYield() async {
         handle(.settings(section: "provider"))
 
-        XCTAssertEqual(session.appState.currentView, .settings)
+        XCTAssertEqual(session.appState.currentView, .organize)
         await spinMainActor()
         XCTAssertEqual(session.appState.selectedSettingsSection, .provider)
         XCTAssertNil(session.appState.settingsFocusTarget)
@@ -134,7 +134,7 @@ final class WindowSessionTests: XCTestCase {
     func testWatchedSettingsSectionMapsToRulesFocusTarget() async {
         handle(.settings(section: "watched"))
 
-        XCTAssertEqual(session.appState.currentView, .settings)
+        XCTAssertEqual(session.appState.currentView, .organize)
         await spinMainActor()
         XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
         XCTAssertNil(session.appState.settingsFocusTarget)
@@ -143,7 +143,7 @@ final class WindowSessionTests: XCTestCase {
     func testWatchedFoldersAliasMapsToRulesSection() async {
         handle(.settings(section: "watched-folders"))
 
-        XCTAssertEqual(session.appState.currentView, .settings)
+        XCTAssertEqual(session.appState.currentView, .organize)
         await spinMainActor()
         XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
         XCTAssertNil(session.appState.settingsFocusTarget)
@@ -152,7 +152,7 @@ final class WindowSessionTests: XCTestCase {
     func testStorageSettingsSectionMapsToStorageFocusTarget() async {
         handle(.settings(section: "storage"))
 
-        XCTAssertEqual(session.appState.currentView, .settings)
+        XCTAssertEqual(session.appState.currentView, .organize)
         await spinMainActor()
         XCTAssertEqual(session.appState.selectedSettingsSection, .rules)
         XCTAssertEqual(session.appState.settingsFocusTarget, .rulesStorageLocations)
