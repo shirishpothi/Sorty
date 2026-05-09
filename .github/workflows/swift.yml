@@ -73,7 +73,7 @@ jobs:
   build-and-test:
     needs: check-local-ci
     if: ${{ needs.check-local-ci.outputs.skip != 'true' }}
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
