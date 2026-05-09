@@ -748,6 +748,8 @@ struct ReadyToOrganizeView: View {
             if let mascotHead = SortyResources.image(named: "SortyMascotHead") {
                 Image(nsImage: mascotHead)
                     .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 48, height: 48)
                     .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
