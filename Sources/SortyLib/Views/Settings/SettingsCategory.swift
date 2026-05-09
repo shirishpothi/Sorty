@@ -57,6 +57,30 @@ public enum SettingsCategoryGroup: String, CaseIterable, Sendable {
     case system = "System"
 }
 
+public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
+    case general = "General"
+    case ai = "AI"
+    case organization = "Organization"
+    case automation = "Automation"
+    case system = "System"
+
+    public var id: String { rawValue }
+
+    public var icon: String {
+        switch self {
+        case .general: return "gearshape"
+        case .ai: return "cpu"
+        case .organization: return "folder.badge.gearshape"
+        case .automation: return "bolt.circle"
+        case .system: return "wrench.and.screwdriver"
+        }
+    }
+
+    public var categories: [SettingsCategory] {
+        SettingsCategory.allCases.filter { $0.tab == self }
+    }
+}
+
 public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
     case provider = "AI Provider"
     case strategy = "Organization Strategy"
@@ -71,6 +95,21 @@ public enum SettingsCategory: String, CaseIterable, Identifiable, Sendable {
     case experimental = "Experimental"
     
     public var id: String { rawValue }
+
+    public var tab: SettingsTab {
+        switch self {
+        case .advanced, .notifications:
+            return .general
+        case .provider, .tuning:
+            return .ai
+        case .rules, .strategy:
+            return .organization
+        case .automation, .finder:
+            return .automation
+        case .troubleshooting, .help, .experimental:
+            return .system
+        }
+    }
     
     public var group: SettingsCategoryGroup {
         switch self {

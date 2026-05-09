@@ -2784,19 +2784,24 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
     @MainActor
     public func redoOrganization(from entry: OrganizationHistoryEntry) async throws {
-        guard let _ = entry.plan, let baseURL = currentDirectory ?? URL(string: "file://" + entry.directoryPath) else {
+        guard let plan = entry.plan else {
             throw OrganizationError.noCurrentPlan
         }
+        let baseURL = currentDirectory ?? URL(fileURLWithPath: entry.directoryPath)
+        currentDirectory = baseURL
+        currentPlan = plan
 
         updateState(.applying, stage: "Re-applying organization...", progress: 0.3)
 
         do {
             try await apply(at: baseURL, dryRun: false, enableTagging: aiConfig?.enableFileTagging ?? true)
             
-            var updatedEntry = entry
-            updatedEntry.isUndone = false
-            updatedEntry.status = .completed
-            history.updateEntry(updatedEntry)
+            if entry.isUndone {
+                var updatedEntry = entry
+                updatedEntry.isUndone = false
+                updatedEntry.status = .completed
+                history.updateEntry(updatedEntry)
+            }
             
             await MainActor.run {
                 organizationStage = "Redo complete"

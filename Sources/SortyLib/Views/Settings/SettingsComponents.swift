@@ -75,6 +75,8 @@ struct SettingsCard<Content: View>: View {
     let icon: String
     let color: Color
     @ViewBuilder let content: Content
+
+    @State private var isHovered = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -92,12 +94,24 @@ struct SettingsCard<Content: View>: View {
         }
         .padding(15)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
-        )
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .scaleEffect(isHovered ? 1.006 : 1)
+        .opacity(isHovered ? 0.98 : 1)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onHover { hovering in
+            if hovering && !isHovered {
+                HapticFeedbackManager.shared.selection()
+            }
+            isHovered = hovering
+        }
+        .animation(.spring(response: 0.22, dampingFraction: 0.86), value: isHovered)
+    }
+}
+
+struct SettingsSectionDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.vertical, 2)
     }
 }
 
@@ -139,23 +153,19 @@ struct SettingsNavigationCard: View {
                     .foregroundColor(.secondary)
             }
             .padding(14)
-            .background(Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.86 : 0.64))
-            .contentShape(Rectangle())
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.secondary.opacity(isHovered ? 0.18 : 0.10), lineWidth: 1)
-            )
+            .systemLiquidGlassBackground(cornerRadius: 12)
+            .scaleEffect(isHovered ? 1.01 : 1)
+            .opacity(isHovered ? 0.98 : 1)
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
         .onHover { hovering in
             if hovering && !isHovered {
                 HapticFeedbackManager.shared.selection()
             }
-            withAnimation(.easeOut(duration: 0.15)) {
-                isHovered = hovering
-            }
+            isHovered = hovering
         }
+        .animation(.spring(response: 0.22, dampingFraction: 0.86), value: isHovered)
     }
 }
 

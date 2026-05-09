@@ -198,6 +198,14 @@ struct AnalysisView: View {
         return .none
     }
 
+    /// Suggestions to drive the Binky-style flight animation. Available once the
+    /// AI plan has at least one named destination folder.
+    private var plannedDestinationSuggestions: [FolderSuggestion]? {
+        guard let plan = organizer.currentPlan else { return nil }
+        let suggestions = plan.suggestions.filter { !$0.folderName.isEmpty }
+        return suggestions.isEmpty ? nil : suggestions
+    }
+
     /// Whether the scan found zero files (empty directory or all files excluded)
     private var isEmptyDirectory: Bool {
         let stage = organizer.organizationStage
@@ -229,12 +237,23 @@ struct AnalysisView: View {
                     tieredNoticeView
 
                     if organizer.isStreaming {
-                        aiInsightsView
-                            .transition(
-                                .asymmetric(
-                                    insertion: .move(edge: .bottom).combined(with: .opacity),
-                                    removal: .opacity
-                                ))
+                        if let suggestions = plannedDestinationSuggestions {
+                            OrganizingFlightStageView(suggestions: suggestions)
+                                .frame(maxWidth: .infinity)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                                        removal: .opacity
+                                    )
+                                )
+                        } else {
+                            aiInsightsView
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                                        removal: .opacity
+                                    ))
+                        }
                     }
 
                     analysisActionButtons

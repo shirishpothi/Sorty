@@ -412,11 +412,8 @@ actor DirectoryScanner {
             return true
         }
         
-        // Google Drive: stream file placeholders
-        let googleStreamExtensions: Set<String> = ["gdoc", "gsheet", "gslides"]
-        if googleStreamExtensions.contains(url.pathExtension.lowercased()) {
-            return true
-        }
+        // Google Drive exposes cloud-native Docs, Sheets, and Slides as small
+        // local files. They can be moved in Finder and should be organized.
         
         // Dropbox: check for extended attribute or zero-size placeholder
         let path = url.path
@@ -448,9 +445,15 @@ actor DirectoryScanner {
             return "iCloud"
         }
         
-        // Google Drive stream files
-        let googleStreamExtensions: Set<String> = ["gdoc", "gsheet", "gslides"]
-        if googleStreamExtensions.contains(url.pathExtension.lowercased()) {
+        let pathComponents = Set(url.standardizedFileURL.pathComponents.map { $0.lowercased() })
+        if pathComponents.contains("cloudstorage") {
+            if let provider = fileProviderName(for: url) {
+                return provider
+            }
+            return "Cloud Storage"
+        }
+
+        if googleDriveNativeExtensions.contains(url.pathExtension.lowercased()) {
             return "Google Drive"
         }
         
@@ -493,9 +496,8 @@ actor DirectoryScanner {
             return .cloudOnly
         }
         
-        let googleStreamExtensions: Set<String> = ["gdoc", "gsheet", "gslides"]
-        if googleStreamExtensions.contains(url.pathExtension.lowercased()) {
-            return .cloudOnly
+        if googleDriveNativeExtensions.contains(url.pathExtension.lowercased()) {
+            return .synced
         }
         
         let xattrLength = getxattr(url.path, "com.dropbox.attrs", nil, 0, 0, 0)
@@ -511,6 +513,41 @@ actor DirectoryScanner {
             return .cloudOnly
         }
         
+        if cloudProviderName(for: url) != nil {
+            return .synced
+        }
+
+        return nil
+    }
+
+    private var googleDriveNativeExtensions: Set<String> {
+        ["gdoc", "gsheet", "gslides", "gdraw", "gform", "gmap", "gsite", "jam"]
+    }
+
+    private func fileProviderName(for url: URL) -> String? {
+        let components = url.standardizedFileURL.pathComponents
+        guard let cloudStorageIndex = components.firstIndex(where: { $0.caseInsensitiveCompare("CloudStorage") == .orderedSame }),
+              components.indices.contains(cloudStorageIndex + 1) else {
+            return nil
+        }
+
+        let providerFolder = components[cloudStorageIndex + 1].lowercased()
+        if providerFolder.contains("googledrive") || providerFolder.contains("google drive") {
+            return "Google Drive"
+        }
+        if providerFolder.contains("onedrive") || providerFolder.contains("one drive") {
+            return "OneDrive"
+        }
+        if providerFolder.contains("dropbox") {
+            return "Dropbox"
+        }
+        if providerFolder.contains("box") {
+            return "Box"
+        }
+        if providerFolder.contains("icloud") {
+            return "iCloud"
+        }
+
         return nil
     }
     
@@ -660,5 +697,4 @@ enum ScannerError: LocalizedError {
         }
     }
 }
-
 

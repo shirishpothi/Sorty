@@ -974,7 +974,17 @@ struct HistorySessionCard: View {
                         .accessibilityLabel("View session details")
                         .accessibilityIdentifier("ViewDetailsButton-\(entry.id.uuidString)")
 
-                        if entry.success && entry.status != .duplicatesCleanup {
+                        if entry.hasApplicablePlan {
+                            Button {
+                                onRedo()
+                            } label: {
+                                Label("Apply Plan", systemImage: "checkmark.circle")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                            .accessibilityLabel("Apply this generated organization plan")
+                            .accessibilityIdentifier("ApplyPlanButton-\(entry.id.uuidString)")
+                        } else if entry.success && entry.status != .duplicatesCleanup {
                             if entry.isUndone {
                                 Button {
                                     onRedo()
@@ -1789,7 +1799,7 @@ struct HistoryDetailSheet: View {
                     }
 
                     // Actions Section
-                    if entry.success || entry.status == .duplicatesCleanup {
+                    if entry.success || entry.status == .duplicatesCleanup || entry.hasApplicablePlan {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Actions")
                                 .font(.headline)
@@ -1809,6 +1819,17 @@ struct HistoryDetailSheet: View {
                                         .accessibilityLabel("Restore deleted files")
                                         .accessibilityIdentifier("RestoreDuplicatesButton")
                                     }
+                                } else if entry.hasApplicablePlan {
+                                    Button {
+                                        handleRedo()
+                                    } label: {
+                                        Label("Apply Generated Plan", systemImage: "checkmark.circle")
+                                            .frame(minWidth: 170)
+                                    }
+                                    .buttonStyle(.onboardingPill)
+                                    .controlSize(.large)
+                                    .accessibilityLabel("Apply this generated organization plan")
+                                    .accessibilityIdentifier("ApplyGeneratedPlanButton")
                                 } else if entry.isUndone {
                                     Button {
                                         handleRedo()

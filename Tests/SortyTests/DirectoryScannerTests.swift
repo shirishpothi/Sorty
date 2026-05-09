@@ -85,4 +85,35 @@ class DirectoryScannerTests: XCTestCase {
         
         XCTAssertTrue(files.contains(where: { $0.name == "sub" }))
     }
+
+    func testGoogleDriveNativeDocumentsAreScanned() async throws {
+        let document = tempDirectory.appendingPathComponent("Planning.gdoc")
+        let sheet = tempDirectory.appendingPathComponent("Budget.gsheet")
+        try #"{"url":"https://docs.google.com/document/d/example"}"#.write(to: document, atomically: true, encoding: .utf8)
+        try #"{"url":"https://docs.google.com/spreadsheets/d/example"}"#.write(to: sheet, atomically: true, encoding: .utf8)
+
+        let files = try await scanner.scanDirectory(at: tempDirectory)
+
+        XCTAssertEqual(files.count, 2)
+        XCTAssertTrue(files.contains(where: { $0.displayName == "Planning.gdoc" && $0.cloudStatus == .synced }))
+        XCTAssertTrue(files.contains(where: { $0.displayName == "Budget.gsheet" && $0.cloudStatus == .synced }))
+    }
+
+    func testCloudStorageProviderDirectoriesAreScannedAsSyncedLocalFiles() async throws {
+        let cloudFolder = tempDirectory
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("CloudStorage", isDirectory: true)
+            .appendingPathComponent("GoogleDrive-user@example.com", isDirectory: true)
+            .appendingPathComponent("My Drive", isDirectory: true)
+        try FileManager.default.createDirectory(at: cloudFolder, withIntermediateDirectories: true)
+
+        let pdf = cloudFolder.appendingPathComponent("Invoice.pdf")
+        try "pdf".write(to: pdf, atomically: true, encoding: .utf8)
+
+        let files = try await scanner.scanDirectory(at: tempDirectory)
+
+        XCTAssertEqual(files.count, 1)
+        XCTAssertEqual(files.first?.displayName, "Invoice.pdf")
+        XCTAssertEqual(files.first?.cloudStatus, .synced)
+    }
 }

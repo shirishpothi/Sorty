@@ -43,12 +43,12 @@ public struct SortyCommands: Commands {
 
     public var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button("About Sorty") {
+            Button("About Sorty", systemImage: "info.circle") {
                 appState?.showAbout()
             }
             .disabled(appState == nil)
             
-            Button("Check for Updates...") {
+            Button("Check for Updates...", systemImage: "arrow.triangle.2.circlepath") {
                 appState?.checkForUpdatesInteractive()
             }
             .disabled(appState == nil)
@@ -56,13 +56,13 @@ public struct SortyCommands: Commands {
 
         // Replace default New/Open with custom commands
         CommandGroup(replacing: .newItem) {
-            Button("New Session") {
+            Button("New Session", systemImage: "plus.square") {
                 appState?.resetSession()
             }
             .keyboardShortcut("n", modifiers: .command)
             .disabled(appState == nil)
 
-            Button("Open Directory...") {
+            Button("Open Directory...", systemImage: "folder") {
                 appState?.showDirectoryPicker = true
             }
             .keyboardShortcut("o", modifiers: .command)
@@ -70,7 +70,7 @@ public struct SortyCommands: Commands {
 
             Divider()
 
-            Button("Export Results...") {
+            Button("Export Results...", systemImage: "square.and.arrow.up") {
                 appState?.exportResults()
             }
             .keyboardShortcut("e", modifiers: .command)
@@ -81,7 +81,7 @@ public struct SortyCommands: Commands {
         CommandGroup(after: .pasteboard) {
             Divider()
 
-            Button("Select All Files") {
+            Button("Select All Files", systemImage: "checkmark.circle") {
                 appState?.selectAllFiles()
             }
             .keyboardShortcut("a", modifiers: .command)
@@ -90,7 +90,7 @@ public struct SortyCommands: Commands {
 
         // View menu - use CommandGroup to add to existing View menu, not create a new one
         CommandGroup(replacing: .sidebar) {
-            Button((appState?.showingSidebar ?? true) ? "Hide Sidebar" : "Show Sidebar") {
+            Button((appState?.showingSidebar ?? true) ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left") {
                 appState?.showingSidebar.toggle()
             }
             .keyboardShortcut("\\", modifiers: .command)
@@ -106,7 +106,7 @@ public struct SortyCommands: Commands {
                 .font(.caption)
 
             ForEach(Array(sidebarItems.prefix(9).enumerated()), id: \.element.id) { index, item in
-                Button(item.title) {
+                Button(item.title, systemImage: item.systemImage) {
                     appState?.currentView = item.view
                 }
                 .keyboardShortcut(Self.commandKeyEquivalent(for: index), modifiers: .command)
@@ -116,13 +116,13 @@ public struct SortyCommands: Commands {
 
         // Organize menu
         CommandMenu("Organize") {
-            Button("Start Organization") {
+            Button("Start Organization", systemImage: "play.circle") {
                 appState?.startOrganization()
             }
             .keyboardShortcut("r", modifiers: .command)
             .disabled(!(appState?.canStartOrganization ?? false))
 
-            Button("Regenerate Organization") {
+            Button("Regenerate Organization", systemImage: "arrow.clockwise") {
                 appState?.regenerateOrganization()
             }
             .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -130,13 +130,13 @@ public struct SortyCommands: Commands {
 
             Divider()
 
-            Button("Apply Changes") {
+            Button("Apply Changes", systemImage: "checkmark.circle.fill") {
                 appState?.applyChanges()
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
             .disabled(!(appState?.canApply ?? false))
 
-            Button("Preview Changes") {
+            Button("Preview Changes", systemImage: "eye") {
                 appState?.previewChanges()
             }
             .keyboardShortcut("p", modifiers: [.command, .shift])
@@ -144,7 +144,7 @@ public struct SortyCommands: Commands {
 
             Divider()
 
-            Button("Cancel") {
+            Button("Cancel", systemImage: "xmark.circle") {
                 appState?.cancelOperation()
             }
             .keyboardShortcut(.escape, modifiers: [])
@@ -153,7 +153,7 @@ public struct SortyCommands: Commands {
 
         // Learnings menu
         CommandMenu("Learnings") {
-            Button("Open Dashboard") {
+            Button("Open Dashboard", systemImage: "chart.bar") {
                 appState?.currentView = .learnings
             }
             .keyboardShortcut("l", modifiers: [.command, .shift])
@@ -161,30 +161,30 @@ public struct SortyCommands: Commands {
             
             Divider()
             
-            Button("Start Honing Session") {
+            Button("Start Honing Session", systemImage: "target") {
                 appState?.startHoningSession()
             }
             .keyboardShortcut("h", modifiers: [.command, .option])
             .disabled(appState == nil)
             
-            Button("View Statistics") {
+            Button("View Statistics", systemImage: "chart.pie") {
                 appState?.showLearningsStats()
             }
             .disabled(appState == nil)
             
             Divider()
             
-            Button("Pause Learning") {
+            Button("Pause Learning", systemImage: "pause.circle") {
                 appState?.pauseLearning()
             }
             .disabled(appState == nil)
             
-            Button("Export Learning Profile...") {
+            Button("Export Learning Profile...", systemImage: "square.and.arrow.up") {
                 appState?.exportLearningsProfile()
             }
             .disabled(appState == nil)
             
-            Button("Import Learning Profile...") {
+            Button("Import Learning Profile...", systemImage: "square.and.arrow.down") {
                 appState?.importLearningsProfile()
             }
             .disabled(appState == nil)
@@ -192,44 +192,44 @@ public struct SortyCommands: Commands {
 
         // History menu
         CommandMenu("History") {
-            Button("Open History") {
+            Button("Open History", systemImage: "clock") {
                 appState?.currentView = .history
             }
             .disabled(appState == nil)
 
             Divider()
 
-            Button("Export History as CSV...") {
+            Button("Export History as CSV...", systemImage: "tablecells") {
                 appState?.exportHistory(format: .csv)
             }
             .disabled(!(appState?.hasHistoryEntries ?? false))
 
-            Button("Export History as JSON...") {
+            Button("Export History as JSON...", systemImage: "curlybraces") {
                 appState?.exportHistory(format: .json)
             }
             .disabled(!(appState?.hasHistoryEntries ?? false))
 
-            Button("Import History...") {
+            Button("Import History...", systemImage: "square.and.arrow.down") {
                 appState?.importHistory()
             }
             .disabled(appState == nil)
 
             Divider()
 
-            Button("Clear History...") {
+            Button("Clear History...", systemImage: "trash") {
                 appState?.clearHistoryWithConfirmation()
             }
             .disabled(!(appState?.hasHistoryEntries ?? false))
         }
 
         CommandGroup(replacing: .help) {
-            Button("Accreditations") {
+            Button("Accreditations", systemImage: "rosette") {
                 appState?.showAccreditations(entryPoint: .help)
             }
                 .keyboardShortcut("©", modifiers: .command)
                 .disabled(appState == nil)
 
-            Button("Internet Access Policy") {
+            Button("Internet Access Policy", systemImage: "network") {
                 appState?.showInternetAccessPolicy()
             }
             .keyboardShortcut("🌐", modifiers: .command)
@@ -237,47 +237,47 @@ public struct SortyCommands: Commands {
 
             Divider()
 
-            Button("Sorty Help") {
+            Button("Sorty Help", systemImage: "questionmark.circle") {
                 appState?.showHelp()
             }
             .keyboardShortcut("?", modifiers: .command)
             .disabled(appState == nil)
             
-            Link("Documentation", destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!)
+            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!) { Label("Documentation", systemImage: "book") }
             
-            Link("Report Issue", destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!)
+            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty/issues")!) { Label("Report Issue", systemImage: "ladybug") }
 
-            Link("Support the Developer", destination: URL(string: "https://github.com/sponsors/shirishpothi")!)
+            Link(destination: URL(string: "https://github.com/sponsors/shirishpothi")!) { Label("Support the Developer", systemImage: "heart") }
             
             Divider()
             
-            Button("Restart Onboarding...") {
+            Button("Restart Onboarding...", systemImage: "sparkles") {
                 appState?.showOnboarding()
             }
             .disabled(appState == nil)
             
-            Button("Feature Tour...") {
+            Button("Feature Tour...", systemImage: "map") {
                 appState?.showFeatureTour()
             }
             .disabled(appState == nil)
 
-            Button("Delete All Usage Data...") {
+            Button("Delete All Usage Data...", systemImage: "trash") {
                 appState?.requestDeleteUsageDataConfirmation()
             }
             .disabled(appState == nil)
             
             Divider()
             
-            Link("GitHub Repository", destination: URL(string: "https://github.com/shirishpothi/Sorty")!)
+            Link(destination: URL(string: "https://github.com/shirishpothi/Sorty")!) { Label("GitHub Repository", systemImage: "chevron.left.forwardslash.chevron.right") }
 
-            Button("Check for Updates...") {
+            Button("Check for Updates...", systemImage: "arrow.triangle.2.circlepath") {
                 appState?.checkForUpdatesInteractive()
             }
             .disabled(appState == nil)
 
             Divider()
 
-            Button("Thank you for using Sorty") {
+            Button("Thank you for using Sorty", systemImage: "heart.fill") {
                 appState?.showThanksForUsingSorty()
             }
             .keyboardShortcut("♥", modifiers: .command)

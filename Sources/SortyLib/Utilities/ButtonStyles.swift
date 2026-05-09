@@ -353,6 +353,178 @@ public struct HapticBounceButtonStyle: ButtonStyle {
     }
 }
 
+/// SwiftUI port of metal-fx's chromatic liquid-metal button treatment.
+public struct MetalFxPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var colorScheme
+
+    var isPaused: Bool
+    @State private var isHovering = false
+
+    public init(isPaused: Bool = false) {
+        self.isPaused = isPaused
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+
+        configuration.label
+            .font(.system(size: 14, weight: .semibold))
+            .lineLimit(1)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 10)
+            .background {
+                MetalFxPillSurface(
+                    isPressed: pressed,
+                    isHovering: isHovering,
+                    isEnabled: isEnabled,
+                    isPaused: isPaused,
+                    colorScheme: colorScheme
+                )
+            }
+            .contentShape(Capsule())
+            .shadow(
+                color: Color(red: 0.65, green: 0.91, blue: 1).opacity(isEnabled ? (isHovering ? 0.24 : 0.14) : 0.03),
+                radius: pressed ? 4 : (isHovering ? 12 : 8),
+                y: pressed ? 1 : (isHovering ? 5 : 3)
+            )
+            .scaleEffect(pressed ? 0.975 : 1)
+            .opacity(isEnabled ? 1 : 0.56)
+            .animation(.easeOut(duration: 0.14), value: pressed)
+            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: isHovering)
+            .onHover { hovering in
+                isHovering = hovering
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+            }
+            .onChange(of: pressed) { _, newValue in
+                if newValue {
+                    HapticFeedbackManager.shared.tap()
+                }
+            }
+    }
+}
+
+private struct MetalFxPillSurface: View {
+    let isPressed: Bool
+    let isHovering: Bool
+    let isEnabled: Bool
+    let isPaused: Bool
+    let colorScheme: ColorScheme
+
+    var body: some View {
+        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30, paused: isPaused || !isEnabled)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+
+            ZStack {
+                Capsule()
+                    .fill(baseFill)
+
+                Capsule()
+                    .strokeBorder(
+                        AngularGradient(
+                            colors: ringColors,
+                            center: .center,
+                            angle: .degrees(time * 52)
+                        ),
+                        lineWidth: isHovering ? 3.2 : 2.6
+                    )
+                    .blur(radius: 0.35)
+
+                Capsule()
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(colorScheme == .dark ? 0.30 : 0.38),
+                                Color.white.opacity(0.08),
+                                Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+
+                movingCatchlight(time: time)
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(isPressed ? 0.08 : (isHovering ? 0.16 : 0.11)),
+                                Color.clear,
+                                Color.black.opacity(isPressed ? 0.22 : 0.13)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .padding(3)
+            }
+            .compositingGroup()
+        }
+    }
+
+    private var baseFill: some ShapeStyle {
+        LinearGradient(
+            colors: [
+                Color(red: 0.98, green: 0.31, blue: 0.45),
+                Color(red: 0.94, green: 0.20, blue: 0.36),
+                Color(red: 0.72, green: 0.15, blue: 0.36)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var ringColors: [Color] {
+        if colorScheme == .dark {
+            return [
+                .black.opacity(0.72),
+                Color(red: 0.67, green: 0.91, blue: 1.00),
+                Color(red: 0.77, green: 1.00, blue: 0.62),
+                Color(red: 0.97, green: 0.53, blue: 0.55),
+                .black.opacity(0.82),
+                Color(red: 1.00, green: 0.99, blue: 0.76),
+                .black.opacity(0.72)
+            ]
+        }
+
+        return [
+            Color(red: 1.00, green: 0.95, blue: 0.95),
+            Color(red: 1.00, green: 0.98, blue: 0.82),
+            Color(red: 0.69, green: 0.91, blue: 0.74),
+            Color(red: 0.62, green: 0.63, blue: 0.65),
+            Color(red: 0.88, green: 0.93, blue: 1.00),
+            .white,
+            Color(red: 1.00, green: 0.95, blue: 0.95)
+        ]
+    }
+
+    private func movingCatchlight(time: TimeInterval) -> some View {
+        let travel = (sin(time * 1.2) + 1) / 2
+
+        return Capsule()
+            .strokeBorder(
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: max(0, travel - 0.22)),
+                        .init(color: Color.white.opacity(isHovering ? 0.72 : 0.52), location: travel),
+                        .init(color: Color(red: 0.67, green: 0.91, blue: 1).opacity(0.28), location: min(1, travel + 0.18)),
+                        .init(color: .clear, location: min(1, travel + 0.30))
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                lineWidth: isHovering ? 6 : 5
+            )
+            .blur(radius: 5)
+            .opacity(isPressed ? 0.35 : 0.72)
+    }
+}
+
 extension ButtonStyle where Self == OnboardingPillButtonStyle {
     public static var onboardingPill: OnboardingPillButtonStyle { OnboardingPillButtonStyle() }
     public static var onboardingPillSecondary: OnboardingPillButtonStyle { OnboardingPillButtonStyle(isSecondary: true) }
@@ -392,6 +564,14 @@ extension ButtonStyle where Self == SortySecondaryButtonStyle {
 
 extension ButtonStyle where Self == SortyDestructiveButtonStyle {
     public static var sortyDestructive: SortyDestructiveButtonStyle { SortyDestructiveButtonStyle() }
+}
+
+extension ButtonStyle where Self == MetalFxPrimaryButtonStyle {
+    public static var metalFxPrimary: MetalFxPrimaryButtonStyle { MetalFxPrimaryButtonStyle() }
+
+    public static func metalFxPrimary(isPaused: Bool = false) -> MetalFxPrimaryButtonStyle {
+        MetalFxPrimaryButtonStyle(isPaused: isPaused)
+    }
 }
 
 extension ButtonStyle where Self == HapticBounceButtonStyle {

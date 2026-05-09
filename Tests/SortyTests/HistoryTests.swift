@@ -122,4 +122,42 @@ class HistoryTests: XCTestCase {
         )
         XCTAssertEqual(recoveredEntries.count, 2)
     }
+
+    @MainActor
+    func testCancelledEntryWithStoredPlanCanBeAppliedLater() {
+        let plan = OrganizationPlan(
+            suggestions: [
+                FolderSuggestion(folderName: "Invoices", files: [])
+            ]
+        )
+        let entry = OrganizationHistoryEntry(
+            directoryPath: "/planned",
+            filesOrganized: 0,
+            foldersCreated: 0,
+            plan: plan,
+            success: false,
+            status: .cancelled
+        )
+
+        XCTAssertTrue(entry.hasApplicablePlan)
+    }
+
+    @MainActor
+    func testCompletedEntryWithOperationsIsNotTreatedAsUnappliedPlan() {
+        let operation = FileSystemManager.FileOperation(
+            type: .createFolder,
+            sourcePath: "/planned",
+            destinationPath: "/planned/Invoices"
+        )
+        let entry = OrganizationHistoryEntry(
+            directoryPath: "/planned",
+            filesOrganized: 1,
+            foldersCreated: 1,
+            plan: OrganizationPlan(),
+            status: .completed,
+            operations: [operation]
+        )
+
+        XCTAssertFalse(entry.hasApplicablePlan)
+    }
 }

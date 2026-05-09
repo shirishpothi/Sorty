@@ -531,7 +531,7 @@ struct ReadyToOrganizeView: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.metalFxPrimary(isPaused: isConnecting))
             .controlSize(.large)
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)

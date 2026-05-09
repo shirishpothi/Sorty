@@ -52,6 +52,14 @@ public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendabl
     public var recoveredSpace: Int64?
     public var restorableItems: [RestorableDuplicate]?
     public var duplicateCleanupMode: DuplicateCleanupMode?
+
+    public var hasApplicablePlan: Bool {
+        guard !success, plan != nil, status != .duplicatesCleanup else {
+            return false
+        }
+
+        return operations?.isEmpty ?? true
+    }
     
     public init(
         id: UUID = UUID(),
