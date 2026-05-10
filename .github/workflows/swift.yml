@@ -34,7 +34,7 @@ concurrency:
 jobs:
   # Fast security check - runs on ubuntu (faster startup)
   security-checks:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +47,7 @@ jobs:
 
   # Check if local CI already passed for this commit
   check-local-ci:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 2
     outputs:
       skip: ${{ steps.check.outputs.skip }}
@@ -73,7 +73,7 @@ jobs:
   build-and-test:
     needs: check-local-ci
     if: ${{ needs.check-local-ci.outputs.skip != 'true' }}
-    runs-on: macos-15
+    runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 30
 
     steps:
