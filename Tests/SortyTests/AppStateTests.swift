@@ -125,7 +125,7 @@ class AppStateTests: XCTestCase {
 
         XCTAssertTrue(appState.requiresSetupRepair)
         XCTAssertEqual(appState.setupRepairMessage, "Provider setup is incomplete.")
-        XCTAssertEqual(appState.currentView, .history)
+        XCTAssertEqual(appState.currentView, .settings)
         XCTAssertEqual(appState.selectedSettingsSection, .provider)
         XCTAssertEqual(testDefaults.string(forKey: setupRepairMessageKey), "Provider setup is incomplete.")
     }
