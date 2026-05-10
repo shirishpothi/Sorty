@@ -91,7 +91,8 @@ public class WatchedFoldersManager: ObservableObject {
     
     public func addFolder(_ folder: WatchedFolder) {
         // Avoid duplicates
-        guard !folders.contains(where: { $0.path == folder.path }) else { return }
+        let normalizedPath = Self.normalizedPath(folder.path)
+        guard !folders.contains(where: { Self.normalizedPath($0.path) == normalizedPath }) else { return }
         folders.append(folder)
         saveFolders()
     }
@@ -284,5 +285,9 @@ public class WatchedFoldersManager: ObservableObject {
         if let encoded = try? JSONEncoder().encode(folders) {
             userDefaults.set(encoded, forKey: storageKey)
         }
+    }
+
+    private static func normalizedPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).standardizedFileURL.path
     }
 }

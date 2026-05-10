@@ -187,13 +187,18 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         let result: Bool
         switch type {
         case .fileExtension:
+            let normalizedPattern = normalizedExtensionPattern
+            guard !normalizedPattern.isEmpty else { return false }
+            let normalizedExtension = file.extension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if caseSensitive {
-                result = file.extension == pattern
+                result = file.extension.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedPattern.trimmingLeadingDots()
             } else {
-                result = file.extension.lowercased() == pattern.lowercased()
+                result = normalizedExtension == normalizedPattern
             }
 
         case .fileName:
+            let pattern = trimmedPattern
+            guard !pattern.isEmpty else { return false }
             if caseSensitive {
                 result = file.name.contains(pattern)
             } else {
@@ -201,6 +206,8 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
             }
 
         case .folderName:
+            let pattern = trimmedPattern
+            guard !pattern.isEmpty else { return false }
             let pathComponents = file.path.components(separatedBy: "/")
             if caseSensitive {
                 result = pathComponents.contains { $0.contains(pattern) }
@@ -209,6 +216,8 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
             }
 
         case .pathContains:
+            let pattern = trimmedPattern
+            guard !pattern.isEmpty else { return false }
             if caseSensitive {
                 result = file.path.contains(pattern)
             } else {
@@ -216,6 +225,8 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
             }
 
         case .regex:
+            let pattern = trimmedPattern
+            guard !pattern.isEmpty else { return false }
             let options: NSRegularExpression.Options = caseSensitive ? [] : .caseInsensitive
             guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else {
                 return false
@@ -260,6 +271,14 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         return negated ? !result : result
     }
 
+    private var trimmedPattern: String {
+        pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var normalizedExtensionPattern: String {
+        trimmedPattern.trimmingLeadingDots().lowercased()
+    }
+
     /// Human-readable description of the rule
     public var displayDescription: String {
         if let desc = description, !desc.isEmpty {
@@ -292,6 +311,16 @@ public struct ExclusionRule: Codable, Identifiable, Hashable, Sendable {
         case .customScript:
             return "Custom script"
         }
+    }
+}
+
+private extension String {
+    func trimmingLeadingDots() -> String {
+        var value = self
+        while value.hasPrefix(".") {
+            value.removeFirst()
+        }
+        return value
     }
 }
 

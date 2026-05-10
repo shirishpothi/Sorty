@@ -48,7 +48,7 @@ public struct DemoStepView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Image(systemName: demoState == .simulatedDemo ? "sparkles" : "wand.and.stars")
                             .font(.system(size: 48))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                             .symbolEffect(.pulse.byLayer, options: .repeating, isActive: demoState == .simulatedDemo)
 
                         Text(demoState == .complete ? "That's Sorty!" : "See the Magic")
@@ -140,12 +140,12 @@ public struct DemoStepView: View {
         VStack(spacing: 28) {
             ZStack {
                 Circle()
-                    .fill(Color.accentColor.opacity(0.12))
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
                     .frame(width: 100, height: 100)
                 
                 Image(systemName: "sparkles")
                     .font(.system(size: 48))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                     .symbolEffect(.pulse.byLayer, options: .repeating)
             }
             
@@ -269,13 +269,13 @@ public struct DemoStepView: View {
                     ZStack {
                         RoundedRectangle(cornerRadius: 20)
                             .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [10]))
-                            .foregroundStyle(isDropTargeted ? Color.accentColor : Color.secondary.opacity(0.3))
+                            .foregroundStyle(isDropTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3))
                             .frame(width: 200, height: 140)
                         
                         VStack(spacing: 12) {
                             Image(systemName: isDropTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
                                 .font(.system(size: 40))
-                                .foregroundStyle(isDropTargeted ? Color.accentColor : Color.secondary)
+                                .foregroundStyle(isDropTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary)
                             
                             Text(isDropTargeted ? "Drop to select" : "Drop a folder here")
                                 .font(.subheadline)
@@ -308,7 +308,7 @@ public struct DemoStepView: View {
             // Animated processing indicator
             ZStack {
                 Circle()
-                    .fill(Color.accentColor.opacity(0.1))
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
                     .frame(width: 100, height: 100)
                 
                 BouncingSpinner(size: 40, color: .accentColor)
@@ -630,7 +630,7 @@ struct ProcessingStepRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(isComplete ? Color.green.opacity(0.1) : isActive ? Color.accentColor.opacity(0.1) : Color.secondary.opacity(0.1))
+                    .fill(isComplete ? Color.green.opacity(0.1) : isActive ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.secondary.opacity(0.1))
                     .frame(width: 28, height: 28)
                 
                 if isComplete {

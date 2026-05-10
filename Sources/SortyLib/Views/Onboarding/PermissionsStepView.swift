@@ -9,7 +9,6 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
-import Beam
 import Permiso
 
 public struct PermissionsStepView: View {
@@ -380,26 +379,15 @@ private struct PermissionActionButton: View {
             action(frameInScreen.isEmpty ? nil : frameInScreen.integral)
         } label: {
             Text(title)
-                .font(.system(size: style == .primary ? 14 : 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(style == .primary ? .white : .primary)
                 .frame(minWidth: style == .primary ? 74 : 96)
-                .padding(.horizontal, style == .primary ? 18 : 14)
-                .padding(.vertical, style == .primary ? 10 : 7)
-                .background {
-                    if style == .primary {
-                        PermissionGrantBeamBackground(isHovering: isHovering)
-                    } else {
-                        Capsule()
-                            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.95))
-                            .overlay {
-                                Capsule()
-                                    .strokeBorder(Color.primary.opacity(0.14), lineWidth: 1)
-                            }
-                    }
-                }
-                .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(buttonStyle)
+        .overlay {
+            if style == .primary {
+                Color.clear.onboardingBeamBorder(variant: .standard)
+            }
+        }
+        .contentShape(Capsule())
         .background(
             ScreenFrameReader(frameInScreen: $frameInScreen)
                 .allowsHitTesting(false)
@@ -414,50 +402,14 @@ private struct PermissionActionButton: View {
         }
         .accessibilityLabel(title)
     }
-}
 
-private struct PermissionGrantBeamBackground: View {
-    let isHovering: Bool
-
-    var body: some View {
-        Capsule()
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.green.opacity(0.92),
-                        Color.teal.opacity(0.95),
-                        Color.blue.opacity(0.86)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.24), .clear, Color.black.opacity(0.18)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-            .overlay {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(isHovering ? 0.24 : 0.16), lineWidth: 1)
-            }
-            .beam(
-                .small,
-                palette: .ocean,
-                theme: .dark,
-                active: true,
-                shape: .capsule,
-                duration: 1.9,
-                strength: isHovering ? 0.92 : 0.76,
-                lensStrength: isHovering ? 2.8 : 1.6
-            )
-            .shadow(color: Color.teal.opacity(isHovering ? 0.30 : 0.18), radius: isHovering ? 14 : 10, y: 5)
-            .shadow(color: Color.blue.opacity(isHovering ? 0.20 : 0.10), radius: isHovering ? 18 : 10)
+    private var buttonStyle: OnboardingPillButtonStyle {
+        switch style {
+        case .primary:
+            return .init()
+        case .bordered:
+            return .init(isSecondary: true, size: .small)
+        }
     }
 }
 

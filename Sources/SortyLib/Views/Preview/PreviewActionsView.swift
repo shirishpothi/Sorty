@@ -162,7 +162,7 @@ struct PreviewActionsView: View {
                         .fixedSize(horizontal: true, vertical: false)
                     if hasCustomInstructions {
                         Circle()
-                            .fill(Color.accentColor)
+                            .fill(SortyDesignSystem.Colors.resolvedAccent)
                             .frame(width: 5, height: 5)
                     }
                 }

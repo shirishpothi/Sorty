@@ -75,7 +75,7 @@ struct PersonaEditorView: View {
                                     Image(systemName: selectedIcon)
                                         .font(.system(size: 28))
                                         .frame(width: 50, height: 50)
-                                        .background(Color.accentColor.opacity(0.15))
+                                        .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.15))
                                         .cornerRadius(10)
                                 }
                                 .buttonStyle(.plain)
@@ -227,7 +227,7 @@ struct PersonaEditorView: View {
                         Image(systemName: icon)
                             .font(.system(size: 20))
                             .frame(width: 36, height: 36)
-                            .background(selectedIcon == icon ? Color.accentColor.opacity(0.2) : Color.clear)
+                            .background(selectedIcon == icon ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.2) : Color.clear)
                             .cornerRadius(8)
                     }
                     .buttonStyle(.plain)

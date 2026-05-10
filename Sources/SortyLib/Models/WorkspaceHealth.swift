@@ -510,6 +510,7 @@ public class WorkspaceHealthManager: ObservableObject {
     private var scanCache: [String: ScanCache] = [:]
     private var lastAnalysisSignature: [String: ScanSignature] = [:]
     private let scanCacheTTL: TimeInterval = 30
+    private let maxAffectedFilesPerOpportunity = 250
     
     @Published public var fileChangeDetected: Date?
 
@@ -651,6 +652,7 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // Remove old opportunities for this path
         opportunities.removeAll { $0.directoryPath == path }
+        var newOpportunities: [CleanupOpportunity] = []
 
         let ignoredPrefixes = Set(config.ignoredPaths.map {
             URL(fileURLWithPath: $0).standardizedFileURL.path
@@ -674,9 +676,12 @@ public class WorkspaceHealthManager: ObservableObject {
              var current = fileURL.deletingLastPathComponent()
              let rootURL = URL(fileURLWithPath: path)
              var foundProject = false
+             var visitedPaths: [String] = []
              
              // Safety check for loop
              while current.path.count >= rootURL.path.count {
+                 visitedPaths.append(current.path)
+
                  // Check cache for this level
                  if let cached = projectDirCache[current.path] {
                      foundProject = cached
@@ -712,22 +717,44 @@ public class WorkspaceHealthManager: ObservableObject {
                  current = current.deletingLastPathComponent()
              }
              
-             // Cache result for the immediate directory
-             projectDirCache[dirPath] = foundProject
+             for visitedPath in visitedPaths {
+                 projectDirCache[visitedPath] = foundProject
+             }
              return foundProject
         }
         
         let now = Date()
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
+
+        func affectedFilesSample<T>(
+            from items: [T],
+            transform: (T) -> CleanupOpportunity.AffectedFile
+        ) -> [CleanupOpportunity.AffectedFile] {
+            items.prefix(maxAffectedFilesPerOpportunity).map(transform)
+        }
+
+        func yieldIfNeeded(_ index: Int) async -> Bool {
+            if Task.isCancelled { return false }
+            if index % 500 == 0 {
+                await Task.yield()
+            }
+            return !Task.isCancelled
+        }
         
         // --- Checks ---
 
         // 1. Screenshot Clutter
         if config.enabledChecks.contains(.screenshotClutter) {
-            let screenshots = filesToAnalyze.filter { !isFileInProject($0) && isScreenshot($0) }
+            var screenshots: [FileItem] = []
+            for (index, file) in filesToAnalyze.enumerated() {
+                guard await yieldIfNeeded(index) else { return }
+                if !isFileInProject(file) && isScreenshot(file) {
+                    screenshots.append(file)
+                }
+            }
             if screenshots.count >= config.minScreenshotCount {
-                let affected = screenshots.map { file -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: screenshots) { file -> CleanupOpportunity.AffectedFile in
                     let dateStr = file.creationDate.map { dateFormatter.string(from: $0) } ?? "Unknown date"
                     return CleanupOpportunity.AffectedFile(
                         path: file.path,
@@ -738,7 +765,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .screenshotClutter,
                     directoryPath: path,
                     description: "\(screenshots.count) screenshots detected.",
@@ -755,22 +782,26 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 2. Download Clutter (Smart)
         if config.enabledChecks.contains(.downloadClutter) {
-            let oldDownloads = filesToAnalyze.filter { file in
-                guard !isFileInProject(file) else { return false }
+            var oldDownloads: [FileItem] = []
+            for (index, file) in filesToAnalyze.enumerated() {
+                guard await yieldIfNeeded(index) else { return }
+                guard !isFileInProject(file) else { continue }
                 
                 // Use last access if available, otherwise creation
                 let relevantDate = file.lastAccessDate ?? file.creationDate
-                guard let date = relevantDate else { return false }
+                guard let date = relevantDate else { continue }
                 
                 let age = now.timeIntervalSince(date)
-                return age > config.downloadClutterThreshold
+                if age > config.downloadClutterThreshold {
+                    oldDownloads.append(file)
+                }
             }
             
             if oldDownloads.count >= config.minDownloadCount {
                 let totalSize = oldDownloads.reduce(0) { $0 + $1.size }
                 let days = Int(config.downloadClutterThreshold / 86400)
                 
-                let affected = oldDownloads.map { file -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: oldDownloads) { file -> CleanupOpportunity.AffectedFile in
                     let date = file.lastAccessDate ?? file.creationDate
                     let dateStr = date.map { dateFormatter.string(from: $0) } ?? "Unknown"
                     return CleanupOpportunity.AffectedFile(
@@ -782,7 +813,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .downloadClutter,
                     directoryPath: path,
                     description: "\(oldDownloads.count) unused downloads older than \(days) days.",
@@ -799,17 +830,21 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 3. Large Files (Smart)
         if config.enabledChecks.contains(.largeFiles) {
-            let largeFiles = filesToAnalyze.filter { file in
+            var largeFiles: [FileItem] = []
+            for (index, file) in filesToAnalyze.enumerated() {
+                guard await yieldIfNeeded(index) else { return }
                 // Smart check: Skip project files
-                if isFileInProject(file) { return false }
-                return file.size > config.largeFileSizeThreshold
+                if isFileInProject(file) { continue }
+                if file.size > config.largeFileSizeThreshold {
+                    largeFiles.append(file)
+                }
             }
             
             if !largeFiles.isEmpty {
                 let totalSize = largeFiles.reduce(0) { $0 + $1.size }
                 let sizeStr = ByteCountFormatter.string(fromByteCount: config.largeFileSizeThreshold, countStyle: .file)
                 
-                let affected = largeFiles.map { file -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: largeFiles) { file -> CleanupOpportunity.AffectedFile in
                     let size = ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file)
                     return CleanupOpportunity.AffectedFile(
                         path: file.path,
@@ -820,7 +855,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .largeFiles,
                     directoryPath: path,
                     description: "\(largeFiles.count) large files (>\(sizeStr)) found.",
@@ -836,12 +871,16 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 4. Unorganized Files (Root)
         if config.enabledChecks.contains(.unorganizedFiles) {
-            let rootFiles = filesToAnalyze.filter { file in
+            var rootFiles: [FileItem] = []
+            for (index, file) in filesToAnalyze.enumerated() {
+                guard await yieldIfNeeded(index) else { return }
                 let relativePath = file.path.replacingOccurrences(of: path + "/", with: "")
-                return !relativePath.contains("/") && !file.isDirectory && !file.name.hasPrefix(".")
+                if !relativePath.contains("/") && !file.isDirectory && !file.name.hasPrefix(".") {
+                    rootFiles.append(file)
+                }
             }
             if rootFiles.count >= config.minUnorganizedCount {
-                let affected = rootFiles.map { file -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: rootFiles) { file -> CleanupOpportunity.AffectedFile in
                     CleanupOpportunity.AffectedFile(
                         path: file.path,
                         name: file.name,
@@ -851,7 +890,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .unorganizedFiles,
                     directoryPath: path,
                     description: "\(rootFiles.count) unorganized files in root.",
@@ -870,7 +909,7 @@ public class WorkspaceHealthManager: ObservableObject {
         let installers = filesToAnalyze.filter { ["dmg", "pkg", "iso"].contains($0.extension.lowercased()) }
         if !installers.isEmpty {
             let totalSize = installers.reduce(0) { $0 + $1.size }
-            let affected = installers.map { file -> CleanupOpportunity.AffectedFile in
+            let affected = affectedFilesSample(from: installers) { file -> CleanupOpportunity.AffectedFile in
                 CleanupOpportunity.AffectedFile(
                     path: file.path,
                     name: file.name,
@@ -880,7 +919,7 @@ public class WorkspaceHealthManager: ObservableObject {
                 )
             }
             
-            opportunities.append(CleanupOpportunity(
+            newOpportunities.append(CleanupOpportunity(
                 type: .largeFiles, // Keeping type for compatibility, logic separates them
                 directoryPath: path,
                 description: "\(installers.count) installer files found.",
@@ -896,10 +935,16 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 6. Temp/Cache
         if config.enabledChecks.contains(.temporaryFiles) || config.enabledChecks.contains(.cacheFiles) {
-            let tempFiles = filesToAnalyze.filter { isTempOrCacheFile($0) }
+            var tempFiles: [FileItem] = []
+            for (index, file) in filesToAnalyze.enumerated() {
+                guard await yieldIfNeeded(index) else { return }
+                if isTempOrCacheFile(file) {
+                    tempFiles.append(file)
+                }
+            }
             if !tempFiles.isEmpty {
                 let totalSize = tempFiles.reduce(0) { $0 + $1.size }
-                let affected = tempFiles.map { file -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: tempFiles) { file -> CleanupOpportunity.AffectedFile in
                     CleanupOpportunity.AffectedFile(
                         path: file.path,
                         name: file.name,
@@ -909,7 +954,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .temporaryFiles,
                     directoryPath: path,
                     description: "\(tempFiles.count) temporary files found.",
@@ -925,17 +970,21 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // 7. Old Files
         if config.enabledChecks.contains(.veryOldFiles) || config.enabledChecks.contains(.oldFiles) {
-            let veryOldFiles = filesToAnalyze.filter { file in
-                if isFileInProject(file) { return false } // Smart check
-                guard let accessDate = file.lastAccessDate ?? file.modificationDate else { return false }
+            var veryOldFiles: [FileItem] = []
+            for (index, file) in filesToAnalyze.enumerated() {
+                guard await yieldIfNeeded(index) else { return }
+                if isFileInProject(file) { continue } // Smart check
+                guard let accessDate = file.lastAccessDate ?? file.modificationDate else { continue }
                 let age = now.timeIntervalSince(accessDate)
-                return age > config.oldFileThreshold
+                if age > config.oldFileThreshold {
+                    veryOldFiles.append(file)
+                }
             }
             if veryOldFiles.count >= config.minOldFileCount {
                 let totalSize = veryOldFiles.reduce(0) { $0 + $1.size }
                 let years = String(format: "%.1f", config.oldFileThreshold / (365 * 86400))
                 
-                let affected = veryOldFiles.map { file -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: veryOldFiles) { file -> CleanupOpportunity.AffectedFile in
                     let dateStr = (file.lastAccessDate ?? file.modificationDate).map { dateFormatter.string(from: $0) } ?? "Unknown"
                     return CleanupOpportunity.AffectedFile(
                         path: file.path,
@@ -946,7 +995,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .veryOldFiles,
                     directoryPath: path,
                     description: "\(veryOldFiles.count) files inactive for >\(years) years.",
@@ -965,7 +1014,7 @@ public class WorkspaceHealthManager: ObservableObject {
         if config.enabledChecks.contains(.emptyFolders) {
             let emptyFolders = await findEmptyFolders(at: path)
             if !emptyFolders.isEmpty {
-                let affected = emptyFolders.map { folderPath -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: emptyFolders) { folderPath -> CleanupOpportunity.AffectedFile in
                     CleanupOpportunity.AffectedFile(
                         path: folderPath,
                         name: URL(fileURLWithPath: folderPath).lastPathComponent,
@@ -975,7 +1024,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .emptyFolders,
                     directoryPath: path,
                     description: "\(emptyFolders.count) empty folders.",
@@ -994,7 +1043,7 @@ public class WorkspaceHealthManager: ObservableObject {
         if config.enabledChecks.contains(.brokenSymlinks) {
             let brokenSymlinks = await findBrokenSymlinks(at: path)
             if !brokenSymlinks.isEmpty {
-                let affected = brokenSymlinks.map { linkPath -> CleanupOpportunity.AffectedFile in
+                let affected = affectedFilesSample(from: brokenSymlinks) { linkPath -> CleanupOpportunity.AffectedFile in
                     CleanupOpportunity.AffectedFile(
                         path: linkPath,
                         name: URL(fileURLWithPath: linkPath).lastPathComponent,
@@ -1004,7 +1053,7 @@ public class WorkspaceHealthManager: ObservableObject {
                     )
                 }
                 
-                opportunities.append(CleanupOpportunity(
+                newOpportunities.append(CleanupOpportunity(
                     type: .brokenSymlinks,
                     directoryPath: path,
                     description: "\(brokenSymlinks.count) broken symbolic links.",
@@ -1019,6 +1068,7 @@ public class WorkspaceHealthManager: ObservableObject {
             }
         }
 
+        opportunities.append(contentsOf: newOpportunities)
         lastAnalysisDate = Date()
         saveData()
     }
@@ -1640,19 +1690,16 @@ public class WorkspaceHealthManager: ObservableObject {
         var destPaths: [String] = []
         
         for file in filesToProcess {
-             var destination = trashURL.appendingPathComponent(file.lastPathComponent)
+             var trashedURL: NSURL?
+             try fileManager.trashItem(at: file, resultingItemURL: &trashedURL)
              
-             if fileManager.fileExists(atPath: destination.path) {
-                 let fileName = file.deletingPathExtension().lastPathComponent
-                 let fileExt = file.pathExtension
-                 let timestamp = Date().filenameTimestamp
-                 let uniqueName = "\(fileName)_\(timestamp).\(fileExt)"
-                 destination = trashURL.appendingPathComponent(uniqueName)
-             }
-             
-             try fileManager.moveItem(at: file, to: destination)
              originalPaths.append(file.path)
-             destPaths.append(destination.path)
+             if let finalURL = trashedURL as? URL {
+                 destPaths.append(finalURL.path)
+             } else {
+                 // Fallback in case resultingItemURL isn't populated (rare)
+                 destPaths.append(trashURL.appendingPathComponent(file.lastPathComponent).path)
+             }
         }
         
         if !originalPaths.isEmpty {
@@ -1927,6 +1974,8 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // First pass: collect all directories with their depth
         while let url = enumerator.nextObject() as? URL {
+            if Task.isCancelled { return [] }
+
             do {
                 let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
                 if resourceValues.isDirectory == true {
@@ -1943,7 +1992,12 @@ public class WorkspaceHealthManager: ObservableObject {
 
         // Second pass: determine which directories are truly empty
         var emptyFolders = Set<String>()
-        for directory in allDirectories {
+        for (index, directory) in allDirectories.enumerated() {
+            if Task.isCancelled { return [] }
+            if index % 500 == 0 {
+                await Task.yield()
+            }
+
             do {
                 let contents = try fileManager.contentsOfDirectory(atPath: directory.path)
                 
@@ -1995,6 +2049,8 @@ public class WorkspaceHealthManager: ObservableObject {
         }
 
         while let url = enumerator.nextObject() as? URL {
+            if Task.isCancelled { return [] }
+
             do {
                 let resourceValues = try url.resourceValues(forKeys: [.isSymbolicLinkKey])
                 if resourceValues.isSymbolicLink == true {
@@ -2155,6 +2211,8 @@ public extension WorkspaceHealthManager {
         }
 
         for case let fileURL as URL in enumerator {
+            try Task.checkCancellation()
+
             let standardizedPath = fileURL.standardizedFileURL.path
             if ignoredPrefixes.contains(where: { standardizedPath.hasPrefix($0) }) {
                 enumerator.skipDescendants()

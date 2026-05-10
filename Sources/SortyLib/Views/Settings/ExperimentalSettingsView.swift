@@ -23,16 +23,8 @@ struct ExperimentalSettingsView: View {
     private var experimentalFlags: [ExperimentalFlag] {
         [
             ExperimentalFlag(
-                name: "Sensitive Action Authentication",
-                description: "Require Touch ID or your system password before revealing secrets, changing network privacy mode, or opening destructive confirmations.",
-                defaultsKey: "sensitiveActionAuthenticationEnabled",
-                defaultValue: false,
-                enableCommand: "defaults write com.sorty.app sensitiveActionAuthenticationEnabled -bool true",
-                disableCommand: "defaults write com.sorty.app sensitiveActionAuthenticationEnabled -bool false"
-            ),
-            ExperimentalFlag(
                 name: "Finder Integration",
-                description: "Show Sorty's Finder integration UI and repair flow. macOS still controls whether the Finder Sync extension is actually enabled.",
+                description: "Enable Finder context menus and Quick Actions for manual organization.",
                 defaultsKey: "finderIntegrationEnabled",
                 defaultValue: false,
                 enableCommand: "defaults write com.sorty.app finderIntegrationEnabled -bool true",
@@ -88,8 +80,6 @@ struct ExperimentalFlagRow: View {
     @State private var copied = false
     @State private var isEnabled: Bool
     @State private var setupMessage: String?
-    @State private var finderSyncDiagnostics: ExtensionCommunication.FinderSyncDiagnostics?
-    @State private var isRepairingFinderSync = false
 
     init(flag: ExperimentalFlag) {
         self.flag = flag
@@ -108,17 +98,21 @@ struct ExperimentalFlagRow: View {
                     isOn: Binding(
                         get: { isEnabled },
                         set: { newValue in
-                            guard isEnabled != newValue else { return }
-                            Task {
-                                let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(
-                                    reason: "Authenticate to change the \(flag.name) experimental setting."
-                                )
-                                guard didAuthenticate else {
-                                    HapticFeedbackManager.shared.error()
-                                    return
+                            UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
+
+                            if flag.defaultsKey == "finderIntegrationEnabled" {
+                                if newValue {
+                                    let quickActionResult = ExtensionCommunication.ensureQuickActionInstalled()
+                                    setupMessage = quickActionResult.message
+                                } else {
+                                    setupMessage = nil
                                 }
-                                await applyFlagValue(newValue)
                             }
+
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                isEnabled = newValue
+                            }
+                            HapticFeedbackManager.shared.selection()
                         }
                     )
                 )
@@ -128,59 +122,10 @@ struct ExperimentalFlagRow: View {
                     Circle()
                         .fill(isEnabled ? Color.green : Color.orange)
                         .frame(width: 8, height: 8)
-                    Text(isEnabled ? "Feature Flag Enabled" : "Feature Flag Disabled")
+                    Text(isEnabled ? "Enabled" : "Disabled")
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundStyle(isEnabled ? .green : .orange)
-                }
-
-                if let availabilityStatus = finderIntegrationAvailabilityStatus {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 8) {
-                            Image(systemName: finderIntegrationAvailabilityIcon)
-                                .foregroundStyle(finderIntegrationAvailabilityColor)
-                                .font(.caption)
-                            Text(availabilityStatus.title)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(finderIntegrationAvailabilityColor)
-                        }
-
-                        Text(availabilityStatus.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if availabilityStatus.state == .setupPending {
-                            HStack(spacing: 8) {
-                                Button(isRepairingFinderSync ? "Repairing..." : "Repair Finder Sync") {
-                                    Task {
-                                        isRepairingFinderSync = true
-                                        let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
-                                        setupMessage = repair.message
-                                        await refreshFinderIntegrationRuntimeState()
-                                        isRepairingFinderSync = false
-
-                                        if repair.success {
-                                            HapticFeedbackManager.shared.success()
-                                        } else {
-                                            HapticFeedbackManager.shared.error()
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.sortySecondary(size: .regular))
-                                .disabled(isRepairingFinderSync)
-
-                                Button("Open Extensions") {
-                                    ExtensionCommunication.openFinderExtensionSettings()
-                                    HapticFeedbackManager.shared.selection()
-                                }
-                                .buttonStyle(.sortySecondary(size: .regular))
-                            }
-                        }
-                    }
-                    .padding(10)
-                    .background(finderIntegrationAvailabilityBackground)
-                    .cornerRadius(8)
                 }
 
                 if let setupMessage, flag.defaultsKey == "finderIntegrationEnabled" {
@@ -229,92 +174,8 @@ struct ExperimentalFlagRow: View {
         .onAppear {
             isEnabled = flag.currentValue()
         }
-        .task(id: isEnabled) {
-            await refreshFinderIntegrationRuntimeState()
-        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ExperimentalFlag-\(flag.name)")
-    }
-
-    private var finderIntegrationAvailabilityStatus: ExtensionCommunication.FinderIntegrationAvailabilityStatus? {
-        guard flag.defaultsKey == "finderIntegrationEnabled" else { return nil }
-        return ExtensionCommunication.finderIntegrationAvailabilityStatus(
-            featureFlagEnabled: isEnabled,
-            diagnostics: finderSyncDiagnostics
-        )
-    }
-
-    private var finderIntegrationAvailabilityColor: Color {
-        guard let status = finderIntegrationAvailabilityStatus else { return .secondary }
-        switch status.state {
-        case .featureDisabled:
-            return .secondary
-        case .checking:
-            return .orange
-        case .setupPending:
-            return .orange
-        case .ready:
-            return .green
-        }
-    }
-
-    private var finderIntegrationAvailabilityIcon: String {
-        guard let status = finderIntegrationAvailabilityStatus else { return "questionmark.circle.fill" }
-        switch status.state {
-        case .featureDisabled:
-            return "circle.dashed"
-        case .checking:
-            return "arrow.triangle.2.circlepath.circle.fill"
-        case .setupPending:
-            return "exclamationmark.triangle.fill"
-        case .ready:
-            return "checkmark.circle.fill"
-        }
-    }
-
-    private var finderIntegrationAvailabilityBackground: Color {
-        guard let status = finderIntegrationAvailabilityStatus else { return Color.secondary.opacity(0.06) }
-        switch status.state {
-        case .featureDisabled:
-            return Color.secondary.opacity(0.06)
-        case .checking:
-            return Color.orange.opacity(0.08)
-        case .setupPending:
-            return Color.orange.opacity(0.08)
-        case .ready:
-            return Color.green.opacity(0.08)
-        }
-    }
-
-    private func refreshFinderIntegrationRuntimeState() async {
-        guard flag.defaultsKey == "finderIntegrationEnabled", isEnabled else {
-            finderSyncDiagnostics = nil
-            return
-        }
-
-        ExtensionCommunication.beginMonitoringFinderSyncRuntime()
-        finderSyncDiagnostics = await ExtensionCommunication.getFinderSyncDiagnosticsAsync()
-    }
-
-    @MainActor
-    private func applyFlagValue(_ newValue: Bool) async {
-        UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
-
-        if flag.defaultsKey == "finderIntegrationEnabled" {
-            if newValue {
-                let quickActionResult = ExtensionCommunication.ensureQuickActionInstalled()
-                setupMessage = quickActionResult.message
-                await refreshFinderIntegrationRuntimeState()
-            } else {
-                setupMessage = nil
-                finderSyncDiagnostics = nil
-            }
-        }
-
-        withAnimation(.easeOut(duration: 0.2)) {
-            isEnabled = newValue
-        }
-        HapticFeedbackManager.shared.selection()
     }
 }
 

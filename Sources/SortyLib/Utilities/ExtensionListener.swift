@@ -12,14 +12,21 @@ import Combine
 @MainActor
 public class ExtensionListener: ObservableObject {
     @Published public var incomingURL: URL?
+    nonisolated(unsafe) private var notificationObserver: NSObjectProtocol?
 
     public init() {
-        ExtensionCommunication.setupNotificationObserver { @MainActor [weak self] url in
+        notificationObserver = ExtensionCommunication.setupNotificationObserver { @MainActor [weak self] url in
             self?.incomingURL = url
         }
 
         if let existingURL = ExtensionCommunication.receiveFromExtension() {
             incomingURL = existingURL
+        }
+    }
+
+    deinit {
+        if let notificationObserver {
+            ExtensionCommunication.removeNotificationObserver(notificationObserver)
         }
     }
 }

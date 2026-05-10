@@ -139,9 +139,10 @@ public struct ExtensionCommunication {
         return nil
     }
     
-    public static func setupNotificationObserver(handler: @escaping @Sendable @MainActor (URL) -> Void) {
+    @discardableResult
+    public static func setupNotificationObserver(handler: @escaping @Sendable @MainActor (URL) -> Void) -> NSObjectProtocol {
         let notificationCenter = DistributedNotificationCenter.default()
-        notificationCenter.addObserver(
+        return notificationCenter.addObserver(
             forName: notificationName,
             object: nil,
             queue: .main
@@ -154,6 +155,10 @@ public struct ExtensionCommunication {
                 }
             }
         }
+    }
+
+    public static func removeNotificationObserver(_ observer: NSObjectProtocol) {
+        DistributedNotificationCenter.default().removeObserver(observer)
     }
 
     // MARK: - Finder Sync Extension Registration

@@ -111,8 +111,8 @@ struct ModelSelectionPopover: View {
         isPresented: Binding<Bool>,
         currentProvider: AIProvider,
         currentModel: String,
-        contextMessage: String?,
-        selectionActionTitle: String,
+        contextMessage: String? = nil,
+        selectionActionTitle: String = "Select",
         popoverSize: CGSize = CGSize(width: 500, height: 420),
         onSelect: @escaping (AIProvider, String) -> Void
     ) {
@@ -205,7 +205,7 @@ struct ModelSelectionPopover: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.accentColor.opacity(0.05))
+        .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.05))
     }
     
     // MARK: - Header
@@ -318,7 +318,7 @@ struct ModelSelectionPopover: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(selectedProvider == provider ? Color.accentColor : Color.clear)
+                    .fill(selectedProvider == provider ? SortyDesignSystem.Colors.resolvedAccent : Color.clear)
             )
             .contentShape(Rectangle())
         }
@@ -464,7 +464,7 @@ struct ModelSelectionPopover: View {
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(selectedModel == model ? Color.accentColor : Color.clear)
+                    .fill(selectedModel == model ? SortyDesignSystem.Colors.resolvedAccent : Color.clear)
             )
             .contentShape(Rectangle())
         }
@@ -627,7 +627,7 @@ struct ModelSelectionPopover: View {
         } else {
             LinearGradient(
                 colors: [
-                    Color.accentColor.opacity(0.08),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.08),
                     Color.primary.opacity(0.03)
                 ],
                 startPoint: .topLeading,

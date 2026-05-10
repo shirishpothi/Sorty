@@ -7,6 +7,8 @@
 
 import SwiftUI
 
+import Beam
+
 /// Primary pill-shaped button style used for main actions
 public struct SortyPrimaryButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
@@ -35,11 +37,11 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
                             .fill(
                                 LinearGradient(
                                     stops: [
-                                        .init(color: Color.accentColor.opacity(0.85), location: 0),
-                                        .init(color: Color.accentColor, location: 0.3),
-                                        .init(color: Color.accentColor.opacity(0.95), location: 0.5),
-                                        .init(color: Color.accentColor, location: 0.7),
-                                        .init(color: Color.accentColor.opacity(0.85), location: 1)
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 0),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.3),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.95), location: 0.5),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.7),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 1)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -139,11 +141,11 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
                             .fill(
                                 LinearGradient(
                                     stops: [
-                                        .init(color: Color.accentColor.opacity(0.85), location: 0),
-                                        .init(color: Color.accentColor, location: 0.3),
-                                        .init(color: Color.accentColor.opacity(0.95), location: 0.5),
-                                        .init(color: Color.accentColor, location: 0.7),
-                                        .init(color: Color.accentColor.opacity(0.85), location: 1)
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 0),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.3),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.95), location: 0.5),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent, location: 0.7),
+                                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.85), location: 1)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -183,7 +185,7 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
             .shadow(
                 color: isSecondary
                     ? Color.black.opacity(colorScheme == .dark ? 0.14 : 0.05)
-                    : Color.accentColor.opacity(0.3),
+                    : SortyDesignSystem.Colors.resolvedAccent.opacity(0.3),
                 radius: 8,
                 x: 0,
                 y: 4
@@ -535,6 +537,249 @@ extension ButtonStyle where Self == OnboardingPillButtonStyle {
     
     public static func onboardingPill(isSecondary: Bool, size: ControlSize = .regular) -> OnboardingPillButtonStyle {
         OnboardingPillButtonStyle(isSecondary: isSecondary, size: size)
+    }
+}
+
+public enum OnboardingBeamBorderVariant {
+    case standard
+    case featured
+
+    var palette: BeamPalette {
+        switch self {
+        case .standard: return .colorful
+        case .featured: return .sunset
+        }
+    }
+
+    var strength: Double {
+        switch self {
+        case .standard: return 0.86
+        case .featured: return 1.0
+        }
+    }
+
+    var lensStrength: Double {
+        switch self {
+        case .standard: return 1.8
+        case .featured: return 3.0
+        }
+    }
+
+    var fallbackOpacity: Double {
+        switch self {
+        case .standard: return 0.82
+        case .featured: return 0.96
+        }
+    }
+}
+
+public extension View {
+    func onboardingBeamBorder(
+        variant: OnboardingBeamBorderVariant = .standard,
+        active: Bool = true,
+        isIntensified: Bool = false,
+        includesInteriorGlow: Bool = false,
+        size: BeamSize = .medium
+    ) -> some View {
+        overlay {
+            OnboardingBeamBorder(
+                variant: variant,
+                active: active,
+                isIntensified: isIntensified,
+                includesInteriorGlow: includesInteriorGlow,
+                size: size
+            )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct OnboardingBeamBorder: View {
+    let variant: OnboardingBeamBorderVariant
+    let active: Bool
+    let isIntensified: Bool
+    let includesInteriorGlow: Bool
+    let size: BeamSize
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Capsule()
+            .strokeBorder(.clear, lineWidth: 1)
+            .beam(
+                size,
+                palette: variant.palette,
+                theme: .dark,
+                active: active,
+                shape: .capsule,
+                duration: 1.96,
+                strength: isIntensified ? variant.strength * 1.2 : variant.strength,
+                lensStrength: isIntensified ? variant.lensStrength * 1.25 : variant.lensStrength
+            )
+            .overlay {
+                SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+                    let time = timeline.date.timeIntervalSinceReferenceDate
+                    let phase = reduceMotion ? 0 : time / 1.96
+                    ZStack {
+                        if includesInteriorGlow {
+                            beamInteriorGlow(phase: phase)
+                        }
+
+                        Capsule()
+                            .strokeBorder(
+                                AngularGradient(
+                                    stops: fallbackStops,
+                                    center: .center,
+                                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                                ),
+                                lineWidth: isIntensified ? 1.35 : 1
+                            )
+                    }
+                    .opacity(active ? (isIntensified ? 1 : variant.fallbackOpacity) : 0)
+                    .animation(.easeOut(duration: 0.22), value: active)
+                    .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isIntensified)
+                }
+            }
+    }
+
+    private func beamInteriorGlow(phase: TimeInterval) -> some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            let scale = max(1, min(size.width, size.height) / 36)
+            ZStack {
+                ForEach(interiorGlowSpots) { spot in
+                    Ellipse()
+                        .fill(
+                            RadialGradient(
+                                colors: [spot.color.opacity(isIntensified ? spot.activeOpacity : spot.opacity), .clear],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: max(spot.radius.width, spot.radius.height) * scale
+                            )
+                        )
+                        .frame(width: spot.radius.width * 2 * scale, height: spot.radius.height * 2 * scale)
+                        .position(x: spot.position.x * size.width, y: spot.position.y * size.height)
+                }
+
+                Capsule()
+                    .strokeBorder(.white.opacity(isIntensified ? 0.12 : 0.08), lineWidth: 9)
+                    .blur(radius: 8)
+            }
+            .blur(radius: isIntensified ? 5 : 6)
+            .opacity(isIntensified ? 0.92 : 0.62)
+            .mask {
+                Capsule()
+                    .fill(
+                        AngularGradient(
+                            stops: interiorConicStops,
+                            center: .center,
+                            angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                        )
+                    )
+            }
+            .mask {
+                Capsule().inset(by: 1)
+            }
+        }
+        .compositingGroup()
+        .blendMode(.screen)
+    }
+
+    private var fallbackStops: [Gradient.Stop] {
+        switch variant {
+        case .standard:
+            return [
+                .init(color: .clear, location: 0.00),
+                .init(color: .clear, location: 0.08),
+                .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.36), location: 0.16),
+                .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.62), location: 0.25),
+                .init(color: .white.opacity(0.88), location: 0.32),
+                .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.54), location: 0.39),
+                .init(color: Color(red: 0.40, green: 0.20, blue: 1.0).opacity(0.36), location: 0.48),
+                .init(color: .clear, location: 0.58),
+                .init(color: .clear, location: 1.00),
+            ]
+        case .featured:
+            return [
+                .init(color: .clear, location: 0.00),
+                .init(color: .clear, location: 0.07),
+                .init(color: Color(red: 1.0, green: 0.76, blue: 0.18).opacity(0.58), location: 0.15),
+                .init(color: Color(red: 1.0, green: 0.34, blue: 0.12).opacity(0.76), location: 0.24),
+                .init(color: .white.opacity(0.95), location: 0.31),
+                .init(color: Color(red: 1.0, green: 0.10, blue: 0.52).opacity(0.78), location: 0.39),
+                .init(color: Color(red: 0.56, green: 0.20, blue: 1.0).opacity(0.50), location: 0.49),
+                .init(color: .clear, location: 0.60),
+                .init(color: .clear, location: 1.00),
+            ]
+        }
+    }
+
+    private var fallbackInteriorStops: [Gradient.Stop] {
+        [
+            .init(color: .clear, location: 0.00),
+            .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(isIntensified ? 0.14 : 0.10), location: 0.15),
+            .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(isIntensified ? 0.26 : 0.20), location: 0.25),
+            .init(color: .white.opacity(isIntensified ? 0.20 : 0.16), location: 0.32),
+            .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(isIntensified ? 0.18 : 0.14), location: 0.40),
+            .init(color: .clear, location: 0.58),
+            .init(color: .clear, location: 1.00),
+        ]
+    }
+
+    private var interiorConicStops: [Gradient.Stop] {
+        [
+            .init(color: .clear, location: 0.00),
+            .init(color: .clear, location: 0.22),
+            .init(color: .white.opacity(0.12), location: 0.28),
+            .init(color: .white.opacity(0.40), location: 0.36),
+            .init(color: .white.opacity(1.00), location: 0.46),
+            .init(color: .white.opacity(1.00), location: 0.82),
+            .init(color: .white.opacity(0.40), location: 0.88),
+            .init(color: .white.opacity(0.12), location: 0.94),
+            .init(color: .clear, location: 0.97),
+            .init(color: .clear, location: 1.00),
+        ]
+    }
+
+    private var interiorGlowSpots: [InteriorGlowSpot] {
+        switch variant {
+        case .standard:
+            return [
+                InteriorGlowSpot(x: 0.02, y: 0.68, width: 9, height: 18, color: Color(red: 0.20, green: 0.78, blue: 0.31), opacity: 0.18, activeOpacity: 0.26),
+                InteriorGlowSpot(x: 0.02, y: 0.68, width: 4, height: 8, color: Color(red: 0.12, green: 0.73, blue: 0.67), opacity: 0.18, activeOpacity: 0.25),
+                InteriorGlowSpot(x: 0.72, y: -0.03, width: 59, height: 9, color: Color(red: 1.0, green: 0.47, blue: 0.16), opacity: 0.16, activeOpacity: 0.22),
+                InteriorGlowSpot(x: 0.74, y: 1.00, width: 42, height: 7, color: Color(red: 0.39, green: 0.27, blue: 1.0), opacity: 0.16, activeOpacity: 0.22),
+                InteriorGlowSpot(x: 1.00, y: 0.27, width: 10, height: 17, color: Color(red: 0.94, green: 0.20, blue: 0.71), opacity: 0.13, activeOpacity: 0.20),
+                InteriorGlowSpot(x: 1.00, y: 0.27, width: 11, height: 12, color: Color(red: 1.0, green: 0.20, blue: 0.39), opacity: 0.14, activeOpacity: 0.21),
+            ]
+        case .featured:
+            return [
+                InteriorGlowSpot(x: 0.02, y: 0.68, width: 9, height: 18, color: Color(red: 1.0, green: 0.70, blue: 0.20), opacity: 0.18, activeOpacity: 0.27),
+                InteriorGlowSpot(x: 0.02, y: 0.68, width: 4, height: 8, color: Color(red: 1.0, green: 0.58, blue: 0.16), opacity: 0.18, activeOpacity: 0.25),
+                InteriorGlowSpot(x: 0.72, y: -0.03, width: 59, height: 9, color: Color(red: 1.0, green: 0.31, blue: 0.23), opacity: 0.16, activeOpacity: 0.22),
+                InteriorGlowSpot(x: 0.74, y: 1.00, width: 42, height: 7, color: Color(red: 1.0, green: 0.39, blue: 0.31), opacity: 0.16, activeOpacity: 0.22),
+                InteriorGlowSpot(x: 1.00, y: 0.27, width: 10, height: 17, color: Color(red: 1.0, green: 0.24, blue: 0.31), opacity: 0.13, activeOpacity: 0.20),
+                InteriorGlowSpot(x: 1.00, y: 0.27, width: 11, height: 12, color: Color(red: 1.0, green: 0.35, blue: 0.27), opacity: 0.14, activeOpacity: 0.21),
+            ]
+        }
+    }
+}
+
+private struct InteriorGlowSpot: Identifiable {
+    let id = UUID()
+    let position: CGPoint
+    let radius: CGSize
+    let color: Color
+    let opacity: Double
+    let activeOpacity: Double
+
+    init(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, color: Color, opacity: Double, activeOpacity: Double) {
+        self.position = CGPoint(x: x, y: y)
+        self.radius = CGSize(width: width, height: height)
+        self.color = color
+        self.opacity = opacity
+        self.activeOpacity = activeOpacity
     }
 }
 

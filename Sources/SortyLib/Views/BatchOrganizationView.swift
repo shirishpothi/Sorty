@@ -27,11 +27,12 @@ struct BatchOrganizationView: View {
     @State private var showApplyConfirmation = false
     @State private var promptTargetFolder: URL?
     @State private var improvingFolders: Set<URL> = []
+    @State private var isSourceAddHovering = false
+    @State private var isEmptyAddHovering = false
 
     var body: some View {
         VStack(spacing: 0) {
             headerSection
-            Divider()
             contentSection
         }
         .navigationTitle("Batch Organize")
@@ -104,16 +105,12 @@ struct BatchOrganizationView: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "square.stack.3d.up.fill")
-                .font(.title2)
-                .foregroundStyle(.tint)
-
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("Batch Organize")
-                    .font(.headline)
-                Text("\(batchManager.totalFolders) folder\(batchManager.totalFolders == 1 ? "" : "s") selected")
-                    .font(.caption)
+                    .font(.largeTitle.bold())
+
+                Text("Queue related source folders, tune exceptions, and review every plan before applying")
                     .foregroundStyle(.secondary)
             }
 
@@ -121,37 +118,37 @@ struct BatchOrganizationView: View {
 
             if sessionManager.prewarmingProvider != nil {
                 Label("Connecting…", systemImage: "bolt.horizontal.circle")
-                    .font(.caption)
+                    .font(.caption.bold())
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .clipShape(Capsule())
                     .accessibilityIdentifier("BatchPrewarmStatusConnecting")
             } else if sessionManager.isPrewarmed {
                 Label("Connected", systemImage: "checkmark.circle.fill")
-                    .font(.caption)
+                    .font(.caption.bold())
                     .foregroundStyle(.green)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .clipShape(Capsule())
                     .accessibilityIdentifier("BatchPrewarmStatusConnected")
             } else if let error = sessionManager.prewarmError {
                 Label("\(String(error.prefix(28)))…", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
+                    .font(.caption.bold())
                     .foregroundStyle(.orange)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .systemLiquidGlassBackground(cornerRadius: 999)
+                    .clipShape(Capsule())
                     .help(error)
                     .accessibilityIdentifier("BatchPrewarmStatusWarning")
             }
-
-            if !batchManager.isProcessing {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    addFolders()
-                } label: {
-                    Label("Add Folders", systemImage: "plus.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.regular)
-                .accessibilityIdentifier("BatchAddFoldersButton")
-            }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
-        .background(.bar)
+        .padding(.horizontal, 32)
+        .padding(.top, 28)
+        .padding(.bottom, 18)
     }
 
     // MARK: - Content
@@ -161,43 +158,224 @@ struct BatchOrganizationView: View {
             if batchManager.selectedFolders.isEmpty && batchManager.results.isEmpty {
                 emptyState
             } else {
-                WorkflowContainer(currentStep: .configure) {
-                    if batchManager.isProcessing {
-                        overallProgressSection
-                    }
-
-                    WorkflowCard(title: "Batch Settings", icon: "slider.horizontal.3") {
-                        optionsSection
-                    }
-
-                    WorkflowCard(title: "Folders", icon: "folder") {
-                        folderListSection
-                    }
-
-                    if let focusedFolder {
-                        WorkflowCard(title: "Folder Customization", icon: "wand.and.stars") {
-                            folderCustomizationSection(for: focusedFolder)
-                        }
-                    }
-
-                    if !previewFolders.isEmpty {
-                        WorkflowCard(title: "Unified Preview", icon: "rectangle.3.group") {
-                            unifiedPreviewSection
-                        }
-                    }
-
-                    if batchManager.hasAnyOutcome && !batchManager.isProcessing {
-                        WorkflowCard(title: "Results", icon: "chart.bar") {
-                            resultsSection
-                        }
-                    }
-
-                    actionButtons
-                }
+                batchWorkspace
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.background)
+        .background(WorkflowGradientBackground())
+    }
+
+    private var batchWorkspace: some View {
+        HStack(spacing: 0) {
+            batchSidebar
+                .frame(width: 310)
+
+            Divider()
+
+            VStack(spacing: 0) {
+                if batchManager.isProcessing {
+                    WorkflowCard {
+                        overallProgressSection
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .transition(TransitionStyles.slideFromBottom)
+                }
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        workflowOverview
+
+                        if let focusedFolder {
+                            selectedFolderDashboard(for: focusedFolder)
+                        } else {
+                            noFolderFocusedState
+                        }
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+
+                Divider()
+                actionButtons
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(.bar)
+            }
+        }
+    }
+
+    private var batchSidebar: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Sources", systemImage: "tray.full")
+                        .font(.subheadline.weight(.semibold))
+
+                    Spacer()
+
+                    Text("\(batchManager.selectedFolders.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(Color.secondary.opacity(0.12)))
+                }
+
+                Toggle("Add immediate subfolders", isOn: $includeSubfolders)
+                    .toggleStyle(.switch)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .disabled(batchManager.isProcessing)
+
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    addFolders()
+                } label: {
+                    Label(includeSubfolders ? "Choose Parent Folder" : "Add Source Folders", systemImage: "folder.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.onboardingPill(size: .small))
+                .onboardingBeamBorder(
+                    variant: .featured,
+                    active: isSourceAddHovering,
+                    isIntensified: isSourceAddHovering
+                )
+                .onHover { isSourceAddHovering = $0 }
+                .disabled(batchManager.isProcessing)
+                .accessibilityIdentifier("BatchSidebarAddFoldersButton")
+            }
+            .padding(16)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(batchManager.selectedFolders, id: \.self) { folder in
+                        folderSidebarRow(for: folder)
+                    }
+                }
+                .padding(12)
+            }
+            .siriDropZone(cornerRadius: 8, isTargeted: $isDropTargeted) { providers in
+                handleDrop(providers: providers)
+            }
+
+            Divider()
+
+            sidebarFooter
+                .padding(14)
+        }
+        .background(.bar)
+    }
+
+    private var sidebarFooter: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(settingsViewModel.config.provider.displayName, systemImage: "cpu")
+                Spacer()
+                Stepper("", value: $batchManager.maxConcurrentFolders, in: 1...5)
+                    .labelsHidden()
+                    .disabled(batchManager.isProcessing)
+                    .accessibilityIdentifier("BatchConcurrentStepper")
+            }
+
+            Text("Runs \(batchManager.maxConcurrentFolders) folder\(batchManager.maxConcurrentFolders == 1 ? "" : "s") at a time. Each source keeps its own destination boundaries.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.caption)
+    }
+
+    private var workflowOverview: some View {
+        WorkflowCard(title: "Flow", icon: "point.3.connected.trianglepath.dotted") {
+            HStack(spacing: 10) {
+                batchFlowStep(number: 1, title: "Queue", detail: "Choose source folders")
+                batchFlowStep(number: 2, title: "Tune", detail: "Override only what differs")
+                batchFlowStep(number: 3, title: "Review", detail: "Open previews before apply")
+            }
+        }
+    }
+
+    private func batchFlowStep(number: Int, title: String, detail: String) -> some View {
+        HStack(spacing: 8) {
+            Text("\(number)")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(SortyDesignSystem.Colors.resolvedAccent))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.07)))
+    }
+
+    private func selectedFolderDashboard(for folder: URL) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            WorkflowCard(title: "Selected Source", icon: "folder") {
+                folderCustomizationSection(for: folder)
+            }
+
+            if let result = batchManager.results.first(where: { $0.folderURL == folder }) {
+                selectedFolderOutcome(result)
+            }
+
+            if !previewFolders.isEmpty {
+                WorkflowCard(title: "Preview Navigator", icon: "rectangle.3.group") {
+                    unifiedPreviewSection
+                }
+            }
+
+            if batchManager.hasAnyOutcome && !batchManager.isProcessing {
+                WorkflowCard(title: "Batch Summary", icon: "chart.bar") {
+                    resultsSection
+                }
+            }
+        }
+    }
+
+    private func selectedFolderOutcome(_ result: BatchResult) -> some View {
+        WorkflowCard(title: "Status", icon: statusIcon(for: result.status)) {
+            HStack(spacing: 12) {
+                statusBadge(for: result.folderURL)
+
+                if result.filesOrganized > 0 {
+                    Text("\(result.filesOrganized) files")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let error = result.error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private var noFolderFocusedState: some View {
+        WorkflowCard {
+            ContentUnavailableView(
+                "Select a source",
+                systemImage: "sidebar.left",
+                description: Text("Use the source list to tune instructions, generate a focused preview, or open a reviewed plan.")
+            )
+            .frame(maxWidth: .infinity, minHeight: 220)
+        }
     }
 
     // MARK: - Empty State
@@ -213,7 +391,7 @@ struct BatchOrganizationView: View {
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text("Add multiple folders to customize instructions and run one polished batch preview.")
+                Text("Choose related source folders, or pick one parent and add its immediate subfolders as separate runs.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -226,7 +404,13 @@ struct BatchOrganizationView: View {
             } label: {
                 Label("Add Folders", systemImage: "plus.circle.fill")
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(
+                variant: .featured,
+                active: isEmptyAddHovering,
+                isIntensified: isEmptyAddHovering
+            )
+            .onHover { isEmptyAddHovering = $0 }
             .controlSize(.large)
             .accessibilityIdentifier("BatchAddFoldersEmptyButton")
         }
@@ -402,7 +586,8 @@ struct BatchOrganizationView: View {
                         Label("Open Full Preview", systemImage: "doc.text.magnifyingglass")
                             .font(.caption)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.onboardingPill(size: .small))
+                    .onboardingBeamBorder(variant: .standard)
                     .minimumHitTarget()
 
                     Spacer()
@@ -580,7 +765,7 @@ struct BatchOrganizationView: View {
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(focusedFolder == folder ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.05))
+                .fill(focusedFolder == folder ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : Color.secondary.opacity(0.05))
         )
         .contentShape(RoundedRectangle(cornerRadius: 6))
         .onTapGesture {
@@ -588,6 +773,110 @@ struct BatchOrganizationView: View {
             HapticFeedbackManager.shared.selection()
             focusedFolder = folder
         }
+    }
+
+    private func folderSidebarRow(for folder: URL) -> some View {
+        let config = batchManager.configuration(for: folder)
+        let isFocused = focusedFolder == folder
+        let hasPrompt = !config.instructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasPersona = config.personaSelection != .global
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                FolderThumbnailView(url: folder, size: CGSize(width: 28, height: 28))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(folder.lastPathComponent)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    PrivacySensitivePathText(path: folder.deletingLastPathComponent().path)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 4)
+                statusBadge(for: folder)
+            }
+
+            if hasPrompt || hasPersona {
+                HStack(spacing: 6) {
+                    if hasPersona {
+                        Label("Persona", systemImage: "person.crop.circle.badge.checkmark")
+                    }
+                    if hasPrompt {
+                        Label("Prompt", systemImage: "text.bubble")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
+                } label: {
+                    Image(systemName: "folder")
+                }
+                .buttonStyle(.plain)
+                .minimumHitTarget()
+                .help("Reveal in Finder")
+                .accessibilityIdentifier("BatchRevealFolder-\(folder.lastPathComponent)")
+
+                if batchManager.results.first(where: { $0.folderURL == folder })?.plan != nil {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        selectedPlanFolder = folder
+                    } label: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
+                    .buttonStyle(.plain)
+                    .minimumHitTarget()
+                    .help("Open preview")
+                    .accessibilityIdentifier("BatchViewPlan-\(folder.lastPathComponent)")
+                }
+
+                Spacer()
+
+                if !batchManager.isProcessing {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        withAnimation(.pageTransition) {
+                            batchManager.removeFolder(folder)
+                        }
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .minimumHitTarget()
+                    .help("Remove source")
+                    .accessibilityIdentifier("BatchRemoveFolder-\(folder.lastPathComponent)")
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isFocused ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.secondary.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(isFocused ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.35) : Color.clear, lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+        .onTapGesture {
+            guard !batchManager.isProcessing else { return }
+            HapticFeedbackManager.shared.selection()
+            focusedFolder = folder
+        }
+        .accessibilityIdentifier("BatchSourceRow-\(folder.lastPathComponent)")
     }
 
     private func folderCustomizationSection(for folder: URL) -> some View {
@@ -873,7 +1162,8 @@ struct BatchOrganizationView: View {
                 } label: {
                     Label("Cancel", systemImage: "xmark.circle")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                .tint(.red)
                 .controlSize(.large)
                 .accessibilityIdentifier("BatchCancelButton")
             } else {
@@ -886,7 +1176,7 @@ struct BatchOrganizationView: View {
                     } label: {
                         Label("Clear All", systemImage: "trash")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                     .controlSize(.large)
                     .accessibilityIdentifier("BatchClearButton")
                 }
@@ -898,7 +1188,7 @@ struct BatchOrganizationView: View {
                     } label: {
                         Label("Retry Failed", systemImage: "arrow.clockwise.circle")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                     .controlSize(.large)
                     .accessibilityIdentifier("BatchRetryFailedButton")
                 }
@@ -910,7 +1200,8 @@ struct BatchOrganizationView: View {
                     } label: {
                         Label("Generate All Previews", systemImage: "wand.and.stars")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.onboardingPill(size: .small))
+                    .onboardingBeamBorder(variant: .featured)
                     .controlSize(.large)
                     .accessibilityIdentifier("BatchPreviewButton")
                 }
@@ -922,7 +1213,7 @@ struct BatchOrganizationView: View {
                     } label: {
                         Label("Preview Focused Folder", systemImage: "eye")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                     .controlSize(.large)
                     .accessibilityIdentifier("BatchFocusedPreviewButton")
                     .disabled(batchManager.isProcessing)
@@ -935,7 +1226,8 @@ struct BatchOrganizationView: View {
                     } label: {
                         Label("Apply Reviewed Plans", systemImage: "checkmark.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.onboardingPill(size: .small))
+                    .onboardingBeamBorder(variant: .featured)
                     .controlSize(.large)
                     .accessibilityIdentifier("BatchApplyButton")
                 }
@@ -947,7 +1239,7 @@ struct BatchOrganizationView: View {
                     } label: {
                         Label("Undo Batch", systemImage: "arrow.uturn.backward.circle")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                     .controlSize(.large)
                     .accessibilityIdentifier("BatchUndoButton")
                 }

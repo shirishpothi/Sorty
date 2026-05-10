@@ -12,13 +12,11 @@ struct DuplicatesView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var detectionManager: DuplicateDetectionManager
     @EnvironmentObject var settingsManager: DuplicateSettingsManager
-    @State private var selectedGroup: UnifiedDuplicateGroup?
     @State private var showDeleteConfirmation = false
     @State private var filesToDelete: [FileItem] = []
     @State private var contentOpacity: Double = 1
     @State private var showSettings = false
     @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
-    @State private var localDirectory: URL?
     @State private var handoffFilePaths: [String] = []
     @State private var currentScanTask: Task<Void, Never>?
     @State private var capturedDirectory: URL?
@@ -26,20 +24,19 @@ struct DuplicatesView: View {
     
     // Derived directory: Use local if set, otherwise fallback to global
     private var effectiveDirectory: URL? {
-        localDirectory ?? appState.selectedDirectory
+        appState.duplicateSelectedDirectory ?? appState.selectedDirectory
     }
 
     var body: some View {
         VStack(spacing: 0) {
             if effectiveDirectory == nil {
                 // Base page: Workspace-Health-style layout
-                ScrollView {
-                    VStack(spacing: 24) {
-                        duplicatesBaseHeaderSection()
-                        duplicatesBaseDirectorySelector()
-                        duplicatesBaseEmptyState()
-                    }
-                    .padding(32)
+                ZStack(alignment: .topLeading) {
+                    duplicatesBaseEmptyState()
+                        .padding(32)
+
+                    duplicatesBaseHeaderSection()
+                        .padding(.horizontal, 32)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(NSColor.windowBackgroundColor))
@@ -116,11 +113,15 @@ struct DuplicatesView: View {
             currentScanTask?.cancel()
             // Clear results when switching directories to prevent showing stale data
             detectionManager.clearResults()
-            selectedGroup = nil
+            appState.duplicateSelectedGroup = nil
         }
         .onChange(of: appState.pendingDuplicatesHandoff) { _, handoff in
             guard let handoff else { return }
             apply(handoff: handoff)
+        }
+        .onDisappear {
+            currentScanTask?.cancel()
+            currentScanTask = nil
         }
         .sheet(isPresented: $showSettings) {
             DuplicateSettingsView(settingsManager: settingsManager)
@@ -137,13 +138,13 @@ struct DuplicatesView: View {
         currentScanTask = nil
 
         if let directory = handoff.directory {
-            localDirectory = directory
+            appState.duplicateSelectedDirectory = directory
             appState.selectedDirectory = directory
         }
         handoffFilePaths = handoff.filePaths
 
         detectionManager.clearResults()
-        selectedGroup = nil
+        appState.duplicateSelectedGroup = nil
         appState.pendingDuplicatesHandoff = nil
 
         if handoff.autoStart, effectiveDirectory != nil {
@@ -215,6 +216,7 @@ struct DuplicatesView: View {
                 selectDirectory()
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
             .controlSize(.large)
             .accessibilityIdentifier("DuplicatesEmptyChooseDirectory")
         }
@@ -243,12 +245,12 @@ struct DuplicatesView: View {
                     
                     Divider()
                     
-                    List(selection: $selectedGroup) {
+                    List(selection: $appState.duplicateSelectedGroup) {
                         ForEach(detectionManager.allGroups) { group in
                             UnifiedDuplicateGroupRow(group: group)
                                 .tag(group)
-                                .scaleEffect(selectedGroup == group ? 1.01 : 1.0)
-                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedGroup)
+                                .scaleEffect(appState.duplicateSelectedGroup == group ? 1.01 : 1.0)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.duplicateSelectedGroup)
                         }
                     }
                     .listStyle(.inset)
@@ -256,7 +258,7 @@ struct DuplicatesView: View {
                 .frame(minWidth: 250, idealWidth: 300, maxWidth: 400)
                 
                 // Right Pane: Detail View
-                if let group = selectedGroup {
+                if let group = appState.duplicateSelectedGroup {
                     UnifiedDuplicateGroupDetailView(
                         group: group,
                         onDelete: { files in
@@ -309,7 +311,7 @@ struct DuplicatesView: View {
                     if !Task.isCancelled {
                         // Auto-select first group
                         if let first = detectionManager.allGroups.first {
-                            selectedGroup = first
+                            appState.duplicateSelectedGroup = first
                         }
                         HapticFeedbackManager.shared.success()
                     }
@@ -438,9 +440,9 @@ struct DuplicatesView: View {
         panel.allowsMultipleSelection = false
         
         if panel.runModal() == .OK, let url = panel.url {
-            localDirectory = url
+            appState.duplicateSelectedDirectory = url
             detectionManager.clearResults()
-            selectedGroup = nil
+            appState.duplicateSelectedGroup = nil
         }
     }
 
@@ -1285,6 +1287,7 @@ struct DuplicatesEmptyStateView: View {
                             .frame(minWidth: 120)
                     }
                     .buttonStyle(.onboardingPill)
+                    .onboardingBeamBorder(variant: .featured)
 
             .controlSize(.large)
             .accessibilityLabel(actionTitle)
@@ -1313,7 +1316,7 @@ struct ScanProgressViewNew: View {
                 if isPreparing {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 30))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 } else {
                     VStack(spacing: 2) {
                         Text("\(Int(progress * 100))%")

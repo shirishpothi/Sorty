@@ -64,55 +64,23 @@ struct OrganizationStrategySettingsView: View {
                     if viewModel.config.enableVision {
                         Divider()
 
-                        SettingsToggle(
-                            isOn: $viewModel.config.limitVisionImages,
-                            title: "Limit Images Sent to AI",
-                            description: "When off, Sorty sends all detected images for a richer analysis"
-                        )
-
-                        if viewModel.config.limitVisionImages {
-                            HStack {
-                                Text("Images per Batch")
-                                    .font(.subheadline)
-                                Spacer()
-
-                                HStack(spacing: 6) {
-                                    Text("Max")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    TextField(
-                                        "5",
-                                        value: Binding(
-                                            get: { viewModel.config.visionBatchSize },
-                                            set: { viewModel.config.visionBatchSize = max(1, $0) }
-                                        ),
-                                        format: .number
-                                    )
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.subheadline.monospacedDigit())
-                                    .frame(width: 64)
-                                    .multilineTextAlignment(.trailing)
-                                }
-                            }
-
-                            Slider(
-                                value: Binding(
-                                    get: { Double(viewModel.config.visionBatchSize) },
-                                    set: { viewModel.config.visionBatchSize = max(1, Int($0)) }
-                                ),
-                                in: 1...Double(max(10, viewModel.config.visionBatchSize)),
-                                step: 1
-                            )
-                        } else {
-                            HStack(spacing: 4) {
-                                Image(systemName: "info.circle")
-                                    .font(.caption2)
-                                    .foregroundColor(.blue)
-                                Text("All detected images will be sent to the AI.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
+                        HStack {
+                            Text("Images per Batch")
+                                .font(.subheadline)
+                            Spacer()
+                            Text("\(viewModel.config.visionBatchSize)")
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundColor(.secondary)
                         }
+
+                        Slider(
+                            value: Binding(
+                                get: { Double(viewModel.config.visionBatchSize) },
+                                set: { viewModel.config.visionBatchSize = Int($0) }
+                            ),
+                            in: 1...10,
+                            step: 1
+                        )
 
                         HStack(spacing: 4) {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -130,7 +98,7 @@ struct OrganizationStrategySettingsView: View {
                             Image(systemName: "info.circle")
                                 .font(.caption2)
                                 .foregroundColor(.blue)
-                            Text("Switch to a vision model (e.g., gpt-5.4-mini, claude-sonnet-4.6) to enable.")
+                            Text("Switch to a vision model (e.g., gpt-4o, claude-3-5-sonnet) to enable.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

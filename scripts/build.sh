@@ -422,6 +422,32 @@ copy_resources_safely() {
     fi
 }
 
+copy_swiftpm_dependency_resource_bundles() {
+    local resources_dir="$1"
+    local build_dir="$2"
+
+    if [ ! -d "${build_dir}" ]; then
+        return 0
+    fi
+
+    while IFS= read -r bundle_path; do
+        local bundle_name
+        bundle_name="$(basename "${bundle_path}")"
+
+        case "${bundle_name}" in
+            Sorty_SortyLib.bundle)
+                # SortyLib resources are intentionally flattened into
+                # Contents/Resources by copy_resources_safely.
+                continue
+                ;;
+        esac
+
+        log_detail "Embedding SwiftPM resource bundle ${bundle_name}"
+        rm -rf "${resources_dir}/${bundle_name}"
+        rsync -a "${bundle_path}/" "${resources_dir}/${bundle_name}/"
+    done < <(find "${build_dir}" -path "*/${BUILD_CONFIG}/*.bundle" -type d | sort)
+}
+
 compile_asset_catalog() {
     local resources_dir="$1"
     local app_path="$2"
@@ -1034,6 +1060,7 @@ else
     IMAGES_SRC="${PROJECT_DIR}/Sources/SortyLib/Resources/Images"
     
     copy_resources_safely "${RESOURCES_DIR}" "${SPM_BUNDLE_PATH}" "${PROJECT_DIR}/Resources" "${IMAGES_SRC}" "${PROJECT_DIR}/Sources/SortyLib/Resources"
+    copy_swiftpm_dependency_resource_bundles "${RESOURCES_DIR}" "${BUILD_DIR}"
 
     # Compile Assets.xcassets into Assets.car
     compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"

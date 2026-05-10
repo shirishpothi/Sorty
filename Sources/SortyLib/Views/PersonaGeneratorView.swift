@@ -81,7 +81,7 @@ struct PersonaGeneratorView: View {
             VStack(spacing: 8) {
                 Image(systemName: "sparkles")
                     .font(.system(size: 48))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 
                 Text("Generate Persona")
                     .font(.title2)

@@ -122,6 +122,19 @@ final class WindowSessionTests: XCTestCase {
         XCTAssertNil(addedFolder.bookmarkData)
     }
 
+    func testWatchedAddDoesNotDuplicateStandardizedPath() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-watch-duplicate-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        handle(.watched(action: "add", path: directory.path))
+        handle(.watched(action: "add", path: directory.appendingPathComponent(".").path))
+
+        XCTAssertEqual(watchedFoldersManager.folders.count, 1)
+        XCTAssertEqual(watchedFoldersManager.folders.first?.path, directory.standardizedFileURL.path)
+    }
+
     func testSettingsSectionSelectionIsAppliedAfterYield() async {
         handle(.settings(section: "provider"))
 

@@ -319,12 +319,12 @@ struct PersonaButton: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.clear)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(
                             isSelected
-                                ? Color.accentColor
+                                ? SortyDesignSystem.Colors.resolvedAccent
                                 : Color.secondary.opacity(isHovering ? 0.5 : 0.2),
                             lineWidth: isSelected ? 2 : 1
                         )

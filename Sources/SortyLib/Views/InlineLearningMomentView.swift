@@ -96,7 +96,7 @@ struct InlineLearningMomentView: View {
                 if hoveredOption == option {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .transition(.opacity.combined(with: .scale))
                 }
             }
@@ -105,7 +105,7 @@ struct InlineLearningMomentView: View {
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(hoveredOption == option
-                          ? Color.accentColor.opacity(0.08)
+                          ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
                           : Color.secondary.opacity(0.05))
             )
         }

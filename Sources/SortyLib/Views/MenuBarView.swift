@@ -415,7 +415,7 @@ private struct MenuBarButton: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
+                    .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             )
             .contentShape(RoundedRectangle(cornerRadius: 6))
         }
@@ -518,7 +518,7 @@ private struct WatchedFolderMenuItem: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
+                    .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             )
             .contentShape(RoundedRectangle(cornerRadius: 6))
             .onHover { hovering in

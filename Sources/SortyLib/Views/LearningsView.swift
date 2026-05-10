@@ -170,6 +170,7 @@ struct LearningsView: View {
                     .font(.headline)
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
             .keyboardShortcut(.return)
               .onHover { hovering in
                   if hovering {
@@ -189,7 +190,7 @@ struct LearningsView: View {
                 .font(.title2.bold())
                 .foregroundColor(.accentColor)
                 .frame(width: 40, height: 40)
-                .background(Color.accentColor.opacity(0.1))
+                .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
                 .cornerRadius(10)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {

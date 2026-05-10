@@ -8,14 +8,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-import Beam
-
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var isTargeted = false
     @State private var isHovering = false
     @State private var isBrowseHovering = false
+    @State private var isBrowseBeamPressed = false
 
     @State private var iconBounce = false
     @State private var hasAppeared = false
@@ -43,7 +42,7 @@ struct DirectorySelectionView: View {
 
                 Button {
                     HapticFeedbackManager.shared.tap()
-                    selectDirectory()
+                    triggerBrowseBeamPress()
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "folder.badge.plus")
@@ -55,12 +54,12 @@ struct DirectorySelectionView: View {
                     .padding(.vertical, 10)
                 }
                 .buttonStyle(.onboardingPill)
-                .overlay {
-                    BrowseFolderBeamBorder(
-                        isActive: hasAppeared,
-                        isHovering: isBrowseHovering
-                    )
-                }
+                .onboardingBeamBorder(
+                    variant: .featured,
+                    active: hasAppeared,
+                    isIntensified: isBrowseHovering || isBrowseBeamPressed,
+                    includesInteriorGlow: isBrowseHovering || isBrowseBeamPressed
+                )
                 .contentShape(Capsule())
                 .scaleEffect(isBrowseHovering ? 1.03 : 1.0)
                 .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isBrowseHovering)
@@ -141,7 +140,7 @@ struct DirectorySelectionView: View {
     private var dropZone: some View {
         let dropZoneHeight: CGFloat = settingsViewModel.config.enableSmartRename ? 120 : 150
         let dropZoneCornerRadius: CGFloat = 16
-        let folderAccent = Color.accentColor
+        let folderAccent = SortyDesignSystem.Colors.resolvedAccent
         let dropZoneContent = VStack(spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14)
@@ -159,7 +158,7 @@ struct DirectorySelectionView: View {
 
             Text(isTargeted ? "Drop to select" : "Drop folder here")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
+                .foregroundStyle(isTargeted ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
         }
         .frame(width: 220, height: dropZoneHeight)
 
@@ -170,17 +169,17 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .fill(
                                 isTargeted
-                                    ? Color.accentColor.opacity(0.08)
+                                    ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
                                     : Color.secondary.opacity(0.05))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : .clear)
+                            .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
-                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
+                                isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
                                 style: StrokeStyle(
                                     lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
                             )
@@ -191,17 +190,17 @@ struct DirectorySelectionView: View {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .fill(
                                 isTargeted
-                                    ? Color.accentColor.opacity(0.08)
+                                    ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08)
                                     : Color.secondary.opacity(0.05))
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
-                            .fill(isTargeted ? Color.accentColor.opacity(0.08) : .clear)
+                            .fill(isTargeted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : .clear)
                     }
                     .overlay {
                         RoundedRectangle(cornerRadius: dropZoneCornerRadius, style: .continuous)
                             .strokeBorder(
-                                isTargeted ? Color.accentColor : Color.secondary.opacity(0.3),
+                                isTargeted ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3),
                                 style: StrokeStyle(
                                     lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [6, 6])
                             )
@@ -289,6 +288,20 @@ struct DirectorySelectionView: View {
         }
     }
 
+    private func triggerBrowseBeamPress() {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.78)) {
+            isBrowseBeamPressed = true
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 140_000_000)
+            selectDirectory()
+            withAnimation(.easeOut(duration: 0.24)) {
+                isBrowseBeamPressed = false
+            }
+        }
+    }
+
     private func openMenuBarTip() {
         HapticFeedbackManager.shared.tap()
         if !UserDefaults.standard.bool(forKey: "showMenuBarIcon") {
@@ -317,27 +330,6 @@ struct DirectorySelectionView: View {
     }
 }
 
-private struct BrowseFolderBeamBorder: View {
-    let isActive: Bool
-    let isHovering: Bool
-
-    var body: some View {
-        Capsule()
-            .strokeBorder(.clear, lineWidth: 1)
-            .beam(
-                .small,
-                palette: .sunset,
-                theme: .dark,
-                active: isActive,
-                shape: .capsule,
-                duration: 1.72,
-                strength: isHovering ? 1.0 : 0.82
-            )
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-}
-
 struct QuickTipItemCompact: View {
     let icon: String
     let title: String
@@ -350,7 +342,7 @@ struct QuickTipItemCompact: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundStyle(isHovering ? Color.accentColor : .secondary)
+                .foregroundStyle(isHovering ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
@@ -380,7 +372,7 @@ struct OrganizationModeCard: View {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? .white.opacity(0.2) : Color.accentColor.opacity(0.1))
+                        .fill(isSelected ? .white.opacity(0.2) : SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
                         .frame(width: 30, height: 30)
 
                     Image(systemName: mode.iconName)
@@ -406,7 +398,7 @@ struct OrganizationModeCard: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
                         isSelected
-                            ? Color.accentColor : Color.secondary.opacity(isHovering ? 0.12 : 0.06)
+                            ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(isHovering ? 0.12 : 0.06)
                     )
                     .overlay {
                         RoundedRectangle(cornerRadius: 16)

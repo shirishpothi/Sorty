@@ -238,6 +238,7 @@ struct OrganizationCompleteView: View {
                 .padding(.vertical, 20)
             }
         }
+        .background(WorkflowGradientBackground())
         .onAppear {
             HapticFeedbackManager.shared.success()
             

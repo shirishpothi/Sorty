@@ -16,37 +16,59 @@ private struct SortyGradientRingSegment: View {
     let end: Double
 
     var body: some View {
-        ZStack {
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            accent.opacity(0.65),
-                            accent,
-                            accent.opacity(0.86),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+        Circle()
+            .inset(by: lineWidth / 2)
+            .trim(from: start, to: end)
+            .stroke(
+                SortyBeamPalette.arcGradient,
+                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
+            )
+            .rotationEffect(.degrees(-90))
+            .shadow(color: accent.opacity(0.24), radius: lineWidth * 1.25)
+    }
+}
 
-            Rectangle()
-                .fill(
-                    LinearGradient(
-                        colors: [.white.opacity(0.35), .clear],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-        }
-        .mask(
-            Circle()
-                .inset(by: lineWidth / 2)
-                .trim(from: start, to: end)
-                .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
+private enum SortyBeamPalette {
+    static let primary = Color(red: 0.20, green: 0.78, blue: 0.38)
+    static let warm = primary
+    static let cool = primary
+
+    static var trackFill: some ShapeStyle {
+        Color.white.opacity(0.095)
+    }
+
+    static var trackStroke: some ShapeStyle {
+        LinearGradient(
+            colors: [.white.opacity(0.18), .white.opacity(0.045)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
-        .shadow(color: accent.opacity(0.35), radius: 8, x: 0, y: 2)
+    }
+
+    static var barGradient: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: primary.opacity(0.22), location: 0.0),
+                .init(color: primary.opacity(0.58), location: 0.50),
+                .init(color: primary.opacity(0.92), location: 0.82),
+                .init(color: primary.opacity(0.98), location: 1.0),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    static var arcGradient: AngularGradient {
+        AngularGradient(
+            stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: primary.opacity(0.24), location: 0.48),
+                .init(color: primary.opacity(0.70), location: 0.76),
+                .init(color: primary.opacity(0.94), location: 0.92),
+                .init(color: primary.opacity(0.98), location: 1.0),
+            ],
+            center: .center
+        )
     }
 }
 
@@ -54,8 +76,9 @@ private struct SortyGradientRingSegment: View {
 
 struct SortyGradientProgressBar: View {
     let progress: Double
-    var accent: Color = .accentColor
+    var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var height: CGFloat = 10
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
@@ -65,36 +88,51 @@ struct SortyGradientProgressBar: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(.white.opacity(0.14))
+                    .fill(SortyBeamPalette.trackFill)
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(.white.opacity(0.08), lineWidth: 1)
+                            .stroke(SortyBeamPalette.trackStroke, lineWidth: 1)
                     )
 
-                Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                accent.opacity(0.65),
-                                accent,
-                                accent.opacity(0.86),
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.35), .clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
+                if clampedProgress > 0 {
+                    let fillWidth = max(height, geo.size.width * clampedProgress)
+
+                    Capsule(style: .continuous)
+                        .fill(SortyBeamPalette.barGradient)
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                colors: [SortyBeamPalette.primary.opacity(0.18), .clear],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
                                 )
+                        )
+                        .frame(width: fillWidth)
+                        .shadow(color: SortyBeamPalette.warm.opacity(0.28), radius: 8, x: 0, y: 0)
+
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    SortyBeamPalette.primary.opacity(0.98),
+                                    SortyBeamPalette.primary.opacity(0.62),
+                                    SortyBeamPalette.primary.opacity(0.18),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: height * 1.15
                             )
-                    )
-                    .frame(width: geo.size.width * clampedProgress)
-                    .shadow(color: accent.opacity(0.35), radius: 8, x: 0, y: 2)
+                        )
+                        .frame(width: height * 1.9, height: height * 1.9)
+                        .shadow(color: SortyBeamPalette.primary.opacity(0.56), radius: height * 0.32)
+                        .shadow(color: SortyBeamPalette.cool.opacity(0.88), radius: height * 0.75)
+                        .shadow(color: SortyBeamPalette.warm.opacity(0.45), radius: height * 1.7)
+                        .offset(x: max(0, fillWidth - (height * 0.95)))
+                        .opacity(reduceMotion ? 0.85 : 1)
+                }
             }
         }
         .frame(height: height)
@@ -105,7 +143,7 @@ struct SortyGradientProgressBar: View {
 // MARK: - SortyGradientLoadingBar
 
 struct SortyGradientLoadingBar: View {
-    var accent: Color = .accentColor
+    var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var width: CGFloat = 150
     var height: CGFloat = 10
     var segmentWidthRatio: CGFloat = 0.34
@@ -123,37 +161,21 @@ struct SortyGradientLoadingBar: View {
 
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(.white.opacity(0.14))
+                    .fill(SortyBeamPalette.trackFill)
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(.white.opacity(0.08), lineWidth: 1)
+                            .stroke(SortyBeamPalette.trackStroke, lineWidth: 1)
                     )
 
                 Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                accent.opacity(0.55),
-                                accent,
-                                accent.opacity(0.72),
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(SortyBeamPalette.barGradient)
                     .overlay(
                         Capsule(style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [.white.opacity(0.3), .clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
+                            .fill(SortyBeamPalette.primary.opacity(0.16))
                     )
                     .frame(width: segmentWidth)
                     .offset(x: (travelPhase * travelDistance) - segmentWidth)
-                    .shadow(color: accent.opacity(0.28), radius: 6, x: 0, y: 2)
+                    .shadow(color: SortyBeamPalette.cool.opacity(0.42), radius: 7, x: 0, y: 0)
             }
             .clipShape(Capsule(style: .continuous))
         }
@@ -171,7 +193,7 @@ struct SortyGradientLoadingBar: View {
 
 struct SortyGradientCircularProgress: View {
     let progress: Double
-    var accent: Color = .accentColor
+    var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var size: CGFloat = 80
     var lineWidth: CGFloat = 8
     var showsShimmer: Bool = false
@@ -186,7 +208,7 @@ struct SortyGradientCircularProgress: View {
         ZStack {
             Circle()
                 .inset(by: lineWidth / 2)
-                .stroke(accent.opacity(0.18), lineWidth: lineWidth)
+                .stroke(SortyBeamPalette.trackFill, lineWidth: lineWidth)
 
             if animatedProgress > 0 {
                 SortyGradientRingSegment(
@@ -216,7 +238,7 @@ struct SortyGradientCircularProgress: View {
                         .inset(by: lineWidth / 2)
                         .trim(from: trimStart, to: trimEnd)
                         .stroke(
-                            .white.opacity(peakOpacity),
+                            SortyBeamPalette.primary.opacity(peakOpacity),
                             style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                         )
                         .rotationEffect(.degrees(-90))
@@ -266,11 +288,12 @@ struct SortyGradientCircularProgress: View {
 ///    The old formula `(p * 360) - 90` was off by 90° and placed the dot at the tail.
 struct SortyGradientCircularTrackProgress: View {
     let progress: Double
-    var accent: Color = .accentColor
+    var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var size: CGFloat = 120
     var lineWidth: CGFloat = 10
     var isIndeterminate: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animatedProgress: Double = 0
 
     private var clampedProgress: Double {
@@ -278,7 +301,7 @@ struct SortyGradientCircularTrackProgress: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             let elapsed = context.date.timeIntervalSinceReferenceDate
             let segmentSpan = 0.24
             let phase =
@@ -286,10 +309,13 @@ struct SortyGradientCircularTrackProgress: View {
             let segments = wrappedSegments(from: phase, to: phase + segmentSpan)
 
             ZStack {
-                // Frosted-glass track ring
                 Circle()
                     .inset(by: lineWidth / 2)
-                    .stroke(.white.opacity(0.09), lineWidth: lineWidth)
+                    .stroke(SortyBeamPalette.trackFill, lineWidth: lineWidth)
+
+                Circle()
+                    .inset(by: lineWidth / 2)
+                    .stroke(SortyBeamPalette.trackStroke, lineWidth: 1)
 
                 if isIndeterminate {
                     ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
@@ -301,8 +327,6 @@ struct SortyGradientCircularTrackProgress: View {
             }
         }
         .frame(width: size, height: size)
-        // No drawingGroup — it rasterises at exactly size×size, clipping any blur or
-        // shadow that spills past the ring's outer edge and producing right-angle artefacts.
         .onAppear { animatedProgress = clampedProgress }
         .onChange(of: clampedProgress) { _, newValue in
             withAnimation(.easeInOut(duration: 0.28)) {
@@ -318,27 +342,26 @@ struct SortyGradientCircularTrackProgress: View {
         let safeP = max(p, 0.005)
         // As progress nears 1.0, the transparent tail fills in so the ring visually closes completely.
         let tailFill = max(0.0, (safeP - 0.9) / 0.1)
-        let baseOpacity = 0.24 + (tailFill * 0.12)
-        let highlightSpan = min(max(0.16, safeP * 0.42), safeP)
+        let baseOpacity = 0.20 + (tailFill * 0.14)
+        let highlightSpan = min(max(0.18, safeP * 0.48), safeP)
         let highlightStart = max(0, safeP - highlightSpan)
         let highlightStops: [Gradient.Stop] = [
             .init(color: .clear, location: highlightStart),
-            .init(color: accent.opacity(0.46), location: highlightStart + (highlightSpan * 0.46)),
-            .init(color: .cyan.opacity(0.90), location: highlightStart + (highlightSpan * 0.84)),
-            .init(color: accent, location: safeP),
+            .init(color: SortyBeamPalette.primary.opacity(0.28), location: highlightStart + (highlightSpan * 0.34)),
+            .init(color: SortyBeamPalette.primary.opacity(0.72), location: highlightStart + (highlightSpan * 0.70)),
+            .init(color: SortyBeamPalette.primary.opacity(0.94), location: highlightStart + (highlightSpan * 0.90)),
+            .init(color: SortyBeamPalette.primary.opacity(0.98), location: safeP),
         ]
 
-        // A stable base arc keeps the visible tail pinned to 12 o'clock at every progress value.
         Circle()
             .inset(by: lineWidth / 2)
             .trim(from: 0, to: safeP)
             .stroke(
-                accent.opacity(baseOpacity),
+                SortyBeamPalette.primary.opacity(baseOpacity),
                 style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt)
             )
             .rotationEffect(.degrees(-90))
 
-        // A short moving highlight adds the brighter head treatment without remapping the tail.
         Circle()
             .inset(by: lineWidth / 2)
             .trim(from: highlightStart, to: safeP)
@@ -348,7 +371,6 @@ struct SortyGradientCircularTrackProgress: View {
             )
             .rotationEffect(.degrees(-90))
 
-        // Glowing dot at the leading tip
         progressHead(progress: safeP)
     }
 
@@ -358,7 +380,12 @@ struct SortyGradientCircularTrackProgress: View {
         Circle()
             .fill(
                 RadialGradient(
-                    colors: [.white, .cyan, accent.opacity(0.20), .clear],
+                    colors: [
+                        SortyBeamPalette.primary.opacity(0.98),
+                        SortyBeamPalette.primary.opacity(0.62),
+                        SortyBeamPalette.primary.opacity(0.18),
+                        .clear
+                    ],
                     center: .center,
                     startRadius: 0,
                     endRadius: d * 0.60
@@ -367,10 +394,10 @@ struct SortyGradientCircularTrackProgress: View {
             .frame(width: d, height: d)
             // Layered shadows build a soft circular glow with no arc artefacts.
             // Shadows render outside the view frame, so they're never hard-clipped.
-            .shadow(color: .white.opacity(0.85), radius: lineWidth * 0.25)
-            .shadow(color: .cyan.opacity(0.90), radius: lineWidth * 0.70)
-            .shadow(color: accent.opacity(0.65), radius: lineWidth * 1.60)
-            .shadow(color: accent.opacity(0.28), radius: lineWidth * 3.50)
+            .shadow(color: SortyBeamPalette.primary.opacity(0.56), radius: lineWidth * 0.25)
+            .shadow(color: SortyBeamPalette.cool.opacity(0.90), radius: lineWidth * 0.70)
+            .shadow(color: SortyBeamPalette.warm.opacity(0.65), radius: lineWidth * 1.60)
+            .shadow(color: SortyBeamPalette.warm.opacity(0.28), radius: lineWidth * 3.50)
             .offset(y: -(size / 2) + (lineWidth / 2))
             .rotationEffect(.degrees(p * 360))
     }
@@ -383,12 +410,11 @@ struct SortyGradientCircularTrackProgress: View {
             let arcLen = end - start
             let stops: [Gradient.Stop] = [
                 .init(color: .clear, location: start),
-                .init(color: accent.opacity(0.42), location: start + arcLen * 0.50),
-                .init(color: .cyan.opacity(0.90), location: start + arcLen * 0.84),
-                .init(color: accent, location: end),
+                .init(color: SortyBeamPalette.primary.opacity(0.34), location: start + arcLen * 0.50),
+                .init(color: SortyBeamPalette.primary.opacity(0.78), location: start + arcLen * 0.84),
+                .init(color: SortyBeamPalette.primary.opacity(0.98), location: end),
             ]
 
-            // Comet body
             Circle()
                 .inset(by: lineWidth / 2)
                 .trim(from: start, to: end)
@@ -398,22 +424,26 @@ struct SortyGradientCircularTrackProgress: View {
                 )
                 .rotationEffect(.degrees(-90))
 
-            // Leading-tip dot — same shadow-glow approach, no blurred arc bloom
             let d = lineWidth * 1.2
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.white, .cyan, accent.opacity(0.20), .clear],
+                        colors: [
+                            SortyBeamPalette.primary.opacity(0.98),
+                            SortyBeamPalette.primary.opacity(0.62),
+                            SortyBeamPalette.primary.opacity(0.18),
+                            .clear
+                        ],
                         center: .center,
                         startRadius: 0,
                         endRadius: d * 0.60
                     )
                 )
                 .frame(width: d, height: d)
-                .shadow(color: .white.opacity(0.85), radius: lineWidth * 0.25)
-                .shadow(color: .cyan.opacity(0.90), radius: lineWidth * 0.70)
-                .shadow(color: accent.opacity(0.65), radius: lineWidth * 1.60)
-                .shadow(color: accent.opacity(0.28), radius: lineWidth * 3.50)
+                .shadow(color: SortyBeamPalette.primary.opacity(0.56), radius: lineWidth * 0.25)
+                .shadow(color: SortyBeamPalette.cool.opacity(0.90), radius: lineWidth * 0.70)
+                .shadow(color: SortyBeamPalette.warm.opacity(0.65), radius: lineWidth * 1.60)
+                .shadow(color: SortyBeamPalette.warm.opacity(0.28), radius: lineWidth * 3.50)
                 .offset(y: -(size / 2) + (lineWidth / 2))
                 .rotationEffect(.degrees(end * 360))
         }
@@ -434,33 +464,33 @@ struct SortyGradientCircularTrackProgress: View {
 /// Compact spinning loader. Uses the same tail-to-tip gradient strategy as
 /// `SortyGradientCircularTrackProgress` so both components share a consistent look.
 struct SortyGradientCircularLoader: View {
-    var accent: Color = .accentColor
+    var accent: Color = SortyDesignSystem.Colors.resolvedAccent
     var size: CGFloat = 18
     var lineWidth: CGFloat = 3
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
-            let rotation = (time * 280).truncatingRemainder(dividingBy: 360)
+            let rotation = reduceMotion ? 0 : (time * 280).truncatingRemainder(dividingBy: 360)
             let pulse = (sin(time * 2.2) + 1) * 0.5
             let sweep = 0.24 + (0.34 * pulse)
-            // `trailEnd`  = trailing (dim) edge of the arc
-            // `leadEnd`   = leading  (bright) edge of the arc
             let trailEnd = 0.06 + ((1 - pulse) * 0.08)
             let leadEnd = min(trailEnd + sweep, 0.97)
             let arcLen = leadEnd - trailEnd
 
             let stops: [Gradient.Stop] = [
                 .init(color: .clear, location: trailEnd),
-                .init(color: accent.opacity(0.45), location: trailEnd + arcLen * 0.50),
-                .init(color: .cyan.opacity(0.82), location: trailEnd + arcLen * 0.84),
-                .init(color: accent, location: leadEnd),
+                .init(color: SortyBeamPalette.primary.opacity(0.34), location: trailEnd + arcLen * 0.50),
+                .init(color: SortyBeamPalette.primary.opacity(0.78), location: trailEnd + arcLen * 0.84),
+                .init(color: SortyBeamPalette.primary.opacity(0.98), location: leadEnd),
             ]
 
             ZStack {
                 Circle()
                     .inset(by: lineWidth / 2)
-                    .stroke(accent.opacity(0.15), lineWidth: lineWidth)
+                    .stroke(SortyBeamPalette.trackFill, lineWidth: lineWidth)
 
                 Circle()
                     .inset(by: lineWidth / 2)
@@ -470,7 +500,7 @@ struct SortyGradientCircularLoader: View {
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(rotation - 90))
-                    .shadow(color: accent.opacity(0.30), radius: lineWidth, x: 0, y: 0)
+                    .shadow(color: SortyBeamPalette.cool.opacity(0.48), radius: lineWidth * 1.2, x: 0, y: 0)
             }
         }
         .frame(width: size, height: size)

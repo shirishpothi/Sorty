@@ -62,6 +62,8 @@
 	<string>Sorty uses biometrics to protect your Learnings data.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAccentColorName</key>
+	<string>AccentColor</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>SUEnableAutomaticChecks</key>

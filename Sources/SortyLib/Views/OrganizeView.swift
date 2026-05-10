@@ -73,7 +73,10 @@ struct OrganizeView: View {
                 .transition(TransitionStyles.slideFromBottom)
             }
 
-            // Main content area with animated transitions
+            // Main content area with animated transitions. We use a critically
+            // damped spring so the cross-fade feels lively without overshooting
+            // — overshoot was previously translating subviews enough to expose
+            // the window background as a white gap along the bottom edge.
             ZStack {
                 if appState.selectedDirectory == nil {
                     DirectorySelectionView(selectedDirectory: $appState.selectedDirectory)
@@ -82,12 +85,12 @@ struct OrganizeView: View {
                     stateContent
                         .id(stateIdentifier)
                         .transition(.asymmetric(
-                            insertion: .scale(scale: 0.95).combined(with: .opacity),
-                            removal: .scale(scale: 1.02).combined(with: .opacity)
+                            insertion: .opacity.combined(with: .scale(scale: 0.985)),
+                            removal: .opacity
                         ))
                 }
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: stateIdentifier)
+            .animation(.easeOut(duration: 0.32), value: stateIdentifier)
         }
         .navigationTitle("Organize Files")
         .toolbar {
@@ -496,22 +499,25 @@ struct ReadyToOrganizeView: View {
                 }
             }
             .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.95)
-            .animation(.easeOut(duration: 0.2).delay(0.05), value: hasAppeared)
+            .scaleEffect(hasAppeared ? 1 : 0.96)
+            .offset(y: hasAppeared ? 0 : 8)
+            .animation(.smooth(duration: 0.45).delay(0.04), value: hasAppeared)
             
             // Instructions card
             WorkflowCard(title: "Instructions", icon: "text.bubble") {
                 instructionsContent
             }
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.easeOut(duration: 0.2).delay(0.08), value: hasAppeared)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.smooth(duration: 0.45).delay(0.10), value: hasAppeared)
             
             // Storage locations card
             WorkflowCard(title: "Storage Locations", icon: "externaldrive") {
                 storageLocationsContent
             }
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.easeOut(duration: 0.2).delay(0.11), value: hasAppeared)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.smooth(duration: 0.45).delay(0.16), value: hasAppeared)
             
             // Start button - full width
             Button {
@@ -536,7 +542,8 @@ struct ReadyToOrganizeView: View {
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.easeOut(duration: 0.2).delay(0.14), value: hasAppeared)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.smooth(duration: 0.45).delay(0.22), value: hasAppeared)
             .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start organizing files using your current settings")
             .accessibilityIdentifier("StartOrganizationButton")
             .accessibilityLabel(isConnecting ? "Connecting to provider" : "Start organization")
@@ -554,12 +561,12 @@ struct ReadyToOrganizeView: View {
             }
             .foregroundStyle(.quaternary)
             .opacity(hasAppeared ? 1 : 0)
-            .animation(.easeOut(duration: 0.2).delay(0.16), value: hasAppeared)
-            
+            .animation(.smooth(duration: 0.45).delay(0.28), value: hasAppeared)
+
             // Connection status indicator
             connectionStatusView
                 .opacity(hasAppeared ? 1 : 0)
-                .animation(.easeOut(duration: 0.2).delay(0.18), value: hasAppeared)
+                .animation(.smooth(duration: 0.45).delay(0.32), value: hasAppeared)
 
         }
         .fileImporter(
@@ -602,12 +609,17 @@ struct ReadyToOrganizeView: View {
             Text(addStorageLocationErrorMessage ?? "Please try selecting the folder again.")
         }
         .onAppear {
-            withAnimation {
-                hasAppeared = true
-            }
+            // Drive the staggered cascade only once. Each child element owns
+            // its own `.animation(.smooth(...), value: hasAppeared)` modifier
+            // with an explicit delay, so wrapping this flip in an additional
+            // `withAnimation { ... }` was layering a default animation on top
+            // of those curves and producing the flicker the user reported on
+            // the main organize page.
+            guard !hasAppeared else { return }
+            hasAppeared = true
         }
     }
-    
+
     private var storageLocationsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Collapsible toggle header

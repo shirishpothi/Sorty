@@ -534,6 +534,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     public var scannedFileCount: Int = 0
     @Published public var scannedFiles: [FileItem] = []
     private var scannedFilePathLookup: [String: [String]] = [:]
+    private let scannedFilesUIPublishLimit = 200
 
     // CRITICAL: Cancellation token - must be checked frequently
     private var currentTask: Task<Void, Error>?
@@ -1202,7 +1203,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
     
     private func setScannedFiles(_ files: [FileItem]) {
-        scannedFiles = files
+        scannedFiles = Array(files.prefix(scannedFilesUIPublishLimit))
         scannedFilePathLookup = Dictionary(grouping: files, by: { $0.displayName.lowercased() })
             .mapValues { $0.map { $0.path } }
     }
@@ -1460,6 +1461,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     }
 
     private func duplicateDetectionPhase(files: [FileItem]) async throws -> ([FileItem], String) {
+        guard aiConfig?.detectDuplicates ?? false else {
+            detectedDuplicates = []
+            return (files, "")
+        }
+
         updateProgress(0.21, stage: "Checking for duplicates...")
 
         let detector = DuplicateDetector()
@@ -1473,11 +1479,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             self.detectedDuplicates = duplicates
         }
 
-        if aiConfig?.detectDuplicates ?? true {
-            return (updatedFiles, PromptContextHelper.duplicateContext(from: duplicates))
-        }
-
-        return (updatedFiles, "")
+        return (updatedFiles, PromptContextHelper.duplicateContext(from: duplicates))
     }
 
     private func aiAnalysisPhase(

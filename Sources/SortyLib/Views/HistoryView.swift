@@ -106,135 +106,53 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header - matches DuplicatesView style
-            HistoryHeader(
-                manager: organizer,
-                selectedFilter: $selectedFilter,
-                searchText: $searchText,
-                onClearHistory: {
-                    appState.clearHistoryWithConfirmation()
-                }
-            )
-
-            Divider()
-
-            ZStack {
-                if organizer.history.entries.isEmpty {
+            if organizer.history.entries.isEmpty {
+                ZStack(alignment: .topLeading) {
                     HistoryEmptyStateView()
                         .transition(TransitionStyles.scaleAndFade)
-                } else if !searchText.isEmpty && allFilteredEntries.isEmpty {
-                    HistorySearchEmptyStateView(searchText: searchText, onClear: { searchText = "" })
-                        .transition(TransitionStyles.scaleAndFade)
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 16) {
-                            // Summary Card - 6 stats in 2x3 grid
-                            HistorySummaryCard(history: organizer.history)
-                                .padding(.top, 16)
-                                .accessibilityElement(children: .contain)
-                                .accessibilityLabel("History Summary")
 
-                            if !manualEntries.isEmpty {
-                                HStack {
-                                    Label("Manual Sessions", systemImage: "person.fill")
-                                        .font(.headline)
-                                    Spacer()
-                                    Text("\(totalManualFilteredCount)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                ForEach(Array(manualEntries.enumerated()), id: \.element.id) { index, entry in
-                                    HistorySessionCard(
-                                        entry: entry,
-                                        isSelected: selectedEntry == entry,
-                                        isModelPickerAnchorActive: showRedoModelPicker && redoModelEntry?.id == entry.id,
-                                        onSelect: {
-                                            HapticFeedbackManager.shared.selection()
-                                            selectEntry(entry)
-                                        },
-                                        onUndo: { handleUndo(entry) },
-                                        onRedo: { handleRedo(entry) },
-                                        onOpenModelPicker: {
-                                            redoModelEntry = entry
-                                            showRedoModelPicker = true
-                                        },
-                                        canProvideFeedback: canProvideSessionFeedback,
-                                        onFeedback: { outcome in
-                                            handleFeedback(entry, outcome: outcome)
-                                        }
-                                    )
-                                    .animatedAppearance(delay: Double(index) * 0.03)
-                                    .onAppear {
-                                        if index >= manualEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
-                                            loadMoreEntries()
-                                        }
-                                    }
-                                }
-                            }
-
-                            if !watchedEntries.isEmpty {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Button {
-                                        HapticFeedbackManager.shared.selection()
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            showWatchedAutomations.toggle()
-                                        }
-                                    } label: {
-                                        HStack {
-                                            Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
-                                                .font(.headline)
-                                            Spacer()
-                                            Text("\(totalWatchedFilteredCount)")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                            Image(systemName: showWatchedAutomations ? "chevron.up" : "chevron.down")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    if showWatchedAutomations {
-                                        ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
-                                            WatchedAutomationRow(entry: entry) {
-                                                HapticFeedbackManager.shared.selection()
-                                                selectEntry(entry)
-                                            }
-                                            .animatedAppearance(delay: Double(index) * 0.02)
-                                            .onAppear {
-                                                if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
-                                                    loadMoreEntries()
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                .padding(14)
-                                .background(.ultraThinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                            }
-
-                            // Load More Button
-                            if hasMoreEntries {
-                                LoadMoreButton(isLoading: isLoadingMore) {
-                                    loadMoreEntries()
-                                }
-                                .padding(.vertical, 16)
-                            }
+                    HistoryHeader(
+                        manager: organizer,
+                        selectedFilter: $selectedFilter,
+                        searchText: $searchText,
+                        showsControls: false,
+                        onClearHistory: {
+                            appState.clearHistoryWithConfirmation()
                         }
-                        .padding(.horizontal, 28)
-                        .padding(.bottom, 24)
-                    }
-                    .background(Color(NSColor.windowBackgroundColor))
-                    .transition(TransitionStyles.slideFromRight)
+                    )
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
+                .opacity(contentOpacity)
+            } else {
+                // Header - matches DuplicatesView style
+                HistoryHeader(
+                    manager: organizer,
+                    selectedFilter: $selectedFilter,
+                    searchText: $searchText,
+                    showsControls: true,
+                    onClearHistory: {
+                        appState.clearHistoryWithConfirmation()
+                    }
+                )
+
+                Divider()
+
+                ZStack {
+                    if !searchText.isEmpty && allFilteredEntries.isEmpty {
+                        HistorySearchEmptyStateView(searchText: searchText, onClear: { searchText = "" })
+                            .transition(TransitionStyles.scaleAndFade)
+                    } else {
+                        historyEntriesScroll
+                        .background(Color(NSColor.windowBackgroundColor))
+                        .transition(TransitionStyles.slideFromRight)
+                    }
+                }
+                .animation(.pageTransition, value: selectedFilter)
+                .opacity(contentOpacity)
             }
-            .animation(.pageTransition, value: organizer.history.entries.isEmpty)
-            .animation(.pageTransition, value: selectedFilter)
-            .opacity(contentOpacity)
         }
+        .animation(.pageTransition, value: organizer.history.entries.isEmpty)
         .navigationTitle("History")
         .disabled(isProcessing)
         .overlay {
@@ -311,6 +229,117 @@ struct HistoryView: View {
             guard oldValue, !newValue, activeNotificationRedoRequestID != nil else { return }
             NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "cancelled", detail: "history picker")
             activeNotificationRedoRequestID = nil
+        }
+    }
+
+    private var historyEntriesScroll: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                HistorySummaryCard(history: organizer.history)
+                    .padding(.top, 16)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("History Summary")
+
+                manualSessionsSection
+                watchedAutomationsSection
+
+                if hasMoreEntries {
+                    LoadMoreButton(isLoading: isLoadingMore) {
+                        loadMoreEntries()
+                    }
+                    .padding(.vertical, 16)
+                }
+            }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 24)
+        }
+    }
+
+    @ViewBuilder
+    private var manualSessionsSection: some View {
+        if !manualEntries.isEmpty {
+            HStack {
+                Label("Manual Sessions", systemImage: "person.fill")
+                    .font(.headline)
+                Spacer()
+                Text("\(totalManualFilteredCount)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(Array(manualEntries.enumerated()), id: \.element.id) { index, entry in
+                HistorySessionCard(
+                    entry: entry,
+                    isSelected: selectedEntry == entry,
+                    isModelPickerAnchorActive: showRedoModelPicker && redoModelEntry?.id == entry.id,
+                    onSelect: {
+                        HapticFeedbackManager.shared.selection()
+                        selectEntry(entry)
+                    },
+                    onUndo: { handleUndo(entry) },
+                    onRedo: { handleRedo(entry) },
+                    onOpenModelPicker: {
+                        redoModelEntry = entry
+                        showRedoModelPicker = true
+                    },
+                    canProvideFeedback: canProvideSessionFeedback,
+                    onFeedback: { outcome in
+                        handleFeedback(entry, outcome: outcome)
+                    }
+                )
+                .animatedAppearance(delay: Double(index) * 0.03)
+                .onAppear {
+                    if index >= manualEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                        loadMoreEntries()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var watchedAutomationsSection: some View {
+        if !watchedEntries.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Button {
+                    HapticFeedbackManager.shared.selection()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showWatchedAutomations.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Label("Watched Folder Automations", systemImage: "bolt.horizontal.circle")
+                            .font(.headline)
+                        Spacer()
+                        Text("\(totalWatchedFilteredCount)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: showWatchedAutomations ? "chevron.up" : "chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showWatchedAutomations {
+                    ForEach(Array(watchedEntries.enumerated()), id: \.element.id) { index, entry in
+                        WatchedAutomationRow(entry: entry) {
+                            HapticFeedbackManager.shared.selection()
+                            selectEntry(entry)
+                        }
+                        .animatedAppearance(delay: Double(index) * 0.02)
+                        .onAppear {
+                            if index >= watchedEntries.count - loadMoreThreshold && hasMoreEntries && !isLoadingMore {
+                                loadMoreEntries()
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         }
     }
 
@@ -481,29 +510,40 @@ struct HistoryHeader: View {
     @ObservedObject var manager: FolderOrganizer
     @Binding var selectedFilter: HistoryView.HistoryFilter
     @Binding var searchText: String
+    var showsControls: Bool = true
     let onClearHistory: () -> Void
     private let controlsHeight: CGFloat = 31
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            titleRow
+            if showsControls {
+                titleRow
+            } else {
+                emptyStateTitleRow
+            }
 
-            HStack(spacing: 12) {
-                searchField
-                    .frame(maxWidth: 220)
-                    .frame(height: controlsHeight)
+            if showsControls {
+                HStack(spacing: 12) {
+                    searchField
+                        .frame(maxWidth: 220)
+                        .frame(height: controlsHeight)
 
-                filterPicker
-                    .frame(height: controlsHeight)
+                    filterPicker
+                        .frame(height: controlsHeight)
 
-                Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                clearHistoryButton
+                    clearHistoryButton
+                }
             }
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(.horizontal, showsControls ? 28 : 32)
+        .padding(.vertical, showsControls ? 10 : 0)
+        .background {
+            if showsControls {
+                Rectangle().fill(.bar)
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("History controls")
     }
@@ -527,6 +567,20 @@ struct HistoryHeader: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .accessibilityLabel("\(manager.history.totalSessions) sessions recorded")
+
+            Spacer()
+        }
+    }
+
+    private var emptyStateTitleRow: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Organization History")
+                    .font(.largeTitle.bold())
+
+                Text("Review organization sessions, undo changes, and revisit past results")
+                    .foregroundStyle(.secondary)
+            }
 
             Spacer()
         }
@@ -857,12 +911,12 @@ struct HistorySessionCard: View {
                         .accessibilityHidden(true)
 
                     // Main Info
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(URL(fileURLWithPath: entry.directoryPath).lastPathComponent)
                             .font(.headline)
                             .lineLimit(1)
 
-                        HStack(spacing: 16) {
+                        HStack(spacing: 12) {
                             if entry.status == .completed {
                                 Label("\(entry.filesOrganized) files", systemImage: "doc")
                                 Label("\(entry.foldersCreated) folders", systemImage: "folder")
@@ -886,7 +940,7 @@ struct HistorySessionCard: View {
                     Spacer()
 
                     // Model Badge + Timestamp Column
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: 2) {
                         // Model & Cost Badge (compact)
                         if let badge = modelBadgeText {
                             Text(badge)
@@ -897,6 +951,13 @@ struct HistorySessionCard: View {
                                 .background(Color.secondary.opacity(0.1))
                                 .clipShape(Capsule())
                                 .accessibilityLabel("Model: \(badge)")
+                        } else {
+                            Text(" ")
+                                .font(.caption2.weight(.medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .opacity(0)
+                                .accessibilityHidden(true)
                         }
 
                         // Timestamp
@@ -913,7 +974,8 @@ struct HistorySessionCard: View {
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
                 }
-                .padding(16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1047,7 +1109,7 @@ struct HistorySessionCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                .stroke(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5) : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
         )
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
         .scaleEffect(isHovered ? 1.01 : 1.0)
@@ -1196,7 +1258,7 @@ private struct OperationsBreakdownBar: View {
                     }
                     if renames > 0 {
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.accentColor.gradient)
+                            .fill(SortyDesignSystem.Colors.resolvedAccent.gradient)
                             .frame(width: max(geometry.size.width * renameFraction - 1, 4))
                     }
                     if folderCreates > 0 {
@@ -1228,7 +1290,7 @@ private struct OperationsBreakdownBar: View {
                 if renames > 0 {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(Color.accentColor)
+                            .fill(SortyDesignSystem.Colors.resolvedAccent)
                             .frame(width: 6, height: 6)
                         Text("\(renames) renamed")
                             .font(.caption2)
@@ -1400,27 +1462,20 @@ struct HistoryEmptyStateView: View {
     @State private var isHovered = false
     @State private var hasAppeared = false
 
-    private let previewFeatures: [(icon: String, title: String, description: String, color: Color)] = [
-        ("arrow.uturn.backward.circle.fill", "Undo & Redo", "Reverse any organization with one click", .orange),
-        ("chart.bar.fill", "Impact Stats", "Track files organized and time saved", .blue),
-        ("wand.and.stars", "Try Different Models", "Re-run with different AI for better results", .accentColor),
-        ("clock.arrow.circlepath", "Full Timeline", "See every change made to your folders", .green)
-    ]
-
     var body: some View {
-        VStack(spacing: 32) {
+        VStack(spacing: 24) {
             Spacer()
 
             // Hero section
             VStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(Color.accentColor.opacity(0.1))
+                        .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
                         .frame(width: 100, height: 100)
 
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 44))
-                        .foregroundStyle(Color.accentColor.gradient)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent.gradient)
                 }
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
@@ -1428,10 +1483,10 @@ struct HistoryEmptyStateView: View {
                 .accessibilityHidden(true)
 
                 VStack(spacing: 8) {
-                    Text("Your Organization History")
+                    Text("No History Yet")
                         .font(.title2.bold())
 
-                    Text("Every organization session is recorded here so you can track, undo, or improve past results.")
+                    Text("Organize a folder to start tracking sessions, results, and actions you can revisit later.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -1442,22 +1497,6 @@ struct HistoryEmptyStateView: View {
                 .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
             }
 
-            // Feature preview cards
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(Array(previewFeatures.enumerated()), id: \.offset) { index, feature in
-                    HistoryFeaturePreviewCard(
-                        icon: feature.icon,
-                        title: feature.title,
-                        description: feature.description,
-                        color: feature.color
-                    )
-                    .opacity(hasAppeared ? 1 : 0)
-                    .offset(y: hasAppeared ? 0 : 20)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3 + Double(index) * 0.08), value: hasAppeared)
-                }
-            }
-            .frame(maxWidth: 500)
-
             // CTA button
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -1465,14 +1504,17 @@ struct HistoryEmptyStateView: View {
                     appState.currentView = .organize
                 }
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "folder.badge.gearshape")
-                    Text("Start Organizing")
-                    Image(systemName: "arrow.right")
-                        .font(.subheadline)
-                }
+                Text("Start Organizing")
             }
-            .buttonStyle(.glossyCallToAction(.accentColor, size: .large, isHovering: isHovered))
+            .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(
+                variant: .featured,
+                active: hasAppeared,
+                isIntensified: isHovered,
+                includesInteriorGlow: isHovered
+            )
+            .controlSize(.large)
+            .contentShape(Capsule())
             .scaleEffect(isHovered ? 1.03 : 1.0)
             .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isHovered)
             .onHover { hovering in
@@ -1483,7 +1525,7 @@ struct HistoryEmptyStateView: View {
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.5), value: hasAppeared)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
             .accessibilityLabel("Start organizing a folder")
             .accessibilityHint("Navigate to the organize view to begin")
             .accessibilityIdentifier("HistoryEmptyStateCTA")
@@ -1953,7 +1995,7 @@ struct HistoryDetailSheet: View {
                                             .padding(8)
                                             .background(
                                                 RoundedRectangle(cornerRadius: 6)
-                                                    .fill(highlightedFileID == fileItem.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                                                    .fill(highlightedFileID == fileItem.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
                                             )
                                             .accessibilityElement(children: .combine)
                                             .accessibilityLabel("Unorganized file: \(fileItem.displayName)")
@@ -2842,7 +2884,7 @@ struct FolderHistoryDetailRow: View {
                             .padding(.horizontal, 8)
                             .background(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .fill(highlightedFileID == fileItem.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                                    .fill(highlightedFileID == fileItem.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
                             )
                             .opacity(isExpanded ? 1 : 0)
                             .offset(y: isExpanded ? 0 : -5)
@@ -2958,11 +3000,11 @@ struct LoadMoreButton: View {
             .padding(.vertical, 12)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.accentColor.opacity(0.1))
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
+                    .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.2), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -3157,7 +3199,7 @@ struct HistoryLiquidGlassReasoningCard: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "brain")
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 Text("AI Reasoning")
                     .font(.headline)
             }
@@ -3189,12 +3231,12 @@ struct HistoryLiquidGlassReasoningCard: View {
                 HStack(spacing: 8) {
                     ZStack {
                         Circle()
-                            .fill(Color.accentColor.opacity(0.12))
+                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
                             .frame(width: 28, height: 28)
 
                         Image(systemName: "brain")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                     }
 
                     Text("AI Reasoning")
@@ -3363,7 +3405,7 @@ struct HistoryLiquidGlassDuplicateCard: View {
                     .padding(.vertical, 8)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.accentColor.opacity(0.12))
+                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
                     )
             }
             .buttonStyle(.plain)
@@ -3434,7 +3476,7 @@ struct HistoryDuplicateGroupRow: View {
                 .padding(4)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(highlightedFileID == group.file.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                        .fill(highlightedFileID == group.file.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 6))
             }
@@ -3468,7 +3510,7 @@ struct HistoryDuplicateGroupRow: View {
                     .padding(.horizontal, 4)
                     .background(
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(highlightedFileID == dup.id ? Color.accentColor.opacity(0.12) : Color.clear)
+                            .fill(highlightedFileID == dup.id ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : Color.clear)
                     )
                     .contentShape(RoundedRectangle(cornerRadius: 4))
                 }

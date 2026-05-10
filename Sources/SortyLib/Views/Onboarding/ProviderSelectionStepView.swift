@@ -26,6 +26,7 @@ public struct ProviderSelectionStepView: View {
     @State private var codexVerifyButtonState: CodexActionVisualState = .idle
     @State private var isHoveringCodexTerminalButton = false
     @State private var isHoveringCodexVerifyButton = false
+    @State private var isHoveringTestConnectionButton = false
     @State private var codexTerminalResetTask: Task<Void, Never>?
     @State private var codexVerifyResetTask: Task<Void, Never>?
     
@@ -105,7 +106,7 @@ public struct ProviderSelectionStepView: View {
                             // Header
                             HStack(spacing: 10) {
                                 Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
-                                    .foregroundStyle(providerSetupStatus.isReady ? .green : Color.accentColor)
+                                    .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
                                     .font(.system(size: 16, weight: .semibold))
 
                                 VStack(alignment: .leading, spacing: 2) {
@@ -129,7 +130,7 @@ public struct ProviderSelectionStepView: View {
                                 }
                             }
                             .padding(12)
-                            .background(providerSetupStatus.isReady ? Color.green.opacity(0.06) : Color.accentColor.opacity(0.08))
+                            .background(providerSetupStatus.isReady ? Color.green.opacity(0.06) : SortyDesignSystem.Colors.resolvedAccent.opacity(0.08))
                             
                             Divider()
                             
@@ -680,7 +681,7 @@ public struct ProviderSelectionStepView: View {
     @ViewBuilder
     private var connectionStatusView: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
+            Group {
                 switch connectionStatus {
                 case .idle:
                     Button {
@@ -690,13 +691,21 @@ public struct ProviderSelectionStepView: View {
                             Image(systemName: "bolt.horizontal.circle.fill")
                             Text("Test Connection")
                         }
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .buttonStyle(.onboardingPill)
+                    .onboardingBeamBorder(
+                        variant: .featured,
+                        active: isHoveringTestConnectionButton && canTestConnection,
+                        isIntensified: isHoveringTestConnectionButton,
+                        includesInteriorGlow: isHoveringTestConnectionButton
+                    )
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.16)) {
+                            isHoveringTestConnectionButton = hovering
+                        }
+                    }
                     .disabled(!canTestConnection)
+                    .opacity(canTestConnection ? 1.0 : 0.5)
                     
                 case .testing:
                     HStack(spacing: 8) {
@@ -716,15 +725,13 @@ public struct ProviderSelectionStepView: View {
                     }
                     
                 case .failed:
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .center, spacing: 8) {
                         HStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.orange)
                             Text("Connection failed")
                                 .font(.subheadline)
                                 .foregroundStyle(.orange)
-                            
-                            Spacer()
                             
                             Button("Retry") {
                                 testConnection()
@@ -735,26 +742,22 @@ public struct ProviderSelectionStepView: View {
                         
                         if let error = connectionError {
                             Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.center)
                         }
                         
                         Text("You can continue anyway and fix this later in Settings.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .italic()
+                            .multilineTextAlignment(.center)
                     }
                 }
-                
-                Spacer()
             }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(connectionStatusBackgroundColor)
-        )
     }
 
     @ViewBuilder
@@ -796,15 +799,6 @@ public struct ProviderSelectionStepView: View {
                 .stroke(status.isReady ? Color.green.opacity(0.18) : Color.orange.opacity(0.18), lineWidth: 1)
         )
         .accessibilityIdentifier("OnboardingProviderConfigurationStatus")
-    }
-    
-    private var connectionStatusBackgroundColor: Color {
-        switch connectionStatus {
-        case .idle: return Color.secondary.opacity(0.05)
-        case .testing: return Color.blue.opacity(0.05)
-        case .success: return Color.green.opacity(0.1)
-        case .failed: return Color.orange.opacity(0.1)
-        }
     }
     
     private var canTestConnection: Bool {
@@ -1147,7 +1141,7 @@ struct OnboardingProviderRow: View {
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
-            .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+            .background(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             .contentShape(Rectangle())
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }

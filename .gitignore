@@ -54,6 +54,9 @@ sparkle_keys/
 .env
 
 # Build artifacts & temp files
+.amp/
+.build-*/
+.codex/
 build_debug.log
 build_output.txt
 build_result.log

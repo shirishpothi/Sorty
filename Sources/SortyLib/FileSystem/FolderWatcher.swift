@@ -57,7 +57,6 @@ public final class FolderWatcher: @unchecked Sendable {
     
     public init() {
         queue.setSpecific(key: queueSpecificKey, value: ())
-        startHeartbeat()
     }
     
     deinit {
@@ -188,7 +187,7 @@ public final class FolderWatcher: @unchecked Sendable {
                 
                 if folder.isEnabled {
                     // If path changed or it's new, restart
-                    if existingFolder == nil || existingFolder?.path != folder.path {
+                    if existingFolder == nil || self.shouldRestartWatcher(from: existingFolder, to: folder) {
                         self.startWatchingSync(folder)
                     } else {
                         // Just update metadata (delay, autoOrganize, etc.)
@@ -202,6 +201,11 @@ public final class FolderWatcher: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    private func shouldRestartWatcher(from existingFolder: WatchedFolder?, to folder: WatchedFolder) -> Bool {
+        guard let existingFolder else { return true }
+        return existingFolder.path != folder.path || existingFolder.bookmarkData != folder.bookmarkData
     }
     
     // MARK: - Private Implementation
@@ -246,6 +250,7 @@ public final class FolderWatcher: @unchecked Sendable {
             streams[folder.id] = stream
             streamStartTime[folder.id] = Date()
             lastEventTime[folder.id] = Date()
+            startHeartbeatIfNeeded()
             DebugLogger.log("FSEvents: Started watching \(path)")
         } else {
             DebugLogger.log("FSEvents: Failed to start stream for \(path)")
@@ -290,6 +295,7 @@ public final class FolderWatcher: @unchecked Sendable {
         
         lastEventTime.removeValue(forKey: id)
         streamStartTime.removeValue(forKey: id)
+        stopHeartbeatIfIdle()
     }
     
     private func updateSnapshot(for folder: WatchedFolder) {
@@ -429,7 +435,8 @@ public final class FolderWatcher: @unchecked Sendable {
             self?.processChanges(for: folderId)
         }
         debounceWorkItems[folderId] = workItem
-        queue.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+        let delay = max(debounceInterval, folder.triggerDelay)
+        queue.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
     
     private func processChanges(for folderId: UUID) {
@@ -511,14 +518,16 @@ public final class FolderWatcher: @unchecked Sendable {
     }
     
     // Heartbeat to ensure streams stay alive (sometimes they can get stuck)
-    private func startHeartbeat() {
+    private func startHeartbeatIfNeeded() {
+        guard heartbeatTimer == nil, !streams.isEmpty else { return }
+
         heartbeatTimer = DispatchSource.makeTimerSource(queue: queue)
         heartbeatTimer?.schedule(deadline: .now() + 60, repeating: 60)
         heartbeatTimer?.setEventHandler { [weak self] in
             guard let self = self else { return }
             
             // Poll for missed changes and refresh quiet streams periodically.
-            for (id, folder) in self.watchedFolders {
+            for (id, folder) in Array(self.watchedFolders) {
                 guard !self.pausedFolders.contains(id) else { continue }
 
                 let lastSeen = self.lastEventTime[id] ?? self.streamStartTime[id] ?? Date.distantPast
@@ -534,6 +543,12 @@ public final class FolderWatcher: @unchecked Sendable {
             }
         }
         heartbeatTimer?.resume()
+    }
+
+    private func stopHeartbeatIfIdle() {
+        guard streams.isEmpty else { return }
+        heartbeatTimer?.cancel()
+        heartbeatTimer = nil
     }
 
     private func performOnQueueSyncIfNeeded(_ block: @escaping () -> Void) {
@@ -576,8 +591,8 @@ public final class FolderWatcher: @unchecked Sendable {
         queue.sync {
             resolvedURL = resolvedURLs[folder.id]
         }
-        guard let url = resolvedURL else { return false }
-        return fileManager.isReadableFile(atPath: url.path)
+        let path = resolvedURL?.path ?? folder.path
+        return fileManager.isReadableFile(atPath: path)
     }
 }
 

@@ -429,7 +429,7 @@ struct TextShimmerModifier: ViewModifier {
                             LinearGradient(
                                 colors: [
                                     .clear,
-                                    Color.accentColor.opacity((colorScheme == .dark ? 0.2 : 0.14) * clampedIntensity),
+                                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.2 : 0.14) * clampedIntensity),
                                     .clear
                                 ],
                                 startPoint: .leading,
@@ -458,11 +458,11 @@ struct TextShimmerModifier: ViewModifier {
                                     LinearGradient(
                                         colors: [
                                             .clear,
-                                            Color.accentColor.opacity(accentGlow * 0.45),
+                                            SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.45),
                                             .white.opacity(whiteGlow * 0.78),
                                             .white.opacity(whiteGlow),
                                             .white.opacity(whiteGlow * 0.72),
-                                            Color.accentColor.opacity(accentGlow * 0.6),
+                                            SortyDesignSystem.Colors.resolvedAccent.opacity(accentGlow * 0.6),
                                             .clear
                                         ],
                                         startPoint: .leading,

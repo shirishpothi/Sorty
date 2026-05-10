@@ -54,6 +54,14 @@ public struct SortyCommands: Commands {
             .disabled(appState == nil)
         }
 
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings...", systemImage: "gearshape") {
+                appState?.openSettingsWindow()
+            }
+            .keyboardShortcut(",", modifiers: .command)
+            .disabled(appState == nil)
+        }
+
         // Replace default New/Open with custom commands
         CommandGroup(replacing: .newItem) {
             Button("New Session", systemImage: "plus.square") {
@@ -420,6 +428,14 @@ public class AppState: ObservableObject {
     @Published public var settingsFocusTarget: SettingsFocusTarget?
     @Published public var duplicateManager = DuplicateDetectionManager()
     @Published public var duplicateSettings = DuplicateSettingsManager()
+    @Published public var duplicateSelectedDirectory: URL?
+    @Published public var duplicateSelectedGroup: UnifiedDuplicateGroup?
+    @Published public var workspaceHealthSelectedDirectory: URL?
+    @Published public var workspaceHealthSelectedOpportunity: CleanupOpportunity?
+    @Published public var workspaceHealthIsAnalyzing = false
+    @Published public var workspaceHealthAnalysisStage: String?
+    @Published public var workspaceHealthAnalysisError: String?
+    @Published public var workspaceHealthAnalysisStartedAt: Date?
     @Published public var debugMode: Bool = false
     @Published public var showUpdateSheet: Bool = false
     @Published public var lastOrganizedDirectory: URL?
@@ -765,11 +781,9 @@ public class AppState: ObservableObject {
     ) {
         selectedSettingsSection = section
         settingsFocusTarget = focusTarget
-        NotificationCenter.default.post(
-            name: .openSettingsWindow,
-            object: SettingsWindowRequest(section: section, focusTarget: focusTarget),
-            userInfo: ["sourceAppState": self]
-        )
+        withAnimation(.pageTransition) {
+            currentView = .settings
+        }
     }
 
     public func startSetupRepair(message: String, navigateToSettings: Bool = true) {

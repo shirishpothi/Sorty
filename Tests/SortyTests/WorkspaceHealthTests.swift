@@ -692,6 +692,35 @@ class WorkspaceHealthIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testAnalyzeDirectoryCapsAffectedFilesForLargeDirectories() async throws {
+        let testPath = "/test/large-downloads"
+        let testConfig = WorkspaceHealthConfig(
+            minUnorganizedCount: 10,
+            enabledChecks: [.unorganizedFiles]
+        )
+        healthManager.updateConfig(testConfig)
+
+        let files = (0..<1_000).map { index in
+            FileItem(
+                path: "\(testPath)/file\(index).txt",
+                name: "file\(index)",
+                extension: "txt",
+                size: 1_000,
+                isDirectory: false,
+                creationDate: Date()
+            )
+        }
+
+        await healthManager.analyzeDirectory(path: testPath, files: files)
+
+        let opportunity = try XCTUnwrap(healthManager.opportunities.first {
+            $0.type == .unorganizedFiles && $0.directoryPath == testPath
+        })
+        XCTAssertEqual(opportunity.fileCount, 1_000)
+        XCTAssertEqual(opportunity.affectedFiles.count, 250)
+    }
+
+    @MainActor
     func testDismissOpportunity() async {
         let testPath = "/test/downloads"
 

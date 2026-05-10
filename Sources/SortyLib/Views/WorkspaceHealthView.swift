@@ -11,17 +11,12 @@ public struct WorkspaceHealthView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var healthManager: WorkspaceHealthManager
     
-    @State private var selectedDirectory: URL?
-    @State private var isAnalyzing = false
     @State private var showSettings = false
-    @State private var selectedOpportunity: CleanupOpportunity?
     @State private var toastMessage: String?
     @State private var showToast = false
-    @State private var analysisStage: String?
-    @State private var analysisError: String?
-    @State private var analysisStartedAt: Date?
     @State private var autoRefreshTask: Task<Void, Never>?
     @State private var initialRefreshTask: Task<Void, Never>?
+    @State private var refreshTask: Task<Void, Never>?
     
     public init() {}
     
@@ -33,7 +28,9 @@ public struct WorkspaceHealthView: View {
                     headerSection
                     
                     // Directory Selector
-                    directorySelector
+                    if selectedDirectory != nil {
+                        directorySelector
+                    }
 
                     analysisStatusSection
                     
@@ -53,13 +50,23 @@ public struct WorkspaceHealthView: View {
                         
                         // Insights
                         insightsSection
-                    } else {
-                        emptyState
                     }
                 }
                 .padding(32)
             }
             .background(Color(NSColor.windowBackgroundColor))
+
+            if selectedDirectory == nil {
+                ZStack(alignment: .topLeading) {
+                    emptyState
+                        .padding(32)
+
+                    headerSection
+                        .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
+            }
             
             if showToast, let message = toastMessage {
                 ToastOverlay(
@@ -108,14 +115,14 @@ public struct WorkspaceHealthView: View {
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .disabled(selectedDirectory == nil || isAnalyzing)
+                .disabled(selectedDirectory == nil || appState.workspaceHealthIsAnalyzing)
             }
         }
         .sheet(isPresented: $showSettings) {
             WorkspaceHealthSettingsView(healthManager: healthManager)
         }
         .onAppear {
-            if let dir = appState.selectedDirectory {
+            if selectedDirectory == nil, let dir = appState.selectedDirectory {
                 selectedDirectory = dir
                 scheduleInitialRefresh()
             }
@@ -123,19 +130,25 @@ public struct WorkspaceHealthView: View {
         .onDisappear {
             initialRefreshTask?.cancel()
             autoRefreshTask?.cancel()
+            refreshTask?.cancel()
         }
         .onChange(of: healthManager.fileChangeDetected) { _, _ in
             // Auto-refresh on file changes
             autoRefreshTask?.cancel()
             autoRefreshTask = Task {
                 try? await Task.sleep(nanoseconds: 700_000_000)
-                await refreshAnalysis()
+                startRefreshAnalysis()
             }
         }
         .navigationTitle("Workspace Health")
     }
     
     // MARK: - Header
+
+    private var selectedDirectory: URL? {
+        get { appState.workspaceHealthSelectedDirectory }
+        nonmutating set { appState.workspaceHealthSelectedDirectory = newValue }
+    }
     
     private var headerSection: some View {
         HStack {
@@ -161,27 +174,10 @@ public struct WorkspaceHealthView: View {
         let healthDescription = scoreDescription(score)
         let healthColor = healthManager.healthScoreBand(for: score).color
         
-        return VStack(spacing: 16) {
-            ZStack {
-                SortyGradientCircularProgress(
-                    progress: Double(score) / 100.0,
-                    accent: healthColor,
-                    size: 80,
-                    lineWidth: 8,
-                    showsShimmer: false
-                )
-                    .accessibilityHidden(true)
-                
-                Text("\(score)")
-                    .font(.title.bold())
-                    .foregroundStyle(healthColor)
-                    .accessibilityHidden(true)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Health Score")
-            .accessibilityValue("\(score) out of 100, \(healthDescription)")
-            .accessibilityAddTraits(.updatesFrequently)
-            
+        return VStack(spacing: 14) {
+            WorkspaceHealthBeamScore(score: score, healthColor: healthColor)
+                .accessibilityHidden(true)
+
             VStack(spacing: 4) {
                 Text("Health Score")
                     .font(.caption)
@@ -199,6 +195,7 @@ public struct WorkspaceHealthView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Workspace Health Score")
+        .accessibilityValue("\(score) out of 100, \(healthDescription)")
         .accessibilityHint("Shows the overall health of your workspace from 0 to 100")
     }
     
@@ -209,7 +206,127 @@ public struct WorkspaceHealthView: View {
         default: return "Needs Attention"
         }
     }
-    
+
+    private struct WorkspaceHealthBeamScore: View {
+        let score: Int
+        let healthColor: Color
+
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .systemLiquidGlassBackground(cornerRadius: 44)
+
+                Text("\(score)")
+                    .font(.system(size: 34, weight: .black, design: .rounded))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(healthColor)
+                    .shadow(color: healthColor.opacity(0.22), radius: 8, x: 0, y: 2)
+            }
+            .frame(width: 88, height: 88)
+            .overlay {
+                ReferenceCircularBeamFallback(
+                    accent: healthColor,
+                    active: true,
+                    includesInteriorGlow: true
+                )
+            }
+        }
+    }
+
+    private struct ReferenceCircularBeamFallback: View {
+        let accent: Color
+        let active: Bool
+        let includesInteriorGlow: Bool
+
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let phase = reduceMotion ? 0 : organicPhase(at: time)
+
+                ZStack {
+                    if includesInteriorGlow {
+                        beamInteriorGlow(phase: phase)
+                    }
+
+                    beamStroke(phase: phase, opacity: 0.76, lineWidth: 2.5)
+                    beamStroke(phase: -phase * 0.43 + 0.37, opacity: 0.32, lineWidth: 1.5)
+                }
+                .opacity(active ? 0.88 : 0)
+                .animation(.easeOut(duration: 0.6), value: active)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+
+        private func organicPhase(at time: TimeInterval) -> TimeInterval {
+            (time / 4.2)
+                + (sin(time * 0.72) * 0.055)
+                + (sin(time * 1.67) * 0.026)
+                + (sin(time * 2.31) * 0.012)
+        }
+
+        private func beamStroke(phase: TimeInterval, opacity: Double, lineWidth: CGFloat) -> some View {
+            Circle()
+                .strokeBorder(
+                    AngularGradient(
+                        stops: beamStops,
+                        center: .center,
+                        angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                    ),
+                    lineWidth: lineWidth
+                )
+                .opacity(opacity)
+        }
+
+        private func beamInteriorGlow(phase: TimeInterval) -> some View {
+            Circle()
+                .inset(by: 4)
+                .fill(
+                    AngularGradient(
+                        stops: glowStops,
+                        center: .center,
+                        angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                    )
+                )
+                .blur(radius: 9)
+                .mask {
+                    Circle()
+                        .strokeBorder(lineWidth: 22)
+                        .blur(radius: 7)
+                }
+        }
+
+        private var beamStops: [Gradient.Stop] {
+            [
+            .init(color: .clear, location: 0.00),
+            .init(color: .clear, location: 0.10),
+            .init(color: accent.opacity(0.18), location: 0.17),
+            .init(color: accent.opacity(0.68), location: 0.28),
+            .init(color: accent.opacity(0.48), location: 0.38),
+            .init(color: accent.opacity(0.22), location: 0.50),
+            .init(color: .clear, location: 0.62),
+            .init(color: .clear, location: 1.00)
+            ]
+        }
+
+        private var glowStops: [Gradient.Stop] {
+            [
+            .init(color: .clear, location: 0.00),
+            .init(color: accent.opacity(0.05), location: 0.16),
+            .init(color: accent.opacity(0.13), location: 0.28),
+            .init(color: accent.opacity(0.08), location: 0.40),
+            .init(color: .clear, location: 0.62),
+            .init(color: .clear, location: 1.00)
+            ]
+        }
+    }
+
     // MARK: - Directory Selector
     
     private var directorySelector: some View {
@@ -256,16 +373,16 @@ public struct WorkspaceHealthView: View {
 
     private var analysisStatusSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if isAnalyzing {
+            if appState.workspaceHealthIsAnalyzing {
                 HStack(spacing: 10) {
                     SortyGradientLoadingBar(width: 96, height: 8)
-                    Text(analysisStage ?? "Analyzing workspace…")
+                    Text(appState.workspaceHealthAnalysisStage ?? "Analyzing workspace…")
                         .font(.callout)
                         .foregroundStyle(.primary)
 
                     Spacer()
 
-                    if let startedAt = analysisStartedAt {
+                    if let startedAt = appState.workspaceHealthAnalysisStartedAt {
                         Text("Started \(startedAt, style: .relative)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -286,7 +403,7 @@ public struct WorkspaceHealthView: View {
                 }
             }
 
-            if let analysisError {
+            if let analysisError = appState.workspaceHealthAnalysisError {
                 HStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -301,7 +418,7 @@ public struct WorkspaceHealthView: View {
                 .accessibilityLabel("Analysis error: \(analysisError)")
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: isAnalyzing)
+        .animation(.easeInOut(duration: 0.2), value: appState.workspaceHealthIsAnalyzing)
     }
     
     // MARK: - Stats Overview
@@ -427,7 +544,7 @@ public struct WorkspaceHealthView: View {
                                     }
                                 }
                             } else {
-                                selectedOpportunity = opportunity
+                                appState.workspaceHealthSelectedOpportunity = opportunity
                             }
                         }
                     }
@@ -490,7 +607,7 @@ public struct WorkspaceHealthView: View {
                                                         }
                                                     }
                                                 } else {
-                                                    selectedOpportunity = opportunity
+                                                    appState.workspaceHealthSelectedOpportunity = opportunity
                                                 }
                                             },
                                             onDismiss: {
@@ -507,7 +624,7 @@ public struct WorkspaceHealthView: View {
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
-        .sheet(item: $selectedOpportunity) { opportunity in
+        .sheet(item: $appState.workspaceHealthSelectedOpportunity) { opportunity in
             CleanupPreviewSheet(
                 opportunity: opportunity,
                 onConfirm: { selectedFiles in
@@ -524,11 +641,11 @@ public struct WorkspaceHealthView: View {
                             toastMessage = "Action completed"
                             showToast = true
                         }
-                        selectedOpportunity = nil
+                        appState.workspaceHealthSelectedOpportunity = nil
                     }
                 },
                 onCancel: {
-                    selectedOpportunity = nil
+                    appState.workspaceHealthSelectedOpportunity = nil
                 }
             )
         }
@@ -594,6 +711,7 @@ public struct WorkspaceHealthView: View {
                 selectDirectory()
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
             .controlSize(.large)
             .accessibilityIdentifier("WorkspaceHealthEmptyChooseDirectory")
         }
@@ -613,7 +731,7 @@ public struct WorkspaceHealthView: View {
         if panel.runModal() == .OK, let url = panel.url {
             selectedDirectory = url
             healthManager.startMonitoring(path: url.path)
-            Task { await refreshAnalysis() }
+            startRefreshAnalysis()
         }
     }
 
@@ -624,22 +742,30 @@ public struct WorkspaceHealthView: View {
         initialRefreshTask = Task {
             try? await Task.sleep(nanoseconds: 180_000_000)
             guard !Task.isCancelled else { return }
+            startRefreshAnalysis()
+        }
+    }
+
+    private func startRefreshAnalysis() {
+        refreshTask?.cancel()
+        refreshTask = Task {
             await refreshAnalysis()
         }
     }
 
     private func refreshAnalysis() async {
         guard let dir = selectedDirectory else { return }
+        guard !appState.workspaceHealthIsAnalyzing else { return }
 
-        isAnalyzing = true
-        analysisStage = "Scanning files…"
-        analysisError = nil
-        analysisStartedAt = Date()
+        appState.workspaceHealthIsAnalyzing = true
+        appState.workspaceHealthAnalysisStage = "Scanning files…"
+        appState.workspaceHealthAnalysisError = nil
+        appState.workspaceHealthAnalysisStartedAt = Date()
 
         defer {
-            isAnalyzing = false
-            analysisStage = nil
-            analysisStartedAt = nil
+            appState.workspaceHealthIsAnalyzing = false
+            appState.workspaceHealthAnalysisStage = nil
+            appState.workspaceHealthAnalysisStartedAt = nil
         }
 
         let directoryModDate = healthManager.directoryModDate(for: dir.path)
@@ -654,20 +780,24 @@ public struct WorkspaceHealthView: View {
                 files = try await Task.detached {
                     try WorkspaceHealthManager.scanFiles(at: dir, ignoredPaths: ignoredPaths)
                 }.value
+                try Task.checkCancellation()
                 await MainActor.run {
                     healthManager.updateScanCache(path: dir.path, directoryModDate: directoryModDate, files: files)
                 }
             }
         } catch {
-            analysisError = error.localizedDescription
+            if Task.isCancelled { return }
+            appState.workspaceHealthAnalysisError = error.localizedDescription
             return
         }
+
+        guard !Task.isCancelled else { return }
 
         if healthManager.isAnalysisUpToDate(path: dir.path, files: files) {
             return
         }
 
-        analysisStage = "Analyzing workspace…"
+        appState.workspaceHealthAnalysisStage = "Analyzing workspace…"
 
         await healthManager.takeSnapshot(at: dir.path, files: files)
         await healthManager.analyzeDirectory(path: dir.path, files: files)

@@ -46,6 +46,7 @@ struct InternetAccessPolicyView: View {
             }
         }
         .modifier(WindowGlassBackground())
+        .windowLinkHoverPillHost()
         .accessibilityIdentifier("InternetAccessPolicyView")
     }
 

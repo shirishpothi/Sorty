@@ -74,7 +74,7 @@ struct LearningsHoningView: View {
             VStack(spacing: 16) {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 48))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 
                 Text("Profile Honing")
                     .font(.title2)

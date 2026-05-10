@@ -242,11 +242,11 @@ struct StorageSuggestionPill: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(isHovered ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
+            .background(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.secondary.opacity(0.1))
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isHovered ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+                    .stroke(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5) : Color.clear, lineWidth: 1)
             )
             .contentShape(Capsule())
         }

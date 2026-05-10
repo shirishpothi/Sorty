@@ -2,129 +2,295 @@
 //  SettingsView.swift
 //  Sorty
 //
-//  Native macOS settings container with tabbed navigation
+//  Lightweight settings container with sidebar navigation
 //
 
 import SwiftUI
 
-public struct SettingsView: View {
+struct SettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
     @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
-    @State private var selectedTab: SettingsTab = .organization
     @State private var selectedCategory: SettingsCategory = .rules
+    @State private var contentOpacity: Double = 1
+    @State private var searchText = ""
 
-    public init() {}
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
-    public var body: some View {
-        TabView(selection: $selectedTab) {
-            ForEach(SettingsTab.allCases) { tab in
-                settingsTabContent(tab)
-                    .tabItem {
-                        Label(tab.rawValue, systemImage: tab.icon)
-                    }
-                    .tag(tab)
-            }
+    private var isSearching: Bool {
+        !trimmedSearchText.isEmpty
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            settingsSidebar
+                .frame(width: 200)
+            Divider()
+            contentView
         }
-        .frame(width: 620, height: 720)
-        .tint(.accentColor)
         .navigationTitle("Settings")
+        .opacity(contentOpacity)
         .onAppear {
             if let section = appState.selectedSettingsSection {
-                selectCategory(section, animated: false)
+                selectedCategory = section
             }
+            contentOpacity = 1.0
         }
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
-            guard let section = newSection, section != selectedCategory else { return }
-            selectCategory(section, animated: true)
+            if let section = newSection, section != selectedCategory {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    selectedCategory = section
+                }
+                if section != .rules {
+                    appState.settingsFocusTarget = nil
+                }
+            }
+        }
+        .onChange(of: searchText) { _, _ in
+            guard !filteredCategories.contains(selectedCategory) else { return }
+            if let firstCategory = filteredCategories.first {
+                selectedCategory = firstCategory
+            }
         }
     }
 
-    private func settingsTabContent(_ tab: SettingsTab) -> some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(availableCategories(in: tab)) { category in
-                        categoryHeader(for: category)
-                            .id(category.rawValue)
-                            .accessibilityAddTraits(.isHeader)
+    private var settingsSidebar: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            TextField("Search settings", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+                .accessibilityLabel("Search settings")
+                .accessibilityHint("Finds matching setting features and sections")
+                .help("Search settings by section name, feature name, or keyword")
 
-                        categoryContent(for: category)
-                            .settingsFocusTarget(appState.settingsFocusTarget)
-
-                        if category != availableCategories(in: tab).last {
-                            SettingsSectionDivider()
+            if filteredCategories.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("No matching settings")
+                        .font(.subheadline.weight(.medium))
+                    Text("Try broader search terms.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 10)
+            } else {
+                ForEach(visibleGroups, id: \.self) { group in
+                    sectionHeader(group.rawValue)
+                    ForEach(filteredCategories(for: group)) { category in
+                        SidebarButton(
+                            title: category.rawValue,
+                            icon: category.icon,
+                            color: category.color,
+                            isSelected: selectedCategory == category
+                        ) {
+                            appState.settingsFocusTarget = nil
+                            appState.selectedSettingsSection = category
+                            HapticFeedbackManager.shared.selection()
                         }
+                        .help("\(category.rawValue) settings")
+                        .accessibilityHint("Open \(category.rawValue) settings")
                     }
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 22)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(Color(nsColor: .windowBackgroundColor))
+            Spacer()
+        }
+        .padding(12)
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+    
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+    }
+
+    private var contentView: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if isSearching {
+                        searchResultsHeader
+                        searchResultsContent
+                    } else {
+                        categoryHeader
+                        categoryContent
+                            .settingsFocusTarget(appState.settingsFocusTarget)
+                    }
+                }
+                .padding(24)
+            }
             .onAppear {
-                scrollToSelectedCategory(in: tab, using: proxy)
+                scrollToFocusedSetting(using: proxy)
             }
             .onChange(of: appState.settingsFocusTarget) { _, _ in
                 scrollToFocusedSetting(using: proxy)
             }
             .onChange(of: selectedCategory) { _, _ in
-                scrollToSelectedCategory(in: tab, using: proxy)
+                scrollToFocusedSetting(using: proxy)
             }
         }
+        .frame(maxWidth: .infinity)
+        .background(Color(NSColor.windowBackgroundColor))
+    }
+    
+    private var availableCategories: [SettingsCategory] {
+        SettingsCategory.allCases.filter(isCategoryEnabled)
+    }
+    
+    private var filteredCategories: [SettingsCategory] {
+        guard isSearching else {
+            return availableCategories
+        }
+
+        let matchedCategorySet = Set(searchResults.map(\.category))
+        return availableCategories.filter { matchedCategorySet.contains($0) || $0.matchesSearch(query: trimmedSearchText) }
     }
 
-    private func availableCategories(in tab: SettingsTab) -> [SettingsCategory] {
-        tab.categories.filter(isCategoryEnabled)
-    }
+    private var searchResults: [SettingsFeatureMatch] {
+        guard isSearching else { return [] }
 
+        let query = trimmedSearchText
+        return availableCategories
+            .flatMap { category in
+                let matches = category.featureMatches(query: query)
+                if !matches.isEmpty {
+                    return matches
+                }
+
+                if category.matchesSearch(query: query) {
+                    let fallback = SettingsFeatureSnippet(
+                        title: category.rawValue,
+                        summary: "Open this section to review settings related to \"\(query)\"."
+                    )
+                    return [SettingsFeatureMatch(category: category, snippet: fallback, score: 1)]
+                }
+                return []
+            }
+            .sorted {
+                if $0.score != $1.score {
+                    return $0.score > $1.score
+                }
+                if $0.category.rawValue != $1.category.rawValue {
+                    return $0.category.rawValue < $1.category.rawValue
+                }
+                return $0.snippet.title < $1.snippet.title
+            }
+    }
+    
+    private var visibleGroups: [SettingsCategoryGroup] {
+        SettingsCategoryGroup.allCases.filter { !filteredCategories(for: $0).isEmpty }
+    }
+    
+    private func filteredCategories(for group: SettingsCategoryGroup) -> [SettingsCategory] {
+        filteredCategories.filter { $0.group == group }
+    }
+    
     private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
         category != .finder || finderIntegrationEnabled
     }
 
-    private func selectCategory(_ category: SettingsCategory, animated: Bool) {
-        let updateSelection = {
-            selectedTab = category.tab
-            selectedCategory = category
-        }
-        if animated {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.82)) {
-                updateSelection()
-            }
-            HapticFeedbackManager.shared.selection()
-        } else {
-            updateSelection()
-        }
-        if category != .rules {
-            appState.settingsFocusTarget = nil
-        }
-    }
-
-    private func categoryHeader(for category: SettingsCategory) -> some View {
+    private var categoryHeader: some View {
         HStack(spacing: 12) {
-            Image(systemName: category.icon)
+            Image(systemName: selectedCategory.icon)
                 .font(.title2)
-                .foregroundStyle(category.color)
+                .foregroundStyle(selectedCategory.color)
                 .frame(width: 32, height: 32)
-                .background(category.color.opacity(0.1))
+                .background(selectedCategory.color.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(category.rawValue)
-                    .font(.title2.bold())
-                Text(category.description)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
+            Text(selectedCategory.rawValue)
+                .font(.title2.bold())
             Spacer()
         }
         .padding(.bottom, 4)
     }
 
+    private var searchResultsHeader: some View {
+        let uniqueCategoryCount = Set(searchResults.map(\.category)).count
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .font(.title2)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(Color.accentColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                Text("Search Results")
+                    .font(.title2.bold())
+            }
+
+            Text("\"\(trimmedSearchText)\" matched \(searchResults.count) \(searchResults.count == 1 ? "setting" : "settings") in \(uniqueCategoryCount) \(uniqueCategoryCount == 1 ? "section" : "sections").")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.bottom, 2)
+    }
+
     @ViewBuilder
-    private func categoryContent(for category: SettingsCategory) -> some View {
-        switch category {
+    private var searchResultsContent: some View {
+        if searchResults.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("No matching settings")
+                    .font(.headline)
+                Text("Try a broader term like \"tags\", \"notifications\", or \"automation\".")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 8)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(searchResults) { result in
+                    SettingsCard(
+                        title: result.snippet.title,
+                        icon: result.category.icon,
+                        color: result.category.color
+                    ) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(result.snippet.summary)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            HStack(spacing: 8) {
+                                Label(result.category.rawValue, systemImage: result.category.icon)
+                                    .font(.caption)
+                                    .foregroundStyle(result.category.color)
+
+                                Spacer()
+
+                                Button {
+                                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                        selectedCategory = result.category
+                                        searchText = ""
+                                    }
+                                    appState.selectedSettingsSection = result.category
+                                    appState.settingsFocusTarget = result.category.focusTarget(for: result.snippet)
+                                    HapticFeedbackManager.shared.selection()
+                                } label: {
+                                    Label("Open Section", systemImage: "arrow.right.circle")
+                                        .font(.caption)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 4)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                                .minimumHitTarget()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var categoryContent: some View {
+        switch selectedCategory {
         case .rules:
             OrganizationRulesSettingsView()
                 .environmentObject(appState)
@@ -179,40 +345,13 @@ public struct SettingsView: View {
     }
 
     private func scrollToFocusedSetting(using proxy: ScrollViewProxy) {
-        guard selectedCategory == .rules else { return }
+        guard !isSearching, selectedCategory == .rules else { return }
         guard let target = appState.settingsFocusTarget else { return }
 
         DispatchQueue.main.async {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                 proxy.scrollTo(target.rawValue, anchor: .top)
             }
-        }
-    }
-
-    private func scrollToSelectedCategory(in tab: SettingsTab, using proxy: ScrollViewProxy) {
-        guard selectedCategory.tab == tab else { return }
-        DispatchQueue.main.async {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                proxy.scrollTo(selectedCategory.rawValue, anchor: .top)
-            }
-        }
-    }
-}
-
-private extension SettingsCategory {
-    var description: String {
-        switch self {
-        case .provider: return "Models, keys, and endpoints"
-        case .strategy: return "Scanning, naming, and AI behavior"
-        case .rules: return "Destinations, prompts, and limits"
-        case .tuning: return "Quality, token, and timeout controls"
-        case .automation: return "Watched folders and background work"
-        case .finder: return "Quick actions and Finder services"
-        case .notifications: return "Alerts, sounds, and delivery"
-        case .advanced: return "Privacy and technical preferences"
-        case .troubleshooting: return "Repair, reset, and diagnostics"
-        case .help: return "Guides, links, and support"
-        case .experimental: return "Flags and beta features"
         }
     }
 }
@@ -234,8 +373,6 @@ private enum SettingsPreviewObjects {
     SettingsView()
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(SettingsPreviewObjects.appStateWithSection(.rules))
-        .environmentObject(PersonaManager())
-        .environmentObject(CustomPersonaStore())
         .frame(width: 900, height: 700)
 }
 
@@ -243,8 +380,6 @@ private enum SettingsPreviewObjects {
     SettingsView()
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(SettingsPreviewObjects.appStateWithSection(.provider))
-        .environmentObject(PersonaManager())
-        .environmentObject(CustomPersonaStore())
         .frame(width: 900, height: 700)
 }
 
@@ -252,8 +387,6 @@ private enum SettingsPreviewObjects {
     SettingsView()
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(SettingsPreviewObjects.appStateWithSection(.strategy))
-        .environmentObject(PersonaManager())
-        .environmentObject(CustomPersonaStore())
         .frame(width: 900, height: 700)
 }
 
@@ -261,8 +394,6 @@ private enum SettingsPreviewObjects {
     SettingsView()
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(SettingsPreviewObjects.appStateWithSection(.notifications))
-        .environmentObject(PersonaManager())
-        .environmentObject(CustomPersonaStore())
         .frame(width: 900, height: 700)
 }
 
@@ -270,7 +401,5 @@ private enum SettingsPreviewObjects {
     SettingsView()
         .environmentObject(SettingsViewModel.preview)
         .environmentObject(SettingsPreviewObjects.appStateWithSection(.advanced))
-        .environmentObject(PersonaManager())
-        .environmentObject(CustomPersonaStore())
         .frame(width: 900, height: 700)
 }

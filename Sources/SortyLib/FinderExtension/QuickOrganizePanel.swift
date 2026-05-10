@@ -240,7 +240,7 @@ struct QuickOrganizeView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.accentColor.opacity(0.1))
+                    .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
                     .cornerRadius(10)
                 }
                 .buttonStyle(.plain)
@@ -447,7 +447,7 @@ struct ModeButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.08))
+            .background(isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.08))
             .foregroundColor(isSelected ? .white : .primary)
             .cornerRadius(12)
         }

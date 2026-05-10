@@ -23,6 +23,10 @@ public enum HashUtility {
         let bufferSize = 1024 * 1024 // 1MB buffer
         
         while true {
+            if Task.isCancelled {
+                return nil
+            }
+
             do {
                 guard let data = try handle.read(upToCount: bufferSize), !data.isEmpty else {
                     break

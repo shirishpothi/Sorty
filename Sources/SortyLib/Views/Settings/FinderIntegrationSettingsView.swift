@@ -11,10 +11,9 @@ import AppKit
 struct FinderIntegrationSettingsView: View {
     @State private var isWatchActionInstalled = false
     @State private var watchActionMessage: String?
-    @State private var finderSyncDiagnostics: ExtensionCommunication.FinderSyncDiagnostics?
+    @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
     @State private var frontmostFinderFolder: URL?
-    @State private var openSystemSettingsButtonFrame: CGRect = .zero
     @EnvironmentObject var automationManager: AutomationManager
     
     var body: some View {
@@ -25,15 +24,13 @@ struct FinderIntegrationSettingsView: View {
                     statusRow(
                         label: "Watch Action",
                         value: isWatchActionInstalled ? "Installed" : "Not installed",
-                        iconName: isWatchActionInstalled ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
-                        color: isWatchActionInstalled ? .green : .orange
+                        isHealthy: isWatchActionInstalled
                     )
 
                     statusRow(
                         label: "Finder Extension",
-                        value: finderSyncStatusText,
-                        iconName: finderSyncStatusIcon,
-                        color: finderSyncStatusColor
+                        value: finderSyncActive ? "Active" : "Needs activation",
+                        isHealthy: finderSyncActive
                     )
 
                     HStack {
@@ -103,18 +100,18 @@ struct FinderIntegrationSettingsView: View {
             SettingsCard(title: "Finder Extension", icon: "puzzlepiece.extension", color: .purple) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
-                        Image(systemName: finderSyncStatusIcon)
-                            .foregroundStyle(finderSyncStatusColor)
-                        Text(finderSyncHeadline)
+                        Image(systemName: finderSyncActive ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(finderSyncActive ? .green : .orange)
+                        Text(finderSyncActive ? "Extension Active" : "Needs Repair or Activation")
                             .font(.caption.weight(.medium))
-                            .foregroundStyle(finderSyncStatusColor)
+                            .foregroundStyle(finderSyncActive ? .green : .orange)
                     }
 
                     HStack(spacing: 8) {
-                        Button(repairButtonTitle) {
+                        Button(finderSyncActive ? "Repair" : "Activate") {
                             Task {
                                 let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
-                                await refreshIntegrationStatus()
+                                finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
                                 finderSyncMessage = repair.message
                                 if repair.success {
                                     HapticFeedbackManager.shared.success()
@@ -129,50 +126,6 @@ struct FinderIntegrationSettingsView: View {
                             ExtensionCommunication.openFinderExtensionSettings()
                         }
                         .buttonStyle(.sortySecondary(size: .regular))
-                    }
-
-                    if let preferredPath = finderSyncDiagnostics?.preferredPath {
-                        finderSyncPathRow(
-                            title: preferredPath == currentFinderSyncPath ? "Current App Extension" : "Preferred Registered Extension",
-                            path: preferredPath
-                        )
-                    }
-
-                    if let activePath = finderSyncDiagnostics?.activePath,
-                       activePath != finderSyncDiagnostics?.preferredPath {
-                        finderSyncPathRow(title: "Finder Recently Loaded", path: activePath)
-                    }
-
-                    if let diagnostics = finderSyncDiagnostics,
-                       !diagnostics.problemPaths.isEmpty {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.orange)
-                                .font(.caption)
-                            Text("Stale Sorty registrations found: \(diagnostics.problemPaths.count). Repair removes the old app copies so Finder keeps using the right one.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(8)
-                        .background(Color.orange.opacity(0.08))
-                        .cornerRadius(8)
-                    }
-
-                    if let diagnostics = finderSyncDiagnostics,
-                       diagnostics.needsCodeSignatureRepair {
-                        HStack(alignment: .top, spacing: 6) {
-                            Image(systemName: "hammer.circle.fill")
-                                .foregroundStyle(.orange)
-                                .font(.caption)
-                            Text("This build was signed without the Finder entitlements it needs. Repair will re-sign the current app, rebuild the registration, and restart Finder automatically.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(8)
-                        .background(Color.orange.opacity(0.08))
-                        .cornerRadius(8)
                     }
 
                     if let message = finderSyncMessage {
@@ -225,7 +178,7 @@ struct FinderIntegrationSettingsView: View {
                                 Text("Front Finder Folder")
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
-                                PrivacySensitivePathText(path: folder.path)
+                                Text(folder.path)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
@@ -282,12 +235,9 @@ struct FinderIntegrationSettingsView: View {
 
                         if automationManager.automationStatus == .denied {
                             Button("Open System Settings") {
-                                automationManager.openAutomationSettings(
-                                    sourceFrameInScreen: openSystemSettingsButtonFrame.isEmpty ? nil : openSystemSettingsButtonFrame
-                                )
+                                automationManager.openAutomationSettings()
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
-                            .background(ScreenFrameReader(frameInScreen: $openSystemSettingsButtonFrame))
                         }
                     }
 
@@ -344,39 +294,18 @@ struct FinderIntegrationSettingsView: View {
     }
 
     @ViewBuilder
-    private func statusRow(label: String, value: String, iconName: String, color: Color) -> some View {
+    private func statusRow(label: String, value: String, isHealthy: Bool) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: iconName)
-                .foregroundStyle(color)
+            Image(systemName: isHealthy ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(isHealthy ? .green : .orange)
                 .font(.caption)
             Text(label)
                 .font(.subheadline)
             Spacer()
             Text(value)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(color)
+                .foregroundStyle(isHealthy ? .green : .orange)
         }
-    }
-
-    @ViewBuilder
-    private func finderSyncPathRow(title: String, path: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "folder")
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                PrivacySensitivePathText(path: path)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-        }
-        .padding(8)
-        .background(Color.secondary.opacity(0.06))
-        .cornerRadius(8)
     }
 
     @ViewBuilder
@@ -509,57 +438,10 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private func refreshIntegrationStatus() async {
-        ExtensionCommunication.beginMonitoringFinderSyncRuntime()
         _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
         let status = await ExtensionCommunication.getIntegrationStatusAsync()
-        finderSyncDiagnostics = await ExtensionCommunication.getFinderSyncDiagnosticsAsync()
         isWatchActionInstalled = status.quickWatchActionInstalled
-    }
-
-    private var currentFinderSyncPath: String? {
-        Bundle.main.builtInPlugInsURL?
-            .appendingPathComponent("SortyFinderSync.appex", isDirectory: true)
-            .path
-    }
-
-    private var finderSyncHeadline: String {
-        finderSyncDiagnostics?.isVerifiedWorking == true ? "Extension Verified in Finder" : (finderSyncDiagnostics?.statusText ?? "Checking Finder Extension")
-    }
-
-    private var finderSyncStatusText: String {
-        finderSyncDiagnostics?.statusText ?? "Checking..."
-    }
-
-    private var finderSyncStatusIcon: String {
-        guard let diagnostics = finderSyncDiagnostics else { return "questionmark.circle.fill" }
-        switch diagnostics.kind {
-        case .verified:
-            return "checkmark.circle.fill"
-        case .registered:
-            return "checkmark.seal.fill"
-        case .signatureInvalid, .activeElsewhere, .needsCleanup, .indeterminate, .disabled:
-            return "exclamationmark.triangle.fill"
-        case .missing, .notRegistered:
-            return "xmark.circle.fill"
-        }
-    }
-
-    private var finderSyncStatusColor: Color {
-        guard let diagnostics = finderSyncDiagnostics else { return .secondary }
-        switch diagnostics.kind {
-        case .verified:
-            return .green
-        case .registered:
-            return .yellow
-        case .signatureInvalid, .activeElsewhere, .needsCleanup, .indeterminate, .disabled:
-            return .orange
-        case .missing, .notRegistered:
-            return .red
-        }
-    }
-
-    private var repairButtonTitle: String {
-        finderSyncDiagnostics?.needsCodeSignatureRepair == true ? "Repair & Re-sign" : "Repair"
+        finderSyncActive = status.finderSyncEnabled
     }
 }
 

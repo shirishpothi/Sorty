@@ -286,7 +286,8 @@ public struct CompletionStepView: View {
                         }
                     }
                 }
-                .buttonStyle(.onboardingPill)
+                .buttonStyle(.onboardingPill(size: .large))
+                .onboardingBeamBorder(variant: .featured, active: readinessState != .checking)
                 .keyboardShortcut(.defaultAction)
                 .disabled(readinessState == .checking)
                 .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
@@ -542,7 +543,7 @@ struct QuickTipRow: View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 .frame(width: 24)
 
             Text(text)

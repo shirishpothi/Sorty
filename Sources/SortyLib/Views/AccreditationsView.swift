@@ -94,6 +94,7 @@ struct AccreditationsView: View {
             }
         }
         .modifier(WindowGlassBackground())
+        .windowLinkHoverPillHost()
         .accessibilityIdentifier("AccreditationsView")
         .onAppear {
             contributorsFetcher.fetchIfNeeded(enabled: shouldFetchContributors)

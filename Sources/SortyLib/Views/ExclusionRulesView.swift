@@ -43,13 +43,8 @@ struct ExclusionRulesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            headerView
-            
-            Divider()
-
-            ZStack {
-                if rulesManager.rules.isEmpty {
+            if rulesManager.rules.isEmpty {
+                ZStack(alignment: .topLeading) {
                     EmptyExclusionRulesView(onAddRule: {
                         HapticFeedbackManager.shared.tap()
                         showingAddRule = true
@@ -62,7 +57,19 @@ struct ExclusionRulesView: View {
                         }
                     })
                     .transition(TransitionStyles.scaleAndFade)
-                } else {
+
+                    emptyHeaderView
+                        .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
+            } else {
+                // Header
+                headerView
+
+                Divider()
+
+                ZStack {
                     ScrollView {
                         VStack(spacing: 20) {
                             // Search bar
@@ -100,9 +107,10 @@ struct ExclusionRulesView: View {
                     }
                     .transition(TransitionStyles.slideFromRight)
                 }
+                .animation(.pageTransition, value: rulesManager.rules.isEmpty)
             }
-            .animation(.pageTransition, value: rulesManager.rules.isEmpty)
         }
+        .animation(.pageTransition, value: rulesManager.rules.isEmpty)
         .navigationTitle("Exclusion Rules")
         .sheet(isPresented: $showingAddRule) {
             AddExclusionRuleView(rulesManager: rulesManager)
@@ -168,10 +176,25 @@ struct ExclusionRulesView: View {
                 Label("Add Rule", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
             .accessibilityIdentifier("AddExclusionRuleButton")
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    private var emptyHeaderView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Exclusion Rules")
+                    .font(.largeTitle.bold())
+
+                Text("Keep protected files, folders, and patterns out of organization and learnings")
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
     }
     
     private var searchBar: some View {
@@ -231,6 +254,11 @@ struct ExclusionRulesView: View {
                         addException()
                     }
                     .buttonStyle(.onboardingPill(size: .small))
+                    .onboardingBeamBorder(
+                        variant: .featured,
+                        active: !newNLException.trimmingCharacters(in: .whitespaces).isEmpty,
+                        size: .small
+                    )
                     .disabled(newNLException.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
 
@@ -342,8 +370,9 @@ struct EmptyExclusionRulesView: View {
                 Label("Add Rule", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
         }
-        .frame(maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -660,6 +689,7 @@ struct AddExclusionRuleView: View {
                     addRule()
                 }
                 .buttonStyle(.onboardingPill)
+                .onboardingBeamBorder(variant: .featured, active: isValidInput)
                 .disabled(!isValidInput)
                 .keyboardShortcut(.return, modifiers: [.command])
             }
@@ -996,7 +1026,7 @@ struct RuleTypeChip: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.1))
+            .background(isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.1))
             .foregroundColor(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }

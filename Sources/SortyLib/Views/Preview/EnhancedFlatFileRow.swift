@@ -69,11 +69,11 @@ struct EnhancedFlatFileRow: View {
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
+                .fill(isDragging ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isEditingName ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                .stroke(isEditingName ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .contextMenu {

@@ -169,7 +169,7 @@ struct PersonaChatView: View {
                 Spacer()
                 Text(displayContent)
                     .padding(10)
-                    .background(Color.accentColor)
+                    .background(SortyDesignSystem.Colors.resolvedAccent)
                     .foregroundColor(.white)
                     .cornerRadius(12)
                     .frame(maxWidth: 380, alignment: .trailing)

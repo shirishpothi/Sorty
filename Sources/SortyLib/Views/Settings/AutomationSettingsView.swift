@@ -16,7 +16,6 @@ struct AutomationSettingsView: View {
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("confirmQuitWhileOrganizing") private var confirmQuitWhileOrganizing = true
     
     @State private var useSeparateModel = false
     @State private var selectedProvider: AIProvider = .openAI
@@ -45,17 +44,6 @@ struct AutomationSettingsView: View {
         .onAppear {
             loadAutomationSettings()
         }
-        .modelSelectionOverlay(
-            isPresented: $showModelPicker,
-            currentProvider: selectedProvider,
-            currentModel: selectedModel,
-            onSelect: { provider, model in
-                selectedProvider = provider
-                selectedModel = model
-                viewModel.config.automationProvider = provider
-                viewModel.config.automationModel = model
-            }
-        )
     }
     
     private var globalModelSection: some View {
@@ -83,18 +71,36 @@ struct AutomationSettingsView: View {
                 
                 if useSeparateModel {
                     Divider()
-
+                    
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Provider & Model")
+                        Text("Provider")
                             .font(.subheadline)
                             .fontWeight(.medium)
-
+                        
+                        Picker("", selection: $selectedProvider) {
+                            ForEach(AIProvider.userSelectableProviders.filter { $0.isAvailable }, id: \.self) { provider in
+                                Text(provider.displayName).tag(provider)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .onChange(of: selectedProvider) { _, newProvider in
+                            selectedModel = newProvider.defaultModel
+                            viewModel.config.automationProvider = newProvider
+                            viewModel.config.automationModel = selectedModel
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Model")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        
                         ModelSelectorRow(
                             provider: selectedProvider,
                             model: selectedModel,
                             onTap: { showModelPicker = true }
                         )
-                        .modelSelectorTriggerBounds()
                     }
                     
                     Divider()
@@ -111,6 +117,19 @@ struct AutomationSettingsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             }
+        }
+        .sheet(isPresented: $showModelPicker) {
+            ModelSelectionPopover(
+                isPresented: $showModelPicker,
+                currentProvider: selectedProvider,
+                currentModel: selectedModel,
+                onSelect: { provider, model in
+                    selectedProvider = provider
+                    selectedModel = model
+                    viewModel.config.automationProvider = provider
+                    viewModel.config.automationModel = model
+                }
+            )
         }
     }
     
@@ -215,17 +234,6 @@ struct AutomationSettingsView: View {
                             Text("Automation Notifications")
                                 .font(.subheadline)
                             Text("Show a system notification when files are automatically organized")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-
-                    Toggle(isOn: $confirmQuitWhileOrganizing) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Warn Before Quitting During Organization")
-                                .font(.subheadline)
-                            Text("Show a confirmation before quitting while active organization is in progress")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

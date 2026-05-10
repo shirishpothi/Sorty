@@ -5,7 +5,7 @@
 //  Coordinates background tasks and watched folder automation
 //
 
-import Foundation
+@preconcurrency import Foundation
 import Combine
 import SwiftUI
 import UserNotifications
@@ -26,6 +26,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private var pendingFiles: [UUID: (folder: WatchedFolder, files: Set<String>, resolvedURL: URL)] = [:]
     private var ignoredWatchEventsUntil: [UUID: Date] = [:]
     private var retryTask: Task<Void, Never>?
+    nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol] = []
     
     init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
         self.organizer = organizer
@@ -74,18 +75,14 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             }
         }
         
-        // Prewarm connections for all configured AI providers on startup
-        Task {
-            await AISessionManager.shared.prewarmAllConfigured()
-        }
     }
     
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        notificationObservers.forEach(NotificationCenter.default.removeObserver)
     }
     
     private func setupNotifications() {
-        NotificationCenter.default.addObserver(forName: .organizationDidRevert, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .organizationDidRevert, object: nil, queue: .main) { [weak self] notification in
             guard let self = self,
                   let url = notification.userInfo?["url"] as? URL else { return }
             
@@ -97,19 +94,19 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
 
                 self.folderWatcher.refreshSnapshot(for: folder)
             }
-        }
+        })
 
-        NotificationCenter.default.addObserver(forName: .autoOrganizeDisabledGlobally, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .autoOrganizeDisabledGlobally, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let reason = notification.userInfo?["reason"] as? String ?? "Unknown reason"
             
             Task { @MainActor in
                 self.notificationManager.showError(message: "Auto-organization paused: \(reason)", isCritical: true)
             }
-        }
+        })
         
         // Listen for organization completion
-        NotificationCenter.default.addObserver(forName: .organizationDidFinish, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .organizationDidFinish, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             guard let entry = notification.userInfo?["entry"] as? OrganizationHistoryEntry else { return }
             
@@ -134,73 +131,73 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 let folderURL = URL(fileURLWithPath: entry.directoryPath)
                 self.learningsFSMonitor.startMonitoring(directory: folderURL)
             }
-        }
+        })
         
         // Handle "Undo" action from notification
-        NotificationCenter.default.addObserver(forName: .undoLastOrganization, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .undoLastOrganization, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let folderPath = notification.userInfo?["folderPath"] as? String
             
             Task { @MainActor in
                 await self.handleUndoAction(folderPath: folderPath)
             }
-        }
+        })
 
-        NotificationCenter.default.addObserver(forName: .requestUndoOrganizationConfirmation, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .requestUndoOrganizationConfirmation, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let folderPath = notification.userInfo?["folderPath"] as? String
 
             Task { @MainActor in
                 await self.handleUndoConfirmationRequest(folderPath: folderPath)
             }
-        }
+        })
         
         // Handle "Open Folder" action from notification
-        NotificationCenter.default.addObserver(forName: .openOrganizedFolder, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .openOrganizedFolder, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let folderPath = notification.userInfo?["folderPath"] as? String
             
             Task { @MainActor in
                 self.handleOpenFolderAction(folderPath: folderPath)
             }
-        }
+        })
         
         // Handle "Retry" action from notification
-        NotificationCenter.default.addObserver(forName: .retryLastOrganization, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .retryLastOrganization, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let folderPath = notification.userInfo?["folderPath"] as? String
             
             Task { @MainActor in
                 await self.handleRetryAction(folderPath: folderPath)
             }
-        }
+        })
 
-        NotificationCenter.default.addObserver(forName: .requestRetryOrganizationConfirmation, object: nil, queue: .main) { [weak self] notification in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .requestRetryOrganizationConfirmation, object: nil, queue: .main) { [weak self] notification in
             guard let self = self else { return }
             let folderPath = notification.userInfo?["folderPath"] as? String
 
             Task { @MainActor in
                 await self.handleRetryConfirmationRequest(folderPath: folderPath)
             }
-        }
+        })
         
         // Handle "Show Details" action from notification
-        NotificationCenter.default.addObserver(forName: .showOrganizationDetails, object: nil, queue: .main) { [weak self] _ in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .showOrganizationDetails, object: nil, queue: .main) { [weak self] _ in
             guard let self = self else { return }
             
             Task { @MainActor in
                 self.handleShowDetailsAction()
             }
-        }
+        })
 
         // Handle "Review/Preview" action from notification
-        NotificationCenter.default.addObserver(forName: .showOrganizationPreview, object: nil, queue: .main) { [weak self] _ in
+        notificationObservers.append(NotificationCenter.default.addObserver(forName: .showOrganizationPreview, object: nil, queue: .main) { [weak self] _ in
             guard let self = self else { return }
 
             Task { @MainActor in
                 self.handleShowDetailsAction()
             }
-        }
+        })
     }
     
     // MARK: - Notification Action Handlers

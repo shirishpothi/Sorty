@@ -199,7 +199,7 @@ struct LiquidGlassDuplicateButton: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.accentColor))
+                        .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
                 } else {
                     Image(systemName: "chevron.right")
                         .font(.caption2)

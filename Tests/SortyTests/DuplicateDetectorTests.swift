@@ -34,4 +34,17 @@ class DuplicateDetectorTests: XCTestCase {
         
         XCTAssertEqual(totalSavings, 200)
     }
+
+    @MainActor
+    func testManagerCompletesEmptyScanWithoutInvalidProgress() async {
+        let manager = DuplicateDetectionManager()
+
+        await manager.scanForDuplicates(files: [], settings: DuplicateSettings())
+
+        XCTAssertEqual(manager.state, .completed(count: 0))
+        XCTAssertEqual(manager.scanProgress, 1.0)
+        XCTAssertFalse(manager.isScanning)
+        XCTAssertTrue(manager.duplicateGroups.isEmpty)
+        XCTAssertTrue(manager.semanticGroups.isEmpty)
+    }
 }

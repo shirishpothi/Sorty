@@ -222,8 +222,6 @@ struct SortyApp: App {
     @StateObject private var steeringPromptManager = SteeringPromptManager.shared
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var updateManager = SparkleUpdateManager()
-    @StateObject private var settingsWindowAppState: AppState
-
     @StateObject private var automationOrganizer = FolderOrganizer()
 
     @State private var coordinator: AppCoordinator?
@@ -231,11 +229,8 @@ struct SortyApp: App {
 
     private let widgetSyncManager = SortyWidgetSyncManager.shared
 
-    private var backgroundActivity: NSObjectProtocol?
-
     init() {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel())
-        _settingsWindowAppState = StateObject(wrappedValue: AppState())
 
         let codexAuthManager = CodexCLIAuthManager()
         _codexAuthManager = StateObject(wrappedValue: codexAuthManager)
@@ -252,11 +247,6 @@ struct SortyApp: App {
             "confirmQuitWhileOrganizing": true,
         ])
 
-        backgroundActivity = ProcessInfo.processInfo.beginActivity(
-            options: [.userInitiated, .automaticTerminationDisabled, .suddenTerminationDisabled],
-            reason: "Monitoring watched folders for automatic organization"
-        )
-
         configureUITestStateIfNeeded()
     }
 
@@ -270,11 +260,6 @@ struct SortyApp: App {
         .commands {
             SortyCommands()
         }
-
-        Settings {
-            settingsWindowContent
-        }
-        .defaultSize(width: 1080, height: 720)
 
         MenuBarExtra(
             isInserted: Binding(
@@ -301,7 +286,6 @@ struct SortyApp: App {
     @ViewBuilder
     private func mainWindowContent(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
         mainWindowRootView(launchRequest: launchRequest)
-            .modifier(SettingsWindowRequestHandler(settingsAppState: settingsWindowAppState))
             .task {
                 configureGlobalsIfNeeded()
             }
@@ -345,24 +329,6 @@ struct SortyApp: App {
                     storageLocationsManager: storageLocationsManager
                 )
             }
-    }
-
-    private var settingsWindowContent: some View {
-        SettingsView()
-            .frame(minWidth: 960, idealWidth: 1080, minHeight: 640, idealHeight: 720)
-            .tint(SortyDesignSystem.Colors.resolvedAccent)
-            .accentColor(SortyDesignSystem.Colors.resolvedAccent)
-            .environmentObject(settingsViewModel)
-            .environmentObject(settingsWindowAppState)
-            .environmentObject(personaManager)
-            .environmentObject(customPersonaStore)
-            .environmentObject(watchedFoldersManager)
-            .environmentObject(loginItemManager)
-            .environmentObject(notificationSettings)
-            .environmentObject(openAIAuthManager)
-            .environmentObject(codexAuthManager)
-            .environmentObject(automationManager)
-            .environmentObject(learningsManager)
     }
 
     private func mainWindowRootView(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
@@ -596,29 +562,5 @@ struct SortyApp: App {
                 }
             }
         }
-    }
-}
-
-private struct SettingsWindowRequestHandler: ViewModifier {
-    @ObservedObject var settingsAppState: AppState
-    @Environment(\.openSettings) private var openSettings
-
-    func body(content: Content) -> some View {
-        content
-            .onReceive(NotificationCenter.default.publisher(for: .openSettingsWindow)) {
-                notification in
-                guard let request = notification.object as? SettingsWindowRequest else {
-                    openSettings()
-                    return
-                }
-
-                settingsAppState.selectedSettingsSection = request.section
-                settingsAppState.settingsFocusTarget = request.focusTarget
-                if let sourceAppState = notification.userInfo?["sourceAppState"] as? AppState {
-                    settingsAppState.requiresSetupRepair = sourceAppState.requiresSetupRepair
-                    settingsAppState.setupRepairMessage = sourceAppState.setupRepairMessage
-                }
-                openSettings()
-            }
     }
 }

@@ -304,25 +304,51 @@ public class DuplicateDetectionManager: ObservableObject {
         
         var mutableFiles = files
         let total = files.count
+        guard total > 0 else {
+            duplicateGroups = []
+            semanticGroups = []
+            lastScanDate = Date()
+            isScanning = false
+            scanProgress = 1.0
+            scanStage = ""
+            state = .completed(count: 0)
+            return
+        }
         
         // Step 1: Compute keys for grouping based on comparison method
-        scanStage = "Computing hashes..."
+        scanStage = settings.comparisonMethod == .exact ? "Computing hashes..." : "Reading metadata..."
+        var lastProgressUpdate = Date.distantPast
+        let progressUpdateInterval: TimeInterval = 0.12
+
+        func publishScanProgress(_ progress: Double, force: Bool = false) {
+            let now = Date()
+            guard force || now.timeIntervalSince(lastProgressUpdate) >= progressUpdateInterval else {
+                return
+            }
+
+            lastProgressUpdate = now
+            scanProgress = progress
+            state = .scanning(progress: progress)
+        }
+
         for i in 0..<mutableFiles.count {
             if Task.isCancelled { break }
             
             // Only compute hash if using Exact method or explicitly requested
             if settings.comparisonMethod == .exact && mutableFiles[i].sha256Hash == nil {
-                mutableFiles[i].sha256Hash = HashUtility.computeSHA256(for: URL(fileURLWithPath: mutableFiles[i].path))
+                let path = mutableFiles[i].path
+                mutableFiles[i].sha256Hash = await Task.detached(priority: .utility) {
+                    HashUtility.computeSHA256(for: URL(fileURLWithPath: path))
+                }.value
             }
             
             // Only update progress if not cancelled
             if !Task.isCancelled {
-                scanProgress = Double(i + 1) / Double(total)
-                state = .scanning(progress: scanProgress)
+                publishScanProgress(Double(i + 1) / Double(total), force: i + 1 == total)
             }
             
             // Yield periodically for UI updates and to allow cancellation
-            if i % 10 == 0 {
+            if i % 50 == 0 {
                 await Task.yield()
             }
         }
@@ -338,7 +364,14 @@ public class DuplicateDetectionManager: ObservableObject {
         scanStage = "Finding duplicates..."
         var groupsMap: [String: [FileItem]] = [:]
         
-        for file in mutableFiles {
+        for (index, file) in mutableFiles.enumerated() {
+            if Task.isCancelled {
+                isScanning = false
+                state = .idle
+                scanStage = ""
+                return
+            }
+
             let key: String?
             switch settings.comparisonMethod {
             case .exact:
@@ -352,6 +385,10 @@ public class DuplicateDetectionManager: ObservableObject {
             
             if let k = key {
                 groupsMap[k, default: []].append(file)
+            }
+
+            if index % 500 == 0 {
+                await Task.yield()
             }
         }
         
@@ -392,7 +429,11 @@ public class DuplicateDetectionManager: ObservableObject {
     
     public func clearResults() {
         duplicateGroups = []
+        semanticGroups = []
         lastScanDate = nil
+        scanProgress = 0
+        scanStage = ""
+        isScanning = false
         state = .idle
     }
 }

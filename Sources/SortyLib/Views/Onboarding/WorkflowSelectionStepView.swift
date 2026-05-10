@@ -111,7 +111,13 @@ public struct WorkflowSelectionStepView: View {
                                 OnboardingCustomPersonaCard(
                                     persona: persona,
                                     isSelected: personaManager.selectedCustomPersonaId == persona.id,
-                                    compact: true
+                                    compact: true,
+                                    onDelete: {
+                                        customPersonaStore.deletePersona(id: persona.id)
+                                        if personaManager.selectedCustomPersonaId == persona.id {
+                                            personaManager.selectedCustomPersonaId = nil
+                                        }
+                                    }
                                 ) {
                                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                         personaManager.selectCustomPersona(persona.id)
@@ -135,11 +141,13 @@ public struct WorkflowSelectionStepView: View {
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 32)
+                .padding(.top, 16)
+                .padding(.bottom, 28)
             }
-            .scrollClipDisabled()
+            .scrollIndicators(.automatic)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 40)
+            .clipped()
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
@@ -180,12 +188,12 @@ public struct WorkflowSelectionStepView: View {
                 VStack(spacing: 24) {
                     ZStack {
                         Circle()
-                            .fill(Color.accentColor.opacity(0.1))
+                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
                             .frame(width: 80, height: 80)
                         
                         Image(systemName: "sparkles")
                             .font(.system(size: 36))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                             .symbolEffect(.pulse, options: .repeating)
                     }
                     
@@ -210,7 +218,7 @@ public struct WorkflowSelectionStepView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color.accentColor.opacity(0.2), Color.teal.opacity(0.18)],
+                                    colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.2), Color.teal.opacity(0.18)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -219,7 +227,7 @@ public struct WorkflowSelectionStepView: View {
 
                         Image(systemName: persona.icon)
                             .font(.system(size: 34, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                     }
                     
                     VStack(spacing: 8) {
@@ -430,12 +438,12 @@ struct OnboardingPersonaCard: View {
             VStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.secondary.opacity(0.1))
+                        .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.secondary.opacity(0.1))
                         .frame(width: 60, height: 60)
                     
                     Image(systemName: persona.icon)
                         .font(.system(size: 28))
-                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                        .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
                 }
                 
                 VStack(spacing: 4) {
@@ -456,11 +464,11 @@ struct OnboardingPersonaCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? Color.accentColor.opacity(0.08) : Color(NSColor.controlBackgroundColor))
+                    .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : Color(NSColor.controlBackgroundColor))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(isHovered ? 0.3 : 0.1), lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(isHovered ? 0.3 : 0.1), lineWidth: isSelected ? 2 : 1)
             )
         }
         .buttonStyle(.plain)
@@ -495,6 +503,7 @@ struct OnboardingCustomPersonaCard: View {
     let persona: CustomPersona
     let isSelected: Bool
     var compact: Bool = false
+    var onDelete: (() -> Void)?
     let action: () -> Void
 
     @State private var isHovered = false
@@ -519,7 +528,7 @@ struct OnboardingCustomPersonaCard: View {
                         LinearGradient(
                             colors: [
                                 Color(NSColor.controlBackgroundColor),
-                                (isSelected ? Color.accentColor : Color.teal).opacity(0.06)
+                                (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.teal).opacity(0.06)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -529,12 +538,12 @@ struct OnboardingCustomPersonaCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
                     .stroke(
-                        isSelected ? Color.accentColor.opacity(0.7) : Color.secondary.opacity(isHovered ? 0.28 : 0.12),
+                        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.7) : Color.secondary.opacity(isHovered ? 0.28 : 0.12),
                         lineWidth: isSelected ? 1.5 : 1
                     )
             )
             .shadow(
-                color: (isSelected ? Color.accentColor : Color.black).opacity(isHovered || isSelected ? 0.12 : 0.06),
+                color: (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.black).opacity(isHovered || isSelected ? 0.12 : 0.06),
                 radius: isHovered || isSelected ? 20 : 10,
                 x: 0,
                 y: isHovered || isSelected ? 10 : 5
@@ -564,6 +573,19 @@ struct OnboardingCustomPersonaCard: View {
             Button("Copy Prompt", systemImage: "doc.text") {
                 copyWorkflowText(persona.promptModifier)
             }
+
+            if let onDelete {
+                Divider()
+
+                Button(role: .destructive) {
+                    HapticFeedbackManager.shared.tap()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        onDelete()
+                    }
+                } label: {
+                    Label("Delete Workflow", systemImage: "trash")
+                }
+            }
         }
         .onHover { hovering in
             if hovering && !isHovered {
@@ -581,7 +603,7 @@ struct OnboardingCustomPersonaCard: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color.accentColor.opacity(0.22), Color.teal.opacity(0.16)],
+                                colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), Color.teal.opacity(0.16)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -590,7 +612,7 @@ struct OnboardingCustomPersonaCard: View {
 
                     Image(systemName: persona.icon)
                         .font(.system(size: 26, weight: .semibold))
-                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                        .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -603,12 +625,12 @@ struct OnboardingCustomPersonaCard: View {
 
                         Text(isSelected ? "Selected" : "Custom")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                            .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 5)
                             .background(
                                 Capsule()
-                                    .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.12))
+                                    .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.14) : Color.secondary.opacity(0.12))
                             )
                     }
 
@@ -646,7 +668,7 @@ struct OnboardingCustomPersonaCard: View {
 
                 Image(systemName: persona.icon)
                     .font(.system(size: 28))
-                    .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                    .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
             }
 
             VStack(spacing: 4) {
@@ -668,12 +690,12 @@ struct OnboardingCustomPersonaCard: View {
 
     private var compactIconFill: AnyShapeStyle {
         if isSelected {
-            return AnyShapeStyle(Color.accentColor.opacity(0.18))
+            return AnyShapeStyle(SortyDesignSystem.Colors.resolvedAccent.opacity(0.18))
         }
 
         return AnyShapeStyle(
             LinearGradient(
-                colors: [Color.accentColor.opacity(0.18), Color.teal.opacity(0.14)],
+                colors: [SortyDesignSystem.Colors.resolvedAccent.opacity(0.18), Color.teal.opacity(0.14)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

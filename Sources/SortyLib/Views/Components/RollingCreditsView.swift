@@ -72,11 +72,6 @@ public enum OpenSourceCredits {
             name: "Permiso",
             license: "MIT",
             url: URL(string: "https://github.com/jevonmao/Permiso")!
-        ),
-        CreditItem(
-            name: "NotifiCLI",
-            license: "MIT",
-            url: URL(string: "https://github.com/saihgupr/NotifiCLI")!
         )
     ]
 }
@@ -587,11 +582,7 @@ struct RollingCreditsView: View {
 
     private var cycleHeight: CGFloat {
         guard !items.isEmpty else { return 0 }
-        return contentHeight + trailingGap
-    }
-
-    private var trailingGap: CGFloat {
-        max(0, viewportHeight + rowHeight - contentHeight)
+        return contentHeight
     }
 
     var body: some View {

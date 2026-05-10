@@ -9,9 +9,6 @@ import SwiftUI
 
 struct AIProviderSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
-    @EnvironmentObject var appState: AppState
-    @EnvironmentObject var openAIAuth: SubscriptionAuthManager
-    @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
     
     @State private var testConnectionStatus: String?
@@ -21,30 +18,9 @@ struct AIProviderSettingsView: View {
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
     @State private var isDetailsExpanded = false
-    @State private var codexTerminalButtonState: CodexActionVisualState = .idle
-    @State private var codexVerifyButtonState: CodexActionVisualState = .idle
-    @State private var isHoveringCodexTerminalButton = false
-    @State private var isHoveringCodexVerifyButton = false
-    @State private var codexTerminalResetTask: Task<Void, Never>?
-    @State private var codexVerifyResetTask: Task<Void, Never>?
     
     var body: some View {
         VStack(spacing: 16) {
-            if let setupRepairMessage = appState.setupRepairMessage, appState.requiresSetupRepair {
-                SettingsCard(title: "Setup Repair", icon: "wrench.and.screwdriver", color: .orange) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(setupRepairMessage)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text("Update your provider settings below, then use Test Connection to verify the setup.")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-            }
-
             // Provider Selection
             SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
                 VStack(spacing: 8) {
@@ -86,31 +62,14 @@ struct AIProviderSettingsView: View {
                     .animatedAppearance(delay: 0.15)
             }
         }
-        .modelSelectionOverlay(
-            isPresented: $showModelPicker,
-            currentProvider: viewModel.config.provider,
-            currentModel: viewModel.config.model,
-            onSelect: { provider, model in
-                viewModel.config.provider = provider
-                viewModel.config.model = model
-            }
-        )
         .onAppear {
             if viewModel.config.provider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
-            }
-            if viewModel.config.provider == .openAI {
-                openAIAuth.checkAuthenticationStatus()
-                codexAuth.checkStatus()
             }
         }
         .onChange(of: viewModel.config.provider) { _, newProvider in
             if newProvider == .githubCopilot {
                 copilotAuth.checkAuthenticationStatus()
-            }
-            if newProvider == .openAI {
-                openAIAuth.checkAuthenticationStatus()
-                codexAuth.checkStatus()
             }
         }
     }
@@ -128,47 +87,29 @@ struct AIProviderSettingsView: View {
                         Text("Signed in")
                             .font(.headline)
                         if let username = copilotAuth.username {
-                            ZStack {
-                                Text(username)
-                                    .opacity(isHoveringUsername ? 0 : 1)
-                                    .blur(radius: 10)
-
-                                Text(username)
-                                    .opacity(isHoveringUsername ? 1 : 0)
-                            }
+                            Text(username)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 6)
-                                .clipShape(Capsule())
-                                .padding(.vertical, -4)
-                                .padding(.horizontal, -6)
-                                .animation(
-                                    isHoveringUsername
-                                        ? .easeOut(duration: 0.34)
-                                        : .easeInOut(duration: 0.24),
-                                    value: isHoveringUsername
-                                )
+                                .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
+                                .animation(.spring(), value: isHoveringUsername)
                                 .onHover { hovering in
-                                    guard hovering != isHoveringUsername else { return }
                                     isHoveringUsername = hovering
-                                    HapticFeedbackManager.shared.light()
                                 }
                         }
                     }
                     
                     Spacer()
                     
-                    if viewModel.isLoadingModels {
+                    if !viewModel.availableModels.isEmpty {
+                        Picker("", selection: $viewModel.config.model) {
+                            ForEach(viewModel.availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 140)
+                    } else if viewModel.isLoadingModels {
                         BouncingSpinner(size: 12, color: .secondary)
-                    } else {
-                        ModelSelectorRow(
-                            provider: .githubCopilot,
-                            model: viewModel.config.model,
-                            onTap: { showModelPicker = true }
-                        )
-                        .frame(maxWidth: 220)
-                        .modelSelectorTriggerBounds()
                     }
                     
                     Button("Sign Out") {
@@ -188,7 +129,6 @@ struct AIProviderSettingsView: View {
                                 .underline()
                                 .foregroundColor(.blue)
                         }
-                        .trackHoveredURL(URL(string: code.verificationUri)!)
                     }
                     
                     StepCard(number: 2, title: "Enter this code") {
@@ -234,15 +174,7 @@ struct AIProviderSettingsView: View {
                         .foregroundColor(.secondary)
                     
                     Button {
-                        Task {
-                            do {
-                                try await copilotAuth.startDeviceFlow()
-                            } catch {
-                                await MainActor.run {
-                                    copilotAuth.authError = error.localizedDescription
-                                }
-                            }
-                        }
+                        Task { try? await copilotAuth.startDeviceFlow() }
                         HapticFeedbackManager.shared.tap()
                     } label: {
                         HStack {
@@ -283,19 +215,15 @@ struct AIProviderSettingsView: View {
                         placeholder: viewModel.config.provider == .ollama ? "http://localhost:11434/v1" : "https://api.openai.com"
                     )
                 }
-
-                if supportsSubscriptionAuthUI {
-                    subscriptionAuthSection
-                } else {
-                    SettingsSecureField(
-                        title: "API Key",
-                        text: Binding(
-                            get: { viewModel.config.apiKey ?? "" },
-                            set: { viewModel.config.apiKey = $0.isEmpty ? nil : $0 }
-                        ),
-                        isOptional: !viewModel.config.requiresAPIKey
-                    )
-                }
+                
+                SettingsSecureField(
+                    title: "API Key",
+                    text: Binding(
+                        get: { viewModel.config.apiKey ?? "" },
+                        set: { viewModel.config.apiKey = $0.isEmpty ? nil : $0 }
+                    ),
+                    isOptional: !viewModel.config.requiresAPIKey
+                )
                 
                 if let url = viewModel.config.provider.apiKeyURL {
                     HStack(spacing: 4) {
@@ -307,7 +235,6 @@ struct AIProviderSettingsView: View {
                                 .font(.caption)
                                 .underline()
                         }
-                        .trackHoveredURL(url)
                     }
                 } else {
                     Text(viewModel.config.provider.apiKeyHelpText)
@@ -325,267 +252,20 @@ struct AIProviderSettingsView: View {
                         model: viewModel.config.model,
                         onTap: { showModelPicker = true }
                     )
-                    .modelSelectorTriggerBounds()
                 }
             }
         }
-    }
-
-    private var subscriptionAuthSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker("Authentication", selection: selectedAuthMethod) {
-                ForEach(viewModel.config.provider.supportedAuthMethods, id: \.self) { method in
-                    Text(method.displayName).tag(method)
+        .sheet(isPresented: $showModelPicker) {
+            ModelSelectionPopover(
+                isPresented: $showModelPicker,
+                currentProvider: viewModel.config.provider,
+                currentModel: viewModel.config.model,
+                onSelect: { provider, model in
+                    viewModel.config.provider = provider
+                    viewModel.config.model = model
                 }
-            }
-            .pickerStyle(.menu)
-            .accessibilityIdentifier("ProviderAuthMethodPicker")
-
-            switch viewModel.config.authMethod(for: viewModel.config.provider) {
-            case .apiKey:
-                SettingsSecureField(
-                    title: "API Key",
-                    text: Binding(
-                        get: { viewModel.config.apiKey ?? "" },
-                        set: { viewModel.config.apiKey = $0.isEmpty ? nil : $0 }
-                    ),
-                    isOptional: false
-                )
-
-            case .accountSignIn:
-                codexCLISignInSection
-
-            case .manualSessionToken:
-                SettingsSecureField(
-                    title: "API Key",
-                    text: Binding(
-                        get: { viewModel.config.apiKey ?? "" },
-                        set: { viewModel.config.apiKey = $0.isEmpty ? nil : $0 }
-                    ),
-                    isOptional: false
-                )
-            }
+            )
         }
-    }
-
-    private var codexCLISignInSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if codexAuth.isAuthenticated {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.green)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Signed in via Codex CLI")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        if let email = codexAuth.accountEmail {
-                            ZStack {
-                                Text(email)
-                                    .opacity(isHoveringUsername ? 0 : 1)
-                                    .blur(radius: 8)
-
-                                Text(email)
-                                    .opacity(isHoveringUsername ? 1 : 0)
-                            }
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.vertical, 3)
-                                .padding(.horizontal, 5)
-                                .clipShape(Capsule())
-                                .animation(
-                                    isHoveringUsername
-                                        ? .easeOut(duration: 0.34)
-                                        : .easeInOut(duration: 0.24),
-                                    value: isHoveringUsername
-                                )
-                                .onHover { hovering in
-                                    guard hovering != isHoveringUsername else { return }
-                                    isHoveringUsername = hovering
-                                    HapticFeedbackManager.shared.light()
-                                }
-                        }
-                    }
-
-                    Spacer()
-
-                    Button("Sign Out") {
-                        codexAuth.signOut()
-                        openAIAuth.checkAuthenticationStatus()
-                        HapticFeedbackManager.shared.tap()
-                        viewModel.updateAvailableModels(force: true)
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("ProviderSignOutButton")
-                }
-                .padding(10)
-                .background(Color.green.opacity(0.08))
-                .cornerRadius(8)
-            } else {
-                codexCLISetupInstructions
-            }
-        }
-    }
-
-    private var codexCLISetupInstructions: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Sign in with your OpenAI account using Codex CLI to enable Codex integration in Sorty.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Disclaimer", systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.orange)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    disclaimerBullet("This is an unofficial integration and is not affiliated with or endorsed by OpenAI.")
-                    disclaimerBullet("You must have an active ChatGPT Plus or Pro subscription")
-                    disclaimerBullet("You understand your data will be sent to OpenAI's servers via Codex CLI")
-                    disclaimerBullet("You agree to comply with OpenAI's Terms of Service")
-                    disclaimerBullet("This is for personal, non-automated use only")
-                    disclaimerBullet("This software is provided 'as is' without warranties")
-                }
-            }
-            .padding(10)
-            .background(Color.orange.opacity(0.06))
-            .cornerRadius(8)
-
-            // Step 1
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Step 1: Sign in to Codex CLI")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-
-                Text("Install Node.js 18+, then install Codex CLI and sign in:")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                codexCommandBlock("npm i -g @openai/codex")
-                codexCommandBlock("codex login")
-
-                Button {
-                    startCodexTerminalSignIn()
-                } label: {
-                    CodexActionButtonLabel(
-                        idleTitle: "Open Terminal & Sign In",
-                        activatingTitle: "Opening Terminal...",
-                        successTitle: "Terminal Opened",
-                        failureTitle: "Could Not Open Terminal",
-                        idleSymbol: "terminal",
-                        state: codexTerminalButtonState,
-                        isHovered: isHoveringCodexTerminalButton
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("CodexTerminalSignInButton")
-                .onHover { hovering in
-                    if hovering && !isHoveringCodexTerminalButton {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                    isHoveringCodexTerminalButton = hovering
-                }
-            }
-
-            // Step 2
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Step 2: Verify")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-
-                Text("We automatically verify that Codex CLI is installed and that your auth tokens are present in ~/.codex/auth.json. You can also run a manual verify anytime.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
-                Button {
-                    manuallyVerifyCodexCLI()
-                } label: {
-                    CodexActionButtonLabel(
-                        idleTitle: "Verify Codex CLI",
-                        activatingTitle: "Verifying...",
-                        successTitle: "Verified",
-                        failureTitle: "Verification Failed",
-                        idleSymbol: "checkmark.shield",
-                        state: codexVerifyButtonState,
-                        isHovered: isHoveringCodexVerifyButton
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("CodexVerifyButton")
-                .onHover { hovering in
-                    if hovering && !isHoveringCodexVerifyButton {
-                        HapticFeedbackManager.shared.selection()
-                    }
-                    isHoveringCodexVerifyButton = hovering
-                }
-
-                HStack(spacing: 8) {
-                    BouncingSpinner(size: 10, color: .secondary)
-                    Text("Automatic verification runs every few seconds while this panel is open.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                if !codexAuth.isCodexInstalled {
-                    Label("Codex CLI not detected", systemImage: "xmark.circle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                } else if !codexAuth.isAuthenticated {
-                    Label("Codex CLI installed, but not signed in", systemImage: "arrow.right.circle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
-            }
-            .task {
-                await autoVerifyCodexSignInLoop()
-            }
-
-            if let error = codexAuth.authError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func disclaimerBullet(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text("•")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(text)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    @ViewBuilder
-    private func codexCommandBlock(_ command: String) -> some View {
-        HStack {
-            Text(command)
-                .font(.system(.caption, design: .monospaced))
-                .textSelection(.enabled)
-
-            Spacer()
-
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(command, forType: .string)
-                HapticFeedbackManager.shared.tap()
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Copy command")
-        }
-        .padding(8)
-        .background(Color.black.opacity(0.05))
-        .cornerRadius(6)
     }
 
     private var appleConfigSection: some View {
@@ -601,7 +281,6 @@ struct AIProviderSettingsView: View {
                         model: viewModel.config.model,
                         onTap: { showModelPicker = true }
                     )
-                    .modelSelectorTriggerBounds()
                 }
 
                 if !viewModel.isAppleModelAvailable {
@@ -621,12 +300,23 @@ struct AIProviderSettingsView: View {
                 }
             }
         }
+        .sheet(isPresented: $showModelPicker) {
+            ModelSelectionPopover(
+                isPresented: $showModelPicker,
+                currentProvider: .appleFoundationModel,
+                currentModel: viewModel.config.model,
+                onSelect: { provider, model in
+                    viewModel.config.provider = provider
+                    viewModel.config.model = model
+                }
+            )
+        }
     }
     
     private var connectionSection: some View {
         SettingsCard(title: "Connection", icon: "network", color: .blue) {
             VStack(alignment: .leading, spacing: 12) {
-                if showsRequiresAPIKeyToggle {
+                if viewModel.config.provider != .appleFoundationModel {
                     Toggle(isOn: $viewModel.config.requiresAPIKey) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Requires API Key")
@@ -641,7 +331,7 @@ struct AIProviderSettingsView: View {
                     Divider()
                 }
                 
-                HStack(spacing: 12) {
+                VStack(spacing: 12) {
                     Button(action: testConnection) {
                         HStack(spacing: 6) {
                             if isTestingConnection {
@@ -656,7 +346,7 @@ struct AIProviderSettingsView: View {
                     .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
                     
                     if let status = testConnectionStatus {
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .center, spacing: 4) {
                             Label(
                                 status.contains("Success") ? "Connected" : "Connection Failed",
                                 systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
@@ -685,6 +375,7 @@ struct AIProviderSettingsView: View {
                                     .buttonStyle(.plain)
                                     .help("Copy error message")
                                 }
+                                .frame(maxWidth: .infinity, alignment: .center)
                                 
                                 if let details = testConnectionDetails, !details.isEmpty {
                                     DisclosureGroup(isExpanded: $isDetailsExpanded) {
@@ -717,6 +408,7 @@ struct AIProviderSettingsView: View {
                         .transition(.scale.combined(with: .opacity))
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
         }
     }
@@ -733,7 +425,6 @@ struct AIProviderSettingsView: View {
                 try await viewModel.testConnection()
                 HapticFeedbackManager.shared.success()
                 await MainActor.run {
-                    appState.clearSetupRepairState()
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         testConnectionStatus = "Success: Connection test passed"
                         testConnectionDetails = nil
@@ -780,160 +471,16 @@ struct AIProviderSettingsView: View {
         }
     }
 
-    @MainActor
-    @discardableResult
-    private func verifyCodexSignInStatus() -> Bool {
-        let wasAuthenticated = codexAuth.isAuthenticated
-        codexAuth.checkStatus()
-        openAIAuth.checkAuthenticationStatus()
-        let becameAuthenticated = codexAuth.isAuthenticated && !wasAuthenticated
-        if becameAuthenticated {
-            viewModel.updateAvailableModels(force: true)
-        }
-        return becameAuthenticated
-    }
-
-    private func autoVerifyCodexSignInLoop() async {
-        while !Task.isCancelled {
-            let becameAuthenticated = await MainActor.run {
-                verifyCodexSignInStatus()
-            }
-
-            if becameAuthenticated {
-                await MainActor.run {
-                    codexVerifyButtonState = .success
-                    HapticFeedbackManager.shared.success()
-                    scheduleCodexVerifyButtonReset()
-                }
-            }
-
-            let shouldContinue = await MainActor.run {
-                viewModel.config.provider == .openAI
-                    && viewModel.config.authMethod(for: .openAI) == .accountSignIn
-                    && !codexAuth.isAuthenticated
-            }
-            if !shouldContinue {
-                break
-            }
-
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-        }
-    }
-
-    @MainActor
-    private func startCodexTerminalSignIn() {
-        HapticFeedbackManager.shared.tap()
-        codexTerminalButtonState = .activating
-        codexAuth.openTerminalWithLogin()
-
-        if codexAuth.authError == nil {
-            codexTerminalButtonState = .success
-            HapticFeedbackManager.shared.success()
-        } else {
-            codexTerminalButtonState = .failure
-            HapticFeedbackManager.shared.error()
-        }
-
-        scheduleCodexTerminalButtonReset()
-    }
-
-    @MainActor
-    private func manuallyVerifyCodexCLI() {
-        HapticFeedbackManager.shared.tap()
-        codexVerifyButtonState = .activating
-
-        let becameAuthenticated = verifyCodexSignInStatus()
-        if codexAuth.isAuthenticated || becameAuthenticated {
-            codexVerifyButtonState = .success
-            HapticFeedbackManager.shared.success()
-            scheduleCodexVerifyButtonReset()
-            return
-        }
-
-        codexVerifyButtonState = .failure
-        HapticFeedbackManager.shared.error()
-        if !codexAuth.isCodexInstalled {
-            codexAuth.authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
-        } else if codexAuth.authError == nil {
-            codexAuth.authError = "Auth tokens not found. Run 'codex login' first."
-        }
-        scheduleCodexVerifyButtonReset()
-    }
-
-    @MainActor
-    private func scheduleCodexTerminalButtonReset() {
-        codexTerminalResetTask?.cancel()
-        codexTerminalResetTask = Task {
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            await MainActor.run {
-                codexTerminalButtonState = .idle
-            }
-        }
-    }
-
-    @MainActor
-    private func scheduleCodexVerifyButtonReset() {
-        codexVerifyResetTask?.cancel()
-        codexVerifyResetTask = Task {
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            await MainActor.run {
-                codexVerifyButtonState = .idle
-            }
-        }
-    }
-
     private func openShortcutsApp() {
         HapticFeedbackManager.shared.tap()
         if let shortcutsURL = URL(string: "shortcuts://") {
             NSWorkspace.shared.open(shortcutsURL)
         }
     }
-
-    private var supportsSubscriptionAuthUI: Bool {
-        FeatureFlags.subscriptionAuthEnabled && viewModel.config.provider.supportsSubscriptionAuth
-    }
-
-    private var selectedAuthMethod: Binding<ProviderAuthMethod> {
-        Binding(
-            get: { viewModel.config.authMethod(for: viewModel.config.provider) },
-            set: { newMethod in
-                setAuthMethod(newMethod)
-            }
-        )
-    }
-
-    private var showsRequiresAPIKeyToggle: Bool {
-        guard viewModel.config.provider != .appleFoundationModel else {
-            return false
-        }
-        if supportsSubscriptionAuthUI, viewModel.config.authMethod(for: viewModel.config.provider) != .apiKey {
-            return false
-        }
-        return true
-    }
-
-    private func setAuthMethod(_ method: ProviderAuthMethod) {
-        let provider = viewModel.config.provider
-        var next = viewModel.config
-        next.setAuthMethod(method, for: provider)
-        if method == .apiKey {
-            next.apiKey = KeychainManager.get(key: provider.keychainKey)
-        } else {
-            next.apiKey = nil
-        }
-        viewModel.config = next
-        HapticFeedbackManager.shared.selection()
-        viewModel.updateAvailableModels(force: true)
-        openAIAuth.checkAuthenticationStatus()
-    }
 }
 
 #Preview {
-    let codexAuthManager = CodexCLIAuthManager()
-
     AIProviderSettingsView()
         .environmentObject(SettingsViewModel())
-        .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
-        .environmentObject(codexAuthManager)
         .frame(width: 500, height: 600)
 }

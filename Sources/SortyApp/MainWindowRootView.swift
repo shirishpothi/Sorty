@@ -201,6 +201,8 @@ struct MainWindowRootView: View {
             .environmentObject(learningsManager)
             .environmentObject(storageLocationsManager)
             .environmentObject(automationManager)
+            .environmentObject(openAIAuth)
+            .environmentObject(codexAuth)
             .environmentObject(notificationSettings)
             .environmentObject(windowSession.healthManager)
             .environmentObject(loginItemManager)

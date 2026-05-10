@@ -24,20 +24,29 @@ struct WatchedFoldersView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            headerView
-            
-            Divider()
-
-            // Folder Grid/List
-            ZStack {
-                if watchedFoldersManager.folders.isEmpty {
+            if watchedFoldersManager.folders.isEmpty {
+                ZStack(alignment: .topLeading) {
                     EmptyWatchedFoldersView(onAddFolder: {
                         HapticFeedbackManager.shared.tap()
                         showingFolderPicker = true
+                    }, onAddSuggestedFolder: { url in
+                        addWatchedFolder(from: url)
                     })
                     .transition(TransitionStyles.scaleAndFade)
-                } else {
+
+                    emptyHeaderView
+                        .padding(.horizontal, 32)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(NSColor.windowBackgroundColor))
+            } else {
+                // Header
+                headerView
+
+                Divider()
+
+                // Folder Grid/List
+                ZStack {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
                             LazyVStack(spacing: 12) {
@@ -58,9 +67,10 @@ struct WatchedFoldersView: View {
                     }
                     .transition(TransitionStyles.slideFromRight)
                 }
+                .animation(.pageTransition, value: watchedFoldersManager.folders.isEmpty)
             }
-            .animation(.pageTransition, value: watchedFoldersManager.folders.isEmpty)
         }
+        .animation(.pageTransition, value: watchedFoldersManager.folders.isEmpty)
         .fileImporter(
             isPresented: $showingFolderPicker,
             allowedContentTypes: [.folder],
@@ -69,35 +79,7 @@ struct WatchedFoldersView: View {
             switch result {
             case .success(let urls):
                 if let url = urls.first {
-                    HapticFeedbackManager.shared.success()
-
-                    // Start accessing the security-scoped resource before creating the bookmark.
-                    // fileImporter URLs are security-scoped but the resource must be
-                    // explicitly started to ensure bookmark creation captures the scope.
-                    let didStart = url.startAccessingSecurityScopedResource()
-
-                    // Create security-scoped bookmark
-                    let bookmarkData = try? url.bookmarkData(
-                        options: .withSecurityScope,
-                        includingResourceValuesForKeys: nil,
-                        relativeTo: nil
-                    )
-
-                    if didStart {
-                        url.stopAccessingSecurityScopedResource()
-                    }
-                    
-                    if bookmarkData == nil {
-                        DebugLogger.log("Failed to create security-scoped bookmark for \(url.path)")
-                    }
-                    
-                    let folder = WatchedFolder(
-                        path: url.path,
-                        bookmarkData: bookmarkData
-                    )
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        watchedFoldersManager.addFolder(folder)
-                    }
+                    addWatchedFolder(from: url)
                 }
             case .failure(let error):
                 HapticFeedbackManager.shared.error()
@@ -109,6 +91,37 @@ struct WatchedFoldersView: View {
         }
         .opacity(contentOpacity)
         .navigationTitle("Watched Folders")
+    }
+
+    private func addWatchedFolder(from url: URL) {
+        HapticFeedbackManager.shared.success()
+
+        // Start accessing the security-scoped resource before creating the bookmark.
+        // fileImporter URLs are security-scoped but the resource must be explicitly
+        // started to ensure bookmark creation captures the scope.
+        let didStart = url.startAccessingSecurityScopedResource()
+
+        let bookmarkData = try? url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+
+        if didStart {
+            url.stopAccessingSecurityScopedResource()
+        }
+
+        if bookmarkData == nil {
+            DebugLogger.log("Failed to create security-scoped bookmark for \(url.path)")
+        }
+
+        let folder = WatchedFolder(
+            path: url.path,
+            bookmarkData: bookmarkData
+        )
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            watchedFoldersManager.addFolder(folder)
+        }
     }
     
     private func handleFolderDrop(providers: [NSItemProvider]) -> Bool {
@@ -181,10 +194,25 @@ struct WatchedFoldersView: View {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
             .accessibilityIdentifier("AddWatchedFolderButton")
         }
         .padding()
         .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    private var emptyHeaderView: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Watched Folders")
+                    .font(.largeTitle.bold())
+
+                Text("Monitor folders and automatically organize new files as they arrive")
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
     }
 }
 
@@ -192,6 +220,13 @@ struct WatchedFoldersView: View {
 
 struct EmptyWatchedFoldersView: View {
     let onAddFolder: () -> Void
+    let onAddSuggestedFolder: (URL) -> Void
+
+    private let suggestions: [(name: String, icon: String, directory: FileManager.SearchPathDirectory)] = [
+        ("Downloads", "arrow.down.circle", .downloadsDirectory),
+        ("Desktop", "menubar.dock.rectangle", .desktopDirectory),
+        ("Documents", "doc.text", .documentDirectory)
+    ]
     
     var body: some View {
         VStack(spacing: 24) {
@@ -218,9 +253,15 @@ struct EmptyWatchedFoldersView: View {
                     .foregroundStyle(.secondary)
                 
                 HStack(spacing: 12) {
-                    FolderSuggestionPill(name: "Downloads", icon: "arrow.down.circle")
-                    FolderSuggestionPill(name: "Desktop", icon: "menubar.dock.rectangle")
-                    FolderSuggestionPill(name: "Documents", icon: "doc.text")
+                    ForEach(suggestions, id: \.name) { suggestion in
+                        FolderSuggestionPill(name: suggestion.name, icon: suggestion.icon) {
+                            guard let url = FileManager.default.urls(for: suggestion.directory, in: .userDomainMask).first else {
+                                HapticFeedbackManager.shared.error()
+                                return
+                            }
+                            onAddSuggestedFolder(url)
+                        }
+                    }
                 }
             }
 
@@ -230,6 +271,7 @@ struct EmptyWatchedFoldersView: View {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -238,18 +280,35 @@ struct EmptyWatchedFoldersView: View {
 struct FolderSuggestionPill: View {
     let name: String
     let icon: String
+    let action: () -> Void
+    @State private var isHovered = false
     
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
-            Text(name)
-                .font(.caption)
+        Button {
+            HapticFeedbackManager.shared.tap()
+            action()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(name)
+                    .font(.caption)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.secondary.opacity(isHovered ? 0.16 : 0.1))
+            .clipShape(Capsule())
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.1))
-        .clipShape(Capsule())
+        .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.03 : 1)
+        .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isHovered)
+        .onHover { hovering in
+            if hovering && !isHovered {
+                HapticFeedbackManager.shared.selection()
+            }
+            isHovered = hovering
+        }
+        .accessibilityLabel("Add \(name) to watched folders")
     }
 }
 
@@ -307,21 +366,21 @@ struct WatchedFolderCard: View {
 
     private var cardBackgroundColor: Color {
         if isHighlighted {
-            return Color.accentColor.opacity(highlightPulse ? 0.14 : 0.08)
+            return SortyDesignSystem.Colors.resolvedAccent.opacity(highlightPulse ? 0.14 : 0.08)
         }
         return isHovered ? Color.primary.opacity(0.03) : Color.clear
     }
 
     private var cardBorderColor: Color {
         if isHighlighted {
-            return Color.accentColor.opacity(highlightPulse ? 0.9 : 0.45)
+            return SortyDesignSystem.Colors.resolvedAccent.opacity(highlightPulse ? 0.9 : 0.45)
         }
         return folder.exists ? Color.white.opacity(0.1) : Color.red.opacity(0.3)
     }
 
     private var cardShadowColor: Color {
         if isHighlighted {
-            return Color.accentColor.opacity(highlightPulse ? 0.35 : 0.16)
+            return SortyDesignSystem.Colors.resolvedAccent.opacity(highlightPulse ? 0.35 : 0.16)
         }
         return .black.opacity(0.03)
     }

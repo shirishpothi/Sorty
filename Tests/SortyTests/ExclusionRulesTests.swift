@@ -62,6 +62,58 @@ class ExclusionRulesTests: XCTestCase {
     }
 
     @MainActor
+    func testBlankTextPatternsDoNotExcludeEverything() {
+        let blankRules = [
+            ExclusionRule(type: .fileExtension, pattern: ""),
+            ExclusionRule(type: .fileName, pattern: "   "),
+            ExclusionRule(type: .folderName, pattern: "\n"),
+            ExclusionRule(type: .pathContains, pattern: "\t"),
+            ExclusionRule(type: .regex, pattern: "")
+        ]
+
+        blankRules.forEach(manager.addRule)
+
+        let file = FileItem(path: "/Users/test/Documents/report.pdf", name: "report", extension: "pdf", size: 0, isDirectory: false)
+        XCTAssertFalse(manager.shouldExclude(file))
+        XCTAssertTrue(manager.matchingRules(for: file).isEmpty)
+    }
+
+    @MainActor
+    func testExtensionExclusionNormalizesDotsAndWhitespace() {
+        let rule = ExclusionRule(type: .fileExtension, pattern: " .TMP ")
+        manager.addRule(rule)
+
+        let file = FileItem(path: "/p/a.tmp", name: "a", extension: "tmp", size: 0, isDirectory: false)
+        XCTAssertTrue(manager.shouldExclude(file))
+    }
+
+    @MainActor
+    func testExclusionEnforcerRemovesNestedViolationsFromAIPlan() {
+        let excludedFile = FileItem(path: "/p/cache/secret.tmp", name: "secret", extension: "tmp", size: 0, isDirectory: false)
+        let allowedFile = FileItem(path: "/p/report.pdf", name: "report", extension: "pdf", size: 0, isDirectory: false)
+        manager.addRule(ExclusionRule(type: .fileExtension, pattern: "tmp"))
+
+        let plan = OrganizationPlan(suggestions: [
+            FolderSuggestion(
+                folderName: "Documents",
+                files: [allowedFile],
+                subfolders: [
+                    FolderSuggestion(folderName: "Temp", files: [excludedFile])
+                ]
+            )
+        ])
+
+        let result = ExclusionEnforcer(exclusionManager: manager).validate(plan)
+
+        XCTAssertFalse(result.isValid)
+        XCTAssertEqual(result.violationCount, 1)
+        XCTAssertEqual(result.violations.first?.file.id, excludedFile.id)
+        XCTAssertEqual(result.cleanedPlan?.suggestions.first?.files, [allowedFile])
+        XCTAssertTrue(result.cleanedPlan?.suggestions.first?.subfolders.isEmpty == true)
+        XCTAssertEqual(result.cleanedPlan?.unorganizedFiles, [excludedFile])
+    }
+
+    @MainActor
     func testRemoveLegacyLearningsLinkedRulesKeepsManualRules() {
         let legacyRule = ExclusionRule(
             type: .folderName,

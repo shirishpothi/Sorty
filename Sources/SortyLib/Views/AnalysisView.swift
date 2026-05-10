@@ -5,6 +5,7 @@
 //  Real-time organization display with streaming progress
 //
 
+import Beam
 import Combine
 import SwiftUI
 import UniformTypeIdentifiers
@@ -337,10 +338,12 @@ struct AnalysisView: View {
     }
 
     private var progressSection: some View {
-        StreamingProgressRing(
+        StreamingProgressBeam(
             progress: organizer.progress,
+            stage: organizer.organizationStage,
             elapsedSeconds: Int(organizer.elapsedTime),
-            isEstablishingConnection: isEstablishingConnection
+            isEstablishingConnection: isEstablishingConnection,
+            state: organizer.state
         )
     }
 
@@ -619,92 +622,81 @@ struct AnalysisView: View {
     }
 }
 
-private struct StreamingProgressRing: View {
+/// Mid-organization progress card using Beam's reference playground samples.
+private struct StreamingProgressBeam: View {
     let progress: Double
+    let stage: String
     let elapsedSeconds: Int
     let isEstablishingConnection: Bool
+    let state: OrganizationState
+
+    private var clampedProgress: Double { max(0, min(1, progress)) }
+    private var percent: Int { Int((clampedProgress * 100).rounded()) }
+
+    private var displayedStage: String {
+        let trimmed = stage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return isEstablishingConnection ? "Establishing connection..." : "Working..."
+        }
+        return trimmed
+    }
 
     var body: some View {
-        ZStack {
-            // Dark glass backdrop — keeps text legible and gives the ring depth
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.black.opacity(0.30),
-                            Color.black.opacity(0.12),
-                            .clear,
-                        ],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 86
-                    )
-                )
-                .frame(width: 172, height: 172)
-
-            // Faint accent halo that sits behind the track ring
-            Circle()
-                .stroke(
-                    AngularGradient(
-                        colors: [
-                            Color.accentColor.opacity(0.0),
-                            Color.accentColor.opacity(0.12),
-                            Color.accentColor.opacity(0.0),
-                        ],
-                        center: .center
-                    ),
-                    lineWidth: 22
-                )
-                .frame(width: 152, height: 152)
-                .blur(radius: 10)
-
-            // Thin glassy rim
-            Circle()
-                .stroke(
-                    LinearGradient(
-                        colors: [.white.opacity(0.18), .white.opacity(0.04)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-                .frame(width: 152, height: 152)
-
-            SortyGradientCircularTrackProgress(
-                progress: progress,
-                accent: .accentColor,
-                size: 152,
-                lineWidth: 11,
-                isIndeterminate: isEstablishingConnection && progress <= 0.02
-            )
-
-            VStack(spacing: 4) {
-                Text("\(Int(progress * 100))%")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.white, .white.opacity(0.85)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.3), value: Int(progress * 100))
-
-                if elapsedSeconds > 0 {
-                    Text(Self.formatTime(elapsedSeconds))
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.62))
-                        .monospacedDigit()
-                }
-            }
-            .accessibilityIdentifier("AnalysisPercentageText")
+        VStack(spacing: 0) {
+            progressCard
         }
-        .frame(width: 172, height: 172)
+        .frame(maxWidth: 460)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Organization preview progress")
-        .accessibilityValue("\(Int(progress * 100)) percent")
+        .accessibilityLabel("Organization progress")
+        .accessibilityValue("\(percent) percent, stage \(displayedStage)")
+        .accessibilityIdentifier("AnalysisPercentageText")
+    }
+
+    // MARK: - Progress card
+
+    private var progressCard: some View {
+        ZStack {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(displayedStage)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Text("\(percent)%")
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut(duration: 0.3), value: percent)
+            }
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(width: 370, height: 90)
+        .background {
+            beamSurface
+        }
+    }
+
+    private var beamSurface: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.clear)
+                .systemLiquidGlassBackground(cornerRadius: 16)
+
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.primary.opacity(0.035))
+        }
+        .beam(
+            .medium,
+            palette: .colorful,
+            theme: .dark,
+            active: true,
+            cornerRadius: 16,
+            strength: 1.0
+        )
+        .referenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private static func formatTime(_ elapsedSeconds: Int) -> String {
@@ -714,6 +706,96 @@ private struct StreamingProgressRing: View {
             return "\(minutes)m \(seconds)s"
         }
         return "\(seconds)s"
+    }
+}
+
+private extension View {
+    func referenceBeamFallback(
+        cornerRadius: CGFloat,
+        active: Bool,
+        includesInteriorGlow: Bool = false
+    ) -> some View {
+        overlay {
+            ReferenceBeamFallback(
+                cornerRadius: cornerRadius,
+                active: active,
+                includesInteriorGlow: includesInteriorGlow
+            )
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct ReferenceBeamFallback: View {
+    let cornerRadius: CGFloat
+    let active: Bool
+    let includesInteriorGlow: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let phase = reduceMotion ? 0 : time / 1.96
+            ZStack {
+                if includesInteriorGlow {
+                    beamInteriorGlow(phase: phase)
+                }
+
+                beamStroke(phase: phase)
+            }
+            .opacity(active ? 0.82 : 0)
+            .animation(.easeOut(duration: 0.6), value: active)
+        }
+    }
+
+    private func beamStroke(phase: TimeInterval) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(
+                AngularGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.00),
+                        .init(color: .clear, location: 0.08),
+                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.36), location: 0.16),
+                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.62), location: 0.25),
+                        .init(color: .white.opacity(0.88), location: 0.32),
+                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.54), location: 0.39),
+                        .init(color: Color(red: 0.40, green: 0.20, blue: 1.0).opacity(0.36), location: 0.48),
+                        .init(color: .clear, location: 0.58),
+                        .init(color: .clear, location: 1.00),
+                    ],
+                    center: .center,
+                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                ),
+                lineWidth: 1
+            )
+    }
+
+    private func beamInteriorGlow(phase: TimeInterval) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .inset(by: 3)
+            .fill(
+                AngularGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.00),
+                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.10), location: 0.15),
+                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.20), location: 0.25),
+                        .init(color: .white.opacity(0.16), location: 0.32),
+                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.14), location: 0.40),
+                        .init(color: .clear, location: 0.58),
+                        .init(color: .clear, location: 1.00),
+                    ],
+                    center: .center,
+                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                )
+            )
+            .blur(radius: 9)
+            .mask {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(lineWidth: 22)
+                    .blur(radius: 7)
+            }
     }
 }
 
@@ -736,22 +818,24 @@ private struct AIReasoningStatus: View {
                 .font(.system(size: 24))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(organizationStage)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .textShimmer(isLoading: isAnalyzingStage, phaseOffset: 0.08, intensity: 1.55)
-
                 if isEstablishingConnection {
                     HStack(spacing: 6) {
-                        Text("Connecting to AI provider")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Text(organizationStage)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
                             .textShimmer(isLoading: true, phaseOffset: 0.34, intensity: 1.65)
 
-                        LoadingDotsView(dotCount: 3, dotSize: 5, color: .secondary)
+                        LoadingDotsView(dotCount: 3, dotSize: 5, color: .primary)
                     }
                     .transition(.opacity.animation(.spring(response: 0.4, dampingFraction: 0.85)))
-                } else if isStreaming {
+                } else {
+                    Text(organizationStage)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .textShimmer(isLoading: isAnalyzingStage, phaseOffset: 0.08, intensity: 1.55)
+                }
+
+                if !isEstablishingConnection && isStreaming {
                     Text(funnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -832,7 +916,7 @@ private struct InsightHistorySection: View {
                         } else {
                             Image(systemName: "sparkles")
                                 .font(.callout)
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                                 .symbolEffect(.pulse.byLayer, options: .repeating)
                         }
                     } else {
@@ -849,7 +933,7 @@ private struct InsightHistorySection: View {
                     if isStreaming {
                         Image(systemName: "waveform")
                             .font(.caption)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                             .symbolEffect(.variableColor.iterative, options: .repeating)
                     }
 
@@ -863,7 +947,7 @@ private struct InsightHistorySection: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.accentColor))
+                            .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
                     }
 
                     if isStreaming {
@@ -881,7 +965,7 @@ private struct InsightHistorySection: View {
                                     ? "bolt.badge.checkmark" : "bolt.slash"
                             )
                             .font(.caption)
-                            .foregroundStyle(liveInsightsEnabled ? Color.accentColor : .secondary)
+                            .foregroundStyle(liveInsightsEnabled ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
                         }
                         .buttonStyle(.plain)
                         .help(
@@ -904,7 +988,7 @@ private struct InsightHistorySection: View {
                                     : "dot.radiowaves.left.and.right.slash"
                             )
                             .font(.caption)
-                            .foregroundStyle(streamingModeEnabled ? Color.accentColor : .secondary)
+                            .foregroundStyle(streamingModeEnabled ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
                         }
                         .buttonStyle(.plain)
                         .help(
@@ -966,7 +1050,7 @@ private struct InsightHistorySection: View {
                             )
                             .font(.caption)
                             .foregroundStyle(
-                                viewState.showDebugStream ? Color.accentColor : .secondary)
+                                viewState.showDebugStream ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
                         }
                         .buttonStyle(.plain)
                         .disabled(!liveInsightsEnabled)
@@ -992,8 +1076,8 @@ private struct InsightHistorySection: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.accentColor.opacity(0.08),
-                                    Color.accentColor.opacity(0.03),
+                                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.08),
+                                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.03),
                                 ],
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -1095,10 +1179,10 @@ private struct InsightHistorySection: View {
         .padding(.vertical, 10)
         .background(
             Capsule()
-                .fill(Color.accentColor.opacity(0.05))
+                .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.05))
                 .overlay(
                     Capsule()
-                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                        .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.15), lineWidth: 1)
                 )
         )
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
@@ -1231,7 +1315,7 @@ private struct InsightHistorySection: View {
 
             if isStreaming {
                 Circle()
-                    .fill(Color.accentColor.opacity(0.4))
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.4))
                     .frame(width: 6, height: 6)
                     .scaleEffect(isStreaming ? 1.3 : 1.0)
                     .animation(.default.speed(0.8), value: isStreaming)
@@ -1241,10 +1325,10 @@ private struct InsightHistorySection: View {
         .padding(.vertical, 10)
         .background(
             Capsule()
-                .fill(Color.accentColor.opacity(0.08))
+                .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.08))
                 .overlay(
                     Capsule()
-                        .stroke(Color.accentColor.opacity(0.15), lineWidth: 1)
+                        .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.15), lineWidth: 1)
                 )
         )
     }
@@ -1354,12 +1438,12 @@ private struct InsightHistorySection: View {
                             Text("Latest")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
                                     Capsule()
-                                        .fill(Color.accentColor.opacity(0.14))
+                                        .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.14))
                                 )
                         }
                     }
@@ -1736,7 +1820,7 @@ private struct PingRingView: View {
 
     var body: some View {
         Circle()
-            .stroke(Color.accentColor.opacity(ping ? 0 : 0.3), lineWidth: 2)
+            .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(ping ? 0 : 0.3), lineWidth: 2)
             .frame(width: 32, height: 32)
             .scaleEffect(ping ? 2.0 : 1.0)
             .drawingGroup(opaque: false)

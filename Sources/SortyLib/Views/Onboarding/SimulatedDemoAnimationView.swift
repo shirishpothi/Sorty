@@ -158,10 +158,10 @@ struct SimulatedDemoAnimationView: View {
         HStack(spacing: 8) {
             ForEach(0..<6) { index in
                 Circle()
-                    .fill(phaseIndex >= index ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .fill(phaseIndex >= index ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.3))
                     .frame(width: 8, height: 8)
                     .scaleEffect(phaseIndex == index ? 1.3 : 1.0)
-                    .shadow(color: phaseIndex == index ? Color.accentColor.opacity(0.4) : .clear, radius: 4)
+                    .shadow(color: phaseIndex == index ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.4) : .clear, radius: 4)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: phaseIndex)
             }
         }
@@ -206,7 +206,7 @@ struct SimulatedDemoAnimationView: View {
                     .offset(messyOffset(for: index))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.accentColor, lineWidth: 2)
+                            .stroke(SortyDesignSystem.Colors.resolvedAccent, lineWidth: 2)
                             .opacity(scanLinePosition(for: index) ? 1 : 0)
                             .animation(.easeInOut(duration: 0.2), value: scanLinePosition(for: index))
                     )
@@ -347,7 +347,7 @@ struct SimulatedDemoAnimationView: View {
                 ZStack {
                     Image(systemName: "arrow.right")
                         .font(.title)
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .symbolEffect(.pulse.byLayer, options: .repeating)
                     
                     // Sliver animation overlay
@@ -358,7 +358,7 @@ struct SimulatedDemoAnimationView: View {
                 HStack(spacing: 4) {
                     ForEach(0..<3) { i in
                         Circle()
-                            .fill(Color.accentColor.opacity(0.5))
+                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.5))
                             .frame(width: 4, height: 4)
                             .offset(y: organizedCount % 3 == i ? -3 : 0)
                             .animation(.spring(response: 0.3, dampingFraction: 0.5).delay(Double(i) * 0.1), value: organizedCount)
@@ -424,7 +424,7 @@ struct SimulatedDemoAnimationView: View {
     private var aiThoughtBubble: some View {
         HStack(spacing: 8) {
             Image(systemName: thoughtIcon)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                 .contentTransition(.interpolate)
             
             Text(currentThought)
@@ -439,8 +439,8 @@ struct SimulatedDemoAnimationView: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.accentColor.opacity(0.1))
-                .stroke(Color.accentColor.opacity(0.2), lineWidth: 1)
+                .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
+                .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.2), lineWidth: 1)
         )
         .opacity(thoughtOpacity)
         .animation(.easeInOut(duration: 0.3), value: currentThought)

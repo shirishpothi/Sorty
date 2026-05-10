@@ -11,81 +11,9 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
-    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
-    @AppStorage("privacyModeEnabled") private var privacyModeEnabled = false
-    @AppStorage("fetchGitHubContributorsEnabled") private var fetchGitHubContributorsEnabled = true
-    @State private var showAutoRevealInfo = false
-
-    enum AutoRevealOption: String, CaseIterable, Identifiable {
-        case off = "Off (Recommended)"
-        case on = "On"
-
-        var id: String { rawValue }
-    }
-
-    private var autoRevealSelection: Binding<AutoRevealOption> {
-        Binding(
-            get: { automationManager.autoSelectOrganizedFolders ? .on : .off },
-            set: { option in
-                let shouldAutoReveal = option == .on
-                guard automationManager.autoSelectOrganizedFolders != shouldAutoReveal else { return }
-                automationManager.autoSelectOrganizedFolders = shouldAutoReveal
-                HapticFeedbackManager.shared.selection()
-            }
-        )
-    }
-
-    private var internetPrivacyModeBinding: Binding<Bool> {
-        Binding(
-            get: { internetPrivacyModeEnabled },
-            set: { newValue in
-                guard internetPrivacyModeEnabled != newValue else { return }
-                Task { @MainActor in
-                    let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(
-                        reason: "Authenticate to change Sorty's internet access policy."
-                    )
-                    guard didAuthenticate else {
-                        HapticFeedbackManager.shared.error()
-                        return
-                    }
-                    internetPrivacyModeEnabled = newValue
-                }
-            }
-        )
-    }
     
     var body: some View {
         VStack(spacing: 16) {
-            SettingsCard(title: "Privacy", icon: "eye.slash", color: .indigo) {
-                VStack(spacing: 12) {
-                    SettingsToggle(
-                        isOn: internetPrivacyModeBinding,
-                        title: "Block Internet Connections",
-                        description: "When enabled, Sorty blocks all internet requests and only allows loopback localhost traffic for local models."
-                    )
-                    .accessibilityIdentifier("InternetPrivacyModeToggle")
-
-                    Divider()
-
-                    SettingsToggle(
-                        isOn: $privacyModeEnabled,
-                        title: "Blur Usernames in Paths",
-                        description: "We'll try to blur your name in file paths throughout Sorty."
-                    )
-                    .accessibilityIdentifier("BlurUsernamesToggle")
-
-                    Divider()
-
-                    SettingsToggle(
-                        isOn: $fetchGitHubContributorsEnabled,
-                        title: "Fetch GitHub Contributors",
-                        description: "Include live contributor names in Accreditations. Disable this to avoid contributor fetch requests to GitHub."
-                    )
-                    .accessibilityIdentifier("FetchGitHubContributorsToggle")
-                }
-            }
-            .animatedAppearance(delay: 0.0)
-
             SettingsCard(title: "Menu Bar", icon: "menubar.rectangle", color: .blue) {
                 SettingsToggle(
                     isOn: $showMenuBarExtra,
@@ -93,64 +21,25 @@ struct AdvancedSettingsView: View {
                     description: "Display Sorty icon in the menu bar for quick access"
                 )
             }
-            .animatedAppearance(delay: 0.03)
+            .animatedAppearance(delay: 0.0)
 
             SettingsCard(title: "Finder Workflow", icon: "folder.badge.gearshape", color: .mint) {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .center, spacing: 10) {
-                        Text("Automatically reveal organized folders")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.primary)
+                    SettingsToggle(
+                        isOn: $automationManager.autoSelectOrganizedFolders,
+                        title: "Automatically reveal organized folders",
+                        description: "Open Finder and highlight newly organized folders after each completed run"
+                    )
+                    .accessibilityIdentifier("FinderAutoRevealToggle")
 
-                        Spacer(minLength: 12)
-
-                        Picker("", selection: autoRevealSelection) {
-                            ForEach(AutoRevealOption.allCases) { option in
-                                Text(option.rawValue).tag(option)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                        .accessibilityIdentifier("FinderAutoRevealToggle")
-                        .accessibilityLabel("Automatically reveal organized folders")
-                        .accessibilityValue(automationManager.autoSelectOrganizedFolders ? "On" : "Off")
-
-                        Button {
-                            showAutoRevealInfo.toggle()
-                            HapticFeedbackManager.shared.selection()
-                        } label: {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 22, height: 22)
-                                .contentShape(Circle())
-                        }
-                        .buttonStyle(.plain)
-                        .help("Recommended usage")
-                        .popover(isPresented: $showAutoRevealInfo, arrowEdge: .bottom) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Recommendation")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .padding(12)
-                            .frame(width: 320, alignment: .leading)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
-                        }
-                        .accessibilityIdentifier("FinderAutoRevealInfoButton")
-                        .accessibilityLabel("Finder auto-reveal recommendation")
+                    if !automationManager.autoSelectOrganizedFolders {
+                        Text("Recommended for most users: keep this off and use \"View in Finder\" when needed.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-
-                    Text("Open Finder and highlight newly organized folders after each completed run")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .animatedAppearance(delay: 0.05)
+            .animatedAppearance(delay: 0.03)
             
             SettingsCard(title: "Streaming", icon: "waveform", color: .purple) {
                 SettingsToggle(
@@ -159,7 +48,7 @@ struct AdvancedSettingsView: View {
                     description: "Stream AI responses for faster feedback"
                 )
             }
-            .animatedAppearance(delay: 0.08)
+            .animatedAppearance(delay: 0.05)
             
             SettingsCard(title: "Timeouts", icon: "clock", color: .orange) {
                 VStack(spacing: 16) {
@@ -184,7 +73,7 @@ struct AdvancedSettingsView: View {
                     )
                 }
             }
-            .animatedAppearance(delay: 0.13)
+            .animatedAppearance(delay: 0.1)
             
             SettingsCard(title: "Token Limits", icon: "number", color: .blue) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -201,14 +90,14 @@ struct AdvancedSettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
-            .animatedAppearance(delay: 0.18)
+            .animatedAppearance(delay: 0.15)
             
             SettingsCard(title: "Developer", icon: "hammer", color: .gray) {
                 VStack(spacing: 12) {
                     SettingsToggle(
                         isOn: $viewModel.config.showStatsForNerds,
                         title: "Stats for Nerds",
-                        description: "Show AI timing, token, and cost metrics in preview, history, and results"
+                        description: "Show detailed generation metrics"
                     )
                     
                     Divider()
@@ -226,12 +115,10 @@ struct AdvancedSettingsView: View {
                     .buttonStyle(.bordered)
                 }
             }
-            .animatedAppearance(delay: 0.23)
+            .animatedAppearance(delay: 0.2)
         }
     }
 }
-
-
 
 // MARK: - Timeout Slider with Editable Maximum
 

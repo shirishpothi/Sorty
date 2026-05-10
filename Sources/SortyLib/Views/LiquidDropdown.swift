@@ -103,7 +103,7 @@ struct LiquidDropdown<T: Identifiable & RawRepresentable & Hashable>: View where
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+                    .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
             )
             .contentShape(Rectangle())
         }

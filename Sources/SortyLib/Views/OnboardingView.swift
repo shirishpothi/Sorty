@@ -28,6 +28,7 @@ public struct OnboardingView: View {
     @State private var isHoveringStepIndicator = false
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
+    @State private var hasConfiguredWindowChrome = false
 
     private let swipeThreshold: CGFloat = 42
 
@@ -49,6 +50,8 @@ public struct OnboardingView: View {
                         .padding(.bottom, 12)
                         .padding(.horizontal, 48)
                         .background(Color(NSColor.windowBackgroundColor))
+                        .opacity(hasConfiguredWindowChrome ? 1 : 0)
+                        .animation(nil, value: hasConfiguredWindowChrome)
 
                     // Main content
                     stepContent
@@ -75,7 +78,12 @@ public struct OnboardingView: View {
                 advanceValidationMessage = nil
             }
         }
-        .background(OnboardingWindowTitleConfigurator().frame(width: 0, height: 0))
+        .background(
+            OnboardingWindowTitleConfigurator {
+                hasConfiguredWindowChrome = true
+            }
+            .frame(width: 0, height: 0)
+        )
         .onAppear {
             installSwipeMonitorIfNeeded()
         }
@@ -174,6 +182,9 @@ public struct OnboardingView: View {
                                     }
                                 }
                                 .buttonStyle(.onboardingPill)
+                                .onboardingBeamBorder(
+                                    active: currentStepValidation.canAdvance && !isAdvancing
+                                )
                                 .keyboardShortcut(.rightArrow, modifiers: [])
                                 .disabled(!currentStepValidation.canAdvance || isAdvancing)
                                 .opacity(
@@ -197,7 +208,8 @@ public struct OnboardingView: View {
                                 .font(.system(size: 12, weight: .semibold))
                         }
                     }
-                    .buttonStyle(.onboardingPill)
+                    .buttonStyle(.onboardingPill(size: .large))
+                    .onboardingBeamBorder(variant: .featured)
                     .keyboardShortcut(.defaultAction)
                     .accessibilityIdentifier("OnboardingAdvanceButton")
                     .transition(.scale.combined(with: .opacity))
@@ -457,10 +469,13 @@ private struct OnboardingTopBar: View {
 }
 
 private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
+    let onConfigured: () -> Void
+
     func makeNSView(context: Context) -> NSView {
         let view = WindowAttachedView()
         view.onWindowAttached = { window in
             context.coordinator.configure(window: window)
+            notifyAfterWindowLayoutSettles()
         }
         return view
     }
@@ -468,6 +483,15 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         if let window = nsView.window {
             context.coordinator.configure(window: window)
+            notifyAfterWindowLayoutSettles()
+        }
+    }
+
+    private func notifyAfterWindowLayoutSettles() {
+        DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                onConfigured()
+            }
         }
     }
 
@@ -552,7 +576,7 @@ struct OnboardingProgressBar: View {
                     Capsule(style: .continuous)
                         .fill(
                             step.rawValue <= currentStep.rawValue
-                                ? Color.accentColor : Color.secondary.opacity(0.2)
+                                ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.2)
                         )
                         .frame(width: 56, height: 2)
                 }
@@ -562,7 +586,7 @@ struct OnboardingProgressBar: View {
                         Circle()
                             .fill(
                                 step.rawValue <= currentStep.rawValue
-                                    ? Color.accentColor : Color.secondary.opacity(0.2)
+                                    ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.2)
                             )
                             .frame(width: 24, height: 24)
 

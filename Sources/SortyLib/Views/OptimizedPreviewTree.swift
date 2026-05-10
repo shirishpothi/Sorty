@@ -1000,8 +1000,8 @@ struct FlatFolderRowView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isDropTarget ? Color.accentColor.opacity(0.1) : Color.clear)
-                    .strokeBorder(isDropTarget ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1.5)
+                    .fill(isDropTarget ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
+                    .strokeBorder(isDropTarget ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.55) : Color.clear, lineWidth: 1.5)
             )
             .contextMenu {
                 Button(role: .destructive) {
@@ -1267,11 +1267,11 @@ struct FlatFileRowView: View {
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isHighlighted ? Color.accentColor.opacity(0.12) : (isDragging ? Color.accentColor.opacity(0.1) : Color.clear))
+                .fill(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : (isDragging ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isHighlighted ? Color.accentColor.opacity(0.3) : (isEditingName ? Color.accentColor.opacity(0.3) : Color.clear), lineWidth: 1)
+                .stroke(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : (isEditingName ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear), lineWidth: 1)
         )
         .contentShape(Rectangle())
         .contextMenu {
@@ -1443,11 +1443,11 @@ struct FlatUnorganizedFileRowView: View {
         .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isHighlighted ? Color.accentColor.opacity(0.12) : (isDragging ? Color.accentColor.opacity(0.1) : Color.clear))
+                .fill(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12) : (isDragging ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isHighlighted ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                .stroke(isHighlighted ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear, lineWidth: 1)
         )
         .contentShape(Rectangle())
         .contextMenu {

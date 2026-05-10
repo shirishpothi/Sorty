@@ -87,14 +87,26 @@ public enum SortyDesignSystem {
         /// system is set to "Multicolor" (the default).
         ///
         /// macOS stores the user's choice in `AppleAccentColor` in the global
-        /// domain.  When "Multicolor" is selected the key is absent, so we
-        /// detect that and fall back to our brand pink.
+        /// domain. The values are:
+        ///   • absent  — historical "Multicolor" representation
+        ///   • -1      — Graphite (older macOS used this for Multicolor too)
+        ///   • -2      — "Multicolor" on macOS Sonoma+ (the default)
+        ///   •  0..6   — a specific accent (Red, Orange, Yellow, Green, Blue,
+        ///              Purple, Pink)
+        ///
+        /// We treat any of the "Multicolor" representations as the trigger to
+        /// fall back to Sorty's brand pink. Any explicit color chosen by the
+        /// user is respected via the live system accent.
         public static var resolvedAccent: Color {
-            if UserDefaults.standard.object(forKey: "AppleAccentColor") != nil {
-                // User chose a specific accent color — respect it
-                return Color.accentColor
+            let raw = UserDefaults.standard.object(forKey: "AppleAccentColor")
+            if let value = raw as? Int, value >= 0 {
+                // User picked a specific accent (Red/Orange/Yellow/Green/Blue/
+                // Purple/Pink) — respect it via SwiftUI's live accent color.
+                // Avoid NSColor.controlAccentColor here; on macOS it can make
+                // SwiftUI ignore the app's asset-catalog accent in Multicolor.
+                return .accentColor
             }
-            // "Multicolor" — enforce Sorty's brand accent
+            // Multicolor (absent / -1 / -2) — enforce Sorty's brand accent.
             return accent
         }
     }
@@ -356,11 +368,11 @@ public struct ExamplePill: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .frame(minHeight: 22)
-                .background(isHovered ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.05))
+                .background(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.primary.opacity(0.05))
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .stroke(isHovered ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                        .stroke(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.3) : Color.clear, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)

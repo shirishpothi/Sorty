@@ -67,6 +67,19 @@ class FileSystemManagerTests: XCTestCase {
         // Should have renamed the destination file to test_1.txt
         XCTAssertTrue(FileManager.default.fileExists(atPath: destFolder.appendingPathComponent("test_1.txt").path))
     }
+
+    @MainActor
+    func testDeleteFileDirectDeleteDoesNotCreateHiddenDuplicatesFolder() async throws {
+        let file = tempDirectory.appendingPathComponent("delete-me.txt")
+        try "data".write(to: file, atomically: true, encoding: .utf8)
+
+        let operation = try await fileSystemManager.deleteFile(at: file, moveToTrash: false)
+
+        XCTAssertEqual(operation.type, .deleteFile)
+        XCTAssertNil(operation.destinationPath)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent(".duplicates").path))
+    }
     
     @MainActor
     func testUndoOperations() async throws {
@@ -89,6 +102,32 @@ class FileSystemManagerTests: XCTestCase {
         
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent("NewDir/to_move.txt").path))
+    }
+
+    @MainActor
+    func testFolderNameFileConflictBackupIsTrackedAndUndoable() async throws {
+        let conflictingFile = tempDirectory.appendingPathComponent("Receipts")
+        try "existing file".write(to: conflictingFile, atomically: true, encoding: .utf8)
+        let sourceFile = tempDirectory.appendingPathComponent("receipt.txt")
+        try "new receipt".write(to: sourceFile, atomically: true, encoding: .utf8)
+        let fileItem = FileItem(path: sourceFile.path, name: "receipt", extension: "txt", size: 11, isDirectory: false)
+
+        let plan = OrganizationPlan(
+            suggestions: [FolderSuggestion(folderName: "Receipts", files: [fileItem])],
+            unorganizedFiles: [],
+            notes: ""
+        )
+
+        let operations = try await fileSystemManager.applyOrganization(plan, at: tempDirectory, dryRun: false)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: conflictingFile.path))
+        XCTAssertTrue(operations.contains { $0.type == .moveFile && $0.sourcePath == conflictingFile.path })
+
+        _ = try await fileSystemManager.reverseOperations(operations)
+
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: conflictingFile.path, isDirectory: &isDirectory))
+        XCTAssertFalse(isDirectory.boolValue)
     }
 
     @MainActor
@@ -413,6 +452,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         XCTAssertEqual(deleted.first?.originalPath, originalFile.path)
         XCTAssertEqual(deleted.first?.deletedPath, duplicateFile.path)
         XCTAssertFalse(FileManager.default.fileExists(atPath: duplicateFile.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent(".duplicates").path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: originalFile.path))
     }
     

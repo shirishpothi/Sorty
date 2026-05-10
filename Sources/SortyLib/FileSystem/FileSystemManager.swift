@@ -950,6 +950,14 @@ public actor FileSystemManager {
                     try await withRetry {
                         try fileManager.moveItem(at: folderURL, to: backupURL)
                     }
+                    operations.append(FileOperation(
+                        id: UUID(),
+                        type: .moveFile,
+                        sourcePath: folderURL.path,
+                        destinationPath: backupURL.path,
+                        timestamp: Date(),
+                        metadata: FileOperation.OperationMetadata(wasCreatedDuringOrganization: true)
+                    ))
                     DebugLogger.log("Moved conflicting file to \(backupName)")
                 }
                 
@@ -1270,6 +1278,12 @@ public actor FileSystemManager {
                         // Determine final source path (handle conflicts)
                         var finalSourcePath = operation.sourcePath
                         if fileManager.fileExists(atPath: finalSourcePath) {
+                            var isDirectory: ObjCBool = false
+                            if fileManager.fileExists(atPath: finalSourcePath, isDirectory: &isDirectory), isDirectory.boolValue {
+                                try? removeEmptyFolder(at: finalSourcePath)
+                            }
+                        }
+                        if fileManager.fileExists(atPath: finalSourcePath) {
                             // Original location is occupied by something else
                             let uniqueURL = generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
                             finalSourcePath = uniqueURL.path
@@ -1386,6 +1400,12 @@ public actor FileSystemManager {
                     }
 
                     var finalSourcePath = operation.sourcePath
+                    if fileManager.fileExists(atPath: finalSourcePath) {
+                        var isDirectory: ObjCBool = false
+                        if fileManager.fileExists(atPath: finalSourcePath, isDirectory: &isDirectory), isDirectory.boolValue {
+                            try? removeEmptyFolder(at: finalSourcePath)
+                        }
+                    }
                     if fileManager.fileExists(atPath: finalSourcePath) {
                         let uniqueURL = generateUniqueURL(for: URL(fileURLWithPath: finalSourcePath))
                         finalSourcePath = uniqueURL.path
@@ -1745,31 +1765,22 @@ public actor FileSystemManager {
         return operation
     }
 
-    /// Delete a file (Now non-destructive: moves to .duplicates)
+    /// Delete a file by moving it to Trash by default, or permanently deleting when requested.
     func deleteFile(at url: URL, moveToTrash: Bool = true, workspaceURL: URL? = nil) throws -> FileOperation {
-        let actualWorkspaceURL = workspaceURL ?? url.deletingLastPathComponent() // Fallback to heuristic
-        return try moveToDuplicates(url: url, workspaceURL: actualWorkspaceURL)
-    }
-    
-    /// Non-destructive move to a .duplicates folder
-    func moveToDuplicates(url: URL, workspaceURL: URL) throws -> FileOperation {
-        let duplicatesDir = workspaceURL.appendingPathComponent(".duplicates")
-        
-        if !fileManager.fileExists(atPath: duplicatesDir.path) {
-            try fileManager.createDirectory(at: duplicatesDir, withIntermediateDirectories: true)
-            // Ideally hide this folder?
-            // try? (duplicatesDir as NSURL).setResourceValue(true, forKey: .isHiddenKey)
+        var deletedLocation: URL?
+        if moveToTrash {
+            var trashedURL: NSURL?
+            try fileManager.trashItem(at: url, resultingItemURL: &trashedURL)
+            deletedLocation = trashedURL as URL?
+        } else {
+            try fileManager.removeItem(at: url)
         }
-        
-        let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(url.lastPathComponent))
-        
-        try fileManager.moveItem(at: url, to: destinationURL)
         
         let operation = FileOperation(
             id: UUID(),
-            type: .deleteFile, // Still marked as delete for history logic, but destination is recorded
+            type: .deleteFile,
             sourcePath: url.path,
-            destinationPath: destinationURL.path,
+            destinationPath: deletedLocation?.path,
             timestamp: Date(),
             metadata: FileOperation.OperationMetadata(
                 originalFilename: url.lastPathComponent,
@@ -1847,22 +1858,13 @@ public class DuplicateRestorationManager: ObservableObject {
     }
     
     /// Safely delete a list of duplicate files, keeping one original.
-    /// Stores metadata for the deleted files so they can be "restored" by copying the original back.
+    /// Moves the deleted files to Trash and stores metadata so they can be restored by copying the original back.
     /// - Parameters:
     ///   - filesToDelete: The duplicates to remove
     ///   - originalFile: The file that is being kept (source for restoration)
     /// - Returns: A list of RestorableDuplicate objects representing the deleted files
     public func deleteSafely(filesToDelete: [FileItem], originalFile: FileItem) throws -> [RestorableDuplicate] {
         var deletedItems: [RestorableDuplicate] = []
-        
-        // Use the original file's location as a base for the .duplicates folder
-        let originalURL = URL(fileURLWithPath: originalFile.path)
-        let workspaceURL = originalURL.deletingLastPathComponent()
-        let duplicatesDir = workspaceURL.appendingPathComponent(".duplicates")
-        
-        if !fileManager.fileExists(atPath: duplicatesDir.path) {
-            try fileManager.createDirectory(at: duplicatesDir, withIntermediateDirectories: true)
-        }
         
         for file in filesToDelete {
             // Capture metadata before move
@@ -1875,22 +1877,13 @@ public class DuplicateRestorationManager: ObservableObject {
                 groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
             )
             
-            let fileName = URL(fileURLWithPath: file.path).lastPathComponent
-            let destinationURL = generateUniqueURL(for: duplicatesDir.appendingPathComponent(fileName))
-            
             let item = RestorableDuplicate(
                 originalPath: originalFile.path,
                 deletedPath: file.path, // Store the ORIGINAL path here
                 metadata: metadata
             )
             
-            // Perform non-destructive move instead of deletion
-            try fileManager.moveItem(atPath: file.path, toPath: destinationURL.path)
-            
-            // We need to store the backup path somewhere. Since RestorableDuplicate doesn't have a backupPath field,
-            // we'll rely on the fact that if we want to restore, we can either copy from originalFile.path 
-            // OR move it back from the .duplicates folder if we can find it.
-            // For now, let's keep it simple: restoration will copy from the current original.
+            try fileManager.trashItem(at: URL(fileURLWithPath: file.path), resultingItemURL: nil)
             
             deletedItems.append(item)
         }
@@ -1899,20 +1892,6 @@ public class DuplicateRestorationManager: ObservableObject {
         saveHistory()
         
         return deletedItems
-    }
-    
-    private func generateUniqueURL(for url: URL) -> URL {
-        let directory = url.deletingLastPathComponent()
-        let filename = url.deletingPathExtension().lastPathComponent
-        let ext = url.pathExtension
-        var counter = 1
-        var newURL = url
-        while fileManager.fileExists(atPath: newURL.path) {
-            let newName = ext.isEmpty ? "\(filename)_\(counter)" : "\(filename)_\(counter).\(ext)"
-            newURL = directory.appendingPathComponent(newName)
-            counter += 1
-        }
-        return newURL
     }
     
     /// Restore a previously deleted duplicate

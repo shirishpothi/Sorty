@@ -74,7 +74,7 @@ struct DuplicateHandlingPicker: View {
         } label: {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: selection == mode ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(selection == mode ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(selection == mode ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary)
                     .font(.caption)
                     .padding(.top, 2)
 
