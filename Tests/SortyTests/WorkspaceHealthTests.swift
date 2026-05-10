@@ -834,6 +834,9 @@ class WorkspaceHealthIntegrationTests: XCTestCase {
     @MainActor
     func testEmptyFoldersDetection() async throws {
         let healthManager = WorkspaceHealthManager()
+        healthManager.updateConfig(WorkspaceHealthConfig(
+            enabledChecks: Set(CleanupOpportunity.OpportunityType.allCases)
+        ))
         
         // Create a temporary test directory
         let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
