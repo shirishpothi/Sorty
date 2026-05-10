@@ -103,6 +103,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
+      - name: Configure test Keychain
+        run: |
+          security create-keychain -p "" ci-test.keychain
+          security default-keychain -s ci-test.keychain
+          security unlock-keychain -p "" ci-test.keychain
+          security set-keychain-settings -lut 21600 ci-test.keychain
+
       - name: Build & Test (SPM)
         run: |
           set -o pipefail
