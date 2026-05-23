@@ -359,6 +359,11 @@ jobs:
           generate_release_notes: true
           append_body: true
           body: |
+            ## Important: install this update from GitHub
+            Sorty's built-in updater may download this version and then fail to install it on older builds.
+
+            **Please install this one manually:** download `Sorty-universal.zip`, quit Sorty, and replace your existing `Sorty.app` in `/Applications`. After this update is installed, future in-app updates should work normally again.
+
             ## Installation
             Download `Sorty-universal.zip` and move `Sorty.app` to `/Applications`.
             > ⚠️ **Note**: The app is not signed with an Apple Developer certificate. If macOS blocks the app, run:

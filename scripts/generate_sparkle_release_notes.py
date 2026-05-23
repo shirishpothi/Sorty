@@ -76,6 +76,11 @@ def markdown(
     lines = [
         f"## {args.title}",
         "",
+        "### Important: install this update from GitHub",
+        "Sorty's built-in updater may download this version and then fail to install it on older builds.",
+        "",
+        "Please install this one manually: download `Sorty-universal.zip`, quit Sorty, and replace your existing `Sorty.app` in `/Applications`. After this update is installed, future in-app updates should work normally again.",
+        "",
         args.summary,
         "",
         "### TL;DR",
@@ -139,6 +144,9 @@ def html_document(
     p {{ line-height: 1.45; opacity: 0.82; }}
     ul {{ margin: 0; padding-left: 22px; }}
     li {{ margin: 8px 0; line-height: 1.4; }}
+    .manual-update {{ border: 1px solid rgba(45, 145, 150, 0.28); border-radius: 16px; padding: 16px 18px; margin: 0 0 22px; background: rgba(45, 145, 150, 0.12); }}
+    .manual-update strong {{ display: block; font: -apple-system-headline; margin-bottom: 6px; }}
+    .manual-update p {{ margin: 6px 0 0; opacity: 0.9; }}
     .callout {{ border: 1px solid rgba(128, 128, 128, 0.24); border-radius: 14px; padding: 14px 16px; background: rgba(128, 128, 128, 0.08); }}
     .hash {{ opacity: 0.62; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }}
     a {{ color: LinkText; }}
@@ -147,6 +155,11 @@ def html_document(
 <body>
   <main>
     <h1>{html.escape(args.title)}</h1>
+    <div class="manual-update">
+      <strong>Important: install this update from GitHub</strong>
+      <p>Sorty's built-in updater may download this version and then fail to install it on older builds.</p>
+      <p>Please install this one manually: download <strong>Sorty-universal.zip</strong>, quit Sorty, and replace your existing <strong>Sorty.app</strong> in <strong>/Applications</strong>. After this update is installed, future in-app updates should work normally again.</p>
+    </div>
     <p>{html.escape(args.summary)}</p>
     <p>Changes shown below are everything since <span class="hash">{html.escape(baseline_label)}</span>.</p>
     <div class="callout">
