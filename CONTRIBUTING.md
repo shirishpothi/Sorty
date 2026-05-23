@@ -43,7 +43,6 @@ make test
 | `make test` | Run unit tests |
 | `make test-fast` | Run fast unit tests only |
 | `make quick` | Compile only, skip tests |
-| `make cli` | Build the `learnings` CLI tool |
 | `make install` | Install app to /Applications |
 | `make harness` | Preview harness for rapid UI iteration |
 | `make ci` | Run CI checks locally (security, build, test, app bundle) |
@@ -87,7 +86,6 @@ Sources/
 │   ├── ViewModels/     # Presentation logic
 │   ├── Views/          # SwiftUI views
 │   └── Utilities/      # Helpers, security, deeplinks
-└── LearningsCLI/       # CLI tool implementation
 ```
 
 ## Code Style Guidelines

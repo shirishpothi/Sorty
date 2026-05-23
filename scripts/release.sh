@@ -10,7 +10,6 @@ print_header "Starting Release Process" 60
 # Default settings
 RUN_UI_TESTS=false
 RUN_UNIT_TESTS=false
-RUN_CLI_TESTS=true # Always verify CLI basics unless skipped
 SKIP_ALL_TESTS=false
 
 # Argument Parsing
@@ -32,15 +31,9 @@ while [[ $# -gt 0 ]]; do
         SKIP_ALL_TESTS=true
         shift
         ;;
-        --cli-only)
-        RUN_UI_TESTS=false
-        RUN_UNIT_TESTS=false
-        RUN_CLI_TESTS=true
-        shift
-        ;;
         *)
         echo "Unknown option: $1"
-        echo "Usage: $0 [--ui-tests] [--skip-ui] [--no-tests] [--cli-only]"
+        echo "Usage: $0 [--ui-tests] [--skip-ui] [--no-tests]"
         exit 1
         ;;
     esac
@@ -52,11 +45,7 @@ if [ "$SKIP_ALL_TESTS" == "true" ]; then
 else
     # Configure build script environment
     export ENABLE_UI_TESTS=false
-    # Unit tests run by default in build.sh unless SKIP_TESTS is set
-    # If cli-only, we might want to skip unit tests in build.sh
-    if [ "$RUN_UNIT_TESTS" == "false" ] && [ "$RUN_CLI_TESTS" == "true" ]; then
-         export SKIP_UNIT_TESTS=true
-    fi
+    # Unit tests run by default in build.sh unless SKIP_TESTS is set.
 fi
 
 # Release builds should always use the release icon unless explicitly overridden.

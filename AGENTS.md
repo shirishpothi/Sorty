@@ -6,7 +6,7 @@
 - Single test: `swift test --disable-sandbox --filter SortyTests.TestClass/testMethod`; use `make test-ui` only to confirm UI tests are currently disabled.
 - No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused tests, and `make ci`.
 - Xcode: open `Sorty.xcodeproj`, run `Sorty`; build `SortyFinderSync` separately when changing Finder integration or target membership.
-- Main targets: `Sources/SortyLib` shared app logic, `Sources/SortyApp` app lifecycle/windowing, `Sources/LearningsCLI` `learnings` executable, `Sources/SortyFinderSync` extension, `Sources/SortyWidgets` widgets.
+- Main targets: `Sources/SortyLib` shared app logic, `Sources/SortyApp` app lifecycle/windowing, `Sources/SortyFinderSync` extension, `Sources/SortyWidgets` widgets.
 - Keep reusable product code in `SortyLib`; `SortyApp` should contain entry/window glue only. New app/extension/widget files need matching Xcode target membership.
 - Architecture is MVVM plus services: `View -> Manager/ViewModel -> FolderOrganizer -> AIClientProtocol -> OrganizationPlan -> preview/apply`.
 - Important APIs: `FolderOrganizer`, `AIClientProtocol`/`AIClientFactory`, `PromptBuilder`, `ModelCatalog`, `DeeplinkHandler`, `ExtensionCommunication`, `LearningsManager`, `SecurityManager`.

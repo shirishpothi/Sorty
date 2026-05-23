@@ -29,7 +29,6 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
 - **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
 - **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
-- **CLI Tooling**: Two companion command-line tools: `learnings` for managing learning profiles and `sorty` for controlling the app via terminal.
 - **Menu Bar Controls**: Quick access with keyboard shortcuts for common actions.
 - **Interactive Preview**: Review and tweak suggested organization before any files are moved.
 - **Organization History**: Track all operations with detailed analytics, reasoning, and rollback support.
@@ -149,8 +148,6 @@ If you see an error indicating that access to a watched folder has been lost (e.
 
 - `Sources/SortyLib/`: Core implementation including AI, FileSystem, Models, and Views.
 - `Sources/SortyApp/`: Main macOS application entry and navigation.
-- `Sources/LearningsCLI/`: Implementation of the `learnings` command-line tool.
-- `CLI/sorty`: Shell-based CLI for controlling the app via deeplinks.
 - `Tests/`: Unit and UI test suites organized by component.
 - `Assets/`: App icons and screenshots.
 - `scripts/`: Build and automation scripts.
@@ -192,7 +189,7 @@ Tests are located in `Tests/SortyTests/` and cover the following areas:
 
 - **Unit Tests**: Core functionality including file organization, duplicate detection, exclusion rules, response parsing, and utility functions.
 - **Integration Tests**: End-to-end workflows for AI providers, file system operations, history management, and workspace health monitoring.
-- **Component Tests**: Individual modules such as personas, learnings manager, deeplinks, security, and the CLI tooling.
+- **Component Tests**: Individual modules such as personas, learnings manager, deeplinks, and security.
 
 Key test files include:
 - `SortyTests.swift` - Core organization logic
@@ -205,34 +202,6 @@ Key test files include:
 - `CustomPersonaTests.swift` - Persona management
 - `DeeplinkTests.swift` - URL scheme handling
 - `UpdateManagerTests.swift` - Update checking functionality
-
-## CLI Commands
-
-### `learnings` CLI
-Manage your learning profile from the terminal:
-```bash
-learnings status      # Show learning status
-learnings stats       # Show detailed statistics
-learnings export      # Export profile data
-learnings clear       # Delete all learning data
-learnings withdraw    # Pause learning
-learnings info        # Show system information
-```
-
-### `sorty` CLI
-Control the app via deeplinks:
-```bash
-sorty organize <path> [--persona <id>] [--auto]   # Organize a directory
-sorty duplicates <path> [--auto]                   # Scan for duplicates
-sorty status                                       # View Workspace Health
-sorty settings [section]                           # Open settings
-sorty persona create                               # Create a persona
-sorty persona generate <prompt>                    # Generate persona from description
-sorty watched add <path>                           # Add a watched folder
-sorty rules add <pattern>                          # Add exclusion rule
-sorty learnings                                    # Open Learnings dashboard
-sorty history                                      # Open History
-```
 
 ## Deeplinks Reference
 

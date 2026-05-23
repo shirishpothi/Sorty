@@ -14,7 +14,6 @@ on:
         type: choice
         options:
         - Unit
-        - CLI
         - None
       release_type:
         description: 'Release Type'
@@ -114,7 +113,7 @@ jobs:
         run: |
           set -o pipefail
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
-          # Build all products first so SortyApp + LearningsCLI are also validated
+          # Build all active products first so SortyApp is validated
           swift build --disable-sandbox -j "$CORES"
           swift test --disable-sandbox --parallel -j "$CORES" 2>&1 | tee unit_test_output.log
           echo "✅ Build & tests completed"
@@ -160,9 +159,7 @@ jobs:
           ARGS=""
           
           # correct scope mapping
-          if [[ "${{ inputs.test_scope }}" == "CLI" ]]; then
-             ARGS="$ARGS --cli-only"
-          elif [[ "${{ inputs.test_scope }}" == "None" ]]; then
+          if [[ "${{ inputs.test_scope }}" == "None" ]]; then
              ARGS="$ARGS --no-tests"
           else
              # Default or Unit (UI tests are globally disabled in CI)

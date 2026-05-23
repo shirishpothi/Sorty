@@ -12,10 +12,7 @@ let package = Package(
             targets: ["SortyLib"]),
         .executable(
             name: "SortyApp",
-            targets: ["SortyApp"]),
-        .executable(
-            name: "learnings",
-            targets: ["LearningsCLI"])
+            targets: ["SortyApp"])
     ],
     dependencies: [
         // Upstream Permiso currently targets macOS 26, so Sorty vendors a local
@@ -77,18 +74,6 @@ let package = Package(
                 // Tests: Fast build with debug info
                 .unsafeFlags(["-Onone", "-enable-batch-mode"]),
                 .unsafeFlags(["-g"]), // Debug symbols for test debugging
-            ]
-        ),
-        .executableTarget(
-            name: "LearningsCLI",
-            dependencies: ["SortyLib"],
-            path: "Sources/LearningsCLI",
-            swiftSettings: [
-                .unsafeFlags(["-Onone", "-enable-batch-mode"], .when(configuration: .debug)),
-                .unsafeFlags(["-O", "-whole-module-optimization"], .when(configuration: .release)),
-            ],
-            linkerSettings: [
-                .unsafeFlags(["-Xlinker", "-no_deduplicate"], .when(configuration: .debug)),
             ]
         )
     ]

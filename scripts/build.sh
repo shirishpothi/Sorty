@@ -476,60 +476,14 @@ compile_asset_catalog() {
 
 bundle_cli_tools() {
     local resources_dir="$1"
-    local build_config="$2"
-    local cli_build_flags="$3"
-    local cli_arch="$4"
 
     if [ "${ENABLE_CLI_BUNDLE}" != "true" ]; then
         log_detail "Skipping CLI bundle (ENABLE_CLI_BUNDLE=${ENABLE_CLI_BUNDLE})"
         return
     fi
 
-    local cli_dir="${resources_dir}/CLI"
-    mkdir -p "${cli_dir}"
-
-    local -a cli_build_cmd
-    cli_build_cmd=(swift build --scratch-path "${BUILD_DIR}" -c "${build_config}" --product learnings)
-
-    if [ -n "${cli_arch}" ]; then
-        cli_build_cmd+=(--arch "${cli_arch}")
-    fi
-
-    if [ -n "${cli_build_flags}" ]; then
-        # shellcheck disable=SC2206
-        local extra_flags=( ${cli_build_flags} )
-        cli_build_cmd+=("${extra_flags[@]}")
-    fi
-
-    log_detail "Building learnings CLI..."
-    if run_with_swiftpm_db_recovery "learnings_cli" "${cli_build_cmd[@]}"; then
-        local learnings_bin=""
-        if [ -n "${cli_arch}" ]; then
-            learnings_bin="${BUILD_DIR}/${cli_arch}-apple-macosx/${build_config}/learnings"
-        fi
-
-        if [ -z "${learnings_bin}" ] || [ ! -f "${learnings_bin}" ]; then
-            local bin_path="${BUILD_DIR}/${build_config}"
-            learnings_bin="${bin_path}/learnings"
-        fi
-
-        if [ -f "${learnings_bin}" ]; then
-            cp "${learnings_bin}" "${cli_dir}/learnings"
-            run_quiet strip -x "${cli_dir}/learnings"
-            chmod 755 "${cli_dir}/learnings"
-            log_detail "Bundled learnings CLI"
-        else
-            log_detail "learnings CLI binary not found after build"
-        fi
-    fi
-
-    # Bundle the sorty shell script
-    local sorty_script="${PROJECT_DIR}/CLI/sorty"
-    if [ -f "${sorty_script}" ]; then
-        cp "${sorty_script}" "${cli_dir}/sorty"
-        chmod 755 "${cli_dir}/sorty"
-        log_detail "Bundled sorty CLI script"
-    fi
+    rm -rf "${resources_dir}/CLI"
+    log_detail "Sorty CLI tools are deprecated and are no longer bundled"
 }
 
 bundle_background_agent_plist() {
@@ -745,7 +699,7 @@ BUILD_METHOD="${BUILD_METHOD:-spm}"
 BUILD_ARCHS="${BUILD_ARCHS:-arm64 x86_64}"
 XCODE_EXTRA_FLAGS="${XCODE_EXTRA_FLAGS:-COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO}"
 XCODE_BUILD_JOBS="${XCODE_BUILD_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 8)}"
-ENABLE_CLI_BUNDLE="${ENABLE_CLI_BUNDLE:-true}"
+ENABLE_CLI_BUNDLE="${ENABLE_CLI_BUNDLE:-false}"
 ENABLE_FINDER_EXTENSION="${ENABLE_FINDER_EXTENSION:-true}"
 ENABLE_ADHOC_SIGNING="${ENABLE_ADHOC_SIGNING:-true}"
 ENABLE_SPARKLE_SIGNING="${ENABLE_SPARKLE_SIGNING:-true}"
@@ -934,11 +888,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     # Copy LaunchAgent plist for Background Activity
     bundle_background_agent_plist "${APP_PATH}"
 
-    CLI_BUILD_ARCH=""
-    if [ "${#BUILD_ARCH_ARRAY[@]}" -eq 1 ]; then
-        CLI_BUILD_ARCH="${BUILD_ARCH_ARRAY[0]}"
-    fi
-    bundle_cli_tools "${RESOURCES_DIR}" "${BUILD_CONFIG}" "" "${CLI_BUILD_ARCH}"
+    bundle_cli_tools "${RESOURCES_DIR}"
 
     # Embed Finder Sync extension
     if [ "${ENABLE_FINDER_EXTENSION}" = "true" ]; then

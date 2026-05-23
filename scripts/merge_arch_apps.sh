@@ -155,10 +155,7 @@ ENTITLEMENTS_FILE="${SCRIPT_DIR}/../Sorty.entitlements"
 
 MAIN_BIN="${OUTPUT_APP}/Contents/MacOS/Sorty"
 verify_executable_file "${MAIN_BIN}"
-verify_executable_file "${OUTPUT_APP}/Contents/Resources/CLI/sorty"
-verify_executable_file "${OUTPUT_APP}/Contents/Resources/CLI/learnings"
 verify_universal_binary "${MAIN_BIN}"
-verify_universal_binary "${OUTPUT_APP}/Contents/Resources/CLI/learnings"
 
 if [ -d "${OUTPUT_APP}/Contents/Frameworks" ]; then
     while IFS= read -r -d '' FRAMEWORK_DIR; do

@@ -94,7 +94,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Session Stability** — Fixed a potential `NSGenericException` crash when changing AI configurations rapidly.
 - **Release Integrity** — Resolved issues with code signing entitlements and NotifiCLI architecture in production builds.
-- **Script Permissions** — Fixed a bug where bundled CLI scripts would lose executable permissions in the release package.
 - **UI Polishing** — Fixed a visual artifact with the completion checkmark and resolved an issue where the menu bar mascot would fail to load in release builds.
 
 ## [1.1.0] - 2026-02-11

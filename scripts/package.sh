@@ -10,29 +10,14 @@ print_header "Packaging Application" 50
 # Ensure release directory exists
 mkdir -p "${RELEASE_DIR}"
 
-REQUIRE_BUNDLED_CLI="${REQUIRE_BUNDLED_CLI:-true}"
 ZIP_NAME="${ZIP_NAME_OVERRIDE:-${PROJECT_NAME}.zip}"
 ZIP_PATH="${RELEASE_DIR}/${ZIP_NAME}"
 IAP_PATH="${APP_PATH}/Contents/Resources/InternetAccessPolicy.plist"
 BACKGROUND_AGENT_PLIST="${APP_PATH}/Contents/Library/LaunchAgents/com.sorty.app.background-agent.plist"
 BACKGROUND_AGENT_BUNDLE_PROGRAM="Contents/MacOS/Sorty"
 
-# 1. Validate bundled CLI tools exist in app bundle
-print_step 1 6 "Validating Bundled CLI Tools"
-CLI_DIR="${APP_PATH}/Contents/Resources/CLI"
-if [ "${REQUIRE_BUNDLED_CLI}" = "true" ]; then
-    if [ ! -x "${CLI_DIR}/sorty" ] || [ ! -x "${CLI_DIR}/learnings" ]; then
-        log_failure "Bundled CLI tools missing in ${CLI_DIR}. Build must bundle CLI tools into Sorty.app."
-        exit 1
-    else
-        log_success "Bundled CLI tools verified"
-    fi
-else
-    log_item "Skipping bundled CLI validation (REQUIRE_BUNDLED_CLI=${REQUIRE_BUNDLED_CLI})"
-fi
-
-# 2. Validate Internet Access Policy is bundled
-print_step 2 6 "Validating Internet Access Policy"
+# 1. Validate Internet Access Policy is bundled
+print_step 1 5 "Validating Internet Access Policy"
 if [ ! -f "${IAP_PATH}" ]; then
     log_failure "Missing InternetAccessPolicy.plist in app bundle at ${IAP_PATH}"
     exit 1
@@ -45,8 +30,8 @@ else
     exit 1
 fi
 
-# 3. Validate background agent launch path before packaging.
-print_step 3 6 "Validating Background Agent"
+# 2. Validate background agent launch path before packaging.
+print_step 2 5 "Validating Background Agent"
 if [ ! -f "${BACKGROUND_AGENT_PLIST}" ]; then
     log_failure "Missing background agent plist at ${BACKGROUND_AGENT_PLIST}"
     exit 1
@@ -59,12 +44,12 @@ if [ "${AGENT_BUNDLE_PROGRAM}" != "${BACKGROUND_AGENT_BUNDLE_PROGRAM}" ]; then
 fi
 log_success "Background agent launch path verified"
 
-# 4. Validate embedded framework linkage before packaging.
-print_step 4 6 "Validating App Linkage"
+# 3. Validate embedded framework linkage before packaging.
+print_step 3 5 "Validating App Linkage"
 validate_sorty_app_linkage "${APP_PATH}"
 
-# 5. Validate code signature before packaging.
-print_step 5 6 "Validating Code Signature"
+# 4. Validate code signature before packaging.
+print_step 4 5 "Validating Code Signature"
 if codesign --verify --strict --verbose=2 "${APP_PATH}" >/dev/null 2>&1; then
     log_success "Code signature verified"
 else
@@ -72,8 +57,8 @@ else
     exit 1
 fi
 
-# 6. Create ZIP
-print_step 6 6 "Creating Application Archive (ZIP)"
+# 5. Create ZIP
+print_step 5 5 "Creating Application Archive (ZIP)"
 start_step_timer "zip"
 rm -f "${ZIP_PATH}"
 
@@ -97,5 +82,4 @@ fi
 
 print_summary "Package Complete" \
     "ZIP" "${ZIP_PATH}" \
-    "CLI (Bundled)" "${CLI_DIR}" \
     "IAP" "${IAP_PATH}"

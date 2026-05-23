@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help cli install-cli install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
+.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
 
 # Default target
 all: build
@@ -118,23 +118,11 @@ rebuild: clean
 	@echo "🔁 Full rebuild after clean..."
 	@$(BUILD_SCRIPT_ENV) BUILD_FLAGS="$(PARALLEL_FLAGS)" ./scripts/build.sh
 
-# Build the learnings CLI tool
-cli:
-	@echo "🔨 Building learnings CLI with $(CORES) parallel jobs..."
-	@swift build $(SWIFTPM_SCRATCH_FLAG) --product learnings $(PARALLEL_FLAGS) --disable-sandbox
-	@echo "✅ CLI built at $(SORTY_BUILD_DIR)/debug/learnings"
-
 # Install app to /Applications
 install: build
 	@echo "📦 Installing Sorty to /Applications..."
 	@cp -R releases/Sorty.app /Applications/Sorty.app
 	@echo "✅ Installed! You can now find Sorty in your Applications folder."
-
-# Install CLI to /usr/local/bin
-install-cli: cli
-	@echo "📦 Installing learnings CLI to /usr/local/bin..."
-	@sudo cp "$(SORTY_BUILD_DIR)/debug/learnings" /usr/local/bin/learnings
-	@echo "✅ Installed! Run with: learnings --help"
 
 # Create a release zip for GitHub (manual)
 release:
@@ -262,8 +250,6 @@ help:
 	@echo "  make clean       - Remove all build artifacts and releases"
 	@echo "  make rebuild     - Clean, then full rebuild (slowest, but fresh)"
 	@echo "  make install     - Copy built app to /Applications"
-	@echo "  make cli         - Build the 'learnings' CLI tool"
-	@echo "  make install-cli - Install 'learnings' CLI to /usr/local/bin"
 	@echo "  make help        - Show this help message"
 	@echo ""
 	@echo "Verbosity:"

@@ -254,81 +254,6 @@ phase_build_test() {
 }
 
 # ============================================================================
-# Phase 3: CLI Validation
-# ============================================================================
-
-phase_cli() {
-    phase_header 3 "CLI Tools Validation"
-    
-    # Build learnings CLI
-    echo -e "  ${BLUE}...${NC} Building learnings CLI..."
-    if swift build --product learnings 2>&1 | tail -3; then
-        check_pass "learnings CLI builds"
-    else
-        check_fail "learnings CLI build" "Failed to compile"
-        return 1
-    fi
-    
-    # Test learnings CLI help
-    if swift run learnings help 2>&1 | grep -q "Learnings CLI"; then
-        check_pass "learnings CLI help command works"
-    else
-        check_fail "learnings CLI" "Help command failed"
-        return 1
-    fi
-    
-    # Test learnings CLI info
-    if swift run learnings info 2>&1 | head -1 > /dev/null; then
-        check_pass "learnings CLI info command works"
-    else
-        check_warn "learnings CLI info" "Info command returned unexpected output"
-    fi
-    
-    # Check sorty script exists
-    SORTY_CLI_PATH="${PROJECT_DIR}/CLI/sorty"
-    if [ -f "$SORTY_CLI_PATH" ]; then
-        check_pass "sorty script exists"
-    else
-        check_fail "sorty script" "Not found at CLI/sorty"
-        return 1
-    fi
-    
-    # Check sorty is executable
-    if [ -x "$SORTY_CLI_PATH" ]; then
-        check_pass "sorty script is executable"
-    else
-        check_warn "sorty permissions" "Script not executable (chmod +x needed)"
-    fi
-    
-    # Syntax check
-    if bash -n "$SORTY_CLI_PATH" 2>&1; then
-        check_pass "sorty syntax valid"
-    else
-        check_fail "sorty syntax" "Bash syntax errors detected"
-        return 1
-    fi
-    
-    # Check scheme is set to sorty
-    if grep -q 'APP_SCHEME="sorty"' "$SORTY_CLI_PATH"; then
-        check_pass "sorty uses sorty:// scheme"
-    else
-        check_fail "sorty scheme" "APP_SCHEME should be 'sorty'"
-        return 1
-    fi
-    
-    # Test help command
-    chmod +x "$SORTY_CLI_PATH"
-    if "$SORTY_CLI_PATH" help 2>&1 | grep -q "Sorty CLI"; then
-        check_pass "sorty help command works"
-    else
-        check_fail "sorty help" "Help output not recognized"
-        return 1
-    fi
-    
-    return 0
-}
-
-# ============================================================================
 # Phase 4: App Bundle Validation
 # ============================================================================
 
@@ -609,7 +534,7 @@ phase_code_quality() {
     SOURCES_DIR="${PROJECT_DIR}/Sources"
     
     # Count debug print statements
-    DEBUG_PRINTS=$(grep -rE "^\s*(print|debugPrint)\(" "$SOURCES_DIR" --include="*.swift" 2>/dev/null | grep -v "Tests/" | grep -v "Sources/LearningsCLI/" | wc -l | tr -d ' ')
+    DEBUG_PRINTS=$(grep -rE "^\s*(print|debugPrint)\(" "$SOURCES_DIR" --include="*.swift" 2>/dev/null | grep -v "Tests/" | wc -l | tr -d ' ')
     if [ "$DEBUG_PRINTS" -eq 0 ]; then
         check_pass "No debug print statements"
     elif [ "$DEBUG_PRINTS" -lt 10 ]; then
@@ -653,25 +578,6 @@ phase_deeplinks() {
     else
         check_fail "URL scheme" "sorty scheme not found in Info.plist"
         return 1
-    fi
-    
-    # Check sorty supports key deeplink commands
-    SORTY_CLI_PATH="${PROJECT_DIR}/CLI/sorty"
-    chmod +x "$SORTY_CLI_PATH"
-    
-    DEEPLINK_COMMANDS=("organize" "duplicates" "settings" "learnings" "health" "history")
-    MISSING_COMMANDS=()
-    
-    for cmd in "${DEEPLINK_COMMANDS[@]}"; do
-        if ! "$SORTY_CLI_PATH" help 2>&1 | grep -qi "$cmd"; then
-            MISSING_COMMANDS+=("$cmd")
-        fi
-    done
-    
-    if [ ${#MISSING_COMMANDS[@]} -eq 0 ]; then
-        check_pass "All key deeplink commands documented in sorty"
-    else
-        check_warn "sorty commands" "Missing documentation for: ${MISSING_COMMANDS[*]}"
     fi
     
     return 0
@@ -723,7 +629,6 @@ phase_permissions() {
         "scripts/package.sh"
         "scripts/run_tests.sh"
         "scripts/validate_sparkle.sh"
-        "CLI/sorty"
     )
     
     for script in "${SCRIPTS[@]}"; do
@@ -907,7 +812,6 @@ main() {
     fi
     
     # Remaining phases - continue on failure
-    phase_cli || true
     phase_app_bundle || true
     phase_plist || true
     phase_version || true

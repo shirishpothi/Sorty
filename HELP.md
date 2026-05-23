@@ -11,14 +11,13 @@
 8. [Exclusion Rules](#exclusion-rules)
 9. [Workspace Health](#workspace-health)
 10. [App Deeplinks](#app-deeplinks)
-11. [CLI Tooling](#cli-tooling)
-12. [Keyboard Shortcuts](#keyboard-shortcuts)
-13. [Menu Bar Commands](#menu-bar-commands)
-14. [Version & Updates](#version--updates)
-15. [Troubleshooting](#troubleshooting)
+11. [Keyboard Shortcuts](#keyboard-shortcuts)
+12. [Menu Bar Commands](#menu-bar-commands)
+13. [Version & Updates](#version--updates)
+14. [Troubleshooting](#troubleshooting)
     - [Update Check Issues](#update-check-issues)
-16. [Privacy & Data](#privacy--data)
-17. [FAQ](#faq)
+15. [Privacy & Data](#privacy--data)
+16. [FAQ](#faq)
 
 ---
 
@@ -265,7 +264,7 @@ You can scan any folder for duplicates without changing your main organization t
 
 ## App Deeplinks
 
-Sorty provides comprehensive URL schemes to control all aspects of the application.
+The app provides comprehensive URL schemes to control all aspects of the application.
 
 ### Organization Routes
 
@@ -337,75 +336,6 @@ Sorty provides comprehensive URL schemes to control all aspects of the applicati
 | `sorty://history` | | Open History |
 | `sorty://help` | | Open Help |
 | `sorty://help` | `section=updates` | Jump to updates section |
-
----
-
-## CLI Tooling
-
-Sorty includes a comprehensive CLI tool called `sorty` that allows you to control the application from your terminal.
-
-### Installation
-Run `make install` (or ensure `CLI/sorty` is in your path).
-
-### Usage
-`sorty <command> [options]`
-
-### Commands
-
-#### Organization
-```bash
-# Organize current folder
-sorty organize .
-
-# Organize specific folder with specific persona
-sorty organize /Users/me/Downloads --persona developer
-
-# Auto-start organization
-sorty organize . --auto
-```
-
-#### Maintenance
-```bash
-# Scan for duplicates
-sorty duplicates /path/to/scan --auto
-
-# Add watched folder
-sorty watched add /path/to/watch
-
-# Add exclusion rule
-sorty rules add "*.log"
-```
-
-#### Generative AI
-```bash
-# Generate a new persona from description
-sorty persona generate "I want to organize my sci-fi ebook collection by author"
-```
-
-#### Navigation
-```bash
-sorty settings
-sorty history
-sorty learnings
-sorty health
-sorty help
-```
-
-### Command Reference
-
-| Command | Description |
-|---------|-------------|
-| `sorty status` | Show current app status and selected folder |
-| `sorty health` | Open Workspace Health view |
-| `sorty settings` | Open Settings |
-| `sorty persona [generate "description"]` | Manage or generate personas |
-| `sorty watched [add <path>]` | Manage watched folders |
-| `sorty rules [add "<pattern>"]` | Manage exclusion rules |
-| `sorty organize <path> [--persona <id>] [--auto]` | Organize a folder |
-| `sorty duplicates <path> [--auto]` | Scan for duplicates |
-| `sorty learnings` | Open The Learnings dashboard |
-| `sorty history` | Open organization history |
-| `sorty help` | Open help (or `sorty://help?section=updates` for updates) |
 
 ---
 

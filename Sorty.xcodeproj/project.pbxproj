@@ -144,7 +144,6 @@
 		AABBCC220002000000000062 /* AutomationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000062 /* AutomationSettingsView.swift */; };
 		AABBCC220002000000000063 /* BatchOrganizationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000063 /* BatchOrganizationManager.swift */; };
 		AABBCC220002000000000064 /* BatchOrganizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000064 /* BatchOrganizationView.swift */; };
-		AABBCC220002000000000065 /* CLIInstaller.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000065 /* CLIInstaller.swift */; };
 		AABBCC220002000000000066 /* CommentPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000066 /* CommentPopoverView.swift */; };
 		AABBCC220002000000000067 /* CompletionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000067 /* CompletionStepView.swift */; };
 		AABBCC220002000000000068 /* ConflictResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000068 /* ConflictResolution.swift */; };
@@ -513,7 +512,6 @@
 		AABBCC110001000000000062 /* AutomationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000063 /* BatchOrganizationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchOrganizationManager.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000064 /* BatchOrganizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchOrganizationView.swift; sourceTree = "<group>"; };
-		AABBCC110001000000000065 /* CLIInstaller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CLIInstaller.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000066 /* CommentPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentPopoverView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000067 /* CompletionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionStepView.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000068 /* ConflictResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConflictResolution.swift; sourceTree = "<group>"; };
@@ -814,7 +812,6 @@
 				AABBCC110001000000000014 /* AudioWaveformGenerator.swift */,
 				AABBCC110001000000000015 /* FileThumbnailProvider.swift */,
 				AABBCC110001000000000016 /* HashUtility.swift */,
-				AABBCC110001000000000065 /* CLIInstaller.swift */,
 				AABBCC11000100000000006B /* CostCalculator.swift */,
 				AABBCC110001000000000073 /* GlobalShortcutManager.swift */,
 				AABBCC110001000000000076 /* LoginItemManager.swift */,

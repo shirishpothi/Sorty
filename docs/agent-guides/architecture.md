@@ -12,8 +12,7 @@ User Action → View → ViewModel/Manager → FolderOrganizer → AIClient → 
 | Layer | Location | Purpose |
 |-------|----------|---------|
 | **SortyApp** | `Sources/SortyApp/` | SwiftUI lifecycle, `AppCoordinator` for background tasks |
-| **SortyLib** | `Sources/SortyLib/` | All business logic, shared with CLI and Finder extension |
-| **LearningsCLI** | `Sources/LearningsCLI/` | `learnings` command-line tool for profile management |
+| **SortyLib** | `Sources/SortyLib/` | All business logic shared by the app, Finder extension, and widgets |
 | **SortyFinderSync** | `Sources/SortyFinderSync/` | Finder Sync extension |
 
 ### SortyLib Directories
