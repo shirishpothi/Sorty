@@ -1,0 +1,133 @@
+name: Nightly Update
+
+on:
+  schedule:
+    # Midnight Singapore time.
+    - cron: '0 16 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-update
+  cancel-in-progress: true
+
+env:
+  PROJECT_NAME: Sorty
+  NIGHTLY_TAG: nightly
+  NIGHTLY_ZIP: Sorty-nightly.zip
+  NIGHTLY_APPCAST: appcast-nightly.xml
+
+jobs:
+  nightly:
+    runs-on: blacksmith-6vcpu-macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-nightly-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-nightly-
+            ${{ runner.os }}-spm-
+
+      - name: Prepare nightly metadata
+        id: nightly
+        run: |
+          BASE_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)
+          NIGHTLY_STAMP=$(date -u +%Y%m%d%H%M)
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BUILD_NUM="${NIGHTLY_STAMP}"
+          DISPLAY_VERSION="${BASE_VERSION}-nightly.${NIGHTLY_STAMP}.${SHORT_SHA}"
+
+          {
+            echo "base_version=${BASE_VERSION}"
+            echo "build_num=${BUILD_NUM}"
+            echo "display_version=${DISPLAY_VERSION}"
+            echo "short_sha=${SHORT_SHA}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build universal app
+        run: |
+          chmod +x ./scripts/build.sh
+          BUILD_METHOD=xcodebuild \
+          SKIP_TESTS=true \
+          BUILD_ARCHS="arm64 x86_64" \
+          APP_ICON_VARIANT=release \
+          XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" \
+          ./scripts/build.sh
+
+      - name: Stamp nightly update feed
+        run: |
+          PLIST="releases/Sorty.app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.nightly.outputs.build_num }}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.nightly.outputs.base_version }}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.NIGHTLY_APPCAST }}" "$PLIST"
+          codesign --force --deep --sign - "releases/Sorty.app"
+
+      - name: Package nightly ZIP
+        run: |
+          chmod +x ./scripts/package.sh
+          ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/package.sh
+
+      - name: Generate nightly appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          APPCAST_REPOSITORY: ${{ github.repository }}
+          APPCAST_RELEASE_TAG: ${{ env.NIGHTLY_TAG }}
+          APPCAST_FILE_OVERRIDE: releases/${{ env.NIGHTLY_APPCAST }}
+          APPCAST_VERSION: ${{ steps.nightly.outputs.base_version }}
+          APPCAST_BUILD_NUM: ${{ steps.nightly.outputs.build_num }}
+          APPCAST_ITEM_TITLE: Nightly ${{ steps.nightly.outputs.display_version }}
+          APPCAST_CHANNEL: nightly
+          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+        run: |
+          chmod +x ./scripts/generate_appcast_ci.sh
+          ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/generate_appcast_ci.sh
+
+      - name: Validate nightly appcast
+        run: |
+          chmod +x ./scripts/validate_sparkle.sh
+          ./scripts/validate_sparkle.sh \
+            --appcast "releases/${{ env.NIGHTLY_APPCAST }}" \
+            --plist "releases/Sorty.app/Contents/Info.plist"
+
+      - name: Publish moving nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "${{ env.NIGHTLY_TAG }}" --yes --cleanup-tag 2>/dev/null || true
+          git tag -f "${{ env.NIGHTLY_TAG }}" "$GITHUB_SHA"
+          git push origin "refs/tags/${{ env.NIGHTLY_TAG }}" --force
+          gh release create "${{ env.NIGHTLY_TAG }}" \
+            "releases/${{ env.NIGHTLY_ZIP }}" \
+            "releases/${{ env.NIGHTLY_APPCAST }}" \
+            --title "Sorty Nightly ${{ steps.nightly.outputs.display_version }}" \
+            --notes "Nightly build from main at $GITHUB_SHA. This release is replaced by the next nightly build." \
+            --prerelease \
+            --target "$GITHUB_SHA"
+
+      - name: Summary
+        run: |
+          echo "## Nightly Update Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: ${{ steps.nightly.outputs.display_version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Build: ${{ steps.nightly.outputs.build_num }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Release tag: ${{ env.NIGHTLY_TAG }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Appcast: ${{ env.NIGHTLY_APPCAST }}" >> "$GITHUB_STEP_SUMMARY"

@@ -11,7 +11,7 @@ source "${SCRIPT_DIR}/utils.sh"
 
 print_header "Generating Signed Appcast" 50
 
-APPCAST_FILE="${RELEASE_DIR}/appcast.xml"
+APPCAST_FILE="${APPCAST_FILE_OVERRIDE:-${RELEASE_DIR}/appcast.xml}"
 ZIP_NAME="${ZIP_NAME_OVERRIDE:-${PROJECT_NAME}.zip}"
 ZIP_PATH="${RELEASE_DIR}/${ZIP_NAME}"
 
@@ -29,14 +29,19 @@ if [ -f "${APP_PLIST}" ]; then
     BUILD_NUM=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "${APP_PLIST}" 2>/dev/null || true)
 fi
 
-VERSION="${VERSION:-$(get_version)}"
-BUILD_NUM="${BUILD_NUM:-$(get_build_number)}"
+VERSION="${APPCAST_VERSION:-${VERSION:-$(get_version)}}"
+BUILD_NUM="${APPCAST_BUILD_NUM:-${BUILD_NUM:-$(get_build_number)}}"
 DATE=$(date -R)
 SIZE=$(stat -f%z "$ZIP_PATH")
 
 # Get download URL from GitHub releases
-RELEASE_URL="https://github.com/shirishpothi/${PROJECT_NAME}/releases/download/v${VERSION}/${ZIP_NAME}"
-RELEASE_NOTES_URL="https://github.com/shirishpothi/${PROJECT_NAME}/releases/tag/v${VERSION}"
+REPOSITORY="${APPCAST_REPOSITORY:-${GITHUB_REPOSITORY:-shirishpothi/${PROJECT_NAME}}}"
+RELEASE_TAG="${APPCAST_RELEASE_TAG:-v${VERSION}}"
+RELEASE_URL="https://github.com/${REPOSITORY}/releases/download/${RELEASE_TAG}/${ZIP_NAME}"
+RELEASE_NOTES_URL="${APPCAST_RELEASE_NOTES_URL:-https://github.com/${REPOSITORY}/releases/tag/${RELEASE_TAG}}"
+APPCAST_ITEM_TITLE="${APPCAST_ITEM_TITLE:-Version ${VERSION}}"
+APPCAST_CHANNEL="${APPCAST_CHANNEL:-}"
+APPCAST_LINK="${APPCAST_LINK:-https://github.com/${REPOSITORY}}"
 
 # Generate Ed25519 signature using Sparkle's sign_update tool
 ENCLOSURE_EXTRA_ATTR="length=\"${SIZE}\""
@@ -75,11 +80,12 @@ cat > "$APPCAST_FILE" <<EOF
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
     <title>${PROJECT_NAME} Changelog</title>
-    <link>https://github.com/shirishpothi/${PROJECT_NAME}</link>
+    <link>${APPCAST_LINK}</link>
     <description>Most recent changes with links to updates.</description>
     <language>en</language>
     <item>
-      <title>Version ${VERSION}</title>
+      <title>${APPCAST_ITEM_TITLE}</title>
+$(if [ -n "${APPCAST_CHANNEL}" ]; then printf '      <sparkle:channel>%s</sparkle:channel>\n' "${APPCAST_CHANNEL}"; fi)
       <sparkle:releaseNotesLink>${RELEASE_NOTES_URL}</sparkle:releaseNotesLink>
       <pubDate>${DATE}</pubDate>
       <enclosure url="${RELEASE_URL}"
