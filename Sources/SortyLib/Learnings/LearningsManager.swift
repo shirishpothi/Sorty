@@ -1638,8 +1638,6 @@ public class LearningsManager: ObservableObject {
     /// The context is intentionally short and session-centric so the model gets
     /// recent, attributable signals instead of a long undifferentiated dump.
     public func generatePromptContext(forFolder folderPath: String? = nil) -> String {
-        loadProfileIfNeededForCollection()
-
         guard let profile = currentProfile, (profile.consentGranted || consentManager.hasConsented) else {
             return ""
         }

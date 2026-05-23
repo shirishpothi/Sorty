@@ -458,11 +458,7 @@ public actor FileSystemManager {
         to destinationURL: URL,
         renameMetadata: FileOperation.OperationMetadata?
     ) -> FileOperation.OperationType {
-        guard renameMetadata != nil else { return .moveFile }
-
-        let sourceParent = sourceURL.deletingLastPathComponent().standardizedFileURL.path
-        let destinationParent = destinationURL.deletingLastPathComponent().standardizedFileURL.path
-        return sourceParent == destinationParent ? .renameFile : .moveFile
+        renameMetadata == nil ? .moveFile : .renameFile
     }
     
     private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
