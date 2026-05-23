@@ -247,12 +247,6 @@ struct AnalysisView: View {
                         .animation(
                             .spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
 
-                    stageIndicator
-                        .opacity(hasAppeared ? 1 : 0)
-                        .offset(y: hasAppeared ? 0 : 10)
-                        .animation(
-                            .spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
-
                     tieredNoticeView
 
                     if isRenameOnlyFlow {
