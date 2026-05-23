@@ -2,8 +2,10 @@ import SwiftUI
 import TourKit
 
 public struct WhatsNewTourView: View {
+    @Environment(\.openURL) private var openURL
     @Binding private var nightlyUpdatesEnabled: Bool
     private let onFinish: () -> Void
+    private static let releasesURL = URL(string: "https://github.com/sorty-organizer/Sorty/releases/latest")!
 
     public init(
         nightlyUpdatesEnabled: Binding<Bool>,
@@ -15,6 +17,8 @@ public struct WhatsNewTourView: View {
 
     public var body: some View {
         VStack(spacing: 16) {
+            manualUpdateCard
+
             TourSlideshowView(
                 pages: pages,
                 continueButtonTitle: "Continue",
@@ -28,6 +32,57 @@ public struct WhatsNewTourView: View {
         .padding(.bottom, 18)
         .frame(width: 680)
         .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var manualUpdateCard: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "arrow.down.app.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    LinearGradient(
+                        colors: [Color.accentColor, Color.teal],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: Color.accentColor.opacity(0.18), radius: 10, x: 0, y: 5)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Please install this update from GitHub")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+
+                Text("This release fixes the updater. Download the latest Sorty zip from GitHub once, replace the app, then future updates should work inside Sorty again.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                openURL(Self.releasesURL)
+            } label: {
+                Label("Open GitHub", systemImage: "arrow.up.right")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .padding(.horizontal, 4)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .accessibilityHint("Opens the latest Sorty release download page")
+        }
+        .padding(16)
+        .background(Color.accentColor.opacity(0.08))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, 24)
+        .padding(.top, 18)
     }
 
     private var nightlyUpdatesCard: some View {

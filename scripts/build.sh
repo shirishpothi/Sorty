@@ -261,6 +261,12 @@ codesign_cmd() {
     "${cmd[@]}"
 }
 
+codesign_cmd_hardened_runtime() {
+    local -a cmd=(codesign --force --options runtime --sign "${SIGNING_IDENTITY}")
+    cmd+=("$@")
+    "${cmd[@]}"
+}
+
 codesign_cmd_allow_failure() {
     local -a cmd=(codesign --force --sign "${SIGNING_IDENTITY}")
     cmd+=("$@")
@@ -596,19 +602,16 @@ sign_sparkle_framework() {
         for helper in "Autoupdate.app" "Updater.app"; do
             local helper_path="${resources_dir}/${helper}"
             if [ -d "${helper_path}" ]; then
-                run_quiet codesign_cmd "${helper_path}"
+                run_quiet codesign_cmd_hardened_runtime "${helper_path}"
             fi
         done
     fi
 
-    local xpc_dir="${framework_path}/XPCServices"
-    if [ -d "${xpc_dir}" ]; then
-        find "${xpc_dir}" -maxdepth 1 -name "*.xpc" -type d -print0 | while IFS= read -r -d '' xpc_service; do
-            run_quiet codesign_cmd "${xpc_service}"
-        done
-    fi
+    find "${framework_path}" -path "*/XPCServices/*.xpc" -type d -print0 2>/dev/null | while IFS= read -r -d '' xpc_service; do
+        run_quiet codesign_cmd_hardened_runtime "${xpc_service}"
+    done
 
-    run_quiet codesign_cmd "${framework_path}"
+    run_quiet codesign_cmd_hardened_runtime "${framework_path}"
 }
 
 # Build and embed the SortyFinderSync Finder extension (.appex)

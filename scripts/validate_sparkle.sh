@@ -48,6 +48,28 @@ fail() {
     ERRORS=$((ERRORS + 1))
 }
 
+sparkle_resources_dir() {
+    local framework_path="$1"
+    local current_resources="${framework_path}/Versions/Current/Resources"
+    if [ -d "${current_resources}" ]; then
+        echo "${current_resources}"
+        return 0
+    fi
+
+    find "${framework_path}/Versions" -mindepth 2 -maxdepth 2 -type d -name Resources 2>/dev/null | head -1
+}
+
+require_hardened_runtime() {
+    local bundle_path="$1"
+    local description="$2"
+
+    local signature
+    signature=$(codesign -dv --verbose=4 "$bundle_path" 2>&1 || true)
+    if ! echo "$signature" | grep -q 'runtime'; then
+        fail "${description} must be signed with hardened runtime"
+    fi
+}
+
 check_tool() {
     local tool="$1"
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -143,22 +165,26 @@ else
 fi
 
 if [ -d "$APP_PATH" ]; then
-    UPDATER_PATH="${APP_PATH}/Contents/Frameworks/Sparkle.framework/Updater.app"
-    AUTOUPDATE_PATH="${APP_PATH}/Contents/Frameworks/Sparkle.framework/Autoupdate"
+    SPARKLE_FRAMEWORK="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
+    SPARKLE_RESOURCES="$(sparkle_resources_dir "$SPARKLE_FRAMEWORK")"
+    UPDATER_PATH="${SPARKLE_RESOURCES}/Updater.app"
+    AUTOUPDATE_PATH="${SPARKLE_RESOURCES}/Autoupdate.app"
 
     if [ -d "$UPDATER_PATH" ]; then
-        UPDATER_SIGNATURE=$(codesign -dv --verbose=4 "$UPDATER_PATH" 2>&1 || true)
-        if ! echo "$UPDATER_SIGNATURE" | grep -q 'runtime'; then
-            fail "Sparkle Updater.app must be signed with hardened runtime"
-        fi
+        require_hardened_runtime "$UPDATER_PATH" "Sparkle Updater.app"
+    else
+        fail "Sparkle Updater.app missing from embedded framework"
     fi
 
-    if [ -f "$AUTOUPDATE_PATH" ]; then
-        AUTOUPDATE_SIGNATURE=$(codesign -dv --verbose=4 "$AUTOUPDATE_PATH" 2>&1 || true)
-        if ! echo "$AUTOUPDATE_SIGNATURE" | grep -q 'runtime'; then
-            fail "Sparkle Autoupdate must be signed with hardened runtime"
-        fi
+    if [ -d "$AUTOUPDATE_PATH" ]; then
+        require_hardened_runtime "$AUTOUPDATE_PATH" "Sparkle Autoupdate.app"
+    else
+        fail "Sparkle Autoupdate.app missing from embedded framework"
     fi
+
+    while IFS= read -r -d '' xpc_service; do
+        require_hardened_runtime "$xpc_service" "Sparkle XPC service $(basename "$xpc_service")"
+    done < <(find "$SPARKLE_FRAMEWORK" -path "*/XPCServices/*.xpc" -type d -print0 2>/dev/null)
 fi
 
 if [ $ERRORS -gt 0 ]; then
