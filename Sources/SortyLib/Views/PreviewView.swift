@@ -11,6 +11,7 @@ import SwiftUI
 struct PreviewView: View {
     let plan: OrganizationPlan
     let baseURL: URL
+    let onReturnToStart: (() -> Void)?
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -49,6 +50,7 @@ struct PreviewView: View {
     }
     private var shouldDisableButtons: Bool { isApplying || organizer.state == .scanning || organizer.state == .organizing }
     private var isOrganizing: Bool { isApplying || organizer.state == .applying }
+    private var mode: OrganizationMode { settingsViewModel.config.mode }
     private var emptyStateType: PreviewListView.EmptyStateType {
         if editablePlan.totalFiles == 0 { return .emptyDirectory }
         if editablePlan.suggestions.isEmpty && !editablePlan.unorganizedFiles.isEmpty { return .allUnorganized(editablePlan.unorganizedFiles.count) }
@@ -59,8 +61,9 @@ struct PreviewView: View {
         learningsManager.summary
     }
     
-    init(plan: OrganizationPlan, baseURL: URL) {
+    init(plan: OrganizationPlan, baseURL: URL, onReturnToStart: (() -> Void)? = nil) {
         self.plan = plan; self.baseURL = baseURL
+        self.onReturnToStart = onReturnToStart
         _previewStore = StateObject(wrappedValue: PreviewStore(plan: plan))
         _editablePlan = State(initialValue: plan)
     }
@@ -118,18 +121,14 @@ struct PreviewView: View {
                     HapticFeedbackManager.shared.selection()
                     appState.showDirectoryPicker = true
                 },
-                onExitPreview: {
-                    HapticFeedbackManager.shared.tap()
-                    organizer.reset()
-                    appState.selectedDirectory = nil
-                }
+                onExitPreview: exitPreview
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
             bottomToolbar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .alert("Apply Organization?", isPresented: $showApplyConfirmation) {
+        .alert("Apply \(mode.actionVerb)?", isPresented: $showApplyConfirmation) {
             Button("Cancel", role: .cancel) {
                 if let requestID = activeNotificationApplyRequestID {
                     NotificationManager.shared.recordActionLifecycle("apply", stage: "cancelled", detail: "preview confirmation")
@@ -143,7 +142,7 @@ struct PreviewView: View {
                 }
                 applyOrganization()
             }
-        } message: { Text("\(editablePlan.totalFiles) files will be organized. \(editablePlan.unorganizedFiles.count) files will remain in place.") }
+        } message: { Text(applyConfirmationMessage) }
         .onChange(of: organizer.state) { _, newState in
             if case .completed = newState {
                 isApplying = false
@@ -187,7 +186,7 @@ struct PreviewView: View {
             NotificationManager.shared.recordActionLifecycle("redo_with_model", stage: "cancelled", detail: "preview picker")
             activeNotificationRedoRequestID = nil
         }
-        .sheet(isPresented: $showPostOrganizationHoning) { PostOrganizationHoningView(fileCount: editablePlan.totalFiles, folderCount: editablePlan.totalFolders, config: settingsViewModel.config, learningsMaturity: learningsSummary.maturity, onComplete: { answers in Task { await learningsManager.saveHoningResults(answers); showPostOrganizationHoning = false } }, onSkip: { showPostOrganizationHoning = false }) }
+        .sheet(isPresented: $showPostOrganizationHoning) { PostOrganizationHoningView(fileCount: editablePlan.totalFiles, folderCount: editablePlan.totalFolders, renameCount: renameCount, config: settingsViewModel.config, learningsMaturity: learningsSummary.maturity, onComplete: { answers in Task { await learningsManager.saveHoningResults(answers); showPostOrganizationHoning = false } }, onSkip: { showPostOrganizationHoning = false }) }
         .modelSelectionOverlay(
             isPresented: $showRedoModelPicker,
             currentProvider: settingsViewModel.config.provider,
@@ -206,7 +205,7 @@ struct PreviewView: View {
                 Divider()
             }
             if isOrganizing {
-                PreviewProgressView(progress: organizer.progress, stage: organizer.organizationStage, estimatedTimeRemaining: calculateTimeRemaining(), onCancel: { organizer.cancel() })
+                PreviewProgressView(progress: organizer.progress, stage: organizer.organizationStage, estimatedTimeRemaining: calculateTimeRemaining(), onCancel: cancelToStart)
             } else {
                 PreviewActionsView(
                     isApplying: isApplying,
@@ -216,7 +215,8 @@ struct PreviewView: View {
                     shouldDisableButtons: shouldDisableButtons,
                     editsCapturedCount: previewStore.editsCapturedCount,
                     editsCapturedPulse: previewStore.editCapturedPulse,
-                    onCancel: { recordCancelledOrganization(); organizer.cancel() },
+                    mode: mode,
+                    onCancel: { recordCancelledOrganization(); cancelToStart() },
                     onReset: { HapticFeedbackManager.shared.tap(); editablePlan = plan; previewStore.updatePlan(plan); previewStore.resetEditsCaptured(); hasEdits = false },
                     onRegenerate: regeneratePreview,
                     onChooseModel: { showRedoModelPicker = true },
@@ -228,6 +228,17 @@ struct PreviewView: View {
     
     private func handleInstructionsChanged(_ newValue: String) {
         if !newValue.isEmpty && learningsManager.consentManager.canCollectData { NotificationCenter.default.post(name: .steeringPromptProvided, object: nil, userInfo: ["prompt": newValue, "folderPath": baseURL.path]) }
+    }
+
+    private var applyConfirmationMessage: String {
+        switch mode {
+        case .renameOnly:
+            return "\(renameCount) suggested name changes will be applied in place. \(editablePlan.unorganizedFiles.count) files will be left unchanged."
+        case .organizeAndRename:
+            return "\(editablePlan.totalFiles) files will be organized, with \(renameCount) name changes. \(editablePlan.unorganizedFiles.count) files will remain in place."
+        case .organize:
+            return "\(editablePlan.totalFiles) files will be organized. \(editablePlan.unorganizedFiles.count) files will remain in place."
+        }
     }
     
     private func regeneratePreview() {
@@ -355,5 +366,26 @@ struct PreviewView: View {
             fileExtensionCounts: extensionCounts.isEmpty ? nil : extensionCounts,
             aiModel: settingsViewModel.config.model
         )
+    }
+
+    private func cancelToStart() {
+        if let onReturnToStart {
+            onReturnToStart()
+        } else {
+            withAnimation(.smooth(duration: 0.34)) {
+                organizer.cancel()
+            }
+        }
+    }
+
+    private func exitPreview() {
+        HapticFeedbackManager.shared.tap()
+        if let onReturnToStart {
+            onReturnToStart()
+        } else {
+            withAnimation(.smooth(duration: 0.34)) {
+                organizer.reset()
+            }
+        }
     }
 }

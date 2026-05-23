@@ -77,7 +77,7 @@ struct ThanksForUsingSortyView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.sortyProminent)
         .controlSize(.large)
         .trackHoveredURL(sponsorsURL)
         .scaleEffect(supportHovered ? 1.04 : 1.0)

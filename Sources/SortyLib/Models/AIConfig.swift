@@ -422,6 +422,49 @@ public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
         case .renameOnly: return "pencil.line"
         }
     }
+
+    public var actionVerb: String {
+        switch self {
+        case .organize: return "Organize"
+        case .organizeAndRename: return "Organize & Rename"
+        case .renameOnly: return "Rename"
+        }
+    }
+
+    public var gerund: String {
+        switch self {
+        case .organize: return "organizing"
+        case .organizeAndRename: return "organizing and renaming"
+        case .renameOnly: return "renaming"
+        }
+    }
+
+    public var completionTitle: String {
+        switch self {
+        case .organize: return "Organization Complete"
+        case .organizeAndRename: return "Organization & Renaming Complete"
+        case .renameOnly: return "Renaming Complete"
+        }
+    }
+
+    public var completionMessage: String {
+        switch self {
+        case .organize: return "Successfully organized your files into a clean structure."
+        case .organizeAndRename: return "Successfully organized your files and improved their names."
+        case .renameOnly: return "Successfully renamed your files in place."
+        }
+    }
+
+    public var instructionPlaceholder: String {
+        switch self {
+        case .organize:
+            return "e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"..."
+        case .organizeAndRename:
+            return "e.g. \"Group by client, then rename invoices with dates and vendor names\"..."
+        case .renameOnly:
+            return "e.g. \"Use clear invoice names\", \"Keep dates first\", \"Use natural names with spaces\"..."
+        }
+    }
 }
 
 public enum DuplicateHandlingMode: String, CaseIterable, Identifiable, Sendable {
@@ -531,6 +574,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
     // Vision & Multimodal
     public var enableVision: Bool // Use AI vision to analyze image content
     public var namingStyle: NamingStyle // Preferred naming convention
+    public var renameNamingOptions: RenameNamingOptions // Detailed filename formatting preferences
     public var customNamingInstructions: String? // Custom naming preferences
     public var renameRules: [RenameRule] // Custom find/replace rename rules
     public var renameRuleMode: RenameRuleApplicationMode // How custom rules interact with AI renaming
@@ -572,6 +616,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         maxTopLevelFolders: Int = 10,
         enableVision: Bool = false,
         namingStyle: NamingStyle = .descriptive,
+        renameNamingOptions: RenameNamingOptions = .default,
         customNamingInstructions: String? = nil,
         renameRules: [RenameRule] = [],
         renameRuleMode: RenameRuleApplicationMode = .beforeAI,
@@ -610,6 +655,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         self.maxTopLevelFolders = maxTopLevelFolders
         self.enableVision = enableVision
         self.namingStyle = namingStyle
+        self.renameNamingOptions = renameNamingOptions
         self.customNamingInstructions = customNamingInstructions
         self.renameRules = renameRules
         self.renameRuleMode = renameRuleMode
@@ -650,6 +696,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         case maxTopLevelFolders
         case enableVision
         case namingStyle
+        case renameNamingOptions
         case customNamingInstructions
         case renameRules
         case renameRuleMode
@@ -694,6 +741,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         maxTopLevelFolders = try container.decodeIfPresent(Int.self, forKey: .maxTopLevelFolders) ?? 10
         enableVision = try container.decodeIfPresent(Bool.self, forKey: .enableVision) ?? false
         namingStyle = try container.decodeIfPresent(NamingStyle.self, forKey: .namingStyle) ?? .descriptive
+        renameNamingOptions = try container.decodeIfPresent(RenameNamingOptions.self, forKey: .renameNamingOptions) ?? .default
         customNamingInstructions = try container.decodeIfPresent(String.self, forKey: .customNamingInstructions)
         renameRules = try container.decodeIfPresent([RenameRule].self, forKey: .renameRules) ?? []
         renameRuleMode = try container.decodeIfPresent(RenameRuleApplicationMode.self, forKey: .renameRuleMode) ?? .beforeAI
@@ -735,6 +783,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         try container.encode(maxTopLevelFolders, forKey: .maxTopLevelFolders)
         try container.encode(enableVision, forKey: .enableVision)
         try container.encode(namingStyle, forKey: .namingStyle)
+        try container.encode(renameNamingOptions, forKey: .renameNamingOptions)
         try container.encodeIfPresent(customNamingInstructions, forKey: .customNamingInstructions)
         try container.encode(renameRules, forKey: .renameRules)
         try container.encode(renameRuleMode, forKey: .renameRuleMode)
@@ -774,6 +823,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         maxTopLevelFolders: 10,
         enableVision: false,
         namingStyle: .descriptive,
+        renameNamingOptions: .default,
         customNamingInstructions: nil,
         renameRules: [],
         renameRuleMode: .beforeAI,
@@ -841,19 +891,145 @@ public extension AIConfig {
     }
 }
 
+public struct RenameNamingOptions: Codable, Sendable, Equatable {
+    public var separator: RenameSeparatorPreference
+    public var caseStyle: RenameCaseStyle
+    public var maxFilenameLength: Int
+    public var outputLanguage: String
+    public var datePolicy: RenameDatePolicy
+
+    public init(
+        separator: RenameSeparatorPreference = .spaces,
+        caseStyle: RenameCaseStyle = .natural,
+        maxFilenameLength: Int = 80,
+        outputLanguage: String = "English",
+        datePolicy: RenameDatePolicy = .whenFound
+    ) {
+        self.separator = separator
+        self.caseStyle = caseStyle
+        self.maxFilenameLength = min(max(maxFilenameLength, 20), 180)
+        self.outputLanguage = outputLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "English" : outputLanguage
+        self.datePolicy = datePolicy
+    }
+
+    public static let `default` = RenameNamingOptions()
+
+    public var promptInstructions: String {
+        """
+        Filename formatting preferences:
+        - Separator: \(separator.promptDescription)
+        - Case style: \(caseStyle.promptDescription)
+        - Maximum filename length, including extension: \(maxFilenameLength) characters.
+        - Output language: \(outputLanguage).
+        - Date usage: \(datePolicy.promptDescription)
+        """
+    }
+
+    public var exampleFilename: String {
+        FilenameNormalizer.normalize(
+            "2026-03-19 Signed Service Agreement.pdf",
+            originalFilename: "scan_2026_03_19.pdf",
+            options: self
+        ) ?? "2026-03-19 Signed Service Agreement.pdf"
+    }
+}
+
+public enum RenameSeparatorPreference: String, Codable, CaseIterable, Sendable {
+    case spaces
+    case hyphen
+    case underscore
+    case smart
+
+    public var displayName: String {
+        switch self {
+        case .spaces: return "Spaces"
+        case .hyphen: return "Hyphen"
+        case .underscore: return "Underscore"
+        case .smart: return "Smart"
+        }
+    }
+
+    public var promptDescription: String {
+        switch self {
+        case .spaces: return "Use normal spaces between words. Spaces are allowed and often preferred."
+        case .hyphen: return "Use hyphens between filename parts."
+        case .underscore: return "Use underscores between filename parts."
+        case .smart: return "Choose spaces, hyphens, or underscores based on the selected template and file type."
+        }
+    }
+}
+
+public enum RenameCaseStyle: String, Codable, CaseIterable, Sendable {
+    case natural
+    case title
+    case sentence
+    case camel
+    case pascal
+    case snake
+    case kebab
+
+    public var displayName: String {
+        switch self {
+        case .natural: return "Natural"
+        case .title: return "Title"
+        case .sentence: return "Sentence"
+        case .camel: return "camelCase"
+        case .pascal: return "PascalCase"
+        case .snake: return "snake_case"
+        case .kebab: return "kebab-case"
+        }
+    }
+
+    public var promptDescription: String {
+        switch self {
+        case .natural: return "Use natural human-readable capitalization."
+        case .title: return "Use Title Case."
+        case .sentence: return "Use sentence case."
+        case .camel: return "Use camelCase for the base filename."
+        case .pascal: return "Use PascalCase for the base filename."
+        case .snake: return "Use snake_case for the base filename."
+        case .kebab: return "Use kebab-case for the base filename."
+        }
+    }
+}
+
+public enum RenameDatePolicy: String, Codable, CaseIterable, Sendable {
+    case never
+    case whenFound
+    case alwaysWhenReliable
+
+    public var displayName: String {
+        switch self {
+        case .never: return "Never"
+        case .whenFound: return "When Found"
+        case .alwaysWhenReliable: return "When Reliable"
+        }
+    }
+
+    public var promptDescription: String {
+        switch self {
+        case .never: return "Do not add dates unless the current filename already has one and removing it would lose meaning."
+        case .whenFound: return "Include dates only when found in file content, OCR, EXIF, metadata, or the current filename."
+        case .alwaysWhenReliable: return "Prefer a leading date when a reliable date can be inferred from content or metadata."
+        }
+    }
+}
+
 public enum NamingStyle: String, Codable, CaseIterable, Sendable {
-    case descriptive // [Date]_[Subject]_[Type]
-    case minimalist  // [Subject]
-    case technical   // [Type]_[Date]_[ID]
-    case datePrefix  // YYYY-MM-DD - [Subject]
+    case descriptive // Natural document names with reliable dates when useful
+    case minimalist  // Subject
+    case technical   // TYPE_DATE_ID
+    case datePrefix  // YYYY-MM-DD - Subject - Type
+    case screenshotFriendly
     case custom      // User-defined naming style
     
     public var displayName: String {
         switch self {
-        case .descriptive: return "Descriptive (Date Subject Type)"
-        case .minimalist: return "Minimalist (Subject Only)"
-        case .technical: return "Technical (Type_Date_ID)"
-        case .datePrefix: return "Date First (YYYY-MM-DD - Subject)"
+        case .descriptive: return "Natural Document Name"
+        case .minimalist: return "Subject Only"
+        case .technical: return "Technical"
+        case .datePrefix: return "Date - Client - Type"
+        case .screenshotFriendly: return "Screenshot Friendly"
         case .custom: return "Custom"
         }
     }
@@ -861,13 +1037,15 @@ public enum NamingStyle: String, Codable, CaseIterable, Sendable {
     public var promptInstructions: String {
         switch self {
         case .descriptive:
-            return "Use a descriptive style with spaces: [Date] [Subject] [Type].[ext] (e.g., 2024-01-15 Tax Return Invoice.pdf). Focus on extracting dates and subjects."
+            return "Use natural, readable names with spaces when helpful, such as 2026-03-19 Signed Service Agreement.pdf. Include dates only when reliable."
         case .minimalist:
-            return "Use a minimalist style: [Subject].[ext] (e.g., TaxReturn.pdf). Keep it very short and remove all dates or technical codes."
+            return "Use the clearest subject only, such as Vendor Contract Notes.docx. Keep names short and omit dates or IDs unless essential."
         case .technical:
-            return "Use a technical style: [Type]_[Date]_[ID].[ext] (e.g., INVOICE_20240115_ABC.pdf). Use uppercase for the type."
+            return "Use a structured technical style, such as INVOICE_20251204_ACME_1843.pdf. Prefer uppercase type and compact identifiers."
         case .datePrefix:
-            return "Use a date-first style: YYYY-MM-DD - [Subject].[ext] (e.g., 2024-01-15 - TaxReturn.pdf)."
+            return "Use date, client or source, and document type when available, such as 2025-12-04 - Acme Co - Invoice 1843.pdf."
+        case .screenshotFriendly:
+            return "Use screenshot-friendly names with visible context, such as 2026-03-12 Checkout Error Screenshot.png."
         case .custom:
             return "Follow the custom naming instructions provided by the user exactly as specified."
         }

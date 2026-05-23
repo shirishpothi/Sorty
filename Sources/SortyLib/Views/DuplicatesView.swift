@@ -14,7 +14,7 @@ struct DuplicatesView: View {
     @EnvironmentObject var settingsManager: DuplicateSettingsManager
     @State private var showDeleteConfirmation = false
     @State private var filesToDelete: [FileItem] = []
-    @State private var contentOpacity: Double = 1
+    @State private var contentOpacity: Double = 0
     @State private var showSettings = false
     @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
     @State private var handoffFilePaths: [String] = []
@@ -34,9 +34,11 @@ struct DuplicatesView: View {
                 ZStack(alignment: .topLeading) {
                     duplicatesBaseEmptyState()
                         .padding(32)
+                        .animatedAppearance(delay: 0.08)
 
                     duplicatesBaseHeaderSection()
                         .padding(.horizontal, 32)
+                        .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(NSColor.windowBackgroundColor))
@@ -51,6 +53,7 @@ struct DuplicatesView: View {
                 onBulkDelete: prepareBulkDelete,
                 onSettings: { showSettings = true }
             )
+            .animatedAppearance(delay: 0.03)
             
             ZStack {
                     switch detectionManager.state {
@@ -106,6 +109,9 @@ struct DuplicatesView: View {
             Text("This will permanently delete \(filesToDelete.count) file(s). This cannot be undone.")
         }
         .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
             consumePendingHandoffIfNeeded()
         }
         .onChange(of: effectiveDirectory) { _, _ in
@@ -195,32 +201,14 @@ struct DuplicatesView: View {
 
     @ViewBuilder
     private func duplicatesBaseEmptyState() -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "doc.on.doc")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-                .opacity(0.7)
-
-            VStack(spacing: 8) {
-                Text("Select a Directory")
-                    .font(.title2.bold())
-
-                Text("Choose a folder to scan for identical files and recover disk space")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 350)
-            }
-
-            Button("Choose Directory") {
-                selectDirectory()
-            }
-            .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured)
-            .controlSize(.large)
-            .accessibilityIdentifier("DuplicatesEmptyChooseDirectory")
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        DuplicatesEmptyStateView(
+            title: "Select a Directory",
+            description: "Choose a folder to scan for identical files and recover disk space",
+            icon: "doc.on.doc",
+            actionTitle: "Choose Directory",
+            actionAccessibilityIdentifier: "DuplicatesEmptyChooseDirectory",
+            action: selectDirectory
+        )
     }
 
     private var noDuplicatesView: some View {
@@ -892,7 +880,7 @@ struct DuplicateFileDetailRow: View {
                     Image(systemName: "trash")
                         .foregroundStyle(.red)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
             } else {
                 Text("Original")
@@ -1169,7 +1157,7 @@ struct UnifiedFileDetailRow: View {
                     Image(systemName: "trash")
                         .foregroundStyle(.red)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
             } else {
                 Text("Keep")
@@ -1259,7 +1247,10 @@ struct DuplicatesEmptyStateView: View {
     let icon: String
     var iconColor: Color = .secondary
     let actionTitle: String
+    var actionAccessibilityIdentifier: String?
     let action: () -> Void
+    @State private var hasAppeared = false
+    @State private var beamHasAppeared = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -1267,6 +1258,9 @@ struct DuplicatesEmptyStateView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(iconColor)
                 .opacity(0.7)
+                .opacity(hasAppeared ? 1 : 0)
+                .scaleEffect(hasAppeared ? 1 : 0.8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
                 .accessibilityHidden(true)
             
             VStack(spacing: 8) {
@@ -1281,22 +1275,37 @@ struct DuplicatesEmptyStateView: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(title). \(description)")
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
             
-                    Button(action: action) {
-                        Text(actionTitle)
-                            .frame(minWidth: 120)
-                    }
-                    .buttonStyle(.onboardingPill)
-                    .onboardingBeamBorder(variant: .featured)
+            Button(action: action) {
+                Text(actionTitle)
+                    .frame(minWidth: 120)
+            }
+            .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
 
             .controlSize(.large)
             .accessibilityLabel(actionTitle)
             .accessibilityHint("Activate to \(actionTitle.lowercased())")
+            .accessibilityIdentifier(actionAccessibilityIdentifier ?? "\(title.replacingOccurrences(of: " ", with: ""))Action")
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                hasAppeared = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                beamHasAppeared = true
+            }
+        }
     }
 }
 

@@ -17,6 +17,9 @@ public struct WorkspaceHealthView: View {
     @State private var autoRefreshTask: Task<Void, Never>?
     @State private var initialRefreshTask: Task<Void, Never>?
     @State private var refreshTask: Task<Void, Never>?
+    @State private var contentOpacity: Double = 0
+    @State private var emptyStateHasAppeared = false
+    @State private var emptyStateBeamHasAppeared = false
     
     public init() {}
     
@@ -26,35 +29,55 @@ public struct WorkspaceHealthView: View {
                 VStack(spacing: 24) {
                     // Header
                     headerSection
+                        .animatedAppearance(delay: 0.03)
                     
                     // Directory Selector
                     if selectedDirectory != nil {
                         directorySelector
+                            .animatedAppearance(delay: 0.06)
                     }
 
                     analysisStatusSection
+                        .animatedAppearance(delay: 0.09)
                     
                     if selectedDirectory != nil {
                         // Stats Overview
                         statsOverview
+                            .animatedAppearance(delay: 0.12)
                         
                         // Growth Chart (if data available)
                         if let growth = healthManager.getGrowth(for: selectedDirectory?.path ?? "") {
                             growthSection(growth)
+                                .animatedAppearance(delay: 0.15)
                         }
 
                         topActionsSection
+                            .animatedAppearance(delay: 0.18)
                         
                         // Cleanup Opportunities
                         opportunitiesSection
+                            .animatedAppearance(delay: 0.21)
                         
                         // Insights
                         insightsSection
+                            .animatedAppearance(delay: 0.24)
                     }
                 }
                 .padding(32)
             }
             .background(Color(NSColor.windowBackgroundColor))
+
+            VStack {
+                HStack {
+                    Spacer()
+                    workspaceHealthControls
+                        .padding(.top, 14)
+                        .padding(.trailing, 16)
+                }
+                Spacer()
+            }
+            .allowsHitTesting(true)
+            .zIndex(10)
 
             if selectedDirectory == nil {
                 ZStack(alignment: .topLeading) {
@@ -87,41 +110,14 @@ public struct WorkspaceHealthView: View {
                 .zIndex(100)
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task {
-                        try? await healthManager.undoLastAction()
-                        await refreshAnalysis()
-                    }
-                } label: {
-                    Image(systemName: "arrow.uturn.backward")
-                }
-                .disabled(healthManager.cleanupHistory.isEmpty)
-                .help("Undo last cleanup action")
-            }
-            
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showSettings = true
-                } label: {
-                    Image(systemName: "gear")
-                }
-            }
-            
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await refreshAnalysis() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(selectedDirectory == nil || appState.workspaceHealthIsAnalyzing)
-            }
-        }
+        .opacity(contentOpacity)
         .sheet(isPresented: $showSettings) {
             WorkspaceHealthSettingsView(healthManager: healthManager)
         }
         .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
             if selectedDirectory == nil, let dir = appState.selectedDirectory {
                 selectedDirectory = dir
                 scheduleInitialRefresh()
@@ -148,6 +144,36 @@ public struct WorkspaceHealthView: View {
     private var selectedDirectory: URL? {
         get { appState.workspaceHealthSelectedDirectory }
         nonmutating set { appState.workspaceHealthSelectedDirectory = newValue }
+    }
+
+    private var workspaceHealthControls: some View {
+        HStack(spacing: 10) {
+            LiquidGlassToolbarIconButton(
+                systemImage: "arrow.uturn.backward",
+                help: "Undo last cleanup action",
+                isDisabled: healthManager.cleanupHistory.isEmpty
+            ) {
+                Task {
+                    try? await healthManager.undoLastAction()
+                    await refreshAnalysis()
+                }
+            }
+
+            LiquidGlassToolbarIconButton(
+                systemImage: "gear",
+                help: "Workspace Health settings"
+            ) {
+                showSettings = true
+            }
+
+            LiquidGlassToolbarIconButton(
+                systemImage: "arrow.clockwise",
+                help: "Refresh workspace health",
+                isDisabled: selectedDirectory == nil || appState.workspaceHealthIsAnalyzing
+            ) {
+                Task { await refreshAnalysis() }
+            }
+        }
     }
     
     private var headerSection: some View {
@@ -695,6 +721,9 @@ public struct WorkspaceHealthView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.secondary)
                 .opacity(0.7)
+                .opacity(emptyStateHasAppeared ? 1 : 0)
+                .scaleEffect(emptyStateHasAppeared ? 1 : 0.8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: emptyStateHasAppeared)
             
             VStack(spacing: 8) {
                 Text("Select a Directory")
@@ -706,17 +735,31 @@ public struct WorkspaceHealthView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 350)
             }
+            .opacity(emptyStateHasAppeared ? 1 : 0)
+            .offset(y: emptyStateHasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: emptyStateHasAppeared)
             
             Button("Choose Directory") {
                 selectDirectory()
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured)
+            .onboardingBeamBorder(variant: .featured, active: emptyStateBeamHasAppeared)
             .controlSize(.large)
             .accessibilityIdentifier("WorkspaceHealthEmptyChooseDirectory")
+            .opacity(emptyStateHasAppeared ? 1 : 0)
+            .offset(y: emptyStateHasAppeared ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: emptyStateHasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                emptyStateHasAppeared = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                emptyStateBeamHasAppeared = true
+            }
+        }
     }
     
     // MARK: - Helpers
@@ -864,6 +907,7 @@ private struct OpportunityCard: View {
     let opportunity: CleanupOpportunity
     let onAction: () -> Void
     let onDismiss: () -> Void
+    @State private var isActionHovering = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -912,6 +956,10 @@ private struct OpportunityCard: View {
                         Image(systemName: "wand.and.stars")
                     }
                     .buttonStyle(.onboardingPill(size: .small))
+                    .onboardingBeamBorder(variant: .featured, active: isActionHovering, size: .small)
+                    .onHover { hovering in
+                        isActionHovering = hovering
+                    }
                     .accessibilityLabel("Run \(opportunity.type.rawValue) action")
                 }
                 
@@ -956,7 +1004,7 @@ private struct InsightRow: View {
                 Button("Mark Read") {
                     onRead()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
                 .accessibilityLabel("Mark insight as read")
             }
@@ -966,9 +1014,47 @@ private struct InsightRow: View {
     }
 }
 
+private struct LiquidGlassToolbarIconButton: View {
+    let systemImage: String
+    let help: String
+    var isDisabled = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            HapticFeedbackManager.shared.selection()
+            action()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isDisabled ? .tertiary : (isHovered ? .primary : .secondary))
+                .frame(width: 38, height: 38)
+                .background {
+                    Circle()
+                        .fill(Color.primary.opacity(isHovered ? 0.075 : 0.035))
+                }
+                .systemLiquidGlassBackground(cornerRadius: 999)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.46 : 1)
+        .help(help)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovered = hovering
+            }
+        }
+        .animation(.easeInOut(duration: 0.16), value: isDisabled)
+    }
+}
+
 private struct TopActionRow: View {
     let opportunity: CleanupOpportunity
     let onAction: () -> Void
+    @State private var isFixHovering = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -990,6 +1076,10 @@ private struct TopActionRow: View {
                 onAction()
             }
             .buttonStyle(.onboardingPill(size: .small))
+            .onboardingBeamBorder(variant: .featured, active: isFixHovering, size: .small)
+            .onHover { hovering in
+                isFixHovering = hovering
+            }
         }
         .padding(10)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))

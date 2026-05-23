@@ -847,7 +847,7 @@ struct HistorySessionCard: View {
             return (0, 0, 0)
         }
         let moves = operations.filter { $0.type == .moveFile }.count
-        let renames = operations.filter { $0.type == .renameFile }.count
+        let renames = operations.filter { $0.type == .renameFile || $0.metadata?.newFilename != nil }.count
         let folderCreates = operations.filter { $0.type == .createFolder }.count
         return (moves, renames, folderCreates)
     }
@@ -1031,7 +1031,7 @@ struct HistorySessionCard: View {
                         } label: {
                             Label("View Details", systemImage: "info.circle")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .accessibilityLabel("View session details")
                         .accessibilityIdentifier("ViewDetailsButton-\(entry.id.uuidString)")
@@ -1042,7 +1042,7 @@ struct HistorySessionCard: View {
                             } label: {
                                 Label("Apply Plan", systemImage: "checkmark.circle")
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.sortyProminent)
                             .controlSize(.small)
                             .accessibilityLabel("Apply this generated organization plan")
                             .accessibilityIdentifier("ApplyPlanButton-\(entry.id.uuidString)")
@@ -1063,7 +1063,7 @@ struct HistorySessionCard: View {
                                 } label: {
                                     Label("Undo", systemImage: "arrow.uturn.backward")
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.sortyBordered)
                                 .controlSize(.small)
                                 .accessibilityLabel("Undo organization")
                                 .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
@@ -1076,7 +1076,7 @@ struct HistorySessionCard: View {
                             } label: {
                                 Label("Try Different Model", systemImage: "wand.and.stars")
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                             .controlSize(.small)
                             .accessibilityLabel("Try organization with a different AI model")
                             .accessibilityIdentifier("TryModelButton-\(entry.id.uuidString)")
@@ -1373,7 +1373,7 @@ struct WatchedAutomationRow: View {
             Button("Details") {
                 onSelect()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             .controlSize(.small)
         }
         .padding(10)
@@ -1430,7 +1430,7 @@ struct HistorySearchEmptyStateView: View {
             } label: {
                 Label("Clear Search", systemImage: "xmark.circle")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             .scaleEffect(isHovered ? 1.03 : 1.0)
             .animation(.spring(response: 0.2), value: isHovered)
             .onHover { hovering in
@@ -1902,7 +1902,7 @@ struct HistoryDetailSheet: View {
                                             Label("Undo Changes", systemImage: "arrow.uturn.backward")
                                                 .frame(maxWidth: .infinity)
                                         }
-                                        .buttonStyle(.bordered)
+                                        .buttonStyle(.sortyBordered)
                                         .controlSize(.large)
                                         .accessibilityLabel("Undo these changes")
                                         .accessibilityIdentifier("UndoSessionButton")
@@ -1914,7 +1914,7 @@ struct HistoryDetailSheet: View {
                                             Label("Try Different Model", systemImage: "wand.and.stars")
                                                 .frame(maxWidth: .infinity)
                                         }
-                                        .buttonStyle(.bordered)
+                                        .buttonStyle(.sortyBordered)
                                         .controlSize(.large)
                                         .accessibilityLabel("Try organization with a different AI model")
                                         .accessibilityIdentifier("TryModelSessionButton")
@@ -2515,7 +2515,7 @@ struct OperationRowView: View {
 
     private var operationLabel: String {
         switch operation.type {
-        case .moveFile: return "Moved"
+        case .moveFile: return operation.metadata?.newFilename == nil ? "Moved" : "Moved & Renamed"
         case .renameFile: return "Renamed"
         case .tagFile: return "Tagged"
         case .createFolder: return "Created"
@@ -2573,7 +2573,7 @@ struct OperationRowView: View {
                     Image(systemName: "arrow.uturn.backward")
                         .font(.caption)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.mini)
                 .disabled(isFailed)
                 .accessibilityLabel("Undo \(fileName)")
@@ -3710,7 +3710,7 @@ struct PartialUndoResultSheet: View {
                     Label("Open Folder in Finder", systemImage: "folder")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .scaleEffect(isHoveredOpenFolder ? 1.02 : 1.0)
                 .animation(.subtleBounce, value: isHoveredOpenFolder)
                 .onHover { isHoveredOpenFolder = $0 }
@@ -3720,7 +3720,7 @@ struct PartialUndoResultSheet: View {
                     HapticFeedbackManager.shared.tap()
                     onDismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .controlSize(.large)
                 .accessibilityIdentifier("DismissPartialResultButton")
             }

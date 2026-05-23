@@ -79,7 +79,7 @@ public struct UpdateDialogView: View {
                     } label: {
                         Label("Download & Install Update", systemImage: "arrow.down.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.sortyProminent)
                 }
                 
             case .upToDate:
@@ -129,7 +129,7 @@ public struct UpdateDialogView: View {
                     Button("Try Again") {
                         appState.updateManager.checkForUpdates()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                 }
 
             case .disabled:

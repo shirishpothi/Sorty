@@ -452,6 +452,18 @@ public actor FileSystemManager {
         )
         return (safeName, metadata)
     }
+
+    private func operationType(
+        from sourceURL: URL,
+        to destinationURL: URL,
+        renameMetadata: FileOperation.OperationMetadata?
+    ) -> FileOperation.OperationType {
+        guard renameMetadata != nil else { return .moveFile }
+
+        let sourceParent = sourceURL.deletingLastPathComponent().standardizedFileURL.path
+        let destinationParent = destinationURL.deletingLastPathComponent().standardizedFileURL.path
+        return sourceParent == destinationParent ? .renameFile : .moveFile
+    }
     
     private func moveFilesInSuggestion(_ suggestion: FolderSuggestion, parentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager?) async throws -> [FileOperation] {
         var operations: [FileOperation] = []
@@ -516,7 +528,11 @@ public actor FileSystemManager {
             }
 
             // Record the operation
-            let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
+            let operationType = operationType(
+                from: sourceURL,
+                to: destinationURL,
+                renameMetadata: renameMetadata
+            )
 
             operations.append(FileOperation(
                 id: UUID(),
@@ -1064,7 +1080,11 @@ public actor FileSystemManager {
                             }
                         }
                         
-                        let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
+                        let operationType = operationType(
+                            from: sourceURL,
+                            to: destinationURL,
+                            renameMetadata: renameMetadata
+                        )
                         operations.append(FileOperation(
                             id: UUID(),
                             type: operationType,
@@ -1084,7 +1104,11 @@ public actor FileSystemManager {
                         DebugLogger.log("Failed to move \(sourceURL.lastPathComponent): \(error.localizedDescription)")
                     }
                 } else {
-                    let operationType: FileOperation.OperationType = renameMetadata != nil ? .renameFile : .moveFile
+                    let operationType = operationType(
+                        from: sourceURL,
+                        to: destinationURL,
+                        renameMetadata: renameMetadata
+                    )
                     operations.append(FileOperation(
                         id: UUID(),
                         type: operationType,

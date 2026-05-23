@@ -242,7 +242,7 @@ struct NotificationsSettingsView: View {
                                     Text("Info")
                                 }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.sortyProminent)
                             .controlSize(.small)
                             .accessibilityIdentifier("testInfoButton")
                             
@@ -260,7 +260,7 @@ struct NotificationsSettingsView: View {
                                     Text("Success")
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                             .controlSize(.small)
                             .accessibilityIdentifier("testSuccessButton")
                             
@@ -273,7 +273,7 @@ struct NotificationsSettingsView: View {
                                     Text("Preview")
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                             .controlSize(.small)
                             .accessibilityIdentifier("testPreviewButton")
                             
@@ -290,7 +290,7 @@ struct NotificationsSettingsView: View {
                                     Text("Error")
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                             .controlSize(.small)
                             .accessibilityIdentifier("testErrorButton")
                         }
@@ -319,7 +319,7 @@ struct NotificationsSettingsView: View {
                                     Text("Summary")
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                             .controlSize(.small)
                             .accessibilityIdentifier("testSummaryButton")
                             
@@ -336,7 +336,7 @@ struct NotificationsSettingsView: View {
                                     Text("Critical")
                                 }
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                             .tint(.red)
                             .controlSize(.small)
                             .accessibilityIdentifier("testCriticalButton")
@@ -391,7 +391,7 @@ struct NotificationsSettingsView: View {
                                             Text("Actions")
                                         }
                                     }
-                                    .buttonStyle(.bordered)
+                                    .buttonStyle(.sortyBordered)
                                     .controlSize(.small)
                                     .accessibilityIdentifier("testActionsButton")
                                     
@@ -411,7 +411,7 @@ struct NotificationsSettingsView: View {
                                             Text("URL")
                                         }
                                     }
-                                    .buttonStyle(.bordered)
+                                    .buttonStyle(.sortyBordered)
                                     .controlSize(.small)
                                     .accessibilityIdentifier("testURLButton")
                                 }
@@ -464,7 +464,7 @@ struct NotificationsSettingsView: View {
                     Button("Clear") {
                         notificationManager.clearAnalytics()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                     .accessibilityIdentifier("NotificationAnalyticsClearButton")
                 }

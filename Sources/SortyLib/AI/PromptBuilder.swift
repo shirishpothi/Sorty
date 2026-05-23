@@ -78,6 +78,7 @@ struct PromptBuilder {
         files: [FileItem],
         mode: OrganizationMode = .organize,
         namingStyle: NamingStyle = .descriptive,
+        renameNamingOptions: RenameNamingOptions = .default,
         customNamingInstructions: String? = nil,
         renameRules: [RenameRule] = [],
         renameRuleMode: RenameRuleApplicationMode = .beforeAI,
@@ -97,6 +98,17 @@ struct PromptBuilder {
             prompt = "Organize the following files into a logical folder structure. You should suggest both descriptive folders and improved filenames within those folders:\n\n"
         } else {
             prompt = "Organize the following files into a logical folder structure. Suggest descriptive folders but KEEP the original filenames unchanged:\n\n"
+        }
+
+        if mode != .renameOnly {
+            prompt += """
+            ## LIVE ORGANIZATION PREVIEW
+            Sorty shows file moves as your JSON streams in. To keep that preview accurate and immediate:
+            - Emit folder objects with "name" before "files", then list files in that folder as soon as the destination is decided.
+            - Put "files" before "subfolders" inside each folder object so direct moves can appear immediately.
+            - Do not add artificial delays or non-JSON file-move narration; the app animates the real streamed JSON tokens.
+
+            """
         }
         
         if let instructions = customInstructions, !instructions.isEmpty {
@@ -119,13 +131,13 @@ struct PromptBuilder {
             """
         }
         
-        // Add storage locations context if provided
-        if let storageContext = storageLocationsContext, !storageContext.isEmpty {
+        // Add organization-only routing context if provided.
+        if mode != .renameOnly, let storageContext = storageLocationsContext, !storageContext.isEmpty {
             prompt += "\(storageContext)\n\n"
         }
         
-        // Add existing folders context - encourage reuse of existing structure
-        if let existingContext = existingFoldersContext, !existingContext.isEmpty {
+        // Add existing folders context - encourage reuse of existing structure in organization modes.
+        if mode != .renameOnly, let existingContext = existingFoldersContext, !existingContext.isEmpty {
             prompt += "\(existingContext)\n\n"
         }
         
@@ -136,11 +148,15 @@ struct PromptBuilder {
             ## INTELLIGENT RENAMING
             Suggest meaningful, descriptive filenames that help users understand file contents at a glance.
             - \(namingStyle.promptInstructions)
+            - \(renameNamingOptions.promptInstructions)
+            - Spaces are valid macOS filename characters. Use spaces when the separator preference asks for them; do not force underscores or hyphens unless configured.
             - When renaming multiple files in the same folder, keep one consistent naming pattern.
             - Return a `rename_confidence` score between 0.0 and 1.0 for each rename.
-            - Renaming is optional per file. If the existing name is already clear and specific, keep it unchanged.
-            - Only include `suggested_name` and `rename_reason` for files that truly need a better name.
+            - Renaming is optional per file. If the existing name is already clear and specific, or user instructions exclude a file/pattern from renaming, keep it unchanged.
+            - When keeping a file unchanged, omit `suggested_name` and include a short `rename_reason` explaining why it stayed the same.
+            - Only include `suggested_name` for files that truly need a better name.
             - `rename_reason` must be concrete and evidence-based (cite content cues, date, project, or ambiguity being resolved). Avoid vague reasons like "more descriptive".
+            - Do not invent dates, clients, invoice numbers, people, or projects. If evidence is weak, keep the original name and use low confidence.
             """
 
             if let customNaming = customNamingInstructions, !customNaming.isEmpty {
@@ -240,7 +256,7 @@ struct PromptBuilder {
                 // Include content metadata if available and requested
                 if includeContentMetadata, let metadata = file.contentMetadata, !metadata.isEmpty {
                     if mode == .renameOnly || mode == .organizeAndRename {
-                        let snippet = renameMetadataSnippet(for: file, maxLength: 50)
+                        let snippet = renameMetadataSnippet(for: file, maxLength: 220)
                         if !snippet.isEmpty {
                             fileDesc += "\n    [Rename Context] \(snippet)"
                         }
@@ -553,6 +569,7 @@ struct PromptBuilder {
         files: [FileItem],
         mode: OrganizationMode = .organize,
         namingStyle: NamingStyle = .descriptive,
+        renameNamingOptions: RenameNamingOptions = .default,
         customNamingInstructions: String? = nil,
         renameRules: [RenameRule] = [],
         renameRuleMode: RenameRuleApplicationMode = .beforeAI,
@@ -568,6 +585,7 @@ struct PromptBuilder {
             var prompt = buildCompactPrompt(files: files, mode: mode, enableReasoning: enableReasoning)
             if mode == .renameOnly || enableSmartRename {
                 prompt += " (\(namingStyle.displayName))"
+                prompt += " \(renameNamingOptions.promptInstructions)"
                 if let customNaming = customNamingInstructions, !customNaming.isEmpty {
                     prompt += " Custom style: \(customNaming)"
                 }
@@ -575,18 +593,18 @@ struct PromptBuilder {
             if let instructions = customInstructions, !instructions.isEmpty {
                 prompt = "⚠️ MANDATORY USER INSTRUCTIONS (override all defaults): \(instructions)\n\n" + prompt
             }
-            if let storageContext = storageLocationsContext, !storageContext.isEmpty {
+            if mode != .renameOnly, let storageContext = storageLocationsContext, !storageContext.isEmpty {
                 prompt = "\(storageContext)\n\n" + prompt
             }
-            if let existingContext = existingFoldersContext, !existingContext.isEmpty {
+            if mode != .renameOnly, let existingContext = existingFoldersContext, !existingContext.isEmpty {
                 prompt = "\(existingContext)\n\n" + prompt
             }
             return prompt
         case .anthropic:
             // Anthropic handles system prompts separately but we ensure the user prompt is robust
-            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
+            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, renameNamingOptions: renameNamingOptions, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
         case .openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
-            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
+            return buildOrganizationPrompt(files: files, mode: mode, namingStyle: namingStyle, renameNamingOptions: renameNamingOptions, customNamingInstructions: customNamingInstructions, renameRules: renameRules, renameRuleMode: renameRuleMode, enableReasoning: enableReasoning, enableSmartRename: enableSmartRename, includeContentMetadata: true, customInstructions: customInstructions, storageLocationsContext: storageLocationsContext, existingFoldersContext: existingFoldersContext)
         }
     }
 
@@ -640,6 +658,25 @@ struct PromptBuilder {
             }
             if let keywords = metadata.keywords, !keywords.isEmpty {
                 parts.append("Keywords: \(truncateForPrompt(keywords.joined(separator: ", "), maxLength: maxLength))")
+            }
+            if let detected = metadata.detectedKeywords, !detected.isEmpty {
+                parts.append("Detected: \(truncateForPrompt(detected.joined(separator: ", "), maxLength: maxLength))")
+            }
+            if let exif = metadata.exifData, !exif.isEmpty {
+                let exifSummary = exif.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+                parts.append("EXIF: \(truncateForPrompt(exifSummary, maxLength: maxLength))")
+            }
+            if let pages = metadata.pageCount {
+                parts.append("Pages: \(pages)")
+            }
+            if let duration = metadata.duration {
+                let minutes = Int(duration) / 60
+                let seconds = Int(duration) % 60
+                parts.append("Duration: \(minutes)m \(seconds)s")
+            }
+            if let mediaInfo = metadata.mediaInfo, !mediaInfo.isEmpty {
+                let mediaSummary = mediaInfo.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+                parts.append("Media: \(truncateForPrompt(mediaSummary, maxLength: maxLength))")
             }
         }
 

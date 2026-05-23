@@ -87,7 +87,7 @@ final class AnalysisRefreshManager: ObservableObject {
         "Still working...",
         "Almost there...",
         "Processing your files...",
-        "Organizing in progress...",
+        "Preparing your preview...",
         "Just a moment longer...",
     ]
 
@@ -95,7 +95,7 @@ final class AnalysisRefreshManager: ObservableObject {
         self.organizer = organizer
 
         // Set initial values
-        currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+        currentFunnyMessage = nextStatusMessage()
 
         withAnimation(.easeIn(duration: 0.5)) {
             funnyMessageOpacity = 1
@@ -150,25 +150,33 @@ final class AnalysisRefreshManager: ObservableObject {
         if elapsedSeconds > 30 {
             currentFunnyMessage = calmerMessages.randomElement() ?? calmerMessages[0]
         } else {
-            currentFunnyMessage = funnyMessages.randomElement() ?? funnyMessages[0]
+            currentFunnyMessage = nextStatusMessage()
         }
 
         withAnimation(.easeInOut(duration: 0.65)) {
             funnyMessageOpacity = 1
         }
     }
+
+    private func nextStatusMessage() -> String {
+        funnyMessages.randomElement() ?? funnyMessages[0]
+    }
 }
 
 struct AnalysisView: View {
+    var onReturnToStart: (() -> Void)?
+
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
+    @AppStorage("analysis.hideTakingLongerHUD") private var hideTakingLongerHUD = false
     @StateObject private var refreshManager = AnalysisRefreshManager()
     @State private var hasAppeared = false
     @State private var showCancelConfirmation = false
     @State private var showFasterModelPicker = false
+    @State private var didShowTakingLongerHUD = false
     @State private var pendingModelSwitch: PendingModelSwitch?
     @State private var lastInsightCount = 0
     @State private var lastMessageTier: MessageTier = .none
@@ -183,9 +191,11 @@ struct AnalysisView: View {
     private struct PendingModelSwitch: Equatable {
         let provider: AIProvider
         let model: String
+        let mode: OrganizationMode
 
         var restartStage: String {
-            "Restarting analysis with \(provider.displayName) (\(model))..."
+            let noun = mode == .renameOnly ? "rename analysis" : "analysis"
+            return "Restarting \(noun) with \(provider.displayName) (\(model))..."
         }
     }
 
@@ -199,12 +209,20 @@ struct AnalysisView: View {
         return .none
     }
 
-    /// Suggestions to drive the Binky-style flight animation. Available once the
-    /// AI plan has at least one named destination folder.
-    private var plannedDestinationSuggestions: [FolderSuggestion]? {
-        guard let plan = organizer.currentPlan else { return nil }
-        let suggestions = plan.suggestions.filter { !$0.folderName.isEmpty }
-        return suggestions.isEmpty ? nil : suggestions
+    private var isRenameOnlyFlow: Bool {
+        settingsViewModel.config.mode == .renameOnly
+    }
+
+    private var hasRenameStreamEvents: Bool {
+        isRenameOnlyFlow && RenameGenerationSequenceView.hasRenderableEvents(in: organizer.displayStreamingContent)
+    }
+
+    private var hasOrganizeStreamEvents: Bool {
+        !isRenameOnlyFlow && OrganizingStreamSuggestions.hasRenderableEvents(in: organizer.displayStreamingContent)
+    }
+
+    private var liveOrganizingSuggestions: [FolderSuggestion] {
+        OrganizingStreamSuggestions.parse(from: organizer.displayStreamingContent, files: organizer.scannedFiles)
     }
 
     /// Whether the scan found zero files (empty directory or all files excluded)
@@ -237,9 +255,22 @@ struct AnalysisView: View {
 
                     tieredNoticeView
 
-                    if organizer.isStreaming {
-                        if let suggestions = plannedDestinationSuggestions {
-                            OrganizingFlightStageView(suggestions: suggestions)
+                    if isRenameOnlyFlow {
+                        if hasRenameStreamEvents {
+                            RenameGenerationSequenceView(
+                                streamText: organizer.displayStreamingContent,
+                                files: organizer.scannedFiles,
+                                isStreaming: organizer.isStreaming
+                            )
+                                .frame(maxWidth: .infinity)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
+                        }
+                    } else if organizer.isStreaming {
+                        if hasOrganizeStreamEvents {
+                            OrganizingFlightStageView(suggestions: liveOrganizingSuggestions)
                                 .frame(maxWidth: .infinity)
                                 .transition(
                                     .asymmetric(
@@ -260,6 +291,8 @@ struct AnalysisView: View {
                     analysisActionButtons
                 }
                 .frame(maxHeight: .infinity)
+                .animation(.spring(response: 0.34, dampingFraction: 0.86), value: hasRenameStreamEvents)
+                .animation(.spring(response: 0.34, dampingFraction: 0.86), value: hasOrganizeStreamEvents)
             }
 
             Spacer(minLength: 20)
@@ -283,6 +316,12 @@ struct AnalysisView: View {
         .onChange(of: currentMessageTier) { oldTier, newTier in
             if oldTier == .none, newTier != .none {
                 HapticSequenceManager.shared.playEventPulse()
+            }
+            if newTier == .takingLonger {
+                showTakingLongerHUDIfNeeded()
+            } else {
+                didShowTakingLongerHUD = false
+                NotificationManager.shared.dismissHUD()
             }
         }
         .onChange(of: organizer.organizationStage) { _, newStage in
@@ -324,15 +363,7 @@ struct AnalysisView: View {
                             removal: .opacity
                         ))
             case .takingLonger:
-                timeoutMessage
-                    .transition(
-                        .asymmetric(
-                            insertion: .scale(scale: 0.95).combined(with: .opacity),
-                            removal: .opacity
-                        )
-                    )
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Warning: Organization is taking longer than usual")
+                EmptyView()
             }
         }
     }
@@ -353,6 +384,7 @@ struct AnalysisView: View {
             organizationStage: organizer.organizationStage,
             isStreaming: organizer.isStreaming,
             isEstablishingConnection: isEstablishingConnection,
+            isRenameOnly: isRenameOnlyFlow,
             funnyMessage: refreshManager.currentFunnyMessage,
             funnyMessageOpacity: refreshManager.funnyMessageOpacity
         )
@@ -367,29 +399,6 @@ struct AnalysisView: View {
         return false
     }
 
-    private var timeoutMessage: some View {
-        InlineNotice(
-            icon: "folder.badge.gearshape",
-            title: "This organisation is taking a while",
-            message: "Large folders can take 1-3 minutes. You can keep working in other apps. ",
-            severity: .info,
-            actions: [
-                InlineNoticeAction(title: "Try Faster Model", systemImage: "bolt.circle") {
-                    HapticFeedbackManager.shared.tap()
-                    showFasterModelPicker = true
-                },
-                InlineNoticeAction(title: "Cancel and Exit", systemImage: "xmark.circle") {
-                    HapticFeedbackManager.shared.tap()
-                    recordCancelledAnalysis()
-                    organizer.reset()
-                    appState.selectedDirectory = nil
-                }
-            ],
-            isCentered: true
-        )
-        .modelSelectorTriggerBounds()
-    }
-
     private var multitaskingHint: some View {
         InlineNotice(
             icon: "bell.badge",
@@ -400,6 +409,35 @@ struct AnalysisView: View {
         )
         .accessibilityLabel("Background processing")
         .accessibilityHint("You will be notified when the preview is ready")
+    }
+
+    private func showTakingLongerHUDIfNeeded() {
+        guard !hideTakingLongerHUD, !didShowTakingLongerHUD else { return }
+        didShowTakingLongerHUD = true
+
+        NotificationManager.shared.showHUDInfo(
+            title: "This \(settingsViewModel.config.mode.gerund) run is taking a while",
+            message: "Large folders can take 1-3 minutes. You can keep working in other apps.",
+            icon: "clock.badge.exclamationmark",
+            iconColor: .orange,
+            actions: [
+                HUDNotificationAction(title: "Try Faster Model", systemImage: "bolt.circle") {
+                    HapticFeedbackManager.shared.tap()
+                    showFasterModelPicker = true
+                    NotificationManager.shared.dismissHUD()
+                },
+                HUDNotificationAction(title: "Cancel", systemImage: "xmark.circle", role: .destructive) {
+                    HapticFeedbackManager.shared.tap()
+                    recordCancelledAnalysis()
+                    returnToStart()
+                    NotificationManager.shared.dismissHUD()
+                },
+                HUDNotificationAction(title: "Never show again") {
+                    hideTakingLongerHUD = true
+                    NotificationManager.shared.dismissHUD()
+                }
+            ]
+        )
     }
 
     // MARK: - Empty Directory View
@@ -422,7 +460,7 @@ struct AnalysisView: View {
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
-                Text("No Files to Organize")
+                Text("No Files to \(settingsViewModel.config.mode.actionVerb)")
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -441,9 +479,7 @@ struct AnalysisView: View {
                 Button {
                     HapticFeedbackManager.shared.tap()
                     recordCancelledAnalysis()
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        organizer.reset()
-                    }
+                    returnToStart()
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "xmark")
@@ -481,7 +517,7 @@ struct AnalysisView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("No files to organize: This folder is empty or all files were excluded.")
+        .accessibilityLabel("No files to \(settingsViewModel.config.mode.actionVerb.lowercased()): This folder is empty or all files were excluded.")
     }
 
     // MARK: - Analysis Action Buttons
@@ -529,14 +565,12 @@ struct AnalysisView: View {
         ) {
             Button("Cancel Generation", role: .destructive) {
                 recordCancelledAnalysis()
-                withAnimation(.easeOut(duration: 0.3)) {
-                    organizer.reset()
-                }
+                returnToStart()
             }
             Button("Continue", role: .cancel) {}
         } message: {
             Text(
-                "This will stop the AI analysis and return to folder selection. Your progress will not be saved."
+                "This will stop the AI analysis and return to the start screen. Your progress will not be saved."
             )
         }
     }
@@ -604,7 +638,7 @@ struct AnalysisView: View {
 
     private func handleFasterModelSelection(provider: AIProvider, model: String) {
         showFasterModelPicker = false
-        pendingModelSwitch = PendingModelSwitch(provider: provider, model: model)
+        pendingModelSwitch = PendingModelSwitch(provider: provider, model: model, mode: settingsViewModel.config.mode)
 
         Task {
             do {
@@ -619,6 +653,671 @@ struct AnalysisView: View {
                 }
             }
         }
+    }
+
+    private func returnToStart() {
+        if let onReturnToStart {
+            onReturnToStart()
+        } else {
+            withAnimation(.smooth(duration: 0.34)) {
+                organizer.reset()
+            }
+        }
+    }
+}
+
+private enum OrganizingStreamSuggestions {
+    private static let maxParseCharacters = 30_000
+    private static let maxVisibleFolders = 5
+    private static let maxFilesPerFolder = 12
+    private static let folderNameRegex = try? NSRegularExpression(
+        pattern: #""name"\s*:\s*"((?:\\"|[^"])*)""#,
+        options: []
+    )
+    private static let filenameRegex = try? NSRegularExpression(
+        pattern: #""filename"\s*:\s*"((?:\\"|[^"])*)""#,
+        options: []
+    )
+
+    static func hasRenderableEvents(in streamText: String) -> Bool {
+        guard let jsonStart = streamText.firstIndex(of: "{") else { return false }
+        let jsonText = boundedParseText(String(streamText[jsonStart...]))
+        let nsText = jsonText as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        return folderNameRegex?.firstMatch(in: jsonText, range: fullRange) != nil
+            && filenameRegex?.firstMatch(in: jsonText, range: fullRange) != nil
+    }
+
+    static func parse(from streamText: String, files: [FileItem]) -> [FolderSuggestion] {
+        guard let jsonStart = streamText.firstIndex(of: "{") else { return [] }
+
+        let jsonText = boundedParseText(String(streamText[jsonStart...]))
+        let nsText = jsonText as NSString
+        let fullRange = NSRange(location: 0, length: nsText.length)
+        let folderMatches = folderNameRegex?.matches(in: jsonText, range: fullRange) ?? []
+        guard !folderMatches.isEmpty else { return [] }
+
+        let filesByName = fileLookup(from: files)
+        var suggestionsByFolder: [String: FolderSuggestion] = [:]
+        var orderedFolderNames: [String] = []
+
+        for index in folderMatches.indices {
+            let folderMatch = folderMatches[index]
+            guard folderMatch.numberOfRanges > 1 else { continue }
+
+            let folderNameRange = folderMatch.range(at: 1)
+            guard folderNameRange.location != NSNotFound else { continue }
+
+            let folderName = decodeJSONString(nsText.substring(with: folderNameRange))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !folderName.isEmpty, folderName != "." else { continue }
+
+            let segmentStart = folderMatch.range.location + folderMatch.range.length
+            let segmentEnd = index + 1 < folderMatches.count
+                ? folderMatches[index + 1].range.location
+                : nsText.length
+            guard segmentEnd > segmentStart else { continue }
+
+            let segmentRange = NSRange(location: segmentStart, length: segmentEnd - segmentStart)
+            let segment = nsText.substring(with: segmentRange)
+            guard segment.range(of: #""files""#, options: .caseInsensitive) != nil else { continue }
+
+            let parsedFiles = parseFiles(from: segment, filesByName: filesByName)
+            guard !parsedFiles.isEmpty else { continue }
+
+            if suggestionsByFolder[folderName] == nil {
+                orderedFolderNames.append(folderName)
+                suggestionsByFolder[folderName] = FolderSuggestion(folderName: folderName)
+            }
+
+            var suggestion = suggestionsByFolder[folderName] ?? FolderSuggestion(folderName: folderName)
+            let existingIDs = Set(suggestion.files.map(\.id))
+            let newFiles = parsedFiles.filter { !existingIDs.contains($0.id) }
+            suggestion.files.append(contentsOf: newFiles.prefix(max(0, maxFilesPerFolder - suggestion.files.count)))
+            suggestionsByFolder[folderName] = suggestion
+        }
+
+        return Array(orderedFolderNames
+            .compactMap { suggestionsByFolder[$0] }
+            .filter { !$0.files.isEmpty }
+            .suffix(maxVisibleFolders))
+    }
+
+    private static func parseFiles(from segment: String, filesByName: [String: FileItem]) -> [FileItem] {
+        let segmentText = segment as NSString
+        let matches = filenameRegex?.matches(
+            in: segment,
+            range: NSRange(location: 0, length: segmentText.length)
+        ) ?? []
+
+        var parsedFiles: [FileItem] = []
+        var seenIDs: Set<UUID> = []
+        for match in matches where match.numberOfRanges > 1 {
+            let filenameRange = match.range(at: 1)
+            guard filenameRange.location != NSNotFound else { continue }
+            let filename = decodeJSONString(segmentText.substring(with: filenameRange))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !filename.isEmpty else { continue }
+
+            let key = normalizedFileName(filename)
+            guard let file = filesByName[key], seenIDs.insert(file.id).inserted else { continue }
+            parsedFiles.append(file)
+        }
+        return parsedFiles
+    }
+
+    private static func boundedParseText(_ text: String) -> String {
+        guard text.count > maxParseCharacters else { return text }
+        let start = text.index(text.endIndex, offsetBy: -maxParseCharacters)
+        return String(text[start...])
+    }
+
+    private static func fileLookup(from files: [FileItem]) -> [String: FileItem] {
+        var lookup: [String: FileItem] = [:]
+        lookup.reserveCapacity(files.count * 3)
+        for file in files {
+            for key in [
+                normalizedFileName(file.displayName),
+                normalizedFileName(file.path),
+                normalizedFileName(file.name)
+            ] where !key.isEmpty {
+                lookup[key] = file
+            }
+        }
+        return lookup
+    }
+
+    private static func normalizedFileName(_ value: String) -> String {
+        let trimmed = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+
+        let lastPathComponent = URL(fileURLWithPath: trimmed).lastPathComponent
+        return lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func decodeJSONString(_ value: String) -> String {
+        guard let data = "\"\(value)\"".data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(String.self, from: data)
+        else {
+            return value
+                .replacingOccurrences(of: #"\""#, with: #"""#)
+                .replacingOccurrences(of: #"\\/"#, with: "/")
+        }
+        return decoded
+    }
+}
+
+private struct RenameGenerationSequenceView: View {
+    let streamText: String
+    let files: [FileItem]
+    let isStreaming: Bool
+    @State private var shouldFollowLatest = true
+    @State private var streamEvents: [RenameStreamEvent] = []
+    @State private var filesByName: [String: FileItem] = [:]
+
+    private static let maxVisibleRows = 5
+    private static let maxParseCharacters = 12_000
+    private static let estimatedRowHeight: CGFloat = 44
+    private static let rowSpacing: CGFloat = 8
+    private static let headerHeight: CGFloat = 20
+    private static let sectionSpacing: CGFloat = 14
+    private static let verticalPadding: CGFloat = 32
+    private static let progressRegex = try? NSRegularExpression(
+        pattern: #">>\s*file:\s*(?:renam(?:e|ing)\s+)?([^"\n]+?)(?:\s*(?:->|→)\s*([^"\n]+))?$"#,
+        options: [.anchorsMatchLines, .caseInsensitive]
+    )
+    private static let objectRegex = try? NSRegularExpression(
+        pattern: #"\{[^{}]*"filename"\s*:\s*"([^"]+)"[^{}]*\}"#,
+        options: []
+    )
+    private static let filenameRegex = try? NSRegularExpression(
+        pattern: #""filename"\s*:\s*"([^"]+)""#,
+        options: []
+    )
+    private static let suggestedNameRegex = try? NSRegularExpression(
+        pattern: #""suggested_name"\s*:\s*"([^"]+)""#,
+        options: []
+    )
+    private static let renameReasonRegex = try? NSRegularExpression(
+        pattern: #""rename_reason"\s*:\s*"([^"]+)""#,
+        options: []
+    )
+
+    private struct RenameStreamEvent: Identifiable, Equatable {
+        let id: String
+        let originalName: String
+        let suggestedName: String?
+        let reason: String?
+        let filePath: String?
+        let isDirectory: Bool
+
+        var isRevealed: Bool {
+            suggestedName?.isEmpty == false
+        }
+    }
+
+    private var visibleRowCount: Int {
+        min(streamEvents.count, Self.maxVisibleRows)
+    }
+
+    private var rowStackHeight: CGFloat {
+        guard visibleRowCount > 0 else { return 0 }
+        return CGFloat(visibleRowCount) * Self.estimatedRowHeight
+            + CGFloat(max(visibleRowCount - 1, 0)) * Self.rowSpacing
+    }
+
+    private var panelHeight: CGFloat {
+        Self.headerHeight + Self.sectionSpacing + rowStackHeight + Self.verticalPadding
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "pencil.and.scribble")
+                    .foregroundStyle(.purple)
+                Text("Renaming files")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+            }
+
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(Array(streamEvents.enumerated()), id: \.element.id) { index, event in
+                            RenameGenerationRow(
+                                originalName: event.originalName,
+                                suggestedName: event.suggestedName,
+                                filePath: event.filePath,
+                                isDirectory: event.isDirectory,
+                                isActive: activeEventID == event.id,
+                                isRevealed: event.isRevealed,
+                                isMostRecent: index == streamEvents.indices.last
+                            )
+                            .id(event.id)
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .bottom).combined(with: .opacity),
+                                removal: .opacity
+                            ))
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+                .onHover { hovering in
+                    shouldFollowLatest = !hovering
+                }
+                .onChange(of: activeEventID) { _, id in
+                    guard shouldFollowLatest, let id else { return }
+                    withAnimation(.smooth(duration: 0.24)) {
+                        proxy.scrollTo(id, anchor: .bottom)
+                    }
+                }
+            }
+            .frame(height: rowStackHeight)
+            .animation(.spring(response: 0.28, dampingFraction: 0.86), value: streamEvents)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .frame(maxWidth: 720)
+        .frame(height: panelHeight, alignment: .top)
+        .systemLiquidGlassBackground(cornerRadius: 14)
+        .animation(.spring(response: 0.34, dampingFraction: 0.86), value: visibleRowCount)
+        .onAppear {
+            refreshFileLookup()
+            refreshStreamEvents()
+        }
+        .onChange(of: streamText) { _, _ in
+            refreshStreamEvents()
+        }
+        .onChange(of: files) { _, _ in
+            refreshFileLookup()
+            refreshStreamEvents()
+        }
+    }
+
+    private var activeEventID: String? {
+        streamEvents.last?.id
+    }
+
+    private func refreshStreamEvents() {
+        let parsed = Self.parseRenameEvents(from: streamText)
+        let visibleEvents = Array(parsed.suffix(Self.maxVisibleRows))
+
+        streamEvents = visibleEvents.map { event in
+            guard let file = filesByName[Self.normalizedFileName(event.originalName)] else {
+                return event
+            }
+            return RenameStreamEvent(
+                id: event.id,
+                originalName: event.originalName,
+                suggestedName: event.suggestedName,
+                reason: event.reason,
+                filePath: file.path,
+                isDirectory: file.isDirectory
+            )
+        }
+    }
+
+    private func refreshFileLookup() {
+        filesByName = Self.fileLookup(from: files)
+    }
+
+    private static func parseRenameEvents(from streamText: String) -> [RenameStreamEvent] {
+        var eventsByOriginal: [String: RenameStreamEvent] = [:]
+        var orderedKeys: [String] = []
+        let parseText: String
+
+        if streamText.count > maxParseCharacters {
+            let start = streamText.index(streamText.endIndex, offsetBy: -maxParseCharacters)
+            parseText = String(streamText[start...])
+        } else {
+            parseText = streamText
+        }
+
+        func upsert(originalName: String, suggestedName: String?, reason: String? = nil) {
+            let key = originalName.lowercased()
+            if !orderedKeys.contains(key) {
+                orderedKeys.append(key)
+            }
+            let existing = eventsByOriginal[key]
+            eventsByOriginal[key] = RenameStreamEvent(
+                id: key,
+                originalName: originalName,
+                suggestedName: suggestedName ?? existing?.suggestedName,
+                reason: reason ?? existing?.reason,
+                filePath: existing?.filePath,
+                isDirectory: existing?.isDirectory ?? false
+            )
+        }
+
+        for match in Self.matches(regex: progressRegex, text: parseText) {
+            let original = (match.indices.contains(1) ? match[1] : "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let suggested = (match.indices.contains(2) ? match[2] : "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !original.isEmpty, !original.localizedCaseInsensitiveContains("ready to output") else { continue }
+            upsert(originalName: original, suggestedName: suggested.isEmpty ? nil : suggested)
+        }
+
+        for match in Self.matches(regex: objectRegex, text: parseText) {
+            let object = match.first ?? ""
+            let original = Self.firstCapture(regex: filenameRegex, text: object)
+            let suggested = Self.firstCapture(regex: suggestedNameRegex, text: object)
+            let reason = Self.firstCapture(regex: renameReasonRegex, text: object)
+            guard !original.isEmpty else { continue }
+            upsert(originalName: original, suggestedName: suggested.isEmpty ? original : suggested, reason: reason)
+        }
+
+        return orderedKeys.compactMap { eventsByOriginal[$0] }
+    }
+
+    static func hasRenderableEvents(in streamText: String) -> Bool {
+        !parseRenameEvents(from: streamText).isEmpty
+    }
+
+    private static func fileLookup(from files: [FileItem]) -> [String: FileItem] {
+        var lookup: [String: FileItem] = [:]
+        lookup.reserveCapacity(files.count * 3)
+        for file in files {
+            for key in [
+                normalizedFileName(file.displayName),
+                normalizedFileName(file.path),
+                normalizedFileName(file.name)
+            ] where !key.isEmpty {
+                lookup[key] = file
+            }
+        }
+        return lookup
+    }
+
+    private static func normalizedFileName(_ value: String) -> String {
+        let trimmed = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+
+        let lastPathComponent = URL(fileURLWithPath: trimmed).lastPathComponent
+        return lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func matches(regex: NSRegularExpression?, text: String) -> [[String]] {
+        guard let regex else { return [] }
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        return regex.matches(in: text, range: range).map { result in
+            (0..<result.numberOfRanges).map { index in
+                let range = result.range(at: index)
+                guard range.location != NSNotFound else { return "" }
+                return nsText.substring(with: range)
+            }
+        }
+    }
+
+    private static func firstCapture(regex: NSRegularExpression?, text: String) -> String {
+        matches(regex: regex, text: text).first.flatMap {
+            $0.indices.contains(1) ? $0[1] : nil
+        } ?? ""
+    }
+}
+
+private struct RenameGenerationRow: View {
+    let originalName: String
+    let suggestedName: String?
+    let filePath: String?
+    let isDirectory: Bool
+    let isActive: Bool
+    let isRevealed: Bool
+    let isMostRecent: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var suggestedNameReveal = false
+
+    var body: some View {
+        let finalName = suggestedName ?? originalName
+        let isUnchanged = isRevealed && finalName == originalName
+
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 14) {
+                RenameFileIcon(filePath: filePath, isDirectory: isDirectory, isUnchanged: isUnchanged)
+
+                RenameNamePill(
+                    text: originalName,
+                    isPrimary: false,
+                    isStruck: isRevealed && !isUnchanged,
+                    isShimmering: isActive && !isRevealed
+                )
+
+                RenameShiftIndicator(isActive: isActive, isUnchanged: isUnchanged)
+
+                RenameNamePill(
+                    text: isRevealed ? finalName : "Waiting for suggested name...",
+                    isPrimary: isRevealed,
+                    isStruck: false,
+                    showRevealSweep: suggestedNameReveal && isRevealed
+                )
+                .opacity(isRevealed ? (suggestedNameReveal ? 1 : 0) : 0.62)
+                .blur(radius: reduceMotion ? 0 : (isRevealed ? (suggestedNameReveal ? 0 : 4) : 2))
+                .offset(x: reduceMotion ? 0 : (suggestedNameReveal ? 0 : -8))
+                .scaleEffect(isRevealed ? 1 : 0.985)
+                .animation(.easeInOut(duration: 0.18), value: isRevealed)
+                .animation(.spring(response: 0.42, dampingFraction: 0.82), value: suggestedNameReveal)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isActive ? Color.purple.opacity(0.08) : Color.primary.opacity(0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isMostRecent && isRevealed ? Color.purple.opacity(0.24) : .clear, lineWidth: 1)
+        )
+        .compositingGroup()
+        .onAppear {
+            revealSuggestedNameIfNeeded()
+        }
+        .onChange(of: suggestedName) { _, _ in
+            revealSuggestedNameIfNeeded()
+        }
+        .onChange(of: isRevealed) { _, _ in
+            revealSuggestedNameIfNeeded()
+        }
+    }
+
+    private func revealSuggestedNameIfNeeded() {
+        guard isRevealed else {
+            suggestedNameReveal = false
+            return
+        }
+        guard !reduceMotion else {
+            suggestedNameReveal = true
+            return
+        }
+
+        suggestedNameReveal = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                suggestedNameReveal = true
+            }
+        }
+    }
+}
+
+private struct RenameNamePill: View {
+    let text: String
+    let isPrimary: Bool
+    let isStruck: Bool
+    var isShimmering = false
+    var showRevealSweep = false
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(isPrimary ? .semibold : .regular))
+            .foregroundStyle(isPrimary ? Color.purple : Color.secondary)
+            .lineLimit(1)
+            .strikethrough(isStruck, color: .secondary)
+            .textShimmer(isLoading: isShimmering, phaseOffset: 0.12, intensity: 1.18)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isPrimary ? Color.purple.opacity(0.08) : Color.secondary.opacity(0.06))
+            )
+            .overlay(alignment: .leading) {
+                if showRevealSweep {
+                    RenameGenerationRevealSweep()
+                        .allowsHitTesting(false)
+                }
+            }
+    }
+}
+
+private struct RenameGenerationRevealSweep: View {
+    @State private var progress: CGFloat = -0.35
+
+    var body: some View {
+        GeometryReader { geometry in
+            let width = max(geometry.size.width, 1)
+
+            LinearGradient(
+                colors: [
+                    .clear,
+                    .white.opacity(0.22),
+                    Color.purple.opacity(0.17),
+                    .clear
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: max(width * 0.26, 22), height: geometry.size.height * 1.8)
+            .blur(radius: 2.2)
+            .offset(x: width * progress)
+            .blendMode(.plusLighter)
+            .onAppear {
+                progress = -0.35
+                withAnimation(.easeOut(duration: 0.58)) {
+                    progress = 1.12
+                }
+            }
+        }
+        .clipped()
+    }
+}
+
+private struct RenameFileIcon: View {
+    let filePath: String?
+    let isDirectory: Bool
+    let isUnchanged: Bool
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if let filePath {
+                let url = URL(fileURLWithPath: filePath)
+                if isDirectory {
+                    FolderThumbnailView(url: url, size: CGSize(width: 22, height: 22))
+                } else {
+                    FileThumbnailView(url: url, size: CGSize(width: 22, height: 22))
+                }
+            } else {
+                Image(nsImage: AnalysisIconProvider.icon(for: .data))
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 22, height: 22)
+                    .opacity(0.72)
+            }
+
+            Image(systemName: isUnchanged ? "equal.circle.fill" : "checkmark.circle.fill")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(isUnchanged ? Color.secondary : Color.green)
+                .background(Circle().fill(Color(NSColor.windowBackgroundColor)))
+                .offset(x: 3, y: 3)
+        }
+        .frame(width: 28, height: 24)
+    }
+}
+
+private struct RenameShiftIndicator: View {
+    let isActive: Bool
+    let isUnchanged: Bool
+    @State private var pulse = false
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.16))
+                .frame(width: 16, height: 2)
+
+            Image(systemName: isUnchanged ? "equal" : "arrow.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(isUnchanged ? Color.secondary : Color.purple)
+                .scaleEffect(isActive && pulse ? 1.12 : 1)
+
+            Capsule()
+                .fill((isUnchanged ? Color.secondary : Color.purple).opacity(0.18))
+                .frame(width: 16, height: 2)
+        }
+        .frame(width: 56)
+        .onAppear {
+            guard isActive else { return }
+            withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+        .onChange(of: isActive) { _, active in
+            if active {
+                withAnimation(.smooth(duration: 0.5).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            } else {
+                withAnimation(.smooth(duration: 0.2)) {
+                    pulse = false
+                }
+            }
+        }
+    }
+}
+
+private struct RenameGenerationSkeletonRow: View {
+    var delay: Double = 0
+    @State private var isOn = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.secondary.opacity(0.18))
+                .frame(width: 18, height: 18)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.secondary.opacity(isOn ? 0.2 : 0.08))
+                .frame(width: 150, height: 8)
+            RenameShiftIndicator(isActive: true, isUnchanged: false)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.purple.opacity(isOn ? 0.2 : 0.08))
+                .frame(width: 170, height: 8)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.5).repeatForever().delay(delay)) {
+                isOn = true
+            }
+        }
+    }
+}
+
+private struct SubtleDotPulse: ViewModifier {
+    let delay: Double
+    @State private var isOn = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isOn ? 1.25 : 0.78)
+            .opacity(isOn ? 0.9 : 0.38)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.58).repeatForever().delay(delay)) {
+                    isOn = true
+                }
+            }
     }
 }
 
@@ -804,6 +1503,7 @@ private struct AIReasoningStatus: View {
     let organizationStage: String
     let isStreaming: Bool
     let isEstablishingConnection: Bool
+    let isRenameOnly: Bool
     let funnyMessage: String
     let funnyMessageOpacity: Double
 
@@ -836,7 +1536,7 @@ private struct AIReasoningStatus: View {
                 }
 
                 if !isEstablishingConnection && isStreaming {
-                    Text(funnyMessage)
+                    Text(isRenameOnly ? renameStatusMessage : funnyMessage)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .textShimmer(isLoading: true, phaseOffset: 0.62, intensity: 1.65)
@@ -852,8 +1552,16 @@ private struct AIReasoningStatus: View {
         .padding(.leading, -10)  // Move the whole group slightly left to compensate for mascot's orbit padding
         .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Current organization stage: \(organizationStage)")
+        .accessibilityLabel("Current \(isRenameOnly ? "rename" : "organization") stage: \(organizationStage)")
         .accessibilityIdentifier("AnalysisStageInfo")
+    }
+
+    private var renameStatusMessage: String {
+        if organizationStage.localizedCaseInsensitiveContains("model")
+            || organizationStage.localizedCaseInsensitiveContains("provider") {
+            return "Asking the model for better names..."
+        }
+        return "Preparing filename suggestions..."
     }
 
     @ViewBuilder
@@ -1165,13 +1873,19 @@ private struct InsightHistorySection: View {
 
     private var receivingResponseView: some View {
         HStack(spacing: 12) {
-            SortyGradientLoadingBar(width: 84, height: 8)
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.secondary.opacity(0.32))
+                        .frame(width: 5, height: 5)
+                        .modifier(SubtleDotPulse(delay: Double(index) * 0.14))
+                }
+            }
                 .padding(.vertical, 6)
 
             Text("Receiving AI response...")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .italic()
 
             Spacer()
         }

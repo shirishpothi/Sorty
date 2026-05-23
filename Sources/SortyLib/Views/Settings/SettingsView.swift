@@ -12,7 +12,7 @@ struct SettingsView: View {
     @EnvironmentObject var appState: AppState
     @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
     @State private var selectedCategory: SettingsCategory = .rules
-    @State private var contentOpacity: Double = 1
+    @State private var contentOpacity: Double = 0
     @State private var searchText = ""
 
     private var trimmedSearchText: String {
@@ -27,8 +27,10 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             settingsSidebar
                 .frame(width: 200)
+                .animatedAppearance(delay: 0.03)
             Divider()
             contentView
+                .animatedAppearance(delay: 0.08)
         }
         .navigationTitle("Settings")
         .opacity(contentOpacity)
@@ -36,7 +38,9 @@ struct SettingsView: View {
             if let section = appState.selectedSettingsSection {
                 selectedCategory = section
             }
-            contentOpacity = 1.0
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
         }
         .onChange(of: appState.selectedSettingsSection) { _, newSection in
             if let section = newSection, section != selectedCategory {
@@ -115,11 +119,18 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     if isSearching {
                         searchResultsHeader
+                            .animatedAppearance(delay: 0.03)
                         searchResultsContent
+                            .animatedAppearance(delay: 0.08)
                     } else {
                         categoryHeader
-                        categoryContent
-                            .settingsFocusTarget(appState.settingsFocusTarget)
+                            .animatedAppearance(delay: 0.03)
+                        Group {
+                            categoryContent
+                                .settingsFocusTarget(appState.settingsFocusTarget)
+                        }
+                        .id(selectedCategory)
+                        .animatedAppearance(delay: 0.08)
                     }
                 }
                 .padding(24)
@@ -277,7 +288,7 @@ struct SettingsView: View {
                                         .padding(.vertical, 4)
                                         .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.sortyBordered)
                                 .controlSize(.small)
                                 .minimumHitTarget()
                             }

@@ -93,7 +93,7 @@ struct AboutView: View {
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .padding(.vertical, 2)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .controlSize(.large)
                 .trackHoveredURL(sponsorsURL)
                 .scaleEffect(supportHovered ? 1.04 : 1.0)
@@ -107,7 +107,7 @@ struct AboutView: View {
                         HapticFeedbackManager.shared.tap()
                         NSWorkspace.shared.open(docsURL)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.large)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .trackHoveredURL(docsURL)
@@ -121,7 +121,7 @@ struct AboutView: View {
                         HapticFeedbackManager.shared.tap()
                         NSWorkspace.shared.open(githubURL)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.large)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .trackHoveredURL(githubURL)
@@ -136,7 +136,7 @@ struct AboutView: View {
                     HapticFeedbackManager.shared.tap()
                     openAccreditations?()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.large)
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .accessibilityIdentifier("AboutAccreditationsButton")

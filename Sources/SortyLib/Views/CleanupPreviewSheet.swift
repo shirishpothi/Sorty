@@ -121,7 +121,7 @@ public struct CleanupPreviewSheet: View {
                     Text("Confirm \(opportunity.action?.rawValue ?? "Cleanup")")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .keyboardShortcut(.defaultAction)
                 .disabled(selectedFileIDs.isEmpty)
             }

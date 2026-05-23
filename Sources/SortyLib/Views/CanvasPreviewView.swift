@@ -484,14 +484,14 @@ struct CanvasToolbar: View {
                 Button("Reset") {
                     viewModel.resetChanges()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
             }
 
             Button("Cancel", action: onCancel)
                 .keyboardShortcut(.cancelAction)
 
             Button("Apply Changes", action: onApply)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent(intent: .success))
                 .keyboardShortcut(.defaultAction)
                 .disabled(!viewModel.hasChanges)
         }

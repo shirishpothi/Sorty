@@ -256,7 +256,7 @@ public struct ProviderSelectionStepView: View {
                         connectionStatus = .idle
                         availableModels = []
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                 }
                 .padding(12)
@@ -559,7 +559,7 @@ public struct ProviderSelectionStepView: View {
                         openAIAuth.checkAuthenticationStatus()
                         scheduleConnectionTest()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                 }
                 .padding(10)
@@ -736,7 +736,7 @@ public struct ProviderSelectionStepView: View {
                             Button("Retry") {
                                 testConnection()
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                             .controlSize(.small)
                         }
                         

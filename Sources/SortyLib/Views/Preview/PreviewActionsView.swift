@@ -15,6 +15,7 @@ struct PreviewActionsView: View {
     let shouldDisableButtons: Bool
     let editsCapturedCount: Int
     let editsCapturedPulse: Bool
+    let mode: OrganizationMode
     
     let onCancel: () -> Void
     let onReset: () -> Void
@@ -119,9 +120,9 @@ struct PreviewActionsView: View {
             .buttonStyle(.tintedPill(.red, size: .small))
             .keyboardShortcut(.cancelAction)
             .keyboardShortcut(".", modifiers: .command)  // Cmd+.
-            .help("Cancel this organization session")
+            .help("Cancel this \(mode.gerund) session")
             .accessibilityIdentifier("PreviewCancelButton")
-            .accessibilityLabel("Cancel organization")
+            .accessibilityLabel("Cancel \(mode.gerund)")
             .accessibilityHint("Press Command+Period to cancel")
             
             if hasEdits {
@@ -170,7 +171,7 @@ struct PreviewActionsView: View {
             .buttonStyle(.onboardingPill(size: .small))
             .keyboardShortcut("r", modifiers: [.command, .shift])
             .disabled(shouldDisableButtons || isRedoingWithModel)
-            .help("Regenerate organization plan with current instructions")
+            .help("Regenerate \(mode.gerund) plan with current instructions")
             .accessibilityIdentifier("RegenerateButton")
             .accessibilityLabel("Regenerate with current model")
             .accessibilityHint("Press Command+Shift+R to regenerate")
@@ -214,10 +215,10 @@ struct PreviewActionsView: View {
         .buttonStyle(.sortyPrimary)
         .keyboardShortcut(.defaultAction)
         .disabled(shouldDisableButtons)
-        .help("Apply file moves and create the planned folder structure")
+        .help(mode == .renameOnly ? "Apply suggested file names in place" : "Apply file moves and create the planned folder structure")
         .accessibilityIdentifier("ApplyOrganizationButton")
-        .accessibilityLabel("Apply this organization to your files")
-        .accessibilityHint("This action moves files and is not easily undone")
+        .accessibilityLabel("Apply this \(mode.gerund) plan to your files")
+        .accessibilityHint(mode == .renameOnly ? "This action renames files and can be undone from history" : "This action moves files and is not easily undone")
     }
 }
 
@@ -238,7 +239,7 @@ struct PreviewProgressView: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                SortyGradientProgressBar(progress: progress, height: 10)
+                ApplyProgressBar(progress: progress, height: 12)
                     .frame(maxWidth: .infinity)
                 
                 // Time estimate
@@ -338,6 +339,34 @@ struct PreviewProgressView: View {
             let seconds = Int(interval.truncatingRemainder(dividingBy: 60))
             return "\(minutes)m \(seconds)s"
         }
+    }
+}
+
+private struct ApplyProgressBar: View {
+    let progress: Double
+    var height: CGFloat = 10
+
+    private var clampedProgress: CGFloat {
+        CGFloat(min(max(progress, 0), 1))
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 2) {
+                if clampedProgress > 0 {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.green.gradient)
+                        .frame(width: max(geometry.size.width * clampedProgress - 1, 4))
+                }
+            }
+        }
+        .frame(height: height)
+        .clipShape(Capsule())
+        .background(
+            Capsule()
+                .fill(Color.secondary.opacity(0.1))
+        )
+        .animation(.easeInOut(duration: 0.25), value: clampedProgress)
     }
 }
 
@@ -455,6 +484,7 @@ private struct EditsCapturedPopoverContent: View {
         shouldDisableButtons: false,
         editsCapturedCount: 0,
         editsCapturedPulse: false,
+        mode: .organize,
         onCancel: {},
         onReset: {},
         onRegenerate: {},
@@ -473,6 +503,7 @@ private struct EditsCapturedPopoverContent: View {
         shouldDisableButtons: false,
         editsCapturedCount: 3,
         editsCapturedPulse: false,
+        mode: .organizeAndRename,
         onCancel: {},
         onReset: {},
         onRegenerate: {},
@@ -491,6 +522,7 @@ private struct EditsCapturedPopoverContent: View {
         shouldDisableButtons: false,
         editsCapturedCount: 0,
         editsCapturedPulse: false,
+        mode: .renameOnly,
         onCancel: {},
         onReset: {},
         onRegenerate: {},
@@ -509,6 +541,7 @@ private struct EditsCapturedPopoverContent: View {
         shouldDisableButtons: false,
         editsCapturedCount: 7,
         editsCapturedPulse: true,
+        mode: .organize,
         onCancel: {},
         onReset: {},
         onRegenerate: {},

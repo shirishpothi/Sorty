@@ -1698,7 +1698,8 @@ public class LearningsManager: ObservableObject {
 
         var output: [String] = [
             "LEARNINGS CONTEXT",
-            "Use the following user-specific learnings to guide the organization plan. Prioritize explicit preferences first, then recent accepted/corrected sessions, then repeated patterns."
+            "Use the following user-specific learnings to guide the organization plan. Prioritize explicit preferences first, then reference examples, then recent accepted/corrected sessions, then repeated patterns.",
+            "When learnings apply, mirror their destination folder names, hierarchy depth, and filename conventions instead of falling back to generic categories."
         ]
 
         if let folderPath {
@@ -1811,14 +1812,27 @@ public class LearningsManager: ObservableObject {
             .prefix(4)
             .map { example in
                 let ext = URL(fileURLWithPath: example.srcPath).pathExtension.lowercased()
+                let sourceName = URL(fileURLWithPath: example.srcPath).lastPathComponent
+                let destinationName = URL(fileURLWithPath: example.dstPath).lastPathComponent
                 let folder = URL(fileURLWithPath: example.dstPath).deletingLastPathComponent().path
                 return ext.isEmpty
-                    ? "Accepted example: similar files belonged in \(folder)."
-                    : "Accepted example: .\(ext) files belonged in \(folder)."
+                    ? "Accepted example: \(sourceName) belonged in \(folder) as \(destinationName)."
+                    : "Accepted example: .\(ext) files like \(sourceName) belonged in \(folder) as \(destinationName)."
             }
         patterns.append(contentsOf: positiveExamples)
 
-        return Array(patterns.orderedDeduplicated().prefix(6))
+        let renameExamples = profile.renameFeedbackHistory
+            .filter { $0.action == .edit || $0.action == .accept }
+            .sorted(by: { $0.timestamp > $1.timestamp })
+            .prefix(4)
+            .compactMap { event -> String? in
+                let learnedName = event.finalName ?? event.suggestedName
+                guard let learnedName, learnedName != event.originalName else { return nil }
+                return "Filename convention: \(event.originalName) -> \(learnedName) was \(event.action == .edit ? "user-edited" : "accepted"). Use similar naming for matching files."
+            }
+        patterns.append(contentsOf: renameExamples)
+
+        return Array(patterns.orderedDeduplicated().prefix(8))
     }
     
     private struct LearningsSection {
@@ -2485,7 +2499,7 @@ public class LearningsManager: ObservableObject {
     private func formatSnapshotContext(snapshots: [(String, ReferenceDirectorySnapshot)]) -> String {
         var lines: [String] = [
             "## REFERENCE MODEL DIRECTORIES",
-            "The user has provided the following well-organized directories as examples of their preferred folder structure and naming conventions. Use these as guidance for how to name and organize folders — match the style, hierarchy depth, and naming patterns you see here."
+            "The user has provided the following well-organized directories as examples of their preferred folder structure and naming conventions. Treat these as few-shot examples: infer the convention, then apply the same style to similar incoming files. Match hierarchy depth, folder names, ordering, and filename patterns when relevant."
         ]
         
         for (name, snapshot) in snapshots {
@@ -2505,6 +2519,9 @@ public class LearningsManager: ObservableObject {
                     .joined(separator: ", ")
                 let suffix = typeInfo.isEmpty ? "" : " [\(typeInfo)]"
                 lines.append("  - \(folder.relativePath)\(suffix)")
+                if !folder.sampleFileNames.isEmpty {
+                    lines.append("    examples: \(folder.sampleFileNames.prefix(3).joined(separator: ", "))")
+                }
             }
             
             if snapshot.folderHierarchy.count > Self.maxFolderEntriesPerDirectory {
@@ -2513,7 +2530,7 @@ public class LearningsManager: ObservableObject {
         }
         
         lines.append("")
-        lines.append("IMPORTANT: These are reference examples only — do NOT reorganize files into these directories. Instead, replicate the naming style and structure patterns in your organization plan.")
+        lines.append("IMPORTANT: These are reference examples only — do NOT move files into the reference directories. Instead, recreate analogous destination folders and names in the current organization plan. If the input resembles a media library, prefer inferred media conventions such as Artist/Album/Track, Movie (Year), Season/Episode, or date/event folders when the examples demonstrate them.")
         
         return lines.joined(separator: "\n")
     }

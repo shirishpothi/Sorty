@@ -52,81 +52,78 @@ struct HUDNotificationCard: View {
     @State private var appeared = false
     
     private let autoDismissSeconds: Double = 4.0
+    private let actionColumns = [
+        GridItem(.adaptive(minimum: 136, maximum: 210), spacing: 8, alignment: .leading)
+    ]
     
     var body: some View {
-        HStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(
-                    LinearGradient(
-                        colors: [notification.iconColor, notification.iconColor.opacity(0.5)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+        HStack(spacing: 10) {
+            Capsule(style: .continuous)
+                .fill(notification.iconColor)
                 .frame(width: 3)
-                .padding(.vertical, 8)
-            
-            HStack(spacing: 12) {
-                Image(systemName: notification.icon)
-                    .font(.title3)
-                    .foregroundStyle(notification.iconColor)
-                    .frame(width: 28, height: 28)
-                    .background(
-                        Circle()
-                            .fill(notification.iconColor.opacity(0.12))
-                    )
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(notification.title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                    
-                    Text(notification.message)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                
-                if isHovered {
-                    Button {
-                        onDismiss()
-                    } label: {
-                        Image(systemName: "xmark")
+                .padding(.vertical, 10)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 12) {
+                    Image(systemName: notification.icon)
+                        .font(.title3)
+                        .foregroundStyle(notification.iconColor)
+                        .frame(width: 28, height: 28)
+                        .systemLiquidGlassBackground(cornerRadius: 14)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(notification.title)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+
+                        Text(notification.message)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
-                    .buttonStyle(.plain)
-                    .transition(.opacity)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    if isHovered {
+                        Button {
+                            onDismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity)
+                    }
+                }
+
+                if !notification.actions.isEmpty {
+                    LazyVGrid(columns: actionColumns, alignment: .leading, spacing: 8) {
+                        ForEach(notification.actions) { action in
+                            Button(role: action.role) {
+                                action.action()
+                            } label: {
+                                HUDNotificationActionLabel(action: action)
+                            }
+                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.trailing, 12)
             .padding(.vertical, 10)
         }
-        .frame(maxWidth: 360)
+        .padding(.leading, 12)
+        .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(.ultraThinMaterial)
-                
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(notification.iconColor.opacity(0.03))
-            }
-        }
+        .systemLiquidGlassBackground(cornerRadius: 14)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.25),
-                            notification.iconColor.opacity(0.15),
-                            Color.white.opacity(0.08)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
+                    Color.primary.opacity(0.08),
                     lineWidth: 1
                 )
         )
@@ -160,6 +157,48 @@ struct HUDNotificationCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(notification.title): \(notification.message)")
         .accessibilityHint("Tap to dismiss")
+    }
+}
+
+private struct HUDNotificationActionLabel: View {
+    let action: HUDNotificationAction
+    @Environment(\.isEnabled) private var isEnabled
+
+    private var isDestructive: Bool {
+        action.role == .destructive
+    }
+
+    private var accent: Color {
+        isDestructive ? SortyDesignSystem.Colors.error : SortyDesignSystem.Colors.resolvedAccent
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if let systemImage = action.systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+
+            Text(action.title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .foregroundStyle(isDestructive ? Color.red : .primary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 30, alignment: .center)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(accent.opacity(isDestructive ? 0.08 : 0.12))
+        }
+        .systemLiquidGlassBackground(cornerRadius: 8)
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(accent.opacity(isDestructive ? 0.28 : 0.22), lineWidth: 1)
+        }
+        .opacity(isEnabled ? 1 : 0.5)
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

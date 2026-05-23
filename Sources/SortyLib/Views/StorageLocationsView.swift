@@ -141,6 +141,7 @@ struct StorageLocationsView: View {
                 Label("Add Location", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured)
             .accessibilityIdentifier("AddStorageLocationButton")
         }
         .padding()
@@ -352,7 +353,7 @@ struct StorageLocationCard: View {
                             showReauthorizePicker = true
                         }
                         .font(.caption2)
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.mini)
                     } else if location.accessStatus == .stale {
                         HStack(spacing: 4) {
@@ -380,7 +381,7 @@ struct StorageLocationCard: View {
                             Image(systemName: "folder")
                                 .font(.caption)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Reveal in Finder")
                         
@@ -391,7 +392,7 @@ struct StorageLocationCard: View {
                             Image(systemName: "slider.horizontal.3")
                                 .font(.caption)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Configure")
                         
@@ -405,7 +406,7 @@ struct StorageLocationCard: View {
                                 .font(.caption)
                                 .foregroundStyle(.red)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Remove")
                     }
@@ -511,7 +512,7 @@ struct StorageLocationConfigView: View {
                     HapticFeedbackManager.shared.success()
                     save()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
             }
             .padding()
             .background(.ultraThinMaterial)

@@ -237,7 +237,7 @@ struct SelectedEntryCard: View {
                     Text("Restore this State")
                         .fontWeight(.medium)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .tint(.blue)
             }
         }

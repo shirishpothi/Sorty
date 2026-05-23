@@ -612,6 +612,8 @@ public enum TransitionStyles {
 
 /// Animated loading dots view
 public struct LoadingDotsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let dotCount: Int
     let dotSize: CGFloat
     let color: Color
@@ -627,17 +629,18 @@ public struct LoadingDotsView: View {
     public var body: some View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
-            HStack(spacing: dotSize * 0.75) {
+            HStack(spacing: dotSize * 0.8) {
                 ForEach(0..<dotCount, id: \.self) { index in
-                    let phase = time * speed + (Double(index) * 0.85)
+                    let phase = reduceMotion ? Double(index) * 0.85 : time * speed + (Double(index) * 0.85)
                     let wave = (sin(phase) + 1) / 2
                     Circle()
                         .fill(color)
                         .frame(width: dotSize, height: dotSize)
-                        .scaleEffect(0.7 + (0.6 * wave))
-                        .opacity(0.35 + (0.65 * wave))
+                        .opacity(0.35 + (0.5 * wave))
+                        .offset(y: reduceMotion ? 0 : -dotSize * 0.3 * wave)
                 }
             }
+            .frame(height: dotSize * 1.6, alignment: .center)
             .accessibilityHidden(true)
         }
         .drawingGroup(opaque: false)

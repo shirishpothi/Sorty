@@ -16,26 +16,30 @@ struct ToastOverlay: View {
     @State private var opacity: Double = 0
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
             
             if let label = actionLabel, let action = action {
                 Spacer()
                 Button(action: action) {
                     Text(label)
                         .bold()
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.accentColor)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.black.opacity(0.8))
-        .cornerRadius(8)
-        .shadow(radius: 4)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 5)
         .padding(.bottom, 20)
         .opacity(opacity)
         .onAppear {

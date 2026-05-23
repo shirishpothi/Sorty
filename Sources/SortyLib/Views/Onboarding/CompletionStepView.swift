@@ -445,14 +445,14 @@ public struct CompletionStepView: View {
                 Button("Retry") {
                     verifyAndFinish()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .controlSize(.small)
                 .accessibilityIdentifier("OnboardingCompletionRetryButton")
 
                 Button("Skip for Now") {
                     skipVerificationAndFinish()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
                 .accessibilityIdentifier("OnboardingCompletionSkipButton")
             }

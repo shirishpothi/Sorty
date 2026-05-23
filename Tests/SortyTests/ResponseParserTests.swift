@@ -238,6 +238,35 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions[0].renameCount, 0)
     }
 
+    func testRenameOnlyPreservesReasonForUnchangedFile() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": ".",
+              "files": [
+                {
+                  "filename": "Invoice 2024 Jan.pdf",
+                  "rename_reason": "Already uses a clear invoice title, date, and readable spacing.",
+                  "rename_confidence": 0.91
+                }
+              ]
+            }
+          ]
+        }
+        """
+
+        let files = [
+            FileItem(path: "/path/Invoice 2024 Jan.pdf", name: "Invoice 2024 Jan", extension: "pdf", size: 1000, isDirectory: false)
+        ]
+
+        let plan = try ResponseParser.parseResponse(json, originalFiles: files, mode: .renameOnly)
+        let mapping = try XCTUnwrap(plan.suggestions[0].fileRenameMappings.first)
+        XCTAssertFalse(mapping.hasRename)
+        XCTAssertEqual(mapping.renameReason, "Already uses a clear invoice title, date, and readable spacing.")
+        XCTAssertEqual(mapping.renameConfidence, 0.91)
+    }
+
     func testLowConfidenceRenameIsAutoSkipped() throws {
         let json = """
         {

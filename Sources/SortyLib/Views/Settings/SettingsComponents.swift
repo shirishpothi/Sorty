@@ -92,12 +92,7 @@ struct SettingsCard<Content: View>: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
+        .systemLiquidGlassBackground(cornerRadius: 12)
     }
 }
 
@@ -140,13 +135,8 @@ struct SettingsNavigationCard: View {
             }
             .padding(14)
             .background(isHovered ? Color.primary.opacity(0.05) : Color.clear)
-            .background(.ultraThinMaterial)
+            .systemLiquidGlassBackground(cornerRadius: 12)
             .contentShape(Rectangle())
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

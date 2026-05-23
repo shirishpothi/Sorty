@@ -52,6 +52,8 @@ struct LearningsView: View {
     @State private var isQuickRefreshingLearnings = false
     @State private var showingStatusPopover = false
     @State private var hoveredStatusPopoverAction: StatusPopoverAction?
+    @State private var contentOpacity: Double = 0
+    @State private var emptyLearningsHasAppeared = false
 
     private enum StatusPopoverAction {
         case pauseResume
@@ -62,7 +64,6 @@ struct LearningsView: View {
 
     private enum ActiveFileImporter: Int, Identifiable {
         case modelDirectories
-        case learningExclusions
         case learningsProfile
 
         var id: Int { rawValue }
@@ -70,7 +71,6 @@ struct LearningsView: View {
         var allowedContentTypes: [UTType] {
             switch self {
             case .modelDirectories: return [.folder]
-            case .learningExclusions: return [.folder]
             case .learningsProfile: return [UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json]
             }
         }
@@ -78,7 +78,6 @@ struct LearningsView: View {
         var allowsMultipleSelection: Bool {
             switch self {
             case .modelDirectories: return true
-            case .learningExclusions: return true
             case .learningsProfile: return false
             }
         }
@@ -96,9 +95,13 @@ struct LearningsView: View {
         }
         .animation(.easeInOut(duration: 0.36), value: manager.consentManager.hasConsented)
         .frame(minWidth: 700, minHeight: 600)
+        .opacity(contentOpacity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings Dashboard")
         .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
             manager.isLocked = false
             if settingsViewModel.availableModels.isEmpty {
                 settingsViewModel.updateAvailableModels()
@@ -132,15 +135,19 @@ struct LearningsView: View {
                     .frame(maxWidth: 500)
             }
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 14) {
                 featureRow(icon: "eye.fill", title: "Watches", description: "Observes when you modify directories after AI organization")
                 featureRow(icon: "arrow.uturn.backward.circle.fill", title: "Learns from Reverts", description: "Understands when AI suggestions weren't right")
                 featureRow(icon: "text.bubble.fill", title: "Remembers Instructions", description: "Captures your additional guidance and preferences")
                 featureRow(icon: "sparkles", title: "Improves Over Time", description: "Uses learnings to make better future suggestions")
             }
             .padding(16)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .systemLiquidGlassBackground(cornerRadius: 16)
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learnings features")
 
@@ -190,8 +197,8 @@ struct LearningsView: View {
                 .font(.title2.bold())
                 .foregroundColor(.accentColor)
                 .frame(width: 40, height: 40)
-                .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
-                .cornerRadius(10)
+                .systemLiquidGlassBackground(cornerRadius: 10)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.headline)
@@ -207,18 +214,19 @@ struct LearningsView: View {
     private var dashboardView: some View {
         VStack(spacing: 0) {
             dashboardHeader
+                .animatedAppearance(delay: 0.03)
             Divider()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     whatSortyHasLearnedSection
-                        .animatedAppearance(delay: 0.05)
+                        .animatedAppearance(delay: 0.08)
 
                     recentActivitySection
-                        .animatedAppearance(delay: 0.10)
+                        .animatedAppearance(delay: 0.12)
 
                     settingsSection
-                        .animatedAppearance(delay: 0.15)
+                        .animatedAppearance(delay: 0.16)
 
                     advancedSection
                         .animatedAppearance(delay: 0.20)
@@ -319,7 +327,6 @@ struct LearningsView: View {
             isShowingFileImporter = false
             switch importer {
             case .modelDirectories: handleModelDirectoryImport(result)
-            case .learningExclusions: handleLearningExclusionImport(result)
             case .learningsProfile: handleProfileImport(result)
             }
         }
@@ -793,6 +800,109 @@ struct LearningsView: View {
         return nil
     }
 
+    // MARK: - Teach by Example
+
+    private var teachByExampleSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: "folder.badge.gearshape")
+                    .font(.title2.bold())
+                    .foregroundStyle(.teal)
+                    .frame(width: 42, height: 42)
+                    .background(Color.teal.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Teach Sorty with example folders")
+                        .font(.headline)
+                    Text("Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 16)
+
+                Button {
+                    presentFileImporter(.modelDirectories)
+                } label: {
+                    Label("Add Examples", systemImage: "plus")
+                        .font(.caption.bold())
+                }
+                .buttonStyle(.onboardingPill(size: .small))
+                .accessibilityIdentifier("TeachByExampleAddButton")
+            }
+
+            HStack(spacing: 10) {
+                teachByExampleStat(
+                    value: "\(manager.modelDirectories.filter(\.isEnabled).count)",
+                    label: "example folders",
+                    color: .teal
+                )
+                teachByExampleStat(
+                    value: "Preview first",
+                    label: "never applies blindly",
+                    color: .blue
+                )
+                teachByExampleStat(
+                    value: "Media ready",
+                    label: "music, movies, photos",
+                    color: .purple
+                )
+            }
+
+            if !manager.modelDirectories.isEmpty {
+                VStack(spacing: 6) {
+                    ForEach(manager.modelDirectories.prefix(3)) { directory in
+                        HStack(spacing: 8) {
+                            Image(systemName: directory.isEnabled ? "checkmark.circle.fill" : "pause.circle")
+                                .foregroundStyle(directory.isEnabled ? .green : .secondary)
+                                .accessibilityHidden(true)
+                            Text(directory.displayName)
+                                .font(.caption.bold())
+                            Spacer()
+                            Text(directory.scanSnapshot?.namingConventions.joined(separator: ", ") ?? "Ready to scan")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(10)
+                .background(Color.secondary.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+            }
+        }
+        .padding(16)
+        .background(Color.teal.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.teal.opacity(0.16), lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Teach Sorty with example folders")
+    }
+
+    private func teachByExampleStat(value: String, label: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.caption.bold())
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(value), \(label)")
+    }
+
     // MARK: - What Sorty Has Learned
 
     private var whatSortyHasLearnedSection: some View {
@@ -849,14 +959,23 @@ struct LearningsView: View {
                 .font(.system(size: 32))
                 .foregroundStyle(.secondary)
                 .opacity(0.5)
+                .opacity(emptyLearningsHasAppeared ? 1 : 0)
+                .scaleEffect(emptyLearningsHasAppeared ? 1 : 0.8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: emptyLearningsHasAppeared)
                 .accessibilityHidden(true)
             Text("No patterns learned yet")
                 .font(.subheadline.bold())
+                .opacity(emptyLearningsHasAppeared ? 1 : 0)
+                .offset(y: emptyLearningsHasAppeared ? 0 : 8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: emptyLearningsHasAppeared)
             Text("Organize some folders, and Sorty will pick up your preferences from corrections and feedback.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 360)
+                .opacity(emptyLearningsHasAppeared ? 1 : 0)
+                .offset(y: emptyLearningsHasAppeared ? 0 : 10)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: emptyLearningsHasAppeared)
         }
         .padding(20)
         .frame(maxWidth: .infinity)
@@ -864,6 +983,11 @@ struct LearningsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No patterns learned yet. Organize folders to start learning.")
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                emptyLearningsHasAppeared = true
+            }
+        }
     }
 
     // MARK: - Recent Activity (Session Timeline)
@@ -1113,8 +1237,6 @@ struct LearningsView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     referenceDirectoriesSection
                         .animatedAppearance(delay: 0.03)
-                    learningExclusionsSection
-                        .animatedAppearance(delay: 0.08)
                 }
                 .padding(.top, 16)
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
@@ -1127,11 +1249,12 @@ struct LearningsView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Reference Directories")
+                    Text("Teach Sorty with example folders")
                         .font(.subheadline.bold())
-                    Text("Well-organized folders used as structure examples")
+                    Text("Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 if !manager.modelDirectories.isEmpty {
@@ -1162,7 +1285,7 @@ struct LearningsView: View {
                         .accessibilityHidden(true)
                     Text("No reference directories")
                         .font(.subheadline.bold())
-                    Text("Add well-organized folders as examples. Sorty will learn your preferred naming and structure.")
+                    Text("Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -1186,68 +1309,6 @@ struct LearningsView: View {
                         ModelDirectoryRow(directory: directory, manager: manager)
                     }
                 }
-            }
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .liquidGlassCard(cornerRadius: 16)
-    }
-
-    private var learningExclusionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Learning Exclusions")
-                        .font(.subheadline.bold())
-                    Text("Folders excluded from learning (still organized)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if let patterns = manager.currentProfile?.learningExclusionPatterns, !patterns.isEmpty {
-                    Button {
-                        presentFileImporter(.learningExclusions)
-                    } label: {
-                        Label("Add Folder", systemImage: "plus")
-                            .font(.caption.bold())
-                    }
-                    .buttonStyle(.onboardingPill(size: .small))
-                    .accessibilityIdentifier("AddLearningExclusionFolderButton")
-                }
-            }
-
-            if let patterns = manager.currentProfile?.learningExclusionPatterns, !patterns.isEmpty {
-                VStack(spacing: 6) {
-                    ForEach(patterns, id: \.self) { pattern in
-                        LearningExclusionRow(pattern: pattern, manager: manager)
-                    }
-                }
-            } else {
-                VStack(spacing: 10) {
-                    Image(systemName: "eye.slash")
-                        .font(.system(size: 28))
-                        .foregroundStyle(.orange.opacity(0.6))
-                        .accessibilityHidden(true)
-                    Text("No folders excluded")
-                        .font(.subheadline.bold())
-                    Text("Exclude folders that should still be organized but shouldn't teach Sorty anything.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 340)
-                    Button {
-                        presentFileImporter(.learningExclusions)
-                    } label: {
-                        Label("Exclude Folder", systemImage: "plus")
-                            .font(.caption.bold())
-                    }
-                    .buttonStyle(.onboardingPill(size: .small))
-                    .accessibilityIdentifier("EmptyStateAddLearningExclusionFolderButton")
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity)
-                .background(Color.secondary.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
         .padding(18)
@@ -1356,28 +1417,6 @@ struct LearningsView: View {
             if addedCount > 0 { HapticFeedbackManager.shared.success() } else { HapticFeedbackManager.shared.error() }
         case .failure(let error):
             DebugLogger.log("Model directory import failed: \(error)")
-            HapticFeedbackManager.shared.error()
-        }
-    }
-
-    private func handleLearningExclusionImport(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            Task {
-                var addedCount = 0
-                for url in urls {
-                    let hasScopedAccess = url.startAccessingSecurityScopedResource()
-                    defer { if hasScopedAccess { url.stopAccessingSecurityScopedResource() } }
-                    let before = manager.currentProfile?.learningExclusionPatterns.count ?? 0
-                    await manager.addLearningExclusion(url.path)
-                    if (manager.currentProfile?.learningExclusionPatterns.count ?? 0) > before {
-                        addedCount += 1
-                    }
-                }
-                if addedCount > 0 { HapticFeedbackManager.shared.success() } else { HapticFeedbackManager.shared.error() }
-            }
-        case .failure(let error):
-            DebugLogger.log("Learning exclusion import failed: \(error)")
             HapticFeedbackManager.shared.error()
         }
     }
@@ -1633,6 +1672,19 @@ struct ModelDirectoryRow: View {
     @ObservedObject var manager: LearningsManager
     @State private var isHovered = false
 
+    private var statusText: String {
+        guard directory.isAccessible else {
+            return "Folder is missing or unavailable"
+        }
+        guard directory.isEnabled else {
+            return "Paused - not used in previews"
+        }
+        guard let snapshot = directory.scanSnapshot else {
+            return "Queued for scanning - used once Sorty reads the structure"
+        }
+        return "Used in previews - scanned \(snapshot.totalFolderCount) folders and \(snapshot.totalFileCount) files"
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: directory.isAccessible ? "folder.fill" : "folder.badge.questionmark")
@@ -1654,6 +1706,11 @@ struct ModelDirectoryRow: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                Text(statusText)
+                    .font(.caption2)
+                    .foregroundStyle(directory.isEnabled && directory.isAccessible ? .teal : .secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
 
             Spacer()

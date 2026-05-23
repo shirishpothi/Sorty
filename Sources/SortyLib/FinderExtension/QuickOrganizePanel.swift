@@ -224,7 +224,7 @@ struct QuickOrganizeView: View {
                     Button("Change") {
                         controller.selectDirectory()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                 }
                 .padding(12)
@@ -360,14 +360,14 @@ struct QuickOrganizeView: View {
                 NSWorkspace.shared.open(URL(string: "sorty://open")!)
                 controller.hidePanel()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             
             Spacer()
             
             Button("Cancel") {
                 controller.hidePanel()
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             .keyboardShortcut(.escape)
             
             Button(action: startOrganization) {
@@ -379,7 +379,7 @@ struct QuickOrganizeView: View {
                         .frame(width: 80)
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.sortyProminent)
             .disabled(controller.selectedDirectory == nil || controller.isOrganizing)
             .keyboardShortcut(.return)
         }

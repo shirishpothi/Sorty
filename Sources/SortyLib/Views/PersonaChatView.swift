@@ -50,7 +50,7 @@ struct PersonaChatView: View {
                     messages.removeAll()
                     errorMessage = nil
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .disabled(messages.isEmpty)
 
                 Button("Done") {
@@ -150,7 +150,7 @@ struct PersonaChatView: View {
                 Button(action: sendMessage) {
                     Image(systemName: "paperplane.fill")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                 .keyboardShortcut(.return)
             }

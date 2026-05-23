@@ -172,7 +172,7 @@ public struct ConflictResolutionSheet: View {
                     Label("Skip", systemImage: "forward.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .accessibilityIdentifier("ConflictSkipButton")
 
                 Button {
@@ -181,7 +181,7 @@ public struct ConflictResolutionSheet: View {
                     Label("Keep Both", systemImage: "doc.on.doc")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .accessibilityIdentifier("ConflictKeepBothButton")
 
                 Button {
@@ -190,7 +190,7 @@ public struct ConflictResolutionSheet: View {
                     Label("Overwrite", systemImage: "arrow.triangle.2.circlepath")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent(intent: .warning))
                 .tint(.red)
                 .accessibilityIdentifier("ConflictOverwriteButton")
             }

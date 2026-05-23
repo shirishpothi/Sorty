@@ -89,13 +89,13 @@ struct VisionRecommendationBanner: View {
                     Button("Enable Vision") {
                         onEnableVision()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.sortyProminent)
                     .controlSize(.small)
                 } else if state.recommendedAction == .switchModel {
                     Button("Switch Model") {
                         onSwitchModel()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                 }
                 

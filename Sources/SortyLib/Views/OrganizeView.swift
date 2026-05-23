@@ -16,12 +16,14 @@ struct OrganizeView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var customPersonaStore: CustomPersonaStore
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     @StateObject private var steeringManager = SteeringPromptManager.shared
 
     @State private var previousState: OrganizationState?
     @State private var showSmarterRetryModelPicker = false
     @State private var showSavedPromptsSheet = false
+    @State private var isReturningToStart = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -44,10 +46,11 @@ struct OrganizeView: View {
                     url: directory,
                     onBack: {
                         HapticFeedbackManager.shared.tap()
-                        withAnimation(.pageTransition) {
-                            if organizer.state == .ready {
-                                organizer.cancel()
-                            } else {
+                        switch organizer.state {
+                        case .scanning, .organizing, .ready, .applying, .completed:
+                            returnToStartAfterCancellation()
+                        default:
+                            withAnimation(.pageTransition) {
                                 appState.selectedDirectory = nil
                                 organizer.reset()
                             }
@@ -84,13 +87,15 @@ struct OrganizeView: View {
                 } else {
                     stateContent
                         .id(stateIdentifier)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .scale(scale: 0.985)),
-                            removal: .opacity
-                        ))
+                        .opacity(isReturningToStart ? 0 : 1)
+                        .scaleEffect(isReturningToStart && !reduceMotion ? 0.965 : 1)
+                        .blur(radius: isReturningToStart && !reduceMotion ? 5 : 0)
+                        .offset(y: isReturningToStart && !reduceMotion ? -14 : 0)
+                        .transition(stateTransition)
                 }
             }
-            .animation(.easeOut(duration: 0.32), value: stateIdentifier)
+            .animation(returnToStartEntranceAnimation, value: stateIdentifier)
+            .animation(returnToStartExitAnimation, value: isReturningToStart)
         }
         .navigationTitle("Organize Files")
         .toolbar {
@@ -105,8 +110,8 @@ struct OrganizeView: View {
                         Label("Regenerate", systemImage: "arrow.clockwise")
                     }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .help("Regenerate organization plan with current settings")
-                    .accessibilityLabel("Regenerate organization plan")
+                    .help(settingsViewModel.config.mode == .renameOnly ? "Regenerate filename suggestions with current settings" : "Regenerate organization plan with current settings")
+                    .accessibilityLabel(settingsViewModel.config.mode == .renameOnly ? "Regenerate filename suggestions" : "Regenerate organization plan")
                     .accessibilityHint("Use when you want different AI suggestions")
                 }
             }
@@ -181,31 +186,41 @@ struct OrganizeView: View {
                 ReadyToOrganizeView(onStart: startOrganization)
             }
         case .scanning:
-            AnalysisView()
+            AnalysisView(onReturnToStart: returnToStartAfterCancellation)
         case .organizing:
-            AnalysisView()
+            AnalysisView(onReturnToStart: returnToStartAfterCancellation)
         case .ready:
             if let plan = organizer.currentPlan {
-                PreviewView(plan: plan, baseURL: appState.selectedDirectory!)
+                PreviewView(
+                    plan: plan,
+                    baseURL: appState.selectedDirectory!,
+                    onReturnToStart: returnToStartAfterCancellation
+                )
             } else {
-                SortyGradientLoadingBar(width: 180, height: 10)
+                PreviewHandoffView(mode: settingsViewModel.config.mode)
             }
         case .applying:
-            AnalysisView()
+            AnalysisView(onReturnToStart: returnToStartAfterCancellation)
         case .completed:
             if let plan = organizer.currentPlan {
                 OrganizationCompleteView(
                     stats: plan.generationStats,
                     totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
                     totalFolders: plan.suggestions.count,
-                    directoryURL: appState.selectedDirectory!
+                    renameCount: plan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count },
+                    mode: settingsViewModel.config.mode,
+                    directoryURL: appState.selectedDirectory!,
+                    onReturnToStart: returnToStartAfterCancellation
                 )
             } else {
                 OrganizationCompleteView(
                     stats: nil,
                     totalFiles: 0,
                     totalFolders: 0,
-                    directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/")
+                    renameCount: 0,
+                    mode: settingsViewModel.config.mode,
+                    directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
+                    onReturnToStart: returnToStartAfterCancellation
                 )
             }
         case .error(let error):
@@ -232,6 +247,66 @@ struct OrganizeView: View {
         case .ready: return "ready"
         case .completed: return "completed"
         case .error: return "error"
+        }
+    }
+
+    private var stateTransition: AnyTransition {
+        guard !reduceMotion else {
+            return .opacity
+        }
+
+        if isReturningToStart {
+            return .asymmetric(
+                insertion: .opacity
+                    .combined(with: .scale(scale: 0.965, anchor: .center))
+                    .combined(with: .offset(y: 18)),
+                removal: .opacity
+                    .combined(with: .scale(scale: 0.965, anchor: .center))
+                    .combined(with: .offset(y: -18))
+            )
+        }
+
+        return AnyTransition.asymmetric(
+            insertion: AnyTransition.opacity
+                .combined(with: AnyTransition.scale(scale: 0.982, anchor: .center))
+                .combined(with: AnyTransition.offset(y: 10)),
+            removal: AnyTransition.opacity
+                .combined(with: AnyTransition.scale(scale: 0.992, anchor: .center))
+                .combined(with: AnyTransition.offset(y: -6))
+        )
+    }
+
+    private var returnToStartExitAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.26)
+    }
+
+    private var returnToStartEntranceAnimation: Animation {
+        reduceMotion
+            ? .easeOut(duration: 0.18)
+            : .spring(response: 0.52, dampingFraction: 0.92, blendDuration: 0.08)
+    }
+
+    private func returnToStartAfterCancellation() {
+        guard !isReturningToStart else { return }
+
+        withAnimation(returnToStartExitAnimation) {
+            isReturningToStart = true
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(90) : .milliseconds(220))
+            withAnimation(returnToStartEntranceAnimation) {
+                if case .completed = organizer.state {
+                    organizer.reset()
+                } else {
+                    organizer.cancel()
+                }
+            }
+
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(40) : .milliseconds(70))
+            withAnimation(returnToStartEntranceAnimation) {
+                isReturningToStart = false
+            }
         }
     }
 
@@ -405,7 +480,7 @@ private struct SetupRepairBanner: View {
             Spacer(minLength: 12)
 
             Button("Open Provider Settings", action: onOpenSettings)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .controlSize(.small)
         }
         .padding(14)
@@ -441,7 +516,7 @@ private struct SetupRepairGateView: View {
                 .frame(maxWidth: 420)
 
             Button("Open Provider Settings", action: onOpenSettings)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .accessibilityIdentifier("OpenProviderSettingsForRepairButton")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -470,6 +545,10 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
+
+    private var mode: OrganizationMode {
+        settingsViewModel.config.mode
+    }
     
     private var isConnecting: Bool {
         sessionManager.prewarmingProvider != nil
@@ -489,10 +568,10 @@ struct ReadyToOrganizeView: View {
             VStack(spacing: 16) {
                 iconSection
                 VStack(spacing: 6) {
-                    Text("Ready to Organize")
+                    Text("Ready to \(mode.actionVerb)")
                         .font(.title2)
                         .fontWeight(.semibold)
-                    Text("AI will analyze your files and suggest an organized folder structure")
+                    Text(mode.description)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -511,13 +590,14 @@ struct ReadyToOrganizeView: View {
             .offset(y: hasAppeared ? 0 : 10)
             .animation(.smooth(duration: 0.45).delay(0.10), value: hasAppeared)
             
-            // Storage locations card
-            WorkflowCard(title: "Storage Locations", icon: "externaldrive") {
-                storageLocationsContent
+            if mode != .renameOnly {
+                WorkflowCard(title: "Storage Locations", icon: "externaldrive") {
+                    storageLocationsContent
+                }
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(y: hasAppeared ? 0 : 10)
+                .animation(.smooth(duration: 0.45).delay(0.16), value: hasAppeared)
             }
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(y: hasAppeared ? 0 : 10)
-            .animation(.smooth(duration: 0.45).delay(0.16), value: hasAppeared)
             
             // Start button - full width
             Button {
@@ -532,21 +612,21 @@ struct ReadyToOrganizeView: View {
                     } else {
                         Image(systemName: "play.fill")
                             .font(.system(size: 12))
-                        Text("Start Organization")
+                        Text("Start \(mode.actionVerb)")
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.metalFxPrimary(isPaused: isConnecting))
+            .buttonStyle(.metalFxPrimary(isPaused: isConnecting, usesSubtleIdleBeam: true))
             .controlSize(.large)
             .keyboardShortcut(.return, modifiers: [])
             .disabled(isConnecting)
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .animation(.smooth(duration: 0.45).delay(0.22), value: hasAppeared)
-            .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start organizing files using your current settings")
+            .help(isConnecting ? "Connecting to AI provider. Start is enabled when connection is ready." : "Start \(mode.gerund) files using your current settings")
             .accessibilityIdentifier("StartOrganizationButton")
-            .accessibilityLabel(isConnecting ? "Connecting to provider" : "Start organization")
+            .accessibilityLabel(isConnecting ? "Connecting to provider" : "Start \(mode.gerund)")
             .accessibilityHint(isConnecting ? "Please wait until connection completes" : "Press Enter to start")
             .accessibilityValue(isConnecting ? "Connecting" : "Ready")
             .accessibilityAddTraits(.isButton)
@@ -556,7 +636,7 @@ struct ReadyToOrganizeView: View {
                 Text("⏎")
                     .font(.caption2)
                     .fontWeight(.medium)
-                Text(isConnecting ? "Waiting..." : "Start")
+                Text(isConnecting ? "Waiting..." : mode.actionVerb)
                     .font(.caption2)
             }
             .foregroundStyle(.quaternary)
@@ -690,28 +770,6 @@ struct ReadyToOrganizeView: View {
                         .frame(maxWidth: .infinity)
                     }
                     
-                    // Quick add suggestions
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Quick add:")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                        
-                        HStack(spacing: 8) {
-                            StorageSuggestionPill(name: "Archives", icon: "archivebox") {
-                                suggestedLocationName = "Archives"
-                                showingFolderPicker = true
-                            }
-                            StorageSuggestionPill(name: "Projects", icon: "folder.badge.gearshape") {
-                                suggestedLocationName = "Projects"
-                                showingFolderPicker = true
-                            }
-                            StorageSuggestionPill(name: "Backups", icon: "externaldrive") {
-                                suggestedLocationName = "Backups"
-                                showingFolderPicker = true
-                            }
-                        }
-                    }
-                    
                     HStack {
                         Button {
                             HapticFeedbackManager.shared.tap()
@@ -721,7 +779,7 @@ struct ReadyToOrganizeView: View {
                             Label("Add Custom Location", systemImage: "plus")
                                 .font(.caption)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Add a folder that Sorty can use as a destination")
                         .accessibilityHint("Opens folder picker to add a destination location")
@@ -730,17 +788,14 @@ struct ReadyToOrganizeView: View {
                         
                         Button("More in Settings") {
                             HapticFeedbackManager.shared.selection()
-                            appState.openSettingsWindow(
-                                section: .rules,
-                                focusTarget: .rulesStorageLocations
-                            )
+                            appState.currentView = .storageLocations
                         }
                         .buttonStyle(.plain)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
-                        .help("Open Storage Locations in Settings")
+                        .help("Open Storage Locations")
                         .accessibilityIdentifier("OpenStorageLocationsInSettingsButton")
-                        .accessibilityHint("Opens Settings and focuses the Storage Locations section")
+                        .accessibilityHint("Opens the Storage Locations page")
                     }
                 }
                 .transition(.asymmetric(
@@ -829,11 +884,12 @@ struct ReadyToOrganizeView: View {
                     .padding(.vertical, 2)
                 }
                 if organizer.customInstructions.isEmpty {
-                    Text("e.g. \"Group by project\", \"Separate RAW photos\", \"Keep documents by year\"...")
+                    Text(mode.instructionPlaceholder)
                         .font(.body)
                         .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 6)
+                        .padding(.leading, 18)
+                        .padding(.trailing, 10)
+                        .padding(.vertical, 9)
                         .allowsHitTesting(false)
                 }
             }
@@ -843,13 +899,15 @@ struct ReadyToOrganizeView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(NSColor.textBackgroundColor))
             )
-            .overlay(
+            .overlay {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-            )
+
+                FocusedInstructionBeamBorder(active: isTextFieldFocused)
+            }
             .accessibilityIdentifier("CustomInstructionsTextField")
-            .accessibilityLabel("Additional instructions for organization")
-            .accessibilityHint("Press Command+Enter to start organization, Enter for new line")
+            .accessibilityLabel("Additional instructions for \(mode.gerund)")
+            .accessibilityHint("Press Command+Enter to start \(mode.gerund), Enter for new line")
 
             HStack(spacing: 8) {
                 // Improve with AI button
@@ -892,7 +950,7 @@ struct ReadyToOrganizeView: View {
                                 Button("Cancel") {
                                     showSavePromptDialog = false
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.sortyBordered)
 
                                 Spacer()
 
@@ -905,7 +963,7 @@ struct ReadyToOrganizeView: View {
                                     showSavePromptDialog = false
                                     HapticFeedbackManager.shared.success()
                                 }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.sortyProminent)
                                 .disabled(savePromptName.trimmingCharacters(in: .whitespaces).isEmpty)
                             }
                         }
@@ -957,8 +1015,8 @@ struct ReadyToOrganizeView: View {
         do {
             let client = try AIClientFactory.createClient(config: settingsViewModel.config)
             let improved = try await client.generateText(
-                prompt: "Improve the following file organization instructions to be clearer, more specific, and more actionable for an AI file organizer. Keep the same intent but make it more precise. Return only the improved instructions text, nothing else.\n\nOriginal instructions: \"\(original)\"",
-                systemPrompt: "You are a file organization expert. You help users write better instructions for organizing their files and folders. Be concise and practical."
+                prompt: "Improve the following file \(mode.gerund) instructions to be clearer, more specific, and more actionable. Keep the same intent but make it more precise. Return only the improved instructions text, nothing else.\n\nOriginal instructions: \"\(original)\"",
+                systemPrompt: "You are a file workflow expert. You help users write better instructions for \(mode.gerund) files. Be concise and practical."
             )
             let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
@@ -970,6 +1028,59 @@ struct ReadyToOrganizeView: View {
         }
     }
 
+}
+
+private struct PreviewHandoffView: View {
+    let mode: OrganizationMode
+    @State private var appeared = false
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.secondary.opacity(0.08))
+                    .frame(width: 48, height: 48)
+
+                Image(systemName: mode == .renameOnly ? "text.badge.checkmark" : "checkmark.circle")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .scaleEffect(appeared ? 1 : 0.88)
+            }
+
+            Text(mode == .renameOnly ? "Preparing name preview" : "Preparing preview")
+                .font(.subheadline.weight(.semibold))
+
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.secondary.opacity(0.32))
+                        .frame(width: 5, height: 5)
+                        .modifier(PreviewHandoffDot(delay: Double(index) * 0.14))
+                }
+            }
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .opacity(appeared ? 1 : 0)
+        .animation(.smooth(duration: 0.28), value: appeared)
+        .onAppear { appeared = true }
+    }
+}
+
+private struct PreviewHandoffDot: ViewModifier {
+    let delay: Double
+    @State private var isOn = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isOn ? 1.22 : 0.78)
+            .opacity(isOn ? 0.88 : 0.35)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.58).repeatForever().delay(delay)) {
+                    isOn = true
+                }
+            }
+    }
 }
 
 // MARK: - Saved Prompts Sheet
@@ -1045,14 +1156,14 @@ struct SavedPromptsSheet: View {
                     editText = newPrompt.prompt
                     HapticFeedbackManager.shared.tap()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
 
                 Spacer()
 
                 Button("Done") {
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .keyboardShortcut(.cancelAction)
             }
             .padding(20)
@@ -1094,7 +1205,7 @@ struct SavedPromptsSheet: View {
                             Label("Improve with AI", systemImage: "wand.and.stars")
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                     .disabled(editText.trimmingCharacters(in: .whitespaces).isEmpty || improvingPromptId == prompt.id)
 
@@ -1113,7 +1224,7 @@ struct SavedPromptsSheet: View {
                         editingPromptId = nil
                         HapticFeedbackManager.shared.success()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.sortyProminent)
                     .controlSize(.small)
                 }
             } else {
@@ -1144,7 +1255,7 @@ struct SavedPromptsSheet: View {
                     Button("Use") {
                         onApplyPrompt(prompt.prompt)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.sortyProminent)
                     .controlSize(.small)
 
                     Button("Edit") {
@@ -1508,6 +1619,42 @@ struct ErrorView: View {
     }
 }
 
+private struct FocusedInstructionBeamBorder: View {
+    let active: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+            let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 1.96
+
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    AngularGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.00),
+                            .init(color: .clear, location: 0.08),
+                            .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.36), location: 0.16),
+                            .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.62), location: 0.25),
+                            .init(color: .white.opacity(0.88), location: 0.32),
+                            .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.54), location: 0.39),
+                            .init(color: Color(red: 0.40, green: 0.20, blue: 1.0).opacity(0.36), location: 0.48),
+                            .init(color: .clear, location: 0.58),
+                            .init(color: .clear, location: 1.00),
+                        ],
+                        center: .center,
+                        angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                    ),
+                    lineWidth: 1.2
+                )
+                .opacity(active ? 0.95 : 0)
+                .animation(.easeOut(duration: 0.2), value: active)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Custom Text Editor with Enter to Submit
 
 /// A TextEditor that treats Cmd+Enter as submit and Enter as new line
@@ -1534,7 +1681,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         textView.allowsUndo = true
         textView.backgroundColor = .clear
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 4, height: 4)
+        textView.textContainerInset = NSSize(width: 10, height: 7)
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
 
@@ -1550,8 +1697,15 @@ struct SubmittableTextEditor: NSViewRepresentable {
             }
         }
         
-        let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak textView] event in
-            guard let tv = textView, tv.window?.firstResponder === tv else { return event }
+        let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak textView, weak coordinator = context.coordinator] event in
+            guard let tv = textView else { return event }
+
+            DispatchQueue.main.async {
+                coordinator?.updateFocusState(for: tv)
+            }
+
+            guard event.type == .keyDown else { return event }
+            guard tv.window?.firstResponder === tv else { return event }
             
             let isReturn = event.keyCode == 36
             let hasCommand = event.modifierFlags.contains(.command)
@@ -1585,12 +1739,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         context.coordinator.onSubmit = onSubmit
         context.coordinator.isFocused = isFocused
 
-        if let isFocused {
-            let currentlyFocused = textView.window?.firstResponder === textView
-            if isFocused.wrappedValue != currentlyFocused {
-                isFocused.wrappedValue = currentlyFocused
-            }
-        }
+        context.coordinator.updateFocusState(for: textView)
     }
     
     func makeCoordinator() -> Coordinator {
@@ -1630,6 +1779,14 @@ struct SubmittableTextEditor: NSViewRepresentable {
 
         func textDidEndEditing(_ notification: Notification) {
             isFocused?.wrappedValue = false
+        }
+
+        func updateFocusState(for textView: NSTextView) {
+            guard let isFocused else { return }
+            let currentlyFocused = textView.window?.firstResponder === textView
+            if isFocused.wrappedValue != currentlyFocused {
+                isFocused.wrappedValue = currentlyFocused
+            }
         }
     }
 }

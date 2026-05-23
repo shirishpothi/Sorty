@@ -250,7 +250,7 @@ public struct DemoStepView: View {
                         } label: {
                             Text("Change")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         
                         Button {
                             startDemo()
@@ -296,7 +296,7 @@ public struct DemoStepView: View {
                         }
                         .frame(minWidth: 120)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                 }
             }
         }

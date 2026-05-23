@@ -258,7 +258,7 @@ public struct WorkflowSelectionStepView: View {
                             Text("Edit Description")
                                 .frame(minWidth: 110)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
 
                         Button {
                             commitGeneratedPersona(persona)
@@ -335,7 +335,7 @@ public struct WorkflowSelectionStepView: View {
                             Text("Cancel")
                                 .frame(minWidth: 80)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         
                         Button {
                             generateCustomPersona()

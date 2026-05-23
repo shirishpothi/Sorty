@@ -72,6 +72,15 @@ struct AIProviderSettingsView: View {
                 copilotAuth.checkAuthenticationStatus()
             }
         }
+        .modelSelectionOverlay(
+            isPresented: $showModelPicker,
+            currentProvider: viewModel.config.provider,
+            currentModel: viewModel.config.model,
+            onSelect: { provider, model in
+                viewModel.config.provider = provider
+                viewModel.config.model = model
+            }
+        )
     }
     
     private var copilotConfigSection: some View {
@@ -101,13 +110,13 @@ struct AIProviderSettingsView: View {
                     Spacer()
                     
                     if !viewModel.availableModels.isEmpty {
-                        Picker("", selection: $viewModel.config.model) {
-                            ForEach(viewModel.availableModels, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 140)
+                        ModelSelectorRow(
+                            provider: .githubCopilot,
+                            model: viewModel.config.model,
+                            onTap: { showModelPicker = true }
+                        )
+                        .frame(width: 220)
+                        .modelSelectorTriggerBounds()
                     } else if viewModel.isLoadingModels {
                         BouncingSpinner(size: 12, color: .secondary)
                     }
@@ -115,7 +124,7 @@ struct AIProviderSettingsView: View {
                     Button("Sign Out") {
                         copilotAuth.signOut()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                 }
                 .onAppear {
                     viewModel.updateAvailableModels()
@@ -155,7 +164,7 @@ struct AIProviderSettingsView: View {
                                 Image(systemName: hasCopiedCode ? "checkmark" : "doc.on.doc")
                                     .foregroundColor(hasCopiedCode ? .green : .primary)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.sortyBordered)
                         }
                     }
                     
@@ -252,19 +261,9 @@ struct AIProviderSettingsView: View {
                         model: viewModel.config.model,
                         onTap: { showModelPicker = true }
                     )
+                    .modelSelectorTriggerBounds()
                 }
             }
-        }
-        .sheet(isPresented: $showModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showModelPicker,
-                currentProvider: viewModel.config.provider,
-                currentModel: viewModel.config.model,
-                onSelect: { provider, model in
-                    viewModel.config.provider = provider
-                    viewModel.config.model = model
-                }
-            )
         }
     }
 
@@ -281,6 +280,7 @@ struct AIProviderSettingsView: View {
                         model: viewModel.config.model,
                         onTap: { showModelPicker = true }
                     )
+                    .modelSelectorTriggerBounds()
                 }
 
                 if !viewModel.isAppleModelAvailable {
@@ -300,19 +300,8 @@ struct AIProviderSettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showModelPicker) {
-            ModelSelectionPopover(
-                isPresented: $showModelPicker,
-                currentProvider: .appleFoundationModel,
-                currentModel: viewModel.config.model,
-                onSelect: { provider, model in
-                    viewModel.config.provider = provider
-                    viewModel.config.model = model
-                }
-            )
-        }
     }
-    
+
     private var connectionSection: some View {
         SettingsCard(title: "Connection", icon: "network", color: .blue) {
             VStack(alignment: .leading, spacing: 12) {
@@ -342,7 +331,7 @@ struct AIProviderSettingsView: View {
                             Text("Test Connection")
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
                     
                     if let status = testConnectionStatus {

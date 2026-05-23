@@ -58,7 +58,7 @@ struct NotifiCLIStatusCard: View {
                             }
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .disabled(isRebuilding)
                 }
                 

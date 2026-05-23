@@ -62,7 +62,7 @@ struct NotificationPermissionCard: View {
                                 Text("Enable")
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.sortyProminent)
                         .disabled(isRequestingPermission)
                         
                     case .denied:
@@ -74,7 +74,7 @@ struct NotificationPermissionCard: View {
                                 Text("Open Settings")
                             }
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         
                     case .authorized, .provisional:
                         Button {
@@ -82,7 +82,7 @@ struct NotificationPermissionCard: View {
                         } label: {
                             Image(systemName: "gearshape")
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.small)
                         .help("Open notification settings")
                         

@@ -24,11 +24,14 @@ struct DirectorySelectionView: View {
             Spacer()
                 .frame(minHeight: 40, maxHeight: .infinity)
 
-            VStack(spacing: 32) {
+            VStack(spacing: 28) {
                 VStack(spacing: 10) {
-                    Text("Select a directory to organize")
+                    Text(headlineText)
                         .font(.title)
                         .fontWeight(.bold)
+                        .id(headlineText)
+                        .transition(.blurReplace)
+                        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: headlineText)
                         .opacity(hasAppeared ? 1 : 0)
 
                     Text("Drag and drop a folder here, or click to browse")
@@ -55,7 +58,7 @@ struct DirectorySelectionView: View {
                 }
                 .buttonStyle(.onboardingPill)
                 .onboardingBeamBorder(
-                    variant: .featured,
+                    variant: .info,
                     active: hasAppeared,
                     isIntensified: isBrowseHovering || isBrowseBeamPressed,
                     includesInteriorGlow: isBrowseHovering || isBrowseBeamPressed
@@ -76,43 +79,9 @@ struct DirectorySelectionView: View {
                 .accessibilityIdentifier("BrowseForFolderButton")
 
                 if settingsViewModel.config.enableSmartRename {
-                    VStack(spacing: 16) {
-                        HStack(spacing: 12) {
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.2))
-                                .frame(height: 1)
-                            Text("ORGANIZATION MODE")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.secondary)
-                            Rectangle()
-                                .fill(Color.secondary.opacity(0.2))
-                                .frame(height: 1)
-                        }
-
-                        LazyVGrid(
-                            columns: [
-                                GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12),
-                            ], spacing: 12
-                        ) {
-                            ForEach(OrganizationMode.allCases, id: \.self) { mode in
-                                OrganizationModeCard(
-                                    mode: mode,
-                                    isSelected: settingsViewModel.config.mode == mode
-                                ) {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        settingsViewModel.config.mode = mode
-                                    }
-                                    HapticFeedbackManager.shared.tap()
-                                }
-                            }
-                        }
-                        .frame(maxWidth: 520)
-                    }
-                    .padding(.top, 8)
-                    .opacity(hasAppeared ? 1 : 0)
-                    .animation(.easeOut(duration: 0.2).delay(0.13), value: hasAppeared)
+                    organizationModePicker
+                        .opacity(hasAppeared ? 1 : 0)
+                        .animation(.easeOut(duration: 0.2).delay(0.12), value: hasAppeared)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -137,8 +106,42 @@ struct DirectorySelectionView: View {
         .accessibilityHint("Drag and drop a folder here or use the Browse button")
     }
 
+    private var headlineText: String {
+        guard settingsViewModel.config.enableSmartRename else {
+            return "Select a directory to organize"
+        }
+        switch settingsViewModel.config.mode {
+        case .organize:
+            return "Select a directory to organize"
+        case .organizeAndRename:
+            return "Select a directory to organize & rename"
+        case .renameOnly:
+            return "Select a directory to rename"
+        }
+    }
+
+    private var organizationModePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(OrganizationMode.allCases, id: \.self) { mode in
+                OrganizationModeSegment(
+                    mode: mode,
+                    isSelected: settingsViewModel.config.mode == mode
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        settingsViewModel.config.mode = mode
+                    }
+                    HapticFeedbackManager.shared.tap()
+                }
+            }
+        }
+        .padding(4)
+        .systemLiquidGlassBackground(cornerRadius: 999)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Organization mode")
+    }
+
     private var dropZone: some View {
-        let dropZoneHeight: CGFloat = settingsViewModel.config.enableSmartRename ? 120 : 150
+        let dropZoneHeight: CGFloat = settingsViewModel.config.enableSmartRename ? 140 : 150
         let dropZoneCornerRadius: CGFloat = 16
         let folderAccent = SortyDesignSystem.Colors.resolvedAccent
         let dropZoneContent = VStack(spacing: 14) {
@@ -360,7 +363,7 @@ struct QuickTipItemCompact: View {
     }
 }
 
-struct OrganizationModeCard: View {
+struct OrganizationModeSegment: View {
     let mode: OrganizationMode
     let isSelected: Bool
     let action: () -> Void
@@ -369,53 +372,40 @@ struct OrganizationModeCard: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? .white.opacity(0.2) : SortyDesignSystem.Colors.resolvedAccent.opacity(0.1))
-                        .frame(width: 30, height: 30)
-
-                    Image(systemName: mode.iconName)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(isSelected ? .white : .accentColor)
-                }
-
-                VStack(spacing: 2) {
-                    Text(mode.displayName)
-                        .font(.caption)
-                        .fontWeight(.bold)
-
-                    Text(mode.subtitle)
-                        .font(.system(size: 9))
-                        .fontWeight(.medium)
-                        .opacity(0.8)
-                }
+            HStack(spacing: 7) {
+                Image(systemName: mode.iconName)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(mode.displayName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .fixedSize()
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 6)
             .background {
-                RoundedRectangle(cornerRadius: 16)
+                Capsule(style: .continuous)
                     .fill(
                         isSelected
-                            ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(isHovering ? 0.12 : 0.06)
+                            ? SortyDesignSystem.Colors.resolvedAccent
+                            : (isHovering ? Color.secondary.opacity(0.12) : Color.clear)
                     )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16)
-                            .strokeBorder(isSelected ? .white.opacity(0.2) : .clear, lineWidth: 1)
-                    }
             }
             .foregroundColor(isSelected ? .white : .primary)
-            .scaleEffect(isHovering ? 1.02 : 1.0)
-            .scaleEffect(isSelected ? 1.05 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovering)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+            .contentShape(Capsule())
+            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
+            .animation(.easeInOut(duration: 0.15), value: isHovering)
         }
         .buttonStyle(.plain)
         .onHover { hovering in
+            if hovering && !isHovering {
+                HapticFeedbackManager.shared.selection()
+            }
             isHovering = hovering
         }
         .help(mode.description)
+        .accessibilityLabel(mode.displayName)
+        .accessibilityHint(mode.description)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

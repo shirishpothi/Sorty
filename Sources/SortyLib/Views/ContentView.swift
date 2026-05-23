@@ -19,6 +19,7 @@ public struct ContentView: View {
     @State private var previousView: AppState.AppView?
     @State private var displayedView: AppState.AppView = .organize
     @State private var showCommandNumbers = false
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var commandFlagsMonitor: Any?
     @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
@@ -49,10 +50,7 @@ public struct ContentView: View {
     }
 
     private var mainContent: some View {
-        NavigationSplitView(columnVisibility: Binding(
-            get: { appState.showingSidebar ? .all : .detailOnly },
-            set: { appState.showingSidebar = $0 != .detailOnly }
-        )) {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             // Sidebar
             List(selection: Binding(
                 get: { appState.currentView },
@@ -115,6 +113,19 @@ public struct ContentView: View {
         .frame(minWidth: 1000, minHeight: 700)
         .onAppear {
             displayedView = appState.currentView
+            columnVisibility = appState.showingSidebar ? .all : .detailOnly
+        }
+        .onChange(of: columnVisibility) { _, newValue in
+            let isShowingSidebar = newValue != .detailOnly
+            guard appState.showingSidebar != isShowingSidebar else { return }
+            appState.showingSidebar = isShowingSidebar
+        }
+        .onChange(of: appState.showingSidebar) { _, isShowingSidebar in
+            let nextVisibility: NavigationSplitViewVisibility = isShowingSidebar ? .all : .detailOnly
+            guard columnVisibility != nextVisibility else { return }
+            withAnimation(.easeInOut(duration: 0.28)) {
+                columnVisibility = nextVisibility
+            }
         }
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {

@@ -10,6 +10,7 @@ import SwiftUI
 struct PostOrganizationHoningView: View {
     let fileCount: Int
     let folderCount: Int
+    let renameCount: Int
     let config: AIConfig
     let learningsMaturity: LearningsManager.LearningsSummary.Maturity
     let onComplete: ([HoningAnswer]) -> Void
@@ -24,6 +25,7 @@ struct PostOrganizationHoningView: View {
     init(
         fileCount: Int,
         folderCount: Int,
+        renameCount: Int = 0,
         config: AIConfig,
         learningsMaturity: LearningsManager.LearningsSummary.Maturity = .new,
         onComplete: @escaping ([HoningAnswer]) -> Void,
@@ -31,6 +33,7 @@ struct PostOrganizationHoningView: View {
     ) {
         self.fileCount = fileCount
         self.folderCount = folderCount
+        self.renameCount = renameCount
         self.config = config
         self.learningsMaturity = learningsMaturity
         self.onComplete = onComplete
@@ -94,7 +97,7 @@ struct PostOrganizationHoningView: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Post-organization feedback")
+        .accessibilityLabel("Post-\(config.mode.gerund) feedback")
     }
 
     private var adaptiveQuestionCount: Int {
@@ -140,21 +143,29 @@ struct PostOrganizationHoningView: View {
                     .foregroundStyle(.green)
             }
             
-            Text("Organization Complete!")
+            Text("\(config.mode.completionTitle)!")
                 .font(.title3)
                 .fontWeight(.bold)
             
             HStack(spacing: 12) {
-                Label("\(fileCount) files", systemImage: "doc.fill")
+                Label(config.mode == .renameOnly ? "\(renameCount) names" : "\(fileCount) files", systemImage: config.mode == .renameOnly ? "pencil.line" : "doc.fill")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 
-                Text("→")
-                    .foregroundStyle(.tertiary)
+                if config.mode != .renameOnly {
+                    Text("→")
+                        .foregroundStyle(.tertiary)
+                }
                 
-                Label("\(folderCount) folders", systemImage: "folder.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if config.mode == .renameOnly {
+                    Label("\(max(fileCount - renameCount, 0)) unchanged", systemImage: "doc.text")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Label("\(folderCount) folders", systemImage: "folder.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -226,7 +237,7 @@ struct PostOrganizationHoningView: View {
     
     private var staticQuestionView: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Was this organization helpful?")
+            Text("Was this \(config.mode.gerund) helpful?")
                 .font(.body)
                 .fontWeight(.medium)
             

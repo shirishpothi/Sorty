@@ -530,7 +530,7 @@ struct BatchOrganizationView: View {
                     } label: {
                         Image(systemName: "chevron.left")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .minimumHitTarget()
                     .disabled(previewFolders.count < 2)
 
@@ -550,7 +550,7 @@ struct BatchOrganizationView: View {
                     } label: {
                         Image(systemName: "chevron.right")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .minimumHitTarget()
                     .disabled(previewFolders.count < 2)
                 }
@@ -902,7 +902,7 @@ struct BatchOrganizationView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
                 .minimumHitTarget()
 
@@ -911,7 +911,7 @@ struct BatchOrganizationView: View {
                 } label: {
                     Image(systemName: "chevron.right")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
                 .minimumHitTarget()
 
@@ -919,7 +919,7 @@ struct BatchOrganizationView: View {
                     HapticFeedbackManager.shared.tap()
                     focusedFolder = nil
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
                 .accessibilityIdentifier("BatchFolderBackButton")
 
@@ -927,7 +927,7 @@ struct BatchOrganizationView: View {
                     HapticFeedbackManager.shared.tap()
                     batchManager.clearFolderCustomization(for: folder)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
                 .controlSize(.small)
                 .accessibilityIdentifier("BatchFolderClearCustomizationsButton")
             }
@@ -956,7 +956,7 @@ struct BatchOrganizationView: View {
                     } label: {
                         Label("Open Preview", systemImage: "eye")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                     .accessibilityIdentifier("BatchFolderOpenPreviewButton")
                 }
@@ -1057,7 +1057,7 @@ struct BatchOrganizationView: View {
                         HapticFeedbackManager.shared.selection()
                         batchManager.updateInstructions(suggestion, for: folder)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .controlSize(.small)
                     .font(.caption2)
                 }
@@ -1557,7 +1557,7 @@ private struct BatchPlanEditorView: View {
                 Button("Done") {
                     dismiss()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
             }
             .padding(12)
 
@@ -1648,7 +1648,7 @@ private struct BatchPlanEditorView: View {
                         hasEdits = false
                         viewingHistoryIndex = nil
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
 
                     Button("Save Changes") {
                         HapticFeedbackManager.shared.success()
@@ -1656,7 +1656,7 @@ private struct BatchPlanEditorView: View {
                         hasEdits = false
                         dismiss()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.sortyProminent)
                     .disabled(!hasEdits || isViewingHistory)
                     .accessibilityIdentifier("BatchPreviewSaveButton")
                 }

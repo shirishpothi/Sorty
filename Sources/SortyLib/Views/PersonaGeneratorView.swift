@@ -130,7 +130,7 @@ struct PersonaGeneratorView: View {
                         Text("Next")
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .disabled(prompt.isEmpty || isLoadingQuestions)
             }
             .padding(.bottom, 30)
@@ -198,7 +198,7 @@ struct PersonaGeneratorView: View {
                         generateFinalPersona()
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .disabled(answers[question.id] == nil || generator.isGenerating)
             }
             .padding(.horizontal, 30)

@@ -58,7 +58,7 @@ public struct TrafficLightUpdateButton: NSViewRepresentable {
                let closeButton = window.standardWindowButton(.closeButton) {
                 NSLayoutConstraint.activate([
                     button.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
-                    button.leadingAnchor.constraint(equalTo: zoomButton.trailingAnchor, constant: 8),
+                    button.leadingAnchor.constraint(equalTo: zoomButton.trailingAnchor, constant: 12),
                 ])
             }
 

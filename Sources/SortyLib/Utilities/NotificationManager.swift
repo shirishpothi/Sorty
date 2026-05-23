@@ -319,9 +319,48 @@ public struct HUDNotification: Identifiable, Equatable {
     public let iconColor: Color
     public let timestamp: Date
     public let playSound: Bool
+    public let actions: [HUDNotificationAction]
+
+    public init(
+        title: String,
+        message: String,
+        icon: String,
+        iconColor: Color,
+        timestamp: Date,
+        playSound: Bool,
+        actions: [HUDNotificationAction] = []
+    ) {
+        self.title = title
+        self.message = message
+        self.icon = icon
+        self.iconColor = iconColor
+        self.timestamp = timestamp
+        self.playSound = playSound
+        self.actions = actions
+    }
     
     public static func == (lhs: HUDNotification, rhs: HUDNotification) -> Bool {
         lhs.id == rhs.id
+    }
+}
+
+public struct HUDNotificationAction: Identifiable {
+    public let id = UUID()
+    public let title: String
+    public let systemImage: String?
+    public let role: ButtonRole?
+    public let action: @MainActor () -> Void
+
+    public init(
+        title: String,
+        systemImage: String? = nil,
+        role: ButtonRole? = nil,
+        action: @escaping @MainActor () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.role = role
+        self.action = action
     }
 }
 
@@ -641,6 +680,23 @@ public class NotificationManager: ObservableObject {
     public func showInfo(title: String, message: String) {
         show(.info(title: title, message: message))
     }
+
+    public func showHUDInfo(
+        title: String,
+        message: String,
+        icon: String = "info.circle.fill",
+        iconColor: Color = .blue,
+        actions: [HUDNotificationAction] = []
+    ) {
+        showHUD(
+            title: title,
+            message: message,
+            icon: icon,
+            iconColor: iconColor,
+            playSound: false,
+            actions: actions
+        )
+    }
     
     /// Show processing complete notification
     public func showProcessingComplete(fileCount: Int, folderName: String) {
@@ -904,7 +960,14 @@ public class NotificationManager: ObservableObject {
         }
     }
     
-    private func showHUD(title: String, message: String, icon: String, iconColor: Color, playSound: Bool) {
+    private func showHUD(
+        title: String,
+        message: String,
+        icon: String,
+        iconColor: Color,
+        playSound: Bool,
+        actions: [HUDNotificationAction] = []
+    ) {
         print("NotificationManager: showHUD called - title: \(title), message: \(message)")
         
         let notification = HUDNotification(
@@ -913,7 +976,8 @@ public class NotificationManager: ObservableObject {
             icon: icon,
             iconColor: iconColor,
             timestamp: Date(),
-            playSound: playSound
+            playSound: playSound,
+            actions: actions
         )
         
         if currentHUDNotification == nil {

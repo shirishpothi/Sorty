@@ -44,7 +44,7 @@ struct PersonaPickerView: View {
             }
 
             // Built-in personas
-            HStack(spacing: 8) {
+            LazyVGrid(columns: personaGridColumns, spacing: 8) {
                 ForEach(PersonaType.allCases, id: \.self) { persona in
                     PersonaButton(
                         persona: persona,
@@ -73,7 +73,7 @@ struct PersonaPickerView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 8) {
+                LazyVGrid(columns: personaGridColumns, spacing: 8) {
                     ForEach(customStore.customPersonas) { custom in
                         CustomPersonaButton(
                             persona: custom,
@@ -245,6 +245,18 @@ Text(
             return custom.name
         }
         return personaManager.selectedPersona.displayName
+    }
+
+    private var personaGridColumns: [GridItem] {
+        let columnCount = min(
+            max(PersonaType.allCases.count, customStore.customPersonas.count),
+            6
+        )
+
+        return Array(
+            repeating: GridItem(.flexible(), spacing: 8),
+            count: columnCount
+        )
     }
 }
 

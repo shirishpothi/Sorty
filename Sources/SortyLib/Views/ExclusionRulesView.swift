@@ -6,14 +6,17 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ExclusionRulesView: View {
     @EnvironmentObject var rulesManager: ExclusionRulesManager
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @EnvironmentObject var learningsManager: LearningsManager
     @State private var showingAddRule = false
+    @State private var showingLearningExclusionImporter = false
     @State private var searchText = ""
-    @State private var contentOpacity: Double = 1
+    @State private var contentOpacity: Double = 0
     @State private var newNLException = ""
     @State private var isImprovingException = false
 
@@ -48,24 +51,20 @@ struct ExclusionRulesView: View {
                     EmptyExclusionRulesView(onAddRule: {
                         HapticFeedbackManager.shared.tap()
                         showingAddRule = true
-                    }, onAddSuggestedRule: { type, pattern in
-                        HapticFeedbackManager.shared.success()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            rulesManager.addRule(
-                                ExclusionRule(type: type, pattern: pattern)
-                            )
-                        }
                     })
                     .transition(TransitionStyles.scaleAndFade)
+                    .animatedAppearance(delay: 0.08)
 
                     emptyHeaderView
                         .padding(.horizontal, 32)
+                        .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(NSColor.windowBackgroundColor))
             } else {
                 // Header
                 headerView
+                    .animatedAppearance(delay: 0.03)
 
                 Divider()
 
@@ -76,6 +75,7 @@ struct ExclusionRulesView: View {
                             searchBar
                                 .padding(.horizontal, 20)
                                 .padding(.top, 16)
+                                .animatedAppearance(delay: 0.06)
 
                             // Grouped rules
                             ForEach(Array(groupedRules.enumerated()), id: \.1.0) { index, group in
@@ -99,6 +99,9 @@ struct ExclusionRulesView: View {
                                 .padding(.vertical, 40)
                             }
 
+                            learningExclusionsCard
+                                .animatedAppearance(delay: 0.12)
+
                             // Natural language exceptions
                             naturalLanguageExceptionsCard
                         }
@@ -116,7 +119,19 @@ struct ExclusionRulesView: View {
             AddExclusionRuleView(rulesManager: rulesManager)
                 .modalBounce()
         }
+        .fileImporter(
+            isPresented: $showingLearningExclusionImporter,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: true
+        ) { result in
+            handleLearningExclusionImport(result)
+        }
         .opacity(contentOpacity)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
+        }
     }
     
     private var headerView: some View {
@@ -222,10 +237,68 @@ struct ExclusionRulesView: View {
 
     // MARK: - Natural Language Exceptions
 
+    private var learningExclusionsCard: some View {
+        SettingsCard(title: "Learning Exclusions", icon: "eye.slash", color: .orange) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Folders here are still organized, but they won't teach Sorty anything.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    if let patterns = learningsManager.currentProfile?.learningExclusionPatterns, !patterns.isEmpty {
+                        Button {
+                            presentLearningExclusionImporter()
+                        } label: {
+                            Label("Add Folder", systemImage: "plus")
+                                .font(.caption.bold())
+                        }
+                        .buttonStyle(.onboardingPill(size: .small))
+                        .accessibilityIdentifier("AddLearningExclusionFolderButton")
+                    }
+                }
+
+                if let patterns = learningsManager.currentProfile?.learningExclusionPatterns, !patterns.isEmpty {
+                    VStack(spacing: 6) {
+                        ForEach(patterns, id: \.self) { pattern in
+                            LearningExclusionRow(pattern: pattern, manager: learningsManager)
+                        }
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        Image(systemName: "eye.slash")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.orange.opacity(0.6))
+                            .accessibilityHidden(true)
+                        Text("No folders excluded")
+                            .font(.subheadline.bold())
+                        Text("Exclude folders that should still be organized but shouldn't teach Sorty anything.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 340)
+                        Button {
+                            presentLearningExclusionImporter()
+                        } label: {
+                            Label("Exclude Folder", systemImage: "plus")
+                                .font(.caption.bold())
+                        }
+                        .buttonStyle(.onboardingPill(size: .small))
+                        .accessibilityIdentifier("EmptyStateAddLearningExclusionFolderButton")
+                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity)
+                    .systemLiquidGlassBackground(cornerRadius: 12)
+                }
+            }
+        }
+    }
+
     private var naturalLanguageExceptionsCard: some View {
         SettingsCard(title: "Natural Language Exceptions", icon: "text.bubble", color: .purple) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Describe files the AI should never touch, in plain English. Use Learnings > Controls for learnings-only exclusions.")
+                Text("Describe files the AI should never touch, in plain English.")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
@@ -299,6 +372,37 @@ struct ExclusionRulesView: View {
         }
     }
 
+    private func presentLearningExclusionImporter() {
+        HapticFeedbackManager.shared.tap()
+        showingLearningExclusionImporter = true
+    }
+
+    private func handleLearningExclusionImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            Task {
+                var addedCount = 0
+                for url in urls {
+                    let hasScopedAccess = url.startAccessingSecurityScopedResource()
+                    defer { if hasScopedAccess { url.stopAccessingSecurityScopedResource() } }
+                    let before = learningsManager.currentProfile?.learningExclusionPatterns.count ?? 0
+                    await learningsManager.addLearningExclusion(url.path)
+                    if (learningsManager.currentProfile?.learningExclusionPatterns.count ?? 0) > before {
+                        addedCount += 1
+                    }
+                }
+                if addedCount > 0 {
+                    HapticFeedbackManager.shared.success()
+                } else {
+                    HapticFeedbackManager.shared.error()
+                }
+            }
+        case .failure(let error):
+            DebugLogger.log("Learning exclusion import failed: \(error)")
+            HapticFeedbackManager.shared.error()
+        }
+    }
+
     private func addException() {
         let trimmed = newNLException.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
@@ -335,13 +439,17 @@ struct ExclusionRulesView: View {
 
 struct EmptyExclusionRulesView: View {
     let onAddRule: () -> Void
-    let onAddSuggestedRule: (ExclusionRuleType, String) -> Void
+    @State private var hasAppeared = false
+    @State private var beamHasAppeared = false
 
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "eye.slash.circle")
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
+                .opacity(hasAppeared ? 1 : 0)
+                .scaleEffect(hasAppeared ? 1 : 0.8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text("No Exclusion Rules")
@@ -354,15 +462,9 @@ struct EmptyExclusionRulesView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
             }
-            
-            HStack(spacing: 6) {
-                RuleExamplePill(icon: "doc.badge.gearshape", text: ".DS_Store") {
-                    onAddSuggestedRule(.fileName, ".DS_Store")
-                }
-                RuleExamplePill(icon: "folder", text: "node_modules", useSystemFolderIcon: true) {
-                    onAddSuggestedRule(.folderName, "node_modules")
-                }
-            }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
 
             Button {
                 onAddRule()
@@ -370,9 +472,20 @@ struct EmptyExclusionRulesView: View {
                 Label("Add Rule", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured)
+            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                hasAppeared = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                beamHasAppeared = true
+            }
+        }
     }
 }
 
@@ -481,12 +594,7 @@ struct RuleGroupCard: View {
                 }
             }
         }
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
+        .systemLiquidGlassBackground(cornerRadius: 12)
     }
 }
 
@@ -689,7 +797,7 @@ struct AddExclusionRuleView: View {
                     addRule()
                 }
                 .buttonStyle(.onboardingPill)
-                .onboardingBeamBorder(variant: .featured, active: isValidInput)
+                .onboardingBeamBorder(variant: .warning, active: isValidInput)
                 .disabled(!isValidInput)
                 .keyboardShortcut(.return, modifiers: [.command])
             }
@@ -729,8 +837,7 @@ struct AddExclusionRuleView: View {
                         }
                     }
                     .padding(16)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .systemLiquidGlassBackground(cornerRadius: 12)
                     
                     // Configuration
                     VStack(alignment: .leading, spacing: 12) {
@@ -741,8 +848,7 @@ struct AddExclusionRuleView: View {
                         ruleConfigurationView
                     }
                     .padding(16)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .systemLiquidGlassBackground(cornerRadius: 12)
                     
                     // Description
                     VStack(alignment: .leading, spacing: 8) {
@@ -754,8 +860,7 @@ struct AddExclusionRuleView: View {
                             .textFieldStyle(.roundedBorder)
                     }
                     .padding(16)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .systemLiquidGlassBackground(cornerRadius: 12)
 
                     // Test Section
                     if selectedType.requiresPattern && selectedType != .fileType {
@@ -785,8 +890,7 @@ struct AddExclusionRuleView: View {
                                 .onChange(of: selectedType) { _, _ in checkMatch() }
                         }
                         .padding(16)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .systemLiquidGlassBackground(cornerRadius: 12)
                         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isMatch)
                     }
                     

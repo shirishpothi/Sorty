@@ -14,7 +14,7 @@ struct WatchedFoldersView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
-    @State private var contentOpacity: Double = 1
+    @State private var contentOpacity: Double = 0
     @State private var isDropTargeted = false
     
     // Check if AI is available
@@ -29,19 +29,20 @@ struct WatchedFoldersView: View {
                     EmptyWatchedFoldersView(onAddFolder: {
                         HapticFeedbackManager.shared.tap()
                         showingFolderPicker = true
-                    }, onAddSuggestedFolder: { url in
-                        addWatchedFolder(from: url)
                     })
                     .transition(TransitionStyles.scaleAndFade)
+                    .animatedAppearance(delay: 0.08)
 
                     emptyHeaderView
                         .padding(.horizontal, 32)
+                        .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color(NSColor.windowBackgroundColor))
             } else {
                 // Header
                 headerView
+                    .animatedAppearance(delay: 0.03)
 
                 Divider()
 
@@ -90,6 +91,11 @@ struct WatchedFoldersView: View {
             handleFolderDrop(providers: providers)
         }
         .opacity(contentOpacity)
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                contentOpacity = 1.0
+            }
+        }
         .navigationTitle("Watched Folders")
     }
 
@@ -194,7 +200,7 @@ struct WatchedFoldersView: View {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured)
+            .onboardingBeamBorder(variant: .success)
             .accessibilityIdentifier("AddWatchedFolderButton")
         }
         .padding()
@@ -220,19 +226,17 @@ struct WatchedFoldersView: View {
 
 struct EmptyWatchedFoldersView: View {
     let onAddFolder: () -> Void
-    let onAddSuggestedFolder: (URL) -> Void
-
-    private let suggestions: [(name: String, icon: String, directory: FileManager.SearchPathDirectory)] = [
-        ("Downloads", "arrow.down.circle", .downloadsDirectory),
-        ("Desktop", "menubar.dock.rectangle", .desktopDirectory),
-        ("Documents", "doc.text", .documentDirectory)
-    ]
+    @State private var hasAppeared = false
+    @State private var beamHasAppeared = false
     
     var body: some View {
         VStack(spacing: 24) {
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
+                .opacity(hasAppeared ? 1 : 0)
+                .scaleEffect(hasAppeared ? 1 : 0.8)
+                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text("No Watched Folders")
@@ -245,25 +249,9 @@ struct EmptyWatchedFoldersView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)
             }
-            
-            // Suggestion cards
-            VStack(spacing: 8) {
-                Text("Popular choices:")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                
-                HStack(spacing: 12) {
-                    ForEach(suggestions, id: \.name) { suggestion in
-                        FolderSuggestionPill(name: suggestion.name, icon: suggestion.icon) {
-                            guard let url = FileManager.default.urls(for: suggestion.directory, in: .userDomainMask).first else {
-                                HapticFeedbackManager.shared.error()
-                                return
-                            }
-                            onAddSuggestedFolder(url)
-                        }
-                    }
-                }
-            }
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
 
             Button {
                 onAddFolder()
@@ -271,9 +259,20 @@ struct EmptyWatchedFoldersView: View {
                 Label("Add Folder", systemImage: "folder.badge.plus")
             }
             .buttonStyle(.onboardingPill)
-            .onboardingBeamBorder(variant: .featured)
+            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                hasAppeared = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                beamHasAppeared = true
+            }
+        }
     }
 }
 
@@ -531,7 +530,7 @@ struct WatchedFolderCard: View {
             }
         }
         .font(.caption2)
-        .buttonStyle(.bordered)
+        .buttonStyle(.sortyBordered)
         .controlSize(.mini)
     }
 
@@ -579,7 +578,7 @@ struct WatchedFolderCard: View {
                 Image(systemName: "folder")
                     .font(.caption)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             .controlSize(.small)
             .help("Reveal in Finder")
 
@@ -590,7 +589,7 @@ struct WatchedFolderCard: View {
                 Image(systemName: "slider.horizontal.3")
                     .font(.caption)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             .controlSize(.small)
             .help("Configure")
 
@@ -604,7 +603,7 @@ struct WatchedFolderCard: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             .controlSize(.small)
             .help("Remove")
         }
@@ -786,7 +785,7 @@ struct WatchedFolderConfigView: View {
                     HapticFeedbackManager.shared.success()
                     save()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
             }
             .padding()
             .background(.ultraThinMaterial)

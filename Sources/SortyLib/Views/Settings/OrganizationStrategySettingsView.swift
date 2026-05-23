@@ -107,11 +107,11 @@ struct OrganizationStrategySettingsView: View {
             }
             .animatedAppearance(delay: 0.1)
 
-            // Naming Style Section
-            SettingsCard(title: "Naming Style", icon: "textformat", color: .indigo) {
+            // Renaming Section
+            SettingsCard(title: "Renaming", icon: "textformat", color: .indigo) {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
-                        Picker("Naming Preset", selection: Binding(
+                        Picker("Template", selection: Binding(
                             get: { viewModel.config.selectedNamingPresetId },
                             set: { newId in
                                 viewModel.config.selectedNamingPresetId = newId
@@ -149,7 +149,7 @@ struct OrganizationStrategySettingsView: View {
                         .pickerStyle(.menu)
                         .labelsHidden()
 
-                        Text("Determines how the AI suggests file names.")
+                        Text("Controls how AI names files. Spaces are allowed and often preferred.")
                             .font(.caption)
                             .foregroundColor(.secondary)
 
@@ -163,6 +163,76 @@ struct OrganizationStrategySettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            Picker("Separator", selection: $viewModel.config.renameNamingOptions.separator) {
+                                ForEach(RenameSeparatorPreference.allCases, id: \.self) { separator in
+                                    Text(separator.displayName).tag(separator)
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            Picker("Case", selection: $viewModel.config.renameNamingOptions.caseStyle) {
+                                ForEach(RenameCaseStyle.allCases, id: \.self) { style in
+                                    Text(style.displayName).tag(style)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                        }
+
+                        HStack(spacing: 12) {
+                            Picker("Dates", selection: $viewModel.config.renameNamingOptions.datePolicy) {
+                                ForEach(RenameDatePolicy.allCases, id: \.self) { policy in
+                                    Text(policy.displayName).tag(policy)
+                                }
+                            }
+                            .pickerStyle(.menu)
+
+                            TextField(
+                                "Language",
+                                text: Binding(
+                                    get: { viewModel.config.renameNamingOptions.outputLanguage },
+                                    set: { viewModel.config.renameNamingOptions.outputLanguage = $0.isEmpty ? "English" : $0 }
+                                )
+                            )
+                            .textFieldStyle(.roundedBorder)
+                        }
+
+                        HStack {
+                            Text("Max Length")
+                                .font(.subheadline)
+                            Slider(
+                                value: Binding(
+                                    get: { Double(viewModel.config.renameNamingOptions.maxFilenameLength) },
+                                    set: { viewModel.config.renameNamingOptions.maxFilenameLength = Int($0) }
+                                ),
+                                in: 20...180,
+                                step: 5
+                            )
+                            Text("\(viewModel.config.renameNamingOptions.maxFilenameLength)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundColor(.secondary)
+                                .frame(width: 32, alignment: .trailing)
+                        }
+
+                        HStack(spacing: 8) {
+                            Image(systemName: "sparkles")
+                                .font(.caption)
+                                .foregroundColor(.purple)
+                            Text(viewModel.config.renameNamingOptions.exampleFilename)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(NSColor.controlBackgroundColor))
+                        .cornerRadius(6)
                     }
 
                     // Preview of selected preset instructions
@@ -290,7 +360,7 @@ struct OrganizationStrategySettingsView: View {
                             Button {
                                 showNamingInput = true
                             } label: {
-                                Label("Generate Instructions", systemImage: "wand.and.stars")
+                                Label("Generate Naming Template", systemImage: "wand.and.stars")
                             }
                             .buttonStyle(.onboardingPill(size: .small))
                             .padding(.top, 4)

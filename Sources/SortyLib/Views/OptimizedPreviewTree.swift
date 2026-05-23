@@ -554,6 +554,12 @@ class PreviewStore: ObservableObject {
             }
         }
     }
+
+    func regenerateRename(fileID: UUID, folderID: UUID) {
+        guard let file = findFile(by: fileID) else { return }
+        let candidate = localRenameCandidate(for: file)
+        updateRename(fileID: fileID, folderID: folderID, newName: candidate)
+    }
     
     func revertFolderOrganization(folderID: UUID) {
         var updatedPlan = plan
@@ -652,6 +658,29 @@ class PreviewStore: ObservableObject {
             }
         }
         return nil
+    }
+
+    private func localRenameCandidate(for file: FileItem) -> String {
+        let ext = file.extension
+        let baseCandidate: String
+
+        if let title = file.contentMetadata?.documentTitle, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            baseCandidate = title
+        } else if let keywords = file.contentMetadata?.detectedKeywords, !keywords.isEmpty {
+            baseCandidate = keywords.prefix(4).joined(separator: " ")
+        } else if let preview = file.contentMetadata?.allTextContent, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            baseCandidate = preview.components(separatedBy: .newlines).first ?? preview
+        } else {
+            baseCandidate = (file.displayName as NSString).deletingPathExtension
+                .replacingOccurrences(of: #"(?i)\b(IMG|DSC|Screenshot|Screen Shot|Document|Copy of)[_\s-]*"#, with: "", options: .regularExpression)
+        }
+
+        let rawName = ext.isEmpty ? baseCandidate : "\(baseCandidate).\(ext)"
+        return FilenameNormalizer.normalize(
+            rawName,
+            originalFilename: file.displayName,
+            options: .default
+        ) ?? rawName
     }
 
     private func updateDestinationInFolder(_ folder: FolderSuggestion, targetID: UUID, newDestinationPath: String) -> FolderSuggestion? {
@@ -1129,10 +1158,12 @@ struct FlatFileRowView: View {
     let onPlanChanged: () -> Void
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     
     @State private var isDragging = false
     @State private var isEditingName = false
     @State private var editedName = ""
+    @State private var isRegeneratingName = false
     @FocusState private var isFocused: Bool
     
     private var renameMapping: FileRenameMapping? {
@@ -1160,6 +1191,12 @@ struct FlatFileRowView: View {
     private var isHighlighted: Bool {
         store.highlightedFileID == file.id
     }
+
+    private var unchangedReason: String? {
+        guard let mapping = renameMapping, !mapping.hasRename else { return nil }
+        let trimmed = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -1178,10 +1215,18 @@ struct FlatFileRowView: View {
                         }
                         .font(.body)
                 } else {
-                    Text(file.displayName)
-                        .lineLimit(1)
-                        .strikethrough(renameMapping?.hasRename ?? false, color: .secondary)
-                        .foregroundColor((renameMapping?.hasRename ?? false) ? .secondary : .primary)
+                    if let mapping = renameMapping, mapping.hasRename {
+                        RenameNameChangeView(
+                            originalName: file.displayName,
+                            suggestedName: mapping.suggestedName ?? "",
+                            helpText: renameHelpText(mapping),
+                            isRegenerating: isRegeneratingName
+                        )
+                    } else {
+                        Text(file.displayName)
+                            .lineLimit(1)
+                            .foregroundColor(.primary)
+                    }
                 }
                 
                 Spacer()
@@ -1191,6 +1236,27 @@ struct FlatFileRowView: View {
                         .font(.caption)
                         .foregroundColor(.purple)
                         .help(mapping.renameReason ?? "AI suggested rename")
+
+                    RenameActionGlassCluster(
+                        isRegenerating: isRegeneratingName,
+                        onAccept: {
+                            HapticFeedbackManager.shared.selection()
+                        },
+                        onEdit: {
+                            startEditing(initialValue: mapping.suggestedName ?? "")
+                        },
+                        onRegenerate: {
+                            regenerateSuggestedName()
+                        },
+                        onReject: {
+                            store.rejectRename(fileID: file.id, folderID: parentFolderID)
+                            onPlanChanged()
+                        }
+                    )
+                }
+
+                if let unchangedReason {
+                    RenameReasoningPopoverButton(reason: unchangedReason)
                 }
 
                 if !fileTags.isEmpty {
@@ -1226,39 +1292,6 @@ struct FlatFileRowView: View {
                     .foregroundColor(.secondary.opacity(0.6))
             }
             
-            if let mapping = renameMapping, mapping.hasRename, !isEditingName {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.right")
-                        .font(.caption2)
-                        .foregroundColor(.purple)
-                    
-                    Text(mapping.suggestedName ?? "")
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(.purple)
-                        .lineLimit(1)
-                    
-                    Spacer()
-                    
-                    Button {
-                        startEditing(initialValue: mapping.suggestedName ?? "")
-                    } label: {
-                        Image(systemName: "pencil")
-                    }
-                    .buttonStyle(.plain)
-                    .help("Edit suggested name")
-                    
-                    Button {
-                        store.rejectRename(fileID: file.id, folderID: parentFolderID)
-                        onPlanChanged()
-                    } label: {
-                        Image(systemName: "xmark.circle")
-                    }
-                    .buttonStyle(.plain)
-                    .help("Keep original name")
-                }
-                .padding(.leading, 20)
-            }
         }
         .padding(.leading, CGFloat(depth * 16))
         .padding(.vertical, 4)
@@ -1290,6 +1323,12 @@ struct FlatFileRowView: View {
             Divider()
             
             if let mapping = renameMapping, mapping.hasRename {
+                Button {
+                    regenerateSuggestedName()
+                } label: {
+                    Label("Regenerate Name", systemImage: "arrow.triangle.2.circlepath")
+                }
+
                 Button(role: .destructive) {
                     store.rejectRename(fileID: file.id, folderID: parentFolderID)
                     onPlanChanged()
@@ -1351,9 +1390,165 @@ struct FlatFileRowView: View {
         }
         isEditingName = false
     }
+
+    private func regenerateSuggestedName() {
+        guard !isRegeneratingName else { return }
+        let previousSuggestion = renameMapping?.suggestedName ?? ""
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isRegeneratingName = true
+        }
+        HapticFeedbackManager.shared.selection()
+
+        Task {
+            do {
+                let client = try AIClientFactory.createClient(config: settingsViewModel.config)
+                let plan = try await client.analyze(
+                    files: [file],
+                    customInstructions: renameRegenerationPrompt(),
+                    personaPrompt: nil,
+                    temperature: 0.8
+                )
+                let suggestedName = plan.suggestions
+                    .lazy
+                    .flatMap(\.allFileRenameMappings)
+                    .first { $0.originalFile.id == file.id || $0.originalFile.displayName == file.displayName }?
+                    .suggestedName
+                guard let suggestedName, !suggestedName.isEmpty else {
+                    throw AIClientError.invalidResponseFormat
+                }
+                let normalized = FilenameNormalizer.normalize(
+                    suggestedName,
+                    originalFilename: file.displayName,
+                    options: settingsViewModel.config.renameNamingOptions
+                ) ?? suggestedName
+                let replacementName = distinctRegeneratedName(normalized, previousSuggestion: previousSuggestion)
+
+                await MainActor.run {
+                    store.updateRename(fileID: file.id, folderID: parentFolderID, newName: replacementName)
+                    onPlanChanged()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isRegeneratingName = false
+                    }
+                    HapticFeedbackManager.shared.success()
+                }
+            } catch {
+                await MainActor.run {
+                    let fallbackName = distinctRegeneratedName(
+                        previousSuggestion.isEmpty ? file.displayName : previousSuggestion,
+                        previousSuggestion: previousSuggestion
+                    )
+                    store.updateRename(fileID: file.id, folderID: parentFolderID, newName: fallbackName)
+                    onPlanChanged()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isRegeneratingName = false
+                    }
+                    HapticFeedbackManager.shared.error()
+                }
+            }
+        }
+    }
+
+    private func renameRegenerationPrompt() -> String {
+        let currentSuggestion = renameMapping?.suggestedName ?? "None"
+        let metadata = file.contentMetadata
+        let title = metadata?.documentTitle ?? ""
+        let keywords = metadata?.detectedKeywords?.prefix(8).joined(separator: ", ") ?? ""
+        let contentPreview = String(
+            metadata?.allTextContent?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .prefix(900) ?? ""
+        )
+
+        return """
+        Rename only this one file. Keep it in the current folder.
+
+        Original filename: \(file.displayName)
+        Current suggested filename: \(currentSuggestion)
+        File extension to preserve: \(file.extension)
+        Document title: \(title)
+        Keywords: \(keywords)
+        Content preview:
+        \(contentPreview)
+
+        Requirements:
+        - Return Sorty's normal JSON organization response.
+        - Use a single folder named ".".
+        - Preserve the original file extension.
+        - Make the name specific, useful, and concise.
+        - Spaces are valid if they improve readability.
+        - Do not return the current suggested filename. Generate a meaningfully different name.
+        - Include suggested_name, rename_reason, and rename_confidence for this file.
+        """
+    }
+
+    private func distinctRegeneratedName(_ candidate: String, previousSuggestion: String) -> String {
+        guard candidate.caseInsensitiveCompare(previousSuggestion) == .orderedSame else {
+            return candidate
+        }
+
+        let nsName = candidate as NSString
+        let ext = nsName.pathExtension
+        let base = nsName.deletingPathExtension
+        let revised = "\(base) Revised"
+        return ext.isEmpty ? revised : "\(revised).\(ext)"
+    }
     
     private func cancelRename() {
         isEditingName = false
+    }
+
+    private func renameHelpText(_ mapping: FileRenameMapping) -> String {
+        let reason = mapping.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return reason.isEmpty ? "AI suggested rename" : reason
+    }
+}
+
+private struct RenameActionGlassCluster: View {
+    let isRegenerating: Bool
+    let onAccept: () -> Void
+    let onEdit: () -> Void
+    let onRegenerate: () -> Void
+    let onReject: () -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            RenameGlassIconButton(systemImage: "checkmark.circle", help: "Accept suggested name", action: onAccept)
+            RenameGlassIconButton(systemImage: "pencil", help: "Edit suggested name", action: onEdit)
+            Button(action: onRegenerate) {
+                if isRegenerating {
+                    SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
+                        .frame(width: 16, height: 16)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 16, height: 16)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(isRegenerating)
+            .help("Regenerate name with the selected AI model")
+
+            RenameGlassIconButton(systemImage: "xmark.circle", help: "Keep original name", action: onReject)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .systemLiquidGlassBackground(cornerRadius: 10)
+    }
+}
+
+private struct RenameGlassIconButton: View {
+    let systemImage: String
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 16, height: 16)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
 

@@ -112,7 +112,7 @@ struct AdvancedSettingsView: View {
                             Text("Show Error Logs")
                         }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                 }
             }
             .animatedAppearance(delay: 0.2)

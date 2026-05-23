@@ -86,7 +86,7 @@ struct ScheduleEditorView: View {
                     HapticFeedbackManager.shared.success()
                     save()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .accessibilityIdentifier("SaveScheduleButton")
             }
             .padding()
@@ -192,7 +192,7 @@ struct ScheduleEditorView: View {
                             }
                             .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.sortyBordered)
                         .controlSize(.large)
                     }
                 }

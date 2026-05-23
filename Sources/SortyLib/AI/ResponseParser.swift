@@ -423,7 +423,7 @@ struct ResponseParser {
                 files.append(file)
 
                 // Parse-level safeguard: strip all rename fields in organize-only mode.
-                if mode != .organize, let suggestedName = fileEntry.suggestedName, !suggestedName.isEmpty {
+                if mode != .organize {
                     let clampedConfidence = fileEntry.renameConfidence.map { min(max($0, 0.0), 1.0) }
                     if let confidence = clampedConfidence, confidence < FileRenameMapping.lowConfidenceThreshold {
                         let mapping = FileRenameMapping(
@@ -436,13 +436,17 @@ struct ResponseParser {
                         continue
                     }
 
-                    let mapping = FileRenameMapping(
-                        originalFile: file,
-                        suggestedName: suggestedName,
-                        renameReason: fileEntry.renameReason,
-                        renameConfidence: clampedConfidence
-                    )
-                    renameMappings.append(mapping)
+                    let suggestedName = fileEntry.suggestedName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let renameReason = fileEntry.renameReason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    if !suggestedName.isEmpty || !renameReason.isEmpty || clampedConfidence != nil {
+                        let mapping = FileRenameMapping(
+                            originalFile: file,
+                            suggestedName: suggestedName.isEmpty ? nil : suggestedName,
+                            renameReason: renameReason.isEmpty ? nil : renameReason,
+                            renameConfidence: clampedConfidence
+                        )
+                        renameMappings.append(mapping)
+                    }
                 }
 
                 // Add tags if present

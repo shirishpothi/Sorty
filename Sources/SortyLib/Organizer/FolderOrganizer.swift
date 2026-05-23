@@ -1218,7 +1218,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 }
             }
             self.isStreaming = false
-            self.organizationStage = "Building organization plan..."
+            self.organizationStage = self.aiConfig?.mode == .renameOnly ? "Building rename preview..." : "Building organization plan..."
             self.stopTimeoutTimer()
             self.stopSteadyProgressTask()
         }
@@ -1506,7 +1506,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         }
         if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
             let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
-            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
+            let object = aiConfig?.mode == .renameOnly ? "rename suggestions" : "organization plan"
+            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
         }
 
         if let nlExceptions = exclusionRules?.sanitizedExceptionsForPrompt, !nlExceptions.isEmpty {
@@ -1514,17 +1515,19 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             instructions += "\n\nUSER EXCEPTIONS (must be respected):\n\(exceptionsList)"
         }
 
-        if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+        let isRenameOnly = aiConfig?.mode == .renameOnly
+
+        if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
             DebugLogger.log("Injected Learnings context into prompt")
         }
 
-        if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+        if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
             instructions += "\n\n" + modelDirContext
             DebugLogger.log("Injected Model Directory reference context into prompt")
         }
 
-        if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+        if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             let sourceDir = StorageLocationPathResolver.canonicalPath(directory.path)
             let enabledLocations = storageLocationsManager?.enabledLocations ?? []
 
@@ -1550,7 +1553,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Storage Locations context into prompt")
         }
 
-        if let existingFoldersContext = PromptBuilder.buildExistingFoldersContext(at: directory) {
+        if !isRenameOnly, let existingFoldersContext = PromptBuilder.buildExistingFoldersContext(at: directory) {
             instructions += "\n\n" + existingFoldersContext
             DebugLogger.log("Injected Existing Folders context into prompt")
         }
@@ -1689,7 +1692,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         temperature: Double?,
         imagePayload: [String: Data]
     ) async throws -> OrganizationPlan {
-        updateState(.organizing, stage: "Checking organization plan...", progress: 0.85)
+        updateState(
+            .organizing,
+            stage: aiConfig?.mode == .renameOnly ? "Checking name suggestions..." : "Checking organization plan...",
+            progress: 0.85
+        )
         await MainActor.run {
             isStreaming = false
         }
@@ -1760,7 +1767,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
         }
 
-        return applyRenameRuleConfiguration(to: validatedPlan)
+        return normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
     }
 
     private func applyRenameRuleConfiguration(to plan: OrganizationPlan) -> OrganizationPlan {
@@ -1773,6 +1780,56 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             applyRenameRules(in: $0, rules: config.renameRules, mode: config.renameRuleMode)
         }
         return updatedPlan
+    }
+
+    private func normalizeRenameSuggestions(in plan: OrganizationPlan) -> OrganizationPlan {
+        guard let config = aiConfig else { return plan }
+        guard config.mode == .renameOnly || config.mode == .organizeAndRename else { return plan }
+
+        var updatedPlan = plan
+        updatedPlan.suggestions = updatedPlan.suggestions.map {
+            normalizeRenameSuggestions(in: $0, options: config.renameNamingOptions)
+        }
+        return updatedPlan
+    }
+
+    private func normalizeRenameSuggestions(
+        in folder: FolderSuggestion,
+        options: RenameNamingOptions
+    ) -> FolderSuggestion {
+        var updated = folder
+        var existingNames = Set(updated.files.map(\.displayName))
+
+        for mapping in updated.fileRenameMappings {
+            guard mapping.hasRename, let suggestedName = mapping.suggestedName else { continue }
+            guard let normalized = FilenameNormalizer.normalize(
+                suggestedName,
+                originalFilename: mapping.originalFile.displayName,
+                options: options
+            ) else {
+                updated.updateRename(
+                    for: mapping.originalFile,
+                    newName: nil,
+                    reason: mapping.renameReason,
+                    confidence: mapping.renameConfidence
+                )
+                continue
+            }
+
+            existingNames.remove(mapping.originalFile.displayName)
+            let uniqueName = FilenameNormalizer.uniqued(normalized, against: &existingNames)
+            updated.updateRename(
+                for: mapping.originalFile,
+                newName: uniqueName,
+                reason: mapping.renameReason,
+                confidence: mapping.renameConfidence
+            )
+        }
+
+        updated.subfolders = updated.subfolders.map {
+            normalizeRenameSuggestions(in: $0, options: options)
+        }
+        return updated
     }
 
     private func applyRenameRules(
@@ -2377,7 +2434,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 isStreaming = false
-                currentPlan = applyRenameRuleConfiguration(to: plan)
+                currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: plan))
             }
 
             // Validate plan before auto-apply (with a targeted retry for common validation failures)
@@ -2422,7 +2479,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             await MainActor.run {
-                currentPlan = applyRenameRuleConfiguration(to: validatedPlan)
+                currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
             }
 
             // Auto-apply for incremental
@@ -2596,7 +2653,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
             await MainActor.run {
                 isStreaming = false
-                currentPlan = applyRenameRuleConfiguration(to: plan)
+                currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: plan))
             }
 
             // Validate selected-files plan before apply.
@@ -2625,7 +2682,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 ) {
                     validatedPlan = retryPlan
                     await MainActor.run {
-                        currentPlan = applyRenameRuleConfiguration(to: retryPlan)
+                        currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: retryPlan))
                     }
                 } else {
                     throw validationError
@@ -2633,7 +2690,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
             await MainActor.run {
-                currentPlan = applyRenameRuleConfiguration(to: validatedPlan)
+                currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: validatedPlan))
             }
 
             // Apply the organization
@@ -2662,7 +2719,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let maxFolders = aiConfig?.mode == .renameOnly ? 100 : (aiConfig?.maxTopLevelFolders ?? 10)
         let allowedLocations = storageLocationsManager?.enabledLocations ?? []
         let normalizedPlan = normalizeStorageDestinations(in: currentPlan, allowedLocations: allowedLocations, sourceDirectoryURL: baseURL)
-        let planToApply = applyRenameRuleConfiguration(to: normalizedPlan)
+        let planToApply = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: normalizedPlan))
         self.currentPlan = planToApply
         try validator.validate(
             planToApply,
@@ -2842,19 +2899,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         
         let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
         
+        let isRenameOnly = tempConfig.mode == .renameOnly
         var instructions = customInstructions ?? self.customInstructions
-        if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+        if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
             instructions += "\n\n" + learnedContext
         }
-        if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+        if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
             instructions += "\n\n" + modelDirContext
         }
-        if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+        if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             instructions += "\n\n" + storageContext
         }
         if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
             let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
-            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
+            let object = isRenameOnly ? "rename suggestions" : "organization plan"
+            instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
         }
         
         let plan = try await tempClient.analyze(
@@ -2963,7 +3022,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             insightsCache = nil
         }
         
-        updateState(.organizing, stage: "Getting a new plan from \(provider.displayName)...", progress: 0.3)
+        let providerStage = aiConfig?.mode == .renameOnly
+            ? "Getting new names from \(provider.displayName)..."
+            : "Getting a new plan from \(provider.displayName)..."
+        updateState(.organizing, stage: providerStage, progress: 0.3)
         
         do {
             var newPlan = try await generatePlanWithProvider(files: files, provider: provider)
@@ -2990,7 +3052,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         self.planHistory.removeFirst()
                     }
                 }
-                self.currentPlan = applyRenameRuleConfiguration(to: newPlan)
+                self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
         } catch {
@@ -3020,7 +3082,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 insightsCache = nil
                 errorMessage = nil
                 elapsedTime = 0
-                organizationStage = "Restarting analysis with \(provider.displayName) (\(model))..."
+                let noun = aiConfig?.mode == .renameOnly ? "rename analysis" : "analysis"
+                organizationStage = "Restarting \(noun) with \(provider.displayName) (\(model))..."
                 progress = 0.08
             }
 
@@ -3058,7 +3121,10 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             insightsCache = nil
         }
         
-        updateState(.organizing, stage: "Getting a new plan from \(provider.displayName) (\(model))...", progress: 0.3)
+        let modelStage = aiConfig?.mode == .renameOnly
+            ? "Getting new names from \(provider.displayName) (\(model))..."
+            : "Getting a new plan from \(provider.displayName) (\(model))..."
+        updateState(.organizing, stage: modelStage, progress: 0.3)
         await MainActor.run {
             isStreaming = true
         }
@@ -3092,7 +3158,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         self.planHistory.removeFirst()
                     }
                 }
-                self.currentPlan = applyRenameRuleConfiguration(to: newPlan)
+                self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
         } catch {
@@ -3145,7 +3211,12 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             allFiles = exclusionRules.filterFiles(allFiles)
         }
 
-        updateState(.organizing, stage: "Generating a new organization plan...", progress: 0.3)
+        let isRenameOnly = aiConfig?.mode == .renameOnly
+        updateState(
+            .organizing,
+            stage: isRenameOnly ? "Generating new filename suggestions..." : "Generating a new organization plan...",
+            progress: 0.3
+        )
         await MainActor.run {
             isStreaming = true
         }
@@ -3168,7 +3239,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     plan: currentPlan,
                     success: false,
                     status: .skipped,
-                    errorMessage: "User requested different organization",
+                    errorMessage: isRenameOnly ? "User requested different filename suggestions" : "User requested different organization",
                     rawAIResponse: streamingContent.isEmpty ? nil : streamingContent
                 )
                 history.addEntry(skippedEntry)
@@ -3196,21 +3267,22 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             let personaPrompt = personaManager?.getPrompt(for: personaManager?.selectedPersona ?? .general)
             
             var instructions = customInstructions
-            if let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
+            if !isRenameOnly, let learnedContext = learningsManager?.generatePromptContext(), !learnedContext.isEmpty {
                 instructions += "\n\n" + learnedContext
             }
 
-            if let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
+            if !isRenameOnly, let modelDirContext = learningsManager?.generateModelDirectoryContext(), !modelDirContext.isEmpty {
                 instructions += "\n\n" + modelDirContext
             }
             
             // Add Storage Locations context
-            if let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
+            if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
                 instructions += "\n\n" + storageContext
             }
             if let activeRules = exclusionRules?.rules.filter({ $0.isEnabled }), !activeRules.isEmpty {
                 let excludedPatterns = activeRules.map { "- \($0.displayDescription)" }.joined(separator: "\n")
-                instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your organization plan completely respects these exclusions."
+                let object = isRenameOnly ? "rename suggestions" : "organization plan"
+                instructions += "\n\nIMPORTANT: The following patterns are STRICTLY EXCLUDED and must NOT be moved, renamed, or modified:\n\(excludedPatterns)\nEnsure your \(object) completely respects these exclusions."
             }
             
             var newPlan = try await client.analyze(files: allFiles, customInstructions: instructions, personaPrompt: personaPrompt, temperature: nil)
@@ -3239,7 +3311,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                         self.planHistory.removeFirst()
                     }
                 }
-                self.currentPlan = applyRenameRuleConfiguration(to: newPlan)
+                self.currentPlan = normalizeRenameSuggestions(in: applyRenameRuleConfiguration(to: newPlan))
                 transition(to: .ready)
             }
 

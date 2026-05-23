@@ -117,6 +117,55 @@ struct LiquidGlassReasoningPopover: View {
     }
 }
 
+struct RenameReasoningPopoverButton: View {
+    let reason: String
+    var help: String = "View why the filename was kept"
+
+    @State private var showPopover = false
+
+    var body: some View {
+        Button {
+            showPopover.toggle()
+        } label: {
+            Image(systemName: "brain")
+                .font(.caption2)
+                .foregroundStyle(showPopover ? Color.purple : Color.secondary)
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel("AI reasoning")
+        .accessibilityHint(help)
+        .popover(isPresented: $showPopover, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "brain")
+                        .font(.caption)
+                        .foregroundStyle(.purple)
+
+                    Text("AI Reasoning")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+                }
+
+                FormattedReasoningText(
+                    text: FeatureFlags.privacyModeEnabled ? PrivacyPathMasker.redactedText(reason) : reason,
+                    font: .callout,
+                    secondaryFont: .caption,
+                    foregroundStyle: .primary
+                )
+                .frame(maxWidth: 280, alignment: .leading)
+            }
+            .padding(12)
+            .frame(width: 320)
+            .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+    }
+}
+
 #Preview("Liquid Glass - AI Reasoning") {
     let suggestion = FolderSuggestion(
         folderName: "Documents",

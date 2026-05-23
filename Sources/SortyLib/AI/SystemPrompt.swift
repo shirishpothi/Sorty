@@ -71,6 +71,7 @@ These updates are for reasoning insight only:
 - Mention observed signals (themes, naming patterns, constraints, hierarchy choices).
 - Do NOT state explicit file-to-folder moves here (forbidden: "Assigning X to Y", "Moving X to Y").
 - File-to-folder mappings belong only in the JSON structure that powers live organization.
+- In Rename Only mode, file progress lines may show rename progress as ">> file: old.ext -> new.ext" when you are confident.
 Keep each line under 90 characters. Reference real file/folder names whenever possible.
 Do NOT repeat the same update with different wording.
 Example:
@@ -83,6 +84,7 @@ Example:
 After reasoning/planning/discovery updates and immediately before the first "{", you MUST emit this exact cue line:
 >> general: Ready to output organization structure.
 After that cue line, output the JSON response immediately. Do NOT emit >> lines after the JSON begins.
+\(Self.streamingOutputSection(for: mode))
 
 ## Output Format (STRICT)
 Return valid JSON as the final output. The only allowed preamble is the >> progress lines above. No markdown, no explanations.
@@ -160,6 +162,20 @@ Before outputting, verify ALL of the following:
     /// Legacy static prompt for backward compatibility
     static let prompt = buildPrompt(maxTopLevelFolders: 10, mode: .organize, enableTagging: true)
 
+    /// Returns streaming-friendly JSON ordering guidance for organization modes.
+    private static func streamingOutputSection(for mode: OrganizationMode) -> String {
+        guard mode != .renameOnly else { return "" }
+
+        return """
+
+        For the live organization UI, the JSON stream itself powers file movement:
+        - Emit each folder object with this key order: "name", "description", optional folder metadata, "files", then "subfolders".
+        - Once a destination folder name is chosen, emit its file objects immediately and one by one in that folder's "files" array.
+        - Do NOT emit synthetic file-move progress lines after JSON starts, and do NOT pause to make movement animations visible.
+        - The app will animate file moves from the streamed JSON tokens as they arrive.
+        """
+    }
+
     /// Returns the tagging/comments section or a directive to omit them
     private static func taggingSection(enabled: Bool) -> String {
         if enabled {
@@ -210,8 +226,8 @@ Before outputting, verify ALL of the following:
                   "tags": ["Blue"],
                   "comment": "Brief folder summary",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "subfolders": [...],
-                  "files": [{"filename": "file.ext", "tags": ["Tag1", "Tag2"], "comment": "Brief description"}]
+                  "files": [{"filename": "file.ext", "tags": ["Tag1", "Tag2"], "comment": "Brief description"}],
+                  "subfolders": [...]
                 }
               ],
               "unorganized": [{"filename": "file.ext", "reason": "Why unorganized"}],
@@ -226,8 +242,8 @@ Before outputting, verify ALL of the following:
                   "name": "FolderName",
                   "description": "Purpose",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "subfolders": [...],
-                  "files": [{"filename": "file.ext"}]
+                  "files": [{"filename": "file.ext"}],
+                  "subfolders": [...]
                 }
               ],
               "unorganized": [{"filename": "file.ext", "reason": "Why unorganized"}],
@@ -274,8 +290,8 @@ Before outputting, verify ALL of the following:
                   "tags": ["Blue"],
                   "comment": "Brief folder summary",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "subfolders": [...],
-                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95, "tags": ["Purple", "Photo"], "comment": "Landscape photo of Golden Gate Bridge"}]
+                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95, "tags": ["Purple", "Photo"], "comment": "Landscape photo of Golden Gate Bridge"}],
+                  "subfolders": [...]
                 }
               ],
               "unorganized": [{"filename": "file.ext", "reason": "Why unorganized"}],
@@ -290,8 +306,8 @@ Before outputting, verify ALL of the following:
                   "name": "FolderName",
                   "description": "Purpose",
                   "rule_id": "id-from-learnings-context-if-applicable",
-                  "subfolders": [...],
-                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95}]
+                  "files": [{"filename": "IMG_1234.jpg", "suggested_name": "Golden Gate Sunset.jpg", "rename_reason": "Descriptive name based on content", "rename_confidence": 0.95}],
+                  "subfolders": [...]
                 }
               ],
               "unorganized": [{"filename": "file.ext", "reason": "Why unorganized"}],
@@ -328,8 +344,9 @@ Before outputting, verify ALL of the following:
             - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
             - Include dates (YYYY-MM-DD) when relevant, max 60 chars, preserve extension, valid macOS chars only.
             - For each renamed file object, include "rename_confidence" from 0.0 to 1.0.
-            - Renaming is optional per file. If the original name is already clear and specific, keep it unchanged.
-            - Only include "suggested_name" and "rename_reason" for files that truly need renaming.
+            - Renaming is optional per file. If the original name is already clear and specific, or user instructions say not to rename a file/pattern, keep it unchanged.
+            - When keeping a file unchanged, omit "suggested_name" and include a short "rename_reason" explaining why it stayed the same.
+            - Only include "suggested_name" for files that truly need renaming.
             - "rename_reason" must cite concrete evidence (content clues, date/project context, or ambiguity resolved). Avoid vague reasons like "more descriptive".
             - Keep naming patterns consistent within the same folder (same date/subject/token style).
             - Do NOT rename files that should remain stable: .gitignore, .env, Makefile, source files tied to imports.
@@ -348,8 +365,9 @@ Before outputting, verify ALL of the following:
             - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
             - Include dates (YYYY-MM-DD) when relevant, max 60 chars, preserve extension, valid macOS chars only.
             - For each renamed file object, include "rename_confidence" from 0.0 to 1.0.
-            - Renaming is optional per file. If the original name is already clear and specific, keep it unchanged.
-            - Only include "suggested_name" and "rename_reason" for files that truly need renaming.
+            - Renaming is optional per file. If the original name is already clear and specific, or user instructions say not to rename a file/pattern, keep it unchanged.
+            - When keeping a file unchanged, omit "suggested_name" and include a short "rename_reason" explaining why it stayed the same.
+            - Only include "suggested_name" for files that truly need renaming.
             - "rename_reason" must cite concrete evidence (content clues, date/project context, or ambiguity resolved). Avoid vague reasons like "more descriptive".
             - Keep naming patterns consistent within the same folder (same date/subject/token style).
             - Do NOT rename files that should remain stable: .gitignore, .env, Makefile, source files tied to imports.

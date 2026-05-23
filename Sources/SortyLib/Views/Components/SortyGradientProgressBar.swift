@@ -34,7 +34,7 @@ private enum SortyBeamPalette {
     static let cool = primary
 
     static var trackFill: some ShapeStyle {
-        Color.white.opacity(0.095)
+        Color.white.opacity(0.055)
     }
 
     static var trackStroke: some ShapeStyle {
@@ -48,10 +48,9 @@ private enum SortyBeamPalette {
     static var barGradient: LinearGradient {
         LinearGradient(
             stops: [
-                .init(color: primary.opacity(0.22), location: 0.0),
-                .init(color: primary.opacity(0.58), location: 0.50),
-                .init(color: primary.opacity(0.92), location: 0.82),
-                .init(color: primary.opacity(0.98), location: 1.0),
+                .init(color: primary.opacity(0.88), location: 0.0),
+                .init(color: primary.opacity(0.98), location: 0.48),
+                .init(color: primary.opacity(0.90), location: 1.0),
             ],
             startPoint: .leading,
             endPoint: .trailing
@@ -101,39 +100,17 @@ struct SortyGradientProgressBar: View {
                         .fill(SortyBeamPalette.barGradient)
                         .overlay(
                             Capsule(style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                colors: [SortyBeamPalette.primary.opacity(0.18), .clear],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
+                                .inset(by: max(1, height * 0.14))
+                                .fill(.white.opacity(0.18))
+                                .frame(height: max(1.5, height * 0.20)),
+                            alignment: .top
                         )
                         .frame(width: fillWidth)
-                        .shadow(color: SortyBeamPalette.warm.opacity(0.28), radius: 8, x: 0, y: 0)
-
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    SortyBeamPalette.primary.opacity(0.98),
-                                    SortyBeamPalette.primary.opacity(0.62),
-                                    SortyBeamPalette.primary.opacity(0.18),
-                                    .clear
-                                ],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: height * 1.15
-                            )
-                        )
-                        .frame(width: height * 1.9, height: height * 1.9)
-                        .shadow(color: SortyBeamPalette.primary.opacity(0.56), radius: height * 0.32)
-                        .shadow(color: SortyBeamPalette.cool.opacity(0.88), radius: height * 0.75)
-                        .shadow(color: SortyBeamPalette.warm.opacity(0.45), radius: height * 1.7)
-                        .offset(x: max(0, fillWidth - (height * 0.95)))
-                        .opacity(reduceMotion ? 0.85 : 1)
+                        .shadow(color: SortyBeamPalette.primary.opacity(0.22), radius: height * 0.65, x: 0, y: 0)
+                        .shadow(color: SortyBeamPalette.primary.opacity(0.16), radius: height * 1.05, x: 0, y: 0)
                 }
             }
+            .clipShape(Capsule(style: .continuous))
         }
         .frame(height: height)
         .animation(.easeInOut(duration: 0.25), value: clampedProgress)

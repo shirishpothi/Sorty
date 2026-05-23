@@ -186,7 +186,7 @@ struct AutomationSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.sortyBordered)
             }
         }
     }

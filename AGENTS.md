@@ -2,7 +2,7 @@
 
 - Native SwiftUI macOS 15+ folder organizer, Swift 6, SPM plus `Sorty.xcodeproj`.
 - Fast loop: `make dev` builds debug without tests; `make now` builds debug and launches; `make harness[-settings|-organize]` launches targeted harnesses.
-- Quality gates: `make build` full build with tests, `make test` unit tests, `make test-full` coverage, `make ci` local CI, `make ci-report` reports status.
+- Quality gates run on Blacksmith by default; push changes and use GitHub/Blacksmith checks for `make build`, `make test`, `make test-full`, and `make ci` unless the user explicitly asks for local testing.
 - Single test: `swift test --disable-sandbox --filter SortyTests.TestClass/testMethod`; use `make test-ui` only to confirm UI tests are currently disabled.
 - No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused tests, and `make ci`.
 - Xcode: open `Sorty.xcodeproj`, run `Sorty`; build `SortyFinderSync` separately when changing Finder integration or target membership.

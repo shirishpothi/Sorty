@@ -409,6 +409,9 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
                 switch op.type {
                 case .moveFile:
                     filesMoved += 1
+                    if op.metadata?.newFilename != nil {
+                        filesRenamed += 1
+                    }
                 case .renameFile:
                     filesRenamed += 1
                 case .tagFile:

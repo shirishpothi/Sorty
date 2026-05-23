@@ -101,7 +101,7 @@ struct InternetAccessPolicyView: View {
                         HapticFeedbackManager.shared.tap()
                         openURL(websiteURL)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                     .trackHoveredURL(websiteURL)
                     .scaleEffect(websiteHovered ? 1.03 : 1.0)
                     .onHover { hovering in

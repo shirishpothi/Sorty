@@ -373,7 +373,7 @@ struct LiquidGlassPopover: View {
                     Button("Dismiss") {
                         controller.dismiss()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered)
                 }
                 .frame(maxWidth: .infinity, minHeight: 150)
                 .padding()
@@ -488,7 +488,7 @@ struct LiquidGlassPopover: View {
                         } label: {
                             Label("Apply", systemImage: "checkmark")
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.sortyProminent(intent: .success))
                         .keyboardShortcut(.defaultAction)
                     }
                 }

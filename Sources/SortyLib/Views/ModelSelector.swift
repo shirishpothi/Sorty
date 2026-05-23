@@ -551,7 +551,7 @@ struct ModelSelectionPopover: View {
                     showCustomInput = false
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.sortyBordered)
             .controlSize(.small)
             .disabled(customModelText.isEmpty)
             
@@ -596,7 +596,7 @@ struct ModelSelectionPopover: View {
                 isPresented = false
             }
             .keyboardShortcut(.return, modifiers: [])
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.sortyProminent)
             .disabled(selectedModel.isEmpty)
         }
         .padding(.horizontal, 14)

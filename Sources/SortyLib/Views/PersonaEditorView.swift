@@ -57,7 +57,7 @@ struct PersonaEditorView: View {
                     savePersona()
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.sortyProminent)
                 .disabled(name.isEmpty)
                 .keyboardShortcut(.return)
             }
@@ -112,18 +112,18 @@ struct PersonaEditorView: View {
                                 Button("Insert Template") {
                                     insertTemplate()
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.sortyBordered)
                                 
                                 Button(action: { showingGenerator = true }) {
                                     Label("Generate with AI", systemImage: "sparkles")
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.sortyBordered)
                                 .disabled(generator.isGenerating)
                                 
                                 Button(action: { showingChat = true }) {
                                     Label("Test Persona", systemImage: "bubble.left.and.bubble.right")
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.sortyBordered)
                                 .disabled(promptModifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                                 
                                 Spacer()
@@ -203,7 +203,7 @@ struct PersonaEditorView: View {
                                 }
                             }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.sortyProminent)
                         .disabled(generationInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }

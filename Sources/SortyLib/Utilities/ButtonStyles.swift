@@ -9,6 +9,137 @@ import SwiftUI
 
 import Beam
 
+public enum SortyButtonIntent: Equatable {
+    case primary
+    case secondary
+    case success
+    case warning
+    case info
+    case destructive
+
+    var accent: Color {
+        switch self {
+        case .primary:
+            return SortyDesignSystem.Colors.resolvedAccent
+        case .secondary:
+            return .secondary
+        case .success:
+            return SortyDesignSystem.Colors.success
+        case .warning:
+            return SortyDesignSystem.Colors.warning
+        case .info:
+            return SortyDesignSystem.Colors.info
+        case .destructive:
+            return SortyDesignSystem.Colors.error
+        }
+    }
+}
+
+/// Standard app button style for regular controls, with semantic tint variants.
+public struct SortyStandardButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    var intent: SortyButtonIntent
+    var isProminent: Bool
+    var size: ControlSize
+
+    public init(
+        intent: SortyButtonIntent = .secondary,
+        isProminent: Bool = false,
+        size: ControlSize = .regular
+    ) {
+        self.intent = intent
+        self.isProminent = isProminent
+        self.size = size
+    }
+
+    public func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        let resolvedIntent = resolvedIntent(for: configuration)
+        let accent = resolvedIntent.accent
+        let radius = size == .small ? 7.0 : 8.0
+
+        configuration.label
+            .font(.system(size: fontSize, weight: isProminent ? .semibold : .medium))
+            .lineLimit(1)
+            .foregroundStyle(foregroundStyle(intent: resolvedIntent, accent: accent))
+            .padding(.horizontal, horizontalPadding)
+            .padding(.vertical, verticalPadding)
+            .background {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(backgroundStyle(accent: accent, isPressed: pressed))
+            }
+            .systemLiquidGlassBackground(cornerRadius: radius)
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .strokeBorder(borderStyle(intent: resolvedIntent, accent: accent), lineWidth: isProminent ? 1.15 : 1)
+            }
+            .scaleEffect(pressed ? 0.975 : 1)
+            .opacity(isEnabled ? 1 : 0.52)
+            .animation(.easeOut(duration: 0.12), value: pressed)
+            .onChange(of: pressed) { _, newValue in
+                if newValue {
+                    if resolvedIntent == .destructive {
+                        HapticFeedbackManager.shared.error()
+                    } else {
+                        HapticFeedbackManager.shared.tap()
+                    }
+                }
+            }
+    }
+
+    private var fontSize: CGFloat {
+        switch size {
+        case .mini: return 11
+        case .small: return 12
+        case .large, .extraLarge: return 15
+        default: return 14
+        }
+    }
+
+    private var horizontalPadding: CGFloat {
+        switch size {
+        case .mini: return 10
+        case .small: return 12
+        case .large, .extraLarge: return 20
+        default: return 16
+        }
+    }
+
+    private var verticalPadding: CGFloat {
+        switch size {
+        case .mini: return 4
+        case .small: return 6
+        case .large, .extraLarge: return 11
+        default: return 9
+        }
+    }
+
+    private func resolvedIntent(for configuration: Configuration) -> SortyButtonIntent {
+        configuration.role == .destructive ? .destructive : intent
+    }
+
+    private func foregroundStyle(intent: SortyButtonIntent, accent: Color) -> some ShapeStyle {
+        isProminent ? AnyShapeStyle(.white) : AnyShapeStyle(intent == .secondary ? Color.primary : accent)
+    }
+
+    private func backgroundStyle(accent: Color, isPressed: Bool) -> some ShapeStyle {
+        if isProminent {
+            return AnyShapeStyle(accent.opacity(isPressed ? 0.78 : 0.9))
+        }
+
+        return AnyShapeStyle(Color.clear)
+    }
+
+    private func borderStyle(intent: SortyButtonIntent, accent: Color) -> some ShapeStyle {
+        if isProminent {
+            return AnyShapeStyle(Color.white.opacity(0.24))
+        }
+
+        return AnyShapeStyle(accent.opacity(intent == .secondary ? 0.24 : 0.38))
+    }
+}
+
 /// Primary pill-shaped button style used for main actions
 public struct SortyPrimaryButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
@@ -361,10 +492,12 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
 
     var isPaused: Bool
+    var usesSubtleIdleBeam: Bool
     @State private var isHovering = false
 
-    public init(isPaused: Bool = false) {
+    public init(isPaused: Bool = false, usesSubtleIdleBeam: Bool = false) {
         self.isPaused = isPaused
+        self.usesSubtleIdleBeam = usesSubtleIdleBeam
     }
 
     public func makeBody(configuration: Configuration) -> some View {
@@ -382,6 +515,7 @@ public struct MetalFxPrimaryButtonStyle: ButtonStyle {
                     isHovering: isHovering,
                     isEnabled: isEnabled,
                     isPaused: isPaused,
+                    usesSubtleIdleBeam: usesSubtleIdleBeam,
                     colorScheme: colorScheme
                 )
             }
@@ -414,7 +548,16 @@ private struct MetalFxPillSurface: View {
     let isHovering: Bool
     let isEnabled: Bool
     let isPaused: Bool
+    let usesSubtleIdleBeam: Bool
     let colorScheme: ColorScheme
+
+    private var isIntensified: Bool {
+        isHovering || isPressed
+    }
+
+    private var idleBeamOpacity: Double {
+        usesSubtleIdleBeam && !isIntensified ? 0.42 : 1.0
+    }
 
     var body: some View {
         SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30, paused: isPaused || !isEnabled)) { timeline in
@@ -431,9 +574,10 @@ private struct MetalFxPillSurface: View {
                             center: .center,
                             angle: .degrees(time * 52)
                         ),
-                        lineWidth: isHovering ? 3.2 : 2.6
+                        lineWidth: isIntensified ? 3.2 : 1.6
                     )
                     .blur(radius: 0.35)
+                    .opacity(idleBeamOpacity)
 
                 Capsule()
                     .strokeBorder(
@@ -450,12 +594,13 @@ private struct MetalFxPillSurface: View {
                     )
 
                 movingCatchlight(time: time)
+                    .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
 
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(isPressed ? 0.08 : (isHovering ? 0.16 : 0.11)),
+                                Color.white.opacity(isPressed ? 0.08 : (isHovering ? 0.16 : (usesSubtleIdleBeam ? 0.08 : 0.11))),
                                 Color.clear,
                                 Color.black.opacity(isPressed ? 0.22 : 0.13)
                             ],
@@ -543,11 +688,19 @@ extension ButtonStyle where Self == OnboardingPillButtonStyle {
 public enum OnboardingBeamBorderVariant {
     case standard
     case featured
+    case info
+    case success
+    case warning
+    case destructive
 
     var palette: BeamPalette {
         switch self {
         case .standard: return .colorful
         case .featured: return .sunset
+        case .info: return .ocean
+        case .success: return .ocean
+        case .warning: return .sunset
+        case .destructive: return .sunset
         }
     }
 
@@ -555,6 +708,10 @@ public enum OnboardingBeamBorderVariant {
         switch self {
         case .standard: return 0.86
         case .featured: return 1.0
+        case .info: return 0.9
+        case .success: return 0.92
+        case .warning: return 0.96
+        case .destructive: return 1.0
         }
     }
 
@@ -562,6 +719,10 @@ public enum OnboardingBeamBorderVariant {
         switch self {
         case .standard: return 1.8
         case .featured: return 3.0
+        case .info: return 2.2
+        case .success: return 2.3
+        case .warning: return 2.8
+        case .destructive: return 3.0
         }
     }
 
@@ -569,6 +730,10 @@ public enum OnboardingBeamBorderVariant {
         switch self {
         case .standard: return 0.82
         case .featured: return 0.96
+        case .info: return 0.86
+        case .success: return 0.88
+        case .warning: return 0.92
+        case .destructive: return 0.96
         }
     }
 }
@@ -712,6 +877,54 @@ private struct OnboardingBeamBorder: View {
                 .init(color: .clear, location: 0.60),
                 .init(color: .clear, location: 1.00),
             ]
+        case .info:
+            return [
+                .init(color: .clear, location: 0.00),
+                .init(color: .clear, location: 0.08),
+                .init(color: Color(red: 0.08, green: 0.62, blue: 1.0).opacity(0.58), location: 0.16),
+                .init(color: Color(red: 0.26, green: 0.32, blue: 1.0).opacity(0.66), location: 0.25),
+                .init(color: .white.opacity(0.90), location: 0.32),
+                .init(color: Color(red: 0.18, green: 0.82, blue: 1.0).opacity(0.54), location: 0.40),
+                .init(color: Color(red: 0.50, green: 0.33, blue: 1.0).opacity(0.38), location: 0.49),
+                .init(color: .clear, location: 0.60),
+                .init(color: .clear, location: 1.00),
+            ]
+        case .success:
+            return [
+                .init(color: .clear, location: 0.00),
+                .init(color: .clear, location: 0.08),
+                .init(color: Color(red: 0.20, green: 0.82, blue: 0.36).opacity(0.58), location: 0.16),
+                .init(color: Color(red: 0.12, green: 0.72, blue: 0.58).opacity(0.66), location: 0.25),
+                .init(color: .white.opacity(0.90), location: 0.32),
+                .init(color: Color(red: 0.70, green: 0.94, blue: 0.28).opacity(0.48), location: 0.40),
+                .init(color: Color(red: 0.05, green: 0.58, blue: 0.78).opacity(0.34), location: 0.49),
+                .init(color: .clear, location: 0.60),
+                .init(color: .clear, location: 1.00),
+            ]
+        case .warning:
+            return [
+                .init(color: .clear, location: 0.00),
+                .init(color: .clear, location: 0.08),
+                .init(color: Color(red: 1.0, green: 0.76, blue: 0.18).opacity(0.62), location: 0.16),
+                .init(color: Color(red: 1.0, green: 0.48, blue: 0.12).opacity(0.72), location: 0.25),
+                .init(color: .white.opacity(0.92), location: 0.32),
+                .init(color: Color(red: 1.0, green: 0.26, blue: 0.10).opacity(0.58), location: 0.40),
+                .init(color: Color(red: 0.92, green: 0.18, blue: 0.50).opacity(0.36), location: 0.49),
+                .init(color: .clear, location: 0.60),
+                .init(color: .clear, location: 1.00),
+            ]
+        case .destructive:
+            return [
+                .init(color: .clear, location: 0.00),
+                .init(color: .clear, location: 0.08),
+                .init(color: Color(red: 1.0, green: 0.18, blue: 0.26).opacity(0.68), location: 0.16),
+                .init(color: Color(red: 0.90, green: 0.08, blue: 0.34).opacity(0.74), location: 0.25),
+                .init(color: .white.opacity(0.92), location: 0.32),
+                .init(color: Color(red: 1.0, green: 0.32, blue: 0.12).opacity(0.54), location: 0.40),
+                .init(color: Color(red: 0.66, green: 0.12, blue: 0.42).opacity(0.40), location: 0.49),
+                .init(color: .clear, location: 0.60),
+                .init(color: .clear, location: 1.00),
+            ]
         }
     }
 
@@ -744,7 +957,7 @@ private struct OnboardingBeamBorder: View {
 
     private var interiorGlowSpots: [InteriorGlowSpot] {
         switch variant {
-        case .standard:
+        case .standard, .info, .success:
             return [
                 InteriorGlowSpot(x: 0.02, y: 0.68, width: 9, height: 18, color: Color(red: 0.20, green: 0.78, blue: 0.31), opacity: 0.18, activeOpacity: 0.26),
                 InteriorGlowSpot(x: 0.02, y: 0.68, width: 4, height: 8, color: Color(red: 0.12, green: 0.73, blue: 0.67), opacity: 0.18, activeOpacity: 0.25),
@@ -753,7 +966,7 @@ private struct OnboardingBeamBorder: View {
                 InteriorGlowSpot(x: 1.00, y: 0.27, width: 10, height: 17, color: Color(red: 0.94, green: 0.20, blue: 0.71), opacity: 0.13, activeOpacity: 0.20),
                 InteriorGlowSpot(x: 1.00, y: 0.27, width: 11, height: 12, color: Color(red: 1.0, green: 0.20, blue: 0.39), opacity: 0.14, activeOpacity: 0.21),
             ]
-        case .featured:
+        case .featured, .warning, .destructive:
             return [
                 InteriorGlowSpot(x: 0.02, y: 0.68, width: 9, height: 18, color: Color(red: 1.0, green: 0.70, blue: 0.20), opacity: 0.18, activeOpacity: 0.27),
                 InteriorGlowSpot(x: 0.02, y: 0.68, width: 4, height: 8, color: Color(red: 1.0, green: 0.58, blue: 0.16), opacity: 0.18, activeOpacity: 0.25),
@@ -793,6 +1006,30 @@ extension ButtonStyle where Self == TintedPillButtonStyle {
     }
 }
 
+extension ButtonStyle where Self == SortyStandardButtonStyle {
+    public static var sortyBordered: SortyStandardButtonStyle {
+        SortyStandardButtonStyle()
+    }
+
+    public static var sortyProminent: SortyStandardButtonStyle {
+        SortyStandardButtonStyle(intent: .primary, isProminent: true)
+    }
+
+    public static func sortyBordered(
+        intent: SortyButtonIntent = .secondary,
+        size: ControlSize = .regular
+    ) -> SortyStandardButtonStyle {
+        SortyStandardButtonStyle(intent: intent, size: size)
+    }
+
+    public static func sortyProminent(
+        intent: SortyButtonIntent = .primary,
+        size: ControlSize = .regular
+    ) -> SortyStandardButtonStyle {
+        SortyStandardButtonStyle(intent: intent, isProminent: true, size: size)
+    }
+}
+
 extension ButtonStyle where Self == SortyPrimaryButtonStyle {
     public static var sortyPrimary: SortyPrimaryButtonStyle { SortyPrimaryButtonStyle() }
     public static func sortyPrimary(isSecondary: Bool = false, size: ControlSize = .regular) -> SortyPrimaryButtonStyle {
@@ -814,8 +1051,11 @@ extension ButtonStyle where Self == SortyDestructiveButtonStyle {
 extension ButtonStyle where Self == MetalFxPrimaryButtonStyle {
     public static var metalFxPrimary: MetalFxPrimaryButtonStyle { MetalFxPrimaryButtonStyle() }
 
-    public static func metalFxPrimary(isPaused: Bool = false) -> MetalFxPrimaryButtonStyle {
-        MetalFxPrimaryButtonStyle(isPaused: isPaused)
+    public static func metalFxPrimary(
+        isPaused: Bool = false,
+        usesSubtleIdleBeam: Bool = false
+    ) -> MetalFxPrimaryButtonStyle {
+        MetalFxPrimaryButtonStyle(isPaused: isPaused, usesSubtleIdleBeam: usesSubtleIdleBeam)
     }
 }
 
