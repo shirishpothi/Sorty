@@ -145,7 +145,7 @@ def html_document(
     ul {{ margin: 0; padding-left: 22px; }}
     li {{ margin: 8px 0; line-height: 1.4; }}
     .manual-update {{ border: 1px solid rgba(45, 145, 150, 0.28); border-radius: 16px; padding: 16px 18px; margin: 0 0 22px; background: rgba(45, 145, 150, 0.12); }}
-    .manual-update strong {{ display: block; font: -apple-system-headline; margin-bottom: 6px; }}
+    .manual-update > strong {{ display: block; font: -apple-system-headline; margin-bottom: 6px; }}
     .manual-update p {{ margin: 6px 0 0; opacity: 0.9; }}
     .callout {{ border: 1px solid rgba(128, 128, 128, 0.24); border-radius: 14px; padding: 14px 16px; background: rgba(128, 128, 128, 0.08); }}
     .hash {{ opacity: 0.62; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }}
