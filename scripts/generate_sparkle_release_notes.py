@@ -77,9 +77,9 @@ def markdown(
         f"## {args.title}",
         "",
         "### Important: install this update from GitHub",
-        "Sorty's built-in updater may download this version and then fail to install it on older builds.",
+        "We revamped Sorty's update system to support nightly builds, so older updater builds may download this version and then fail during install. This manual install is safe: it uses the same signed GitHub release asset and gets you onto the fixed updater path.",
         "",
-        "Please install this one manually: download `Sorty-universal.zip`, quit Sorty, and replace your existing `Sorty.app` in `/Applications`. After this update is installed, future in-app updates should work normally again.",
+        "Please install this one manually: [download `Sorty-universal.zip` from GitHub](https://github.com/sorty-organizer/Sorty/releases/latest), quit Sorty, and replace your existing `Sorty.app` in `/Applications`. After this update is installed, future in-app updates should work normally again.",
         "",
         args.summary,
         "",
@@ -157,8 +157,8 @@ def html_document(
     <h1>{html.escape(args.title)}</h1>
     <div class="manual-update">
       <strong>Important: install this update from GitHub</strong>
-      <p>Sorty's built-in updater may download this version and then fail to install it on older builds.</p>
-      <p>Please install this one manually: download <strong>Sorty-universal.zip</strong>, quit Sorty, and replace your existing <strong>Sorty.app</strong> in <strong>/Applications</strong>. After this update is installed, future in-app updates should work normally again.</p>
+      <p>We revamped Sorty's update system to support nightly builds, so older updater builds may download this version and then fail during install. This manual install is safe: it uses the same signed GitHub release asset and gets you onto the fixed updater path.</p>
+      <p>Please install this one manually: <a href="https://github.com/sorty-organizer/Sorty/releases/latest"><strong>download Sorty-universal.zip from GitHub</strong></a>, quit Sorty, and replace your existing <strong>Sorty.app</strong> in <strong>/Applications</strong>. After this update is installed, future in-app updates should work normally again.</p>
     </div>
     <p>{html.escape(args.summary)}</p>
     <p>Changes shown below are everything since <span class="hash">{html.escape(baseline_label)}</span>.</p>
