@@ -73,6 +73,15 @@ jobs:
           XCODE_EXTRA_FLAGS="COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO" \
           ./scripts/build.sh
 
+      - name: Upload nightly build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-build-logs
+          path: .build/logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Stamp nightly update feed
         run: |
           PLIST="releases/Sorty.app/Contents/Info.plist"
