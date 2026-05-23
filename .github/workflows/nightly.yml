@@ -16,6 +16,7 @@ env:
   NIGHTLY_ZIP: Sorty-nightly.zip
   NIGHTLY_APPCAST: appcast-nightly.xml
   STABLE_PROMOTION_APPCAST: appcast.xml
+  RELEASE_NOTES_HTML: release-notes.html
 
 jobs:
   nightly:
@@ -97,6 +98,14 @@ jobs:
           chmod +x ./scripts/package.sh
           ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/package.sh
 
+      - name: Write formatted release notes
+        run: |
+          python3 scripts/generate_sparkle_release_notes.py \
+            --title "Sorty Nightly Preview ${{ steps.nightly.outputs.display_version }}" \
+            --summary "This preview is published through the regular Sorty update channel first, so everyone on Sorty 1.1.2 can choose to install it and try the new design system." \
+            --markdown nightly-release-notes.md \
+            --html "releases/${{ env.RELEASE_NOTES_HTML }}"
+
       - name: Generate nightly appcast
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -107,7 +116,7 @@ jobs:
           APPCAST_BUILD_NUM: ${{ steps.nightly.outputs.build_num }}
           APPCAST_ITEM_TITLE: Nightly ${{ steps.nightly.outputs.display_version }}
           APPCAST_CHANNEL: nightly
-          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.RELEASE_NOTES_HTML }}
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
           ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/generate_appcast_ci.sh
@@ -121,7 +130,7 @@ jobs:
           APPCAST_VERSION: ${{ steps.nightly.outputs.base_version }}
           APPCAST_BUILD_NUM: ${{ steps.nightly.outputs.build_num }}
           APPCAST_ITEM_TITLE: Sorty ${{ steps.nightly.outputs.base_version }} Nightly Preview
-          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/tag/${{ env.NIGHTLY_TAG }}
+          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.RELEASE_NOTES_HTML }}
         run: |
           ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/generate_appcast_ci.sh
 
@@ -139,45 +148,6 @@ jobs:
             --appcast "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
             --plist "releases/Sorty.app/Contents/Info.plist"
 
-      - name: Write nightly release notes
-        run: |
-          PREVIOUS_NIGHTLY=$(git rev-list -n 1 "${{ env.NIGHTLY_TAG }}" 2>/dev/null || true)
-          if [ -n "$PREVIOUS_NIGHTLY" ]; then
-            RANGE="${PREVIOUS_NIGHTLY}..HEAD"
-            COMPARE_URL="https://github.com/${{ github.repository }}/compare/${PREVIOUS_NIGHTLY}...${GITHUB_SHA}"
-          else
-            RANGE="HEAD~25..HEAD"
-            COMPARE_URL="https://github.com/${{ github.repository }}/commit/${GITHUB_SHA}"
-          fi
-
-          COMMITS=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges 2>/dev/null || true)
-          if [ -z "$COMMITS" ]; then
-            COMMITS="- No user-facing commits since the previous nightly."
-          fi
-
-          cat > nightly-release-notes.md <<EOF
-          ## Sorty Nightly ${{ steps.nightly.outputs.display_version }}
-
-          Built from \`${GITHUB_SHA}\` on \`main\`.
-
-          ### What changed
-          ${COMMITS}
-
-          ### Update channel
-          This first nightly preview is also published through the normal stable update feed so everyone on Sorty 1.1.2 can choose to install it.
-
-          After installing, Sorty stays on the regular release update system unless you turn on **Settings > Experimental > Nightly Updates**.
-
-          Future nightly-only builds use this Sparkle feed:
-
-          \`https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.NIGHTLY_APPCAST }}\`
-
-          ### Notes
-          This build is intentionally more fragile than a normal stable release because it introduces the new design system and nightly access path.
-
-          ${COMPARE_URL}
-          EOF
-
       - name: Publish moving nightly release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -194,6 +164,7 @@ jobs:
             "releases/${{ env.NIGHTLY_ZIP }}" \
             "releases/${{ env.NIGHTLY_APPCAST }}" \
             "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
+            "releases/${{ env.RELEASE_NOTES_HTML }}" \
             --clobber
 
       - name: Promote first nightly to stable appcast
