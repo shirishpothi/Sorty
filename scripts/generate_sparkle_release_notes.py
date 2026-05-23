@@ -22,13 +22,17 @@ def git_lines(args: list[str]) -> list[str]:
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def commit_range(fallback_count: int) -> tuple[str, str]:
+def commit_range(args: argparse.Namespace) -> tuple[str, str, str]:
     repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
-    previous = "".join(git_lines(["rev-list", "-n", "1", "nightly"]))
     head = "".join(git_lines(["rev-parse", "HEAD"])) or "HEAD"
+    if args.from_tag:
+        baseline = args.from_tag
+        return f"{baseline}..HEAD", f"https://github.com/{repository}/compare/{baseline}...{head}", baseline
+
+    previous = "".join(git_lines(["rev-list", "-n", "1", "nightly"]))
     if previous:
-        return f"{previous}..HEAD", f"https://github.com/{repository}/compare/{previous}...{head}"
-    return f"HEAD~{fallback_count}..HEAD", f"https://github.com/{repository}/commit/{head}"
+        return f"{previous}..HEAD", f"https://github.com/{repository}/compare/{previous}...{head}", previous[:7]
+    return f"HEAD~{args.fallback_count}..HEAD", f"https://github.com/{repository}/commit/{head}", f"last {args.fallback_count} commits"
 
 
 def categorize(subject: str) -> str:
@@ -58,11 +62,18 @@ def load_commits(range_spec: str) -> dict[str, list[tuple[str, str]]]:
     return {key: value for key, value in groups.items() if value}
 
 
-def markdown(args: argparse.Namespace, groups: dict[str, list[tuple[str, str]]], compare_url: str) -> str:
+def markdown(
+    args: argparse.Namespace,
+    groups: dict[str, list[tuple[str, str]]],
+    compare_url: str,
+    baseline_label: str,
+) -> str:
     lines = [
         f"## {args.title}",
         "",
         args.summary,
+        "",
+        f"Changes shown below are everything since `{baseline_label}`.",
         "",
         "### Highlights",
         "- Offered through the normal update channel first, so Sorty 1.1.2 users can choose this update without enabling nightly updates ahead of time.",
@@ -92,7 +103,12 @@ def markdown(args: argparse.Namespace, groups: dict[str, list[tuple[str, str]]],
     return "\n".join(lines)
 
 
-def html_document(args: argparse.Namespace, groups: dict[str, list[tuple[str, str]]], compare_url: str) -> str:
+def html_document(
+    args: argparse.Namespace,
+    groups: dict[str, list[tuple[str, str]]],
+    compare_url: str,
+    baseline_label: str,
+) -> str:
     sections = []
     for heading, commits in groups.items():
         items = "".join(
@@ -127,6 +143,7 @@ def html_document(args: argparse.Namespace, groups: dict[str, list[tuple[str, st
   <main>
     <h1>{html.escape(args.title)}</h1>
     <p>{html.escape(args.summary)}</p>
+    <p>Changes shown below are everything since <span class="hash">{html.escape(baseline_label)}</span>.</p>
     <div class="callout">
       <strong>Update behavior:</strong> This preview is offered through the normal update channel. Installing it does not switch Sorty to future nightly builds unless you enable Nightly Updates in Settings &gt; Experimental.
     </div>
@@ -152,13 +169,14 @@ def main() -> None:
     parser.add_argument("--summary", required=True)
     parser.add_argument("--markdown", required=True)
     parser.add_argument("--html", required=True)
+    parser.add_argument("--from-tag", default="")
     parser.add_argument("--fallback-count", type=int, default=25)
     args = parser.parse_args()
 
-    range_spec, compare_url = commit_range(args.fallback_count)
+    range_spec, compare_url, baseline_label = commit_range(args)
     groups = load_commits(range_spec)
-    Path(args.markdown).write_text(markdown(args, groups, compare_url), encoding="utf-8")
-    Path(args.html).write_text(html_document(args, groups, compare_url), encoding="utf-8")
+    Path(args.markdown).write_text(markdown(args, groups, compare_url, baseline_label), encoding="utf-8")
+    Path(args.html).write_text(html_document(args, groups, compare_url, baseline_label), encoding="utf-8")
 
 
 if __name__ == "__main__":
