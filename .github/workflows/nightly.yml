@@ -157,14 +157,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete "${{ env.NIGHTLY_TAG }}" --yes --cleanup-tag 2>/dev/null || true
           git tag -f "${{ env.NIGHTLY_TAG }}" "$GITHUB_SHA"
           git push origin "refs/tags/${{ env.NIGHTLY_TAG }}" --force
-          gh release create "${{ env.NIGHTLY_TAG }}" \
-            --title "${{ steps.nightly.outputs.display_name }}" \
-            --notes-file nightly-release-notes.md \
-            --prerelease \
-            --target "$GITHUB_SHA"
+
+          if gh release view "${{ env.NIGHTLY_TAG }}" >/dev/null 2>&1; then
+            gh release edit "${{ env.NIGHTLY_TAG }}" \
+              --title "${{ steps.nightly.outputs.display_name }}" \
+              --notes-file nightly-release-notes.md \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          else
+            gh release create "${{ env.NIGHTLY_TAG }}" \
+              --title "${{ steps.nightly.outputs.display_name }}" \
+              --notes-file nightly-release-notes.md \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
+
           gh release upload "${{ env.NIGHTLY_TAG }}" \
             "releases/${{ env.NIGHTLY_ZIP }}" \
             "releases/${{ env.NIGHTLY_APPCAST }}" \
