@@ -52,7 +52,17 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
     printf '%s' "$SPARKLE_PRIVATE_KEY" > "$PRIVATE_KEY_FILE"
     chmod 600 "$PRIVATE_KEY_FILE"
 
-    SIGN_UPDATE_TOOL=$(find "${BUILD_DIR}/artifacts" -name "sign_update" -type f -not -path "*/old_dsa_scripts/*" | head -1)
+    SIGN_UPDATE_TOOL=$(
+        find \
+            "${BUILD_DIR}/artifacts" \
+            "${BUILD_DIR}/DerivedData/SourcePackages/artifacts" \
+            "${WORKSPACE_BUILD_DIR}/artifacts" \
+            "${WORKSPACE_BUILD_DIR}/DerivedData/SourcePackages/artifacts" \
+            -name "sign_update" \
+            -type f \
+            -not -path "*/old_dsa_scripts/*" \
+            2>/dev/null | head -1
+    )
 
     if [ -n "$SIGN_UPDATE_TOOL" ] && [ -x "$SIGN_UPDATE_TOOL" ]; then
         SIGNATURE_OUTPUT=$("$SIGN_UPDATE_TOOL" -f "$PRIVATE_KEY_FILE" "$ZIP_PATH" 2>/dev/null || true)
@@ -65,7 +75,7 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
         fi
     else
         log_warning "Sparkle sign_update tool not found. Update will not be signed."
-        log_item "Build artifacts must include Sparkle tools under .build/artifacts"
+        log_item "Build artifacts must include Sparkle tools under SwiftPM or Xcode SourcePackages artifacts"
     fi
 
     rm -f "$PRIVATE_KEY_FILE"

@@ -81,8 +81,8 @@ if [ -z "$FEED_URL" ]; then
     fail "SUFeedURL not set"
 elif [[ ! "$FEED_URL" == https://* ]]; then
     fail "SUFeedURL must use https"
-elif [[ ! "$FEED_URL" == *"appcast.xml" ]]; then
-    fail "SUFeedURL must point to appcast.xml"
+elif [[ ! "$(basename "$FEED_URL")" == appcast*.xml ]]; then
+    fail "SUFeedURL must point to an appcast XML file"
 fi
 
 if [ -z "$PUBLIC_KEY" ]; then
