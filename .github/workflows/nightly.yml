@@ -186,13 +186,15 @@ jobs:
           git tag -f "${{ env.NIGHTLY_TAG }}" "$GITHUB_SHA"
           git push origin "refs/tags/${{ env.NIGHTLY_TAG }}" --force
           gh release create "${{ env.NIGHTLY_TAG }}" \
-            "releases/${{ env.NIGHTLY_ZIP }}" \
-            "releases/${{ env.NIGHTLY_APPCAST }}" \
-            "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
             --title "Sorty Nightly ${{ steps.nightly.outputs.display_version }}" \
             --notes-file nightly-release-notes.md \
             --prerelease \
             --target "$GITHUB_SHA"
+          gh release upload "${{ env.NIGHTLY_TAG }}" \
+            "releases/${{ env.NIGHTLY_ZIP }}" \
+            "releases/${{ env.NIGHTLY_APPCAST }}" \
+            "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
+            --clobber
 
       - name: Promote first nightly to stable appcast
         env:
