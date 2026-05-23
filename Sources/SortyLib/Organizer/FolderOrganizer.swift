@@ -1527,6 +1527,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             DebugLogger.log("Injected Model Directory reference context into prompt")
         }
 
+        if !isRenameOnly, let directoryManifest = PromptBuilder.buildDirectoryManifestContext(baseDirectoryURL: directory, files: files) {
+            instructions += "\n\n" + directoryManifest
+            DebugLogger.log("Injected source folder context into prompt")
+        }
+
         if !isRenameOnly, let storageContext = storageLocationsManager?.generatePromptContext(), !storageContext.isEmpty {
             let sourceDir = StorageLocationPathResolver.canonicalPath(directory.path)
             let enabledLocations = storageLocationsManager?.enabledLocations ?? []

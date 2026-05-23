@@ -282,6 +282,9 @@ struct PromptBuilder {
         
         prompt += "## FILE METADATA\n"
         prompt += "Files include metadata when available — use it for smarter organization:\n"
+        prompt += "- Treat filenames as helpful but imperfect labels; do not overfit to names like IMG_, Screenshot, scan, final, or untitled\n"
+        prompt += "- Parent/ancestor folders: Use relative paths as context for project, client, event, course, or workflow, without blindly preserving the old layout\n"
+        prompt += "- Content metadata: Prefer extracted titles, text, OCR, EXIF/media info, Finder comments, and tags over ambiguous filenames when making decisions\n"
         prompt += "- Dates (created/modified): Group by time period or project phase when relevant\n"
         prompt += "- Finder Tags: Respect existing user categorization; group tagged files together when appropriate\n"
         prompt += "- Finder Comments: User annotations that provide context about the file's purpose or content\n\n"
@@ -367,6 +370,10 @@ struct PromptBuilder {
         }
         if let comment = file.finderComment, !comment.isEmpty {
             extras.append("comment:\(String(comment.prefix(40)))")
+        }
+        let parentPath = URL(fileURLWithPath: file.path).deletingLastPathComponent().lastPathComponent
+        if !parentPath.isEmpty && parentPath != "/" {
+            extras.append("parent:\(String(parentPath.prefix(32)))")
         }
         if !extras.isEmpty {
             line += "|\(extras.joined(separator: "|"))"
@@ -788,9 +795,12 @@ struct PromptBuilder {
             return line
         }
 
+        let ancestorNames = directoryContextNames(for: baseDirectoryURL)
+
         var context = """
-        ## DIRECTORY MANIFEST
+        ## SOURCE FOLDER CONTEXT
         Source directory: \(baseDirectoryURL.lastPathComponent)
+        Ancestor context: \(ancestorNames.isEmpty ? "n/a" : ancestorNames.joined(separator: " / "))
         Files in current organization scope: \(files.count)
         Extension mix: \(extensionSummary.isEmpty ? "n/a" : extensionSummary)
         Folder distribution: \(parentSummary.isEmpty ? "(root only)" : parentSummary)
@@ -802,8 +812,25 @@ struct PromptBuilder {
             context += "\n- ... and \(files.count - maxEntries) more files in scope"
         }
 
-        context += "\nUse this manifest to understand the whole directory before deciding on folder structure."
+        context += "\nUse this context to understand projects, clients, events, and existing groupings before deciding on folder structure. Do not rely on filenames alone."
         return context
+    }
+
+    private static func directoryContextNames(for directoryURL: URL, maxAncestors: Int = 3) -> [String] {
+        var names: [String] = []
+        var cursor = directoryURL.deletingLastPathComponent()
+
+        while names.count < maxAncestors {
+            let name = cursor.lastPathComponent
+            guard !name.isEmpty && name != "/" else { break }
+            names.append(name)
+
+            let next = cursor.deletingLastPathComponent()
+            guard next.path != cursor.path else { break }
+            cursor = next
+        }
+
+        return names.reversed()
     }
 
     private static func relativePath(for file: FileItem, baseDirectoryURL: URL) -> String {

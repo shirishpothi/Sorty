@@ -606,7 +606,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         requiresAPIKey: Bool = true,
         enableReasoning: Bool = false,
         mode: OrganizationMode = .organize,
-        enableDeepScan: Bool = false,
+        enableDeepScan: Bool = true,
         enableSmartRename: Bool = false,
         detectDuplicates: Bool = false,
         enableFileTagging: Bool = true,
@@ -731,7 +731,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         requiresAPIKey = try container.decodeIfPresent(Bool.self, forKey: .requiresAPIKey) ?? provider.typicallyRequiresAPIKey
         enableReasoning = try container.decodeIfPresent(Bool.self, forKey: .enableReasoning) ?? false
         mode = try container.decodeIfPresent(OrganizationMode.self, forKey: .mode) ?? .organize
-        enableDeepScan = try container.decodeIfPresent(Bool.self, forKey: .enableDeepScan) ?? false
+        enableDeepScan = try container.decodeIfPresent(Bool.self, forKey: .enableDeepScan) ?? true
         enableSmartRename = try container.decodeIfPresent(Bool.self, forKey: .enableSmartRename) ?? false
         detectDuplicates = try container.decodeIfPresent(Bool.self, forKey: .detectDuplicates) ?? false
         enableFileTagging = try container.decodeIfPresent(Bool.self, forKey: .enableFileTagging) ?? true
@@ -813,7 +813,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         requiresAPIKey: true,
         enableReasoning: false,
         mode: .organize,
-        enableDeepScan: false,
+        enableDeepScan: true,
         enableSmartRename: false,
         detectDuplicates: false,
         enableFileTagging: true,
