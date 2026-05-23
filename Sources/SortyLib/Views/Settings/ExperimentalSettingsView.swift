@@ -39,6 +39,15 @@ struct ExperimentalSettingsView: View {
                 disableCommand: "defaults write com.sorty.app batchOrganizationEnabled -bool false"
             ),
             ExperimentalFlag(
+                name: "Nightly Updates",
+                description: "Check the nightly Sparkle feed for the latest main-branch builds. Nightlies can include unfinished changes.",
+                defaultsKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey,
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app nightlyUpdatesEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app nightlyUpdatesEnabled -bool false",
+                restartMessage: "Use Check for Updates after switching channels."
+            ),
+            ExperimentalFlag(
                 name: "GitHub Update Checker",
                 description: "In-app update dialog using GitHub Releases. Sparkle handles updates by default.",
                 defaultsKey: "githubUpdateCheckerEnabled",
@@ -66,6 +75,25 @@ struct ExperimentalFlag: Identifiable {
     let defaultValue: Bool
     let enableCommand: String
     let disableCommand: String
+    let restartMessage: String
+
+    init(
+        name: String,
+        description: String,
+        defaultsKey: String,
+        defaultValue: Bool,
+        enableCommand: String,
+        disableCommand: String,
+        restartMessage: String = "Relaunch Sorty to ensure all views pick up this change."
+    ) {
+        self.name = name
+        self.description = description
+        self.defaultsKey = defaultsKey
+        self.defaultValue = defaultValue
+        self.enableCommand = enableCommand
+        self.disableCommand = disableCommand
+        self.restartMessage = restartMessage
+    }
 
     func currentValue() -> Bool {
         if UserDefaults.standard.object(forKey: defaultsKey) == nil {
@@ -166,7 +194,7 @@ struct ExperimentalFlagRow: View {
                 .background(Color.black.opacity(0.05))
                 .cornerRadius(6)
 
-                Text("Relaunch Sorty to ensure all views pick up this change.")
+                Text(flag.restartMessage)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

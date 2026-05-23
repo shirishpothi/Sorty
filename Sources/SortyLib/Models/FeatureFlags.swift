@@ -38,6 +38,20 @@ public enum FeatureFlags {
         UserDefaults.standard.bool(forKey: "githubUpdateCheckerEnabled")
     }
 
+    /// Controls whether Sparkle checks the nightly update feed instead of the stable feed.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app nightlyUpdatesEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app nightlyUpdatesEnabled -bool false
+    /// ```
+    public static var nightlyUpdatesEnabled: Bool {
+        UserDefaults.standard.bool(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey)
+    }
+
     /// Controls privacy features like blurring sensitive handles and hiding API keys by default.
     ///
     /// Enabled by default. Disable via Terminal:

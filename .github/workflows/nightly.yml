@@ -108,6 +108,43 @@ jobs:
             --appcast "releases/${{ env.NIGHTLY_APPCAST }}" \
             --plist "releases/Sorty.app/Contents/Info.plist"
 
+      - name: Write nightly release notes
+        run: |
+          PREVIOUS_NIGHTLY=$(git rev-list -n 1 "${{ env.NIGHTLY_TAG }}" 2>/dev/null || true)
+          if [ -n "$PREVIOUS_NIGHTLY" ]; then
+            RANGE="${PREVIOUS_NIGHTLY}..HEAD"
+            COMPARE_URL="https://github.com/${{ github.repository }}/compare/${PREVIOUS_NIGHTLY}...${GITHUB_SHA}"
+          else
+            RANGE="HEAD~25..HEAD"
+            COMPARE_URL="https://github.com/${{ github.repository }}/commit/${GITHUB_SHA}"
+          fi
+
+          COMMITS=$(git log "$RANGE" --pretty=format:'- %s (%h)' --no-merges 2>/dev/null || true)
+          if [ -z "$COMMITS" ]; then
+            COMMITS="- No user-facing commits since the previous nightly."
+          fi
+
+          cat > nightly-release-notes.md <<EOF
+          ## Sorty Nightly ${{ steps.nightly.outputs.display_version }}
+
+          Built from \`${GITHUB_SHA}\` on \`main\`.
+
+          ### What changed
+          ${COMMITS}
+
+          ### Update channel
+          This build uses the nightly Sparkle feed:
+
+          \`https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.NIGHTLY_APPCAST }}\`
+
+          Enable nightly updates in Sorty from **Settings > Experimental > Nightly Updates**.
+
+          ### Notes
+          Nightly builds are prereleases from the current \`main\` branch. They may include unfinished changes and are replaced by the next nightly.
+
+          ${COMPARE_URL}
+          EOF
+
       - name: Publish moving nightly release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -119,7 +156,7 @@ jobs:
             "releases/${{ env.NIGHTLY_ZIP }}" \
             "releases/${{ env.NIGHTLY_APPCAST }}" \
             --title "Sorty Nightly ${{ steps.nightly.outputs.display_version }}" \
-            --notes "Nightly build from main at $GITHUB_SHA. This release is replaced by the next nightly build." \
+            --notes-file nightly-release-notes.md \
             --prerelease \
             --target "$GITHUB_SHA"
 

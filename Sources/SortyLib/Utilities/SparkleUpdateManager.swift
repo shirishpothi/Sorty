@@ -13,12 +13,36 @@ import Combine
 import Sparkle
 #endif
 
+public enum SparkleUpdateFeed {
+    public static let nightlyUpdatesEnabledKey = "nightlyUpdatesEnabled"
+    public static let nightlyAppcastURLString = "https://github.com/sorty-organizer/Sorty/releases/download/nightly/appcast-nightly.xml"
+}
+
 @MainActor
 public class SparkleUpdateManager: ObservableObject {
 
     @Published public var canCheckForUpdates = false
     @Published public var lastCheckDate: Date?
     @Published public var updateState: UpdateState = .idle
+    @Published public private(set) var updateChannel: UpdateChannel = .current
+
+    public enum UpdateChannel: String, Equatable {
+        case stable
+        case nightly
+
+        public static var current: UpdateChannel {
+            UserDefaults.standard.bool(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey) ? .nightly : .stable
+        }
+
+        public var displayName: String {
+            switch self {
+            case .stable:
+                return "Stable"
+            case .nightly:
+                return "Nightly"
+            }
+        }
+    }
 
     public enum UpdateState: Equatable {
         case idle
@@ -46,6 +70,7 @@ public class SparkleUpdateManager: ObservableObject {
     // UserDefaults key for persisting last check date
     private static let lastAutoCheckKey = "lastSparkleUpdateCheckDate"
     private var lastObservedInternetPrivacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
+    private var lastObservedUpdateChannel = UpdateChannel.current
     private var isApplyingInternetPrivacyPolicy = false
 
     public init() {
@@ -58,6 +83,7 @@ public class SparkleUpdateManager: ObservableObject {
         // Create delegates
         self.updaterDelegate = SparkleUpdaterDelegate()
         self.userDriverDelegate = SparkleUserDriverDelegate()
+        self.updateChannel = Self.UpdateChannel.current
 
         // Set up state observation
         (self.updaterDelegate as? SparkleUpdaterDelegate)?.stateCallback = { [weak self] state in
@@ -102,12 +128,18 @@ public class SparkleUpdateManager: ObservableObject {
 
     private func handleUserDefaultsDidChange() {
         let privacyModeEnabled = NetworkPrivacyPolicy.isInternetPrivacyModeEnabled
-        guard privacyModeEnabled != lastObservedInternetPrivacyModeEnabled else {
-            return
+        let currentUpdateChannel = UpdateChannel.current
+
+        if currentUpdateChannel != lastObservedUpdateChannel {
+            lastObservedUpdateChannel = currentUpdateChannel
+            updateChannel = currentUpdateChannel
+            LogManager.shared.log("Sparkle update channel changed to \(currentUpdateChannel.displayName)", category: "SparkleUpdateManager")
         }
 
-        lastObservedInternetPrivacyModeEnabled = privacyModeEnabled
-        applyInternetPrivacyPolicy()
+        if privacyModeEnabled != lastObservedInternetPrivacyModeEnabled {
+            lastObservedInternetPrivacyModeEnabled = privacyModeEnabled
+            applyInternetPrivacyPolicy()
+        }
     }
 
     #if canImport(Sparkle)
@@ -309,7 +341,19 @@ private class SparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
     }
 
     nonisolated func allowedChannels(for updater: SPUUpdater) -> Set<String> {
-        return [] // Empty set allows all items, including those without a channel
+        if UserDefaults.standard.bool(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey) {
+            return ["nightly"]
+        }
+
+        return []
+    }
+
+    nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
+        if UserDefaults.standard.bool(forKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey) {
+            return SparkleUpdateFeed.nightlyAppcastURLString
+        }
+
+        return nil
     }
 }
 
