@@ -237,7 +237,6 @@
 		CC220002000000000000A017 /* InternetAccessPolicy.plist in Resources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A017 /* InternetAccessPolicy.plist */; };
 		EC166F2A25CE1F1430F1FBD9 /* SortyLib in Frameworks */ = {isa = PBXBuildFile; productRef = 488B75F6213B19AC5840050B /* SortyLib */; };
 		3D9D39047A3FAF904B00EBB4 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = FA4B34027E72C1ED9821975F /* Sparkle */; };
-		D4B6C0A00000000000000001 /* Sparkle in Embed Frameworks */ = {isa = PBXBuildFile; productRef = FA4B34027E72C1ED9821975F /* Sparkle */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F61A46EE2DF2D37736E4CC95 /* SortyLib in Frameworks */ = {isa = PBXBuildFile; productRef = 2281A6367D915CEFD05D59CF /* SortyLib */; };
 		59558C17C04E18C2E143EEDA /* AIInsightExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94E640E9F5531D468E67A0EC /* AIInsightExtractorTests.swift */; };
 		232608AB5B682D35BDDCAA8D /* AppStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41C3F34679E0B27BE6BD9DD /* AppStateTests.swift */; };
@@ -336,17 +335,6 @@
 				D4A500200000000000000005 /* SortyWidgets.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D4B6C0A10000000000000001 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				D4B6C0A00000000000000001 /* Sparkle in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -1148,7 +1136,6 @@
 			buildPhases = (
 				33A1285E2F01230000A86470 /* Sources */,
 				33A1285F2F01230000A86470 /* Frameworks */,
-				D4B6C0A10000000000000001 /* Embed Frameworks */,
 				33A128602F01230000A86470 /* Resources */,
 				F1A1D001D001D001D001D001 /* Embed App Extensions */,
 			);
