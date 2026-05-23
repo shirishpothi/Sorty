@@ -15,6 +15,7 @@ env:
   NIGHTLY_TAG: nightly
   NIGHTLY_ZIP: Sorty-nightly.zip
   NIGHTLY_APPCAST: appcast-nightly.xml
+  STABLE_PROMOTION_APPCAST: appcast.xml
 
 jobs:
   nightly:
@@ -111,11 +112,31 @@ jobs:
           chmod +x ./scripts/generate_appcast_ci.sh
           ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/generate_appcast_ci.sh
 
+      - name: Generate stable-channel promotion appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          APPCAST_REPOSITORY: ${{ github.repository }}
+          APPCAST_RELEASE_TAG: ${{ env.NIGHTLY_TAG }}
+          APPCAST_FILE_OVERRIDE: releases/${{ env.STABLE_PROMOTION_APPCAST }}
+          APPCAST_VERSION: ${{ steps.nightly.outputs.base_version }}
+          APPCAST_BUILD_NUM: ${{ steps.nightly.outputs.build_num }}
+          APPCAST_ITEM_TITLE: Sorty ${{ steps.nightly.outputs.base_version }} Nightly Preview
+          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/tag/${{ env.NIGHTLY_TAG }}
+        run: |
+          ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/generate_appcast_ci.sh
+
       - name: Validate nightly appcast
         run: |
           chmod +x ./scripts/validate_sparkle.sh
           ./scripts/validate_sparkle.sh \
             --appcast "releases/${{ env.NIGHTLY_APPCAST }}" \
+            --plist "releases/Sorty.app/Contents/Info.plist"
+
+      - name: Validate stable-channel promotion appcast
+        run: |
+          chmod +x ./scripts/validate_sparkle.sh
+          ./scripts/validate_sparkle.sh \
+            --appcast "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
             --plist "releases/Sorty.app/Contents/Info.plist"
 
       - name: Write nightly release notes
@@ -143,14 +164,16 @@ jobs:
           ${COMMITS}
 
           ### Update channel
-          This build uses the nightly Sparkle feed:
+          This first nightly preview is also published through the normal stable update feed so everyone on Sorty 1.1.2 can choose to install it.
+
+          After installing, Sorty stays on the regular release update system unless you turn on **Settings > Experimental > Nightly Updates**.
+
+          Future nightly-only builds use this Sparkle feed:
 
           \`https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.NIGHTLY_APPCAST }}\`
 
-          Enable nightly updates in Sorty from **Settings > Experimental > Nightly Updates**.
-
           ### Notes
-          Nightly builds are prereleases from the current \`main\` branch. They may include unfinished changes and are replaced by the next nightly.
+          This build is intentionally more fragile than a normal stable release because it introduces the new design system and nightly access path.
 
           ${COMPARE_URL}
           EOF
@@ -165,10 +188,25 @@ jobs:
           gh release create "${{ env.NIGHTLY_TAG }}" \
             "releases/${{ env.NIGHTLY_ZIP }}" \
             "releases/${{ env.NIGHTLY_APPCAST }}" \
+            "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
             --title "Sorty Nightly ${{ steps.nightly.outputs.display_version }}" \
             --notes-file nightly-release-notes.md \
             --prerelease \
             --target "$GITHUB_SHA"
+
+      - name: Promote first nightly to stable appcast
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST_STABLE=$(gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName')
+          if [ -z "$LATEST_STABLE" ]; then
+            echo "No stable release found for appcast promotion"
+            exit 1
+          fi
+
+          echo "Publishing first nightly preview to stable appcast on ${LATEST_STABLE}"
+          gh release delete-asset "$LATEST_STABLE" "${{ env.STABLE_PROMOTION_APPCAST }}" --yes 2>/dev/null || true
+          gh release upload "$LATEST_STABLE" "releases/${{ env.STABLE_PROMOTION_APPCAST }}" --clobber
 
       - name: Summary
         run: |
@@ -178,3 +216,4 @@ jobs:
           echo "- Build: ${{ steps.nightly.outputs.build_num }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Release tag: ${{ env.NIGHTLY_TAG }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Appcast: ${{ env.NIGHTLY_APPCAST }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Stable promotion appcast: ${{ env.STABLE_PROMOTION_APPCAST }}" >> "$GITHUB_STEP_SUMMARY"

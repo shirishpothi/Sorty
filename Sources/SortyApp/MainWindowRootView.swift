@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 #if canImport(SortyLib)
 import SortyLib
 #endif
@@ -23,11 +23,14 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var globalShortcutManager: GlobalShortcutManager
     @EnvironmentObject private var steeringPromptManager: SteeringPromptManager
     @EnvironmentObject private var menuBarController: MenuBarController
+    @AppStorage(SparkleUpdateFeed.nightlyUpdatesEnabledKey) private var nightlyUpdatesEnabled = false
+    @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
 
     @StateObject private var windowSession: WindowSession
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
     @State private var handledLaunchRequestID: UUID?
     @State private var handledUITestDeepLink = false
+    @State private var isShowingWhatsNew = false
     @State private var setupRepairTask: Task<Void, Never>?
 
     let launchRequest: WindowLaunchRequest?
@@ -49,6 +52,11 @@ struct MainWindowRootView: View {
                 isPresented: $windowSession.appState.showDeleteUsageDataConfirmation,
                 deleteAction: windowSession.appState.deleteUsageData
             )
+            .sheet(isPresented: $isShowingWhatsNew) {
+                WhatsNewTourView(nightlyUpdatesEnabled: $nightlyUpdatesEnabled) {
+                    markWhatsNewSeen()
+                }
+            }
     }
 
     private var contentWithNotificationRouting: some View {
@@ -153,6 +161,7 @@ struct MainWindowRootView: View {
                 scheduleSetupRepairReconciliation()
                 processLaunchRequestIfNeeded()
                 processUITestDeeplinkIfNeeded()
+                presentWhatsNewIfNeeded()
             }
             .onChange(of: launchRequest?.id) { _, _ in
                 processLaunchRequestIfNeeded()
@@ -232,6 +241,28 @@ struct MainWindowRootView: View {
 
         handledLaunchRequestID = launchRequest.id
         processDeeplink(url)
+    }
+
+    private func presentWhatsNewIfNeeded() {
+        guard !FeatureFlags.harnessMode else { return }
+        guard windowSession.appState.hasCompletedOnboarding else { return }
+        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        guard !currentVersion.isEmpty, lastSeenWhatsNewVersion != currentVersion else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            if lastSeenWhatsNewVersion != currentVersion {
+                isShowingWhatsNew = true
+            }
+        }
+    }
+
+    private func markWhatsNewSeen() {
+        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        if !currentVersion.isEmpty {
+            lastSeenWhatsNewVersion = currentVersion
+        }
+        isShowingWhatsNew = false
     }
 
     private func processUITestDeeplinkIfNeeded() {

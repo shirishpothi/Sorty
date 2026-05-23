@@ -19,6 +19,7 @@ let package = Package(
         // package variant that preserves the same overlay UI on macOS 15.
         .package(path: "Packages/Permiso"),
         .package(url: "https://github.com/tornikegomareli/beam.git", from: "0.1.0"),
+        .package(url: "https://github.com/rampatra/TourKit.git", from: "1.0.0"),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
@@ -27,6 +28,7 @@ let package = Package(
             dependencies: [
                 .product(name: "Permiso", package: "Permiso"),
                 .product(name: "Beam", package: "beam"),
+                .product(name: "TourKit", package: "TourKit"),
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             path: "Sources/SortyLib",
@@ -34,6 +36,9 @@ let package = Package(
                 // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
                 // SPM only handles the Images directory as PNG fallbacks
                 .copy("Resources/Images"),
+                .copy("Resources/whats-new-design-system.png"),
+                .copy("Resources/whats-new-preview.png"),
+                .copy("Resources/whats-new-nightly.png"),
                 .copy("Resources/SortyAppRepair.entitlements"),
                 .process("Resources/SortyMascotTemplate.svg"),
                 .process("Resources/OnboardingSound.wav"),
