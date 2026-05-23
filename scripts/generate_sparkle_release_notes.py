@@ -62,6 +62,11 @@ def load_commits(range_spec: str) -> dict[str, list[tuple[str, str]]]:
     return {key: value for key, value in groups.items() if value}
 
 
+def commit_url(short_hash: str) -> str:
+    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
+    return f"https://github.com/{repository}/commit/{short_hash}"
+
+
 def markdown(
     args: argparse.Namespace,
     groups: dict[str, list[tuple[str, str]]],
@@ -73,19 +78,19 @@ def markdown(
         "",
         args.summary,
         "",
-        f"Changes shown below are everything since `{baseline_label}`.",
+        "### TL;DR",
+        "- This preview is available through the normal Sorty update flow.",
+        "- Installing it does not opt you into future nightly builds.",
+        "- Future nightly builds are controlled from Settings > Experimental > Nightly Updates.",
         "",
-        "### Highlights",
-        "- Offered through the normal update channel first, so Sorty 1.1.2 users can choose this update without enabling nightly updates ahead of time.",
-        "- Installs as a regular update and keeps Sorty on the stable feed unless Nightly Updates are enabled in Settings > Experimental.",
-        "- Includes the new What's New tour and the nightly update opt-in path.",
+        f"Changes shown below are everything since `{baseline_label}`.",
         "",
     ]
     if groups:
         for heading, commits in groups.items():
             lines.append(f"### {heading}")
             for short_hash, subject in commits:
-                lines.append(f"- {subject} (`{short_hash}`)")
+                lines.append(f"- {subject} ([`{short_hash}`]({commit_url(short_hash)}))")
             lines.append("")
     else:
         lines.extend(["### Changes", "- No user-facing commits since the previous nightly.", ""])
@@ -112,7 +117,7 @@ def html_document(
     sections = []
     for heading, commits in groups.items():
         items = "".join(
-            f'<li>{html.escape(subject)} <span class="hash">{html.escape(short_hash)}</span></li>'
+            f'<li>{html.escape(subject)} <a class="hash" href="{html.escape(commit_url(short_hash))}">{html.escape(short_hash)}</a></li>'
             for short_hash, subject in commits
         )
         sections.append(f"<h2>{html.escape(heading)}</h2><ul>{items}</ul>")
@@ -147,11 +152,11 @@ def html_document(
     <div class="callout">
       <strong>Update behavior:</strong> This preview is offered through the normal update channel. Installing it does not switch Sorty to future nightly builds unless you enable Nightly Updates in Settings &gt; Experimental.
     </div>
-    <h2>Highlights</h2>
+    <h2>TL;DR</h2>
     <ul>
-      <li>Available to Sorty 1.1.2 users from the regular update prompt.</li>
-      <li>Includes the new What's New tour and the nightly update opt-in path.</li>
-      <li>Future nightly-only builds are more fragile and remain optional.</li>
+      <li>This preview is available through the normal Sorty update flow.</li>
+      <li>Installing it does not opt you into future nightly builds.</li>
+      <li>Future nightly builds are controlled from Settings &gt; Experimental &gt; Nightly Updates.</li>
     </ul>
     {''.join(sections)}
     <h2>Update Channel</h2>
