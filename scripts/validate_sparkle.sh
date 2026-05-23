@@ -65,6 +65,8 @@ if [ ! -f "$PLIST_PATH" ]; then
     fail "Info.plist not found at $PLIST_PATH"
 fi
 
+APP_PATH="$(dirname "$(dirname "$PLIST_PATH")")"
+
 PLIST_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST_PATH" 2>/dev/null || echo "")
 PLIST_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST_PATH" 2>/dev/null || echo "")
 FEED_URL=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$PLIST_PATH" 2>/dev/null || echo "")
@@ -137,6 +139,25 @@ else
 
     if [ -n "$PLIST_BUILD" ] && [ "$ENC_VERSION" != "$PLIST_BUILD" ]; then
         fail "Enclosure version (${ENC_VERSION}) does not match Info.plist (${PLIST_BUILD})"
+    fi
+fi
+
+if [ -d "$APP_PATH" ]; then
+    UPDATER_PATH="${APP_PATH}/Contents/Frameworks/Sparkle.framework/Updater.app"
+    AUTOUPDATE_PATH="${APP_PATH}/Contents/Frameworks/Sparkle.framework/Autoupdate"
+
+    if [ -d "$UPDATER_PATH" ]; then
+        UPDATER_SIGNATURE=$(codesign -dv --verbose=4 "$UPDATER_PATH" 2>&1 || true)
+        if ! echo "$UPDATER_SIGNATURE" | grep -q 'runtime'; then
+            fail "Sparkle Updater.app must be signed with hardened runtime"
+        fi
+    fi
+
+    if [ -f "$AUTOUPDATE_PATH" ]; then
+        AUTOUPDATE_SIGNATURE=$(codesign -dv --verbose=4 "$AUTOUPDATE_PATH" 2>&1 || true)
+        if ! echo "$AUTOUPDATE_SIGNATURE" | grep -q 'runtime'; then
+            fail "Sparkle Autoupdate must be signed with hardened runtime"
+        fi
     fi
 fi
 

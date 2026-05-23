@@ -95,7 +95,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.nightly.outputs.base_version }}" "$PLIST"
           /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$PLIST" 2>/dev/null || true
           /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.NIGHTLY_APPCAST }}" "$PLIST"
-          codesign --force --deep --sign - "releases/Sorty.app"
+          codesign --force --deep --options runtime --sign - "releases/Sorty.app"
 
       - name: Package nightly ZIP
         run: |
