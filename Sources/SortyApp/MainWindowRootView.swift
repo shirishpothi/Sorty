@@ -44,6 +44,48 @@ struct MainWindowRootView: View {
     }
 
     var body: some View {
+        contentWithNotificationRouting
+            .deleteUsageDataConfirmationAlert(
+                isPresented: $windowSession.appState.showDeleteUsageDataConfirmation,
+                deleteAction: windowSession.appState.deleteUsageData
+            )
+    }
+
+    private var contentWithNotificationRouting: some View {
+        contentWithPrimaryNotificationRouting
+            .onReceive(NotificationCenter.default.publisher(for: .requestApplyOrganizationConfirmation)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
+                routeNotificationActionRequest(
+                    kind: .applyConfirmation,
+                    notification: notification
+                )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .requestRedoOrganizationWithModelConfirmation)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
+                routeNotificationActionRequest(
+                    kind: .redoWithModelConfirmation,
+                    notification: notification
+                )
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { notification in
+                guard notification.targetsWindowSession(windowSession.id) else { return }
+                withAnimation(.pageTransition) {
+                    if windowSession.appState.selectedDirectory == nil,
+                       let currentDirectory = windowSession.organizer.currentDirectory {
+                        windowSession.appState.selectedDirectory = currentDirectory
+                    }
+                    windowSession.appState.currentView = .organize
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                Task { @MainActor in
+                    settingsViewModel.forceSave()
+                    await learningsManager.forceSave()
+                }
+            }
+    }
+
+    private var contentWithPrimaryNotificationRouting: some View {
         contentWithLifecycle
             .onReceive(NotificationCenter.default.publisher(for: .routeDeeplinkInMainWindow)) { notification in
                 guard notification.targetsWindowSession(windowSession.id),
@@ -89,44 +131,6 @@ struct MainWindowRootView: View {
                     }
                     windowSession.appState.currentView = .organize
                 }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .requestApplyOrganizationConfirmation)) { notification in
-                guard notification.targetsWindowSession(windowSession.id) else { return }
-                routeNotificationActionRequest(
-                    kind: .applyConfirmation,
-                    notification: notification
-                )
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .requestRedoOrganizationWithModelConfirmation)) { notification in
-                guard notification.targetsWindowSession(windowSession.id) else { return }
-                routeNotificationActionRequest(
-                    kind: .redoWithModelConfirmation,
-                    notification: notification
-                )
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .redoOrganizationWithModel)) { notification in
-                guard notification.targetsWindowSession(windowSession.id) else { return }
-                withAnimation(.pageTransition) {
-                    if windowSession.appState.selectedDirectory == nil,
-                       let currentDirectory = windowSession.organizer.currentDirectory {
-                        windowSession.appState.selectedDirectory = currentDirectory
-                    }
-                    windowSession.appState.currentView = .organize
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                Task { @MainActor in
-                    settingsViewModel.forceSave()
-                    await learningsManager.forceSave()
-                }
-            }
-            .alert("Delete All Usage Data?", isPresented: $windowSession.appState.showDeleteUsageDataConfirmation) {
-                Button("Delete", role: .destructive) {
-                    windowSession.appState.deleteUsageData()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will permanently delete all organization history, learnings data, and cached sessions. This action cannot be undone.")
             }
     }
 
@@ -356,4 +360,18 @@ struct MainWindowRootView: View {
         }
     }
 
+}
+
+private extension View {
+    func deleteUsageDataConfirmationAlert(
+        isPresented: Binding<Bool>,
+        deleteAction: @escaping () -> Void
+    ) -> some View {
+        alert("Delete All Usage Data?", isPresented: isPresented) {
+            Button("Delete", role: .destructive, action: deleteAction)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete all organization history, learnings data, and cached sessions. This action cannot be undone.")
+        }
+    }
 }

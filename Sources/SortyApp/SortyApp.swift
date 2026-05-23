@@ -285,7 +285,15 @@ struct SortyApp: App {
 
     @ViewBuilder
     private func mainWindowContent(launchRequest: Binding<WindowLaunchRequest?>) -> some View {
-        mainWindowRootView(launchRequest: launchRequest)
+        mainWindowIntegrationHandlers(
+            mainWindowConfigurationHandlers(
+                mainWindowRootView(launchRequest: launchRequest)
+            )
+        )
+    }
+
+    private func mainWindowConfigurationHandlers<Content: View>(_ content: Content) -> some View {
+        content
             .task {
                 configureGlobalsIfNeeded()
             }
@@ -307,6 +315,10 @@ struct SortyApp: App {
             .onChange(of: showMenuBarExtra) { _, _ in
                 syncLoginItemState()
             }
+    }
+
+    private func mainWindowIntegrationHandlers<Content: View>(_ content: Content) -> some View {
+        content
             .onChange(of: finderIntegrationEnabled) { _, newValue in
                 if newValue {
                     ExtensionCommunication.beginMonitoringFinderSyncRuntime()
