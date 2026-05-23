@@ -151,7 +151,7 @@ final class PromptBuilderTests: XCTestCase {
         )
 
         XCTAssertNotNil(context)
-        XCTAssertTrue(context?.contains("DIRECTORY MANIFEST") ?? false)
+        XCTAssertTrue(context?.contains("SOURCE FOLDER CONTEXT") ?? false)
         XCTAssertTrue(context?.contains("Invoices/march.pdf") ?? false)
         XCTAssertTrue(context?.contains("notes.txt") ?? false)
         XCTAssertTrue(context?.contains("pdf:1") ?? false)
