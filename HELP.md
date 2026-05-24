@@ -538,17 +538,17 @@ Sorty includes a built-in update checker that helps you stay current with the la
 
 **To check for updates:**
 1. Go to **Help → Check for Updates...** (or use the About menu)
-2. Sorty will check GitHub releases for a newer version
-3. If an update is available, you'll see release notes and a download link
+2. Sorty will check the configured Sparkle update feed for a newer version
+3. If an update is available, Sparkle will show the available release and install options
 
 ### How the Update System Works
 
-The update checker queries the **GitHub Releases API** to compare your installed version against the latest published release:
+The update checker uses **Sparkle** to compare your installed version against the configured appcast feed:
 
-1. **API Request**: Sorty fetches `https://api.github.com/repos/shirishpothi/Sorty/releases/latest`
-2. **Version Comparison**: The `tag_name` from the response is compared with the current app version
-3. **Release Notes**: If a newer version exists, the `body` field provides release notes
-4. **Download Link**: The `html_url` links directly to the release download page
+1. **Feed Request**: Sorty checks the configured Sparkle appcast feed
+2. **Version Comparison**: Sparkle compares the feed version with the current app version
+3. **Release Notes**: If a newer version exists, Sparkle displays the release notes
+4. **Install Flow**: Sparkle handles download, verification, and installation
 
 ### What's Included in Updates
 
@@ -620,11 +620,10 @@ View the full changelog at:
 
 ### Update Check Issues
 
-- ✓ **Rate limit error**: GitHub limits unauthenticated API requests to 60/hour. Wait and retry later.
 - ✓ **Network error**: Check your internet connection and firewall settings.
-- ✓ **404 Not Found**: No releases exist yet in the repository. This is normal for new installations.
-- ✓ **Timeout**: Try again later; GitHub may be experiencing issues.
-- ✓ **Version parsing error**: The release tag format may have changed. Check the [releases page](https://github.com/shirishpothi/Sorty/releases) manually.
+- ✓ **Feed unavailable**: The appcast may not be reachable yet. Retry later.
+- ✓ **Timeout**: Try again later; the update feed may be temporarily unavailable.
+- ✓ **Version parsing error**: The appcast format may have changed. Check the [releases page](https://github.com/shirishpothi/Sorty/releases) manually.
 
 ---
 

@@ -164,10 +164,6 @@ public struct ContentView: View {
                 extensionListener.incomingURL = nil
             }
         }
-        .sheet(isPresented: $appState.showUpdateSheet) {
-            UpdateDialogView()
-                .environmentObject(appState)
-        }
         .sheet(isPresented: $appState.isFeatureTourPresented) {
             FeatureTourView()
                 .environmentObject(appState)
@@ -195,8 +191,6 @@ public struct ContentView: View {
             LearningsView()
         case .storageLocations:
             StorageLocationsView()
-        case .batchOrganization:
-            BatchOrganizationView()
         }
     }
 

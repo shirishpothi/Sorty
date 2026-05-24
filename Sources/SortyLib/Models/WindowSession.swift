@@ -8,7 +8,6 @@ public final class WindowSession: ObservableObject {
     @Published public var appState: AppState
     @Published public var organizer: FolderOrganizer
     @Published public var healthManager: WorkspaceHealthManager
-    @Published public var batchManager: BatchOrganizationManager
 
     private var didConfigure = false
 
@@ -20,7 +19,6 @@ public final class WindowSession: ObservableObject {
         self.appState = AppState(windowSessionID: id, updateManager: updateManager)
         self.organizer = FolderOrganizer()
         self.healthManager = WorkspaceHealthManager()
-        self.batchManager = BatchOrganizationManager()
     }
 
     public func configureIfNeeded(

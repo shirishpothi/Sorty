@@ -437,7 +437,6 @@ public class AppState: ObservableObject {
     @Published public var workspaceHealthAnalysisError: String?
     @Published public var workspaceHealthAnalysisStartedAt: Date?
     @Published public var debugMode: Bool = false
-    @Published public var showUpdateSheet: Bool = false
     @Published public var lastOrganizedDirectory: URL?
     @Published public var navigatedFromSettings: Bool = false
     @Published public var showDeleteUsageDataConfirmation: Bool = false
@@ -461,17 +460,12 @@ public class AppState: ObservableObject {
     
     /// Trigger update check with visible UI feedback.
     /// In debug builds this rebuilds and relaunches from source via `make now`.
-    /// In release builds it uses Sparkle's native UI by default; the in-app
-    /// update dialog is only shown when `githubUpdateCheckerEnabled` is true.
+    /// In release builds it uses Sparkle's native UI.
     public func checkForUpdatesInteractive() {
         #if DEBUG
         DevRebuilder.shared.rebuild()
         #else
-        if FeatureFlags.githubUpdateCheckerEnabled {
-            showUpdateSheet = true
-        } else {
-            updateManager.checkForUpdates()
-        }
+        updateManager.checkForUpdates()
         #endif
     }
     
@@ -510,7 +504,6 @@ public class AppState: ObservableObject {
         case watchedFolders
         case learnings
         case storageLocations
-        case batchOrganization
     }
 
     public enum AccreditationsEntryPoint: Sendable {

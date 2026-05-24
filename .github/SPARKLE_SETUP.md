@@ -95,7 +95,6 @@ This will:
 - `Package.swift` - Added Sparkle dependency
 - `Info.plist` - Updated SUPublicEDKey
 - `Sources/SortyLib/Utilities/SparkleUpdateManager.swift` - New file
-- `Sources/SortyLib/Views/Components/UpdateDialogView.swift` - Updated for Sparkle
 - `Sources/SortyLib/Views/AppCommands.swift` - Changed to SparkleUpdateManager
 - `scripts/generate_appcast_ci.sh` - Updated for Ed25519 signing
 - `scripts/generate_sparkle_keys.sh` - New helper script

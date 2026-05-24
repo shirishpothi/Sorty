@@ -230,8 +230,6 @@ public struct FeatureTourView: View {
             DuplicatesScreenMockup(step: step)
         case .history:
             HistoryScreenMockup(step: step)
-        case .batch:
-            BatchScreenMockup(step: step)
         case .exclusions:
             ExclusionScreenMockup(step: step)
         case .watchFolders:
@@ -283,7 +281,6 @@ private enum FeatureTourStepID: String, CaseIterable, Identifiable {
     case workspaceHealth
     case duplicates
     case history
-    case batch
     case exclusions
     case watchFolders
     case learnings
@@ -322,14 +319,6 @@ private struct FeatureTourStep: Identifiable {
                 "Reopen any run, inspect every move, and undo with context when you need to roll back.",
             accent: .blue,
             icon: "clock.arrow.circlepath"
-        ),
-        FeatureTourStep(
-            id: .batch,
-            title: "Batch Organize",
-            subtitle:
-                "Queue multiple folders, watch progress live, and finish large cleanup sessions in one pass.",
-            accent: .indigo,
-            icon: "square.stack.3d.up.fill"
         ),
         FeatureTourStep(
             id: .exclusions,
@@ -528,40 +517,6 @@ private struct HistoryScreenMockup: View {
                 }
             }
             .frame(width: 260, alignment: .topLeading)
-        }
-    }
-}
-
-private struct BatchScreenMockup: View {
-    let step: FeatureTourStep
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            TourSectionHeader(
-                eyebrow: "Queue overview",
-                title: "5 folders organized in one batch",
-                detail:
-                    "Progress stays visible per folder so you can see what is queued, running, or waiting on review."
-            )
-
-            VStack(spacing: 12) {
-                BatchQueueRow(
-                    title: "Downloads", subtitle: "Preview complete", progress: 1.0, color: .green)
-                BatchQueueRow(
-                    title: "Invoices", subtitle: "Applying changes", progress: 0.72,
-                    color: step.accent)
-                BatchQueueRow(
-                    title: "Project Assets", subtitle: "Scanning structure", progress: 0.48,
-                    color: .blue)
-                BatchQueueRow(
-                    title: "Receipts", subtitle: "Waiting in queue", progress: 0.14, color: .orange)
-            }
-
-            HStack(spacing: 14) {
-                BatchSummaryCard(title: "Total files", value: "1,284", accent: step.accent)
-                BatchSummaryCard(title: "ETA", value: "4 min", accent: .blue)
-                BatchSummaryCard(title: "Ready to apply", value: "2 folders", accent: .green)
-            }
         }
     }
 }
@@ -960,64 +915,6 @@ private struct TourActionPill: View {
         .overlay(
             Capsule(style: .continuous)
                 .stroke(accent.opacity(0.34), lineWidth: 1)
-        )
-    }
-}
-
-private struct BatchQueueRow: View {
-    let title: String
-    let subtitle: String
-    let progress: Double
-    let color: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Text(subtitle)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(color)
-            }
-            ZStack(alignment: .leading) {
-                Capsule(style: .continuous)
-                    .fill(.white.opacity(0.07))
-                    .frame(height: 10)
-                Capsule(style: .continuous)
-                    .fill(color)
-                    .frame(width: max(36, 560 * progress), height: 10)
-            }
-        }
-        .padding(14)
-        .background(
-            .white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
-private struct BatchSummaryCard: View {
-    let title: String
-    let value: String
-    let accent: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.56))
-            Text(value)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(accent.opacity(0.22), lineWidth: 1)
         )
     }
 }

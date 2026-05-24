@@ -23,21 +23,6 @@ public enum FeatureFlags {
         UserDefaults.standard.bool(forKey: "finderIntegrationEnabled")
     }
 
-    /// Controls whether the GitHub Releases-based in-app update checker is enabled.
-    /// Sparkle is the preferred update mechanism and is always active.
-    ///
-    /// Disabled by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app githubUpdateCheckerEnabled -bool true
-    /// ```
-    /// Disable:
-    /// ```
-    /// defaults write com.sorty.app githubUpdateCheckerEnabled -bool false
-    /// ```
-    public static var githubUpdateCheckerEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "githubUpdateCheckerEnabled")
-    }
-
     /// Controls whether Sparkle checks the nightly update feed instead of the stable feed.
     ///
     /// Disabled by default. Enable via Terminal:
@@ -114,23 +99,6 @@ public enum FeatureFlags {
             return true
         }
         return UserDefaults.standard.bool(forKey: "fileTaggingEnabled")
-    }
-
-    /// Controls whether the Batch Organization (multi-folder) feature is available.
-    ///
-    /// Enabled by default. Disable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app batchOrganizationEnabled -bool false
-    /// ```
-    /// Enable:
-    /// ```
-    /// defaults write com.sorty.app batchOrganizationEnabled -bool true
-    /// ```
-    public static var batchOrganizationEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "batchOrganizationEnabled") == nil {
-            return false
-        }
-        return UserDefaults.standard.bool(forKey: "batchOrganizationEnabled")
     }
 
     /// Controls whether advanced/technical notification controls are shown in Settings.

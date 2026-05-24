@@ -28,19 +28,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
             )
         ]
 
-        if FeatureFlags.batchOrganizationEnabled {
-            items.append(
-                SidebarNavigationItem(
-                    view: .batchOrganization,
-                    title: "Batch Organize",
-                    systemImage: "square.stack.3d.up.fill",
-                    accessibilityIdentifier: "BatchOrganizeSidebarItem",
-                    accessibilityHint: "Organize multiple folders in one run",
-                    helpText: "Run organization for multiple folders"
-                )
-            )
-        }
-
         items.append(contentsOf: [
             SidebarNavigationItem(
                 view: .watchedFolders,

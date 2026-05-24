@@ -543,7 +543,7 @@ class AppStateTests: XCTestCase {
         XCTAssertNotNil(appState.calibrateAction)
     }
     
-    // MARK: - UpdateManager Tests
+    // MARK: - Sparkle Update Manager Tests
     
     func testUpdateManagerExists() {
         XCTAssertNotNil(appState.updateManager)

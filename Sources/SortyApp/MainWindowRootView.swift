@@ -224,7 +224,6 @@ struct MainWindowRootView: View {
             .environmentObject(namingPresetManager)
             .environmentObject(globalShortcutManager)
             .environmentObject(steeringPromptManager)
-            .environmentObject(windowSession.batchManager)
             .environmentObject(windowSession.appState.duplicateManager)
             .environmentObject(windowSession.appState.duplicateSettings)
             .focusedSceneValue(\.appState, windowSession.appState)

@@ -31,14 +31,6 @@ struct ExperimentalSettingsView: View {
                 disableCommand: "defaults write com.sorty.app finderIntegrationEnabled -bool false"
             ),
             ExperimentalFlag(
-                name: "Batch Organization",
-                description: "Organize multiple folders at once with concurrent processing and batch preview/apply.",
-                defaultsKey: "batchOrganizationEnabled",
-                defaultValue: false,
-                enableCommand: "defaults write com.sorty.app batchOrganizationEnabled -bool true",
-                disableCommand: "defaults write com.sorty.app batchOrganizationEnabled -bool false"
-            ),
-            ExperimentalFlag(
                 name: "Nightly Updates",
                 description: "Check the nightly Sparkle feed for the latest main-branch builds. Nightlies can include unfinished changes.",
                 defaultsKey: SparkleUpdateFeed.nightlyUpdatesEnabledKey,
@@ -46,14 +38,6 @@ struct ExperimentalSettingsView: View {
                 enableCommand: "defaults write com.sorty.app nightlyUpdatesEnabled -bool true",
                 disableCommand: "defaults write com.sorty.app nightlyUpdatesEnabled -bool false",
                 restartMessage: "Use Check for Updates after switching channels."
-            ),
-            ExperimentalFlag(
-                name: "GitHub Update Checker",
-                description: "In-app update dialog using GitHub Releases. Sparkle handles updates by default.",
-                defaultsKey: "githubUpdateCheckerEnabled",
-                defaultValue: false,
-                enableCommand: "defaults write com.sorty.app githubUpdateCheckerEnabled -bool true",
-                disableCommand: "defaults write com.sorty.app githubUpdateCheckerEnabled -bool false"
             ),
             ExperimentalFlag(
                 name: "Advanced Notification Controls",

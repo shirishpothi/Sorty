@@ -201,7 +201,6 @@ Key test files include:
 - `PrivacyPathMaskerTests.swift` - Privacy-sensitive path redaction
 - `CustomPersonaTests.swift` - Persona management
 - `DeeplinkTests.swift` - URL scheme handling
-- `UpdateManagerTests.swift` - Update checking functionality
 
 ## Deeplinks Reference
 
