@@ -19,7 +19,7 @@ public struct WhatsNewTourView: View {
 
             TourSlideshowView(
                 pages: pages,
-                width: 860,
+                width: 760,
                 continueButtonTitle: "Continue",
                 finishButtonTitle: "Start using Sorty",
                 onFinish: onFinish,
@@ -28,8 +28,8 @@ public struct WhatsNewTourView: View {
 
             nightlyUpdatesCard
         }
-        .padding(.bottom, 18)
-        .frame(width: 920)
+        .padding(.bottom, 20)
+        .frame(width: 820)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
@@ -109,20 +109,20 @@ public struct WhatsNewTourView: View {
             TourPage(
                 imageName: "whats-new-design-system.png",
                 imageBundle: .module,
-                title: "A cleaner Sorty",
-                description: "This build introduces the new design system: calmer surfaces, clearer hierarchy, and a friendlier organizer flow."
+                title: "A cleaner organizer",
+                description: "The main Sorty flow now has a calmer sidebar, clearer folder drop zone, and a more polished visual system."
             ),
             TourPage(
                 imageName: "whats-new-preview.png",
                 imageBundle: .module,
-                title: "Choose exactly how Sorty works",
-                description: "Pick Organize Only, Organize & Rename, or Rename Only before Sorty touches a folder."
+                title: "Choose how Sorty handles files",
+                description: "Pick Organize Only, Organize & Rename, or Rename Only before choosing a folder."
             ),
             TourPage(
                 imageName: "whats-new-nightly.png",
                 imageBundle: .module,
-                title: "Nightlies are now available",
-                description: "Everyone gets this first nightly-style build through the normal updater. Future nightly builds are optional and may be less polished."
+                title: "Nightly builds are available",
+                description: "This build arrives through the normal updater. Turn on Nightly Updates only if you want future, less-polished builds."
             ),
         ]
     }
