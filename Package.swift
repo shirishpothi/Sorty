@@ -40,6 +40,8 @@ let package = Package(
                 .copy("Resources/whats-new-design-system-1.png"),
                 .copy("Resources/whats-new-design-system-2.png"),
                 .copy("Resources/whats-new-design-system-3.png"),
+                .copy("Resources/whats-new-design-system-4.png"),
+                .copy("Resources/whats-new-design-system-5.png"),
                 .copy("Resources/whats-new-preview.png"),
                 .copy("Resources/whats-new-nightly.png"),
                 .copy("Resources/SortyAppRepair.entitlements"),
