@@ -2,10 +2,8 @@ import SwiftUI
 import TourKit
 
 public struct WhatsNewTourView: View {
-    @Environment(\.openURL) private var openURL
     @Binding private var nightlyUpdatesEnabled: Bool
     private let onFinish: () -> Void
-    private static let releasesURL = URL(string: "https://github.com/sorty-organizer/Sorty/releases/latest")!
 
     public init(
         nightlyUpdatesEnabled: Binding<Bool>,
@@ -17,10 +15,11 @@ public struct WhatsNewTourView: View {
 
     public var body: some View {
         VStack(spacing: 16) {
-            manualUpdateCard
+            updateChannelCard
 
             TourSlideshowView(
                 pages: pages,
+                width: 860,
                 continueButtonTitle: "Continue",
                 finishButtonTitle: "Start using Sorty",
                 onFinish: onFinish,
@@ -30,13 +29,13 @@ public struct WhatsNewTourView: View {
             nightlyUpdatesCard
         }
         .padding(.bottom, 18)
-        .frame(width: 680)
+        .frame(width: 920)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-    private var manualUpdateCard: some View {
+    private var updateChannelCard: some View {
         HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "arrow.down.app.fill")
+            Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
@@ -51,28 +50,15 @@ public struct WhatsNewTourView: View {
                 .shadow(color: Color.accentColor.opacity(0.18), radius: 10, x: 0, y: 5)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Please install this update from GitHub")
+                Text("Available from the regular updater")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
 
-                Text("This release fixes the updater. Download the latest Sorty zip from GitHub once, replace the app, then future updates should work inside Sorty again.")
+                Text("Everyone on Sorty 1.1.2 can find this build with Check for Updates. After installing it, you can choose whether future checks use stable or nightly builds.")
                     .font(.system(size: 12, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: 12)
-
-            Button {
-                openURL(Self.releasesURL)
-            } label: {
-                Label("Open GitHub", systemImage: "arrow.up.right")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 4)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .accessibilityHint("Opens the latest Sorty release download page")
         }
         .padding(16)
         .background(Color.accentColor.opacity(0.08))
@@ -129,8 +115,8 @@ public struct WhatsNewTourView: View {
             TourPage(
                 imageName: "whats-new-preview.png",
                 imageBundle: .module,
-                title: "Preview before files move",
-                description: "Review Sorty’s suggested folders and file moves before applying anything to your Mac."
+                title: "Choose exactly how Sorty works",
+                description: "Pick Organize Only, Organize & Rename, or Rename Only before Sorty touches a folder."
             ),
             TourPage(
                 imageName: "whats-new-nightly.png",

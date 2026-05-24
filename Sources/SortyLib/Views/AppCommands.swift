@@ -469,9 +469,6 @@ public class AppState: ObservableObject {
         #else
         if FeatureFlags.githubUpdateCheckerEnabled {
             showUpdateSheet = true
-        } else if NetworkPrivacyPolicy.isInternetPrivacyModeEnabled {
-            showUpdateSheet = true
-            updateManager.checkForUpdates()
         } else {
             updateManager.checkForUpdates()
         }
