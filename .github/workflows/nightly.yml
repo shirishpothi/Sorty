@@ -16,6 +16,7 @@ env:
   NIGHTLY_ZIP: Sorty-nightly.zip
   NIGHTLY_APPCAST: appcast-nightly.xml
   STABLE_PROMOTION_APPCAST: appcast.xml
+  STABLE_APPCAST_URL: https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast.xml
   RELEASE_NOTES_HTML: release-notes.html
 
 jobs:
@@ -88,13 +89,13 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Stamp nightly update feed
+      - name: Stamp first-preview update feed
         run: |
           PLIST="releases/Sorty.app/Contents/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.nightly.outputs.build_num }}" "$PLIST"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.nightly.outputs.base_version }}" "$PLIST"
           /usr/libexec/PlistBuddy -c "Delete :SUFeedURL" "$PLIST" 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.NIGHTLY_APPCAST }}" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Add :SUFeedURL string ${{ env.STABLE_APPCAST_URL }}" "$PLIST"
           codesign --force --deep --options runtime --sign - "releases/Sorty.app"
 
       - name: Package nightly ZIP
