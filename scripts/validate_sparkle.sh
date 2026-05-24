@@ -81,6 +81,22 @@ require_hardened_runtime() {
     fi
 }
 
+require_entitlement() {
+    local bundle_path="$1"
+    local entitlement_key="$2"
+    local description="$3"
+    local entitlements_file
+    entitlements_file="$(mktemp)"
+
+    codesign -d --entitlements :- "$bundle_path" >"${entitlements_file}" 2>/dev/null || true
+
+    if ! /usr/libexec/PlistBuddy -c "Print :${entitlement_key}" "${entitlements_file}" >/dev/null 2>&1; then
+        fail "${description} missing ${entitlement_key}"
+    fi
+
+    rm -f "${entitlements_file}"
+}
+
 check_tool() {
     local tool="$1"
     if ! command -v "$tool" >/dev/null 2>&1; then
@@ -176,6 +192,12 @@ else
 fi
 
 if [ -d "$APP_PATH" ]; then
+    require_hardened_runtime "$APP_PATH" "Sorty.app"
+    require_entitlement \
+        "$APP_PATH" \
+        "com.apple.security.cs.disable-library-validation" \
+        "Sorty.app"
+
     SPARKLE_FRAMEWORK="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
     SPARKLE_RESOURCES="$(sparkle_resources_dir "$SPARKLE_FRAMEWORK")"
     SPARKLE_VERSION_DIR="$(sparkle_current_version_dir "$SPARKLE_FRAMEWORK")"
