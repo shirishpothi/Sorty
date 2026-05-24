@@ -210,6 +210,10 @@ PY
                 -rawin \
                 -in "$ENC_FILE" \
                 -sigfile "$SIGNATURE_FILE" >/dev/null 2>&1; then
+                PUBLIC_KEY_FINGERPRINT=$(printf '%s' "$PUBLIC_KEY" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
+                SIGNATURE_FINGERPRINT=$(printf '%s' "$ENC_SIG" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
+                echo "Sparkle public key fingerprint: ${PUBLIC_KEY_FINGERPRINT}"
+                echo "Sparkle signature fingerprint: ${SIGNATURE_FINGERPRINT}"
                 fail "Enclosure Sparkle signature does not verify with SUPublicEDKey"
             fi
             rm -f "$PUBLIC_KEY_DER" "$SIGNATURE_FILE"

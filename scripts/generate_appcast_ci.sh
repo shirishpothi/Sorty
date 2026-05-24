@@ -116,6 +116,9 @@ log_success "Generated appcast.xml at ${APPCAST_FILE}"
 # Validate the generated appcast
 if echo "$ENCLOSURE_EXTRA_ATTR" | grep -q 'sparkle:edSignature='; then
     log_success "✓ Appcast is SIGNED with Ed25519"
+    PUBLIC_KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${APP_PLIST}" 2>/dev/null || /usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "${PROJECT_DIR}/Info.plist" 2>/dev/null || true)
+    PUBLIC_KEY_FINGERPRINT=$(printf '%s' "$PUBLIC_KEY" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
+    log_item "Sparkle public key fingerprint: ${PUBLIC_KEY_FINGERPRINT}"
 else
     log_warning "⚠ Appcast is UNSIGNED - updates may fail signature verification"
 fi
