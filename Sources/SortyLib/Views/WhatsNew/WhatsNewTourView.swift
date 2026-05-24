@@ -39,9 +39,9 @@ public struct WhatsNewTourView: View {
         .onReceive(
             Timer.publish(every: 3.8, on: .main, in: .common).autoconnect()
         ) { _ in
-            guard currentPage == 0 else { return }
+            guard page.imageNames.count > 1 else { return }
             withAnimation(.easeInOut(duration: 0.45)) {
-                workflowImageIndex = (workflowImageIndex + 1) % workflowImages.count
+                workflowImageIndex = (workflowImageIndex + 1) % page.imageNames.count
             }
         }
     }
@@ -126,12 +126,12 @@ public struct WhatsNewTourView: View {
     private var pages: [WhatsNewPage] {
         [
             WhatsNewPage(
-                imageNames: workflowImages,
+                imageName: "whats-new-preview.png",
                 title: "Choose the right flow",
                 description: "Start with Organize Only, Organize & Rename, or Rename Only from the same compact control."
             ),
             WhatsNewPage(
-                imageName: "whats-new-mid-generation.png",
+                imageNames: designSystemImages,
                 title: "A new design system",
                 description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
             ),
@@ -143,8 +143,12 @@ public struct WhatsNewTourView: View {
         ]
     }
 
-    private var workflowImages: [String] {
-        ["whats-new-preview.png", "whats-new-rename-only.png"]
+    private var designSystemImages: [String] {
+        [
+            "whats-new-design-system-1.png",
+            "whats-new-design-system-2.png",
+            "whats-new-design-system-3.png",
+        ]
     }
 
     private func tourPage(_ page: WhatsNewPage) -> some View {
@@ -187,9 +191,8 @@ public struct WhatsNewTourView: View {
         ZStack(alignment: .top) {
             Image(page.imageNames[imageIndex(for: page)], bundle: .module)
                 .resizable()
-                .scaledToFill()
-                .frame(width: 640, height: 360)
-                .clipped()
+                .scaledToFit()
+                .frame(width: 640, height: 400)
                 .id(page.imageNames[imageIndex(for: page)])
                 .transition(.opacity)
 
@@ -206,7 +209,7 @@ public struct WhatsNewTourView: View {
 
             topControls
         }
-        .frame(width: 640, height: 360)
+        .frame(width: 640, height: 400)
         .animation(.easeInOut(duration: 0.45), value: workflowImageIndex)
     }
 

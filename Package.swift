@@ -37,9 +37,10 @@ let package = Package(
                 // SPM only handles the Images directory as PNG fallbacks
                 .copy("Resources/Images"),
                 .copy("Resources/whats-new-design-system.png"),
-                .copy("Resources/whats-new-mid-generation.png"),
+                .copy("Resources/whats-new-design-system-1.png"),
+                .copy("Resources/whats-new-design-system-2.png"),
+                .copy("Resources/whats-new-design-system-3.png"),
                 .copy("Resources/whats-new-preview.png"),
-                .copy("Resources/whats-new-rename-only.png"),
                 .copy("Resources/whats-new-nightly.png"),
                 .copy("Resources/SortyAppRepair.entitlements"),
                 .process("Resources/SortyMascotTemplate.svg"),
