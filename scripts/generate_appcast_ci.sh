@@ -70,18 +70,21 @@ if [ -n "${SPARKLE_PRIVATE_KEY:-}" ]; then
             ENCLOSURE_EXTRA_ATTR=$(echo "$SIGNATURE_OUTPUT" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')
             log_success "Ed25519 signature generated successfully"
         else
-            log_warning "Could not generate signature. Update will not be signed."
+            log_failure "Could not generate signature."
             log_item "Check that SPARKLE_PRIVATE_KEY matches Info.plist SUPublicEDKey"
+            exit 1
         fi
     else
-        log_warning "Sparkle sign_update tool not found. Update will not be signed."
+        log_failure "Sparkle sign_update tool not found."
         log_item "Build artifacts must include Sparkle tools under SwiftPM or Xcode SourcePackages artifacts"
+        exit 1
     fi
 
     rm -f "$PRIVATE_KEY_FILE"
 else
-    log_warning "No SPARKLE_PRIVATE_KEY found. Generating unsigned appcast."
+    log_failure "No SPARKLE_PRIVATE_KEY found."
     log_item "Set SPARKLE_PRIVATE_KEY in GitHub Secrets to enable signed updates"
+    exit 1
 fi
 
 # Generate the appcast XML

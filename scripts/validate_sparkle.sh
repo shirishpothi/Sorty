@@ -105,6 +105,7 @@ check_tool() {
 }
 
 check_tool xmllint
+check_tool openssl
 
 if [ ! -x /usr/libexec/PlistBuddy ]; then
     fail "Required tool not found: /usr/libexec/PlistBuddy"
@@ -180,6 +181,39 @@ else
 
     if [ -z "$ENC_SIG" ]; then
         fail "Enclosure missing sparkle:edSignature"
+    fi
+
+    if [ -n "$ENC_SIG" ] && [ -n "$PUBLIC_KEY" ] && [ -n "$ENC_URL" ]; then
+        ENC_FILE="${APPCAST_PATH%/*}/$(basename "$ENC_URL")"
+        if [ ! -f "$ENC_FILE" ]; then
+            fail "Enclosure ZIP not found next to appcast: $ENC_FILE"
+        else
+            PUBLIC_KEY_DER="$(mktemp)"
+            SIGNATURE_FILE="$(mktemp)"
+            if ! python3 - "$PUBLIC_KEY" "$ENC_SIG" "$PUBLIC_KEY_DER" "$SIGNATURE_FILE" <<'PY'
+import base64
+import pathlib
+import sys
+
+public_key, signature, public_key_der_path, signature_path = sys.argv[1:]
+pathlib.Path(public_key_der_path).write_bytes(
+    bytes.fromhex("302a300506032b6570032100") + base64.b64decode(public_key)
+)
+pathlib.Path(signature_path).write_bytes(base64.b64decode(signature))
+PY
+            then
+                fail "Could not decode Sparkle public key or signature"
+            elif ! openssl pkeyutl \
+                -verify \
+                -pubin \
+                -inkey "$PUBLIC_KEY_DER" \
+                -rawin \
+                -in "$ENC_FILE" \
+                -sigfile "$SIGNATURE_FILE" >/dev/null 2>&1; then
+                fail "Enclosure Sparkle signature does not verify with SUPublicEDKey"
+            fi
+            rm -f "$PUBLIC_KEY_DER" "$SIGNATURE_FILE"
+        fi
     fi
 
     if [ -n "$PLIST_VERSION" ] && [ "$ENC_SHORT" != "$PLIST_VERSION" ]; then

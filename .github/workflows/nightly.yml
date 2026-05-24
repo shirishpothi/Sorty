@@ -5,6 +5,12 @@ on:
     # Midnight Singapore time.
     - cron: '0 16 * * *'
   workflow_dispatch:
+    inputs:
+      promote_to_stable:
+        description: 'Also publish this nightly through the stable update feed'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: nightly-update
@@ -130,6 +136,7 @@ jobs:
           ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/generate_appcast_ci.sh
 
       - name: Generate stable-channel promotion appcast
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_to_stable }}
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           APPCAST_REPOSITORY: ${{ github.repository }}
@@ -150,6 +157,7 @@ jobs:
             --plist "releases/Sorty.app/Contents/Info.plist"
 
       - name: Validate stable-channel promotion appcast
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_to_stable }}
         run: |
           chmod +x ./scripts/validate_sparkle.sh
           ./scripts/validate_sparkle.sh \
@@ -180,11 +188,20 @@ jobs:
           gh release upload "${{ env.NIGHTLY_TAG }}" \
             "releases/${{ env.NIGHTLY_ZIP }}" \
             "releases/${{ env.NIGHTLY_APPCAST }}" \
-            "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
             "releases/${{ env.RELEASE_NOTES_HTML }}" \
             --clobber
 
-      - name: Promote first nightly to stable appcast
+      - name: Upload stable promotion assets to nightly release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_to_stable }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ env.NIGHTLY_TAG }}" \
+            "releases/${{ env.STABLE_PROMOTION_APPCAST }}" \
+            --clobber
+
+      - name: Promote nightly to stable appcast
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.promote_to_stable }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -194,7 +211,7 @@ jobs:
             exit 1
           fi
 
-          echo "Publishing first nightly preview to stable appcast on ${LATEST_STABLE}"
+          echo "Publishing nightly preview to stable appcast on ${LATEST_STABLE}"
           gh release delete-asset "$LATEST_STABLE" "${{ env.STABLE_PROMOTION_APPCAST }}" --yes 2>/dev/null || true
           gh release upload "$LATEST_STABLE" "releases/${{ env.STABLE_PROMOTION_APPCAST }}" --clobber
           gh release upload "$LATEST_STABLE" \
