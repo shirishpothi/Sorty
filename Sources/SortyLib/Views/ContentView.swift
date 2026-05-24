@@ -92,20 +92,26 @@ public struct ContentView: View {
             }
             .animation(.easeInOut(duration: 0.28), value: displayedView)
             .toolbar {
-                    if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
-                        ToolbarItem(placement: .navigation) {
-                            Button {
-                                HapticFeedbackManager.shared.tap()
-                                appState.navigatedFromSettings = false
-                                appState.currentView = prev
-                            } label: {
-                                Label("Back", systemImage: "chevron.left")
-                            }
-                            .accessibilityIdentifier("SettingsReturnButton")
-                            .accessibilityLabel("Return to previous view")
+                ToolbarItem(placement: .primaryAction) {
+                    Color.clear
+                        .frame(width: 0, height: 0)
+                        .accessibilityHidden(true)
+                }
+
+                if appState.navigatedFromSettings, let prev = previousView, prev != appState.currentView {
+                    ToolbarItem(placement: .navigation) {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            appState.navigatedFromSettings = false
+                            appState.currentView = prev
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
                         }
+                        .accessibilityIdentifier("SettingsReturnButton")
+                        .accessibilityLabel("Return to previous view")
                     }
                 }
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .accessibilityElement(children: .contain)
