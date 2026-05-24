@@ -25,6 +25,8 @@ struct MainWindowRootView: View {
     @EnvironmentObject private var menuBarController: MenuBarController
     @AppStorage(SparkleUpdateFeed.nightlyUpdatesEnabledKey) private var nightlyUpdatesEnabled = false
     @AppStorage("lastSeenWhatsNewVersion") private var lastSeenWhatsNewVersion = ""
+    @AppStorage("lastSeenWhatsNewBuild") private var lastSeenWhatsNewBuild = ""
+    @AppStorage("forceShowWhatsNewOnLaunch") private var forceShowWhatsNewOnLaunch = false
 
     @StateObject private var windowSession: WindowSession
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
@@ -246,23 +248,45 @@ struct MainWindowRootView: View {
     private func presentWhatsNewIfNeeded() {
         guard !FeatureFlags.harnessMode else { return }
         guard windowSession.appState.hasCompletedOnboarding else { return }
-        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        guard !currentVersion.isEmpty, lastSeenWhatsNewVersion != currentVersion else { return }
+        let currentIdentifier = whatsNewIdentifier()
+        guard !currentIdentifier.isEmpty else { return }
+        guard forceShowWhatsNewOnLaunch || lastSeenWhatsNewBuild != currentIdentifier else { return }
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 700_000_000)
-            if lastSeenWhatsNewVersion != currentVersion {
+            if forceShowWhatsNewOnLaunch || lastSeenWhatsNewBuild != currentIdentifier {
                 isShowingWhatsNew = true
             }
         }
     }
 
     private func markWhatsNewSeen() {
-        let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let currentVersion = whatsNewVersion()
+        let currentIdentifier = whatsNewIdentifier()
         if !currentVersion.isEmpty {
             lastSeenWhatsNewVersion = currentVersion
         }
+        if !currentIdentifier.isEmpty {
+            lastSeenWhatsNewBuild = currentIdentifier
+        }
+        forceShowWhatsNewOnLaunch = false
         isShowingWhatsNew = false
+    }
+
+    private func whatsNewVersion() -> String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+
+    private func whatsNewIdentifier() -> String {
+        let version = whatsNewVersion()
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        if version.isEmpty {
+            return build
+        }
+        if build.isEmpty {
+            return version
+        }
+        return "\(version)-\(build)"
     }
 
     private func processUITestDeeplinkIfNeeded() {

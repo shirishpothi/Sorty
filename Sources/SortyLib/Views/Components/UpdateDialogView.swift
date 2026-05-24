@@ -141,7 +141,7 @@ public struct UpdateDialogView: View {
                         Text("Update checking is disabled")
                             .font(.title3)
                             .fontWeight(.medium)
-                        Text("This build doesn't support automatic updates.")
+                        Text(NetworkPrivacyPolicy.isInternetPrivacyModeEnabled ? "Internet Privacy Mode is on. Turn it off to check for updates." : "This build doesn't support automatic updates.")
                             .foregroundColor(.secondary)
                             .font(.callout)
                     }
