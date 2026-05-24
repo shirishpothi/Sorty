@@ -59,6 +59,17 @@ sparkle_resources_dir() {
     find "${framework_path}/Versions" -mindepth 2 -maxdepth 2 -type d -name Resources 2>/dev/null | head -1
 }
 
+sparkle_current_version_dir() {
+    local framework_path="$1"
+    local current_version="${framework_path}/Versions/Current"
+    if [ -e "${current_version}" ]; then
+        cd "${current_version}" 2>/dev/null && pwd -P
+        return 0
+    fi
+
+    find "${framework_path}/Versions" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -1
+}
+
 require_hardened_runtime() {
     local bundle_path="$1"
     local description="$2"
@@ -167,19 +178,39 @@ fi
 if [ -d "$APP_PATH" ]; then
     SPARKLE_FRAMEWORK="${APP_PATH}/Contents/Frameworks/Sparkle.framework"
     SPARKLE_RESOURCES="$(sparkle_resources_dir "$SPARKLE_FRAMEWORK")"
-    UPDATER_PATH="${SPARKLE_RESOURCES}/Updater.app"
-    AUTOUPDATE_PATH="${SPARKLE_RESOURCES}/Autoupdate.app"
+    SPARKLE_VERSION_DIR="$(sparkle_current_version_dir "$SPARKLE_FRAMEWORK")"
+    UPDATER_PATH=""
+    AUTOUPDATE_PATH=""
 
-    if [ -d "$UPDATER_PATH" ]; then
+    for candidate in \
+        "${SPARKLE_RESOURCES}/Updater.app" \
+        "${SPARKLE_VERSION_DIR}/Updater.app"; do
+        if [ -d "$candidate" ]; then
+            UPDATER_PATH="$candidate"
+            break
+        fi
+    done
+
+    for candidate in \
+        "${SPARKLE_RESOURCES}/Autoupdate.app" \
+        "${SPARKLE_VERSION_DIR}/Autoupdate.app" \
+        "${SPARKLE_VERSION_DIR}/Autoupdate"; do
+        if [ -e "$candidate" ]; then
+            AUTOUPDATE_PATH="$candidate"
+            break
+        fi
+    done
+
+    if [ -n "$UPDATER_PATH" ]; then
         require_hardened_runtime "$UPDATER_PATH" "Sparkle Updater.app"
     else
         fail "Sparkle Updater.app missing from embedded framework"
     fi
 
-    if [ -d "$AUTOUPDATE_PATH" ]; then
-        require_hardened_runtime "$AUTOUPDATE_PATH" "Sparkle Autoupdate.app"
+    if [ -n "$AUTOUPDATE_PATH" ]; then
+        require_hardened_runtime "$AUTOUPDATE_PATH" "Sparkle Autoupdate"
     else
-        fail "Sparkle Autoupdate.app missing from embedded framework"
+        fail "Sparkle Autoupdate missing from embedded framework"
     fi
 
     while IFS= read -r -d '' xpc_service; do
