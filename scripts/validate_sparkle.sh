@@ -105,8 +105,6 @@ check_tool() {
 }
 
 check_tool xmllint
-check_tool openssl
-
 if [ ! -x /usr/libexec/PlistBuddy ]; then
     fail "Required tool not found: /usr/libexec/PlistBuddy"
 fi
@@ -188,35 +186,28 @@ else
         if [ ! -f "$ENC_FILE" ]; then
             fail "Enclosure ZIP not found next to appcast: $ENC_FILE"
         else
-            PUBLIC_KEY_DER="$(mktemp)"
-            SIGNATURE_FILE="$(mktemp)"
-            if ! python3 - "$PUBLIC_KEY" "$ENC_SIG" "$PUBLIC_KEY_DER" "$SIGNATURE_FILE" <<'PY'
-import base64
-import pathlib
-import sys
+            if ! swift - "$PUBLIC_KEY" "$ENC_SIG" "$ENC_FILE" >/dev/null <<'SWIFT'
+import CryptoKit
+import Foundation
 
-public_key, signature, public_key_der_path, signature_path = sys.argv[1:]
-pathlib.Path(public_key_der_path).write_bytes(
-    bytes.fromhex("302a300506032b6570032100") + base64.b64decode(public_key)
-)
-pathlib.Path(signature_path).write_bytes(base64.b64decode(signature))
-PY
+let args = CommandLine.arguments
+guard args.count == 4,
+      let publicKeyData = Data(base64Encoded: args[1]),
+      let signatureData = Data(base64Encoded: args[2]) else {
+    exit(2)
+}
+
+let archiveData = try Data(contentsOf: URL(fileURLWithPath: args[3]))
+let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: publicKeyData)
+exit(publicKey.isValidSignature(signatureData, for: archiveData) ? 0 : 1)
+SWIFT
             then
-                fail "Could not decode Sparkle public key or signature"
-            elif ! openssl pkeyutl \
-                -verify \
-                -pubin \
-                -inkey "$PUBLIC_KEY_DER" \
-                -rawin \
-                -in "$ENC_FILE" \
-                -sigfile "$SIGNATURE_FILE" >/dev/null 2>&1; then
                 PUBLIC_KEY_FINGERPRINT=$(printf '%s' "$PUBLIC_KEY" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
                 SIGNATURE_FINGERPRINT=$(printf '%s' "$ENC_SIG" | shasum -a 256 | awk '{print substr($1, 1, 12)}')
                 echo "Sparkle public key fingerprint: ${PUBLIC_KEY_FINGERPRINT}"
                 echo "Sparkle signature fingerprint: ${SIGNATURE_FINGERPRINT}"
                 fail "Enclosure Sparkle signature does not verify with SUPublicEDKey"
             fi
-            rm -f "$PUBLIC_KEY_DER" "$SIGNATURE_FILE"
         fi
     fi
 
