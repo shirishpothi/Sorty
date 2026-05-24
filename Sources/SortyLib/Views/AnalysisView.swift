@@ -181,6 +181,9 @@ struct AnalysisView: View {
     @State private var lastInsightCount = 0
     @State private var lastMessageTier: MessageTier = .none
     @State private var lastInsightPulseAt: Date = .distantPast
+    @State private var hasRenameStreamEvents = false
+    @State private var hasOrganizeStreamEvents = false
+    @State private var liveOrganizingSuggestions: [FolderSuggestion] = []
 
     private enum MessageTier {
         case none
@@ -211,18 +214,6 @@ struct AnalysisView: View {
 
     private var isRenameOnlyFlow: Bool {
         settingsViewModel.config.mode == .renameOnly
-    }
-
-    private var hasRenameStreamEvents: Bool {
-        isRenameOnlyFlow && RenameGenerationSequenceView.hasRenderableEvents(in: organizer.displayStreamingContent)
-    }
-
-    private var hasOrganizeStreamEvents: Bool {
-        !isRenameOnlyFlow && OrganizingStreamSuggestions.hasRenderableEvents(in: organizer.displayStreamingContent)
-    }
-
-    private var liveOrganizingSuggestions: [FolderSuggestion] {
-        OrganizingStreamSuggestions.parse(from: organizer.displayStreamingContent, files: organizer.scannedFiles)
     }
 
     /// Whether the scan found zero files (empty directory or all files excluded)
@@ -297,6 +288,7 @@ struct AnalysisView: View {
             }
             organizer.setLiveInsightsEnabled(liveInsightsEnabled)
             refreshManager.start(organizer: organizer)
+            refreshStreamDerivedState()
         }
         .onDisappear {
             refreshManager.stop()
@@ -322,6 +314,15 @@ struct AnalysisView: View {
             guard let pendingModelSwitch else { return }
             guard !newStage.isEmpty, newStage != pendingModelSwitch.restartStage else { return }
             self.pendingModelSwitch = nil
+        }
+        .onChange(of: organizer.displayStreamingContent) { _, _ in
+            refreshStreamDerivedState()
+        }
+        .onChange(of: organizer.scannedFiles) { _, _ in
+            refreshStreamDerivedState()
+        }
+        .onChange(of: settingsViewModel.config.mode) { _, _ in
+            refreshStreamDerivedState()
         }
         .modelSelectionOverlay(
             isPresented: $showFasterModelPicker,
@@ -656,6 +657,24 @@ struct AnalysisView: View {
             withAnimation(.smooth(duration: 0.34)) {
                 organizer.reset()
             }
+        }
+    }
+
+    private func refreshStreamDerivedState() {
+        let streamText = organizer.displayStreamingContent
+
+        if isRenameOnlyFlow {
+            hasRenameStreamEvents = RenameGenerationSequenceView.hasRenderableEvents(in: streamText)
+            hasOrganizeStreamEvents = false
+            liveOrganizingSuggestions = []
+        } else {
+            let suggestions = OrganizingStreamSuggestions.parse(
+                from: streamText,
+                files: organizer.scannedFiles
+            )
+            liveOrganizingSuggestions = suggestions
+            hasOrganizeStreamEvents = !suggestions.isEmpty
+            hasRenameStreamEvents = false
         }
     }
 }
