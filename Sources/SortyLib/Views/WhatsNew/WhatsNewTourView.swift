@@ -1,9 +1,10 @@
 import SwiftUI
-import TourKit
 
 public struct WhatsNewTourView: View {
     @Binding private var nightlyUpdatesEnabled: Bool
     private let onFinish: () -> Void
+    @State private var currentPage = 0
+    @State private var workflowImageIndex = 0
 
     public init(
         nightlyUpdatesEnabled: Binding<Bool>,
@@ -14,31 +15,43 @@ public struct WhatsNewTourView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 16) {
-            updateChannelCard
+        VStack(spacing: 12) {
+            if currentPage == 0 {
+                updateChannelCard
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
 
-            TourSlideshowView(
-                pages: pages,
-                width: 760,
-                continueButtonTitle: "Continue",
-                finishButtonTitle: "Start using Sorty",
-                onFinish: onFinish,
-                onClose: onFinish
-            )
+            ZStack {
+                tourPage(page)
+                    .id(currentPage)
+                    .transition(.opacity)
+            }
 
-            nightlyUpdatesCard
+            if currentPage == pages.count - 1 {
+                nightlyUpdatesCard
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
-        .padding(.bottom, 20)
-        .frame(width: 820)
+        .padding(.vertical, 16)
+        .frame(width: 680)
         .background(Color(nsColor: .windowBackgroundColor))
+        .animation(.easeInOut(duration: 0.24), value: currentPage)
+        .onReceive(
+            Timer.publish(every: 3.8, on: .main, in: .common).autoconnect()
+        ) { _ in
+            guard currentPage == 0 else { return }
+            withAnimation(.easeInOut(duration: 0.45)) {
+                workflowImageIndex = (workflowImageIndex + 1) % workflowImages.count
+            }
+        }
     }
 
     private var updateChannelCard: some View {
         HStack(alignment: .center, spacing: 14) {
             Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: 36, height: 36)
                 .background(
                     LinearGradient(
                         colors: [Color.accentColor, Color.teal],
@@ -46,12 +59,11 @@ public struct WhatsNewTourView: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: Color.accentColor.opacity(0.18), radius: 10, x: 0, y: 5)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("Available from the regular updater")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
 
                 Text("Everyone on Sorty 1.1.2 can find this build with Check for Updates. After installing it, you can choose whether future checks use stable or nightly builds.")
@@ -60,15 +72,14 @@ public struct WhatsNewTourView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(16)
+        .padding(14)
         .background(Color.accentColor.opacity(0.08))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .padding(.horizontal, 24)
-        .padding(.top, 18)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 18)
     }
 
     private var nightlyUpdatesCard: some View {
@@ -100,31 +111,190 @@ public struct WhatsNewTourView: View {
         }
         .padding(14)
         .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .padding(.horizontal, 24)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 18)
     }
 
-    private var pages: [TourPage] {
+    private var page: WhatsNewPage {
+        pages[currentPage]
+    }
+
+    private var pages: [WhatsNewPage] {
         [
-            TourPage(
-                imageName: "whats-new-design-system.png",
-                imageBundle: .module,
-                title: "A cleaner organizer",
-                description: "The main Sorty flow now has a calmer sidebar, clearer folder drop zone, and a more polished visual system."
+            WhatsNewPage(
+                imageNames: workflowImages,
+                title: "Choose the right flow",
+                description: "Start with Organize Only, Organize & Rename, or Rename Only from the same compact control."
             ),
-            TourPage(
-                imageName: "whats-new-preview.png",
-                imageBundle: .module,
-                title: "Choose how Sorty handles files",
-                description: "Pick Organize Only, Organize & Rename, or Rename Only before choosing a folder."
+            WhatsNewPage(
+                imageName: "whats-new-mid-generation.png",
+                title: "A new design system",
+                description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
             ),
-            TourPage(
+            WhatsNewPage(
                 imageName: "whats-new-nightly.png",
-                imageBundle: .module,
-                title: "Nightly builds are available",
-                description: "This build arrives through the normal updater. Turn on Nightly Updates only if you want future, less-polished builds."
+                title: "Choose future builds",
+                description: "Keep stable updates by default, or turn on nightlies if you want newer, less-polished builds after this release."
             ),
         ]
+    }
+
+    private var workflowImages: [String] {
+        ["whats-new-preview.png", "whats-new-rename-only.png"]
+    }
+
+    private func tourPage(_ page: WhatsNewPage) -> some View {
+        VStack(spacing: 0) {
+            imageSection(page)
+
+            VStack(spacing: 6) {
+                pageIndicator
+
+                Text(page.title)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(page.description)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.70))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 28)
+
+                actionButton
+                    .padding(.top, 12)
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 18)
+        }
+        .frame(width: 640)
+        .background(Color(white: 0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+        }
+    }
+
+    private func imageSection(_ page: WhatsNewPage) -> some View {
+        ZStack(alignment: .top) {
+            Image(page.imageNames[imageIndex(for: page)], bundle: .module)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 640, height: 360)
+                .clipped()
+                .id(page.imageNames[imageIndex(for: page)])
+                .transition(.opacity)
+
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: Color(white: 0.10).opacity(0.20), location: 0.45),
+                    .init(color: Color(white: 0.10), location: 1.0),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            topControls
+        }
+        .frame(width: 640, height: 360)
+        .animation(.easeInOut(duration: 0.45), value: workflowImageIndex)
+    }
+
+    private func imageIndex(for page: WhatsNewPage) -> Int {
+        page.imageNames.count > 1 ? workflowImageIndex : 0
+    }
+
+    private var topControls: some View {
+        HStack {
+            Button {
+                guard currentPage > 0 else { return }
+                currentPage -= 1
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.white.opacity(0.14)))
+            }
+            .buttonStyle(.plain)
+            .opacity(currentPage == 0 ? 0 : 1)
+            .disabled(currentPage == 0)
+
+            Spacer()
+
+            Button(action: onFinish) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.white.opacity(0.14)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close What's New")
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 12)
+    }
+
+    private var pageIndicator: some View {
+        HStack(spacing: 7) {
+            ForEach(pages.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(index == currentPage ? Color.white.opacity(0.95) : Color.white.opacity(0.32))
+                    .frame(width: index == currentPage ? 22 : 7, height: 7)
+            }
+        }
+        .padding(.bottom, 7)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
+    }
+
+    private var actionButton: some View {
+        Button {
+            if currentPage == pages.count - 1 {
+                onFinish()
+            } else {
+                currentPage += 1
+            }
+        } label: {
+            Text(currentPage == pages.count - 1 ? "Start using Sorty" : "Continue")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 200, height: 40)
+                .background(Color.accentColor)
+                .clipShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .keyboardShortcut(.defaultAction)
+    }
+}
+
+private struct WhatsNewPage: Identifiable, Hashable {
+    let id = UUID()
+    let imageNames: [String]
+    let title: String
+    let description: String
+
+    init(imageName: String, title: String, description: String) {
+        self.imageNames = [imageName]
+        self.title = title
+        self.description = description
+    }
+
+    init(imageNames: [String], title: String, description: String) {
+        self.imageNames = imageNames
+        self.title = title
+        self.description = description
     }
 }
 
