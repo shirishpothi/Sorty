@@ -269,18 +269,12 @@ struct PermissionRow: View {
     let state: PermissionState
     let onExplain: () -> Void
     let onRequest: (CGRect?) -> Void
+    @State private var approvalPulse = false
+    @State private var approvalSpin = false
 
     var body: some View {
         HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(type.color.opacity(0.1))
-                    .frame(width: 44, height: 44)
-
-                Image(systemName: type.icon)
-                    .font(.system(size: 20))
-                    .foregroundStyle(type.color)
-            }
+            permissionIcon
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(type.rawValue)
@@ -329,6 +323,61 @@ struct PermissionRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(state == .granted ? Color.green.opacity(0.3) : Color.clear, lineWidth: 2)
         )
+        .onChange(of: state) { _, newState in
+            guard newState == .granted else { return }
+            playApprovalAnimation()
+        }
+    }
+
+    private var permissionIcon: some View {
+        ZStack {
+            Circle()
+                .fill(type.color.opacity(state == .granted ? 0.16 : 0.1))
+                .frame(width: 44, height: 44)
+                .scaleEffect(approvalPulse ? 1.08 : 1)
+
+            Image(systemName: type.icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(type.color)
+                .scaleEffect(approvalPulse ? 1.08 : 1)
+                .rotationEffect(iconRotation)
+                .symbolEffect(.bounce, value: approvalPulse)
+
+            if state == .granted {
+                Circle()
+                    .stroke(type.color.opacity(0.28), lineWidth: 1)
+                    .frame(width: 52, height: 52)
+                    .scaleEffect(approvalPulse ? 1.12 : 0.86)
+                    .opacity(approvalPulse ? 0 : 1)
+            }
+        }
+        .frame(width: 52, height: 52)
+        .animation(.spring(response: 0.28, dampingFraction: 0.62), value: approvalPulse)
+        .animation(.easeInOut(duration: 0.42), value: approvalSpin)
+    }
+
+    private var iconRotation: Angle {
+        switch type {
+        case .notifications:
+            return .degrees(approvalPulse ? -12 : 0)
+        case .automation:
+            return .degrees(approvalSpin ? 32 : 0)
+        case .fullDiskAccess:
+            return .degrees(approvalPulse ? -5 : 0)
+        }
+    }
+
+    private func playApprovalAnimation() {
+        approvalSpin.toggle()
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.48)) {
+            approvalPulse = true
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.66)) {
+                approvalPulse = false
+            }
+        }
     }
 }
 
