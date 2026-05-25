@@ -147,7 +147,12 @@ struct HUDNotificationCard: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 14))
         .onTapGesture {
-            onDismiss()
+            if let defaultAction = notification.defaultAction {
+                HapticFeedbackManager.shared.tap()
+                defaultAction()
+            } else {
+                onDismiss()
+            }
         }
         .onAppear {
             withAnimation(.linear(duration: autoDismissSeconds)) {
@@ -156,7 +161,7 @@ struct HUDNotificationCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(notification.title): \(notification.message)")
-        .accessibilityHint("Tap to dismiss")
+        .accessibilityHint(notification.defaultAction == nil ? "Tap to dismiss" : "Tap to open")
     }
 }
 

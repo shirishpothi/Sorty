@@ -192,6 +192,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .advanced:
             return [
                 SettingsFeatureSnippet(title: "Menu Bar", summary: "Configure menu bar UI behavior."),
+                SettingsFeatureSnippet(title: "Privacy Mode", summary: "Mask sensitive paths, usernames, API keys, and raw AI details.", keywords: ["privacy", "redact", "mask", "hide"]),
+                SettingsFeatureSnippet(title: "Block Internet Connections", summary: "Allow only localhost requests for local models and offline workflows.", keywords: ["internet privacy", "network privacy", "offline", "localhost"]),
                 SettingsFeatureSnippet(title: "Streaming", summary: "Toggle streaming responses in AI flows."),
                 SettingsFeatureSnippet(title: "Timeouts", summary: "Tune max request durations and retries."),
                 SettingsFeatureSnippet(title: "Token Limits", summary: "Set global token constraints for requests."),

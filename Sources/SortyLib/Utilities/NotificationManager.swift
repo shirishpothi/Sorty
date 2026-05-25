@@ -320,6 +320,7 @@ public struct HUDNotification: Identifiable, Equatable {
     public let timestamp: Date
     public let playSound: Bool
     public let actions: [HUDNotificationAction]
+    public let defaultAction: (@MainActor () -> Void)?
 
     public init(
         title: String,
@@ -328,7 +329,8 @@ public struct HUDNotification: Identifiable, Equatable {
         iconColor: Color,
         timestamp: Date,
         playSound: Bool,
-        actions: [HUDNotificationAction] = []
+        actions: [HUDNotificationAction] = [],
+        defaultAction: (@MainActor () -> Void)? = nil
     ) {
         self.title = title
         self.message = message
@@ -337,6 +339,7 @@ public struct HUDNotification: Identifiable, Equatable {
         self.timestamp = timestamp
         self.playSound = playSound
         self.actions = actions
+        self.defaultAction = defaultAction
     }
     
     public static func == (lhs: HUDNotification, rhs: HUDNotification) -> Bool {
@@ -613,7 +616,14 @@ public class NotificationManager: ObservableObject {
         
         // Show in-app HUD if enabled AND app is active
         if settingsValue.inAppHUD && NSApplication.shared.isActive {
-            showHUD(title: title, message: message, icon: icon, iconColor: iconColor, playSound: settingsValue.hudSounds)
+            showHUD(
+                title: title,
+                message: message,
+                icon: icon,
+                iconColor: iconColor,
+                playSound: settingsValue.hudSounds,
+                defaultAction: defaultHUDAction(for: type)
+            )
         } else {
             print("NotificationManager: skipping HUD (inAppHUD=\(settingsValue.inAppHUD), isActive=\(NSApplication.shared.isActive))")
         }
@@ -652,7 +662,14 @@ public class NotificationManager: ObservableObject {
         
         // Show in-app HUD if enabled AND app is active
         if settingsValue.inAppHUD && NSApplication.shared.isActive {
-            showHUD(title: title, message: message, icon: icon, iconColor: iconColor, playSound: settingsValue.hudSounds)
+            showHUD(
+                title: title,
+                message: message,
+                icon: icon,
+                iconColor: iconColor,
+                playSound: settingsValue.hudSounds,
+                defaultAction: defaultHUDAction(for: type, actionHandler: actionHandler)
+            )
         }
         
         // Show system notification: always for critical errors, otherwise when enabled + shouldShow or backgrounded
@@ -966,7 +983,8 @@ public class NotificationManager: ObservableObject {
         icon: String,
         iconColor: Color,
         playSound: Bool,
-        actions: [HUDNotificationAction] = []
+        actions: [HUDNotificationAction] = [],
+        defaultAction: (@MainActor () -> Void)? = nil
     ) {
         print("NotificationManager: showHUD called - title: \(title), message: \(message)")
         
@@ -977,7 +995,8 @@ public class NotificationManager: ObservableObject {
             iconColor: iconColor,
             timestamp: Date(),
             playSound: playSound,
-            actions: actions
+            actions: actions,
+            defaultAction: defaultAction
         )
         
         if currentHUDNotification == nil {
@@ -1011,6 +1030,27 @@ public class NotificationManager: ObservableObject {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             if !Task.isCancelled {
                 dismissHUD()
+            }
+        }
+    }
+
+    private func defaultHUDAction(
+        for type: NotificationType,
+        actionHandler: NotificationActionHandler? = nil
+    ) -> (@MainActor () -> Void)? {
+        if case .info = type {
+            return nil
+        }
+
+        return { [weak self] in
+            guard let self else { return }
+            self.dismissHUD()
+            Task {
+                await self.handleDefaultNotificationActivation(
+                    for: type,
+                    actionHandler: actionHandler,
+                    backend: .inAppHUD
+                )
             }
         }
     }

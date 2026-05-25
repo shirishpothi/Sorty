@@ -11,6 +11,8 @@ struct AdvancedSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var automationManager: AutomationManager
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+    @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -40,6 +42,27 @@ struct AdvancedSettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.03)
+
+            SettingsCard(title: "Privacy", icon: "lock.shield", color: .green) {
+                VStack(spacing: 12) {
+                    SettingsToggle(
+                        isOn: $privacyModeEnabled,
+                        title: "Privacy Mode",
+                        description: "Mask usernames, paths, API keys, and raw AI details in the interface"
+                    )
+                    .accessibilityIdentifier("PrivacyModeToggle")
+
+                    Divider()
+
+                    SettingsToggle(
+                        isOn: $internetPrivacyModeEnabled,
+                        title: "Block Internet Connections",
+                        description: "Allow only localhost requests for local models and offline workflows"
+                    )
+                    .accessibilityIdentifier("InternetPrivacyModeToggle")
+                }
+            }
+            .animatedAppearance(delay: 0.04)
             
             SettingsCard(title: "Streaming", icon: "waveform", color: .purple) {
                 SettingsToggle(
