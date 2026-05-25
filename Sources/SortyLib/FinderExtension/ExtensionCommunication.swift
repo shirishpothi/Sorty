@@ -3162,14 +3162,6 @@ public struct ExtensionCommunication {
         }
     }
     
-    // MARK: - Keyboard Shortcut Registration
-    
-    /// Register a global keyboard shortcut for quick organize
-    public static func registerGlobalShortcut() {
-        // Note: Requires accessibility permissions
-        // This is a placeholder - actual implementation would use Carbon APIs or MASShortcut
-    }
-    
     // MARK: - Finder Integration Status
     
     public struct FinderIntegrationStatus: Sendable {

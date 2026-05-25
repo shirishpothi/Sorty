@@ -4,13 +4,10 @@
 //
 //  Service for advanced Finder automation using AppleScript
 //  Requires Automation permission for Finder control
-//  Requires Accessibility permission for global hotkeys
 //
 
 import Foundation
 import AppKit
-import Carbon
-import ApplicationServices
 import Permiso
 
 /// Service for automating Finder interactions
@@ -65,13 +62,6 @@ public final class FinderAutomation {
     public static func openAutomationSettings(sourceFrameInScreen: CGRect? = nil) {
         Task { @MainActor in
             PermisoAssistant.shared.present(panel: .automation, sourceFrameInScreen: sourceFrameInScreen)
-        }
-    }
-    
-    /// Open System Settings to the Accessibility permission pane
-    public static func openAccessibilitySettings(sourceFrameInScreen: CGRect? = nil) {
-        Task { @MainActor in
-            PermisoAssistant.shared.present(panel: .accessibility, sourceFrameInScreen: sourceFrameInScreen)
         }
     }
     
@@ -255,29 +245,6 @@ public final class FinderAutomation {
         if let error = errorInfo {
             DebugLogger.log("AppleScript error opening Finder window: \(error)")
         }
-    }
-    
-    // MARK: - Global Hotkeys (Disabled - requires complex C API integration)
-    
-    /// NOTE: Global hotkey registration requires Carbon APIs which have limitations
-    /// with Swift closures. This feature is disabled for now.
-    /// 
-    /// To implement global hotkeys properly, you would need to:
-    /// 1. Use a global singleton to store the handler
-    /// 2. Use a C function pointer that calls back to Swift via the singleton
-    /// 3. Or use a library like MASShortcut or HotKey
-    ///
-    /// For now, users can organize via:
-    /// - The "Organize Finder Selection" button in the app
-    /// - The Finder Quick Action (right-click menu)
-    /// - The URL scheme (sorty://organize?path=...)
-    
-    /// Check if Accessibility permission is granted
-    @MainActor
-    public static func checkAccessibilityPermission(prompt: Bool = false) -> Bool {
-        // Use the known constant string value to avoid Swift 6 concurrency issues with kAXTrustedCheckOptionPrompt
-        let key = "AXTrustedCheckOptionPrompt"
-        return AXIsProcessTrustedWithOptions([key: prompt] as CFDictionary)
     }
     
     // MARK: - Finder Refresh

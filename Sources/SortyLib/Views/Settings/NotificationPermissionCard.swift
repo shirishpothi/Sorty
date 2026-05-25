@@ -12,6 +12,7 @@ import AppKit
 struct NotificationPermissionCard: View {
     @ObservedObject private var notificationManager = NotificationManager.shared
     @State private var isRequestingPermission = false
+    @State private var isShowingPermissionInfo = false
     
     private var statusInfo: (icon: String, color: Color, title: String, description: String) {
         switch notificationManager.notificationPermissionStatus {
@@ -46,6 +47,16 @@ struct NotificationPermissionCard: View {
                     }
                     
                     Spacer()
+
+                    if notificationManager.notificationPermissionStatus != .authorized {
+                        Button {
+                            isShowingPermissionInfo = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .help("Show what Sorty asks for")
+                    }
                     
                     // Action button based on status
                     switch notificationManager.notificationPermissionStatus {
@@ -112,6 +123,11 @@ struct NotificationPermissionCard: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task {
                 await notificationManager.checkNotificationPermission()
+            }
+        }
+        .sheet(isPresented: $isShowingPermissionInfo) {
+            PermissionEducationView(pages: [.notifications]) {
+                isShowingPermissionInfo = false
             }
         }
     }

@@ -14,6 +14,7 @@ struct FinderIntegrationSettingsView: View {
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
     @State private var frontmostFinderFolder: URL?
+    @State private var isShowingAutomationPermissionInfo = false
     @EnvironmentObject var automationManager: AutomationManager
     
     var body: some View {
@@ -225,10 +226,11 @@ struct FinderIntegrationSettingsView: View {
             // Automation Permission
             SettingsCard(title: "Automation Permission", icon: "gearshape.2", color: .purple) {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
                         Image(systemName: automationStatusIcon)
                             .font(.title3)
                             .foregroundStyle(automationStatusColor)
+                            .frame(width: 24, height: 24)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(automationStatusTitle)
@@ -240,11 +242,21 @@ struct FinderIntegrationSettingsView: View {
 
                         Spacer()
 
-                        if automationManager.automationStatus == .denied {
-                            Button("Open System Settings") {
-                                automationManager.openAutomationSettings()
+                        if automationManager.automationStatus != .granted {
+                            HStack(spacing: 8) {
+                                Button {
+                                    isShowingAutomationPermissionInfo = true
+                                } label: {
+                                    Image(systemName: "info.circle")
+                                }
+                                .buttonStyle(.plain)
+                                .help("Show what Sorty asks for")
+
+                                Button("Open System Settings") {
+                                    automationManager.openAutomationSettings()
+                                }
+                                .buttonStyle(.sortySecondary(size: .regular))
                             }
-                            .buttonStyle(.sortySecondary(size: .regular))
                         }
                     }
 
@@ -297,6 +309,11 @@ struct FinderIntegrationSettingsView: View {
         .task {
             await refreshIntegrationStatus()
             refreshFinderContext()
+        }
+        .sheet(isPresented: $isShowingAutomationPermissionInfo) {
+            PermissionEducationView(pages: [.automation]) {
+                isShowingAutomationPermissionInfo = false
+            }
         }
     }
 

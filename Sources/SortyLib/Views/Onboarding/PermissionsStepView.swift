@@ -16,6 +16,7 @@ public struct PermissionsStepView: View {
     @Binding var hasRequiredPermissions: Bool
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
+    @State private var selectedEducationPermission: PermissionType?
     @EnvironmentObject private var automationManager: AutomationManager
 
     public init(hasRequiredPermissions: Binding<Bool>) {
@@ -24,7 +25,6 @@ public struct PermissionsStepView: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            // Left side - explanation
             VStack(alignment: .leading, spacing: 24) {
                 Spacer()
 
@@ -37,18 +37,18 @@ public struct PermissionsStepView: View {
                         .font(.system(size: 28, weight: .bold, design: .rounded))
 
                     Text(
-                        "Sorty needs a few permissions to organize your files effectively. You can grant these now or later when needed."
+                        "Sorty can work without extra setup. Grant optional permissions now if you want Finder actions, broader folder access, or system notifications."
                     )
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Why these permissions?")
+                        Text("What is requested here?")
                             .font(.subheadline.bold())
 
                         Text(
-                            "• **Files & Folders** *(Required)*: To read and move your files\n• **Full Disk Access** *(Recommended)*: To organize files in any folder\n• **Automation** *(Optional)*: For Finder integration\n• **Notifications** *(Optional)*: To alert you when organization completes"
+                            "• **Full Disk Access**: Organize protected folders without repeated prompts\n• **Automation**: Read Finder selections for Finder Integration\n• **Notifications**: Alert you when organization completes"
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -69,58 +69,35 @@ public struct PermissionsStepView: View {
             .padding(.horizontal, 60)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
 
-            // Right side - permission requests
-            VStack(spacing: 24) {
-                Text("Grant Permissions")
-                    .font(.title3)
-                    .fontWeight(.semibold)
+            VStack(spacing: 20) {
+                Text("Optional Permissions")
+                    .font(.title3.weight(.semibold))
 
                 VStack(spacing: 16) {
                     PermissionRow(
-                        type: .filesAndFolders,
-                        state: permissionStates[.filesAndFolders] ?? .unknown,
-                        onRequest: { requestPermission(.filesAndFolders, sourceFrameInScreen: $0) }
-                    )
-
-                    PermissionRow(
                         type: .fullDiskAccess,
                         state: permissionStates[.fullDiskAccess] ?? .unknown,
+                        onExplain: { selectedEducationPermission = .fullDiskAccess },
                         onRequest: { requestPermission(.fullDiskAccess, sourceFrameInScreen: $0) }
                     )
 
                     PermissionRow(
                         type: .automation,
                         state: permissionStates[.automation] ?? .unknown,
+                        onExplain: { selectedEducationPermission = .automation },
                         onRequest: { requestPermission(.automation, sourceFrameInScreen: $0) }
                     )
 
                     PermissionRow(
                         type: .notifications,
                         state: permissionStates[.notifications] ?? .unknown,
+                        onExplain: { selectedEducationPermission = .notifications },
                         onRequest: { requestPermission(.notifications, sourceFrameInScreen: $0) }
                     )
                 }
                 .frame(maxWidth: 400)
 
-                if permissionStates[.filesAndFolders] == .granted {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text("Files & Folders permission granted. You can continue.")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } else {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundStyle(.orange)
-                        Text("Files & Folders permission is required to continue")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-                Text("Full Disk Access is recommended · Automation and Notifications are optional")
+                Text("Folder access is requested when you choose a folder to organize.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -133,7 +110,13 @@ public struct PermissionsStepView: View {
         }
         .onAppear {
             withAnimation { hasAppeared = true }
+            hasRequiredPermissions = true
             checkPermissions()
+        }
+        .sheet(item: $selectedEducationPermission) { permission in
+            PermissionEducationView(pages: [permission]) {
+                selectedEducationPermission = nil
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Permissions Step")
@@ -141,7 +124,6 @@ public struct PermissionsStepView: View {
 
     private func checkPermissions() {
         if UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey) {
-            permissionStates[.filesAndFolders] = .granted
             hasRequiredPermissions = true
         }
 
@@ -160,38 +142,9 @@ public struct PermissionsStepView: View {
             }
         }
 
-        // Check Files & Folders permission by testing access to user's home directory
-        // If we can list the contents of Documents, we likely have access
-        if !UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey) {
-            let documentsPath = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Documents")
-            if FileManager.default.isReadableFile(atPath: documentsPath.path) {
-                // Try to actually list contents to confirm access
-                if (try? FileManager.default.contentsOfDirectory(atPath: documentsPath.path)) != nil
-                {
-                    permissionStates[.filesAndFolders] = .granted
-                    hasRequiredPermissions = true
-                } else {
-                    permissionStates[.filesAndFolders] = .unknown
-                    hasRequiredPermissions = false
-                }
-            } else {
-                permissionStates[.filesAndFolders] = .unknown
-                hasRequiredPermissions = false
-            }
-        }
+        permissionStates[.fullDiskAccess] = .unknown
 
-        // Check Full Disk Access by probing a protected directory
-        let protectedPath = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Safari")
-        if (try? FileManager.default.contentsOfDirectory(atPath: protectedPath.path)) != nil {
-            permissionStates[.fullDiskAccess] = .granted
-        } else {
-            permissionStates[.fullDiskAccess] = .unknown
-        }
-
-        // Check Automation permission using FinderAutomation service
-        automationManager.requestAutomationPermissionCheck()
+        automationManager.checkPermissions(enableChecksIfNeeded: false)
         switch automationManager.automationStatus {
         case .granted:
             permissionStates[.automation] = .granted
@@ -206,28 +159,6 @@ public struct PermissionsStepView: View {
         HapticFeedbackManager.shared.tap()
 
         switch type {
-        case .filesAndFolders:
-            // Use NSOpenPanel to trigger the Files & Folders permission dialog
-            // This is the proper way to request file access permissions
-            let panel = NSOpenPanel()
-            panel.canChooseFiles = false
-            panel.canChooseDirectories = true
-            panel.allowsMultipleSelection = false
-            panel.message = "Select any folder to grant Sorty access to your files"
-            panel.prompt = "Grant Access"
-            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
-
-            if panel.runModal() == .OK, panel.url != nil {
-                // User granted access - the permission is now active
-                permissionStates[.filesAndFolders] = .granted
-                hasRequiredPermissions = true
-                HapticFeedbackManager.shared.success()
-            } else {
-                // User cancelled - still unknown/not granted
-                permissionStates[.filesAndFolders] = .unknown
-                hasRequiredPermissions = false
-            }
-
         case .fullDiskAccess:
             // Open System Settings to Full Disk Access using Permiso
             PermisoAssistant.shared.present(
@@ -263,15 +194,15 @@ public struct PermissionsStepView: View {
 
 // MARK: - Supporting Types
 
-enum PermissionType: String {
-    case filesAndFolders = "Files & Folders"
+enum PermissionType: String, Identifiable {
     case fullDiskAccess = "Full Disk Access"
     case automation = "Automation"
     case notifications = "Notifications"
 
+    var id: String { rawValue }
+
     var icon: String {
         switch self {
-        case .filesAndFolders: return "folder.fill"
         case .fullDiskAccess: return "lock.open.fill"
         case .automation: return "gearshape.2.fill"
         case .notifications: return "bell.fill"
@@ -280,19 +211,48 @@ enum PermissionType: String {
 
     var description: String {
         switch self {
-        case .filesAndFolders: return "Access to read and organize your files"
-        case .fullDiskAccess: return "Move files to any folder without restrictions"
-        case .automation: return "Control Finder for seamless integration"
+        case .fullDiskAccess: return "Access protected folders when you choose them"
+        case .automation: return "Read Finder selections for Finder Integration"
         case .notifications: return "Get notified when organization completes"
         }
     }
 
     var color: Color {
         switch self {
-        case .filesAndFolders: return .blue
         case .fullDiskAccess: return .green
         case .automation: return .orange
         case .notifications: return .purple
+        }
+    }
+
+    var educationTitle: String {
+        switch self {
+        case .fullDiskAccess:
+            return "Full Disk Access"
+        case .automation:
+            return "Finder Automation"
+        case .notifications:
+            return "Notifications"
+        }
+    }
+
+    var educationDescription: String {
+        switch self {
+        case .fullDiskAccess:
+            return "Lets Sorty organize protected folders you explicitly choose, such as Desktop, Documents, Downloads, or external locations macOS protects."
+        case .automation:
+            return "Lets Sorty read the current Finder selection for Finder Integration actions. Sorty only asks when you use Finder-driven workflows."
+        case .notifications:
+            return "Lets Sorty send completion and error alerts through macOS Notification Center. In-app HUD alerts still work without it."
+        }
+    }
+
+    var educationActionTitle: String {
+        switch self {
+        case .fullDiskAccess, .automation:
+            return "Open System Settings"
+        case .notifications:
+            return "Enable Notifications"
         }
     }
 }
@@ -307,6 +267,7 @@ enum PermissionState {
 struct PermissionRow: View {
     let type: PermissionType
     let state: PermissionState
+    let onExplain: () -> Void
     let onRequest: (CGRect?) -> Void
 
     var body: some View {
@@ -345,8 +306,18 @@ struct PermissionRow: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             case .unknown:
-                PermissionActionButton(title: "Grant", style: .primary, action: onRequest)
-                    .fixedSize()
+                HStack(spacing: 8) {
+                    Button {
+                        onExplain()
+                    } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show what Sorty asks for")
+
+                    PermissionActionButton(title: "Grant", style: .primary, action: onRequest)
+                        .fixedSize()
+                }
             }
         }
         .padding(16)
@@ -358,6 +329,139 @@ struct PermissionRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(state == .granted ? Color.green.opacity(0.3) : Color.clear, lineWidth: 2)
         )
+    }
+}
+
+struct PermissionEducationView: View {
+    let pages: [PermissionType]
+    let onFinish: () -> Void
+    @State private var currentPage = 0
+    @State private var previousPage = 0
+
+    private var page: PermissionType {
+        pages[min(currentPage, max(pages.count - 1, 0))]
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                educationPage(page)
+                    .id(page.id)
+                    .transition(.opacity.combined(with: .scale(scale: 1.01)))
+            }
+
+            if pages.count > 1 {
+                pageIndicator
+            }
+        }
+        .padding(.vertical, 16)
+        .frame(width: 680)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .animation(.easeInOut(duration: 0.24), value: currentPage)
+    }
+
+    private func educationPage(_ permission: PermissionType) -> some View {
+        let direction: CGFloat = currentPage >= previousPage ? 1 : -1
+
+        return VStack(spacing: 0) {
+            permissionVideoPlaceholder(permission)
+                .frame(width: 640, height: 360)
+                .blur(radius: currentPage == previousPage ? 0 : 3)
+                .offset(x: currentPage == previousPage ? 0 : 10 * direction)
+
+            VStack(spacing: 8) {
+                Text(permission.educationTitle)
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+
+                Text(permission.educationDescription)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(0.72))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 28)
+
+                HStack(spacing: 10) {
+                    if currentPage > 0 {
+                        Button {
+                            previousPage = currentPage
+                            currentPage -= 1
+                        } label: {
+                            Label("Back", systemImage: "chevron.left")
+                        }
+                        .buttonStyle(.sortySecondary(size: .regular))
+                    }
+
+                    Button {
+                        if currentPage == pages.count - 1 {
+                            onFinish()
+                        } else {
+                            previousPage = currentPage
+                            currentPage += 1
+                        }
+                    } label: {
+                        Label(currentPage == pages.count - 1 ? "Done" : "Continue", systemImage: currentPage == pages.count - 1 ? "checkmark" : "chevron.right")
+                    }
+                    .buttonStyle(.sortyPrimary(size: .regular))
+                    .keyboardShortcut(.defaultAction)
+                }
+                .padding(.top, 10)
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 18)
+        }
+        .frame(width: 640)
+        .background(Color(white: 0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+        }
+    }
+
+    private func permissionVideoPlaceholder(_ permission: PermissionType) -> some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(white: 0.16),
+                    permission.color.opacity(0.22),
+                    Color(white: 0.10),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            VStack(spacing: 14) {
+                Image(systemName: permission.icon)
+                    .font(.system(size: 54, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.86))
+
+                HStack(spacing: 8) {
+                    Image(systemName: "play.rectangle.fill")
+                        .foregroundStyle(permission.color)
+                    Text("Permission video")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.82))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.10))
+                .clipShape(Capsule(style: .continuous))
+            }
+        }
+    }
+
+    private var pageIndicator: some View {
+        HStack(spacing: 7) {
+            ForEach(pages.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(index == currentPage ? Color.primary.opacity(0.82) : Color.secondary.opacity(0.28))
+                    .frame(width: index == currentPage ? 22 : 7, height: 7)
+            }
+        }
+        .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
     }
 }
 

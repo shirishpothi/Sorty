@@ -1,13 +1,11 @@
 import Foundation
 import AppKit
 import Combine
-import Permiso
 
 @MainActor
 public class GlobalShortcutManager: ObservableObject {
     @Published public var isRegistered = false
     @Published public var shortcutDescription: String = "⌘⇧O"
-    @Published public var requiresAccessibility = false
 
     private var globalMonitor: Any?
     private var localMonitor: Any?
@@ -15,18 +13,6 @@ public class GlobalShortcutManager: ObservableObject {
     public static let shared = GlobalShortcutManager()
 
     private init() {}
-
-    // Check if accessibility permission is granted
-    public var hasAccessibilityPermission: Bool {
-        AXIsProcessTrusted()
-    }
-
-    // Request accessibility access (shows system prompt)
-    public func requestAccessibilityPermission() {
-        Task { @MainActor in
-            PermisoAssistant.shared.present(panel: .accessibility)
-        }
-    }
 
     // Register global shortcut (Cmd+Shift+O by default)
     // NOTE: Global shortcut is currently disabled. Kept for potential future use.
@@ -72,13 +58,6 @@ public class GlobalShortcutManager: ObservableObject {
                     window.makeKeyAndOrderFront(nil)
                 }
             }
-        }
-    }
-
-    // Open Accessibility settings
-    public func openAccessibilitySettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
         }
     }
 }
