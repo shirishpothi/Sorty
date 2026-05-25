@@ -385,7 +385,6 @@ struct PermissionEducationView: View {
     let pages: [PermissionType]
     let onFinish: () -> Void
     @State private var currentPage = 0
-    @State private var previousPage = 0
 
     private var page: PermissionType {
         pages[min(currentPage, max(pages.count - 1, 0))]
@@ -406,17 +405,13 @@ struct PermissionEducationView: View {
         .padding(.vertical, 16)
         .frame(width: 680)
         .background(Color(nsColor: .windowBackgroundColor))
-        .animation(.easeInOut(duration: 0.24), value: currentPage)
+        .animation(.easeOut(duration: 0.18), value: currentPage)
     }
 
     private func educationPage(_ permission: PermissionType) -> some View {
-        let direction: CGFloat = currentPage >= previousPage ? 1 : -1
-
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             permissionVideoPlaceholder(permission)
                 .frame(width: 640, height: 360)
-                .blur(radius: currentPage == previousPage ? 0 : 3)
-                .offset(x: currentPage == previousPage ? 0 : 10 * direction)
 
             VStack(spacing: 8) {
                 Text(permission.educationTitle)
@@ -435,7 +430,6 @@ struct PermissionEducationView: View {
                 HStack(spacing: 10) {
                     if currentPage > 0 {
                         Button {
-                            previousPage = currentPage
                             currentPage -= 1
                         } label: {
                             Label("Back", systemImage: "chevron.left")
@@ -447,7 +441,6 @@ struct PermissionEducationView: View {
                         if currentPage == pages.count - 1 {
                             onFinish()
                         } else {
-                            previousPage = currentPage
                             currentPage += 1
                         }
                     } label: {
