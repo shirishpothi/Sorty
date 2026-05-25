@@ -20,6 +20,7 @@ public struct WorkspaceHealthView: View {
     @State private var contentOpacity: Double = 0
     @State private var emptyStateHasAppeared = false
     @State private var emptyStateBeamHasAppeared = false
+    @Namespace private var controlsGlassNamespace
     
     public init() {}
     
@@ -147,33 +148,59 @@ public struct WorkspaceHealthView: View {
     }
 
     private var workspaceHealthControls: some View {
-        HStack(spacing: 10) {
-            LiquidGlassToolbarIconButton(
-                systemImage: "arrow.uturn.backward",
-                help: "Undo last cleanup action",
-                isDisabled: healthManager.cleanupHistory.isEmpty
-            ) {
-                Task {
-                    try? await healthManager.undoLastAction()
-                    await refreshAnalysis()
+        Group {
+            if #available(macOS 26.0, *) {
+                GlassEffectContainer(spacing: 10) {
+                    workspaceHealthControlButtons
                 }
-            }
-
-            LiquidGlassToolbarIconButton(
-                systemImage: "gear",
-                help: "Workspace Health settings"
-            ) {
-                showSettings = true
-            }
-
-            LiquidGlassToolbarIconButton(
-                systemImage: "arrow.clockwise",
-                help: "Refresh workspace health",
-                isDisabled: selectedDirectory == nil || appState.workspaceHealthIsAnalyzing
-            ) {
-                Task { await refreshAnalysis() }
+            } else {
+                workspaceHealthControlButtons
             }
         }
+    }
+
+    @ViewBuilder
+    private var workspaceHealthControlButtons: some View {
+        HStack(spacing: 10) {
+            undoHealthActionButton
+            settingsHealthButton
+            refreshHealthButton
+        }
+    }
+
+    private var undoHealthActionButton: some View {
+        LiquidGlassToolbarIconButton(
+            systemImage: "arrow.uturn.backward",
+            help: "Undo last cleanup action",
+            isDisabled: healthManager.cleanupHistory.isEmpty
+        ) {
+            Task {
+                try? await healthManager.undoLastAction()
+                await refreshAnalysis()
+            }
+        }
+        .workspaceHealthControlGlassID("undo", in: controlsGlassNamespace)
+    }
+
+    private var settingsHealthButton: some View {
+        LiquidGlassToolbarIconButton(
+            systemImage: "gear",
+            help: "Workspace Health settings"
+        ) {
+            showSettings = true
+        }
+        .workspaceHealthControlGlassID("settings", in: controlsGlassNamespace)
+    }
+
+    private var refreshHealthButton: some View {
+        LiquidGlassToolbarIconButton(
+            systemImage: "arrow.clockwise",
+            help: "Refresh workspace health",
+            isDisabled: selectedDirectory == nil || appState.workspaceHealthIsAnalyzing
+        ) {
+            Task { await refreshAnalysis() }
+        }
+        .workspaceHealthControlGlassID("refresh", in: controlsGlassNamespace)
     }
     
     private var headerSection: some View {
@@ -1048,6 +1075,17 @@ private struct LiquidGlassToolbarIconButton: View {
             }
         }
         .animation(.easeInOut(duration: 0.16), value: isDisabled)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func workspaceHealthControlGlassID(_ id: String, in namespace: Namespace.ID) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffectID(id, in: namespace)
+        } else {
+            self
+        }
     }
 }
 
