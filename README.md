@@ -84,12 +84,11 @@ make run
   - **OpenAI-Compatible**: Enter the API URL and your private key.
   - **Apple Foundation Models**: Requires macOS 15+ with Apple Intelligence enabled.
 
-### 2. Finder Extension (disabled by default via defaults feature flag)
-To enable the "Organize with AI..." context menu in Finder:
-1. Build and run the `SortyExtension` target.
-2. Go to **System Settings → Privacy & Security → Extensions → Finder Extensions**.
-3. Enable **SortyExtension**.
-4. Restart Finder if necessary: `killall Finder`.
+### 2. Finder Integration
+Sorty includes Finder Integration as a core app feature:
+1. Open **Settings -> Finder Integration**.
+2. Use **Activate** or **Repair** if the Finder extension needs attention.
+3. Use **Open Extensions** and confirm **SortyFinderSync** is enabled in macOS Extensions settings.
 
 > [!IMPORTANT]
 > The Finder extension requires **App Groups** to be configured in both the main app and extension targets using the identifier `group.com.sorty.app`.

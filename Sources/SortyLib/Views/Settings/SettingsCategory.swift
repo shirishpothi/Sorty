@@ -127,7 +127,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .help:
             return ["help", "support", "documentation", "faq", "guide", "tips", "contact", "deeplink", "url scheme", "sorty://", "automation links"]
         case .experimental:
-            return ["experimental", "labs", "beta", "feature flags", "defaults", "finder integration"]
+            return ["experimental", "labs", "beta", "feature flags", "defaults"]
         }
     }
 
@@ -212,7 +212,6 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .experimental:
             return [
-                SettingsFeatureSnippet(title: "Finder Integration Flag", summary: "Enable Finder quick actions, toolbar support, and extension wiring."),
                 SettingsFeatureSnippet(title: "Advanced Notification Controls Flag", summary: "Expose technical notification backend controls.")
             ]
         }

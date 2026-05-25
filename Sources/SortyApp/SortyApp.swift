@@ -201,7 +201,7 @@ struct SortyApp: App {
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("hideDockIcon") private var hideDockIcon = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
-    @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
+    @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = true
 
     @StateObject private var settingsViewModel: SettingsViewModel
     @StateObject private var personaManager = PersonaManager()
@@ -245,6 +245,7 @@ struct SortyApp: App {
             "hideDockIcon": false,
             "launchAtLogin": false,
             "confirmQuitWhileOrganizing": true,
+            "finderIntegrationEnabled": true,
         ])
 
         configureUITestStateIfNeeded()
@@ -392,12 +393,10 @@ struct SortyApp: App {
             storageLocationsManager: storageLocationsManager
         )
 
-        if finderIntegrationEnabled {
-            ExtensionCommunication.beginMonitoringFinderSyncRuntime()
-            Task {
-                _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
-                await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
-            }
+        ExtensionCommunication.beginMonitoringFinderSyncRuntime()
+        Task {
+            _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+            await ExtensionCommunication.autoRepairFinderSyncIfNeeded()
         }
 
         if coordinator == nil {

@@ -10,7 +10,7 @@ import SwiftUI
 struct ExperimentalSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("These features are available but disabled by default. You can enable them directly here or with Terminal commands.")
+            Text("These optional controls are intentionally hidden from the main workflow. You can enable them directly here or with Terminal commands.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -22,14 +22,6 @@ struct ExperimentalSettingsView: View {
 
     private var experimentalFlags: [ExperimentalFlag] {
         [
-            ExperimentalFlag(
-                name: "Finder Integration",
-                description: "Enable Finder context menus and Quick Actions for manual organization.",
-                defaultsKey: "finderIntegrationEnabled",
-                defaultValue: false,
-                enableCommand: "defaults write com.sorty.app finderIntegrationEnabled -bool true",
-                disableCommand: "defaults write com.sorty.app finderIntegrationEnabled -bool false"
-            ),
             ExperimentalFlag(
                 name: "Nightly Updates",
                 description: "Check the nightly Sparkle feed for the latest main-branch builds. Nightlies can include unfinished changes.",
@@ -91,7 +83,6 @@ struct ExperimentalFlagRow: View {
     let flag: ExperimentalFlag
     @State private var copied = false
     @State private var isEnabled: Bool
-    @State private var setupMessage: String?
 
     init(flag: ExperimentalFlag) {
         self.flag = flag
@@ -112,15 +103,6 @@ struct ExperimentalFlagRow: View {
                         set: { newValue in
                             UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
 
-                            if flag.defaultsKey == "finderIntegrationEnabled" {
-                                if newValue {
-                                    let quickActionResult = ExtensionCommunication.ensureQuickActionInstalled()
-                                    setupMessage = quickActionResult.message
-                                } else {
-                                    setupMessage = nil
-                                }
-                            }
-
                             withAnimation(.easeOut(duration: 0.2)) {
                                 isEnabled = newValue
                             }
@@ -138,12 +120,6 @@ struct ExperimentalFlagRow: View {
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundStyle(isEnabled ? .green : .orange)
-                }
-
-                if let setupMessage, flag.defaultsKey == "finderIntegrationEnabled" {
-                    Text(setupMessage)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
                 }
 
                 let command = isEnabled ? flag.disableCommand : flag.enableCommand

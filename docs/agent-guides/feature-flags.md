@@ -15,7 +15,6 @@ defaults write com.sorty.app <key> -bool false
 
 | Flag | Key | Default | Description |
 |------|-----|---------|-------------|
-| Finder Integration | `finderIntegrationEnabled` | `false` | Finder Integration settings and features (Quick Actions, toolbar) |
 | GitHub Update Checker | `githubUpdateCheckerEnabled` | `false` | GitHub Releases-based in-app update dialog (Sparkle is always active) |
 | Privacy Mode | `privacyModeEnabled` | `true` | Blurs sensitive handles until hover; hides API keys with manual reveal |
 | File Tagging | `fileTaggingEnabled` | `true` | Finder file tagging during organization (may not work in sandboxed envs) |
@@ -25,7 +24,7 @@ defaults write com.sorty.app <key> -bool false
 
 ## Finder Integration Repair
 
-After the Finder Integration flag is enabled, Quick Action and Finder Sync repair should be done from the app UI:
+Finder Integration is a core app feature. Quick Action and Finder Sync repair should be done from the app UI:
 
 1. Open Settings -> Finder Integration
 2. Use `Install`/`Reinstall` for Quick Action

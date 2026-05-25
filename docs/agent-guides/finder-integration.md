@@ -3,15 +3,14 @@
 ## Basics
 - Finder Sync extension target: `SortyFinderSync` (embedded `.appex`).
 - IPC uses app group `group.com.sorty.app`.
-- Feature flag key: `finderIntegrationEnabled`.
+- Finder Integration is a core app feature. The legacy defaults key `finderIntegrationEnabled` remains for migration and diagnostics, but new installs default to enabled.
 - In-app repair path: `ExtensionCommunication.repairFinderSyncExtensionRegistration`.
 
 ## Preferred Repair Flow
-1. Enable Finder Integration if needed.
-2. Open `Settings -> Finder Integration`.
-3. Use `Install/Reinstall` for Quick Action.
-4. Use `Repair Finder Sync` (or `Activate Extension`) for the `.appex`.
-5. Use `Open Extensions` and confirm `com.sorty.app.SortyFinderSync` is enabled.
+1. Open `Settings -> Finder Integration`.
+2. Use `Install/Reinstall` for Quick Action.
+3. Use `Repair Finder Sync` (or `Activate Extension`) for the `.appex`.
+4. Use `Open Extensions` and confirm `com.sorty.app.SortyFinderSync` is enabled.
 
 ## Extension Isolation
 - If Sorty is running from `/Applications` or `~/Applications`, Finder Sync is registered from that app bundle directly.

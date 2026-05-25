@@ -9,18 +9,15 @@ import Foundation
 
 @MainActor
 public enum FeatureFlags {
-    /// Controls whether the Finder Integration section is visible in Settings and the Finder Integration view.
+    /// Legacy preference for Finder Integration.
     ///
-    /// Disabled by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app finderIntegrationEnabled -bool true
-    /// ```
-    /// Disable:
-    /// ```
-    /// defaults write com.sorty.app finderIntegrationEnabled -bool false
-    /// ```
+    /// Finder Integration is a core app feature. The key remains for migration and
+    /// older installs that may have written it, but new installs default to enabled.
     public static var finderSyncEnabled: Bool {
-        UserDefaults.standard.bool(forKey: "finderIntegrationEnabled")
+        if UserDefaults.standard.object(forKey: "finderIntegrationEnabled") == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "finderIntegrationEnabled")
     }
 
     /// Controls whether Sparkle checks the nightly update feed instead of the stable feed.

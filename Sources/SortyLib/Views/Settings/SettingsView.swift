@@ -10,7 +10,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var appState: AppState
-    @AppStorage("finderIntegrationEnabled") private var finderIntegrationEnabled = false
     @State private var selectedCategory: SettingsCategory = .rules
     @State private var contentOpacity: Double = 0
     @State private var searchText = ""
@@ -202,7 +201,7 @@ struct SettingsView: View {
     }
     
     private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
-        category != .finder || finderIntegrationEnabled
+        true
     }
 
     private var categoryHeader: some View {
@@ -317,7 +316,7 @@ struct SettingsView: View {
                 .environmentObject(viewModel)
                 .environmentObject(appState)
         case .finder:
-            FeatureFlags.finderSyncEnabled ? AnyView(FinderIntegrationSettingsView()) : AnyView(finderDisabledView)
+            FinderIntegrationSettingsView()
         case .notifications:
             NotificationsSettingsView()
         case .advanced:
@@ -329,30 +328,6 @@ struct SettingsView: View {
         case .experimental:
             ExperimentalSettingsView()
         }
-    }
-
-    private var finderDisabledView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "puzzlepiece.extension")
-                .font(.system(size: 48))
-                .foregroundStyle(.secondary)
-            Text("Finder Integration is currently disabled")
-                .font(.headline)
-            Text("Enable via Terminal:")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text("defaults write com.sorty.app finderIntegrationEnabled -bool true")
-                .font(.system(.caption, design: .monospaced))
-                .padding(10)
-                .background(Color.black.opacity(0.05))
-                .cornerRadius(8)
-                .textSelection(.enabled)
-            Text("Then relaunch Sorty.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 40)
     }
 
     private func scrollToFocusedSetting(using proxy: ScrollViewProxy) {

@@ -51,7 +51,7 @@ URL scheme `sorty://` — see `DeeplinkHandler` for routes:
 - `sorty://settings`
 
 ## Finder Extension
-Uses App Groups (`group.com.sorty.app`) for IPC. Behind the `finderIntegrationEnabled` feature flag.
+Uses App Groups (`group.com.sorty.app`) for IPC. Finder Integration is a core app feature and defaults on for new installs.
 Quick Action and Finder Sync repair flows are exposed in-app via Finder Integration settings.
 The Finder Sync `.appex` registration repair path is `ExtensionCommunication.repairFinderSyncExtensionRegistration` and should be preferred over external terminal instructions.
 

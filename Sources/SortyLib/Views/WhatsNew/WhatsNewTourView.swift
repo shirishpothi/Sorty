@@ -1,9 +1,11 @@
+import AppKit
 import SwiftUI
 
 public struct WhatsNewTourView: View {
     @Binding private var nightlyUpdatesEnabled: Bool
     private let onFinish: () -> Void
     @State private var currentPage = 0
+    @State private var previousPage = 0
     @State private var workflowImageIndex = 0
 
     public init(
@@ -36,6 +38,14 @@ public struct WhatsNewTourView: View {
         .frame(width: 680)
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(.easeInOut(duration: 0.24), value: currentPage)
+        .onChange(of: currentPage) { _, newValue in
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 260_000_000)
+                withAnimation(.easeOut(duration: 0.18)) {
+                    previousPage = newValue
+                }
+            }
+        }
         .onReceive(
             Timer.publish(every: 3.8, on: .main, in: .common).autoconnect()
         ) { _ in
@@ -136,6 +146,10 @@ public struct WhatsNewTourView: View {
                 description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
             ),
             WhatsNewPage(
+                title: "Finder Integration is core",
+                description: "Organize from Finder's right-click menu, add watched folders quickly, and repair the extension from Settings."
+            ),
+            WhatsNewPage(
                 imageName: "whats-new-nightly.png",
                 title: "Choose future builds",
                 description: "Keep stable updates by default, or turn on nightlies if you want newer, less-polished builds after this release."
@@ -154,8 +168,16 @@ public struct WhatsNewTourView: View {
     }
 
     private func tourPage(_ page: WhatsNewPage) -> some View {
-        VStack(spacing: 0) {
+        let direction: CGFloat = currentPage >= previousPage ? 1 : -1
+
+        return VStack(spacing: 0) {
             imageSection(page)
+                .transition(
+                    .asymmetric(
+                        insertion: .offset(x: 24 * direction).combined(with: .opacity),
+                        removal: .offset(x: -24 * direction).combined(with: .opacity)
+                    )
+                )
 
             VStack(spacing: 6) {
                 pageIndicator
@@ -165,6 +187,8 @@ public struct WhatsNewTourView: View {
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                    .blur(radius: textMotionBlurRadius)
+                    .offset(x: textMotionOffset)
 
                 Text(page.description)
                     .font(.system(size: 13, weight: .medium, design: .rounded))
@@ -173,6 +197,8 @@ public struct WhatsNewTourView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 28)
+                    .blur(radius: textMotionBlurRadius)
+                    .offset(x: textMotionOffset)
 
                 actionButton
                     .padding(.top, 12)
@@ -191,12 +217,19 @@ public struct WhatsNewTourView: View {
 
     private func imageSection(_ page: WhatsNewPage) -> some View {
         ZStack(alignment: .top) {
-            Image(page.imageNames[imageIndex(for: page)], bundle: .module)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 640, height: 400)
-                .id(page.imageNames[imageIndex(for: page)])
-                .transition(.opacity)
+            if let imageName = page.activeImageName(at: imageIndex(for: page)) {
+                bundledImage(imageName)
+                    .frame(width: 640, height: 400)
+                    .id(imageName)
+                    .transition(.opacity.combined(with: .scale(scale: 1.015)))
+                    .blur(radius: imageMotionBlurRadius)
+                    .offset(x: imageMotionOffset)
+            } else {
+                finderIntegrationPreview
+                    .frame(width: 640, height: 400)
+                    .blur(radius: imageMotionBlurRadius)
+                    .offset(x: imageMotionOffset)
+            }
 
             LinearGradient(
                 stops: [
@@ -219,10 +252,153 @@ public struct WhatsNewTourView: View {
         page.imageNames.count > 1 ? workflowImageIndex : 0
     }
 
+    private var imageMotionOffset: CGFloat {
+        currentPage == previousPage ? 0 : (currentPage > previousPage ? 10 : -10)
+    }
+
+    private var imageMotionBlurRadius: CGFloat {
+        currentPage == previousPage ? 0 : 3
+    }
+
+    private var textMotionOffset: CGFloat {
+        currentPage == previousPage ? 0 : (currentPage > previousPage ? 8 : -8)
+    }
+
+    private var textMotionBlurRadius: CGFloat {
+        currentPage == previousPage ? 0 : 2
+    }
+
+    @ViewBuilder
+    private func bundledImage(_ name: String) -> some View {
+        if let image = WhatsNewImageLoader.image(named: name) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+        } else {
+            missingImagePlaceholder(name)
+        }
+    }
+
+    private func missingImagePlaceholder(_ name: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "photo")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.6))
+            Text(name)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.72))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var finderIntegrationPreview: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .frame(width: 500, height: 276)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                }
+
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) {
+                    Circle().fill(Color.red.opacity(0.85)).frame(width: 10, height: 10)
+                    Circle().fill(Color.yellow.opacity(0.85)).frame(width: 10, height: 10)
+                    Circle().fill(Color.green.opacity(0.85)).frame(width: 10, height: 10)
+                    Spacer()
+                    Image(systemName: "folder")
+                        .foregroundStyle(.cyan)
+                }
+                .padding(16)
+
+                Divider().overlay(Color.white.opacity(0.12))
+
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        finderSidebarRow("Downloads", icon: "arrow.down.circle", isActive: true)
+                        finderSidebarRow("Desktop", icon: "desktopcomputer", isActive: false)
+                        finderSidebarRow("Documents", icon: "doc.text", isActive: false)
+                    }
+                    .padding(14)
+                    .frame(width: 160, alignment: .topLeading)
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
+                    .background(Color.white.opacity(0.04))
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(["Invoices", "Screenshots", "Loose PDFs"], id: \.self) { folder in
+                            HStack(spacing: 10) {
+                                Image(systemName: "folder.fill")
+                                    .foregroundStyle(.cyan)
+                                Text(folder)
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.white.opacity(0.88))
+                                Spacer()
+                            }
+                        }
+                    }
+                    .padding(18)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+            }
+            .frame(width: 500, height: 276)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 7) {
+                finderMenuItem("Organize with Sorty", icon: "sparkles", isPrimary: true)
+                finderMenuItem("Watch with Sorty", icon: "eye", isPrimary: false)
+                Divider().overlay(Color.white.opacity(0.12))
+                finderMenuItem("Repair Finder Extension", icon: "puzzlepiece.extension", isPrimary: false)
+            }
+            .padding(10)
+            .frame(width: 220)
+            .background(Color(white: 0.12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .shadow(color: .black.opacity(0.35), radius: 18, y: 10)
+            .offset(x: 136, y: 58)
+        }
+    }
+
+    private func finderSidebarRow(_ title: String, icon: String, isActive: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .foregroundStyle(isActive ? .cyan : .white.opacity(0.46))
+            Text(title)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(isActive ? .white.opacity(0.9) : .white.opacity(0.58))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(isActive ? Color.cyan.opacity(0.16) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func finderMenuItem(_ title: String, icon: String, isPrimary: Bool) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .frame(width: 16)
+                .foregroundStyle(isPrimary ? .cyan : .white.opacity(0.7))
+            Text(title)
+                .font(.system(size: 12, weight: isPrimary ? .semibold : .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(isPrimary ? 0.95 : 0.78))
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(isPrimary ? Color.cyan.opacity(0.14) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+
     private var topControls: some View {
         HStack {
             Button {
                 guard currentPage > 0 else { return }
+                previousPage = currentPage
                 currentPage -= 1
             } label: {
                 Image(systemName: "chevron.left")
@@ -269,6 +445,7 @@ public struct WhatsNewTourView: View {
             if currentPage == pages.count - 1 {
                 onFinish()
             } else {
+                previousPage = currentPage
                 currentPage += 1
             }
         } label: {
@@ -296,10 +473,40 @@ private struct WhatsNewPage: Identifiable, Hashable {
         self.description = description
     }
 
+    init(title: String, description: String) {
+        self.imageNames = []
+        self.title = title
+        self.description = description
+    }
+
     init(imageNames: [String], title: String, description: String) {
         self.imageNames = imageNames
         self.title = title
         self.description = description
+    }
+
+    func activeImageName(at index: Int) -> String? {
+        guard imageNames.indices.contains(index) else { return nil }
+        return imageNames[index]
+    }
+}
+
+private enum WhatsNewImageLoader {
+    static func image(named name: String) -> NSImage? {
+        let resourceName = (name as NSString).deletingPathExtension
+        let resourceExtension = (name as NSString).pathExtension
+
+        if let url = Bundle.module.url(forResource: resourceName, withExtension: resourceExtension),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+
+        if let url = Bundle.module.url(forResource: name, withExtension: nil),
+           let image = NSImage(contentsOf: url) {
+            return image
+        }
+
+        return NSImage(named: name)
     }
 }
 

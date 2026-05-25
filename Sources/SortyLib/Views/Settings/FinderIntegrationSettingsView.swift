@@ -18,9 +18,13 @@ struct FinderIntegrationSettingsView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // Integration Status
-            SettingsCard(title: "Integration Status", icon: "checkmark.shield", color: .teal) {
-                VStack(alignment: .leading, spacing: 10) {
+            SettingsCard(title: "Finder Integration", icon: "folder.badge.gearshape", color: .cyan) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Run Sorty from Finder, watch folders from the right-click menu, and repair the Finder extension without leaving the app.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     statusRow(
                         label: "Watch Action",
                         value: isWatchActionInstalled ? "Installed" : "Not installed",
@@ -34,7 +38,7 @@ struct FinderIntegrationSettingsView: View {
                     )
 
                     HStack {
-                        Text("Use the sections below to install or repair each integration.")
+                        Text("Sorty checks and repairs these pieces automatically where macOS allows it.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -51,14 +55,13 @@ struct FinderIntegrationSettingsView: View {
             }
             .animatedAppearance(delay: 0.03)
 
-            // Quick Actions
-            SettingsCard(title: "Quick Actions", icon: "cursorarrow.click.badge.clock", color: .cyan) {
+            SettingsCard(title: "Finder Menu Actions", icon: "cursorarrow.click.badge.clock", color: .cyan) {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                             .font(.caption)
-                        Text("'Organize with Sorty' now appears only in Finder's main right-click menu (via Finder Sync), not under Quick Actions.")
+                        Text("'Organize with Sorty' appears in Finder's main right-click menu. 'Watch with Sorty' adds folders to automation from Finder.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -67,7 +70,7 @@ struct FinderIntegrationSettingsView: View {
                     // Watch with Sorty
                     quickActionRow(
                         title: "Watch with Sorty",
-                        description: "Right-click to add a folder to your watched folders",
+                        description: "Right-click a folder to add it to watched folders.",
                         isInstalled: isWatchActionInstalled,
                         message: watchActionMessage,
                         installAction: {
@@ -96,7 +99,6 @@ struct FinderIntegrationSettingsView: View {
             }
             .animatedAppearance(delay: 0.05)
 
-            // Finder Extension
             SettingsCard(title: "Finder Extension", icon: "puzzlepiece.extension", color: .purple) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
@@ -106,6 +108,11 @@ struct FinderIntegrationSettingsView: View {
                             .font(.caption.weight(.medium))
                             .foregroundStyle(finderSyncActive ? .green : .orange)
                     }
+
+                    Text("The Finder extension powers Sorty's direct context-menu action. If macOS disables it after an update, repair it here and confirm it is enabled in Extensions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 8) {
                         Button(finderSyncActive ? "Repair" : "Activate") {
