@@ -30,17 +30,94 @@ private struct MenuBarMascotIcon: View {
 public struct MenuBarLabel: View {
     public init() {}
 
-    private static func menuBarImage() -> NSImage {
-        let source = SortyResources.menuBarLabelNSImage()
-        let image = (source.copy() as? NSImage) ?? source
-        image.size = NSSize(width: 18, height: 18)
-        image.isTemplate = false
-        return image
+    public var body: some View {
+        MenuBarMascotPill()
+            .accessibilityLabel("Sorty")
+    }
+}
+
+private struct MenuBarMascotPill: View {
+    private let pillSize = CGSize(width: 58, height: 24)
+
+    var body: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { context in
+            let time = context.date.timeIntervalSinceReferenceDate
+
+            ZStack {
+                Capsule(style: .continuous)
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.16))
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.26), lineWidth: 0.8)
+                    }
+
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.cyan.opacity(0.38),
+                                Color.white.opacity(0.06),
+                                Color.teal.opacity(0.32)
+                            ],
+                            startPoint: UnitPoint(
+                                x: 0.18 + 0.18 * sin(time * 0.8),
+                                y: 0.1
+                            ),
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .blendMode(.screen)
+
+                MenuBarAnimatedMascot(time: time)
+            }
+            .frame(width: pillSize.width, height: pillSize.height)
+            .clipShape(Capsule(style: .continuous))
+            .systemLiquidGlassBackground(cornerRadius: pillSize.height / 2)
+        }
+    }
+}
+
+private struct MenuBarAnimatedMascot: View {
+    let time: TimeInterval
+
+    private var mascotImage: Image {
+        if let nsImage = SortyResources.image(named: "SortyMascot") {
+            return Image(nsImage: nsImage)
+        }
+
+        return Image(nsImage: SortyResources.menuBarLabelNSImage())
     }
 
-    public var body: some View {
-        Image(nsImage: Self.menuBarImage())
-            .accessibilityLabel("Sorty")
+    var body: some View {
+        mascotImage
+            .renderingMode(.original)
+            .resizable()
+            .scaledToFit()
+            .frame(width: 22, height: 22)
+            .overlay {
+                eyeOverlay
+            }
+            .shadow(color: Color.cyan.opacity(0.38), radius: 3, x: 0, y: 0)
+            .scaleEffect(1.0 + 0.035 * sin(time * 2.4))
+            .rotationEffect(.degrees(3.5 * sin(time * 1.4)))
+            .offset(y: -0.6 + 0.7 * sin(time * 2.0))
+    }
+
+    private var eyeOverlay: some View {
+        let blink = sin(time * 2.9) > 0.965 ? 0.22 : 1.0
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: 1.1)
+                .fill(Color.white)
+                .frame(width: 3.8, height: 4.2 * blink)
+                .offset(x: -3.0, y: -1.6)
+
+            RoundedRectangle(cornerRadius: 1.1)
+                .fill(Color.white)
+                .frame(width: 3.8, height: 4.2 * blink)
+                .offset(x: 3.0, y: -1.6)
+        }
+        .shadow(color: Color.cyan.opacity(0.7), radius: 1.6)
     }
 }
 
