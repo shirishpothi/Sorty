@@ -37,7 +37,7 @@ public struct PermissionsStepView: View {
                         .font(.system(size: 28, weight: .bold, design: .rounded))
 
                     Text(
-                        "Sorty can work without extra setup. Grant optional permissions now if you want Finder actions, broader folder access, or system notifications."
+                        "Sorty needs Files & Folders access before organizing. Grant optional permissions now if you want Finder actions, broader folder access, or system notifications."
                     )
                     .font(.body)
                     .foregroundStyle(.secondary)
@@ -48,7 +48,7 @@ public struct PermissionsStepView: View {
                             .font(.subheadline.bold())
 
                         Text(
-                            "• **Full Disk Access**: Organize protected folders without repeated prompts\n• **Automation**: Read Finder selections for Finder Integration\n• **Notifications**: Alert you when organization completes"
+                            "• **Files & Folders**: Choose a folder before organizing\n• **Full Disk Access**: Organize protected folders without repeated prompts\n• **Automation**: Read Finder selections for Finder Integration\n• **Notifications**: Alert you when organization completes"
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -70,8 +70,22 @@ public struct PermissionsStepView: View {
             .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
 
             VStack(spacing: 20) {
+                Text("Required Permission")
+                    .font(.title3.weight(.semibold))
+
+                VStack(spacing: 16) {
+                    PermissionRow(
+                        type: .filesAndFolders,
+                        state: permissionStates[.filesAndFolders] ?? .unknown,
+                        onExplain: { selectedEducationPermission = .filesAndFolders },
+                        onRequest: { requestPermission(.filesAndFolders, sourceFrameInScreen: $0) }
+                    )
+                }
+                .frame(maxWidth: 400)
+
                 Text("Optional Permissions")
                     .font(.title3.weight(.semibold))
+                    .padding(.top, 4)
 
                 VStack(spacing: 16) {
                     PermissionRow(
@@ -97,7 +111,7 @@ public struct PermissionsStepView: View {
                 }
                 .frame(maxWidth: 400)
 
-                Text("Folder access is requested when you choose a folder to organize.")
+                Text("Choose any folder once so macOS can grant Sorty file access.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -110,7 +124,6 @@ public struct PermissionsStepView: View {
         }
         .onAppear {
             withAnimation { hasAppeared = true }
-            hasRequiredPermissions = true
             checkPermissions()
         }
         .sheet(item: $selectedEducationPermission) { permission in
@@ -126,6 +139,7 @@ public struct PermissionsStepView: View {
         if UserDefaults.standard.bool(forKey: assumeFilesPermissionForUITestsKey) {
             hasRequiredPermissions = true
         }
+        permissionStates[.filesAndFolders] = hasRequiredPermissions ? .granted : .unknown
 
         // Check notification permission
         UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -159,6 +173,9 @@ public struct PermissionsStepView: View {
         HapticFeedbackManager.shared.tap()
 
         switch type {
+        case .filesAndFolders:
+            requestFilesAndFoldersPermission()
+
         case .fullDiskAccess:
             // Open System Settings to Full Disk Access using Permiso
             PermisoAssistant.shared.present(
@@ -190,11 +207,33 @@ public struct PermissionsStepView: View {
             }
         }
     }
+
+    private func requestFilesAndFoldersPermission() {
+        permissionStates[.filesAndFolders] = .pending
+
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.message = "Choose any folder you want Sorty to organize."
+        panel.prompt = "Grant Access"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            _ = url.startAccessingSecurityScopedResource()
+            hasRequiredPermissions = true
+            permissionStates[.filesAndFolders] = .granted
+            HapticFeedbackManager.shared.success()
+        } else {
+            hasRequiredPermissions = false
+            permissionStates[.filesAndFolders] = .unknown
+        }
+    }
 }
 
 // MARK: - Supporting Types
 
 enum PermissionType: String, Identifiable {
+    case filesAndFolders = "Files & Folders"
     case fullDiskAccess = "Full Disk Access"
     case automation = "Automation"
     case notifications = "Notifications"
@@ -203,6 +242,7 @@ enum PermissionType: String, Identifiable {
 
     var icon: String {
         switch self {
+        case .filesAndFolders: return "folder.badge.gearshape.fill"
         case .fullDiskAccess: return "lock.open.fill"
         case .automation: return "gearshape.2.fill"
         case .notifications: return "bell.fill"
@@ -211,6 +251,7 @@ enum PermissionType: String, Identifiable {
 
     var description: String {
         switch self {
+        case .filesAndFolders: return "Choose a folder so Sorty can organize files"
         case .fullDiskAccess: return "Access protected folders when you choose them"
         case .automation: return "Read Finder selections for Finder Integration"
         case .notifications: return "Get notified when organization completes"
@@ -219,6 +260,7 @@ enum PermissionType: String, Identifiable {
 
     var color: Color {
         switch self {
+        case .filesAndFolders: return .blue
         case .fullDiskAccess: return .green
         case .automation: return .orange
         case .notifications: return .purple
@@ -227,6 +269,8 @@ enum PermissionType: String, Identifiable {
 
     var educationTitle: String {
         switch self {
+        case .filesAndFolders:
+            return "Files & Folders"
         case .fullDiskAccess:
             return "Full Disk Access"
         case .automation:
@@ -238,6 +282,8 @@ enum PermissionType: String, Identifiable {
 
     var educationDescription: String {
         switch self {
+        case .filesAndFolders:
+            return "Lets Sorty access folders you explicitly choose with the macOS picker. This is required before Sorty can scan and organize files."
         case .fullDiskAccess:
             return "Lets Sorty organize protected folders you explicitly choose, such as Desktop, Documents, Downloads, or external locations macOS protects."
         case .automation:
@@ -249,6 +295,8 @@ enum PermissionType: String, Identifiable {
 
     var educationActionTitle: String {
         switch self {
+        case .filesAndFolders:
+            return "Choose Folder"
         case .fullDiskAccess, .automation:
             return "Open System Settings"
         case .notifications:
@@ -271,6 +319,7 @@ struct PermissionRow: View {
     let onRequest: (CGRect?) -> Void
     @State private var approvalPulse = false
     @State private var approvalSpin = false
+    @State private var approvalBurst = false
 
     var body: some View {
         HStack(spacing: 16) {
@@ -289,9 +338,7 @@ struct PermissionRow: View {
 
             switch state {
             case .granted:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(.green)
+                grantedCheckmark
             case .denied:
                 PermissionActionButton(title: "Open Settings", style: .bordered, action: onRequest)
                     .fixedSize()
@@ -327,6 +374,11 @@ struct PermissionRow: View {
             guard newState == .granted else { return }
             playApprovalAnimation()
         }
+        .onAppear {
+            if state == .granted {
+                approvalBurst = true
+            }
+        }
     }
 
     private var permissionIcon: some View {
@@ -349,15 +401,35 @@ struct PermissionRow: View {
                     .frame(width: 52, height: 52)
                     .scaleEffect(approvalPulse ? 1.12 : 0.86)
                     .opacity(approvalPulse ? 0 : 1)
+
+                Image(systemName: "sparkle")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(type.color)
+                    .offset(x: 17, y: -18)
+                    .scaleEffect(approvalBurst ? 1 : 0.2)
+                    .opacity(approvalBurst ? 0.95 : 0)
             }
         }
         .frame(width: 52, height: 52)
         .animation(.spring(response: 0.28, dampingFraction: 0.62), value: approvalPulse)
         .animation(.easeInOut(duration: 0.42), value: approvalSpin)
+        .animation(.spring(response: 0.24, dampingFraction: 0.72), value: approvalBurst)
+    }
+
+    private var grantedCheckmark: some View {
+        Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(.green)
+            .scaleEffect(approvalPulse ? 1.16 : 1)
+            .symbolEffect(.bounce, value: approvalPulse)
+            .transition(.scale(scale: 0.7).combined(with: .opacity))
+            .accessibilityLabel("Granted")
     }
 
     private var iconRotation: Angle {
         switch type {
+        case .filesAndFolders:
+            return .degrees(approvalPulse ? 7 : 0)
         case .notifications:
             return .degrees(approvalPulse ? -12 : 0)
         case .automation:
@@ -369,13 +441,19 @@ struct PermissionRow: View {
 
     private func playApprovalAnimation() {
         approvalSpin.toggle()
+        approvalBurst = false
         withAnimation(.spring(response: 0.22, dampingFraction: 0.48)) {
             approvalPulse = true
+            approvalBurst = true
         }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 180_000_000)
             withAnimation(.spring(response: 0.26, dampingFraction: 0.66)) {
                 approvalPulse = false
+            }
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            withAnimation(.easeOut(duration: 0.18)) {
+                approvalBurst = false
             }
         }
     }
