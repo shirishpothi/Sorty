@@ -1049,7 +1049,7 @@ public class NotificationManager: ObservableObject {
                 await self.handleDefaultNotificationActivation(
                     for: type,
                     actionHandler: actionHandler,
-                    backend: .inAppHUD
+                    backend: self.settings.settings.notificationBackend
                 )
             }
         }
