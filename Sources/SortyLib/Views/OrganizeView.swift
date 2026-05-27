@@ -24,6 +24,8 @@ struct OrganizeView: View {
     @State private var showSmarterRetryModelPicker = false
     @State private var showSavedPromptsSheet = false
     @State private var isReturningToStart = false
+    @State private var isCompletingOrganization = false
+    @State private var showsCompletionContent = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -93,10 +95,10 @@ struct OrganizeView: View {
                     stateContent
                         .environment(\.workflowGradientHidden, true)
                         .id(stateIdentifier)
-                        .opacity(isReturningToStart ? 0 : 1)
+                        .opacity(stateContentOpacity)
                         .scaleEffect(isReturningToStart && !reduceMotion ? 0.965 : 1)
-                        .blur(radius: isReturningToStart && !reduceMotion ? 5 : 0)
-                        .offset(y: isReturningToStart && !reduceMotion ? -14 : 0)
+                        .blur(radius: stateContentBlur)
+                        .offset(y: stateContentOffset)
                         .transition(stateTransition)
                 }
             }
@@ -175,17 +177,37 @@ struct OrganizeView: View {
     }
 
     private var persistentWorkflowGradientOpacity: Double {
-        guard appState.selectedDirectory != nil, !shouldShowCompletionView else { return 0 }
+        guard appState.selectedDirectory != nil, !showsCompletionContent else { return 0 }
         return 1
     }
 
     private var persistentWorkflowGradientAnimation: Animation {
         reduceMotion ? .easeOut(duration: 0.12) : .easeInOut(duration: 0.52)
     }
+
+    private var stateContentOpacity: Double {
+        if isReturningToStart { return 0 }
+        if isCompletingOrganization, !showsCompletionContent { return 0 }
+        return 1
+    }
+
+    private var stateContentBlur: CGFloat {
+        guard !reduceMotion else { return 0 }
+        if isReturningToStart { return 5 }
+        if isCompletingOrganization, !showsCompletionContent { return 3 }
+        return 0
+    }
+
+    private var stateContentOffset: CGFloat {
+        guard !reduceMotion else { return 0 }
+        if isReturningToStart { return -14 }
+        if isCompletingOrganization, !showsCompletionContent { return -8 }
+        return 0
+    }
     
     @ViewBuilder
     private var stateContentInner: some View {
-        if shouldShowCompletionView, let plan = organizer.currentPlan {
+        if shouldShowCompletionView, showsCompletionContent, let plan = organizer.currentPlan {
             OrganizationCompleteView(
                 stats: plan.generationStats,
                 totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
@@ -239,7 +261,13 @@ struct OrganizeView: View {
         case .applying:
             AnalysisView(onReturnToStart: returnToStartAfterCancellation)
         case .completed:
-            if let plan = organizer.currentPlan {
+            if !showsCompletionContent, let plan = organizer.currentPlan {
+                PreviewView(
+                    plan: plan,
+                    baseURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
+                    onReturnToStart: returnToStartAfterCancellation
+                )
+            } else if let plan = organizer.currentPlan {
                 OrganizationCompleteView(
                     stats: plan.generationStats,
                     totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
@@ -282,7 +310,7 @@ struct OrganizeView: View {
         case .idle: return "idle"
         case .scanning, .organizing, .applying: return "active"
         case .ready: return "ready"
-        case .completed: return "completed"
+        case .completed: return showsCompletionContent ? "completed" : "ready"
         case .error: return "error"
         }
     }
@@ -352,15 +380,39 @@ struct OrganizeView: View {
             switch newState {
             case .completed:
                 HapticFeedbackManager.shared.success()
+                beginCompletionHandoff()
             case .error:
+                isCompletingOrganization = false
+                showsCompletionContent = false
                 HapticFeedbackManager.shared.error()
             case .ready:
+                isCompletingOrganization = false
+                showsCompletionContent = false
                 HapticFeedbackManager.shared.success()
             case .scanning, .organizing:
+                isCompletingOrganization = false
+                showsCompletionContent = false
                 HapticFeedbackManager.shared.selection()
             default:
                 break
             }
+        }
+    }
+
+    private func beginCompletionHandoff() {
+        guard !showsCompletionContent else { return }
+
+        isCompletingOrganization = true
+
+        Task { @MainActor in
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(80) : .milliseconds(260))
+
+            withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)) {
+                showsCompletionContent = true
+            }
+
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(40) : .milliseconds(360))
+            isCompletingOrganization = false
         }
     }
 
