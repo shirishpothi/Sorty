@@ -228,7 +228,7 @@ struct OrganizeView: View {
     }
 
     private var returnToStartContent: some View {
-        ReadyToOrganizeView(onStart: startOrganization)
+        ReadyToOrganizeView(onStart: startOrganization, startsVisible: true)
     }
     
     @ViewBuilder
@@ -310,7 +310,10 @@ struct OrganizeView: View {
                     }
                 )
             } else {
-                ReadyToOrganizeView(onStart: startOrganization)
+                ReadyToOrganizeView(
+                    onStart: startOrganization,
+                    startsVisible: isShowingReturnToStartContent
+                )
             }
         case .scanning:
             AnalysisView(onReturnToStart: returnToStartAfterCancellation)
@@ -353,9 +356,19 @@ struct OrganizeView: View {
     private func returnToStartAfterCancellation() {
         guard !isReturningToStart else { return }
 
+        let stateAtReturnStart = organizer.state
+        let isReturningFromCompletion: Bool
+        if case .completed = stateAtReturnStart {
+            isReturningFromCompletion = true
+        } else {
+            isReturningFromCompletion = false
+        }
         isShowingReturnToStartContent = true
         withAnimation(returnToStartExitAnimation) {
             isReturningToStart = true
+        }
+        if !isReturningFromCompletion {
+            organizer.prepareForReturnToStartTransition()
         }
 
         Task { @MainActor in
@@ -363,7 +376,7 @@ struct OrganizeView: View {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
-                if case .completed = organizer.state {
+                if isReturningFromCompletion {
                     organizer.pinsCompletionView = false
                     organizer.reset()
                 } else {
@@ -633,6 +646,11 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
+
+    init(onStart: @escaping () -> Void, startsVisible: Bool = false) {
+        self.onStart = onStart
+        _hasAppeared = State(initialValue: startsVisible)
+    }
 
     private var mode: OrganizationMode {
         settingsViewModel.config.mode

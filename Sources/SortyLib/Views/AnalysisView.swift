@@ -253,24 +253,22 @@ struct AnalysisView: View {
                                     removal: .opacity
                                 ))
                         }
-                    } else if organizer.isStreaming {
-                        if hasOrganizeStreamEvents {
-                            OrganizingFlightStageView(suggestions: liveOrganizingSuggestions)
-                                .frame(maxWidth: .infinity)
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .opacity.combined(with: .scale(scale: 0.96)),
-                                        removal: .opacity
-                                    )
+                    } else if hasOrganizeStreamEvents {
+                        OrganizingFlightStageView(suggestions: liveOrganizingSuggestions)
+                            .frame(maxWidth: .infinity)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                                    removal: .opacity
                                 )
-                        } else {
-                            aiInsightsView
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                                        removal: .opacity
-                                    ))
-                        }
+                            )
+                    } else if organizer.isStreaming {
+                        aiInsightsView
+                            .transition(
+                                .asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
                     }
 
                     analysisActionButtons
@@ -668,13 +666,21 @@ struct AnalysisView: View {
             hasOrganizeStreamEvents = false
             liveOrganizingSuggestions = []
         } else {
+            hasRenameStreamEvents = false
             let suggestions = OrganizingStreamSuggestions.parse(
                 from: streamText,
                 files: organizer.scannedFiles
             )
-            liveOrganizingSuggestions = suggestions
-            hasOrganizeStreamEvents = !suggestions.isEmpty
-            hasRenameStreamEvents = false
+            if suggestions.isEmpty {
+                if hasOrganizeStreamEvents && (organizer.isStreaming || organizer.state == .organizing) {
+                    return
+                }
+                liveOrganizingSuggestions = []
+                hasOrganizeStreamEvents = false
+            } else {
+                liveOrganizingSuggestions = suggestions
+                hasOrganizeStreamEvents = true
+            }
         }
     }
 }

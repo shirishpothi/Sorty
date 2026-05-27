@@ -379,6 +379,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     @Published public var planHistory: [OrganizationPlan] = []
     @Published public var errorMessage: String?
     @Published public var customInstructions: String = ""
+
+    /// When true, callers (such as OrganizeView) should keep showing the OrganizationCompleteView
+    /// even if `state` momentarily transitions through `.applying`/`.idle` during an in-place
+    /// undo or redo action performed from that screen.
+    @Published public var pinsCompletionView: Bool = false
     
     // Proactive AI Validation
     @Published public var isAIConfigured: Bool = false
@@ -1331,11 +1336,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             if files.isEmpty {
                 stopTimeoutTimer()
 
-                updateState(.ready, stage: "No files found to organize", progress: 1.0)
                 await MainActor.run {
                     currentPlan = OrganizationPlan(
                         notes: "This folder is empty. Add files and try again."
                     )
+                    updateState(.ready, stage: "No files found to organize", progress: 1.0)
                 }
 
                 NotificationManager.shared.show(
@@ -1366,9 +1371,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 imagePayload: imagePayload
             )
 
-            updateState(.ready, stage: "Ready!", progress: 1.0)
             await MainActor.run {
                 currentPlan = validatedPlan
+                updateState(.ready, stage: "Ready!", progress: 1.0)
             }
 
             NotificationManager.shared.show(
@@ -1932,6 +1937,18 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         AISessionManager.shared.clearErrors()
         cancelInternal()
         resetToIdle()
+    }
+
+    /// Stop live work immediately while a caller owns the visual return-to-start transition.
+    /// The caller should finish the cancellation with `cancel()` after the outgoing view has faded.
+    public func prepareForReturnToStartTransition() {
+        guard state == .scanning || state == .organizing || state == .applying else { return }
+        DebugLogger.log("Preparing return-to-start cancellation")
+        AISessionManager.shared.clearErrors()
+        suppressCancellationReset = true
+        cancelInternal()
+        isStreaming = false
+        stopSteadyProgressTask()
     }
 
     private func cancelInternal() {
