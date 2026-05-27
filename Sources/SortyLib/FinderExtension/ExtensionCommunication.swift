@@ -10,6 +10,20 @@ import Foundation
 import AppKit
 import Darwin
 
+private actor FinderSyncAutoRepairGate {
+    static let shared = FinderSyncAutoRepairGate()
+
+    private var isRunning = false
+
+    func run(_ operation: () async -> Void) async {
+        guard !isRunning else { return }
+        isRunning = true
+        defer { isRunning = false }
+
+        await operation()
+    }
+}
+
 public struct ExtensionCommunication {
     private static let appGroupIdentifier = "group.com.sorty.app"
     private static let directoryKey = "selectedDirectory"
@@ -1319,18 +1333,20 @@ public struct ExtensionCommunication {
     /// the extension from going missing after a rebuild or after switching
     /// between release and debug builds.
     public static func autoRepairFinderSyncIfNeeded() async {
-        guard let currentExtensionURL = currentFinderSyncExtensionURL() else {
-            return
+        await FinderSyncAutoRepairGate.shared.run {
+            guard let currentExtensionURL = currentFinderSyncExtensionURL() else {
+                return
+            }
+            let currentPath = currentExtensionURL.path
+
+            let diagnostics = await getFinderSyncDiagnosticsAsync()
+
+            if !shouldAutoRepairFinderSync(diagnostics: diagnostics, currentPath: currentPath) {
+                return
+            }
+
+            _ = await repairFinderSyncExtensionRegistrationAsync(restartFinder: true)
         }
-        let currentPath = currentExtensionURL.path
-
-        let diagnostics = await getFinderSyncDiagnosticsAsync()
-
-        if !shouldAutoRepairFinderSync(diagnostics: diagnostics, currentPath: currentPath) {
-            return
-        }
-
-        _ = await repairFinderSyncExtensionRegistrationAsync(restartFinder: true)
     }
 
     // MARK: - Quick Action Installation
