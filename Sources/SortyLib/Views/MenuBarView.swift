@@ -5,8 +5,8 @@
 //  Menu bar extra view for persistent background presence
 //
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 // MARK: - Menu Bar Mascot Icon
 
@@ -28,57 +28,96 @@ private struct MenuBarMascotIcon: View {
 // MARK: - Menu Bar Label (Icon for menu bar)
 
 public struct MenuBarLabel: View {
-    public init() {}
+    @ObservedObject private var runningActivity: RunningOrganizationActivity
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    public init() {
+        _runningActivity = ObservedObject(wrappedValue: FolderOrganizer.runningActivity)
+    }
+
+    public init(runningActivity: RunningOrganizationActivity) {
+        _runningActivity = ObservedObject(wrappedValue: runningActivity)
+    }
+
+    private static func menuBarImage() -> NSImage {
+        let source = SortyResources.menuBarLabelNSImage()
+        let image = (source.copy() as? NSImage) ?? source
+        image.size = NSSize(width: 18, height: 18)
+        image.isTemplate = false
+        return image
+    }
 
     public var body: some View {
-        MenuBarMascotPill()
-            .accessibilityLabel("Sorty")
+        Group {
+            if runningActivity.isRunning {
+                MenuBarMascotPill(reduceMotion: reduceMotion)
+            } else {
+                Image(nsImage: Self.menuBarImage())
+            }
+        }
+        .accessibilityLabel(runningActivity.isRunning ? "Sorty is organizing" : "Sorty")
     }
 }
 
 private struct MenuBarMascotPill: View {
+    let reduceMotion: Bool
+
     private let pillSize = CGSize(width: 58, height: 24)
 
     var body: some View {
-        SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
+        if reduceMotion {
+            pill(time: 0)
+        } else {
+            SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 18.0)) { context in
+                pill(time: context.date.timeIntervalSinceReferenceDate)
+            }
+        }
+    }
 
-            ZStack {
-                Capsule(style: .continuous)
-                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.16))
-                    .overlay {
-                        Capsule(style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.26), lineWidth: 0.8)
-                    }
+    private func pill(time: TimeInterval) -> some View {
+        ZStack {
+            Capsule(style: .continuous)
+                .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.18))
+                .overlay {
+                    Capsule(style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
+                }
 
-                Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.cyan.opacity(0.38),
-                                Color.white.opacity(0.06),
-                                Color.teal.opacity(0.32)
-                            ],
-                            startPoint: UnitPoint(
-                                x: 0.18 + 0.18 * sin(time * 0.8),
-                                y: 0.1
-                            ),
-                            endPoint: .bottomTrailing
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.cyan.opacity(0.42),
+                            Color.white.opacity(0.08),
+                            Color.teal.opacity(0.34)
+                        ],
+                        startPoint: UnitPoint(
+                            x: 0.1 + 0.8 * shimmerProgress(time),
+                            y: 0.0
+                        ),
+                        endPoint: UnitPoint(
+                            x: 0.35 + 0.8 * shimmerProgress(time),
+                            y: 1.0
                         )
                     )
-                    .blendMode(.screen)
+                )
+                .blendMode(.screen)
 
-                MenuBarAnimatedMascot(time: time)
-            }
-            .frame(width: pillSize.width, height: pillSize.height)
-            .clipShape(Capsule(style: .continuous))
-            .systemLiquidGlassBackground(cornerRadius: pillSize.height / 2)
+            MenuBarAnimatedMascot(time: time, reduceMotion: reduceMotion)
         }
+        .frame(width: pillSize.width, height: pillSize.height)
+        .clipShape(Capsule(style: .continuous))
+        .systemLiquidGlassBackground(cornerRadius: pillSize.height / 2)
+    }
+
+    private func shimmerProgress(_ time: TimeInterval) -> Double {
+        reduceMotion ? 0.35 : (sin(time * 1.8) + 1.0) / 2.0
     }
 }
 
 private struct MenuBarAnimatedMascot: View {
     let time: TimeInterval
+    let reduceMotion: Bool
 
     private var mascotImage: Image {
         if let nsImage = SortyResources.image(named: "SortyMascot") {
@@ -98,13 +137,13 @@ private struct MenuBarAnimatedMascot: View {
                 eyeOverlay
             }
             .shadow(color: Color.cyan.opacity(0.38), radius: 3, x: 0, y: 0)
-            .scaleEffect(1.0 + 0.035 * sin(time * 2.4))
-            .rotationEffect(.degrees(3.5 * sin(time * 1.4)))
-            .offset(y: -0.6 + 0.7 * sin(time * 2.0))
+            .scaleEffect(reduceMotion ? 1.0 : 1.0 + 0.035 * sin(time * 2.4))
+            .rotationEffect(.degrees(reduceMotion ? 0 : 3.5 * sin(time * 1.4)))
+            .offset(y: reduceMotion ? -0.6 : -0.6 + 0.7 * sin(time * 2.0))
     }
 
     private var eyeOverlay: some View {
-        let blink = sin(time * 2.9) > 0.965 ? 0.22 : 1.0
+        let blink = reduceMotion || sin(time * 2.9) <= 0.965 ? 1.0 : 0.22
 
         return ZStack {
             RoundedRectangle(cornerRadius: 1.1)

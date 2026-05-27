@@ -342,8 +342,18 @@ public struct VisionAnalysisSummary: Equatable, Sendable {
 }
 
 @MainActor
+public final class RunningOrganizationActivity: ObservableObject {
+    @Published public fileprivate(set) var count = 0
+
+    public var isRunning: Bool {
+        count > 0
+    }
+}
+
+@MainActor
 public class FolderOrganizer: ObservableObject, StreamingDelegate {
     nonisolated(unsafe) private static var runningOrganizerIDs: Set<ObjectIdentifier> = []
+    @MainActor public static let runningActivity = RunningOrganizationActivity()
 
     public nonisolated static var runningOrganizationCount: Int {
         runningOrganizerIDs.count
@@ -587,6 +597,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
     deinit {
         if isRegisteredAsRunningOrganizer {
             Self.runningOrganizerIDs.remove(ObjectIdentifier(self))
+            Task { @MainActor in
+                Self.runningActivity.count = Self.runningOrganizationCount
+            }
         }
     }
 
@@ -604,6 +617,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             Self.runningOrganizerIDs.remove(id)
             isRegisteredAsRunningOrganizer = false
         }
+
+        Self.runningActivity.count = Self.runningOrganizationCount
     }
 
     #if DEBUG
