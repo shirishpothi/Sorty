@@ -81,12 +81,8 @@ private final class MenuBarActivityIconView: NSView {
 
     private let baseLayer = CAGradientLayer()
     private let glowLayer = CAGradientLayer()
-    private let laptopLayer = CAShapeLayer()
-    private let screenLayer = CAShapeLayer()
-    private let leftEyeLayer = CAShapeLayer()
-    private let rightEyeLayer = CAShapeLayer()
-    private let standLayer = CAShapeLayer()
     private let highlightLayer = CAGradientLayer()
+    private let mascotLayer = CALayer()
     private var reduceMotion = false
 
     override init(frame frameRect: NSRect) {
@@ -117,20 +113,21 @@ private final class MenuBarActivityIconView: NSView {
     private func setupLayers() {
         wantsLayer = true
         guard let layer else { return }
+        layer.masksToBounds = false
 
         baseLayer.colors = [
-            Self.sortyAccent.withAlphaComponent(0.72).cgColor,
-            Self.sortyHighlight.withAlphaComponent(0.5).cgColor,
-            Self.sortyAccentDeep.withAlphaComponent(0.46).cgColor
+            Self.sortyAccent.withAlphaComponent(0.88).cgColor,
+            Self.sortyHighlight.withAlphaComponent(0.72).cgColor,
+            Self.sortyAccentDeep.withAlphaComponent(0.64).cgColor
         ]
         baseLayer.startPoint = CGPoint(x: 0, y: 0.35)
         baseLayer.endPoint = CGPoint(x: 1, y: 0.7)
         layer.addSublayer(baseLayer)
 
         glowLayer.colors = [
-            Self.sortyHighlight.withAlphaComponent(0.0).cgColor,
-            Self.sortyHighlight.withAlphaComponent(0.56).cgColor,
-            NSColor.white.withAlphaComponent(0.18).cgColor,
+            NSColor.white.withAlphaComponent(0.0).cgColor,
+            NSColor.white.withAlphaComponent(0.38).cgColor,
+            Self.sortyHighlight.withAlphaComponent(0.52).cgColor,
             Self.sortyAccentDeep.withAlphaComponent(0.0).cgColor
         ]
         glowLayer.locations = [0.0, 0.34, 0.5, 1.0].map(NSNumber.init(value:))
@@ -150,52 +147,40 @@ private final class MenuBarActivityIconView: NSView {
         highlightLayer.compositingFilter = "screenBlendMode"
         layer.addSublayer(highlightLayer)
 
-        [laptopLayer, screenLayer, leftEyeLayer, rightEyeLayer, standLayer].forEach {
-            $0.fillColor = NSColor.clear.cgColor
-            $0.strokeColor = NSColor.white.cgColor
-            $0.lineCap = .round
-            $0.lineJoin = .round
-            layer.addSublayer($0)
-        }
-
-        screenLayer.fillColor = NSColor.white.withAlphaComponent(0.08).cgColor
-        laptopLayer.lineWidth = 2.7
-        screenLayer.lineWidth = 2.7
-        leftEyeLayer.fillColor = NSColor.white.cgColor
-        leftEyeLayer.strokeColor = nil
-        rightEyeLayer.fillColor = NSColor.white.cgColor
-        rightEyeLayer.strokeColor = nil
-        standLayer.lineWidth = 2.7
+        mascotLayer.contents = Self.mascotImage()
+        mascotLayer.contentsGravity = .resizeAspect
+        mascotLayer.shadowColor = NSColor.white.cgColor
+        mascotLayer.shadowOpacity = 0.5
+        mascotLayer.shadowRadius = 2.5
+        mascotLayer.shadowOffset = .zero
+        layer.addSublayer(mascotLayer)
 
         updateLayerFrames()
         updateAnimations()
     }
 
     private func updateLayerFrames() {
-        let bounds = CGRect(origin: .zero, size: CGSize(width: 58, height: 24))
+        let bounds = CGRect(origin: .zero, size: self.bounds.size)
         baseLayer.frame = bounds
-        baseLayer.cornerRadius = 12
+        baseLayer.cornerRadius = bounds.height / 2
         glowLayer.frame = bounds
-        glowLayer.cornerRadius = 12
-        highlightLayer.frame = CGRect(x: -22, y: 0, width: 24, height: bounds.height)
-        highlightLayer.cornerRadius = 12
+        glowLayer.cornerRadius = bounds.height / 2
+        highlightLayer.frame = CGRect(x: -22, y: 0, width: 26, height: bounds.height)
+        highlightLayer.cornerRadius = bounds.height / 2
 
-        laptopLayer.frame = bounds
-        screenLayer.frame = bounds
-        leftEyeLayer.frame = bounds
-        rightEyeLayer.frame = bounds
-        standLayer.frame = bounds
-
-        laptopLayer.path = roundedRectPath(x: 18, y: 6.8, width: 22, height: 13, radius: 2.3)
-        screenLayer.path = roundedRectPath(x: 18, y: 6.8, width: 22, height: 13, radius: 2.3)
-        leftEyeLayer.path = roundedRectPath(x: 25.0, y: 13.0, width: 2.2, height: 3.8, radius: 0.8)
-        rightEyeLayer.path = roundedRectPath(x: 31.0, y: 13.0, width: 2.2, height: 3.8, radius: 0.8)
-        standLayer.path = linePath(from: CGPoint(x: 16.5, y: 3.8), to: CGPoint(x: 41.5, y: 3.8))
+        let mascotSize = min(bounds.height - 3, 22)
+        mascotLayer.frame = CGRect(
+            x: (bounds.width - mascotSize) / 2,
+            y: (bounds.height - mascotSize) / 2,
+            width: mascotSize,
+            height: mascotSize
+        )
     }
 
     private func updateAnimations() {
         highlightLayer.removeAllAnimations()
         glowLayer.removeAllAnimations()
+        mascotLayer.removeAllAnimations()
         guard !reduceMotion else { return }
 
         let sweep = CABasicAnimation(keyPath: "position.x")
@@ -214,17 +199,22 @@ private final class MenuBarActivityIconView: NSView {
         pulse.repeatCount = .infinity
         pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         glowLayer.add(pulse, forKey: "pulse")
+
+        let mascotPulse = CABasicAnimation(keyPath: "transform.scale")
+        mascotPulse.fromValue = 0.94
+        mascotPulse.toValue = 1.04
+        mascotPulse.duration = 0.8
+        mascotPulse.autoreverses = true
+        mascotPulse.repeatCount = .infinity
+        mascotPulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        mascotLayer.add(mascotPulse, forKey: "mascotPulse")
     }
 
-    private func roundedRectPath(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, radius: CGFloat) -> CGPath {
-        CGPath(roundedRect: CGRect(x: x, y: y, width: width, height: height), cornerWidth: radius, cornerHeight: radius, transform: nil)
-    }
-
-    private func linePath(from start: CGPoint, to end: CGPoint) -> CGPath {
-        let path = CGMutablePath()
-        path.move(to: start)
-        path.addLine(to: end)
-        return path
+    private static func mascotImage() -> CGImage? {
+        let image = SortyResources.image(named: "SortyMascotHead", withExtension: "png")
+            ?? SortyResources.menuBarLabelNSImage()
+        var proposedRect = CGRect(origin: .zero, size: image.size)
+        return image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil)
     }
 }
 
