@@ -1390,21 +1390,21 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
 
         } catch is CancellationError {
             stopTimeoutTimer()
-            resetToIdle()
+            resetToIdleUnlessCancellationResetIsSuppressed()
             throw CancellationError()
         } catch let error as OrganizationError where error == .cancelled {
             stopTimeoutTimer()
-            resetToIdle()
+            resetToIdleUnlessCancellationResetIsSuppressed()
             throw CancellationError()
         } catch let error as AIClientError where error.isCancellation {
             stopTimeoutTimer()
-            resetToIdle()
+            resetToIdleUnlessCancellationResetIsSuppressed()
             throw CancellationError()
         } catch where (error as NSError).code == NSURLErrorCancelled || 
                       error.localizedDescription.lowercased().contains("cancelled") ||
                       error.localizedDescription.lowercased().contains("canceled") {
             stopTimeoutTimer()
-            resetToIdle()
+            resetToIdleUnlessCancellationResetIsSuppressed()
             throw CancellationError()
         } catch {
             stopTimeoutTimer()
@@ -2038,6 +2038,11 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         isStreaming = false
         
         stopSteadyProgressTask()
+    }
+
+    private func resetToIdleUnlessCancellationResetIsSuppressed(source: OrganizationEntrySource = .manual) {
+        guard !suppressCancellationReset else { return }
+        resetToIdle(source: source)
     }
 
     @MainActor
