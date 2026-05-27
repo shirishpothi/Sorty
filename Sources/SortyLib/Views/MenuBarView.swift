@@ -6,7 +6,6 @@
 //
 
 import AppKit
-import QuartzCore
 import SwiftUI
 
 // MARK: - Menu Bar Mascot Icon
@@ -30,6 +29,7 @@ private struct MenuBarMascotIcon: View {
 
 public struct MenuBarLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isPulsing = false
     private let isAnimating: Bool
 
     public init(isAnimating: Bool = false) {
@@ -44,11 +44,19 @@ public struct MenuBarLabel: View {
         return image
     }()
 
+    private static let activeMascotImage: NSImage = {
+        let source = SortyResources.image(named: "SortyMascotHead", withExtension: "png")
+            ?? SortyResources.menuBarLabelNSImage()
+        let image = (source.copy() as? NSImage) ?? source
+        image.size = NSSize(width: 20, height: 20)
+        image.isTemplate = false
+        return image
+    }()
+
     public var body: some View {
         Group {
             if isAnimating {
-                AnimatedMenuBarActivityIcon(reduceMotion: reduceMotion)
-                    .frame(width: 58, height: 24)
+                activeMascotLabel
             } else {
                 Image(nsImage: Self.menuBarImage)
                     .resizable()
@@ -58,163 +66,41 @@ public struct MenuBarLabel: View {
         }
         .accessibilityLabel(isAnimating ? "Sorty is organizing" : "Sorty")
     }
-}
 
-private struct AnimatedMenuBarActivityIcon: NSViewRepresentable {
-    let reduceMotion: Bool
+    private var activeMascotLabel: some View {
+        ZStack {
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.9),
+                            Color.pink.opacity(0.72),
+                            Color.black.opacity(0.28)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    Capsule(style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.32), lineWidth: 0.8)
+                }
 
-    func makeNSView(context: Context) -> MenuBarActivityIconView {
-        let view = MenuBarActivityIconView(frame: NSRect(origin: .zero, size: CGSize(width: 58, height: 24)))
-        view.setReduceMotion(reduceMotion)
-        return view
-    }
-
-    func updateNSView(_ nsView: MenuBarActivityIconView, context: Context) {
-        nsView.setReduceMotion(reduceMotion)
-    }
-}
-
-private final class MenuBarActivityIconView: NSView {
-    private static let sortyAccent = NSColor(red: 0.95, green: 0.38, blue: 0.475, alpha: 1.0)
-    private static let sortyAccentDeep = NSColor(red: 0.55, green: 0.13, blue: 0.24, alpha: 1.0)
-    private static let sortyHighlight = NSColor(red: 1.0, green: 0.55, blue: 0.66, alpha: 1.0)
-
-    private let baseLayer = CAGradientLayer()
-    private let glowLayer = CAGradientLayer()
-    private let highlightLayer = CAGradientLayer()
-    private let mascotLayer = CALayer()
-    private var reduceMotion = false
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        setupLayers()
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupLayers()
-    }
-
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: 58, height: 24)
-    }
-
-    override func layout() {
-        super.layout()
-        updateLayerFrames()
-    }
-
-    func setReduceMotion(_ reduceMotion: Bool) {
-        guard self.reduceMotion != reduceMotion else { return }
-        self.reduceMotion = reduceMotion
-        updateAnimations()
-    }
-
-    private func setupLayers() {
-        wantsLayer = true
-        guard let layer else { return }
-        layer.masksToBounds = false
-
-        baseLayer.colors = [
-            Self.sortyAccent.withAlphaComponent(0.88).cgColor,
-            Self.sortyHighlight.withAlphaComponent(0.72).cgColor,
-            Self.sortyAccentDeep.withAlphaComponent(0.64).cgColor
-        ]
-        baseLayer.startPoint = CGPoint(x: 0, y: 0.35)
-        baseLayer.endPoint = CGPoint(x: 1, y: 0.7)
-        layer.addSublayer(baseLayer)
-
-        glowLayer.colors = [
-            NSColor.white.withAlphaComponent(0.0).cgColor,
-            NSColor.white.withAlphaComponent(0.38).cgColor,
-            Self.sortyHighlight.withAlphaComponent(0.52).cgColor,
-            Self.sortyAccentDeep.withAlphaComponent(0.0).cgColor
-        ]
-        glowLayer.locations = [0.0, 0.34, 0.5, 1.0].map(NSNumber.init(value:))
-        glowLayer.startPoint = CGPoint(x: 0, y: 0.5)
-        glowLayer.endPoint = CGPoint(x: 1, y: 0.5)
-        glowLayer.compositingFilter = "screenBlendMode"
-        layer.addSublayer(glowLayer)
-
-        highlightLayer.colors = [
-            NSColor.white.withAlphaComponent(0.0).cgColor,
-            NSColor.white.withAlphaComponent(0.28).cgColor,
-            NSColor.white.withAlphaComponent(0.0).cgColor
-        ]
-        highlightLayer.locations = [0.0, 0.48, 1.0].map(NSNumber.init(value:))
-        highlightLayer.startPoint = CGPoint(x: 0, y: 0)
-        highlightLayer.endPoint = CGPoint(x: 1, y: 1)
-        highlightLayer.compositingFilter = "screenBlendMode"
-        layer.addSublayer(highlightLayer)
-
-        mascotLayer.contents = Self.mascotImage()
-        mascotLayer.contentsGravity = .resizeAspect
-        mascotLayer.shadowColor = NSColor.white.cgColor
-        mascotLayer.shadowOpacity = 0.5
-        mascotLayer.shadowRadius = 2.5
-        mascotLayer.shadowOffset = .zero
-        layer.addSublayer(mascotLayer)
-
-        updateLayerFrames()
-        updateAnimations()
-    }
-
-    private func updateLayerFrames() {
-        let bounds = CGRect(origin: .zero, size: self.bounds.size)
-        baseLayer.frame = bounds
-        baseLayer.cornerRadius = bounds.height / 2
-        glowLayer.frame = bounds
-        glowLayer.cornerRadius = bounds.height / 2
-        highlightLayer.frame = CGRect(x: -22, y: 0, width: 26, height: bounds.height)
-        highlightLayer.cornerRadius = bounds.height / 2
-
-        let mascotSize = min(bounds.height - 3, 22)
-        mascotLayer.frame = CGRect(
-            x: (bounds.width - mascotSize) / 2,
-            y: (bounds.height - mascotSize) / 2,
-            width: mascotSize,
-            height: mascotSize
-        )
-    }
-
-    private func updateAnimations() {
-        highlightLayer.removeAllAnimations()
-        glowLayer.removeAllAnimations()
-        mascotLayer.removeAllAnimations()
-        guard !reduceMotion else { return }
-
-        let sweep = CABasicAnimation(keyPath: "position.x")
-        sweep.fromValue = -10
-        sweep.toValue = 70
-        sweep.duration = 1.35
-        sweep.repeatCount = .infinity
-        sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        highlightLayer.add(sweep, forKey: "sweep")
-
-        let pulse = CABasicAnimation(keyPath: "opacity")
-        pulse.fromValue = 0.72
-        pulse.toValue = 1.0
-        pulse.duration = 0.9
-        pulse.autoreverses = true
-        pulse.repeatCount = .infinity
-        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        glowLayer.add(pulse, forKey: "pulse")
-
-        let mascotPulse = CABasicAnimation(keyPath: "transform.scale")
-        mascotPulse.fromValue = 0.94
-        mascotPulse.toValue = 1.04
-        mascotPulse.duration = 0.8
-        mascotPulse.autoreverses = true
-        mascotPulse.repeatCount = .infinity
-        mascotPulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        mascotLayer.add(mascotPulse, forKey: "mascotPulse")
-    }
-
-    private static func mascotImage() -> CGImage? {
-        let image = SortyResources.image(named: "SortyMascotHead", withExtension: "png")
-            ?? SortyResources.menuBarLabelNSImage()
-        var proposedRect = CGRect(origin: .zero, size: image.size)
-        return image.cgImage(forProposedRect: &proposedRect, context: nil, hints: nil)
+            Image(nsImage: Self.activeMascotImage)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+                .shadow(color: .white.opacity(0.35), radius: 2)
+                .scaleEffect(reduceMotion ? 1.0 : (isPulsing ? 1.06 : 0.96))
+        }
+        .frame(width: 34, height: 22)
+        .scaleEffect(reduceMotion ? 1.0 : (isPulsing ? 1.04 : 0.98))
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+                isPulsing = true
+            }
+        }
     }
 }
 
