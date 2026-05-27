@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 
 struct DirectorySelectionView: View {
     @Binding var selectedDirectory: URL?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var isTargeted = false
     @State private var isHovering = false
@@ -47,25 +48,12 @@ struct DirectorySelectionView: View {
                     HapticFeedbackManager.shared.tap()
                     triggerBrowseBeamPress()
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 15, weight: .medium))
-                        Text("Browse for Folder")
-                            .font(.system(size: 15, weight: .semibold))
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    browseFolderButtonLabel
                 }
-                .buttonStyle(.onboardingPill)
-                .onboardingBeamBorder(
-                    variant: .info,
-                    active: hasAppeared,
-                    isIntensified: isBrowseHovering || isBrowseBeamPressed,
-                    includesInteriorGlow: isBrowseHovering || isBrowseBeamPressed
-                )
-                .contentShape(Capsule())
-                .scaleEffect(isBrowseHovering ? 1.03 : 1.0)
-                .animation(.spring(response: 0.22, dampingFraction: 0.84), value: isBrowseHovering)
+                .buttonStyle(.plain)
+                .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .scaleEffect(isBrowseHovering ? 1.025 : 1.0)
+                .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.84), value: isBrowseHovering)
                 .onHover { hovering in
                     let wasHovering = isBrowseHovering
                     if hovering && !wasHovering {
@@ -118,6 +106,60 @@ struct DirectorySelectionView: View {
         case .renameOnly:
             return "Select a directory to rename"
         }
+    }
+
+    private var browseFolderButtonLabel: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Choose folder")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.68))
+                    .lineLimit(1)
+
+                Text("Browse for Folder")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+
+            Image(systemName: "arrow.up.forward")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.9))
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(.white.opacity(isBrowseHovering ? 0.18 : 0.12)))
+                .accessibilityHidden(true)
+        }
+        .padding(.leading, 18)
+        .padding(.trailing, 12)
+        .frame(minWidth: 174, minHeight: 58)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.black.opacity(0.92))
+                .overlay(alignment: .top) {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.white.opacity(0.2), .clear],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                        .frame(height: 30)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.white.opacity(isBrowseHovering ? 0.22 : 0.12), lineWidth: 1)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+        }
+        .shadow(
+            color: .black.opacity(isBrowseHovering || isBrowseBeamPressed ? 0.18 : 0.1),
+            radius: isBrowseHovering || isBrowseBeamPressed ? 16 : 10,
+            y: isBrowseHovering || isBrowseBeamPressed ? 8 : 5
+        )
     }
 
     private var organizationModePicker: some View {
