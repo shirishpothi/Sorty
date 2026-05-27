@@ -81,11 +81,17 @@ struct OrganizeView: View {
             // — overshoot was previously translating subviews enough to expose
             // the window background as a white gap along the bottom edge.
             ZStack {
+                WorkflowGradientBackground()
+                    .opacity(persistentWorkflowGradientOpacity)
+                    .animation(persistentWorkflowGradientAnimation, value: persistentWorkflowGradientOpacity)
+                    .allowsHitTesting(false)
+
                 if appState.selectedDirectory == nil {
                     DirectorySelectionView(selectedDirectory: $appState.selectedDirectory)
                         .transition(TransitionStyles.scaleAndFade)
                 } else {
                     stateContent
+                        .environment(\.workflowGradientHidden, true)
                         .id(stateIdentifier)
                         .opacity(isReturningToStart ? 0 : 1)
                         .scaleEffect(isReturningToStart && !reduceMotion ? 0.965 : 1)
@@ -165,11 +171,42 @@ struct OrganizeView: View {
     private var stateContent: some View {
         stateContentInner
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.background)
+            .background(Color.clear)
+    }
+
+    private var persistentWorkflowGradientOpacity: Double {
+        guard appState.selectedDirectory != nil, !shouldShowCompletionView else { return 0 }
+        return 1
+    }
+
+    private var persistentWorkflowGradientAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .easeInOut(duration: 0.52)
     }
     
     @ViewBuilder
     private var stateContentInner: some View {
+        if shouldShowCompletionView, let plan = organizer.currentPlan {
+            OrganizationCompleteView(
+                stats: plan.generationStats,
+                totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
+                totalFolders: plan.suggestions.count,
+                renameCount: plan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count },
+                mode: settingsViewModel.config.mode,
+                directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
+                onReturnToStart: returnToStartAfterCancellation
+            )
+        } else {
+            stateContentSwitch
+        }
+    }
+
+    private var shouldShowCompletionView: Bool {
+        if case .completed = organizer.state { return true }
+        return organizer.pinsCompletionView
+    }
+
+    @ViewBuilder
+    private var stateContentSwitch: some View {
         switch organizer.state {
         case .idle:
             if needsSetupRepair {

@@ -36,11 +36,27 @@ public enum WorkflowStep: Int, CaseIterable {
     }
 }
 
+/// Environment flag: when `true`, `WorkflowContainer` suppresses its own
+/// gradient background. Use this when an ancestor view is rendering a single
+/// persistent `WorkflowGradientBackground` to avoid double-mounting (which
+/// causes the gradient to flicker as views transition).
+private struct WorkflowGradientHiddenKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var workflowGradientHidden: Bool {
+        get { self[WorkflowGradientHiddenKey.self] }
+        set { self[WorkflowGradientHiddenKey.self] = newValue }
+    }
+}
+
 /// Shared container for workflow screens with consistent layout
 struct WorkflowContainer<Content: View>: View {
     let currentStep: WorkflowStep?
     let showStepIndicator: Bool
     @ViewBuilder var content: Content
+    @Environment(\.workflowGradientHidden) private var gradientHidden
 
     init(
         currentStep: WorkflowStep? = nil,
@@ -73,40 +89,42 @@ struct WorkflowContainer<Content: View>: View {
                 }
             }
         }
-        .background(WorkflowGradientBackground())
+        .background {
+            if !gradientHidden {
+                WorkflowGradientBackground()
+            }
+        }
     }
 }
 
 struct WorkflowGradientBackground: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.workflowGradientHidden) private var gradientHidden
 
     /// Drives the one-shot rise-from-bottom reveal (0 -> 1).
     /// We animate only `scaleEffect` (anchored to `.bottom`) and `opacity`:
     /// no blur, no `drawingGroup`, because those were the main flicker sources.
     @State private var gradientReveal: Double = 0
 
-    /// Drives a continuous, slow breath (0 -> 1, autoreverses).
-    /// Modulates the gradient's vertical extent and brightness so it feels
-    /// alive without ever lifting off the bottom edge.
-    @State private var gradientBreath: Double = 0
+    /// Anchor for the continuous TimelineView clock so animation is phase
+    /// stable across view rebuilds and never snaps when the system tick rate
+    /// changes.
+    @State private var startTime: Date = .now
 
     var body: some View {
-        backgroundLayer
-            .task {
-                // Guarded against re-entry so it only plays once per mount even
-                // if `task` is re-fired by an upstream identity change.
-                guard gradientReveal == 0 else { return }
-                withAnimation(.easeOut(duration: 0.7)) {
-                    gradientReveal = 1
+        if !gradientHidden {
+            backgroundLayer
+                .task {
+                    // Guarded against re-entry so it only plays once per mount even
+                    // if `task` is re-fired by an upstream identity change.
+                    guard gradientReveal == 0 else { return }
+                    startTime = .now
+                    withAnimation(.easeOut(duration: 0.7)) {
+                        gradientReveal = 1
+                    }
                 }
-                // Wait for the reveal to settle, then start the slow continuous
-                // breath. Starting it before the reveal completes would compound
-                // two scale animations on the same property and look jittery.
-                try? await Task.sleep(nanoseconds: 750_000_000)
-                withAnimation(.easeInOut(duration: 3.6).repeatForever(autoreverses: true)) {
-                    gradientBreath = 1
-                }
-            }
+        }
     }
 
     /// Light mode needs more saturation for the gradient to read against the
@@ -120,40 +138,77 @@ struct WorkflowGradientBackground: View {
         colorScheme == .dark ? 0.11 : 0.18
     }
 
-    /// Combined vertical scale: the one-shot reveal multiplied by a visible
-    /// breath modulation. The breath stays inside `[0.86, 1.02]` so the
-    /// gradient never lifts off the bottom edge — no white gap can appear,
-    /// while still being clearly perceptible.
-    private var combinedScaleY: Double {
-        let breath = 0.86 + 0.16 * gradientBreath
-        return gradientReveal * breath
+    /// Top-of-stack soft bloom: a radial highlight that drifts horizontally,
+    /// giving the wash a sense of light catching on it rather than a flat
+    /// pulse.
+    private var bloomOpacity: Double {
+        colorScheme == .dark ? 0.22 : 0.30
     }
 
-    /// Combined opacity: the one-shot reveal multiplied by a perceptible
-    /// breath in `[0.70, 1.0]` so the colour seems to bloom and recede.
-    private var combinedOpacity: Double {
-        let breath = 0.70 + 0.30 * gradientBreath
-        return gradientReveal * breath
-    }
-
-    /// The background is built once. Only `scaleEffect` (anchored to
-    /// `.bottom`) and `opacity` change — both cheap GPU transforms — so
+    /// The background is built once and `TimelineView` only mutates cheap GPU
+    /// transforms (`scaleEffect`, `opacity`) plus the bloom's `UnitPoint`.
     /// SwiftUI never has to rebuild or rasterize the gradient itself.
     private var backgroundLayer: some View {
-        ZStack(alignment: .bottom) {
-            Color(NSColor.windowBackgroundColor)
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
+            let t = context.date.timeIntervalSince(startTime)
 
-            LinearGradient(
-                colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(topOpacity),
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity),
-                    Color.clear
-                ],
-                startPoint: .bottom,
-                endPoint: .center
-            )
-            .scaleEffect(x: 1, y: combinedScaleY, anchor: .bottom)
-            .opacity(combinedOpacity)
+            // Two detuned sine waves combined produce a slowly varying breath
+            // that never repeats exactly, so the motion feels organic instead
+            // of mechanically looping. Periods ~4.8s and ~7.3s are coprime
+            // enough to give a long beat pattern.
+            let breathA = sin(t * (2 * .pi / 4.8))
+            let breathB = sin(t * (2 * .pi / 7.3) + 1.1)
+            let breath = (breathA * 0.65 + breathB * 0.35) // -1 ... 1
+            let breathNorm = (breath + 1) * 0.5             //  0 ... 1
+
+            // Vertical scale stays inside [0.88, 1.04] so the gradient never
+            // lifts off the bottom edge — no white gap can appear — while
+            // still reading as a clear bloom.
+            let scaleY = reduceMotion ? 1.0 : (0.88 + 0.16 * breathNorm)
+            // Opacity breathes between ~0.78 and 1.0 of the resting value.
+            let opacityBreath = reduceMotion ? 1.0 : (0.78 + 0.22 * breathNorm)
+            // Lateral drift of the bloom highlight, very slow (~11s cycle),
+            // travelling within the central 60% of the width.
+            let drift = reduceMotion ? 0 : sin(t * (2 * .pi / 11.0))
+            let bloomX = 0.5 + drift * 0.18
+            // Bloom intensity breathes on its own offset cycle so it never
+            // perfectly aligns with the scale breath.
+            let bloomPulse = reduceMotion ? 0.55 : (0.45 + 0.30 * ((sin(t * (2 * .pi / 6.1) + 0.6) + 1) * 0.5))
+
+            ZStack(alignment: .bottom) {
+                Color(NSColor.windowBackgroundColor)
+
+                LinearGradient(
+                    colors: [
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(topOpacity),
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity),
+                        Color.clear
+                    ],
+                    startPoint: .bottom,
+                    endPoint: .center
+                )
+                .scaleEffect(x: 1, y: gradientReveal * scaleY, anchor: .bottom)
+                .opacity(gradientReveal * opacityBreath)
+
+                // Soft drifting bloom layered on top. RadialGradient anchored
+                // near the bottom edge so the highlight reads as a light source
+                // glowing from below the window chrome.
+                GeometryReader { proxy in
+                    RadialGradient(
+                        colors: [
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(bloomOpacity * bloomPulse),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(bloomOpacity * bloomPulse * 0.35),
+                            .clear
+                        ],
+                        center: UnitPoint(x: bloomX, y: 1.05),
+                        startRadius: 0,
+                        endRadius: max(proxy.size.width, proxy.size.height) * 0.62
+                    )
+                    .blendMode(.plusLighter)
+                    .opacity(gradientReveal)
+                }
+                .allowsHitTesting(false)
+            }
             .allowsHitTesting(false)
         }
         .ignoresSafeArea()
