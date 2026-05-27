@@ -187,39 +187,78 @@ struct OrganizeView: View {
 
     private var stateContentOpacity: Double {
         if isReturningToStart { return 0 }
-        if isCompletingOrganization, !showsCompletionContent { return 0 }
         return 1
     }
 
     private var stateContentBlur: CGFloat {
         guard !reduceMotion else { return 0 }
         if isReturningToStart { return 5 }
-        if isCompletingOrganization, !showsCompletionContent { return 3 }
         return 0
     }
 
     private var stateContentOffset: CGFloat {
         guard !reduceMotion else { return 0 }
         if isReturningToStart { return -14 }
-        if isCompletingOrganization, !showsCompletionContent { return -8 }
         return 0
     }
     
     @ViewBuilder
     private var stateContentInner: some View {
-        if shouldShowCompletionView, showsCompletionContent, let plan = organizer.currentPlan {
-            OrganizationCompleteView(
-                stats: plan.generationStats,
-                totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
-                totalFolders: plan.suggestions.count,
-                renameCount: plan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count },
-                mode: settingsViewModel.config.mode,
-                directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
-                onReturnToStart: returnToStartAfterCancellation
-            )
+        if shouldShowCompletionView {
+            completionHandoffContent
         } else {
             stateContentSwitch
         }
+    }
+
+    @ViewBuilder
+    private var completionHandoffContent: some View {
+        ZStack {
+            if let plan = organizer.currentPlan {
+                PreviewView(
+                    plan: plan,
+                    baseURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
+                    onReturnToStart: returnToStartAfterCancellation
+                )
+                .opacity(showsCompletionContent ? 0 : 1)
+                .blur(radius: completionPreviewBlur)
+                .scaleEffect(showsCompletionContent && !reduceMotion ? 0.992 : 1)
+                .allowsHitTesting(!showsCompletionContent)
+
+                OrganizationCompleteView(
+                    stats: plan.generationStats,
+                    totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
+                    totalFolders: plan.suggestions.count,
+                    renameCount: plan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count },
+                    mode: settingsViewModel.config.mode,
+                    directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
+                    onReturnToStart: returnToStartAfterCancellation
+                )
+                .opacity(showsCompletionContent ? 1 : 0)
+                .scaleEffect(showsCompletionContent || reduceMotion ? 1 : 0.985)
+                .offset(y: showsCompletionContent || reduceMotion ? 0 : 10)
+                .allowsHitTesting(showsCompletionContent)
+            } else {
+                OrganizationCompleteView(
+                    stats: nil,
+                    totalFiles: 0,
+                    totalFolders: 0,
+                    renameCount: 0,
+                    mode: settingsViewModel.config.mode,
+                    directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
+                    onReturnToStart: returnToStartAfterCancellation
+                )
+            }
+        }
+        .animation(completionHandoffAnimation, value: showsCompletionContent)
+    }
+
+    private var completionPreviewBlur: CGFloat {
+        showsCompletionContent && !reduceMotion ? 2 : 0
+    }
+
+    private var completionHandoffAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)
     }
 
     private var shouldShowCompletionView: Bool {
@@ -261,33 +300,7 @@ struct OrganizeView: View {
         case .applying:
             AnalysisView(onReturnToStart: returnToStartAfterCancellation)
         case .completed:
-            if !showsCompletionContent, let plan = organizer.currentPlan {
-                PreviewView(
-                    plan: plan,
-                    baseURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
-                    onReturnToStart: returnToStartAfterCancellation
-                )
-            } else if let plan = organizer.currentPlan {
-                OrganizationCompleteView(
-                    stats: plan.generationStats,
-                    totalFiles: plan.suggestions.reduce(0) { $0 + $1.totalFileCount },
-                    totalFolders: plan.suggestions.count,
-                    renameCount: plan.suggestions.reduce(0) { $0 + $1.allFileRenameMappings.filter { $0.hasRename }.count },
-                    mode: settingsViewModel.config.mode,
-                    directoryURL: appState.selectedDirectory!,
-                    onReturnToStart: returnToStartAfterCancellation
-                )
-            } else {
-                OrganizationCompleteView(
-                    stats: nil,
-                    totalFiles: 0,
-                    totalFolders: 0,
-                    renameCount: 0,
-                    mode: settingsViewModel.config.mode,
-                    directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
-                    onReturnToStart: returnToStartAfterCancellation
-                )
-            }
+            completionHandoffContent
         case .error(let error):
             ErrorView(
                 error: error,
@@ -310,7 +323,7 @@ struct OrganizeView: View {
         case .idle: return "idle"
         case .scanning, .organizing, .applying: return "active"
         case .ready: return "ready"
-        case .completed: return showsCompletionContent ? "completed" : "ready"
+        case .completed: return "ready"
         case .error: return "error"
         }
     }
