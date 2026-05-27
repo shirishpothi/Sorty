@@ -67,14 +67,8 @@ public struct MenuBarLabel: View {
     }
 
     private var activeMascotLabel: some View {
-        Group {
-            if reduceMotion {
-                activeMascotFrame(time: 0)
-            } else {
-                TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { context in
-                    activeMascotFrame(time: context.date.timeIntervalSinceReferenceDate)
-                }
-            }
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { context in
+            activeMascotFrame(time: reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate)
         }
         .frame(width: 34, height: 22)
     }
