@@ -57,6 +57,7 @@ struct DirectorySelectionView: View {
                     .padding(.vertical, 10)
                 }
                 .buttonStyle(.onboardingPill)
+                .folderBrowserButtonDepth(isPressed: isBrowseBeamPressed)
                 .onboardingBeamBorder(
                     variant: .info,
                     active: hasAppeared,
@@ -406,6 +407,65 @@ struct OrganizationModeSegment: View {
         .accessibilityLabel(mode.displayName)
         .accessibilityHint(mode.description)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+private struct FolderBrowserButtonDepthModifier: ViewModifier {
+    let isPressed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                Capsule()
+                    .strokeBorder(
+                        LinearGradient(
+                            stops: [
+                                .init(color: Color.white.opacity(isPressed ? 0.18 : 0.42), location: 0),
+                                .init(color: Color.white.opacity(isPressed ? 0.06 : 0.16), location: 0.34),
+                                .init(color: Color.black.opacity(isPressed ? 0.22 : 0.12), location: 1)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: .top) {
+                Capsule()
+                    .fill(Color.white.opacity(isPressed ? 0.14 : 0.36))
+                    .frame(height: 1)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 1)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                Capsule()
+                    .strokeBorder(Color.black.opacity(isPressed ? 0.2 : 0.1), lineWidth: 1)
+                    .blur(radius: 1.2)
+                    .offset(y: isPressed ? 1 : 1.5)
+                    .mask(
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.clear,
+                                        Color.black.opacity(0.65),
+                                        Color.black
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                    )
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+private extension View {
+    func folderBrowserButtonDepth(isPressed: Bool) -> some View {
+        modifier(FolderBrowserButtonDepthModifier(isPressed: isPressed))
     }
 }
 
