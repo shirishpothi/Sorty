@@ -24,7 +24,7 @@ struct OrganizeView: View {
     @State private var showSmarterRetryModelPicker = false
     @State private var showSavedPromptsSheet = false
     @State private var isReturningToStart = false
-    @State private var isCompletingOrganization = false
+    @State private var isShowingReturnToStartContent = false
     @State private var showsCompletionContent = false
 
     var body: some View {
@@ -94,15 +94,21 @@ struct OrganizeView: View {
                 } else {
                     stateContent
                         .environment(\.workflowGradientHidden, true)
-                        .id(stateIdentifier)
                         .opacity(stateContentOpacity)
-                        .scaleEffect(isReturningToStart && !reduceMotion ? 0.965 : 1)
+                        .scaleEffect(stateContentScale)
                         .blur(radius: stateContentBlur)
                         .offset(y: stateContentOffset)
-                        .transition(stateTransition)
+
+                    if isShowingReturnToStartContent {
+                        returnToStartContent
+                            .environment(\.workflowGradientHidden, true)
+                            .opacity(returnToStartContentOpacity)
+                            .scaleEffect(returnToStartContentScale)
+                            .offset(y: returnToStartContentOffset)
+                            .transition(.identity)
+                    }
                 }
             }
-            .animation(returnToStartEntranceAnimation, value: stateIdentifier)
             .animation(returnToStartExitAnimation, value: isReturningToStart)
         }
         .navigationTitle("Organize Files")
@@ -190,9 +196,14 @@ struct OrganizeView: View {
         return 1
     }
 
+    private var stateContentScale: CGFloat {
+        if isReturningToStart, !reduceMotion { return 0.985 }
+        return 1
+    }
+
     private var stateContentBlur: CGFloat {
         guard !reduceMotion else { return 0 }
-        if isReturningToStart { return 5 }
+        if isReturningToStart { return 2 }
         return 0
     }
 
@@ -200,6 +211,24 @@ struct OrganizeView: View {
         guard !reduceMotion else { return 0 }
         if isReturningToStart { return -14 }
         return 0
+    }
+
+    private var returnToStartContentOpacity: Double {
+        isReturningToStart ? 1 : 0
+    }
+
+    private var returnToStartContentScale: CGFloat {
+        guard !reduceMotion else { return 1 }
+        return isReturningToStart ? 1 : 0.985
+    }
+
+    private var returnToStartContentOffset: CGFloat {
+        guard !reduceMotion else { return 0 }
+        return isReturningToStart ? 0 : 12
+    }
+
+    private var returnToStartContent: some View {
+        ReadyToOrganizeView(onStart: startOrganization)
     }
     
     @ViewBuilder
@@ -317,74 +346,39 @@ struct OrganizeView: View {
         }
     }
 
-    private var stateIdentifier: String {
-        // Group states that show the same view to avoid unnecessary subtree rebuilds
-        switch organizer.state {
-        case .idle: return "idle"
-        case .scanning, .organizing, .applying: return "active"
-        case .ready: return "ready"
-        case .completed: return "ready"
-        case .error: return "error"
-        }
-    }
-
-    private var stateTransition: AnyTransition {
-        guard !reduceMotion else {
-            return .opacity
-        }
-
-        if isReturningToStart {
-            return .asymmetric(
-                insertion: .opacity
-                    .combined(with: .scale(scale: 0.965, anchor: .center))
-                    .combined(with: .offset(y: 18)),
-                removal: .opacity
-                    .combined(with: .scale(scale: 0.965, anchor: .center))
-                    .combined(with: .offset(y: -18))
-            )
-        }
-
-        return AnyTransition.asymmetric(
-            insertion: AnyTransition.opacity
-                .combined(with: AnyTransition.scale(scale: 0.982, anchor: .center))
-                .combined(with: AnyTransition.offset(y: 10)),
-            removal: AnyTransition.opacity
-                .combined(with: AnyTransition.scale(scale: 0.992, anchor: .center))
-                .combined(with: AnyTransition.offset(y: -6))
-        )
-    }
-
     private var returnToStartExitAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.26)
-    }
-
-    private var returnToStartEntranceAnimation: Animation {
-        reduceMotion
-            ? .easeOut(duration: 0.18)
-            : .spring(response: 0.52, dampingFraction: 0.92, blendDuration: 0.08)
+        reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)
     }
 
     private func returnToStartAfterCancellation() {
         guard !isReturningToStart else { return }
 
+        isShowingReturnToStartContent = true
         withAnimation(returnToStartExitAnimation) {
             isReturningToStart = true
         }
 
         Task { @MainActor in
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(90) : .milliseconds(220))
-            withAnimation(returnToStartEntranceAnimation) {
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(90) : .milliseconds(360))
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
                 if case .completed = organizer.state {
+                    organizer.pinsCompletionView = false
                     organizer.reset()
                 } else {
                     organizer.cancel()
                 }
+                showsCompletionContent = false
             }
 
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(40) : .milliseconds(70))
-            withAnimation(returnToStartEntranceAnimation) {
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(80) : .milliseconds(260))
+            withAnimation(returnToStartExitAnimation) {
                 isReturningToStart = false
             }
+
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(120) : .milliseconds(420))
+            isShowingReturnToStartContent = false
         }
     }
 
@@ -395,15 +389,12 @@ struct OrganizeView: View {
                 HapticFeedbackManager.shared.success()
                 beginCompletionHandoff()
             case .error:
-                isCompletingOrganization = false
                 showsCompletionContent = false
                 HapticFeedbackManager.shared.error()
             case .ready:
-                isCompletingOrganization = false
                 showsCompletionContent = false
                 HapticFeedbackManager.shared.success()
             case .scanning, .organizing:
-                isCompletingOrganization = false
                 showsCompletionContent = false
                 HapticFeedbackManager.shared.selection()
             default:
@@ -415,17 +406,12 @@ struct OrganizeView: View {
     private func beginCompletionHandoff() {
         guard !showsCompletionContent else { return }
 
-        isCompletingOrganization = true
-
         Task { @MainActor in
             try? await Task.sleep(for: reduceMotion ? .milliseconds(80) : .milliseconds(260))
 
             withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)) {
                 showsCompletionContent = true
             }
-
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(40) : .milliseconds(360))
-            isCompletingOrganization = false
         }
     }
 
