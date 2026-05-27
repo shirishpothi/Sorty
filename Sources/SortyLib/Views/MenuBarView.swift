@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import QuartzCore
 import SwiftUI
 
 // MARK: - Menu Bar Mascot Icon
@@ -28,135 +29,202 @@ private struct MenuBarMascotIcon: View {
 // MARK: - Menu Bar Label (Icon for menu bar)
 
 public struct MenuBarLabel: View {
-    @ObservedObject private var runningActivity: RunningOrganizationActivity
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let isAnimating: Bool
 
-    public init() {
-        _runningActivity = ObservedObject(wrappedValue: FolderOrganizer.runningActivity)
+    public init(isAnimating: Bool = false) {
+        self.isAnimating = isAnimating
     }
 
-    public init(runningActivity: RunningOrganizationActivity) {
-        _runningActivity = ObservedObject(wrappedValue: runningActivity)
-    }
-
-    private static func menuBarImage() -> NSImage {
+    private static let menuBarImage: NSImage = {
         let source = SortyResources.menuBarLabelNSImage()
         let image = (source.copy() as? NSImage) ?? source
         image.size = NSSize(width: 18, height: 18)
         image.isTemplate = false
         return image
-    }
+    }()
 
     public var body: some View {
         Group {
-            if runningActivity.isRunning {
-                MenuBarMascotPill(reduceMotion: reduceMotion)
+            if isAnimating {
+                AnimatedMenuBarActivityIcon(reduceMotion: reduceMotion)
+                    .frame(width: 58, height: 24)
             } else {
-                Image(nsImage: Self.menuBarImage())
+                Image(nsImage: Self.menuBarImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
             }
         }
-        .accessibilityLabel(runningActivity.isRunning ? "Sorty is organizing" : "Sorty")
+        .accessibilityLabel(isAnimating ? "Sorty is organizing" : "Sorty")
     }
 }
 
-private struct MenuBarMascotPill: View {
+private struct AnimatedMenuBarActivityIcon: NSViewRepresentable {
     let reduceMotion: Bool
 
-    private let pillSize = CGSize(width: 58, height: 24)
-
-    var body: some View {
-        if reduceMotion {
-            pill(time: 0)
-        } else {
-            SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 18.0)) { context in
-                pill(time: context.date.timeIntervalSinceReferenceDate)
-            }
-        }
+    func makeNSView(context: Context) -> MenuBarActivityIconView {
+        let view = MenuBarActivityIconView(frame: NSRect(origin: .zero, size: CGSize(width: 58, height: 24)))
+        view.setReduceMotion(reduceMotion)
+        return view
     }
 
-    private func pill(time: TimeInterval) -> some View {
-        ZStack {
-            Capsule(style: .continuous)
-                .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.18))
-                .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.28), lineWidth: 0.8)
-                }
-
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.cyan.opacity(0.42),
-                            Color.white.opacity(0.08),
-                            Color.teal.opacity(0.34)
-                        ],
-                        startPoint: UnitPoint(
-                            x: 0.1 + 0.8 * shimmerProgress(time),
-                            y: 0.0
-                        ),
-                        endPoint: UnitPoint(
-                            x: 0.35 + 0.8 * shimmerProgress(time),
-                            y: 1.0
-                        )
-                    )
-                )
-                .blendMode(.screen)
-
-            MenuBarAnimatedMascot(time: time, reduceMotion: reduceMotion)
-        }
-        .frame(width: pillSize.width, height: pillSize.height)
-        .clipShape(Capsule(style: .continuous))
-        .systemLiquidGlassBackground(cornerRadius: pillSize.height / 2)
-    }
-
-    private func shimmerProgress(_ time: TimeInterval) -> Double {
-        reduceMotion ? 0.35 : (sin(time * 1.8) + 1.0) / 2.0
+    func updateNSView(_ nsView: MenuBarActivityIconView, context: Context) {
+        nsView.setReduceMotion(reduceMotion)
     }
 }
 
-private struct MenuBarAnimatedMascot: View {
-    let time: TimeInterval
-    let reduceMotion: Bool
+private final class MenuBarActivityIconView: NSView {
+    private static let sortyAccent = NSColor(red: 0.95, green: 0.38, blue: 0.475, alpha: 1.0)
+    private static let sortyAccentDeep = NSColor(red: 0.55, green: 0.13, blue: 0.24, alpha: 1.0)
+    private static let sortyHighlight = NSColor(red: 1.0, green: 0.55, blue: 0.66, alpha: 1.0)
 
-    private var mascotImage: Image {
-        if let nsImage = SortyResources.image(named: "SortyMascot") {
-            return Image(nsImage: nsImage)
-        }
+    private let baseLayer = CAGradientLayer()
+    private let glowLayer = CAGradientLayer()
+    private let laptopLayer = CAShapeLayer()
+    private let screenLayer = CAShapeLayer()
+    private let leftEyeLayer = CAShapeLayer()
+    private let rightEyeLayer = CAShapeLayer()
+    private let standLayer = CAShapeLayer()
+    private let highlightLayer = CAGradientLayer()
+    private var reduceMotion = false
 
-        return Image(nsImage: SortyResources.menuBarLabelNSImage())
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupLayers()
     }
 
-    var body: some View {
-        mascotImage
-            .renderingMode(.original)
-            .resizable()
-            .scaledToFit()
-            .frame(width: 22, height: 22)
-            .overlay {
-                eyeOverlay
-            }
-            .shadow(color: Color.cyan.opacity(0.38), radius: 3, x: 0, y: 0)
-            .scaleEffect(reduceMotion ? 1.0 : 1.0 + 0.035 * sin(time * 2.4))
-            .rotationEffect(.degrees(reduceMotion ? 0 : 3.5 * sin(time * 1.4)))
-            .offset(y: reduceMotion ? -0.6 : -0.6 + 0.7 * sin(time * 2.0))
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupLayers()
     }
 
-    private var eyeOverlay: some View {
-        let blink = reduceMotion || sin(time * 2.9) <= 0.965 ? 1.0 : 0.22
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 58, height: 24)
+    }
 
-        return ZStack {
-            RoundedRectangle(cornerRadius: 1.1)
-                .fill(Color.white)
-                .frame(width: 3.8, height: 4.2 * blink)
-                .offset(x: -3.0, y: -1.6)
+    override func layout() {
+        super.layout()
+        updateLayerFrames()
+    }
 
-            RoundedRectangle(cornerRadius: 1.1)
-                .fill(Color.white)
-                .frame(width: 3.8, height: 4.2 * blink)
-                .offset(x: 3.0, y: -1.6)
+    func setReduceMotion(_ reduceMotion: Bool) {
+        guard self.reduceMotion != reduceMotion else { return }
+        self.reduceMotion = reduceMotion
+        updateAnimations()
+    }
+
+    private func setupLayers() {
+        wantsLayer = true
+        guard let layer else { return }
+
+        baseLayer.colors = [
+            Self.sortyAccent.withAlphaComponent(0.72).cgColor,
+            Self.sortyHighlight.withAlphaComponent(0.5).cgColor,
+            Self.sortyAccentDeep.withAlphaComponent(0.46).cgColor
+        ]
+        baseLayer.startPoint = CGPoint(x: 0, y: 0.35)
+        baseLayer.endPoint = CGPoint(x: 1, y: 0.7)
+        layer.addSublayer(baseLayer)
+
+        glowLayer.colors = [
+            Self.sortyHighlight.withAlphaComponent(0.0).cgColor,
+            Self.sortyHighlight.withAlphaComponent(0.56).cgColor,
+            NSColor.white.withAlphaComponent(0.18).cgColor,
+            Self.sortyAccentDeep.withAlphaComponent(0.0).cgColor
+        ]
+        glowLayer.locations = [0.0, 0.34, 0.5, 1.0].map(NSNumber.init(value:))
+        glowLayer.startPoint = CGPoint(x: 0, y: 0.5)
+        glowLayer.endPoint = CGPoint(x: 1, y: 0.5)
+        glowLayer.compositingFilter = "screenBlendMode"
+        layer.addSublayer(glowLayer)
+
+        highlightLayer.colors = [
+            NSColor.white.withAlphaComponent(0.0).cgColor,
+            NSColor.white.withAlphaComponent(0.28).cgColor,
+            NSColor.white.withAlphaComponent(0.0).cgColor
+        ]
+        highlightLayer.locations = [0.0, 0.48, 1.0].map(NSNumber.init(value:))
+        highlightLayer.startPoint = CGPoint(x: 0, y: 0)
+        highlightLayer.endPoint = CGPoint(x: 1, y: 1)
+        highlightLayer.compositingFilter = "screenBlendMode"
+        layer.addSublayer(highlightLayer)
+
+        [laptopLayer, screenLayer, leftEyeLayer, rightEyeLayer, standLayer].forEach {
+            $0.fillColor = NSColor.clear.cgColor
+            $0.strokeColor = NSColor.white.cgColor
+            $0.lineCap = .round
+            $0.lineJoin = .round
+            layer.addSublayer($0)
         }
-        .shadow(color: Color.cyan.opacity(0.7), radius: 1.6)
+
+        screenLayer.fillColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        laptopLayer.lineWidth = 2.7
+        screenLayer.lineWidth = 2.7
+        leftEyeLayer.fillColor = NSColor.white.cgColor
+        leftEyeLayer.strokeColor = nil
+        rightEyeLayer.fillColor = NSColor.white.cgColor
+        rightEyeLayer.strokeColor = nil
+        standLayer.lineWidth = 2.7
+
+        updateLayerFrames()
+        updateAnimations()
+    }
+
+    private func updateLayerFrames() {
+        let bounds = CGRect(origin: .zero, size: CGSize(width: 58, height: 24))
+        baseLayer.frame = bounds
+        baseLayer.cornerRadius = 12
+        glowLayer.frame = bounds
+        glowLayer.cornerRadius = 12
+        highlightLayer.frame = CGRect(x: -22, y: 0, width: 24, height: bounds.height)
+        highlightLayer.cornerRadius = 12
+
+        laptopLayer.frame = bounds
+        screenLayer.frame = bounds
+        leftEyeLayer.frame = bounds
+        rightEyeLayer.frame = bounds
+        standLayer.frame = bounds
+
+        laptopLayer.path = roundedRectPath(x: 18, y: 6.8, width: 22, height: 13, radius: 2.3)
+        screenLayer.path = roundedRectPath(x: 18, y: 6.8, width: 22, height: 13, radius: 2.3)
+        leftEyeLayer.path = roundedRectPath(x: 25.0, y: 13.0, width: 2.2, height: 3.8, radius: 0.8)
+        rightEyeLayer.path = roundedRectPath(x: 31.0, y: 13.0, width: 2.2, height: 3.8, radius: 0.8)
+        standLayer.path = linePath(from: CGPoint(x: 16.5, y: 3.8), to: CGPoint(x: 41.5, y: 3.8))
+    }
+
+    private func updateAnimations() {
+        highlightLayer.removeAllAnimations()
+        glowLayer.removeAllAnimations()
+        guard !reduceMotion else { return }
+
+        let sweep = CABasicAnimation(keyPath: "position.x")
+        sweep.fromValue = -10
+        sweep.toValue = 70
+        sweep.duration = 1.35
+        sweep.repeatCount = .infinity
+        sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        highlightLayer.add(sweep, forKey: "sweep")
+
+        let pulse = CABasicAnimation(keyPath: "opacity")
+        pulse.fromValue = 0.72
+        pulse.toValue = 1.0
+        pulse.duration = 0.9
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        glowLayer.add(pulse, forKey: "pulse")
+    }
+
+    private func roundedRectPath(x: CGFloat, y: CGFloat, width: CGFloat, height: CGFloat, radius: CGFloat) -> CGPath {
+        CGPath(roundedRect: CGRect(x: x, y: y, width: width, height: height), cornerWidth: radius, cornerHeight: radius, transform: nil)
+    }
+
+    private func linePath(from start: CGPoint, to end: CGPoint) -> CGPath {
+        let path = CGMutablePath()
+        path.move(to: start)
+        path.addLine(to: end)
+        return path
     }
 }
 
