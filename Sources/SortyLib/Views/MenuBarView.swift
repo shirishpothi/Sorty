@@ -28,11 +28,7 @@ private struct MenuBarMascotIcon: View {
 // MARK: - Menu Bar Label (Icon for menu bar)
 
 public struct MenuBarLabel: View {
-    private let isAnimating: Bool
-
-    public init(isAnimating: Bool = false) {
-        self.isAnimating = isAnimating
-    }
+    public init() {}
 
     private static let menuBarImage: NSImage = {
         let source = SortyResources.menuBarLabelNSImage()
@@ -47,7 +43,7 @@ public struct MenuBarLabel: View {
             .resizable()
             .scaledToFit()
             .frame(width: 18, height: 18)
-        .accessibilityLabel(isAnimating ? "Sorty is organizing" : "Sorty")
+            .accessibilityLabel("Sorty")
     }
 }
 
