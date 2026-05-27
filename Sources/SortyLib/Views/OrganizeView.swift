@@ -25,6 +25,7 @@ struct OrganizeView: View {
     @State private var showSavedPromptsSheet = false
     @State private var isReturningToStart = false
     @State private var isShowingReturnToStartContent = false
+    @State private var keepsReadyContentVisibleAfterReturn = false
     @State private var showsCompletionContent = false
 
     var body: some View {
@@ -312,7 +313,7 @@ struct OrganizeView: View {
             } else {
                 ReadyToOrganizeView(
                     onStart: startOrganization,
-                    startsVisible: isShowingReturnToStartContent
+                    startsVisible: isShowingReturnToStartContent || keepsReadyContentVisibleAfterReturn
                 )
             }
         case .scanning:
@@ -383,6 +384,7 @@ struct OrganizeView: View {
                     organizer.cancel()
                 }
                 showsCompletionContent = false
+                keepsReadyContentVisibleAfterReturn = true
             }
 
             try? await Task.sleep(for: reduceMotion ? .milliseconds(80) : .milliseconds(260))
@@ -449,6 +451,7 @@ struct OrganizeView: View {
         }
 
         HapticFeedbackManager.shared.tap()
+        keepsReadyContentVisibleAfterReturn = false
 
         // Apply default steering prompt if no custom instructions provided
         if organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
