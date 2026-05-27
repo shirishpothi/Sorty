@@ -29,7 +29,6 @@ private struct MenuBarMascotIcon: View {
 
 public struct MenuBarLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
     private let isAnimating: Bool
 
     public init(isAnimating: Bool = false) {
@@ -68,39 +67,78 @@ public struct MenuBarLabel: View {
     }
 
     private var activeMascotLabel: some View {
-        ZStack {
+        Group {
+            if reduceMotion {
+                activeMascotFrame(time: 0)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 15.0)) { context in
+                    activeMascotFrame(time: context.date.timeIntervalSinceReferenceDate)
+                }
+            }
+        }
+        .frame(width: 34, height: 22)
+    }
+
+    private func activeMascotFrame(time: TimeInterval) -> some View {
+        let eyeOffset = reduceMotion ? 0 : CGFloat(sin(time * 2.6) * 1.15)
+        let sweepOffset = reduceMotion ? 0 : CGFloat((time * 28).truncatingRemainder(dividingBy: 52)) - 26
+
+        return ZStack {
             Capsule(style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.9),
-                            Color.pink.opacity(0.72),
-                            Color.black.opacity(0.28)
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.92),
+                            Color.pink.opacity(0.7),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.42)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
-                .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.32), lineWidth: 0.8)
-                }
+
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0),
+                            Color.white.opacity(0.28),
+                            Color.pink.opacity(0.48),
+                            Color.white.opacity(0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 13, height: 26)
+                .rotationEffect(.degrees(16))
+                .offset(x: sweepOffset)
+                .blendMode(.screen)
+                .allowsHitTesting(false)
 
             Image(nsImage: Self.activeMascotImage)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 20, height: 20)
-                .shadow(color: .white.opacity(0.35), radius: 2)
-                .scaleEffect(reduceMotion ? 1.0 : (isPulsing ? 1.06 : 0.96))
-        }
-        .frame(width: 34, height: 22)
-        .scaleEffect(reduceMotion ? 1.0 : (isPulsing ? 1.04 : 0.98))
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
-                isPulsing = true
+                .shadow(color: .white.opacity(0.3), radius: 2)
+
+            HStack(spacing: 4.2) {
+                eyeDot
+                eyeDot
             }
+            .offset(x: eyeOffset, y: -1.5)
+
+            Capsule(style: .continuous)
+                .strokeBorder(Color.white.opacity(0.32), lineWidth: 0.8)
         }
+        .clipShape(Capsule(style: .continuous))
+    }
+
+    private var eyeDot: some View {
+        Capsule(style: .continuous)
+            .fill(Color.white)
+            .frame(width: 2.4, height: 4.2)
+            .shadow(color: .white.opacity(0.45), radius: 1.2)
     }
 }
 
