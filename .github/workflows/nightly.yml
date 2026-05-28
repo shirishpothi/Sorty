@@ -130,7 +130,7 @@ jobs:
           APPCAST_BUILD_NUM: ${{ steps.nightly.outputs.build_num }}
           APPCAST_ITEM_TITLE: ${{ steps.nightly.outputs.display_name }}
           APPCAST_CHANNEL: nightly
-          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/download/${{ env.NIGHTLY_TAG }}/${{ env.RELEASE_NOTES_HTML }}
+          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/tag/${{ env.NIGHTLY_TAG }}
         run: |
           chmod +x ./scripts/generate_appcast_ci.sh
           ZIP_NAME_OVERRIDE="${{ env.NIGHTLY_ZIP }}" ./scripts/generate_appcast_ci.sh
@@ -145,7 +145,7 @@ jobs:
           APPCAST_VERSION: ${{ steps.nightly.outputs.base_version }}
           APPCAST_BUILD_NUM: ${{ steps.nightly.outputs.build_num }}
           APPCAST_ITEM_TITLE: ${{ steps.nightly.outputs.display_name }}
-          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/download/${{ steps.nightly.outputs.latest_stable_tag }}/${{ env.RELEASE_NOTES_HTML }}
+          APPCAST_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/tag/${{ steps.nightly.outputs.latest_stable_tag }}
         run: |
           ZIP_NAME_OVERRIDE="${{ env.STABLE_ZIP }}" ./scripts/generate_appcast_ci.sh
 
