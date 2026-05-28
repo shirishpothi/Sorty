@@ -389,7 +389,11 @@ copy_resources_safely() {
     if [ -n "${spm_bundle}" ] && [ -d "${spm_bundle}" ]; then
         if [ "$(find "${spm_bundle}" -type f | wc -l)" -gt 0 ]; then
             log_detail "Syncing resources from SPM bundle"
-            rsync -a "${spm_bundle}/" "${dest_dir}/"
+            rsync -a \
+                --exclude ".DS_Store" \
+                --exclude "CLI/" \
+                --exclude "AppIcons/" \
+                "${spm_bundle}/" "${dest_dir}/"
         else
             log_warning "SPM bundle is empty"
         fi
@@ -398,13 +402,24 @@ copy_resources_safely() {
     # Priority 2: Resources folder (sync updates from source)
     if [ -d "${resources_dir}" ]; then
         log_detail "Syncing additional resources from Resources folder"
-        rsync -a "${resources_dir}/" "${dest_dir}/"
+        rsync -a \
+            --exclude ".DS_Store" \
+            --exclude "CLI/" \
+            --exclude "AppIcons/" \
+            --exclude "backgroundImage.png" \
+            --exclude "dmg-background.png" \
+            --exclude "dmg-background-with-toolbar.png" \
+            --exclude "dmg-layout.json" \
+            "${resources_dir}/" "${dest_dir}/"
     fi
 
     # Priority 2b: SortyLib source resources (audio/svg not in top-level Resources)
     if [ -d "${source_resources_dir}" ]; then
         log_detail "Syncing additional resources from SortyLib source resources"
-        rsync -a --exclude "Images/" "${source_resources_dir}/" "${dest_dir}/"
+        rsync -a \
+            --exclude ".DS_Store" \
+            --exclude "Images/" \
+            "${source_resources_dir}/" "${dest_dir}/"
     fi
     
     # Priority 3: Fallback images (only if Images folder doesn't exist yet)
@@ -489,7 +504,23 @@ bundle_cli_tools() {
     fi
 
     rm -rf "${resources_dir}/CLI"
+    rm -rf "${resources_dir}/AppIcons"
     log_detail "Sorty CLI tools are deprecated and are no longer bundled"
+}
+
+prune_nonshipping_resources() {
+    local resources_dir="$1"
+
+    rm -rf "${resources_dir}/CLI" "${resources_dir}/AppIcons"
+    rm -f \
+        "${resources_dir}/.DS_Store" \
+        "${resources_dir}/.png" \
+        "${resources_dir}/backgroundImage.png" \
+        "${resources_dir}/dmg-background.png" \
+        "${resources_dir}/dmg-background-with-toolbar.png" \
+        "${resources_dir}/dmg-layout.json" \
+        "${resources_dir}/whats-new-mid-generation.png" \
+        "${resources_dir}/whats-new-rename-only.png"
 }
 
 bundle_background_agent_plist() {
@@ -884,6 +915,7 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
 
     # Compile Assets.xcassets into Assets.car (xcodebuild may have already done this)
     compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"
+    prune_nonshipping_resources "${RESOURCES_DIR}"
 
     # Remove stale entitlements file from bundle (entitlements are applied via --entitlements flag during signing)
     rm -f "${APP_PATH}/Contents/Sorty.entitlements"
@@ -1017,6 +1049,7 @@ else
 
     # Compile Assets.xcassets into Assets.car
     compile_asset_catalog "${RESOURCES_DIR}" "${APP_PATH}"
+    prune_nonshipping_resources "${RESOURCES_DIR}"
 
     # Remove stale entitlements file from bundle (entitlements are applied via --entitlements flag during signing)
     rm -f "${APP_PATH}/Contents/Sorty.entitlements"

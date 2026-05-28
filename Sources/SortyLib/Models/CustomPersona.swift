@@ -53,6 +53,7 @@ public class CustomPersonaStore: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let storageKey = "customPersonas"
+    private var clearUsageObserver: NSObjectProtocol?
     
     public init() {
         loadPersonas()
@@ -60,8 +61,14 @@ public class CustomPersonaStore: ObservableObject {
     }
     
     private func setupNotificationObservers() {
-        NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
+        clearUsageObserver = NotificationCenter.default.addObserver(forName: .clearAllUsageData, object: nil, queue: .main) { [weak self] _ in
             self?.clearAll()
+        }
+    }
+
+    deinit {
+        if let clearUsageObserver {
+            NotificationCenter.default.removeObserver(clearUsageObserver)
         }
     }
     

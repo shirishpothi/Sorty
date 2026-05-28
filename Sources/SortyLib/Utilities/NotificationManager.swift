@@ -455,17 +455,13 @@ public class NotificationManager: ObservableObject {
             }
         }
         
-        // Setup NotifiCLI in background (builds on first run)
+        // Avoid building NotifiCLI at launch. The build can be memory-heavy, so
+        // startup only checks whether an existing install is already available.
         if isSafeToUseSystemNotifications {
+            let installation = await NotifiCLIService.shared.getInstallationInfo()
             await MainActor.run {
-                self.notifiCLISetupStatus = "Setting up enhanced notifications..."
-            }
-            
-            let available = await NotifiCLIService.shared.ensureSetup()
-            
-            await MainActor.run {
-                self.isNotifiCLIAvailable = available
-                self.notifiCLISetupStatus = available ? "Ready" : "Using native notifications"
+                self.isNotifiCLIAvailable = installation.installed
+                self.notifiCLISetupStatus = installation.installed ? "Ready" : "Using native notifications"
             }
         } else {
             await MainActor.run {
@@ -1088,7 +1084,8 @@ public class NotificationManager: ObservableObject {
         
         switch settingsValue.notificationBackend {
         case .notifiCLI:
-            if isNotifiCLIAvailable {
+            let available = isNotifiCLIAvailable ? true : await prepareNotifiCLIIfNeeded()
+            if available {
                 await showNotifiCLINotification(
                     type: type,
                     title: title,
@@ -1115,6 +1112,21 @@ public class NotificationManager: ObservableObject {
                 actionHandler: actionHandler
             )
         }
+    }
+
+    private func prepareNotifiCLIIfNeeded() async -> Bool {
+        await MainActor.run {
+            self.notifiCLISetupStatus = "Setting up enhanced notifications..."
+        }
+
+        let available = await NotifiCLIService.shared.ensureSetup()
+
+        await MainActor.run {
+            self.isNotifiCLIAvailable = available
+            self.notifiCLISetupStatus = available ? "Ready" : "Using native notifications"
+        }
+
+        return available
     }
     
     /// Show notification using NotifiCLI with action buttons
