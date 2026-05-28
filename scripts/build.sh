@@ -1114,8 +1114,7 @@ if [ ! -f "${ICON_SRC}" ]; then
 fi
 if [ -f "${ICON_SRC}" ]; then
     cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
-    mkdir -p "${APP_PATH}/Contents/Resources/AppIcons"
-    cp "${PROJECT_DIR}/Assets/AppIcon/AppIcon-"*.icns "${APP_PATH}/Contents/Resources/AppIcons/" 2>/dev/null || true
+    rm -rf "${APP_PATH}/Contents/Resources/AppIcons"
     log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
 else
     log_warning "Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"

@@ -39,7 +39,8 @@ public class FolderThumbnailProvider: ObservableObject {
     // MARK: - Initialization
     
     private init() {
-        cache.countLimit = 200  // Cache up to 200 folder thumbnails
+        cache.countLimit = 80
+        cache.totalCostLimit = 8 * 1024 * 1024
     }
     
     // MARK: - Public API
@@ -65,7 +66,7 @@ public class FolderThumbnailProvider: ObservableObject {
         
         // Generate thumbnail
         let image = await generateThumbnail(for: url, size: size)
-        cache.setObject(image, forKey: url as NSURL)
+        cache.setObject(image, forKey: url as NSURL, cost: imageCost(image))
         
         // Resume any waiting continuations with SendableImage wrapper
         if let waitingContinuations = continuations.removeValue(forKey: url) {
@@ -253,5 +254,11 @@ public class FolderThumbnailProvider: ObservableObject {
         
         image.unlockFocus()
         return image
+    }
+
+    private func imageCost(_ image: NSImage) -> Int {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let pixels = max(1, Int(image.size.width * scale * image.size.height * scale))
+        return pixels * 4
     }
 }

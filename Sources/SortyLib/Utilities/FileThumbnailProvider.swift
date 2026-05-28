@@ -10,10 +10,13 @@ public class FileThumbnailProvider: ObservableObject {
     
     private let cache = NSCache<NSString, NSImage>()
     private var processingKeys: Set<String> = []
-    private var waveformCache: [String: NSImage] = [:]
+    private let waveformCache = NSCache<NSString, NSImage>()
     
     private init() {
-        cache.countLimit = 500 // Cache up to 500 thumbnails
+        cache.countLimit = 180
+        cache.totalCostLimit = 16 * 1024 * 1024
+        waveformCache.countLimit = 60
+        waveformCache.totalCostLimit = 6 * 1024 * 1024
     }
     
     /// Get a thumbnail for a file at the given URL
@@ -38,7 +41,7 @@ public class FileThumbnailProvider: ObservableObject {
         processingKeys.insert(key)
         defer { processingKeys.remove(key) }
         let image = await generateThumbnail(for: url, size: size)
-        cache.setObject(image, forKey: key as NSString)
+        cache.setObject(image, forKey: key as NSString, cost: imageCost(image))
         return image
     }
     
@@ -48,11 +51,11 @@ public class FileThumbnailProvider: ObservableObject {
            type.conforms(to: .audio) {
             if size.width >= 32 && size.height >= 32 {
                 let waveformKey = "\(url.path)|\(Int(size.width.rounded()))x\(Int(size.height.rounded()))"
-                if let cachedWaveform = waveformCache[waveformKey] {
+                if let cachedWaveform = waveformCache.object(forKey: waveformKey as NSString) {
                     return cachedWaveform
                 }
                 if let waveform = await AudioWaveformGenerator.shared.generateWaveform(for: url, size: size) {
-                    waveformCache[waveformKey] = waveform
+                    waveformCache.setObject(waveform, forKey: waveformKey as NSString, cost: imageCost(waveform))
                     return waveform
                 }
             }
@@ -110,6 +113,12 @@ public class FileThumbnailProvider: ObservableObject {
     public func clearCache() {
         cache.removeAllObjects()
         processingKeys.removeAll()
-        waveformCache.removeAll()
+        waveformCache.removeAllObjects()
+    }
+
+    private func imageCost(_ image: NSImage) -> Int {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let pixels = max(1, Int(image.size.width * scale * image.size.height * scale))
+        return pixels * 4
     }
 }
