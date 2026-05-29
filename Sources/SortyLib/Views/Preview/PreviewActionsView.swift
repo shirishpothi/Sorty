@@ -270,17 +270,17 @@ struct PreviewProgressView: View {
                             .fontWeight(.medium)
                     }
                     .foregroundColor(.red)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
                     .background(
-                        RoundedRectangle(cornerRadius: 6)
+                        Capsule(style: .continuous)
                             .fill(Color.red.opacity(0.1))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
+                                Capsule(style: .continuous)
                                     .stroke(Color.red.opacity(0.3), lineWidth: 1)
                             )
                     )
-                    .contentShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(Capsule(style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
