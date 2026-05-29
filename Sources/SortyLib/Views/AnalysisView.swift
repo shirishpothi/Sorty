@@ -328,7 +328,6 @@ struct AnalysisView: View {
             currentModel: settingsViewModel.config.model,
             contextMessage: "Sorty will stop the current attempt and restart analysis from the beginning. The model you choose becomes your active model for future runs.",
             selectionActionTitle: "Restart Analysis",
-            isSelectionActionProminent: false,
             onSelect: { provider, model in
                 handleFasterModelSelection(provider: provider, model: model)
             }

@@ -23,8 +23,8 @@
 #
 # If --report is passed and any step fails, a "failure" commit status is
 # posted to GitHub for the current HEAD, so the PR shows it as a failed check.
-# On success, a "success" status is posted and GitHub CI can be configured
-# to skip redundant work.
+# On success, a "success" status is posted for visibility only. Blacksmith
+# GitHub Actions still run as the PR and release gate.
 
 set -e
 set -o pipefail

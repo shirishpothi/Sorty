@@ -653,7 +653,8 @@ private struct CompletionFeatureSuggestionCard: View {
                     .lineLimit(1)
                     .font(.subheadline.weight(.semibold))
             }
-                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                .buttonStyle(.sortyProminent)
+                .controlSize(.small)
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(2)
                 .help("Open storage location settings")
