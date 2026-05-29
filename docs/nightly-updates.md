@@ -7,16 +7,18 @@ The workflow runs every day at midnight Singapore time and can also be triggered
 Nightly update feed:
 
 ```text
-https://github.com/sorty-organizer/Sorty/releases/download/nightly/appcast-nightly.xml
+https://github.com/shirishpothi/Sorty/releases/download/nightly/appcast-nightly.xml
 ```
 
 Nightly download:
 
 ```text
-https://github.com/sorty-organizer/Sorty/releases/download/nightly/Sorty-nightly.zip
+https://github.com/shirishpothi/Sorty/releases/download/nightly/Sorty-nightly.zip
 ```
 
-Stable releases continue to use the existing `release.yml` workflow and `appcast.xml`. The nightly workflow only mutates the moving `nightly` tag and prerelease assets, so it does not create version tags or update the stable appcast.
+Stable releases continue to use the existing `release.yml` workflow and `appcast.xml`. By default, the nightly workflow only mutates the moving `nightly` tag and prerelease assets, so it does not create version tags or update the stable appcast.
+
+When the manual `promote_to_stable` option is enabled, the same nightly build is also uploaded to the latest stable release as `Sorty-universal.zip` with `appcast.xml`. That path is only for deliberate first-preview promotions to the stable update channel.
 
 Required secret:
 

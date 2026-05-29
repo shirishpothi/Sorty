@@ -23,7 +23,7 @@ env:
   STABLE_ZIP: Sorty-universal.zip
   NIGHTLY_APPCAST: appcast-nightly.xml
   STABLE_PROMOTION_APPCAST: appcast.xml
-  STABLE_APPCAST_URL: https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast.xml
+  STABLE_APPCAST_URL: https://github.com/shirishpothi/Sorty/releases/latest/download/appcast.xml
   RELEASE_NOTES_HTML: release-notes.html
 
 jobs:

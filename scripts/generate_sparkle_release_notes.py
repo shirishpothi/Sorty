@@ -23,7 +23,7 @@ def git_lines(args: list[str]) -> list[str]:
 
 
 def commit_range(args: argparse.Namespace) -> tuple[str, str, str]:
-    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
+    repository = os.environ.get("GITHUB_REPOSITORY", "shirishpothi/Sorty")
     head = "".join(git_lines(["rev-parse", "HEAD"])) or "HEAD"
     if args.from_tag:
         baseline = args.from_tag
@@ -63,7 +63,7 @@ def load_commits(range_spec: str) -> dict[str, list[tuple[str, str]]]:
 
 
 def commit_url(short_hash: str) -> str:
-    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
+    repository = os.environ.get("GITHUB_REPOSITORY", "shirishpothi/Sorty")
     return f"https://github.com/{repository}/commit/{short_hash}"
 
 
