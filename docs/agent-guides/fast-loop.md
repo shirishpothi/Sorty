@@ -8,7 +8,7 @@ Optimized workflows for rapid iteration on Sorty.
 |------|---------|-------------|
 | Build + launch (no tests) | `make now` | ~7s incremental |
 | Build only (no tests) | `make dev` | ~7s incremental |
-| Build + run tests | `make build` | ~30-60s |
+| Local diagnostic build + tests | `make build` | ~30-60s |
 | Harness mode (targeted view) | `make harness` | ~7s incremental |
 | Profile slow files | `make build-profile` | ~30s |
 | Benchmark all builds | `make benchmark` | ~5-10min |
@@ -101,7 +101,7 @@ SortyLib is a monolithic target (199 files, ~85K lines). Clean builds take ~160s
 - **Use `make now` as your default** — it's the fastest path to a running app
 - **Touch only what you're editing** — incremental builds only recompile changed files
 - **Avoid `make clean`** unless you're debugging build cache issues
-- **Use `make test-fast`** to run only unit tests (excludes slow integration tests)
+- **Use `make test-fast`** for a local unit-test diagnostic pass; Blacksmith remains the merge/release gate
 - **Close Xcode** when using SPM builds — Xcode's indexer competes for resources
 - **For liquid glass changes, do a visual check** — compile/test success is not enough. Compare against `AboutView` if the goal is “system liquid glass”, because native `.popover` or `.sheet` chrome can look wrong even when `glassEffect` compiles.
 

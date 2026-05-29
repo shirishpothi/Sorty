@@ -50,34 +50,8 @@ jobs:
       - name: Run Gitleaks
         run: gitleaks detect --source . --verbose
 
-  # Check if local CI already passed for this commit
-  check-local-ci:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 2
-    outputs:
-      skip: ${{ steps.check.outputs.skip }}
-    steps:
-      - name: Check for local-ci status
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-          STATUS=$(gh api "/repos/${{ github.repository }}/commits/${SHA}/statuses" \
-            --jq '[.[] | select(.context == "local-ci" and .state == "success")] | length' \
-            2>/dev/null || echo "0")
-          if [ "$STATUS" -gt 0 ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Local CI already passed for ${SHA:0:7} — skipping redundant checks"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "No local CI status found — running full CI"
-          fi
-
   # Main build and test job
   build-and-test:
-    needs: check-local-ci
-    if: ${{ needs.check-local-ci.outputs.skip != 'true' }}
     runs-on: blacksmith-6vcpu-macos-15
     timeout-minutes: 30
 
@@ -115,6 +89,7 @@ jobs:
           CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
           # Build all active products first so SortyApp is validated
           swift build --disable-sandbox -j "$CORES"
+          swift test --disable-sandbox --list-tests | tee test_inventory.log
           swift test --disable-sandbox --parallel -j "$CORES" 2>&1 | tee unit_test_output.log
           echo "✅ Build & tests completed"
 
@@ -182,6 +157,7 @@ jobs:
         with:
           name: test-results
           path: |
+            test_inventory.log
             unit_test_output.log
             build_output.log
           retention-days: 7
