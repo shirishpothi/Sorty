@@ -1315,50 +1315,195 @@ struct ScanProgressViewNew: View {
     let progress: Double
     var isPreparing: Bool = false
 
+    private var clampedProgress: Double {
+        max(0, min(1, progress))
+    }
+
+    private var percent: Int {
+        Int((clampedProgress * 100).rounded())
+    }
+
+    private var title: String {
+        isPreparing ? "Preparing Scan..." : "Computing File Hashes"
+    }
+
+    private var subtitle: String {
+        isPreparing ? "Reading directory structure..." : "Comparing file content to find exact matches..."
+    }
+
     var body: some View {
-        VStack(spacing: 28) {
-            ZStack {
-                if isPreparing {
-                    SortyGradientCircularLoader(size: 120, lineWidth: 10)
-                } else {
-                    SortyGradientCircularProgress(progress: progress, size: 120, lineWidth: 10)
-                }
-                
-                if isPreparing {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 30))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                } else {
-                    VStack(spacing: 2) {
-                        Text("\(Int(progress * 100))%")
-                            .font(.system(size: 28, weight: .semibold, design: .rounded))
-                        Text("Scanning")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+        ZStack {
+            VStack(spacing: 0) {
+                progressCard
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Scan progress")
-            .accessibilityValue(isPreparing ? "Preparing scan" : "\(Int(progress * 100)) percent complete")
-            
-            VStack(spacing: 6) {
-                Text(isPreparing ? "Preparing Scan..." : "Computing File Hashes")
-                    .font(.subheadline.weight(.medium))
-                Text(isPreparing ? "Reading directory structure..." : "Comparing file content to find exact matches...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                LoadingDotsView(dotCount: 3, dotSize: 5, color: .accentColor)
-                    .padding(.top, 6)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(isPreparing ? "Preparing to scan for duplicates" : "Computing file hashes to find exact duplicate matches")
+            .frame(maxWidth: 460)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(isPreparing ? "Preparing scan" : "Scanning for duplicate files, \(Int(progress * 100)) percent complete")
+        .accessibilityLabel(isPreparing ? "Preparing scan" : "Scanning for duplicate files, \(percent) percent complete")
+    }
+
+    private var progressCard: some View {
+        ZStack {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: isPreparing ? "magnifyingglass" : "doc.text.magnifyingglass")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 30)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(title)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        if !isPreparing {
+                            Text("\(percent)%")
+                                .monospacedDigit()
+                                .contentTransition(.numericText())
+                                .animation(.easeInOut(duration: 0.3), value: percent)
+                        }
+                    }
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                Spacer(minLength: 0)
+
+                LoadingDotsView(dotCount: 3, dotSize: 5, color: .accentColor)
+                    .frame(width: 34)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(width: 390, height: 94)
+        .background {
+            beamSurface
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(isPreparing ? "Preparing to scan for duplicates" : "Computing file hashes to find exact duplicate matches")
+        .accessibilityValue(isPreparing ? subtitle : "\(percent) percent complete, \(subtitle)")
+    }
+
+    private var beamSurface: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.clear)
+                .systemLiquidGlassBackground(cornerRadius: 16)
+
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.primary.opacity(0.035))
+        }
+        .beam(
+            .medium,
+            palette: .colorful,
+            theme: .dark,
+            active: true,
+            cornerRadius: 16,
+            strength: 1.0
+        )
+        .scanProgressReferenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private extension View {
+    func scanProgressReferenceBeamFallback(
+        cornerRadius: CGFloat,
+        active: Bool,
+        includesInteriorGlow: Bool = false
+    ) -> some View {
+        overlay {
+            ScanProgressReferenceBeamFallback(
+                cornerRadius: cornerRadius,
+                active: active,
+                includesInteriorGlow: includesInteriorGlow
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct ScanProgressReferenceBeamFallback: View {
+    let cornerRadius: CGFloat
+    let active: Bool
+    let includesInteriorGlow: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let phase = reduceMotion ? 0 : time / 1.96
+            ZStack {
+                if includesInteriorGlow {
+                    beamInteriorGlow(phase: phase)
+                }
+
+                beamStroke(phase: phase)
+            }
+            .opacity(active ? 0.82 : 0)
+            .animation(.easeOut(duration: 0.6), value: active)
+        }
+    }
+
+    private func beamStroke(phase: TimeInterval) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(
+                AngularGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.00),
+                        .init(color: .clear, location: 0.08),
+                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.36), location: 0.16),
+                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.62), location: 0.25),
+                        .init(color: .white.opacity(0.88), location: 0.32),
+                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.54), location: 0.39),
+                        .init(color: Color(red: 0.40, green: 0.20, blue: 1.0).opacity(0.36), location: 0.48),
+                        .init(color: .clear, location: 0.58),
+                        .init(color: .clear, location: 1.00),
+                    ],
+                    center: .center,
+                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                ),
+                lineWidth: 1
+            )
+    }
+
+    private func beamInteriorGlow(phase: TimeInterval) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .inset(by: 3)
+            .fill(
+                AngularGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.00),
+                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.10), location: 0.15),
+                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.20), location: 0.25),
+                        .init(color: .white.opacity(0.16), location: 0.32),
+                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.14), location: 0.40),
+                        .init(color: .clear, location: 0.58),
+                        .init(color: .clear, location: 1.00),
+                    ],
+                    center: .center,
+                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                )
+            )
+            .blur(radius: 9)
+            .mask {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(lineWidth: 22)
+                    .blur(radius: 7)
+            }
     }
 }
 

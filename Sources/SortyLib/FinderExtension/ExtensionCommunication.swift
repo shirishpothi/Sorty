@@ -49,10 +49,10 @@ public struct ExtensionCommunication {
     private static let finderRepairRequiredAppGroup = "group.com.sorty.app"
     private static let pbsDomain = "pbs"
     private static let activeSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
+        (organizeQuickActionBundleIdentifier, "Organize with Sorty"),
         (watchQuickActionBundleIdentifier, "Watch with Sorty")
     ]
     private static let deprecatedSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
-        (organizeQuickActionBundleIdentifier, "Organize with Sorty"),
         (scanQuickActionBundleIdentifier, "Scan with Sorty"),
         (previewQuickActionBundleIdentifier, "Preview with Sorty")
     ]
@@ -1974,24 +1974,284 @@ public struct ExtensionCommunication {
         UserDefaults.standard.synchronize()
     }
     
-    /// Organize is now provided only via Finder Sync's primary context menu entry.
-    /// This helper removes the deprecated legacy Quick Action workflow, if present.
+    /// Install an "Organize with Sorty" Quick Action workflow to ~/Library/Services.
     public static func installQuickAction() -> (success: Bool, message: String) {
-        let removedLegacyQuickAction = uninstallQuickAction()
-        removeLegacyServiceStatusEntries()
-        refreshDynamicServicesRegistry()
-
-        if removedLegacyQuickAction {
+        let workflowName = organizeQuickActionWorkflowName
+        guard let servicesDir = resolveServicesDirectoryForInstall() else {
             return (
-                true,
-                "Removed deprecated 'Organize with Sorty' Quick Action. Use the main Finder context menu entry instead."
+                false,
+                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
             )
         }
+        let workflowDir = servicesDir.appendingPathComponent(workflowName)
+        let contentsDir = workflowDir.appendingPathComponent("Contents")
 
-        return (
-            true,
-            "Organize is provided via Finder Sync in the main context menu. No Quick Action install is needed."
-        )
+        do {
+            try replaceWorkflowDirectoryIfNeeded(workflowDir)
+            try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
+
+            let infoPlist = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>CFBundleIdentifier</key>
+                <string>\(organizeQuickActionBundleIdentifier)</string>
+                <key>CFBundleName</key>
+                <string>Organize with Sorty</string>
+                <key>CFBundlePackageType</key>
+                <string>BNDL</string>
+                <key>CFBundleIconFile</key>
+                <string>\(quickActionServiceIconName)</string>
+                <key>NSServices</key>
+                <array>
+                    <dict>
+                        <key>NSMenuItem</key>
+                        <dict>
+                            <key>default</key>
+                            <string>Organize with Sorty</string>
+                        </dict>
+                        <key>NSIconName</key>
+                        <string>\(quickActionServiceIconName)</string>
+                        <key>NSMessage</key>
+                        <string>runWorkflowAsService</string>
+                        <key>NSRequiredContext</key>
+                        <dict>
+                            <key>NSApplicationIdentifier</key>
+                            <string>com.apple.finder</string>
+                        </dict>
+                        <key>NSSendFileTypes</key>
+                        <array>
+                            <string>public.folder</string>
+                            <string>public.item</string>
+                        </array>
+                    </dict>
+                </array>
+            </dict>
+            </plist>
+            """
+            try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
+
+            let shellCommand = """
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://organize?path=$encoded"; done
+            """
+
+            let workflowPlist = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>AMApplicationBuild</key>
+                <string>523</string>
+                <key>AMApplicationVersion</key>
+                <string>2.10</string>
+                <key>AMDocumentVersion</key>
+                <string>2</string>
+                <key>actions</key>
+                <array>
+                    <dict>
+                        <key>action</key>
+                        <dict>
+                            <key>AMAccepts</key>
+                            <dict>
+                                <key>Container</key>
+                                <string>List</string>
+                                <key>Optional</key>
+                                <true/>
+                                <key>Types</key>
+                                <array>
+                                    <string>com.apple.cocoa.path</string>
+                                    <string>com.apple.cocoa.url</string>
+                                    <string>public.item</string>
+                                    <string>public.folder</string>
+                                </array>
+                            </dict>
+                            <key>AMActionVersion</key>
+                            <string>1.0.2</string>
+                            <key>AMApplication</key>
+                            <array>
+                                <string>Automator</string>
+                            </array>
+                            <key>AMCategory</key>
+                            <string>AMCategoryUtilities</string>
+                            <key>AMIconName</key>
+                            <string>\(quickActionServiceIconName)</string>
+                            <key>AMName</key>
+                            <string>Run Shell Script</string>
+                            <key>AMParameters</key>
+                            <dict>
+                                <key>COMMAND_STRING</key>
+                                <string>\(shellCommand)</string>
+                                <key>CheckedForUserDefaultShell</key>
+                                <true/>
+                                <key>inputMethod</key>
+                                <integer>1</integer>
+                                <key>shell</key>
+                                <string>/bin/zsh</string>
+                                <key>source</key>
+                                <string></string>
+                            </dict>
+                            <key>AMProvides</key>
+                            <dict>
+                                <key>Container</key>
+                                <string>List</string>
+                                <key>Types</key>
+                                <array>
+                                    <string>com.apple.cocoa.path</string>
+                                </array>
+                            </dict>
+                            <key>AMRequiredResources</key>
+                            <array/>
+                            <key>ActionBundlePath</key>
+                            <string>/System/Library/Automator/Run Shell Script.action</string>
+                            <key>ActionName</key>
+                            <string>Run Shell Script</string>
+                            <key>ActionParameters</key>
+                            <dict>
+                                <key>COMMAND_STRING</key>
+                                <string>\(shellCommand)</string>
+                                <key>CheckedForUserDefaultShell</key>
+                                <true/>
+                                <key>inputMethod</key>
+                                <integer>1</integer>
+                                <key>shell</key>
+                                <string>/bin/zsh</string>
+                                <key>source</key>
+                                <string></string>
+                            </dict>
+                            <key>BundleIdentifier</key>
+                            <string>com.apple.RunShellScript</string>
+                            <key>CFBundleVersion</key>
+                            <string>1.0.2</string>
+                            <key>CanShowSelectedItemsWhenRun</key>
+                            <false/>
+                            <key>CanShowWhenRun</key>
+                            <true/>
+                            <key>Category</key>
+                            <array>
+                                <string>AMCategoryUtilities</string>
+                            </array>
+                            <key>Class Name</key>
+                            <string>RunShellScriptAction</string>
+                            <key>InputUUID</key>
+                            <string>6A1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D</string>
+                            <key>Keywords</key>
+                            <array>
+                                <string>Shell</string>
+                                <string>Script</string>
+                                <string>Command</string>
+                                <string>Run</string>
+                                <string>Unix</string>
+                            </array>
+                            <key>OutputUUID</key>
+                            <string>7B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E</string>
+                            <key>UUID</key>
+                            <string>8C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F</string>
+                            <key>UnlocalizedApplications</key>
+                            <array>
+                                <string>Automator</string>
+                            </array>
+                            <key>arguments</key>
+                            <dict>
+                                <key>0</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <integer>1</integer>
+                                    <key>name</key>
+                                    <string>inputMethod</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>0</string>
+                                </dict>
+                                <key>1</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <string></string>
+                                    <key>name</key>
+                                    <string>source</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>1</string>
+                                </dict>
+                                <key>2</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <false/>
+                                    <key>name</key>
+                                    <string>CheckedForUserDefaultShell</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>2</string>
+                                </dict>
+                                <key>3</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <string></string>
+                                    <key>name</key>
+                                    <string>COMMAND_STRING</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>3</string>
+                                </dict>
+                                <key>4</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <string>/bin/sh</string>
+                                    <key>name</key>
+                                    <string>shell</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>4</string>
+                                </dict>
+                            </dict>
+                            <key>isViewVisible</key>
+                            <integer>1</integer>
+                            <key>location</key>
+                            <string>309.000000:253.000000</string>
+                            <key>nibPath</key>
+                            <string>/System/Library/Automator/Run Shell Script.action/Contents/Resources/Base.lproj/main.nib</string>
+                        </dict>
+                        <key>isViewVisible</key>
+                        <integer>1</integer>
+                    </dict>
+                </array>
+                <key>connectors</key>
+                <dict/>
+                <key>workflowMetaData</key>
+                <dict>
+                    <key>serviceInputTypeIdentifier</key>
+                    <string>com.apple.Automator.fileSystemObject</string>
+                    <key>serviceApplicationPath</key>
+                    <string>/System/Library/CoreServices/Finder.app</string>
+                    <key>workflowTypeIdentifier</key>
+                    <string>com.apple.Automator.servicesMenu</string>
+                </dict>
+            </dict>
+            </plist>
+            """
+            try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
+            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir)
+            refreshDynamicServicesRegistry()
+
+            return (true, "Organize Action installed. Right-click folders in Finder to use 'Organize with Sorty'.")
+        } catch {
+            return (false, "Installation failed: \(error.localizedDescription)")
+        }
     }
 
     public static func installQuickActionAsync() async -> (success: Bool, message: String) {
@@ -2003,9 +2263,18 @@ public struct ExtensionCommunication {
         }
     }
 
-    /// Ensure legacy organize Quick Action is removed and Watch service entries are refreshed.
+    /// Ensure Organize and Watch service entries are installed and refreshed.
     public static func ensureQuickActionInstalled() -> (installed: Bool, message: String) {
-        let removedLegacyQuickAction = uninstallQuickAction()
+        var refreshedOrganizeWorkflow = false
+        var organizeRefreshError: String?
+        if !isQuickActionInstalled() {
+            let refreshResult = installQuickAction()
+            refreshedOrganizeWorkflow = refreshResult.success
+            if !refreshResult.success {
+                organizeRefreshError = refreshResult.message
+            }
+        }
+
         let hasWatchWorkflow = hasInstalledWatchWorkflowPackage()
 
         var refreshedWatchWorkflow = false
@@ -2022,23 +2291,27 @@ public struct ExtensionCommunication {
             refreshDynamicServicesRegistry()
         }
 
+        if let organizeRefreshError {
+            return (false, "Finder services refreshed, but Organize workflow install failed: \(organizeRefreshError)")
+        }
+
         if let watchRefreshError {
             return (false, "Finder services refreshed, but Watch workflow icon update failed: \(watchRefreshError)")
         }
 
-        if removedLegacyQuickAction && refreshedWatchWorkflow {
-            return (true, "Removed deprecated 'Organize with Sorty' Quick Action, refreshed Finder services, and updated Watch workflow icon for current appearance.")
+        if refreshedOrganizeWorkflow && refreshedWatchWorkflow {
+            return (true, "Installed Organize workflow, refreshed Finder services, and updated Watch workflow icon for current appearance.")
         }
 
-        if removedLegacyQuickAction {
-            return (true, "Removed deprecated 'Organize with Sorty' Quick Action and refreshed Finder services.")
+        if refreshedOrganizeWorkflow {
+            return (true, "Installed Organize workflow and refreshed Finder services.")
         }
 
         if refreshedWatchWorkflow {
             return (true, "Refreshed Watch workflow icon for current appearance.")
         }
 
-        return (true, "Finder services are up to date. 'Organize with Sorty' is available in the main context menu.")
+        return (true, "Finder services are up to date. 'Organize with Sorty' and 'Watch with Sorty' are available in Finder.")
     }
 
     public static func ensureQuickActionInstalledAsync() async -> (installed: Bool, message: String) {
@@ -2691,8 +2964,6 @@ public struct ExtensionCommunication {
             try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
             applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir, style: .watch)
 
-            // Ensure deprecated organize Quick Action stays removed so Finder only shows the primary context-menu entry.
-            _ = uninstallQuickAction()
             removeLegacyServiceStatusEntries()
             refreshDynamicServicesRegistry()
 
@@ -3117,7 +3388,6 @@ public struct ExtensionCommunication {
     @discardableResult
     public static func cleanupLegacyQuickActions() -> Int {
         let workflows = [
-            organizeQuickActionWorkflowName,
             scanQuickActionWorkflowName,
             previewQuickActionWorkflowName
         ]
@@ -3301,9 +3571,9 @@ public struct ExtensionCommunication {
         let finderSyncResult = repairFinderSyncExtensionRegistration()
         results.append(("Finder Sync Extension", finderSyncResult.success, finderSyncResult.message))
 
-        // 2. Remove deprecated Organize Quick Action (if present)
+        // 2. Quick Organize Action
         let quickActionResult = installQuickAction()
-        results.append(("Organize Quick Action Cleanup", quickActionResult.success, quickActionResult.message))
+        results.append(("Quick Organize Action", quickActionResult.success, quickActionResult.message))
 
         // 3. Quick Watch Action
         let quickWatchResult = installQuickWatchAction()
