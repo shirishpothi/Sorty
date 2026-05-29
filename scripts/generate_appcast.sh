@@ -71,7 +71,7 @@ else
 fi
 
 # Manual simple XML generation if tool not found or for custom control
-REPO_URL="https://github.com/shirishpothi/Sorty"
+REPO_URL="https://github.com/sorty-organizer/Sorty"
 
 # If we have a signature from sign_update, it already contains length="..."
 ENCLOSURE_ATTRIBUTES="sparkle:version=\"${BUILD_NUM}\" sparkle:shortVersionString=\"${VERSION}\" type=\"application/octet-stream\""

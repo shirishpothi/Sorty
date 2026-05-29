@@ -576,7 +576,7 @@ Sorty periodically checks for updates in the background and will notify you when
 
 View the full changelog at:
 - **In-app**: Check for Updates dialog shows release notes
-- **Online**: [GitHub Releases](https://github.com/shirishpothi/Sorty/releases)
+- **Online**: [GitHub Releases](https://github.com/sorty-organizer/Sorty/releases)
 
 ---
 
@@ -623,7 +623,7 @@ View the full changelog at:
 - ✓ **Network error**: Check your internet connection and firewall settings.
 - ✓ **Feed unavailable**: The appcast may not be reachable yet. Retry later.
 - ✓ **Timeout**: Try again later; the update feed may be temporarily unavailable.
-- ✓ **Version parsing error**: The appcast format may have changed. Check the [releases page](https://github.com/shirishpothi/Sorty/releases) manually.
+- ✓ **Version parsing error**: The appcast format may have changed. Check the [releases page](https://github.com/sorty-organizer/Sorty/releases) manually.
 
 ---
 

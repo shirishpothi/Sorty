@@ -18,7 +18,7 @@ The following keys are configured in `Info.plist`:
 
 ```xml
 <key>SUFeedURL</key>
-<string>https://github.com/shirishpothi/Sorty/releases/latest/download/appcast.xml</string>
+<string>https://github.com/sorty-organizer/Sorty/releases/latest/download/appcast.xml</string>
 <key>SUPublicEDKey</key>
 <string>cQdl4m9jYnfXOXAZ0SGwoVpc+/T/j3akfG7CLsmOTOM=</string>
 <key>SUEnableAutomaticChecks</key>

@@ -4,7 +4,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Swift](https://img.shields.io/badge/Swift-6.0+-orange.svg)](https://swift.org)
 [![macOS](https://img.shields.io/badge/macOS-15.1+-blue.svg)](https://www.apple.com/macos)
-[![Security Checks](https://github.com/shirishpothi/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/shirishpothi/Sorty/actions/workflows/swift.yml)
+[![Security Checks](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml)
 
 A native macOS SwiftUI application that uses AI to intelligently organize directory contents into relevant, semantically-named folders.
 
@@ -50,7 +50,7 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 
 #### Option 1: Download Pre-Built Release (Easiest)
 
-1. Download the latest `.zip` from the [Releases](https://github.com/shirishpothi/Sorty/releases) page.
+1. Download the latest `.zip` from the [Releases](https://github.com/sorty-organizer/Sorty/releases) page.
 2. Unzip and drag `Sorty.app` to your `/Applications` folder.
    > **Note**: Moving the app to `/Applications` is highly recommended. It ensures that security bookmarks for "Watched Folders" persist reliably across app restarts.
 3. **Important**: Since the app is not notarized (no Apple Developer certificate), you need to remove the quarantine attribute:
@@ -66,7 +66,7 @@ A native macOS SwiftUI application that uses AI to intelligently organize direct
 
 **Using Make (Recommended):**
 ```bash
-git clone https://github.com/shirishpothi/Sorty.git
+git clone https://github.com/sorty-organizer/Sorty.git
 cd Sorty
 make run
 ```
@@ -134,14 +134,14 @@ If you see an error indicating that access to a watched folder has been lost (e.
 
 ### Update Check Issues
 - If update checks fail, verify you have an active internet connection.
-- Check if you can access [GitHub Releases](https://github.com/shirishpothi/Sorty/releases) in your browser.
+- Check if you can access [GitHub Releases](https://github.com/sorty-organizer/Sorty/releases) in your browser.
 - Rate limiting may occur if too many requests are made; wait a few minutes and try again.
 
 
 ### Verifying App is Up to Date
 1. Open **Settings** and click **Check for Updates**.
 2. If the app shows "Up to date", you have the latest version.
-3. Alternatively, compare the version in **About** with the [latest release](https://github.com/shirishpothi/Sorty/releases/latest).
+3. Alternatively, compare the version in **About** with the [latest release](https://github.com/sorty-organizer/Sorty/releases/latest).
 
 ## Project Structure
 
@@ -163,24 +163,26 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ## Testing
 
-### Local CI (Recommended)
+Blacksmith-backed GitHub Actions are the source of truth for commit, push, PR, and release confidence. The default Swift CI workflow runs security checks on Blacksmith Ubuntu and builds/tests/packages on Blacksmith macOS.
 
-Run the same checks as GitHub Actions on your machine for faster feedback:
+Prefer frequent small commits and pushes. Push each coherent change to the branch so Blacksmith validates the real PR state early; continue with follow-up commits when more work remains.
+
+### Local Diagnostics
+
+Use local commands only for fast diagnosis before pushing:
 ```bash
-make ci              # Security scan, build, tests, app bundle
-make ci-report       # Same + report result to GitHub (skips redundant remote CI)
+make dev                                      # Fast debug build, no tests
+make now                                      # Fast debug build + launch, no tests
+swift test --disable-sandbox --filter SortyTests.TestClass/testMethod
 ```
 
-### Running Tests
+`make ci`, `make test`, and `make test-full` still exist for local troubleshooting, but they do not replace Blacksmith checks.
 
-**Using Swift Package Manager:**
-```bash
-swift test
-```
+### Blacksmith Validation
 
-**Using Xcode:**
-1. Open the project in Xcode.
-2. Press `⌘U` to run all tests.
+For PRs and releases, rely on the GitHub Actions checks:
+- **Swift CI**: security scan, SPM build, current test inventory, parallel unit tests, app bundle build.
+- **Release**: changelog preparation, current test inventory, parallel unit tests, universal app build, Sparkle appcast generation, release artifact upload.
 
 ### Test Coverage
 
@@ -228,7 +230,7 @@ See [Resources/NotifiCLI/LICENSE](Resources/NotifiCLI/LICENSE) for the full lice
 
 ## Support
 
-- **Documentation**: See [HELP.md](https://github.com/shirishpothi/Sorty/blob/main/HELP.md) for detailed usage guides
+- **Documentation**: See [HELP.md](https://github.com/sorty-organizer/Sorty/blob/main/HELP.md) for detailed usage guides
 - **Bug Reports**: Use the [Bug Report template](../../issues/new?template=bug_report.md)
 - **Feature Requests**: Use the [Feature Request template](../../issues/new?template=feature_request.md)
 - **Security Issues**: Email shirish.pothi.27@gmail.com (do not open public issues)

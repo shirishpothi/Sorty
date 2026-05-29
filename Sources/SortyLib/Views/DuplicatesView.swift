@@ -6,6 +6,7 @@
 //  Enhanced with haptic feedback, "Liquid Glass" aesthetic, and Split View layout
 //
 
+import Beam
 import SwiftUI
 
 struct DuplicatesView: View {
@@ -1118,10 +1119,11 @@ struct UnifiedFileDetailRow: View {
                     NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
                 } label: {
                     HStack(spacing: 4) {
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: fileURL.deletingLastPathComponent().path))
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 12, height: 12)
+                        AppKitImageView(
+                            image: NSWorkspace.shared.icon(forFile: fileURL.deletingLastPathComponent().path),
+                            size: CGSize(width: 12, height: 12)
+                        )
+                        .frame(width: 12, height: 12)
                         Text(parentFolderName)
                             .font(.caption)
                     }

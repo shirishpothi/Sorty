@@ -13,7 +13,7 @@ This template is for tracking publicly disclosed vulnerabilities or issues that 
 
 **For new security issues:**
 Please DO NOT use this public template. Instead:
-1. Read our [Security Policy](https://github.com/shirishpothi/Sorty/blob/main/SECURITY.md)
+1. Read our [Security Policy](https://github.com/sorty-organizer/Sorty/blob/main/SECURITY.md)
 2. Email details to shirish.pothi.27@gmail.com
 3. Wait for acknowledgment within 48 hours
 

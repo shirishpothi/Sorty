@@ -673,7 +673,7 @@ phase_update_system() {
     
     # Test 2: Verify GitHub API is reachable (optional, warn on failure)
     echo -e "  ${BLUE}...${NC} Checking GitHub API accessibility..."
-    GITHUB_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/shirishpothi/Sorty/releases/latest" 2>/dev/null || echo "000")
+    GITHUB_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "https://api.github.com/repos/sorty-organizer/Sorty/releases/latest" 2>/dev/null || echo "000")
     
     case "$GITHUB_RESPONSE" in
         200)

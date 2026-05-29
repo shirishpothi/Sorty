@@ -28,9 +28,10 @@ List the specific changes:
 ## Testing
 
 ### Automated Tests
-- [ ] All existing tests pass (`make test`)
+- [ ] Blacksmith Swift CI passed for this branch/PR
 - [ ] New tests added for new functionality
-- [ ] UI tests pass if UI changed (`make test-ui`)
+- [ ] UI coverage considered; UI tests are currently disabled, so manual UI evidence is attached when UI changed
+- [ ] Local tests, if any, were diagnostic only and are listed below
 
 ### Manual Testing
 Describe what you tested manually:

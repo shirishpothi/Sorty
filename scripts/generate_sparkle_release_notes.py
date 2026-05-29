@@ -23,7 +23,7 @@ def git_lines(args: list[str]) -> list[str]:
 
 
 def commit_range(args: argparse.Namespace) -> tuple[str, str, str]:
-    repository = os.environ.get("GITHUB_REPOSITORY", "shirishpothi/Sorty")
+    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
     head = "".join(git_lines(["rev-parse", "HEAD"])) or "HEAD"
     if args.from_tag:
         baseline = args.from_tag
@@ -63,7 +63,7 @@ def load_commits(range_spec: str) -> dict[str, list[tuple[str, str]]]:
 
 
 def commit_url(short_hash: str) -> str:
-    repository = os.environ.get("GITHUB_REPOSITORY", "shirishpothi/Sorty")
+    repository = os.environ.get("GITHUB_REPOSITORY", "sorty-organizer/Sorty")
     return f"https://github.com/{repository}/commit/{short_hash}"
 
 
@@ -75,17 +75,6 @@ def markdown(
 ) -> str:
     lines = [
         f"## {args.title}",
-        "",
-        "### Important: install this update from GitHub",
-        "We revamped Sorty's update system to support nightly builds, so older updater builds may download this version and then fail during install. This manual install is safe: it uses the same signed GitHub release asset and gets you onto the fixed updater path.",
-        "",
-        "Please install this one manually:",
-        "",
-        "1. [Download `Sorty-universal.zip` from GitHub](https://github.com/sorty-organizer/Sorty/releases/latest).",
-        "2. Quit Sorty.",
-        "3. Replace your existing `Sorty.app` in `/Applications`.",
-        "",
-        "After this update is installed, future in-app updates should work normally again.",
         "",
         args.summary,
         "",
@@ -150,11 +139,6 @@ def html_document(
     p {{ line-height: 1.45; opacity: 0.82; }}
     ul {{ margin: 0; padding-left: 22px; }}
     li {{ margin: 8px 0; line-height: 1.4; }}
-    .manual-update {{ border: 1px solid rgba(45, 145, 150, 0.28); border-radius: 16px; padding: 16px 18px; margin: 0 0 22px; background: rgba(45, 145, 150, 0.12); }}
-    .manual-update > strong {{ display: block; font: -apple-system-headline; margin-bottom: 6px; }}
-    .manual-update p {{ margin: 6px 0 0; opacity: 0.9; }}
-    .manual-update ol {{ margin: 10px 0 0; padding-left: 22px; }}
-    .manual-update .download {{ display: inline-block; margin: 8px 0 2px; padding: 8px 12px; border-radius: 10px; background: rgba(45, 145, 150, 0.18); font-weight: 700; }}
     .callout {{ border: 1px solid rgba(128, 128, 128, 0.24); border-radius: 14px; padding: 14px 16px; background: rgba(128, 128, 128, 0.08); }}
     .hash {{ opacity: 0.62; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }}
     a {{ color: LinkText; }}
@@ -163,17 +147,6 @@ def html_document(
 <body>
   <main>
     <h1>{html.escape(args.title)}</h1>
-    <div class="manual-update">
-      <strong>Important: install this update from GitHub</strong>
-      <p>We revamped Sorty's update system to support nightly builds, so older updater builds may download this version and then fail during install. This manual install is safe: it uses the same signed GitHub release asset and gets you onto the fixed updater path.</p>
-      <p>Please install this one manually:</p>
-      <p><a class="download" href="https://github.com/sorty-organizer/Sorty/releases/latest">Download Sorty-universal.zip from GitHub</a></p>
-      <ol>
-        <li>Quit Sorty.</li>
-        <li>Replace your existing <strong>Sorty.app</strong> in <strong>/Applications</strong>.</li>
-      </ol>
-      <p>After this update is installed, future in-app updates should work normally again.</p>
-    </div>
     <p>{html.escape(args.summary)}</p>
     <p>Changes shown below are everything since <span class="hash">{html.escape(baseline_label)}</span>.</p>
     <div class="callout">

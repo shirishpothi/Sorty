@@ -1,15 +1,15 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security Vulnerability
-    url: https://github.com/shirishpothi/Sorty/blob/main/SECURITY.md
+    url: https://github.com/sorty-organizer/Sorty/blob/main/SECURITY.md
     about: Please report security issues privately via email, not through public issues.
   
   - name: Ask a Question
-    url: https://github.com/shirishpothi/Sorty/discussions
+    url: https://github.com/sorty-organizer/Sorty/discussions
     about: For general questions, usage help, or community discussions.
   
   - name: Read Documentation
-    url: https://github.com/shirishpothi/Sorty/blob/main/README.md
+    url: https://github.com/sorty-organizer/Sorty/blob/main/README.md
     about: Check the README for setup instructions and feature overview.
   
   - name: In-App Help

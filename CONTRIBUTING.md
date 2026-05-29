@@ -4,7 +4,7 @@ Thank you for your interest in contributing to Sorty. This document provides com
 
 ## Code of Conduct
 
-This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold these standards. Report violations via [GitHub Discussions](https://github.com/shirishpothi/Sorty/discussions).
+This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold these standards. Report violations via [GitHub Discussions](https://github.com/sorty-organizer/Sorty/discussions).
 
 ## Development Environment
 
@@ -19,34 +19,34 @@ This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating
 
 ```bash
 # Clone the repository
-git clone https://github.com/shirishpothi/Sorty.git
+git clone https://github.com/sorty-organizer/Sorty.git
 cd Sorty
 
 # Install dependencies
 swift package resolve
 
 # Build the project
-make build
+make dev
 
-# Run tests
-make test
+# Optional: run one focused diagnostic test while developing
+swift test --disable-sandbox --filter SortyTests.TestClass/testMethod
 ```
 
 ### Useful Make Commands
 
 | Command | Purpose |
 |---------|---------|
-| `make build` | Full build with tests |
+| `make build` | Full local build with tests, for diagnostics |
 | `make run` | Build and launch app |
 | `make now` | Fast debug build + launch (recommended for dev) |
 | `make dev` | Fastest build (debug, no tests, no launch) |
-| `make test` | Run unit tests |
-| `make test-fast` | Run fast unit tests only |
+| `make test` | Run local unit tests, for diagnostics |
+| `make test-fast` | Run local fast unit tests only |
 | `make quick` | Compile only, skip tests |
 | `make install` | Install app to /Applications |
 | `make harness` | Preview harness for rapid UI iteration |
-| `make ci` | Run CI checks locally (security, build, test, app bundle) |
-| `make ci-report` | Run CI locally + report pass/fail to GitHub |
+| `make ci` | Run local CI-style diagnostics |
+| `make ci-report` | Legacy local CI status reporting; do not use to skip Blacksmith |
 | `make benchmark` | Measure build times |
 
 For the full fast development loop guide, see [docs/agent-guides/fast-loop.md](docs/agent-guides/fast-loop.md).
@@ -241,27 +241,28 @@ Add `accessibilityIdentifier` to all interactive elements:
 .accessibilityIdentifier("PersonaPickerButton")
 ```
 
-## Pull Request Process
+## Commit, Push, and Pull Request Process
+
+Prefer small, reviewable commits and push them early. The goal is to get Blacksmith feedback on the actual branch state as work progresses, not to hold a large local-only batch until the end.
 
 ### Before Submitting
 
-1. **Run Local CI** (recommended — mirrors GitHub Actions):
-```bash
-make ci              # Run all CI checks locally
-make ci-report       # Same, but also reports result to GitHub
-```
+1. **Commit and push coherent checkpoints**:
+   - Commit after each focused fix, feature slice, or documentation update.
+   - Push the branch after meaningful checkpoints so Blacksmith starts validating while follow-up work can continue.
+   - If Blacksmith fails, fix it in a follow-up commit and push again.
 
-   Or run tests individually:
-```bash
-make test
-```
+2. **Keep local checks focused**:
+   - For small code changes, run one relevant local test only if it materially speeds debugging.
+   - For UI polish or documentation-only changes, local verification is optional.
+   - Do not run `make ci-report`; Blacksmith checks must run for the pushed commit.
 
-2. **Check Code Style**:
+3. **Check Code Style**:
    - No warnings in Xcode
    - Consistent with existing code
    - Proper documentation comments for public APIs
 
-3. **Update Documentation**:
+4. **Update Documentation**:
    - README.md if user-facing changes
    - HelpView.swift if adding new features
    - AGENTS.md if changing build process
@@ -270,16 +271,26 @@ make test
 
 - Clear description of what changed and why
 - Link to related issues (e.g., "Fixes #123")
+- Small, coherent commits that reviewers can inspect independently
 - Screenshots for UI changes
-- Test results showing what was verified
+- Blacksmith Swift CI result for the pushed branch
+- Any local diagnostic command you ran, clearly marked as local
 
 ### Review Process
 
-1. If you ran `make ci-report`, GitHub CI skips redundant checks for that commit
-2. Otherwise, automated CI runs tests and security checks
-3. Maintainers review for code quality and architecture alignment
+1. Automated Blacksmith CI runs security checks, build, current test inventory, parallel unit tests, and app bundle validation
+2. Maintainers review for code quality and architecture alignment
 3. Feedback is provided within 48 hours
 4. Changes may be requested before approval
+
+## Release Process
+
+Releases are validated and built on Blacksmith. Do not create release confidence from local `make release`, `make prerelease`, or `make ci` output.
+
+1. Push the release branch and wait for **Swift CI** to pass on Blacksmith.
+2. Trigger the **Release** workflow from GitHub Actions with the target version, or push the intended `v*` tag.
+3. Confirm the release workflow completed all required Blacksmith jobs: changelog preparation, current test inventory, parallel unit tests, universal app build, Sparkle appcast generation, and release publication.
+4. Use local release commands only to reproduce or debug a failure from the Blacksmith run.
 
 ## Commit Message Guidelines
 
@@ -333,8 +344,8 @@ When adding features that affect users:
 
 - **General questions**: Open a GitHub Discussion
 - **Bug reports**: Use the bug report template
-- **Security issues**: Use [GitHub's private vulnerability reporting](https://github.com/shirishpothi/Sorty/security/advisories/new) (do not open public issues)
-- **Code of Conduct violations**: Report via [GitHub Discussions](https://github.com/shirishpothi/Sorty/discussions)
+- **Security issues**: Use [GitHub's private vulnerability reporting](https://github.com/sorty-organizer/Sorty/security/advisories/new) (do not open public issues)
+- **Code of Conduct violations**: Report via [GitHub Discussions](https://github.com/sorty-organizer/Sorty/discussions)
 
 ## License
 

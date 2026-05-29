@@ -309,8 +309,8 @@ Yes, with Ollama (local AI) or Apple Intelligence. Cloud providers require inter
 
 ## Support
 
-- [GitHub Repository](https://github.com/shirishpothi/Sorty)
-- [Report Issues](https://github.com/shirishpothi/Sorty/issues)
+- [GitHub Repository](https://github.com/sorty-organizer/Sorty)
+- [Report Issues](https://github.com/sorty-organizer/Sorty/issues)
 - [Full Help Documentation](../HELP.md)
 
 ---

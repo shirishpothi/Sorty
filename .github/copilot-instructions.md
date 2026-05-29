@@ -1,10 +1,12 @@
 # Sorty - AI Coding Agent Instructions
 
-- `make dev` = fast debug build, `make now` = fast build + launch, `make build` = full build with unit tests, `make ci` = local CI gate, `make test` = parallel unit tests.
-- Single test: `swift test --disable-sandbox --filter SortyTests.TestClass/testMethod`; coverage: `make test-full`; `make test-ui` currently does nothing because UI tests are disabled.
-- There is no dedicated `swiftlint`/`swiftformat` repo command today; do not invent one. Use `make ci`, compiler warnings, and tests as the quality gate.
+- `make dev` = fast debug build, `make now` = fast build + launch, `make build` = full build with unit tests, `make ci` = local diagnostic CI, `make test` = local parallel unit tests.
+- Blacksmith GitHub Actions are the source of truth for commit, push, PR, and release gates. Do not use local CI status to skip remote checks.
+- Work in frequent small commits and push after each coherent change so Blacksmith validates the branch continuously. Continue with additional commits on the same branch when more cleanup or follow-up work is needed.
+- Single local diagnostic test: `swift test --disable-sandbox --filter SortyTests.TestClass/testMethod`; coverage: `make test-full`; `make test-ui` currently does nothing because UI tests are disabled.
+- There is no dedicated `swiftlint`/`swiftformat` repo command today; do not invent one. Use compiler warnings, focused tests when needed, and Blacksmith CI as the quality gate.
 - Xcode entry point is `Sorty.xcodeproj`; run the `Sorty` scheme for the app and build `SortyFinderSync` separately when changing Finder integration behavior.
-- Main targets: `Sources/SortyApp` (app lifecycle/windowing), `Sources/SortyLib` (shared product code), `Sources/LearningsCLI` (`learnings` executable), `Sources/SortyFinderSync` (Finder Sync extension).
+- Main targets: `Sources/SortyApp` (app lifecycle/windowing), `Sources/SortyLib` (shared product code), `Sources/SortyFinderSync` (Finder Sync extension).
 - Core flow is `View -> Manager/ViewModel -> FolderOrganizer -> AIClientProtocol -> OrganizationPlan -> preview/apply`.
 - Keep shared logic in `SortyLib`; only app-entry glue belongs in `SortyApp`; new files under `Sources/SortyApp` and `Sources/SortyFinderSync` still need correct Xcode target membership.
 - Key internal APIs/services: `FolderOrganizer`, `AIClientProtocol` + `AIClientFactory`, `PromptBuilder`, `ModelCatalog`, `DeeplinkHandler`, `ExtensionCommunication`, `LearningsManager`, `SecurityManager`.

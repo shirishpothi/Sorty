@@ -2,9 +2,12 @@
 
 - Native SwiftUI macOS 15+ folder organizer, Swift 6, SPM plus `Sorty.xcodeproj`.
 - Fast loop: `make dev` builds debug without tests; `make now` builds debug and launches; `make harness[-settings|-organize]` launches targeted harnesses.
-- Quality gates run on Blacksmith by default; push changes and use GitHub/Blacksmith checks for `make build`, `make test`, `make test-full`, and `make ci` unless the user explicitly asks for local testing.
+- Quality gates run on Blacksmith by default; push changes and use GitHub/Blacksmith checks for build, tests, app bundle, prerelease, and release validation unless the user explicitly asks for local testing.
+- Local `make ci`, `make test`, and `make test-full` are diagnostics only and must not be used to skip Blacksmith checks for commit, push, PR, or release confidence.
+- Prefer frequent small commits and pushes over large local-only batches. After each coherent change or fix, commit with a clear message and push so Blacksmith can validate the current branch early.
+- If more work remains after a push, keep going in follow-up commits on the same branch instead of waiting for a perfect final batch.
 - Single test: `swift test --disable-sandbox --filter SortyTests.TestClass/testMethod`; use `make test-ui` only to confirm UI tests are currently disabled.
-- No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused tests, and `make ci`.
+- No repo `swiftlint`/`swiftformat` command exists; do not invent one—use compiler warnings, focused diagnostic tests when useful, and Blacksmith CI as the quality gate.
 - Xcode: open `Sorty.xcodeproj`, run `Sorty`; build `SortyFinderSync` separately when changing Finder integration or target membership.
 - Main targets: `Sources/SortyLib` shared app logic, `Sources/SortyApp` app lifecycle/windowing, `Sources/SortyFinderSync` extension, `Sources/SortyWidgets` widgets.
 - Keep reusable product code in `SortyLib`; `SortyApp` should contain entry/window glue only. New app/extension/widget files need matching Xcode target membership.
