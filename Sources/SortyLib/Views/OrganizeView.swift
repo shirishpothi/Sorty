@@ -25,6 +25,7 @@ struct OrganizeView: View {
     @State private var showSavedPromptsSheet = false
     @State private var isReturningToStart = false
     @State private var isShowingReturnToStartContent = false
+    @State private var returnsToDirectorySelection = false
     @State private var keepsReadyContentVisibleAfterReturn = false
     @State private var showsCompletionContent = false
 
@@ -229,7 +230,13 @@ struct OrganizeView: View {
     }
 
     private var returnToStartContent: some View {
-        ReadyToOrganizeView(onStart: startOrganization, startsVisible: true)
+        Group {
+            if returnsToDirectorySelection {
+                DirectorySelectionView(selectedDirectory: $appState.selectedDirectory)
+            } else {
+                ReadyToOrganizeView(onStart: startOrganization, startsVisible: true)
+            }
+        }
     }
     
     @ViewBuilder
@@ -364,6 +371,7 @@ struct OrganizeView: View {
         } else {
             isReturningFromCompletion = false
         }
+        returnsToDirectorySelection = isReturningFromCompletion
         isShowingReturnToStartContent = true
         withAnimation(returnToStartExitAnimation) {
             isReturningToStart = true
@@ -380,11 +388,12 @@ struct OrganizeView: View {
                 if isReturningFromCompletion {
                     organizer.pinsCompletionView = false
                     organizer.reset()
+                    appState.selectedDirectory = nil
                 } else {
                     organizer.cancel()
                 }
                 showsCompletionContent = false
-                keepsReadyContentVisibleAfterReturn = true
+                keepsReadyContentVisibleAfterReturn = !isReturningFromCompletion
             }
 
             try? await Task.sleep(for: reduceMotion ? .milliseconds(80) : .milliseconds(260))
@@ -394,6 +403,7 @@ struct OrganizeView: View {
 
             try? await Task.sleep(for: reduceMotion ? .milliseconds(120) : .milliseconds(420))
             isShowingReturnToStartContent = false
+            returnsToDirectorySelection = false
         }
     }
 

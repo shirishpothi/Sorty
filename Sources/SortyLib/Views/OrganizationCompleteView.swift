@@ -236,7 +236,7 @@ struct OrganizationCompleteView: View {
                                 HapticFeedbackManager.shared.tap()
                                 returnToStart()
                             } label: {
-                                Label("Start Again", systemImage: "arrow.counterclockwise")
+                                Label("Organise Another", systemImage: "arrow.counterclockwise")
                                     .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
@@ -245,8 +245,8 @@ struct OrganizationCompleteView: View {
                                     HapticFeedbackManager.shared.selection()
                                 }
                             }
-                            .help("Return to the start screen for this folder")
-                            .accessibilityHint("Returns to the start organization screen")
+                            .help("Return to the folder picker to organise another folder")
+                            .accessibilityHint("Returns to the folder picker to organise another folder")
                             .disabled(undoState.isUndoing || undoState == .completed)
                         }
                     }
