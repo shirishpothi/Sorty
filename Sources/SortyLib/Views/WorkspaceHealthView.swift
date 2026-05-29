@@ -72,7 +72,7 @@ public struct WorkspaceHealthView: View {
                 HStack {
                     Spacer()
                     workspaceHealthControls
-                        .padding(.top, 14)
+                        .padding(.top, 6)
                         .padding(.trailing, 16)
                 }
                 Spacer()
