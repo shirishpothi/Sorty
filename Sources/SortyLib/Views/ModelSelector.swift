@@ -69,6 +69,7 @@ extension View {
         currentModel: String,
         contextMessage: String? = nil,
         selectionActionTitle: String = "Select",
+        isSelectionActionProminent: Bool = true,
         onSelect: @escaping (AIProvider, String) -> Void
     ) -> some View {
         modifier(
@@ -78,6 +79,7 @@ extension View {
                 currentModel: currentModel,
                 contextMessage: contextMessage,
                 selectionActionTitle: selectionActionTitle,
+                isSelectionActionProminent: isSelectionActionProminent,
                 onSelect: onSelect
             )
         )
@@ -92,6 +94,7 @@ struct ModelSelectionPopover: View {
     let currentModel: String
     let contextMessage: String?
     let selectionActionTitle: String
+    let isSelectionActionProminent: Bool
     let popoverSize: CGSize
     let onSelect: (AIProvider, String) -> Void
 
@@ -113,6 +116,7 @@ struct ModelSelectionPopover: View {
         currentModel: String,
         contextMessage: String? = nil,
         selectionActionTitle: String = "Select",
+        isSelectionActionProminent: Bool = true,
         popoverSize: CGSize = CGSize(width: 500, height: 420),
         onSelect: @escaping (AIProvider, String) -> Void
     ) {
@@ -121,6 +125,7 @@ struct ModelSelectionPopover: View {
         self.currentModel = currentModel
         self.contextMessage = contextMessage
         self.selectionActionTitle = selectionActionTitle
+        self.isSelectionActionProminent = isSelectionActionProminent
         self.popoverSize = popoverSize
         self.onSelect = onSelect
     }
@@ -596,12 +601,16 @@ struct ModelSelectionPopover: View {
                 isPresented = false
             }
             .keyboardShortcut(.return, modifiers: [])
-            .buttonStyle(.sortyProminent)
+            .buttonStyle(selectionActionButtonStyle)
             .disabled(selectedModel.isEmpty)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(chromeBackground)
+    }
+
+    private var selectionActionButtonStyle: SortyStandardButtonStyle {
+        isSelectionActionProminent ? .sortyProminent : .sortyBordered(intent: .primary)
     }
 
     @ViewBuilder
@@ -698,6 +707,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
     let currentModel: String
     let contextMessage: String?
     let selectionActionTitle: String
+    let isSelectionActionProminent: Bool
     let onSelect: (AIProvider, String) -> Void
 
     private let contentPadding: CGFloat = 12
@@ -727,6 +737,7 @@ private struct ModelSelectionOverlayModifier: ViewModifier {
                                 currentModel: currentModel,
                                 contextMessage: contextMessage,
                                 selectionActionTitle: selectionActionTitle,
+                                isSelectionActionProminent: isSelectionActionProminent,
                                 popoverSize: popoverSize,
                                 onSelect: onSelect
                             )
