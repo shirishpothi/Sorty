@@ -678,7 +678,9 @@ bundle_finder_extension() {
             mkdir -p "${plugins_dir}"
             rm -rf "${plugins_dir}/${appex_name}"
             cp -R "${cached_appex}" "${plugins_dir}/${appex_name}"
-            run_quiet_allow_failure codesign_cmd_allow_failure "${plugins_dir}/${appex_name}"
+            if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
+                run_quiet_allow_failure codesign_cmd_allow_failure "${plugins_dir}/${appex_name}"
+            fi
             log_detail "SortyFinderSync.appex unchanged, using cache"
             return
         fi
@@ -713,7 +715,9 @@ bundle_finder_extension() {
             mkdir -p "${plugins_dir}"
             rm -rf "${plugins_dir}/${appex_name}"
             cp -R "${built_appex}" "${plugins_dir}/${appex_name}"
-            run_quiet_allow_failure codesign_cmd_allow_failure "${plugins_dir}/${appex_name}"
+            if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
+                run_quiet_allow_failure codesign_cmd_allow_failure "${plugins_dir}/${appex_name}"
+            fi
             log_detail "Embedded SortyFinderSync.appex in PlugIns ($(get_step_duration "finder_ext"))"
         else
             log_warning "SortyFinderSync.appex not found after build"
@@ -740,7 +744,11 @@ ENABLE_SPARKLE_SIGNING="${ENABLE_SPARKLE_SIGNING:-true}"
 PRESERVE_APP_BUNDLE="${PRESERVE_APP_BUNDLE:-false}"
 SORTY_VERBOSE="${SORTY_VERBOSE:-${VERBOSE:-false}}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:-auto}"
-SIGNING_IDENTITY=$(resolve_codesign_identity "${SIGNING_IDENTITY}")
+if [ "${ENABLE_ADHOC_SIGNING}" = "true" ] || [ "${ENABLE_SPARKLE_SIGNING}" = "true" ]; then
+    SIGNING_IDENTITY=$(resolve_codesign_identity "${SIGNING_IDENTITY}")
+else
+    SIGNING_IDENTITY="${SIGNING_IDENTITY:-}"
+fi
 
 if [ "${SIGNING_IDENTITY}" = "-" ]; then
     log_detail "Using ad-hoc code signing identity"
@@ -880,7 +888,9 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     if [ -f "${MACOS_BIN}" ]; then
         chmod +x "${MACOS_BIN}"
         normalize_app_executable_linkage "${MACOS_BIN}"
-        run_quiet strip -x "${MACOS_BIN}"
+        if [ "${BUILD_CONFIG}" != "debug" ]; then
+            run_quiet strip -x "${MACOS_BIN}"
+        fi
         chmod +x "${MACOS_BIN}"
     fi
 
@@ -992,7 +1002,7 @@ else
         # shellcheck disable=SC2206
         BUILD_FLAGS_ARRAY=( ${BUILD_FLAGS_EXTRA} )
     fi
-    if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" -c "${BUILD_CONFIG}" "${BUILD_FLAGS_ARRAY[@]}"; then
+    if ! run_with_swiftpm_db_recovery "swift_build" swift build --scratch-path "${BUILD_DIR}" -c "${BUILD_CONFIG}" --product "${SPM_BINARY_NAME}" "${BUILD_FLAGS_ARRAY[@]}"; then
         log_failure "Compilation failed"
         exit 1
     fi
@@ -1017,7 +1027,9 @@ else
         cp "${BIN_PATH}/${SPM_BINARY_NAME}" "${MACOS_DIR}/${BINARY_NAME}"
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
         normalize_app_executable_linkage "${MACOS_DIR}/${BINARY_NAME}"
-        run_quiet strip -x "${MACOS_DIR}/${BINARY_NAME}"
+        if [ "${BUILD_CONFIG}" != "debug" ]; then
+            run_quiet strip -x "${MACOS_DIR}/${BINARY_NAME}"
+        fi
         chmod +x "${MACOS_DIR}/${BINARY_NAME}"
     else
         log_failure "Binary not found at ${BIN_PATH}/${SPM_BINARY_NAME}"
@@ -1109,7 +1121,8 @@ fi
 # Icon variant selection — swap AppIcon.icns in the bundle based on context.
 # APP_ICON_VARIANT accepts:
 # - release/prod/production -> AppIcon-Release.icns
-# - anything else          -> AppIcon-CI.icns for non-release builds
+# - debug/dev/local        -> AppIcon-Debug.icns for local builds
+# - anything else          -> AppIcon-CI.icns for CI builds
 RAW_APP_ICON_VARIANT="${APP_ICON_VARIANT:-ci}"
 APP_ICON_VARIANT_NORMALIZED="$(echo "${RAW_APP_ICON_VARIANT}" | tr '[:upper:]' '[:lower:]')"
 
@@ -1117,6 +1130,10 @@ case "${APP_ICON_VARIANT_NORMALIZED}" in
     release|prod|production)
         APP_ICON_VARIANT_KEY="release"
         ICON_VARIANT_SUFFIX="Release"
+        ;;
+    debug|dev|local)
+        APP_ICON_VARIANT_KEY="debug"
+        ICON_VARIANT_SUFFIX="Debug"
         ;;
     *)
         APP_ICON_VARIANT_KEY="ci"

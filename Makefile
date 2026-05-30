@@ -15,7 +15,7 @@ SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
 # Swift build flags for optimization
 SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox -Xlinker -no_deduplicate
 SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true AUTO_PRUNE_BUILD_CACHE=false
 VERBOSE ?= false
 BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
@@ -47,14 +47,14 @@ run: build
 # builds with debug symbols and verbose logging
 debug:
 	@echo "🛠️  Building in DEBUG mode with $(CORES) parallel jobs..."
-	@$(BUILD_SCRIPT_ENV) BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) APP_ICON_VARIANT=debug BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS)" ./scripts/build.sh
 	@echo "🚀 Launching Debug Build..."
 	@open releases/Sorty.app
 
 # Fastest development build - parallel, no tests, debug mode
 dev:
 	@echo "⚡ Fast development build ($(CORES) parallel jobs)..."
-	@$(BUILD_SCRIPT_ENV) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 
 # runs the complete test suite with parallel execution
 test:
@@ -85,23 +85,25 @@ build-profile:
 # runs basic syntax checks and builds (skips tests)
 quick:
 	@echo "⚡ Quick build (skipping tests, DEBUG mode, $(CORES) parallel jobs)..."
-	@$(BUILD_SCRIPT_ENV) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 
 # skips all checks and builds/runs immediately
 now:
 	@echo "🏎️  Immediate build and run (DEBUG mode, $(CORES) parallel jobs)..."
-	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@open releases/Sorty.app
 
-# Local CI - mirrors GitHub Actions CI checks on your machine (faster)
+# Local CI-style diagnostics. Blacksmith GitHub Actions remain the release/PR gate.
 ci:
-	@echo "🔄 Running local CI checks ($(CORES) cores)..."
+	@echo "🔄 Running local CI-style diagnostics ($(CORES) cores)..."
+	@echo "   Blacksmith GitHub Actions remain the source of truth for PR/release gates."
 	@chmod +x scripts/local_ci.sh
 	@./scripts/local_ci.sh
 
-# Local CI + report result to GitHub as a commit status
+# Legacy local CI + report result to GitHub as a commit status.
 ci-report:
-	@echo "🔄 Running local CI checks + reporting to GitHub..."
+	@echo "🔄 Running legacy local CI checks + reporting to GitHub..."
+	@echo "   This status does not skip Blacksmith checks."
 	@chmod +x scripts/local_ci.sh
 	@./scripts/local_ci.sh --report
 
@@ -215,9 +217,9 @@ help:
 	@echo "  make build-ci-x86_64    - Deprecated alias (forwards to build-ci-universal)"
 	@echo ""
 	@echo ""
-	@echo "Local CI (mirrors GitHub Actions):"
-	@echo "  make ci          - Run CI checks locally (security, build, test, app bundle)"
-	@echo "  make ci-report   - Run CI locally + report pass/fail to GitHub"
+	@echo "Local diagnostics:"
+	@echo "  make ci          - Run local CI-style diagnostics"
+	@echo "  make ci-report   - Legacy local status report; does not skip Blacksmith"
 	@echo ""
 	@echo "Build Profiling:"
 	@echo "  make build-profile - Identify slow-compiling files and functions"
@@ -232,9 +234,9 @@ help:
 	@echo "  make release-patch   - Auto-release with patch version bump (1.0.0 -> 1.0.1)"
 	@echo "  make release-minor   - Auto-release with minor version bump (1.0.0 -> 1.1.0)"
 	@echo "  make release-major   - Auto-release with major version bump (1.0.0 -> 2.0.0)"
-	@echo "  make release         - Create release zip (no version bump)"
-	@echo "  make prerelease      - Run comprehensive pre-release validation"
-	@echo "  make prerelease-full - Full pre-release validation"
+	@echo "  make release         - Create local release zip for diagnostics"
+	@echo "  make prerelease      - Run local pre-release diagnostics"
+	@echo "  make prerelease-full - Full local pre-release diagnostics"
 	@echo ""
 	@echo "Preview Harness (fast iteration):"
 	@echo "  make harness          - Build and launch harness mode"

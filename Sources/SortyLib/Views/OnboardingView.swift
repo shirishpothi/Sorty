@@ -20,7 +20,7 @@ public struct OnboardingView: View {
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
 
-    @State private var currentStep: OnboardingStep = .welcome
+    @State private var currentStep: OnboardingStep = .provider
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
     @State private var isAdvancing = false
@@ -74,7 +74,9 @@ public struct OnboardingView: View {
                 .animation(.easeInOut(duration: 0.5), value: isIntroVisible)
 
                 if isIntroVisible {
-                    OnboardingIntroView()
+                    OnboardingIntroView {
+                        dismissIntro()
+                    }
                         .transition(.opacity)
                 }
             }
@@ -99,7 +101,6 @@ public struct OnboardingView: View {
             .frame(width: 0, height: 0)
         )
         .onAppear {
-            startIntroIfNeeded()
             installSwipeMonitorIfNeeded()
         }
         .onDisappear {
@@ -145,7 +146,7 @@ public struct OnboardingView: View {
 
     private var navigationControls: some View {
         let sideControlWidth: CGFloat = 180
-        let backHidden = (currentStep == .welcome || currentStep == .completion)
+        let backHidden = (currentStep == OnboardingStep.activeCases.first || currentStep == .completion)
 
         return VStack(spacing: 8) {
             ZStack {
@@ -273,19 +274,16 @@ public struct OnboardingView: View {
         )
     }
 
-    private func startIntroIfNeeded() {
+    private func dismissIntro() {
         guard isIntroVisible else { return }
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            withAnimation(.easeInOut(duration: 0.55)) {
-                isIntroVisible = false
-            }
+        HapticFeedbackManager.shared.selection()
+        withAnimation(.easeInOut(duration: 0.55)) {
+            isIntroVisible = false
         }
     }
 
     private func navigateToPreviousStep() {
-        guard currentStep != .welcome && currentStep != .completion else { return }
+        guard currentStep != OnboardingStep.activeCases.first && currentStep != .completion else { return }
         HapticFeedbackManager.shared.selection()
         withAnimation(.pageTransition) {
             currentStep = currentStep.previous
@@ -427,6 +425,9 @@ enum OnboardingStep: Int, CaseIterable {
     @MainActor
     static var activeCases: [OnboardingStep] {
         allCases.filter { step in
+            if step == .welcome {
+                return false
+            }
             if step == .demo {
                 return FeatureFlags.featureDemoEnabled
             }
@@ -486,79 +487,197 @@ extension OnboardingStep: OnboardingStepValidating {
 // MARK: - Onboarding Title Bar
 
 private struct OnboardingIntroView: View {
-    @State private var iconScale: CGFloat = 0.92
+    let onGetStarted: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var iconScale: CGFloat = 0.9
     @State private var iconOpacity: Double = 0
     @State private var textOpacity: Double = 0
-    @State private var textOffset: CGFloat = 12
-    @State private var glowRadius: CGFloat = 24
+    @State private var textOffset: CGFloat = 14
+    @State private var glowRadius: CGFloat = 22
+    @State private var orbitPhase: Double = 0
+    @State private var isHoveringButton = false
 
     var body: some View {
         ZStack {
-            Color.clear
+            OnboardingBottomGradient()
                 .ignoresSafeArea()
+                .allowsHitTesting(false)
 
-            VStack(spacing: 18) {
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
+                let phase = reduceMotion ? 0 : orbitPhase + context.date.timeIntervalSinceReferenceDate * 0.32
                 ZStack {
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(.white.opacity(0.18))
-                        .frame(width: 138, height: 138)
-                        .blur(radius: glowRadius)
-                        .opacity(iconOpacity)
-
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 92, height: 92)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .shadow(color: .black.opacity(0.22), radius: 18, x: 0, y: 10)
+                    ForEach(OnboardingOrbitFile.files) { file in
+                        OnboardingOrbitFileChip(file: file)
+                            .offset(orbitOffset(for: file, phase: phase))
+                            .scaleEffect(isHoveringButton ? 0.42 : 1)
+                            .opacity(isHoveringButton ? 0 : textOpacity)
+                            .blur(radius: isHoveringButton ? 12 : 0)
+                    }
                 }
-                .scaleEffect(iconScale)
-                .opacity(iconOpacity)
+                .animation(.spring(response: 0.42, dampingFraction: 0.82), value: isHoveringButton)
+                .allowsHitTesting(false)
+            }
 
-                Text("Meet Sorty")
-                    .font(.system(size: 34, weight: .medium, design: .serif))
-                    .foregroundStyle(.primary.opacity(0.82))
-                    .opacity(textOpacity)
-                    .offset(y: textOffset)
-                    .animation(.easeOut(duration: 0.55).delay(0.16), value: textOpacity)
+            VStack(spacing: 22) {
+                VStack(spacing: 18) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 34, style: .continuous)
+                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.28))
+                            .frame(width: 148, height: 148)
+                            .blur(radius: glowRadius)
+                            .opacity(iconOpacity)
+
+                        Image(nsImage: NSApp.applicationIconImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 96, height: 96)
+                            .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+                            .shadow(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.18), radius: 24, x: 0, y: 0)
+                            .shadow(color: .black.opacity(0.22), radius: 18, x: 0, y: 10)
+                            .accessibilityHidden(true)
+                    }
+                    .scaleEffect(iconScale)
+                    .opacity(iconOpacity)
+
+                    Text("Welcome to Sorty")
+                        .font(.system(size: 36, weight: .medium, design: .serif))
+                        .foregroundStyle(.primary.opacity(0.86))
+                        .opacity(textOpacity)
+                        .offset(y: textOffset)
+                }
+
+                Button {
+                    onGetStarted()
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Get Started")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                }
+                .buttonStyle(.onboardingPill(size: .large))
+                .onboardingBeamBorder(variant: .featured, isIntensified: isHoveringButton, includesInteriorGlow: isHoveringButton)
+                .keyboardShortcut(.defaultAction)
+                .accessibilityIdentifier("OnboardingAdvanceButton")
+                .onHover { hovering in
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
+                        isHoveringButton = hovering
+                    }
+                }
+                .scaleEffect(isHoveringButton ? 1.035 : 1)
+                .opacity(textOpacity)
+                .offset(y: textOffset)
+                .animation(.spring(response: 0.36, dampingFraction: 0.82), value: isHoveringButton)
             }
         }
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Welcome to Sorty")
         .onAppear {
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.84)) {
                 iconScale = 1
                 iconOpacity = 1
             }
 
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
-                glowRadius = 34
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                    glowRadius = 36
+                }
             }
 
-            withAnimation(.easeOut(duration: 0.55).delay(0.16)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.7).delay(0.16)) {
                 textOpacity = 1
                 textOffset = 0
+                orbitPhase = 1
             }
         }
+    }
+
+    private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
+        if isHoveringButton {
+            return CGSize(width: file.collapseX, height: 104 + file.collapseY)
+        }
+
+        let angle = file.angle + phase * file.speed
+        return CGSize(
+            width: cos(angle) * file.radiusX,
+            height: sin(angle) * file.radiusY + file.verticalBias
+        )
+    }
+}
+
+private struct OnboardingOrbitFile: Identifiable {
+    let id = UUID()
+    let name: String
+    let icon: String
+    let tint: Color
+    let angle: Double
+    let speed: Double
+    let radiusX: CGFloat
+    let radiusY: CGFloat
+    let verticalBias: CGFloat
+    let collapseX: CGFloat
+    let collapseY: CGFloat
+
+    static let files: [OnboardingOrbitFile] = [
+        OnboardingOrbitFile(name: "Invoices", icon: "doc.text.fill", tint: .blue, angle: 0.2, speed: 0.9, radiusX: 260, radiusY: 150, verticalBias: -12, collapseX: -42, collapseY: -8),
+        OnboardingOrbitFile(name: "Designs", icon: "photo.fill", tint: .pink, angle: 1.1, speed: 0.72, radiusX: 310, radiusY: 172, verticalBias: -8, collapseX: 34, collapseY: -12),
+        OnboardingOrbitFile(name: "Reports", icon: "chart.bar.doc.horizontal.fill", tint: .green, angle: 2.15, speed: 0.84, radiusX: 276, radiusY: 158, verticalBias: 6, collapseX: -18, collapseY: 8),
+        OnboardingOrbitFile(name: "Clips", icon: "film.fill", tint: .orange, angle: 3.35, speed: 0.68, radiusX: 322, radiusY: 178, verticalBias: 18, collapseX: 52, collapseY: 10),
+        OnboardingOrbitFile(name: "Notes", icon: "note.text", tint: .purple, angle: 4.45, speed: 0.78, radiusX: 244, radiusY: 142, verticalBias: 2, collapseX: 8, collapseY: -4),
+        OnboardingOrbitFile(name: "Exports", icon: "shippingbox.fill", tint: .teal, angle: 5.45, speed: 0.74, radiusX: 292, radiusY: 166, verticalBias: -16, collapseX: -58, collapseY: 12)
+    ]
+}
+
+private struct OnboardingOrbitFileChip: View {
+    let file: OnboardingOrbitFile
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: file.icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(file.tint)
+
+            Text(file.name)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.84))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .systemLiquidGlassBackground(cornerRadius: 13)
+        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 8)
+        .accessibilityHidden(true)
     }
 }
 
 private struct OnboardingBottomGradient: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        VStack {
-            Spacer(minLength: 0)
+        ZStack(alignment: .bottom) {
+            Color(NSColor.windowBackgroundColor)
 
             LinearGradient(
                 colors: [
-                    Color.teal.opacity(0.22),
-                    Color.blue.opacity(0.16),
-                    Color.indigo.opacity(0.08),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(colorScheme == .dark ? 0.34 : 0.46),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(colorScheme == .dark ? 0.16 : 0.20),
                     Color.clear
                 ],
                 startPoint: .bottom,
-                endPoint: .top
+                endPoint: .center
             )
-            .frame(maxWidth: .infinity)
-            .frame(height: 380)
+
+            RadialGradient(
+                colors: [
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(colorScheme == .dark ? 0.24 : 0.30),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.08),
+                    Color.clear
+                ],
+                center: UnitPoint(x: 0.5, y: 1.04),
+                startRadius: 0,
+                endRadius: 620
+            )
+            .blendMode(.plusLighter)
         }
     }
 }
