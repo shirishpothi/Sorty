@@ -326,11 +326,7 @@ public struct WelcomeStepView: View {
                 }
                 .padding(14)
                 .frame(maxWidth: 460)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.blue.opacity(0.05))
-                        .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-                )
+                .systemLiquidGlassBackground(cornerRadius: 12)
                 .opacity(featuresAppeared ? 1 : 0)
                 .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(2.1), value: featuresAppeared)
 
@@ -595,6 +591,7 @@ struct WelcomeFeatureRow: View {
 
             Spacer()
         }
+        .systemLiquidGlassBackground(cornerRadius: 14)
         .padding(.vertical, 4)
     }
 }

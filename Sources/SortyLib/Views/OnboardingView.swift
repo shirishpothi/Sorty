@@ -29,6 +29,7 @@ public struct OnboardingView: View {
     @State private var swipeAccumulatedTranslation: CGFloat = 0
     @State private var hasTriggeredSwipeForGesture = false
     @State private var hasConfiguredWindowChrome = false
+    @State private var isIntroVisible = true
 
     private let swipeThreshold: CGFloat = 42
 
@@ -40,7 +41,13 @@ public struct OnboardingView: View {
         GeometryReader { geometry in
             ZStack {
                 Color(NSColor.windowBackgroundColor)
+                    .opacity(isIntroVisible ? 0 : 1)
                     .ignoresSafeArea()
+
+                OnboardingBottomGradient()
+                    .opacity(isIntroVisible ? 0 : 1)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
 
                 VStack(spacing: 0) {
                     // Pinned with a fixed top padding so it doesn't shift between steps.
@@ -63,6 +70,13 @@ public struct OnboardingView: View {
                         .padding(.bottom, 16)
                 }
                 .ignoresSafeArea(.container, edges: .top)
+                .opacity(isIntroVisible ? 0 : 1)
+                .animation(.easeInOut(duration: 0.5), value: isIntroVisible)
+
+                if isIntroVisible {
+                    OnboardingIntroView()
+                        .transition(.opacity)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -85,6 +99,7 @@ public struct OnboardingView: View {
             .frame(width: 0, height: 0)
         )
         .onAppear {
+            startIntroIfNeeded()
             installSwipeMonitorIfNeeded()
         }
         .onDisappear {
@@ -256,6 +271,17 @@ public struct OnboardingView: View {
                 hasRequiredPermissions: hasFilesAndFoldersPermission
             )
         )
+    }
+
+    private func startIntroIfNeeded() {
+        guard isIntroVisible else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            withAnimation(.easeInOut(duration: 0.55)) {
+                isIntroVisible = false
+            }
+        }
     }
 
     private func navigateToPreviousStep() {
@@ -459,6 +485,84 @@ extension OnboardingStep: OnboardingStepValidating {
 
 // MARK: - Onboarding Title Bar
 
+private struct OnboardingIntroView: View {
+    @State private var iconScale: CGFloat = 0.92
+    @State private var iconOpacity: Double = 0
+    @State private var textOpacity: Double = 0
+    @State private var textOffset: CGFloat = 12
+    @State private var glowRadius: CGFloat = 24
+
+    var body: some View {
+        ZStack {
+            Color.clear
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(.white.opacity(0.18))
+                        .frame(width: 138, height: 138)
+                        .blur(radius: glowRadius)
+                        .opacity(iconOpacity)
+
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 92, height: 92)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: .black.opacity(0.22), radius: 18, x: 0, y: 10)
+                }
+                .scaleEffect(iconScale)
+                .opacity(iconOpacity)
+
+                Text("Meet Sorty")
+                    .font(.system(size: 34, weight: .medium, design: .serif))
+                    .foregroundStyle(.primary.opacity(0.82))
+                    .opacity(textOpacity)
+                    .offset(y: textOffset)
+                    .animation(.easeOut(duration: 0.55).delay(0.16), value: textOpacity)
+            }
+        }
+        .accessibilityHidden(true)
+        .onAppear {
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                iconScale = 1
+                iconOpacity = 1
+            }
+
+            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                glowRadius = 34
+            }
+
+            withAnimation(.easeOut(duration: 0.55).delay(0.16)) {
+                textOpacity = 1
+                textOffset = 0
+            }
+        }
+    }
+}
+
+private struct OnboardingBottomGradient: View {
+    var body: some View {
+        VStack {
+            Spacer(minLength: 0)
+
+            LinearGradient(
+                colors: [
+                    Color.teal.opacity(0.22),
+                    Color.blue.opacity(0.16),
+                    Color.indigo.opacity(0.08),
+                    Color.clear
+                ],
+                startPoint: .bottom,
+                endPoint: .top
+            )
+            .frame(maxWidth: .infinity)
+            .frame(height: 380)
+        }
+    }
+}
+
 private struct OnboardingTopBar: View {
     var body: some View {
         Color.clear
@@ -504,6 +608,9 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         private var originalTitleVisibility: NSWindow.TitleVisibility?
         private var originalTitlebarAppearsTransparent: Bool?
         private var originalStyleMask: NSWindow.StyleMask?
+        private var originalBackgroundColor: NSColor?
+        private var originalIsOpaque: Bool?
+        private var originalHasShadow: Bool?
 
         func configure(window: NSWindow) {
             guard configuredWindow !== window else { return }
@@ -513,10 +620,16 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             originalTitleVisibility = window.titleVisibility
             originalTitlebarAppearsTransparent = window.titlebarAppearsTransparent
             originalStyleMask = window.styleMask
+            originalBackgroundColor = window.backgroundColor
+            originalIsOpaque = window.isOpaque
+            originalHasShadow = window.hasShadow
 
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
+            window.backgroundColor = .clear
+            window.isOpaque = false
+            window.hasShadow = false
             window.isMovableByWindowBackground = true
 
             // Pin the window to the onboarding minimum content size before the
@@ -538,6 +651,15 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             }
             if let originalTitleVisibility {
                 window.titleVisibility = originalTitleVisibility
+            }
+            if let originalBackgroundColor {
+                window.backgroundColor = originalBackgroundColor
+            }
+            if let originalIsOpaque {
+                window.isOpaque = originalIsOpaque
+            }
+            if let originalHasShadow {
+                window.hasShadow = originalHasShadow
             }
         }
 
