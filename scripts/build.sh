@@ -1109,9 +1109,8 @@ fi
 # Icon variant selection — swap AppIcon.icns in the bundle based on context.
 # APP_ICON_VARIANT accepts:
 # - release/prod/production -> AppIcon-Release.icns
-# - debug/local/dev         -> AppIcon-Debug.icns
-# - ci/commit/push/github   -> AppIcon-CI.icns
-RAW_APP_ICON_VARIANT="${APP_ICON_VARIANT:-debug}"
+# - anything else          -> AppIcon-CI.icns for non-release builds
+RAW_APP_ICON_VARIANT="${APP_ICON_VARIANT:-ci}"
 APP_ICON_VARIANT_NORMALIZED="$(echo "${RAW_APP_ICON_VARIANT}" | tr '[:upper:]' '[:lower:]')"
 
 case "${APP_ICON_VARIANT_NORMALIZED}" in
@@ -1119,17 +1118,9 @@ case "${APP_ICON_VARIANT_NORMALIZED}" in
         APP_ICON_VARIANT_KEY="release"
         ICON_VARIANT_SUFFIX="Release"
         ;;
-    debug|local|dev)
-        APP_ICON_VARIANT_KEY="debug"
-        ICON_VARIANT_SUFFIX="Debug"
-        ;;
-    ci|commit|commits|push|github|nonrelease|non-release)
+    *)
         APP_ICON_VARIANT_KEY="ci"
         ICON_VARIANT_SUFFIX="CI"
-        ;;
-    *)
-        APP_ICON_VARIANT_KEY="${APP_ICON_VARIANT_NORMALIZED}"
-        ICON_VARIANT_SUFFIX="$(echo "${APP_ICON_VARIANT_KEY}" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
         ;;
 esac
 
