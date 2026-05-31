@@ -27,7 +27,7 @@ public enum NetworkPrivacyPolicy {
     }
 
     public static var blockedMessage: String {
-        "Privacy Mode is enabled. Internet connections are blocked. Only localhost loopback requests are allowed."
+        "Block Internet Connections is enabled. Remote internet connections are blocked. Only localhost loopback requests are allowed."
     }
 
     public static func isRequestAllowed(url: URL) -> Bool {

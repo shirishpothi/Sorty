@@ -76,6 +76,8 @@ struct InternetAccessPolicyView: View {
             }
 
             Spacer(minLength: 0)
+
+            blockInternetConnectionsToggle
         }
     }
 
@@ -116,8 +118,6 @@ struct InternetAccessPolicyView: View {
                 }
             }
 
-            privacyModeToggle
-
             Divider()
 
             AutoScrollingConnectionList(connections: policy.connections)
@@ -145,26 +145,30 @@ struct InternetAccessPolicyView: View {
         }
     }
 
-    private var privacyModeToggle: some View {
+    private var blockInternetConnectionsToggle: some View {
         Toggle(isOn: $internetPrivacyModeEnabled) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Privacy Mode")
+                Text("Block Internet Connections")
                     .font(.caption.weight(.semibold))
 
-                Text("Block all internet connections in and out, including public Ollama hosts. Local models on localhost remain allowed.")
+                Text("Allow localhost only")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .toggleStyle(.switch)
-        .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .controlSize(.small)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: 250)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(internetPrivacyModeEnabled ? Color.green.opacity(0.35) : Color.secondary.opacity(0.18), lineWidth: 1)
         }
-        .accessibilityIdentifier("InternetAccessPolicyPrivacyModeToggle")
+        .accessibilityIdentifier("InternetAccessPolicyBlockInternetConnectionsToggle")
+        .accessibilityHint("Blocks remote internet connections while allowing local model requests on localhost.")
     }
 }
 
