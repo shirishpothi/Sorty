@@ -1156,6 +1156,7 @@ fi
 if [ -f "${ICON_SRC}" ]; then
     cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
     rm -rf "${APP_PATH}/Contents/Resources/AppIcons"
+    touch "${APP_PATH}" "${APP_PATH}/Contents/Info.plist" "${APP_PATH}/Contents/Resources/AppIcon.icns"
     log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
 else
     log_warning "Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"
