@@ -170,8 +170,7 @@ struct AnalysisView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = false
-    @AppStorage("experimentalStreamingInsightsEnabled") private var experimentalStreamingInsightsEnabled = false
+    @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
     @AppStorage("analysis.hideTakingLongerHUD") private var hideTakingLongerHUD = false
     @StateObject private var refreshManager = AnalysisRefreshManager()
     @State private var hasAppeared = false
@@ -263,7 +262,7 @@ struct AnalysisView: View {
                                     removal: .opacity
                                 )
                             )
-                    } else if experimentalStreamingInsightsEnabled && organizer.isStreaming {
+                    } else if organizer.isStreaming {
                         aiInsightsView
                             .transition(
                                 .asymmetric(
@@ -285,11 +284,9 @@ struct AnalysisView: View {
             withAnimation {
                 hasAppeared = true
             }
-            if !experimentalStreamingInsightsEnabled {
-                settingsViewModel.config.enableStreaming = false
-                liveInsightsEnabled = false
-            }
-            organizer.setLiveInsightsEnabled(experimentalStreamingInsightsEnabled && liveInsightsEnabled)
+            settingsViewModel.config.enableStreaming = true
+            liveInsightsEnabled = true
+            organizer.setLiveInsightsEnabled(true)
             refreshManager.start(organizer: organizer)
             refreshStreamDerivedState()
         }
@@ -297,14 +294,7 @@ struct AnalysisView: View {
             refreshManager.stop()
         }
         .onChange(of: liveInsightsEnabled) { _, enabled in
-            organizer.setLiveInsightsEnabled(experimentalStreamingInsightsEnabled && enabled)
-        }
-        .onChange(of: experimentalStreamingInsightsEnabled) { _, enabled in
-            if !enabled {
-                settingsViewModel.config.enableStreaming = false
-                liveInsightsEnabled = false
-            }
-            organizer.setLiveInsightsEnabled(enabled && liveInsightsEnabled)
+            organizer.setLiveInsightsEnabled(enabled)
         }
         .onChange(of: organizer.insightHistory.count) { _, newCount in
             lastInsightCount = newCount
@@ -598,10 +588,6 @@ struct AnalysisView: View {
                 get: { settingsViewModel.config.enableStreaming },
                 set: { newValue in
                     settingsViewModel.config.enableStreaming = newValue
-                    if !newValue {
-                        liveInsightsEnabled = false
-                        organizer.setLiveInsightsEnabled(false)
-                    }
                 }
             )
         )
@@ -1689,54 +1675,6 @@ private struct InsightHistorySection: View {
                             .background(Capsule().fill(SortyDesignSystem.Colors.resolvedAccent))
                     }
 
-                    if isStreaming {
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                                liveInsightsEnabled.toggle()
-                                if !liveInsightsEnabled {
-                                    viewState.showDebugStream = false
-                                }
-                            }
-                            HapticFeedbackManager.shared.selection()
-                        } label: {
-                            Image(
-                                systemName: liveInsightsEnabled
-                                    ? "bolt.badge.checkmark" : "bolt.slash"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(liveInsightsEnabled ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help(
-                            liveInsightsEnabled
-                                ? "Disable streamed live insights" : "Enable streamed live insights"
-                        )
-                        .accessibilityIdentifier("LiveInsightsToggle")
-                    }
-
-                    if isStreaming {
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
-                                streamingModeEnabled.toggle()
-                            }
-                            HapticFeedbackManager.shared.selection()
-                        } label: {
-                            Image(
-                                systemName: streamingModeEnabled
-                                    ? "dot.radiowaves.left.and.right"
-                                    : "dot.radiowaves.left.and.right.slash"
-                            )
-                            .font(.caption)
-                            .foregroundStyle(streamingModeEnabled ? SortyDesignSystem.Colors.resolvedAccent : .secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help(
-                            streamingModeEnabled
-                                ? "Disable Streaming Mode" : "Enable Streaming Mode"
-                        )
-                        .accessibilityIdentifier("StreamingModeToggle")
-                    }
-
                     if FeatureFlags.privacyModeEnabled {
                         Button {
                             showPrivacyWarning.toggle()
@@ -1758,22 +1696,14 @@ private struct InsightHistorySection: View {
                                 }
 
                                 Text(
-                                    "Sorty masks username path segments in streamed text, but model-generated names can still appear before full parsing. Disable Streaming Mode and Live Insights for strict privacy."
+                                    "Sorty masks username path segments in streamed text, but model-generated names can still appear before full parsing."
                                 )
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
-
-                                Toggle("Streaming Mode", isOn: $streamingModeEnabled)
-                                    .toggleStyle(.switch)
-
-                                Toggle("Live Insights", isOn: $liveInsightsEnabled)
-                                    .toggleStyle(.switch)
-                                    .disabled(!streamingModeEnabled)
-                                    .opacity(streamingModeEnabled ? 1 : 0.6)
                             }
                             .padding(12)
-                            .frame(width: 300)
+                            .frame(width: 280)
                             .systemLiquidGlassPopover(cornerRadius: 12)
                         }
                     }
@@ -1860,7 +1790,7 @@ private struct InsightHistorySection: View {
         }
         .onChange(of: streamingModeEnabled) { _, enabled in
             if !enabled {
-                liveInsightsEnabled = false
+                streamingModeEnabled = true
                 viewState.showDebugStream = false
             } else if isStreaming && !liveInsightsEnabled {
                 liveInsightsEnabled = true

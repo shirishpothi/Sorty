@@ -610,7 +610,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         resourceTimeout: TimeInterval = 600,
         systemPromptOverride: String? = nil,
         maxTokens: Int? = nil,
-        enableStreaming: Bool = false,
+        enableStreaming: Bool = true,
         requiresAPIKey: Bool = true,
         enableReasoning: Bool = false,
         mode: OrganizationMode = .organize,
@@ -735,7 +735,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         resourceTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .resourceTimeout) ?? 600
         systemPromptOverride = try container.decodeIfPresent(String.self, forKey: .systemPromptOverride)
         maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
-        enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? false
+        enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
         requiresAPIKey = try container.decodeIfPresent(Bool.self, forKey: .requiresAPIKey) ?? provider.typicallyRequiresAPIKey
         enableReasoning = try container.decodeIfPresent(Bool.self, forKey: .enableReasoning) ?? false
         mode = try container.decodeIfPresent(OrganizationMode.self, forKey: .mode) ?? .organize
@@ -817,7 +817,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         resourceTimeout: 600,
         systemPromptOverride: nil,
         maxTokens: nil,
-        enableStreaming: false,
+        enableStreaming: true,
         requiresAPIKey: true,
         enableReasoning: false,
         mode: .organize,

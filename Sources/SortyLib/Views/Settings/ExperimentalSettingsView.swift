@@ -39,14 +39,6 @@ struct ExperimentalSettingsView: View {
                 enableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true",
                 disableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false"
             ),
-            ExperimentalFlag(
-                name: "Streaming AI Insights",
-                description: "Adds the streaming response controls and live insight panel back into the analysis flow.",
-                defaultsKey: "experimentalStreamingInsightsEnabled",
-                defaultValue: false,
-                enableCommand: "defaults write com.sorty.app experimentalStreamingInsightsEnabled -bool true",
-                disableCommand: "defaults write com.sorty.app experimentalStreamingInsightsEnabled -bool false"
-            ),
         ]
     }
 }
