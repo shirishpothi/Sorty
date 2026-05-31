@@ -140,7 +140,7 @@ struct HUDNotificationCard: View {
         .systemLiquidGlassBackground(cornerRadius: 14)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay {
-            HUDNotificationAmbientEffect(isAnimated: appeared && !reduceMotion)
+            HUDNotificationTorchEffect(isAnimated: appeared && !reduceMotion)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -192,100 +192,102 @@ struct HUDNotificationCard: View {
     }
 }
 
-private struct HUDNotificationAmbientEffect: View {
+private struct HUDNotificationTorchEffect: View {
     let isAnimated: Bool
 
-    private let cyan = Color(red: 0.08, green: 0.88, blue: 0.92)
-    private let pink = Color(red: 1.0, green: 0.22, blue: 0.62)
+    private let accent = Color(red: 1.0, green: 0.22, blue: 0.62)
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
-                leftIconHalo(in: geometry.size)
-                horizontalMist(in: geometry.size)
+                torchGlow(in: geometry.size)
 
                 if isAnimated {
                     SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
-                        ParticleField(time: timeline.date.timeIntervalSinceReferenceDate, size: geometry.size, accent: cyan)
+                        ParticleField(time: timeline.date.timeIntervalSinceReferenceDate, accent: accent)
                     }
                 } else {
-                    ParticleField(time: 0, size: geometry.size, accent: cyan)
+                    ParticleField(time: 0, accent: accent)
                 }
             }
         }
     }
 
-    private func leftIconHalo(in size: CGSize) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                .stroke(cyan.opacity(0.18), lineWidth: 1)
-                .frame(width: 66, height: 58)
-                .blur(radius: 1)
+    private func torchGlow(in size: CGSize) -> some View {
+        ZStack(alignment: .leading) {
+            LinearGradient(
+                colors: [
+                    accent.opacity(0.52),
+                    accent.opacity(0.24),
+                    accent.opacity(0.075),
+                    .clear
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: min(250, size.width * 0.60), height: size.height)
+            .blur(radius: 18)
 
-            Circle()
+            Ellipse()
                 .fill(
                     RadialGradient(
                         colors: [
-                            cyan.opacity(0.22),
-                            cyan.opacity(0.07),
+                            accent.opacity(0.72),
+                            accent.opacity(0.28),
+                            accent.opacity(0.08),
                             .clear
                         ],
-                        center: .center,
-                        startRadius: 2,
-                        endRadius: 42
+                        center: .leading,
+                        startRadius: 0,
+                        endRadius: 92
                     )
                 )
-                .frame(width: 84, height: 84)
-                .blur(radius: 8)
-        }
-        .frame(width: size.width, height: size.height, alignment: .leading)
-        .offset(x: 42, y: 0)
-    }
+                .frame(width: min(210, size.width * 0.50), height: size.height * 1.28)
+                .blur(radius: 12)
+                .offset(x: -46)
 
-    private func horizontalMist(in size: CGSize) -> some View {
-        LinearGradient(
-            colors: [
-                .clear,
-                cyan.opacity(0.08),
-                pink.opacity(0.045),
-                .clear
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-        .frame(width: min(260, size.width * 0.62), height: min(58, size.height * 0.70))
-        .blur(radius: 18)
-        .offset(x: 58)
+            Rectangle()
+                .fill(accent.opacity(0.24))
+                .frame(width: 3, height: size.height * 0.72)
+                .blur(radius: 4)
+                .offset(x: 1)
+        }
     }
 }
 
 private struct ParticleField: View {
     let time: TimeInterval
-    let size: CGSize
     let accent: Color
 
     private let particles: [Particle] = [
-        .init(seed: 0.13, x: 0.38, y: 0.37, size: 1.8, drift: 5, delay: 0.00),
-        .init(seed: 0.42, x: 0.43, y: 0.50, size: 1.2, drift: 4, delay: 0.36),
-        .init(seed: 0.71, x: 0.49, y: 0.42, size: 1.5, drift: 6, delay: 0.72)
+        .init(seed: 0.07, y: 0.30, size: 1.1, speed: 14, delay: 0.00),
+        .init(seed: 0.22, y: 0.40, size: 0.8, speed: 18, delay: 0.32),
+        .init(seed: 0.39, y: 0.52, size: 1.0, speed: 12, delay: 0.64),
+        .init(seed: 0.56, y: 0.63, size: 0.7, speed: 16, delay: 0.96),
+        .init(seed: 0.74, y: 0.46, size: 0.9, speed: 20, delay: 1.28)
     ]
 
     var body: some View {
-        Canvas { context, _ in
+        Canvas { context, size in
             for particle in particles {
-                let pulse = (sin((time + particle.delay) * 1.7 + particle.seed * 9.0) + 1) / 2
-                let drift = CGFloat(sin((time + particle.delay) * 0.9 + particle.seed * 6.0)) * particle.drift
+                let cycle = 3.0
+                let progress = ((time + particle.delay).truncatingRemainder(dividingBy: cycle)) / cycle
+                let easedProgress = 1 - pow(1 - progress, 3)
+                let x = 18 + CGFloat(easedProgress) * particle.speed * 3.2
+                let drift = CGFloat(sin((time * 1.2) + particle.seed * 8.0) * 2.0)
+                let y = size.height * particle.y + drift
+                let fade = sin(progress * .pi)
                 let rect = CGRect(
-                    x: size.width * particle.x + drift,
-                    y: size.height * particle.y,
+                    x: x,
+                    y: y,
                     width: particle.size,
                     height: particle.size
                 )
 
-                context.opacity = 0.32 + pulse * 0.28
+                context.opacity = max(0, fade) * 0.55
                 context.fill(
                     Path(ellipseIn: rect),
-                    with: .color(accent.opacity(0.58))
+                    with: .color(accent.opacity(0.74))
                 )
             }
         }
@@ -294,10 +296,9 @@ private struct ParticleField: View {
 
 private struct Particle {
     let seed: Double
-    let x: CGFloat
     let y: CGFloat
     let size: CGFloat
-    let drift: CGFloat
+    let speed: CGFloat
     let delay: TimeInterval
 }
 
