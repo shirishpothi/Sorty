@@ -19,6 +19,11 @@ struct DirectorySelectionView: View {
     @State private var iconBounce = false
     @State private var hasAppeared = false
 
+    init(selectedDirectory: Binding<URL?>, startsVisible: Bool = false) {
+        _selectedDirectory = selectedDirectory
+        _hasAppeared = State(initialValue: startsVisible)
+    }
+
     var body: some View {
         WorkflowContainer(currentStep: .selectFolder) {
             Spacer()

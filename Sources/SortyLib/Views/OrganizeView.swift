@@ -91,7 +91,10 @@ struct OrganizeView: View {
                     .allowsHitTesting(false)
 
                 if appState.selectedDirectory == nil {
-                    DirectorySelectionView(selectedDirectory: $appState.selectedDirectory)
+                    DirectorySelectionView(
+                        selectedDirectory: $appState.selectedDirectory,
+                        startsVisible: isShowingReturnToStartContent
+                    )
                         .transition(TransitionStyles.scaleAndFade)
                 } else {
                     stateContent
@@ -232,7 +235,10 @@ struct OrganizeView: View {
     private var returnToStartContent: some View {
         Group {
             if returnsToDirectorySelection {
-                DirectorySelectionView(selectedDirectory: $appState.selectedDirectory)
+                DirectorySelectionView(
+                    selectedDirectory: $appState.selectedDirectory,
+                    startsVisible: true
+                )
             } else {
                 ReadyToOrganizeView(onStart: startOrganization, startsVisible: true)
             }
