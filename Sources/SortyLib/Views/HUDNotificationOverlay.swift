@@ -55,6 +55,10 @@ struct HUDNotificationCard: View {
     private let actionColumns = [
         GridItem(.adaptive(minimum: 136, maximum: 210), spacing: 8, alignment: .leading)
     ]
+
+    private var inlineAction: HUDNotificationAction? {
+        notification.actions.count == 1 ? notification.actions.first : nil
+    }
     
     var body: some View {
         HStack(spacing: 10) {
@@ -85,6 +89,16 @@ struct HUDNotificationCard: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    if let inlineAction {
+                        Button(role: inlineAction.role) {
+                            inlineAction.action()
+                        } label: {
+                            HUDNotificationActionLabel(action: inlineAction, fillsWidth: false)
+                        }
+                        .buttonStyle(.plain)
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
+
                     if isHovered {
                         Button {
                             onDismiss()
@@ -98,13 +112,13 @@ struct HUDNotificationCard: View {
                     }
                 }
 
-                if !notification.actions.isEmpty {
+                if notification.actions.count > 1 {
                     LazyVGrid(columns: actionColumns, alignment: .leading, spacing: 8) {
                         ForEach(notification.actions) { action in
                             Button(role: action.role) {
                                 action.action()
                             } label: {
-                                HUDNotificationActionLabel(action: action)
+                                HUDNotificationActionLabel(action: action, fillsWidth: true)
                             }
                             .buttonStyle(.plain)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -167,6 +181,7 @@ struct HUDNotificationCard: View {
 
 private struct HUDNotificationActionLabel: View {
     let action: HUDNotificationAction
+    let fillsWidth: Bool
     @Environment(\.isEnabled) private var isEnabled
 
     private var isDestructive: Bool {
@@ -192,7 +207,7 @@ private struct HUDNotificationActionLabel: View {
         .foregroundStyle(isDestructive ? Color.red : .primary)
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, minHeight: 30, alignment: .center)
+        .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: 30, alignment: .center)
         .systemLiquidGlassBackground(cornerRadius: 8)
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
