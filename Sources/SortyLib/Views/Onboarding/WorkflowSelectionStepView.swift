@@ -63,13 +63,6 @@ public struct WorkflowSelectionStepView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 60)
-            .background(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.10), Color.clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
             
             // Right side - persona selection
             ScrollView {
@@ -469,12 +462,13 @@ struct OnboardingPersonaCard: View {
             .padding(.horizontal, 16)
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.08) : Color(NSColor.controlBackgroundColor))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(cardFill)
             )
+            .systemLiquidGlassBackground(cornerRadius: 16)
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(isHovered ? 0.3 : 0.1), lineWidth: isSelected ? 2 : 1)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(cardStroke, lineWidth: isSelected ? 1.4 : 1)
             )
         }
         .buttonStyle(.plain)
@@ -495,13 +489,37 @@ struct OnboardingPersonaCard: View {
             }
         }
         .shadow(
-            color: Color.black.opacity(isHovered && !isSelected ? 0.08 : 0),
-            radius: isHovered && !isSelected ? 14 : 0,
+            color: shadowColor,
+            radius: isHovered || isSelected ? 14 : 7,
             x: 0,
-            y: isHovered && !isSelected ? 8 : 0
+            y: isHovered || isSelected ? 7 : 3
         )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
+    }
+
+    private var cardFill: Color {
+        if isSelected {
+            return SortyDesignSystem.Colors.resolvedAccent.opacity(0.10)
+        }
+
+        return Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.72 : 0.56)
+    }
+
+    private var cardStroke: Color {
+        if isSelected {
+            return SortyDesignSystem.Colors.resolvedAccent.opacity(0.62)
+        }
+
+        return Color.primary.opacity(isHovered ? 0.18 : 0.09)
+    }
+
+    private var shadowColor: Color {
+        if isSelected {
+            return SortyDesignSystem.Colors.resolvedAccent.opacity(0.10)
+        }
+
+        return Color.black.opacity(isHovered ? 0.06 : 0.025)
     }
 }
 
@@ -529,30 +547,31 @@ struct OnboardingCustomPersonaCard: View {
             .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
             .padding(compact ? 14 : 18)
             .background(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(NSColor.controlBackgroundColor),
-                                (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.teal).opacity(0.06)
+                                Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.74 : 0.58),
+                                (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.teal).opacity(isSelected ? 0.12 : 0.08)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
             )
+            .systemLiquidGlassBackground(cornerRadius: 18)
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(
-                        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.7) : Color.secondary.opacity(isHovered ? 0.28 : 0.12),
-                        lineWidth: isSelected ? 1.5 : 1
+                        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.62) : Color.primary.opacity(isHovered ? 0.18 : 0.09),
+                        lineWidth: isSelected ? 1.4 : 1
                     )
             )
             .shadow(
-                color: (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.black).opacity(isHovered || isSelected ? 0.12 : 0.06),
-                radius: isHovered || isSelected ? 20 : 10,
+                color: (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.black).opacity(isHovered || isSelected ? 0.10 : 0.025),
+                radius: isHovered || isSelected ? 16 : 7,
                 x: 0,
-                y: isHovered || isSelected ? 10 : 5
+                y: isHovered || isSelected ? 8 : 3
             )
             .contentShape(RoundedRectangle(cornerRadius: 18))
         }
@@ -759,20 +778,21 @@ struct CreatePersonaButton: View {
             .padding(.horizontal, 16)
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(NSColor.controlBackgroundColor))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.72 : 0.56))
             )
+            .systemLiquidGlassBackground(cornerRadius: 16)
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.secondary.opacity(isHovered ? 0.3 : 0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.primary.opacity(isHovered ? 0.18 : 0.09), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
         .shadow(
-            color: Color.black.opacity(isHovered ? 0.08 : 0),
-            radius: isHovered ? 14 : 0,
+            color: Color.black.opacity(isHovered ? 0.06 : 0.025),
+            radius: isHovered ? 14 : 7,
             x: 0,
-            y: isHovered ? 8 : 0
+            y: isHovered ? 7 : 3
         )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)

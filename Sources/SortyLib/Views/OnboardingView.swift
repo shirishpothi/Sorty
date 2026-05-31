@@ -78,11 +78,17 @@ public struct OnboardingView: View {
                     // Main content
                     stepContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                    // Navigation controls
+                        .padding(.bottom, currentStep == .completion ? 0 : 76)
+                }
+                .overlay(alignment: .bottom) {
                     navigationControls
                         .padding(.horizontal, 40)
+                        .padding(.top, 24)
                         .padding(.bottom, 16)
+                        .background(
+                            OnboardingNavigationBackdrop()
+                                .allowsHitTesting(false)
+                        )
                 }
                 .ignoresSafeArea(.container, edges: .top)
                 .allowsHitTesting(!isIntroVisible)
@@ -750,6 +756,21 @@ private struct OnboardingBottomGradient: View {
             )
             .blendMode(.plusLighter)
         }
+    }
+}
+
+private struct OnboardingNavigationBackdrop: View {
+    var body: some View {
+        LinearGradient(
+            colors: [
+                Color(NSColor.windowBackgroundColor).opacity(0),
+                Color(NSColor.windowBackgroundColor).opacity(0.20),
+                Color(NSColor.windowBackgroundColor).opacity(0.34)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea(edges: .bottom)
     }
 }
 
