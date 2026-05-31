@@ -136,13 +136,15 @@ struct WorkflowGradientBackground: View {
             }
 
             LinearGradient(
-                colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(topOpacity),
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity),
-                    Color.clear
+                stops: [
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(topOpacity), location: 0.00),
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity), location: 0.36),
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.42), location: 0.68),
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.10), location: 0.88),
+                    .init(color: Color.clear, location: 1.00)
                 ],
                 startPoint: .bottom,
-                endPoint: .center
+                endPoint: .top
             )
             .opacity(1.0)
 
@@ -155,7 +157,7 @@ struct WorkflowGradientBackground: View {
                     ],
                     center: UnitPoint(x: 0.5, y: 1.05),
                     startRadius: 0,
-                    endRadius: max(proxy.size.width, proxy.size.height) * 0.62
+                    endRadius: max(proxy.size.width, proxy.size.height) * 0.82
                 )
                 .blendMode(.plusLighter)
                 .opacity(0.58)
