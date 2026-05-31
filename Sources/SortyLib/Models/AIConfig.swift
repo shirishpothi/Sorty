@@ -431,6 +431,14 @@ public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    public var workflowTitle: String {
+        switch self {
+        case .organize: return "Organize Files"
+        case .organizeAndRename: return "Organize & Rename Files"
+        case .renameOnly: return "Rename Files"
+        }
+    }
+
     public var gerund: String {
         switch self {
         case .organize: return "organizing"
@@ -602,7 +610,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         resourceTimeout: TimeInterval = 600,
         systemPromptOverride: String? = nil,
         maxTokens: Int? = nil,
-        enableStreaming: Bool = true,
+        enableStreaming: Bool = false,
         requiresAPIKey: Bool = true,
         enableReasoning: Bool = false,
         mode: OrganizationMode = .organize,
@@ -727,7 +735,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         resourceTimeout = try container.decodeIfPresent(TimeInterval.self, forKey: .resourceTimeout) ?? 600
         systemPromptOverride = try container.decodeIfPresent(String.self, forKey: .systemPromptOverride)
         maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
-        enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? true
+        enableStreaming = try container.decodeIfPresent(Bool.self, forKey: .enableStreaming) ?? false
         requiresAPIKey = try container.decodeIfPresent(Bool.self, forKey: .requiresAPIKey) ?? provider.typicallyRequiresAPIKey
         enableReasoning = try container.decodeIfPresent(Bool.self, forKey: .enableReasoning) ?? false
         mode = try container.decodeIfPresent(OrganizationMode.self, forKey: .mode) ?? .organize
@@ -809,7 +817,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         resourceTimeout: 600,
         systemPromptOverride: nil,
         maxTokens: nil,
-        enableStreaming: true,
+        enableStreaming: false,
         requiresAPIKey: true,
         enableReasoning: false,
         mode: .organize,

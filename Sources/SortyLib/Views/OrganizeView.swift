@@ -113,7 +113,7 @@ struct OrganizeView: View {
             }
             .animation(returnToStartExitAnimation, value: isReturningToStart)
         }
-        .navigationTitle("Organize Files")
+        .navigationTitle(settingsViewModel.config.mode.workflowTitle)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 if organizer.state == .ready {
@@ -659,6 +659,8 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
+    @State private var referenceableFiles: [InstructionFileReference] = []
+    @State private var instructionSelection: NSRange = NSRange(location: 0, length: 0)
 
     init(onStart: @escaping () -> Void, startsVisible: Bool = false) {
         self.onStart = onStart
@@ -700,7 +702,7 @@ struct ReadyToOrganizeView: View {
             .scaleEffect(hasAppeared ? 1 : 0.96)
             .offset(y: hasAppeared ? 0 : 8)
             .animation(.smooth(duration: 0.45).delay(0.04), value: hasAppeared)
-            
+
             // Instructions card
             WorkflowCard(title: "Instructions", icon: "text.bubble") {
                 instructionsContent
@@ -708,7 +710,7 @@ struct ReadyToOrganizeView: View {
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .animation(.smooth(duration: 0.45).delay(0.10), value: hasAppeared)
-            
+
             if mode != .renameOnly {
                 WorkflowCard(title: "Storage Locations", icon: "externaldrive") {
                     storageLocationsContent
@@ -717,7 +719,7 @@ struct ReadyToOrganizeView: View {
                 .offset(y: hasAppeared ? 0 : 10)
                 .animation(.smooth(duration: 0.45).delay(0.16), value: hasAppeared)
             }
-            
+
             // Start button - full width
             Button {
                 HapticFeedbackManager.shared.tap()
@@ -766,7 +768,6 @@ struct ReadyToOrganizeView: View {
             connectionStatusView
                 .opacity(hasAppeared ? 1 : 0)
                 .animation(.smooth(duration: 0.45).delay(0.32), value: hasAppeared)
-
         }
         .fileImporter(
             isPresented: $showingFolderPicker,
@@ -808,6 +809,8 @@ struct ReadyToOrganizeView: View {
             Text(addStorageLocationErrorMessage ?? "Please try selecting the folder again.")
         }
         .onAppear {
+            refreshReferenceableFiles()
+
             // Drive the staggered cascade only once. Each child element owns
             // its own `.animation(.smooth(...), value: hasAppeared)` modifier
             // with an explicit delay, so wrapping this flip in an additional
@@ -815,7 +818,20 @@ struct ReadyToOrganizeView: View {
             // of those curves and producing the flicker the user reported on
             // the main organize page.
             guard !hasAppeared else { return }
+            guard !appState.hasPresentedReadyToOrganize else {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    hasAppeared = true
+                }
+                return
+            }
+
+            appState.hasPresentedReadyToOrganize = true
             hasAppeared = true
+        }
+        .onChange(of: appState.selectedDirectory) { _, _ in
+            refreshReferenceableFiles()
         }
     }
 
@@ -981,6 +997,8 @@ struct ReadyToOrganizeView: View {
     
     private var instructionsContent: some View {
         VStack(alignment: .leading, spacing: 8) {
+            let mention = activeFileMention
+
             ZStack(alignment: .topLeading) {
                 if isImprovingPrompt {
                     HStack {
@@ -995,7 +1013,8 @@ struct ReadyToOrganizeView: View {
                 } else {
                     SubmittableTextEditor(
                         text: $organizer.customInstructions,
-                        isFocused: $isTextFieldFocused
+                        isFocused: $isTextFieldFocused,
+                        selectedRange: $instructionSelection
                     ) {
                         onStart()
                     }
@@ -1027,6 +1046,21 @@ struct ReadyToOrganizeView: View {
             .accessibilityIdentifier("CustomInstructionsTextField")
             .accessibilityLabel("Additional instructions for \(mode.gerund)")
             .accessibilityHint("Press Command+Enter to start \(mode.gerund), Enter for new line")
+            .overlay(alignment: .bottomLeading) {
+                if let mention, shouldShowReferencePicker(for: mention) {
+                    InstructionFileReferencePicker(
+                        matches: referenceMatches(for: mention.query),
+                        query: mention.query,
+                        onSelect: { reference in
+                            insertReference(reference, replacing: mention)
+                        }
+                    )
+                    .offset(y: 8)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
+                    .zIndex(4)
+                }
+            }
+            .animation(.easeInOut(duration: 0.16), value: mention?.query)
 
             HStack(spacing: 8) {
                 // Improve with AI button
@@ -1147,6 +1181,234 @@ struct ReadyToOrganizeView: View {
         }
     }
 
+    private var activeFileMention: InstructionMentionQuery? {
+        InstructionMentionQuery.active(in: organizer.customInstructions, selectedRange: instructionSelection)
+    }
+
+    private func shouldShowReferencePicker(for mention: InstructionMentionQuery) -> Bool {
+        isTextFieldFocused && !mention.query.isEmpty && !referenceMatches(for: mention.query).isEmpty
+    }
+
+    private func referenceMatches(for query: String) -> [InstructionFileReference] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
+        let matches: [InstructionFileReference]
+
+        if normalizedQuery.isEmpty {
+            matches = Array(referenceableFiles.prefix(8))
+        } else {
+            let prefixMatches = referenceableFiles.filter {
+                $0.name.localizedLowercase.hasPrefix(normalizedQuery)
+            }
+            let containedMatches = referenceableFiles.filter {
+                !$0.name.localizedLowercase.hasPrefix(normalizedQuery) &&
+                $0.name.localizedLowercase.localizedStandardContains(normalizedQuery)
+            }
+            matches = Array((prefixMatches + containedMatches).prefix(8))
+        }
+
+        return matches
+    }
+
+    private func insertReference(_ reference: InstructionFileReference, replacing mention: InstructionMentionQuery) {
+        var instructions = organizer.customInstructions
+
+        let replacement = "@\(reference.displayToken)"
+        instructions.replaceSubrange(mention.range, with: replacement)
+        organizer.customInstructions = instructions
+        instructionSelection = NSRange(location: mention.nsRange.location + (replacement as NSString).length, length: 0)
+        HapticFeedbackManager.shared.selection()
+    }
+
+    private func refreshReferenceableFiles() {
+        guard let directory = appState.selectedDirectory else {
+            referenceableFiles = []
+            return
+        }
+
+        let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .fileSizeKey]
+        let options: FileManager.DirectoryEnumerationOptions = [.skipsHiddenFiles, .skipsPackageDescendants]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: resourceKeys,
+            options: options
+        ) else {
+            referenceableFiles = []
+            return
+        }
+
+        var files: [InstructionFileReference] = []
+        for case let url as URL in enumerator {
+            guard files.count < 400 else { break }
+            guard let values = try? url.resourceValues(forKeys: Set(resourceKeys)),
+                  values.isRegularFile == true else { continue }
+
+            files.append(
+                InstructionFileReference(
+                    url: url,
+                    baseDirectory: directory,
+                    fileSize: values.fileSize
+                )
+            )
+        }
+
+        referenceableFiles = files.sorted {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+    }
+}
+
+private struct InstructionMentionQuery: Equatable {
+    let range: Range<String.Index>
+    let nsRange: NSRange
+    let query: String
+
+    static func active(in text: String, selectedRange: NSRange) -> InstructionMentionQuery? {
+        guard selectedRange.length == 0 else { return nil }
+        guard selectedRange.location <= (text as NSString).length else { return nil }
+        let cursor = String.Index(utf16Offset: selectedRange.location, in: text)
+        let prefix = text[..<cursor]
+        guard let atIndex = prefix.lastIndex(of: "@") else { return nil }
+        let afterAt = text.index(after: atIndex)
+        let query = String(text[afterAt..<cursor])
+
+        guard !query.contains(where: \.isNewline) else { return nil }
+        guard query.rangeOfCharacter(from: CharacterSet(charactersIn: ",;()[]{}")) == nil else { return nil }
+        guard query.count <= 80 else { return nil }
+        if let characterBeforeAt = text[..<atIndex].last,
+           !characterBeforeAt.isWhitespace,
+           !",;([{".contains(characterBeforeAt) {
+            return nil
+        }
+
+        let range = atIndex..<cursor
+        return InstructionMentionQuery(
+            range: range,
+            nsRange: NSRange(range, in: text),
+            query: query
+        )
+    }
+}
+
+private struct InstructionFileReference: Identifiable, Equatable {
+    let id: String
+    let url: URL
+    let name: String
+    let relativePath: String
+    let fileSize: Int?
+
+    init(url: URL, baseDirectory: URL, fileSize: Int?) {
+        self.id = url.path
+        self.url = url
+        self.name = url.lastPathComponent
+        self.fileSize = fileSize
+
+        let basePath = baseDirectory.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        if path.hasPrefix(basePath + "/") {
+            self.relativePath = String(path.dropFirst(basePath.count + 1))
+        } else {
+            self.relativePath = url.lastPathComponent
+        }
+    }
+
+    var displayToken: String {
+        let token = relativePath
+        return token.rangeOfCharacter(from: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;()[]{}"))) == nil ? token : "\"\(token)\""
+    }
+
+    var subtitle: String {
+        let folder = URL(fileURLWithPath: relativePath).deletingLastPathComponent().path
+        if folder == "." || folder == "/" || folder.isEmpty {
+            return formattedSize
+        }
+        return "\(folder) • \(formattedSize)"
+    }
+
+    private var formattedSize: String {
+        guard let fileSize else { return "File" }
+        return ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file)
+    }
+}
+
+private struct InstructionFileReferencePicker: View {
+    let matches: [InstructionFileReference]
+    let query: String
+    let onSelect: (InstructionFileReference) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "at")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.teal)
+                Text("Reference a file")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("↩ to insert")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
+
+            ForEach(matches) { reference in
+                Button {
+                    onSelect(reference)
+                } label: {
+                    HStack(spacing: 10) {
+                        FileThumbnailView(url: reference.url, size: CGSize(width: 24, height: 24))
+                            .frame(width: 24, height: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            highlightedName(reference.name)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineLimit(1)
+
+                            Text(reference.subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        if !reference.url.pathExtension.isEmpty {
+                            Text(".\(reference.url.pathExtension)")
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(Color.teal.opacity(0.12), in: Capsule())
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .contentShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reference \(reference.name)")
+                .accessibilityHint("Adds this file reference to the instructions")
+            }
+        }
+        .padding(6)
+        .frame(width: 360)
+        .systemLiquidGlassPopover(cornerRadius: 12)
+        .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 10)
+    }
+
+    private func highlightedName(_ name: String) -> Text {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty,
+              let range = name.range(of: trimmedQuery, options: [.caseInsensitive, .diacriticInsensitive]) else {
+            return Text(name)
+        }
+
+        let prefix = String(name[..<range.lowerBound])
+        let match = String(name[range])
+        let suffix = String(name[range.upperBound...])
+        return Text(prefix) + Text(match).foregroundStyle(.teal) + Text(suffix)
+    }
 }
 
 private struct PreviewHandoffView: View {
@@ -1780,11 +2042,18 @@ private struct FocusedInstructionBeamBorder: View {
 struct SubmittableTextEditor: NSViewRepresentable {
     @Binding var text: String
     var isFocused: Binding<Bool>?
+    var selectedRange: Binding<NSRange>?
     var onSubmit: () -> Void
 
-    init(text: Binding<String>, isFocused: Binding<Bool>? = nil, onSubmit: @escaping () -> Void) {
+    init(
+        text: Binding<String>,
+        isFocused: Binding<Bool>? = nil,
+        selectedRange: Binding<NSRange>? = nil,
+        onSubmit: @escaping () -> Void
+    ) {
         self._text = text
         self.isFocused = isFocused
+        self.selectedRange = selectedRange
         self.onSubmit = onSubmit
     }
     
@@ -1809,11 +2078,9 @@ struct SubmittableTextEditor: NSViewRepresentable {
             object: textView,
             queue: .main
         ) { [weak textView, weak coordinator = context.coordinator] _ in
-            guard let textView, let coordinator, let isFocused = coordinator.isFocused else { return }
-            let currentlyFocused = textView.window?.firstResponder === textView
-            if isFocused.wrappedValue != currentlyFocused {
-                isFocused.wrappedValue = currentlyFocused
-            }
+            guard let textView, let coordinator else { return }
+            coordinator.updateFocusState(for: textView)
+            coordinator.updateSelectedRange(from: textView)
         }
         
         let monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown]) { [weak textView, weak coordinator = context.coordinator] event in
@@ -1850,31 +2117,44 @@ struct SubmittableTextEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         
         if textView.string != text {
-            let selectedRanges = textView.selectedRanges
+            let selectedRanges = selectedRange.map { [NSValue(range: $0.wrappedValue)] } ?? textView.selectedRanges
             textView.string = text
             textView.selectedRanges = selectedRanges
+        } else if let selectedRange,
+                  textView.selectedRange() != selectedRange.wrappedValue,
+                  selectedRange.wrappedValue.location + selectedRange.wrappedValue.length <= (textView.string as NSString).length {
+            textView.setSelectedRange(selectedRange.wrappedValue)
         }
         
         context.coordinator.onSubmit = onSubmit
         context.coordinator.isFocused = isFocused
+        context.coordinator.selectedRange = selectedRange
 
         context.coordinator.updateFocusState(for: textView)
+        context.coordinator.updateSelectedRange(from: textView)
     }
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, isFocused: isFocused, onSubmit: onSubmit)
+        Coordinator(text: $text, isFocused: isFocused, selectedRange: selectedRange, onSubmit: onSubmit)
     }
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         var isFocused: Binding<Bool>?
+        var selectedRange: Binding<NSRange>?
         var onSubmit: () -> Void
         var eventMonitor: Any?
         var selectionObserver: NSObjectProtocol?
         
-        init(text: Binding<String>, isFocused: Binding<Bool>?, onSubmit: @escaping () -> Void) {
+        init(
+            text: Binding<String>,
+            isFocused: Binding<Bool>?,
+            selectedRange: Binding<NSRange>?,
+            onSubmit: @escaping () -> Void
+        ) {
             self.text = text
             self.isFocused = isFocused
+            self.selectedRange = selectedRange
             self.onSubmit = onSubmit
         }
         
@@ -1890,6 +2170,7 @@ struct SubmittableTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text.wrappedValue = textView.string
+            updateSelectedRange(from: textView)
         }
 
         func textDidBeginEditing(_ notification: Notification) {
@@ -1905,6 +2186,14 @@ struct SubmittableTextEditor: NSViewRepresentable {
             let currentlyFocused = textView.window?.firstResponder === textView
             if isFocused.wrappedValue != currentlyFocused {
                 isFocused.wrappedValue = currentlyFocused
+            }
+        }
+
+        func updateSelectedRange(from textView: NSTextView) {
+            guard let selectedRange else { return }
+            let currentRange = textView.selectedRange()
+            if selectedRange.wrappedValue != currentRange {
+                selectedRange.wrappedValue = currentRange
             }
         }
     }

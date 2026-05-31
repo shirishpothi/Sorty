@@ -481,10 +481,7 @@ private struct WatchedFolderMenuItem: View {
         } label: {
             HStack(spacing: 8) {
                 ZStack(alignment: .bottomTrailing) {
-                    Image(nsImage: folderIcon)
-                        .interpolation(.high)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+                    AppKitImageView(image: folderIcon, size: CGSize(width: 18, height: 18))
                         .frame(width: 18, height: 18)
 
                     Image(systemName: statusIcon)

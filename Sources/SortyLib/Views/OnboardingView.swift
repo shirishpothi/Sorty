@@ -7,7 +7,9 @@
 //
 
 import AppKit
+import QuartzCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Main Onboarding View
 
@@ -44,19 +46,32 @@ public struct OnboardingView: View {
                     .opacity(isIntroVisible ? 0 : 1)
                     .ignoresSafeArea()
 
-                OnboardingBottomGradient()
+                OnboardingBottomGradient(progress: gradientProgress)
                     .opacity(isIntroVisible ? 0 : 1)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
+                    .animation(.easeInOut(duration: 0.65), value: gradientProgress)
 
                 VStack(spacing: 0) {
                     // Pinned with a fixed top padding so it doesn't shift between steps.
-                    // Opaque background prevents scrolled step content from bleeding behind it.
+                    // A soft top scrim (instead of a hard opaque strip) prevents scrolled
+                    // step content from bleeding behind it while blending seamlessly into
+                    // the unified background gradient so there is no visible color seam.
                     OnboardingProgressBar(currentStep: currentStep)
                         .padding(.top, 54)
                         .padding(.bottom, 12)
                         .padding(.horizontal, 48)
-                        .background(Color(NSColor.windowBackgroundColor))
+                        .background(
+                            LinearGradient(
+                                colors: [
+                                    Color(NSColor.windowBackgroundColor),
+                                    Color(NSColor.windowBackgroundColor),
+                                    Color(NSColor.windowBackgroundColor).opacity(0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                         .opacity(hasConfiguredWindowChrome ? 1 : 0)
                         .animation(nil, value: hasConfiguredWindowChrome)
 
@@ -251,6 +266,16 @@ public struct OnboardingView: View {
                     .accessibilityIdentifier("OnboardingValidationMessage")
             }
         }
+    }
+
+    /// Normalized progress (0...1) through the active onboarding steps. Drives
+    /// the background gradient so it climbs higher as the user advances.
+    private var gradientProgress: Double {
+        let active = OnboardingStep.activeCases
+        guard active.count > 1, let index = active.firstIndex(of: currentStep) else {
+            return 0
+        }
+        return Double(index) / Double(active.count - 1)
     }
 
     private var providerSetupContext: ProviderSetupContext {
@@ -494,9 +519,10 @@ private struct OnboardingIntroView: View {
     @State private var iconOpacity: Double = 0
     @State private var textOpacity: Double = 0
     @State private var textOffset: CGFloat = 14
-    @State private var glowRadius: CGFloat = 22
-    @State private var orbitPhase: Double = 0
+    @State private var glowRadius: CGFloat = 28
+    @State private var filesAppeared = false
     @State private var isHoveringButton = false
+    @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
         ZStack {
@@ -504,50 +530,60 @@ private struct OnboardingIntroView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
-                let phase = reduceMotion ? 0 : orbitPhase + context.date.timeIntervalSinceReferenceDate * 0.32
+            // Messy pile of real files scattered around the app icon. When the
+            // user hovers "Get Started" they collapse into the icon — Sorty
+            // tidying the clutter.
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
+                let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 ZStack {
                     ForEach(OnboardingOrbitFile.files) { file in
                         OnboardingOrbitFileChip(file: file)
+                            .rotationEffect(.degrees(isHoveringButton ? 0 : file.rotation))
+                            .scaleEffect(isHoveringButton ? 0.28 : file.scale)
                             .offset(orbitOffset(for: file, phase: phase))
-                            .scaleEffect(isHoveringButton ? 0.42 : 1)
-                            .opacity(isHoveringButton ? 0 : textOpacity)
-                            .blur(radius: isHoveringButton ? 12 : 0)
+                            .opacity(isHoveringButton ? 0 : (filesAppeared ? 1 : 0))
+                            .blur(radius: isHoveringButton ? 14 : 0)
+                            .animation(
+                                .spring(response: 0.7, dampingFraction: 0.86)
+                                    .delay(file.appearDelay),
+                                value: filesAppeared
+                            )
                     }
                 }
-                .animation(.spring(response: 0.42, dampingFraction: 0.82), value: isHoveringButton)
+                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isHoveringButton)
                 .allowsHitTesting(false)
             }
 
-            VStack(spacing: 22) {
-                VStack(spacing: 18) {
+            VStack(spacing: 26) {
+                VStack(spacing: 20) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 34, style: .continuous)
-                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.28))
-                            .frame(width: 148, height: 148)
+                        RoundedRectangle(cornerRadius: 44, style: .continuous)
+                            .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.30))
+                            .frame(width: 220, height: 220)
                             .blur(radius: glowRadius)
                             .opacity(iconOpacity)
 
                         Image(nsImage: NSApp.applicationIconImage)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 96, height: 96)
-                            .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
-                            .shadow(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.18), radius: 24, x: 0, y: 0)
-                            .shadow(color: .black.opacity(0.22), radius: 18, x: 0, y: 10)
+                            .frame(width: 156, height: 156)
+                            .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+                            .shadow(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), radius: 34, x: 0, y: 0)
+                            .shadow(color: .black.opacity(0.28), radius: 26, x: 0, y: 16)
                             .accessibilityHidden(true)
                     }
                     .scaleEffect(iconScale)
                     .opacity(iconOpacity)
 
                     Text("Welcome to Sorty")
-                        .font(.system(size: 36, weight: .medium, design: .serif))
-                        .foregroundStyle(.primary.opacity(0.86))
+                        .font(.system(size: 38, weight: .medium, design: .serif))
+                        .foregroundStyle(.primary.opacity(0.88))
                         .opacity(textOpacity)
                         .offset(y: textOffset)
                 }
 
                 Button {
+                    audio.stopAll()
                     onGetStarted()
                 } label: {
                     HStack(spacing: 8) {
@@ -574,6 +610,8 @@ private struct OnboardingIntroView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Welcome to Sorty")
         .onAppear {
+            audio.startBackgroundMelody()
+
             withAnimation(reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.84)) {
                 iconScale = 1
                 iconOpacity = 1
@@ -581,71 +619,120 @@ private struct OnboardingIntroView: View {
 
             if !reduceMotion {
                 withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                    glowRadius = 36
+                    glowRadius = 46
                 }
             }
 
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.7).delay(0.16)) {
                 textOpacity = 1
                 textOffset = 0
-                orbitPhase = 1
             }
+
+            filesAppeared = true
+        }
+        .onDisappear {
+            audio.stopAll()
         }
     }
 
     private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
         if isHoveringButton {
-            return CGSize(width: file.collapseX, height: 104 + file.collapseY)
+            return CGSize(width: file.collapseX, height: file.collapseY)
         }
 
-        let angle = file.angle + phase * file.speed
-        return CGSize(
-            width: cos(angle) * file.radiusX,
-            height: sin(angle) * file.radiusY + file.verticalBias
-        )
+        // Gentle, lazy drift around each file's scattered resting position so
+        // the pile feels alive without looking like a tidy orbit.
+        let driftX = cos(phase * file.driftSpeed + file.driftPhase) * file.driftRadius
+        let driftY = sin(phase * file.driftSpeed * 0.82 + file.driftPhase) * file.driftRadius * 0.7
+        return CGSize(width: file.baseX + driftX, height: file.baseY + driftY)
     }
 }
 
 private struct OnboardingOrbitFile: Identifiable {
     let id = UUID()
     let name: String
-    let icon: String
-    let tint: Color
-    let angle: Double
-    let speed: Double
-    let radiusX: CGFloat
-    let radiusY: CGFloat
-    let verticalBias: CGFloat
+    let ext: String
+    // Scattered resting position (offset from center).
+    let baseX: CGFloat
+    let baseY: CGFloat
+    // Lazy floating motion.
+    let driftPhase: Double
+    let driftSpeed: Double
+    let driftRadius: CGFloat
+    // Messy presentation.
+    let rotation: Double
+    let scale: CGFloat
+    let appearDelay: Double
+    // Where the file flies to when the pile collapses into the icon.
     let collapseX: CGFloat
     let collapseY: CGFloat
 
     static let files: [OnboardingOrbitFile] = [
-        OnboardingOrbitFile(name: "Invoices", icon: "doc.text.fill", tint: .blue, angle: 0.2, speed: 0.9, radiusX: 260, radiusY: 150, verticalBias: -12, collapseX: -42, collapseY: -8),
-        OnboardingOrbitFile(name: "Designs", icon: "photo.fill", tint: .pink, angle: 1.1, speed: 0.72, radiusX: 310, radiusY: 172, verticalBias: -8, collapseX: 34, collapseY: -12),
-        OnboardingOrbitFile(name: "Reports", icon: "chart.bar.doc.horizontal.fill", tint: .green, angle: 2.15, speed: 0.84, radiusX: 276, radiusY: 158, verticalBias: 6, collapseX: -18, collapseY: 8),
-        OnboardingOrbitFile(name: "Clips", icon: "film.fill", tint: .orange, angle: 3.35, speed: 0.68, radiusX: 322, radiusY: 178, verticalBias: 18, collapseX: 52, collapseY: 10),
-        OnboardingOrbitFile(name: "Notes", icon: "note.text", tint: .purple, angle: 4.45, speed: 0.78, radiusX: 244, radiusY: 142, verticalBias: 2, collapseX: 8, collapseY: -4),
-        OnboardingOrbitFile(name: "Exports", icon: "shippingbox.fill", tint: .teal, angle: 5.45, speed: 0.74, radiusX: 292, radiusY: 166, verticalBias: -16, collapseX: -58, collapseY: 12)
+        OnboardingOrbitFile(name: "Q3 Report", ext: "pdf", baseX: -332, baseY: -150, driftPhase: 0.0, driftSpeed: 0.42, driftRadius: 10, rotation: -13, scale: 1.04, appearDelay: 0.05, collapseX: -30, collapseY: -18),
+        OnboardingOrbitFile(name: "Budget 2024", ext: "xlsx", baseX: 318, baseY: -126, driftPhase: 1.3, driftSpeed: 0.5, driftRadius: 9, rotation: 11, scale: 0.96, appearDelay: 0.12, collapseX: 26, collapseY: -22),
+        OnboardingOrbitFile(name: "vacation", ext: "jpg", baseX: -250, baseY: 96, driftPhase: 2.1, driftSpeed: 0.46, driftRadius: 12, rotation: 8, scale: 1.1, appearDelay: 0.18, collapseX: -34, collapseY: 14),
+        OnboardingOrbitFile(name: "Resume", ext: "docx", baseX: 268, baseY: 120, driftPhase: 3.4, driftSpeed: 0.4, driftRadius: 10, rotation: -9, scale: 1.0, appearDelay: 0.24, collapseX: 30, collapseY: 20),
+        OnboardingOrbitFile(name: "demo", ext: "mp4", baseX: -382, baseY: 8, driftPhase: 0.7, driftSpeed: 0.54, driftRadius: 8, rotation: 6, scale: 0.92, appearDelay: 0.3, collapseX: -44, collapseY: 0),
+        OnboardingOrbitFile(name: "Keynote", ext: "key", baseX: 388, baseY: 18, driftPhase: 4.2, driftSpeed: 0.44, driftRadius: 11, rotation: -7, scale: 0.94, appearDelay: 0.36, collapseX: 44, collapseY: 4),
+        OnboardingOrbitFile(name: "logo", ext: "png", baseX: -150, baseY: -188, driftPhase: 5.0, driftSpeed: 0.48, driftRadius: 9, rotation: 14, scale: 0.88, appearDelay: 0.1, collapseX: -16, collapseY: -28),
+        OnboardingOrbitFile(name: "playlist", ext: "mp3", baseX: 168, baseY: -196, driftPhase: 2.7, driftSpeed: 0.52, driftRadius: 10, rotation: -12, scale: 0.9, appearDelay: 0.16, collapseX: 18, collapseY: -30),
+        OnboardingOrbitFile(name: "data", ext: "csv", baseX: -120, baseY: 178, driftPhase: 1.8, driftSpeed: 0.43, driftRadius: 8, rotation: -5, scale: 0.86, appearDelay: 0.22, collapseX: -14, collapseY: 26),
+        OnboardingOrbitFile(name: "archive", ext: "zip", baseX: 132, baseY: 188, driftPhase: 3.9, driftSpeed: 0.5, driftRadius: 11, rotation: 10, scale: 0.9, appearDelay: 0.28, collapseX: 16, collapseY: 28),
+        OnboardingOrbitFile(name: "contract", ext: "pages", baseX: -300, baseY: -34, driftPhase: 0.4, driftSpeed: 0.47, driftRadius: 9, rotation: 5, scale: 0.84, appearDelay: 0.34, collapseX: -38, collapseY: -8),
+        OnboardingOrbitFile(name: "notes", ext: "txt", baseX: 296, baseY: -42, driftPhase: 4.7, driftSpeed: 0.41, driftRadius: 10, rotation: -8, scale: 0.82, appearDelay: 0.4, collapseX: 38, collapseY: -6),
+        OnboardingOrbitFile(name: "Screenshot", ext: "png", baseX: 40, baseY: -206, driftPhase: 2.4, driftSpeed: 0.49, driftRadius: 8, rotation: 3, scale: 0.8, appearDelay: 0.2, collapseX: 6, collapseY: -32),
+        OnboardingOrbitFile(name: "invoice", ext: "pdf", baseX: -36, baseY: 200, driftPhase: 5.5, driftSpeed: 0.45, driftRadius: 9, rotation: -4, scale: 0.82, appearDelay: 0.26, collapseX: -4, collapseY: 30)
     ]
+}
+
+/// Provides (and caches) the real macOS file-type icon for a given extension.
+@MainActor
+private enum OnboardingFileIconProvider {
+    private static var cache: [String: NSImage] = [:]
+
+    static func icon(for ext: String) -> NSImage {
+        if let cached = cache[ext] {
+            return cached
+        }
+        let image: NSImage
+        if let type = UTType(filenameExtension: ext) {
+            image = NSWorkspace.shared.icon(for: type)
+        } else {
+            image = NSWorkspace.shared.icon(forFileType: ext)
+        }
+        cache[ext] = image
+        return image
+    }
 }
 
 private struct OnboardingOrbitFileChip: View {
     let file: OnboardingOrbitFile
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: file.icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(file.tint)
+        VStack(spacing: 6) {
+            Image(nsImage: OnboardingFileIconProvider.icon(for: file.ext))
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 46, height: 46)
 
-            Text(file.name)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.84))
+            Text("\(file.name).\(file.ext)")
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.82))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule(style: .continuous).fill(.ultraThinMaterial))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .systemLiquidGlassBackground(cornerRadius: 13)
-        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 8)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.30), radius: 16, x: 0, y: 12)
         .accessibilityHidden(true)
     }
 }
@@ -653,29 +740,41 @@ private struct OnboardingOrbitFileChip: View {
 private struct OnboardingBottomGradient: View {
     @Environment(\.colorScheme) private var colorScheme
 
+    /// 0 = gradient hugs the bottom edge, 1 = gradient reaches near the top.
+    var progress: Double = 0
+
     var body: some View {
-        ZStack(alignment: .bottom) {
+        let clamped = max(0, min(1, progress))
+        // The linear wash climbs from the lower third toward the top as the
+        // user progresses. We keep a small top margin (y never reaches 0) so
+        // the title/progress region stays calm and the fade is always smooth.
+        let linearEnd = UnitPoint(x: 0.5, y: 0.62 - clamped * 0.5)
+        let radialCenterY = 1.06 - clamped * 0.36
+        let radialEnd = 560 + clamped * 540
+        let intensity = 1.0 + clamped * 0.25
+
+        return ZStack(alignment: .bottom) {
             Color(NSColor.windowBackgroundColor)
 
             LinearGradient(
                 colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(colorScheme == .dark ? 0.34 : 0.46),
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(colorScheme == .dark ? 0.16 : 0.20),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.34 : 0.46) * intensity),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.16 : 0.20) * intensity),
                     Color.clear
                 ],
                 startPoint: .bottom,
-                endPoint: .center
+                endPoint: linearEnd
             )
 
             RadialGradient(
                 colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(colorScheme == .dark ? 0.24 : 0.30),
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.08),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.24 : 0.30) * intensity),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.08 * intensity),
                     Color.clear
                 ],
-                center: UnitPoint(x: 0.5, y: 1.04),
+                center: UnitPoint(x: 0.5, y: radialCenterY),
                 startRadius: 0,
-                endRadius: 620
+                endRadius: radialEnd
             )
             .blendMode(.plusLighter)
         }
@@ -730,6 +829,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         private var originalBackgroundColor: NSColor?
         private var originalIsOpaque: Bool?
         private var originalHasShadow: Bool?
+        private var originalAlphaValue: CGFloat?
 
         func configure(window: NSWindow) {
             guard configuredWindow !== window else { return }
@@ -742,6 +842,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             originalBackgroundColor = window.backgroundColor
             originalIsOpaque = window.isOpaque
             originalHasShadow = window.hasShadow
+            originalAlphaValue = window.alphaValue
 
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
@@ -757,6 +858,17 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             if window.frame.size.width < targetSize.width || window.frame.size.height < targetSize.height {
                 window.setContentSize(targetSize)
                 window.center()
+            }
+
+            // Start fully transparent and slowly fade the whole window in so the
+            // onboarding materializes rather than popping into existence.
+            window.alphaValue = 0
+            DispatchQueue.main.async {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 1.4
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    window.animator().alphaValue = 1
+                }
             }
         }
 
@@ -779,6 +891,11 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             }
             if let originalHasShadow {
                 window.hasShadow = originalHasShadow
+            }
+            if let originalAlphaValue {
+                window.alphaValue = originalAlphaValue
+            } else {
+                window.alphaValue = 1
             }
         }
 

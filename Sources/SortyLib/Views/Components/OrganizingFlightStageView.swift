@@ -2,10 +2,14 @@
 //  OrganizingFlightStageView.swift
 //  Sorty
 //
-//  Binky-inspired "files flying into folders" animation. Once the AI
-//  produces a plan, this view animates a file card from the top of the
-//  stage down into one of the planned destination folder buckets, then
-//  bounces the bucket on landing — cycling through the planned folders.
+//  Files flying into folders animation. This view is purely presentational:
+//  it never gates the AI response, preview creation, or transition to ready.
+//
+//  Note: there is no public API to reuse Finder's exact drop-into-folder
+//  animation in an arbitrary view. The legacy `kOpenFolderIcon` resource
+//  only ships at 32x32 and looks pixelated at our sizes, so we render the
+//  real high-resolution folder icon and use the same kind of subtle scale
+//  bump + halo that Finder itself shows on a successful drop.
 //
 
 import AppKit
@@ -15,27 +19,34 @@ import UniformTypeIdentifiers
 struct OrganizingFlightStageView: View {
     let suggestions: [FolderSuggestion]
 
-    var stageWidth: CGFloat = 360
-    var stageHeight: CGFloat = 200
+    var stageWidth: CGFloat = 430
+    var stageHeight: CGFloat = 170
     var maxBuckets: Int = 5
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     @State private var cardOffset: CGSize = .zero
-    @State private var cardRotation: Double = 0
-    @State private var cardScale: CGFloat = 0.55
+    @State private var cardScale: CGFloat = 0.85
     @State private var cardOpacity: Double = 0
     @State private var bumpedIndex: Int?
+    @State private var haloIndex: Int?
     @State private var bumpTrigger: Int = 0
     @State private var currentFileIcon: NSImage = AnalysisIconProvider.icon(for: .data)
+    @State private var currentFileName = ""
+    @State private var currentRenamedFileName: String?
+    @State private var isShowingRenamedFileName = false
+    @State private var displayedSuggestions: [FolderSuggestion] = []
     @State private var flightTask: Task<Void, Never>?
+    @State private var flightStep = 0
 
-    private let dropDistance: CGFloat = 130
-    private let cardSize = CGSize(width: 56, height: 76)
-    private let bucketSize = CGSize(width: 70, height: 54)
+    private let dropTravel: CGFloat = 76
+    private let cardSize = CGSize(width: 28, height: 28)
+    private let fileCardSize = CGSize(width: 188, height: 42)
+    private let bucketSize = CGSize(width: 56, height: 56)
 
     private var visibleSuggestions: [FolderSuggestion] {
-        Array(suggestions.prefix(maxBuckets))
+        let source = displayedSuggestions.isEmpty ? suggestions : displayedSuggestions
+        return Array(source.prefix(maxBuckets))
     }
 
     private var bucketCount: Int { visibleSuggestions.count }
@@ -46,32 +57,44 @@ struct OrganizingFlightStageView: View {
                 EmptyView()
             } else {
                 ZStack {
-                    // Buckets pinned to the bottom of the stage.
                     VStack(spacing: 0) {
                         Spacer(minLength: 0)
                         HStack(spacing: 0) {
-                            ForEach(Array(visibleSuggestions.enumerated()), id: \.offset) { index, suggestion in
+                            ForEach(Array(visibleSuggestions.enumerated()), id: \.element.folderName) { index, suggestion in
                                 destinationView(suggestion: suggestion, index: index)
                                     .frame(maxWidth: .infinity)
+                                    .transition(.asymmetric(
+                                        insertion: .scale(scale: 0.4, anchor: .bottom)
+                                            .combined(with: .opacity)
+                                            .combined(with: .offset(y: 14)),
+                                        removal: .opacity.combined(with: .scale(scale: 0.85))
+                                    ))
                             }
                         }
-                        .padding(.bottom, 4)
+                        .padding(.bottom, 6)
+                        .animation(
+                            systemReduceMotion
+                                ? .easeInOut(duration: 0.18)
+                                : .spring(response: 0.42, dampingFraction: 0.72),
+                            value: visibleSuggestions.map(\.folderName)
+                        )
                     }
 
-                    // The flying file card sits on top of everything else.
                     fileCard
                         .offset(cardOffset)
-                        .rotationEffect(.degrees(cardRotation))
                         .scaleEffect(cardScale)
                         .opacity(cardOpacity)
                         .allowsHitTesting(false)
                 }
                 .frame(width: stageWidth, height: stageHeight)
                 .accessibilityHidden(true)
-                .onAppear { startCycle() }
+                .onAppear {
+                    mergeDisplayedSuggestions(animated: false)
+                    startCycleIfNeeded()
+                }
                 .onDisappear { stopCycle() }
-                .onChange(of: bucketCount) { _, _ in
-                    restartCycle()
+                .onChange(of: suggestions) { _, _ in
+                    mergeDisplayedSuggestions(animated: true)
                 }
             }
         }
@@ -80,38 +103,83 @@ struct OrganizingFlightStageView: View {
     // MARK: - Subviews
 
     private var fileCard: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-            Image(nsImage: currentFileIcon)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .padding(8)
+        HStack(spacing: 8) {
+            AppKitImageView(image: currentFileIcon, size: cardSize)
+                .frame(width: cardSize.width, height: cardSize.height)
+                .shadow(color: Color.black.opacity(0.16), radius: 4, x: 0, y: 2)
+
+            if !currentFileName.isEmpty {
+                fileNameLabel
+            }
+
+            Image(systemName: "arrow.down.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary.opacity(0.75))
         }
-        .frame(width: cardSize.width, height: cardSize.height)
-        .shadow(color: Color.black.opacity(0.18), radius: 6, x: 0, y: 3)
+        .padding(.horizontal, 10)
+        .frame(width: fileCardSize.width, height: fileCardSize.height)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(0.07))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.14), radius: 8, x: 0, y: 5)
+    }
+
+    private var fileNameLabel: some View {
+        ZStack {
+            if let currentRenamedFileName, isShowingRenamedFileName {
+                Text(currentRenamedFileName)
+                    .foregroundStyle(.primary.opacity(0.92))
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+            } else {
+                Text(currentFileName)
+                    .foregroundStyle(.primary.opacity(0.72))
+                    .strikethrough(currentRenamedFileName != nil, color: .secondary.opacity(0.7))
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .leading).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+        .accessibilityHidden(true)
     }
 
     @ViewBuilder
     private func destinationView(suggestion: FolderSuggestion, index: Int) -> some View {
         let isBumped = bumpedIndex == index
+        let showHalo = haloIndex == index
 
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.primary.opacity(isBumped ? 0.14 : 0.07))
-                    .frame(width: bucketSize.width, height: bucketSize.height)
+                if showHalo {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.22))
+                        .frame(width: bucketSize.width + 18, height: bucketSize.width + 18)
+                        .blur(radius: 10)
+                        .transition(.opacity)
+                }
 
-                Image(nsImage: AnalysisIconProvider.icon(for: .folder))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 34, height: 34)
-                    .scaleEffect(isBumped ? 1.18 : 1.0)
-                    .animation(.spring(response: 0.28, dampingFraction: 0.5), value: bumpTrigger)
+                AppKitImageView(image: FolderDropBucket.folderIcon, size: bucketSize)
+                    .frame(width: bucketSize.width, height: bucketSize.height)
+                    .scaleEffect(isBumped ? 1.07 : 1.0)
+                    .shadow(color: Color.black.opacity(isBumped ? 0.18 : 0.10),
+                            radius: isBumped ? 8 : 4, x: 0, y: 3)
             }
-            .animation(.easeOut(duration: 0.25), value: bumpedIndex)
+            .frame(width: bucketSize.width + 18, height: bucketSize.height + 6)
+            .animation(.spring(response: 0.32, dampingFraction: 0.55), value: bumpTrigger)
+            .animation(.easeOut(duration: 0.25), value: showHalo)
 
             Text(suggestion.folderName)
                 .font(.caption2)
@@ -131,23 +199,31 @@ struct OrganizingFlightStageView: View {
         return pos - stageWidth / 2
     }
 
+    private func folderTopOffset() -> CGFloat {
+        // Folders sit pinned to the bottom of the stage; this gives the
+        // approximate Y position of the folder's center for the file to
+        // land into.
+        let folderCenterY = stageHeight / 2 - bucketSize.height / 2 - 15
+        return folderCenterY
+    }
+
     // MARK: - Animation cycle
 
-    private func startCycle() {
-        stopCycle()
-        guard !systemReduceMotion, bucketCount > 0 else { return }
+    private func startCycleIfNeeded() {
+        guard flightTask == nil, !systemReduceMotion, bucketCount > 0 else { return }
 
         flightTask = Task { @MainActor in
-            var step = 0
             while !Task.isCancelled {
-                let count = visibleSuggestions.count
-                guard count > 0 else { break }
-                let index = step % count
-                let suggestion = visibleSuggestions[index]
-                currentFileIcon = pickFileIcon(for: suggestion)
-                await runFlight(toIndex: index)
-                try? await Task.sleep(nanoseconds: 220_000_000)
-                step &+= 1
+                guard let flight = nextFlight() else {
+                    try? await Task.sleep(nanoseconds: 180_000_000)
+                    continue
+                }
+                currentFileIcon = iconForPath(flight.file.path)
+                currentFileName = flight.file.displayName
+                currentRenamedFileName = flight.renameMapping?.suggestedName
+                isShowingRenamedFileName = false
+                await runFlight(toIndex: flight.folderIndex)
+                try? await Task.sleep(nanoseconds: 140_000_000)
             }
         }
     }
@@ -157,43 +233,53 @@ struct OrganizingFlightStageView: View {
         flightTask = nil
         cardOpacity = 0
         bumpedIndex = nil
-    }
-
-    private func restartCycle() {
-        stopCycle()
-        startCycle()
+        haloIndex = nil
+        isShowingRenamedFileName = false
     }
 
     private func runFlight(toIndex index: Int) async {
-        // Phase 1 — Spawn above the stage center, small and invisible.
-        cardOffset = CGSize(width: 0, height: -dropDistance + 30)
-        cardRotation = Double.random(in: -10 ... 10)
-        cardScale = 0.55
+        // Phase 1: appear at the top of the stage.
+        let startY: CGFloat = -dropTravel
+        cardOffset = CGSize(width: 0, height: startY)
+        cardScale = 0.9
         cardOpacity = 0
+        haloIndex = nil
 
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) {
-            cardOffset = CGSize(width: 0, height: -dropDistance + 60)
-            cardScale = 1.0
+        withAnimation(.easeOut(duration: 0.18)) {
             cardOpacity = 1
-            cardRotation = 0
+            cardScale = 1.0
         }
-        try? await Task.sleep(nanoseconds: 480_000_000)
+        try? await Task.sleep(nanoseconds: 160_000_000)
         if Task.isCancelled { return }
 
-        // Phase 2 — Glide diagonally toward the destination bucket.
+        // Phase 2: glide toward the destination folder along an arc.
         let destX = centerOffset(for: index)
-        let leanAngle: Double = destX < -1 ? -8 : (destX > 1 ? 8 : 0)
+        let landingY = folderTopOffset() - 8
 
-        withAnimation(.timingCurve(0.4, 0.0, 0.2, 1.0, duration: 0.55)) {
-            cardOffset = CGSize(width: destX, height: 6)
-            cardRotation = leanAngle
+        if currentRenamedFileName != nil {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                isShowingRenamedFileName = true
+            }
+            HapticFeedbackManager.shared.selection()
         }
-        try? await Task.sleep(nanoseconds: 420_000_000)
+
+        try? await Task.sleep(nanoseconds: currentRenamedFileName == nil ? 40_000_000 : 220_000_000)
         if Task.isCancelled { return }
 
-        // Phase 3 — Drop into the bucket, shrinking and fading.
-        withAnimation(.easeIn(duration: 0.22)) {
-            cardOffset = CGSize(width: destX, height: 30)
+        // Show the receive halo just before the file lands.
+        withAnimation(.easeIn(duration: 0.32).delay(0.18)) {
+            haloIndex = index
+        }
+
+        withAnimation(.timingCurve(0.34, 0.04, 0.2, 1.0, duration: 0.46)) {
+            cardOffset = CGSize(width: destX, height: landingY)
+        }
+        try? await Task.sleep(nanoseconds: 360_000_000)
+        if Task.isCancelled { return }
+
+        // Phase 3: the file tucks into the folder, the folder bumps.
+        withAnimation(.timingCurve(0.42, 0.0, 0.28, 1.0, duration: 0.18)) {
+            cardOffset = CGSize(width: destX, height: landingY + 18)
             cardScale = 0.3
             cardOpacity = 0
         }
@@ -201,24 +287,71 @@ struct OrganizingFlightStageView: View {
         bumpTrigger &+= 1
         HapticFeedbackManager.shared.selection()
 
-        try? await Task.sleep(nanoseconds: 260_000_000)
+        try? await Task.sleep(nanoseconds: 220_000_000)
         if Task.isCancelled { return }
+        withAnimation(.easeOut(duration: 0.25)) {
+            haloIndex = nil
+        }
         bumpedIndex = nil
-        try? await Task.sleep(nanoseconds: 90_000_000)
     }
 
-    // MARK: - Icon selection
+    // MARK: - Suggestions and file selection
 
-    private func pickFileIcon(for suggestion: FolderSuggestion) -> NSImage {
-        if let item = suggestion.files.randomElement() {
-            return iconForPath(item.path)
-        }
-        for sub in suggestion.subfolders {
-            if let item = sub.files.randomElement() {
-                return iconForPath(item.path)
+    private func mergeDisplayedSuggestions(animated: Bool = true) {
+        let incoming = Array(suggestions.prefix(maxBuckets))
+        guard !incoming.isEmpty else { return }
+
+        var merged = displayedSuggestions
+        var didInsert = false
+        for suggestion in incoming {
+            if let index = merged.firstIndex(where: { $0.folderName == suggestion.folderName }) {
+                merged[index] = suggestion
+            } else if merged.count < maxBuckets {
+                merged.append(suggestion)
+                didInsert = true
             }
         }
-        return AnalysisIconProvider.icon(for: .data)
+
+        guard merged != displayedSuggestions else { return }
+
+        if animated && didInsert && !systemReduceMotion {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
+                displayedSuggestions = merged
+            }
+            HapticFeedbackManager.shared.light()
+        } else {
+            displayedSuggestions = merged
+        }
+
+        startCycleIfNeeded()
+    }
+
+    private struct FlightCandidate {
+        let folderIndex: Int
+        let file: FileItem
+        let renameMapping: FileRenameMapping?
+    }
+
+    private func nextFlight() -> FlightCandidate? {
+        let candidates = visibleSuggestions.enumerated().flatMap { index, suggestion in
+            filesWithRenames(in: suggestion).map {
+                FlightCandidate(folderIndex: index, file: $0.file, renameMapping: $0.renameMapping)
+            }
+        }
+        guard !candidates.isEmpty else { return nil }
+        let candidate = candidates[flightStep % candidates.count]
+        flightStep &+= 1
+        return candidate
+    }
+
+    private func filesWithRenames(in suggestion: FolderSuggestion) -> [(file: FileItem, renameMapping: FileRenameMapping?)] {
+        var items = suggestion.files.map { file in
+            (file: file, renameMapping: suggestion.renameMapping(for: file).flatMap { $0.hasRename ? $0 : nil })
+        }
+        for subfolder in suggestion.subfolders {
+            items.append(contentsOf: filesWithRenames(in: subfolder))
+        }
+        return items
     }
 
     private func iconForPath(_ path: String) -> NSImage {
@@ -229,6 +362,14 @@ struct OrganizingFlightStageView: View {
         }
         return AnalysisIconProvider.icon(for: .data)
     }
+}
+
+private enum FolderDropBucket {
+    static let folderIcon: NSImage = {
+        let icon = NSWorkspace.shared.icon(for: .folder)
+        icon.size = NSSize(width: 128, height: 128)
+        return icon
+    }()
 }
 
 #Preview {

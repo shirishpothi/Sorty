@@ -234,6 +234,8 @@ public struct CompletionStepView: View {
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 420)
                         .opacity(hasAppeared ? 1 : 0)
                         .offset(y: hasAppeared ? 0 : 15)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.4), value: hasAppeared)
@@ -242,7 +244,7 @@ public struct CompletionStepView: View {
                 .offset(y: contentDismissed ? 30 : 0)
 
                 // Quick tips (staggered slide-in from left)
-                VStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 16) {
                     QuickTipRow(icon: "folder.badge.plus", text: "Drag any folder to organize it")
                         .opacity(tipsAppeared ? 1 : 0)
                         .offset(x: tipsAppeared ? 0 : -30)
@@ -263,10 +265,15 @@ public struct CompletionStepView: View {
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
                 }
-                .padding(20)
+                .padding(24)
+                .frame(maxWidth: 380)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(.ultraThinMaterial)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 40 : 0)
@@ -540,16 +547,22 @@ struct QuickTipRow: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 16))
-                .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
-                .frame(width: 24)
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.14))
+                    .frame(width: 34, height: 34)
+
+                Image(systemName: icon)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+            }
 
             Text(text)
-                .font(.subheadline)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.primary.opacity(0.9))
 
-            Spacer()
+            Spacer(minLength: 0)
         }
     }
 }

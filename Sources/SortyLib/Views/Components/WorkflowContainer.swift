@@ -98,6 +98,8 @@ struct WorkflowContainer<Content: View>: View {
 }
 
 struct WorkflowGradientBackground: View {
+    var showsBaseColor = true
+
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.workflowGradientHidden) private var gradientHidden
@@ -176,7 +178,9 @@ struct WorkflowGradientBackground: View {
             let bloomPulse = reduceMotion ? 0.55 : (0.45 + 0.30 * ((sin(t * (2 * .pi / 6.1) + 0.6) + 1) * 0.5))
 
             ZStack(alignment: .bottom) {
-                Color(NSColor.windowBackgroundColor)
+                if showsBaseColor {
+                    Color(NSColor.windowBackgroundColor)
+                }
 
                 LinearGradient(
                     colors: [
@@ -212,6 +216,37 @@ struct WorkflowGradientBackground: View {
             .allowsHitTesting(false)
         }
         .ignoresSafeArea()
+    }
+}
+
+private struct EmptyStateWorkflowGradientModifier: ViewModifier {
+    let isVisible: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack(alignment: .bottom) {
+                    Color(NSColor.windowBackgroundColor)
+
+                    WorkflowGradientBackground(showsBaseColor: false)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(
+                            x: 1,
+                            y: isVisible || reduceMotion ? 1 : 0.86,
+                            anchor: .bottom
+                        )
+                        .animation(.easeInOut(duration: reduceMotion ? 0.01 : 0.45), value: isVisible)
+                }
+                .ignoresSafeArea()
+            }
+    }
+}
+
+extension View {
+    func emptyStateWorkflowGradient(isVisible: Bool) -> some View {
+        modifier(EmptyStateWorkflowGradientModifier(isVisible: isVisible))
     }
 }
 

@@ -38,7 +38,6 @@ struct WatchedFoldersView: View {
                         .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.windowBackgroundColor))
             } else {
                 // Header
                 headerView
@@ -71,6 +70,7 @@ struct WatchedFoldersView: View {
                 .animation(.pageTransition, value: watchedFoldersManager.folders.isEmpty)
             }
         }
+        .emptyStateWorkflowGradient(isVisible: watchedFoldersManager.folders.isEmpty)
         .animation(.pageTransition, value: watchedFoldersManager.folders.isEmpty)
         .fileImporter(
             isPresented: $showingFolderPicker,

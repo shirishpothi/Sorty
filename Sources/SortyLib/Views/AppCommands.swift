@@ -408,6 +408,7 @@ public class AppState: ObservableObject {
     @Published public var currentView: AppView = .organize
     @Published public var showingSidebar: Bool = true
     @Published public var showDirectoryPicker: Bool = false
+    public var hasPresentedReadyToOrganize = false
     @Published public var selectedDirectory: URL? {
         didSet {
             if let url = selectedDirectory {

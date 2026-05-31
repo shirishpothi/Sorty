@@ -20,53 +20,18 @@ public struct WorkspaceHealthView: View {
     @State private var contentOpacity: Double = 0
     @State private var emptyStateHasAppeared = false
     @State private var emptyStateBeamHasAppeared = false
-    @Namespace private var controlsGlassNamespace
     
     public init() {}
     
     public var body: some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Header
-                    headerSection
-                        .animatedAppearance(delay: 0.03)
-                    
-                    // Directory Selector
-                    if selectedDirectory != nil {
-                        directorySelector
-                            .animatedAppearance(delay: 0.06)
-                    }
-
-                    analysisStatusSection
-                        .animatedAppearance(delay: 0.09)
-                    
-                    if selectedDirectory != nil {
-                        // Stats Overview
-                        statsOverview
-                            .animatedAppearance(delay: 0.12)
-                        
-                        // Growth Chart (if data available)
-                        if let growth = healthManager.getGrowth(for: selectedDirectory?.path ?? "") {
-                            growthSection(growth)
-                                .animatedAppearance(delay: 0.15)
-                        }
-
-                        topActionsSection
-                            .animatedAppearance(delay: 0.18)
-                        
-                        // Cleanup Opportunities
-                        opportunitiesSection
-                            .animatedAppearance(delay: 0.21)
-                        
-                        // Insights
-                        insightsSection
-                            .animatedAppearance(delay: 0.24)
-                    }
+            Group {
+                if selectedDirectory != nil {
+                    analyzedWorkspaceContent
+                } else {
+                    EmptyView()
                 }
-                .padding(32)
             }
-            .background(Color(NSColor.windowBackgroundColor))
 
             VStack {
                 HStack {
@@ -89,7 +54,6 @@ public struct WorkspaceHealthView: View {
                         .padding(.horizontal, 32)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.windowBackgroundColor))
             }
             
             if showToast, let message = toastMessage {
@@ -111,6 +75,7 @@ public struct WorkspaceHealthView: View {
                 .zIndex(100)
             }
         }
+        .emptyStateWorkflowGradient(isVisible: selectedDirectory == nil)
         .opacity(contentOpacity)
         .sheet(isPresented: $showSettings) {
             WorkspaceHealthSettingsView(healthManager: healthManager)
@@ -148,75 +113,119 @@ public struct WorkspaceHealthView: View {
     }
 
     private var workspaceHealthControls: some View {
-        Group {
-            if #available(macOS 26.0, *) {
-                GlassEffectContainer(spacing: 10) {
-                    workspaceHealthControlButtons
-                }
-            } else {
-                workspaceHealthControlButtons
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var workspaceHealthControlButtons: some View {
         HStack(spacing: 10) {
-            undoHealthActionButton
-            settingsHealthButton
-            refreshHealthButton
-        }
-    }
+            if selectedDirectory != nil {
+                LiquidGlassToolbarIconButton(
+                    systemImage: "arrow.uturn.backward",
+                    help: "Undo last cleanup action",
+                    isDisabled: healthManager.cleanupHistory.isEmpty
+                ) {
+                    Task {
+                        try? await healthManager.undoLastAction()
+                        await refreshAnalysis()
+                    }
+                }
+            }
 
-    private var undoHealthActionButton: some View {
-        LiquidGlassToolbarIconButton(
-            systemImage: "arrow.uturn.backward",
-            help: "Undo last cleanup action",
-            isDisabled: healthManager.cleanupHistory.isEmpty
-        ) {
-            Task {
-                try? await healthManager.undoLastAction()
-                await refreshAnalysis()
+            LiquidGlassToolbarIconButton(
+                systemImage: "gear",
+                help: "Workspace Health settings"
+            ) {
+                showSettings = true
+            }
+
+            if selectedDirectory != nil {
+                LiquidGlassToolbarIconButton(
+                    systemImage: "arrow.clockwise",
+                    help: "Refresh workspace health",
+                    isDisabled: appState.workspaceHealthIsAnalyzing
+                ) {
+                    Task { await refreshAnalysis() }
+                }
             }
         }
-        .workspaceHealthControlGlassID("undo", in: controlsGlassNamespace)
     }
 
-    private var settingsHealthButton: some View {
-        LiquidGlassToolbarIconButton(
-            systemImage: "gear",
-            help: "Workspace Health settings"
-        ) {
-            showSettings = true
+    private var analyzedWorkspaceContent: some View {
+        HStack(alignment: .top, spacing: 24) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    headerSection
+                        .animatedAppearance(delay: 0.03)
+
+                    directorySelector
+                        .animatedAppearance(delay: 0.06)
+
+                    opportunitiesSection
+                        .animatedAppearance(delay: 0.12)
+
+                    insightsSection
+                        .animatedAppearance(delay: 0.15)
+                }
+                .padding(.leading, 32)
+                .padding(.vertical, 32)
+                .padding(.trailing, 4)
+            }
+
+            rightRail
+                .frame(width: 316)
+                .padding(.top, 62)
+                .padding(.trailing, 24)
+                .padding(.bottom, 32)
         }
-        .workspaceHealthControlGlassID("settings", in: controlsGlassNamespace)
     }
 
-    private var refreshHealthButton: some View {
-        LiquidGlassToolbarIconButton(
-            systemImage: "arrow.clockwise",
-            help: "Refresh workspace health",
-            isDisabled: selectedDirectory == nil || appState.workspaceHealthIsAnalyzing
-        ) {
-            Task { await refreshAnalysis() }
+    private var rightRail: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                analysisStatusSection
+                    .animatedAppearance(delay: 0.09)
+
+                if let snapshot = healthManager.snapshots[selectedDirectory?.path ?? ""]?.last {
+                    compactHealthScore(snapshot: snapshot)
+                        .animatedAppearance(delay: 0.12)
+
+                    compactStats(snapshot: snapshot)
+                        .animatedAppearance(delay: 0.14)
+                }
+
+                if let growth = healthManager.getGrowth(for: selectedDirectory?.path ?? "") {
+                    compactGrowthSection(growth)
+                        .animatedAppearance(delay: 0.16)
+                }
+
+                topActionsSection
+                    .animatedAppearance(delay: 0.18)
+            }
+            .padding(.top, 2)
         }
-        .workspaceHealthControlGlassID("refresh", in: controlsGlassNamespace)
+        .scrollIndicators(.hidden)
     }
     
     private var headerSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Workspace Health")
-                    .font(.largeTitle.bold())
-                
-                Text("Monitor clutter, track growth, and discover cleanup opportunities")
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                if appState.navigatedFromSettings {
+                    GlassyBackButton {
+                        HapticFeedbackManager.shared.tap()
+                        appState.navigatedFromSettings = false
+                        appState.openSettingsWindow(section: .help)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Workspace Health")
+                        .font(.largeTitle.bold())
+
+                    Text("Monitor clutter, track growth, and discover cleanup opportunities")
+                        .foregroundStyle(.secondary)
+                }
             }
             
             Spacer()
             
-            // Health Score Badge
-            if let snapshot = healthManager.snapshots[selectedDirectory?.path ?? ""]?.last {
+            if selectedDirectory == nil,
+               let snapshot = healthManager.snapshots[selectedDirectory?.path ?? ""]?.last {
                 healthScoreBadge(snapshot: snapshot)
             }
         }
@@ -251,13 +260,45 @@ public struct WorkspaceHealthView: View {
         .accessibilityValue("\(score) out of 100, \(healthDescription)")
         .accessibilityHint("Shows the overall health of your workspace from 0 to 100")
     }
-    
+
     private func scoreDescription(_ score: Int) -> String {
         switch score {
         case 80...100: return "Excellent"
         case 60..<80: return "Good"
         default: return "Needs Attention"
         }
+    }
+
+    private func compactHealthScore(snapshot: DirectorySnapshot) -> some View {
+        let score = healthManager.healthScore(for: snapshot.directoryPath)
+        let healthDescription = scoreDescription(score)
+        let healthColor = healthManager.healthScoreBand(for: score).color
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
+                WorkspaceHealthBeamScore(score: score, healthColor: healthColor)
+                    .frame(width: 76, height: 76)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(healthDescription)
+                        .font(.headline.weight(.semibold))
+                    Text("Health score")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Based on cleanup opportunities, growth, and file age")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Workspace health score")
+        .accessibilityValue("\(score) out of 100, \(healthDescription)")
     }
 
     private struct WorkspaceHealthBeamScore: View {
@@ -385,16 +426,18 @@ public struct WorkspaceHealthView: View {
     private var directorySelector: some View {
         HStack {
             if let dir = selectedDirectory {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: dir.path))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 28, height: 28)
+                AppKitImageView(
+                    image: NSWorkspace.shared.icon(forFile: dir.path),
+                    size: CGSize(width: 28, height: 28)
+                )
+                .frame(width: 28, height: 28)
             } else {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: "/tmp"))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 28, height: 28)
-                    .opacity(0.6)
+                AppKitImageView(
+                    image: NSWorkspace.shared.icon(forFile: "/tmp"),
+                    size: CGSize(width: 28, height: 28),
+                    opacity: 0.6
+                )
+                .frame(width: 28, height: 28)
             }
             
             if let dir = selectedDirectory {
@@ -514,6 +557,41 @@ public struct WorkspaceHealthView: View {
             }
         }
     }
+
+    private func compactStats(snapshot: DirectorySnapshot) -> some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible(), spacing: 10),
+            GridItem(.flexible(), spacing: 10)
+        ], spacing: 10) {
+            CompactStatTile(
+                title: "Files",
+                value: "\(snapshot.totalFiles)",
+                icon: "doc.fill",
+                color: .blue
+            )
+
+            CompactStatTile(
+                title: "Size",
+                value: snapshot.formattedSize,
+                icon: "externaldrive.fill",
+                color: .purple
+            )
+
+            CompactStatTile(
+                title: "Unorganized",
+                value: "\(snapshot.unorganizedCount)",
+                icon: "questionmark.folder.fill",
+                color: .orange
+            )
+
+            CompactStatTile(
+                title: "Avg age",
+                value: snapshot.formattedAverageAge,
+                icon: "clock.fill",
+                color: .gray
+            )
+        }
+    }
     
     // MARK: - Growth Section
     
@@ -567,6 +645,51 @@ public struct WorkspaceHealthView: View {
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func compactGrowthSection(_ growth: DirectoryGrowth) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Growth", systemImage: growth.growthRate.icon)
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                Text(growth.growthRate.rawValue)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(growth.growthRate.color)
+            }
+
+            HStack(spacing: 10) {
+                CompactGrowthMetric(
+                    label: "Files",
+                    value: "\(growth.fileCountChange >= 0 ? "+" : "")\(growth.fileCountChange)",
+                    isPositive: growth.fileCountChange <= 0
+                )
+
+                CompactGrowthMetric(
+                    label: "Size",
+                    value: growth.formattedSizeChange,
+                    isPositive: growth.sizeChange <= 0
+                )
+            }
+
+            if !growth.topGrowingTypes.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(growth.topGrowingTypes.prefix(4), id: \.extension) { item in
+                        Text(".\(item.extension)")
+                            .font(.caption2.monospaced())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(.blue.opacity(0.1), in: Capsule())
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Growth trends")
     }
     
     // MARK: - Opportunities Section
@@ -778,7 +901,6 @@ public struct WorkspaceHealthView: View {
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: emptyStateHasAppeared)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 emptyStateHasAppeared = true
@@ -909,6 +1031,39 @@ private struct StatCard: View {
     }
 }
 
+private struct CompactStatTile: View {
+    let title: String
+    let value: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(color)
+
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Text(value)
+                .font(.headline.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
+    }
+}
+
 private struct GrowthMetric: View {
     let label: String
     let value: String
@@ -927,6 +1082,31 @@ private struct GrowthMetric: View {
                 .background((isPositive ? Color.green : Color.red).opacity(0.1), in: Capsule())
                 .foregroundStyle(isPositive ? .green : .red)
         }
+    }
+}
+
+private struct CompactGrowthMetric: View {
+    let label: String
+    let value: String
+    let isPositive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.callout.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.76)
+                .foregroundStyle(isPositive ? .green : .red)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background((isPositive ? Color.green : Color.red).opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 }
 
@@ -1075,17 +1255,6 @@ private struct LiquidGlassToolbarIconButton: View {
             }
         }
         .animation(.easeInOut(duration: 0.16), value: isDisabled)
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func workspaceHealthControlGlassID(_ id: String, in namespace: Namespace.ID) -> some View {
-        if #available(macOS 26.0, *) {
-            self.glassEffectID(id, in: namespace)
-        } else {
-            self
-        }
     }
 }
 

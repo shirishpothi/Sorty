@@ -17,10 +17,11 @@ struct StorageLocationPopoverContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: path))
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 24, height: 24)
+                AppKitImageView(
+                    image: NSWorkspace.shared.icon(forFile: path),
+                    size: CGSize(width: 24, height: 24)
+                )
+                .frame(width: 24, height: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(displayName)

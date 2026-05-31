@@ -32,6 +32,7 @@ struct OrganizationCompleteView: View {
     @State private var undoState: UndoPresentationState = .idle
     @State private var undoRestoredCount = 0
     @State private var undoSkippedCount = 0
+    @State private var lastUndoneEntry: OrganizationHistoryEntry?
     
     @State private var displayedFiles = 0
     @State private var displayedFolders = 0
@@ -41,6 +42,7 @@ struct OrganizationCompleteView: View {
         case idle
         case undoing
         case completed
+        case redoing
         case failed
 
         var isUndoing: Bool {
@@ -48,6 +50,17 @@ struct OrganizationCompleteView: View {
                 return true
             }
             return false
+        }
+
+        var isRedoing: Bool {
+            if case .redoing = self {
+                return true
+            }
+            return false
+        }
+
+        var isBusy: Bool {
+            isUndoing || isRedoing
         }
     }
     
@@ -207,30 +220,56 @@ struct OrganizationCompleteView: View {
                         }
                         .help(mode == .renameOnly ? "Open the folder containing renamed files" : "Open the organized folder in Finder")
                         .accessibilityHint(mode == .renameOnly ? "Shows your renamed files in Finder" : "Shows your organized files in Finder")
-                        .disabled(undoState.isUndoing || undoState == .completed)
+                        .disabled(undoState.isBusy)
 
                         HStack(spacing: 12) {
-                            Button {
-                                HapticFeedbackManager.shared.tap()
-                                undoLastOrganization()
-                            } label: {
-                                if undoState.isUndoing {
-                                    Label("Undoing...", systemImage: "arrow.triangle.2.circlepath")
-                                        .frame(maxWidth: .infinity)
-                                } else {
-                                    Label("Undo", systemImage: "arrow.uturn.backward")
-                                        .frame(maxWidth: .infinity)
+                            if undoState == .completed || undoState.isRedoing {
+                                Button {
+                                    HapticFeedbackManager.shared.tap()
+                                    redoLastOrganization()
+                                } label: {
+                                    if undoState.isRedoing {
+                                        Label("Redoing...", systemImage: "arrow.triangle.2.circlepath")
+                                            .frame(maxWidth: .infinity)
+                                    } else {
+                                        Label("Redo", systemImage: "arrow.uturn.forward")
+                                            .frame(maxWidth: .infinity)
+                                    }
                                 }
-                            }
-                            .buttonStyle(.sortySecondary(size: .regular))
-                            .onHover { hovering in
-                                if hovering {
-                                    HapticFeedbackManager.shared.selection()
+                                .buttonStyle(.sortyBordered(intent: .primary, size: .regular))
+                                .onHover { hovering in
+                                    if hovering {
+                                        HapticFeedbackManager.shared.selection()
+                                    }
                                 }
+                                .help("Reapply the organization you just undid")
+                                .accessibilityHint("Reapplies the most recent organization plan")
+                                .disabled(undoState.isRedoing || lastUndoneEntry == nil)
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            } else {
+                                Button {
+                                    HapticFeedbackManager.shared.tap()
+                                    undoLastOrganization()
+                                } label: {
+                                    if undoState.isUndoing {
+                                        Label("Undoing...", systemImage: "arrow.triangle.2.circlepath")
+                                            .frame(maxWidth: .infinity)
+                                    } else {
+                                        Label("Undo", systemImage: "arrow.uturn.backward")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                }
+                                .buttonStyle(.sortyBordered(size: .regular))
+                                .onHover { hovering in
+                                    if hovering {
+                                        HapticFeedbackManager.shared.selection()
+                                    }
+                                }
+                                .help("Undo the latest organization for this folder")
+                                .accessibilityHint("Restores files from the most recent successful run")
+                                .disabled(undoState != .idle)
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
                             }
-                            .help("Undo the latest organization for this folder")
-                            .accessibilityHint("Restores files from the most recent successful run")
-                            .disabled(undoState != .idle)
 
                             Button {
                                 HapticFeedbackManager.shared.tap()
@@ -239,7 +278,7 @@ struct OrganizationCompleteView: View {
                                 Label("Organise Another", systemImage: "arrow.counterclockwise")
                                     .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.sortySecondary(size: .regular))
+                            .buttonStyle(.sortyBordered(size: .regular))
                             .onHover { hovering in
                                 if hovering {
                                     HapticFeedbackManager.shared.selection()
@@ -247,7 +286,7 @@ struct OrganizationCompleteView: View {
                             }
                             .help("Return to the folder picker to organise another folder")
                             .accessibilityHint("Returns to the folder picker to organise another folder")
-                            .disabled(undoState.isUndoing || undoState == .completed)
+                            .disabled(undoState.isBusy)
                         }
                     }
                     .frame(maxWidth: 560)
@@ -337,6 +376,7 @@ struct OrganizationCompleteView: View {
         .onDisappear {
             countUpTask?.cancel()
             countUpTask = nil
+            organizer.pinsCompletionView = false
         }
     }
 
@@ -348,6 +388,8 @@ struct OrganizationCompleteView: View {
             return "arrow.uturn.backward"
         case .completed:
             return "arrow.uturn.backward.circle.fill"
+        case .redoing:
+            return "arrow.uturn.forward"
         case .failed:
             return "exclamationmark"
         }
@@ -361,6 +403,8 @@ struct OrganizationCompleteView: View {
             return .blue
         case .completed:
             return .mint
+        case .redoing:
+            return .blue
         case .failed:
             return .red
         }
@@ -374,6 +418,8 @@ struct OrganizationCompleteView: View {
             return "Undoing Changes"
         case .completed:
             return "Undo Complete"
+        case .redoing:
+            return "Redoing Changes"
         case .failed:
             return "Undo Failed"
         }
@@ -387,11 +433,13 @@ struct OrganizationCompleteView: View {
             return "Restoring files to their previous locations..."
         case .completed:
             if undoSkippedCount > 0 {
-                return "\(undoRestoredCount) restored, \(undoSkippedCount) skipped. Returning to the start screen."
+                return "\(undoRestoredCount) restored, \(undoSkippedCount) skipped. Redo to reapply this organization."
             }
-            return "\(undoRestoredCount) restored. Returning to the start screen."
+            return "\(undoRestoredCount) restored. Redo to reapply this organization."
+        case .redoing:
+            return "Reapplying the organization plan..."
         case .failed:
-            return "Sorty could not restore this run. Please review history for details."
+            return "Sorty could not complete that action. Please review history for details."
         }
     }
     
@@ -429,6 +477,8 @@ struct OrganizationCompleteView: View {
     private func undoLastOrganization() {
         guard undoState == .idle else { return }
         guard let lastEntry = organizer.history.entries.first(where: { $0.directoryPath == directoryURL.path && $0.success && !$0.isUndone }) else { return }
+        lastUndoneEntry = lastEntry
+        organizer.pinsCompletionView = true
 
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
             undoState = .undoing
@@ -439,19 +489,13 @@ struct OrganizationCompleteView: View {
             do {
                 let result = try await organizer.undoHistoryEntry(lastEntry)
                 await MainActor.run {
-                    undoRestoredCount = result.successfulOperations
+                    undoRestoredCount = restoredDisplayCount(for: lastEntry, result: result)
                     undoSkippedCount = result.missingFiles.count
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                         undoState = .completed
                         ringExpanded = false
                     }
                     HapticFeedbackManager.shared.success()
-                }
-
-                try? await Task.sleep(for: .milliseconds(950))
-
-                await MainActor.run {
-                    returnToStart()
                 }
             } catch {
                 await MainActor.run {
@@ -468,12 +512,74 @@ struct OrganizationCompleteView: View {
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
                         undoState = .idle
                     }
+                    lastUndoneEntry = nil
+                }
+            }
+        }
+    }
+
+    private func restoredDisplayCount(
+        for entry: OrganizationHistoryEntry,
+        result: FileSystemManager.RestoreResult
+    ) -> Int {
+        guard result.successfulOperations == 0, result.missingFiles.isEmpty else {
+            return result.successfulOperations
+        }
+
+        let fileOperationCount = entry.operations?.filter { operation in
+            operation.type == .moveFile || operation.type == .renameFile || operation.type == .copyFile
+        }.count ?? 0
+
+        return max(fileOperationCount, entry.filesOrganized)
+    }
+
+    private func redoLastOrganization() {
+        guard undoState == .completed else { return }
+        guard let entry = lastUndoneEntry else { return }
+        organizer.pinsCompletionView = true
+
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+            undoState = .redoing
+        }
+
+        Task {
+            do {
+                try await organizer.redoOrganization(from: entry)
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                        undoState = .idle
+                        ringExpanded = true
+                    }
+                    lastUndoneEntry = nil
+                    undoRestoredCount = 0
+                    undoSkippedCount = 0
+                    HapticFeedbackManager.shared.success()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        showParticles = true
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+                        undoState = .failed
+                    }
+                    HapticFeedbackManager.shared.error()
+                }
+                print("Failed to redo organization: \(error)")
+
+                try? await Task.sleep(for: .seconds(2))
+
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+                        undoState = .completed
+                    }
                 }
             }
         }
     }
 
     private func returnToStart() {
+        organizer.pinsCompletionView = false
         if let onReturnToStart {
             onReturnToStart()
         } else {
@@ -653,17 +759,16 @@ private struct CompletionFeatureSuggestionCard: View {
                     .lineLimit(1)
                     .font(.subheadline.weight(.semibold))
             }
-                .buttonStyle(.sortyProminent)
-                .controlSize(.small)
+                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(2)
                 .help("Open storage location settings")
         }
-        .padding(14)
-        .background(CompletionLiquidGlassBackground(cornerRadius: 14))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(16)
+        .systemLiquidGlassBackground(cornerRadius: 16)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(
                     LinearGradient(
                         colors: [Color.white.opacity(0.28), Color.white.opacity(0.08)],
@@ -678,32 +783,5 @@ private struct CompletionFeatureSuggestionCard: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title). \(description)")
         .accessibilityHint("Use this suggestion to configure destinations for future runs")
-    }
-}
-
-private struct CompletionLiquidGlassBackground: View {
-    let cornerRadius: CGFloat
-    @Environment(\.colorScheme) private var colorScheme
-    
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(
-                    Color(NSColor.controlBackgroundColor)
-                        .opacity(colorScheme == .dark ? 0.86 : 0.94)
-                )
-            
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.12 : 0.45),
-                            Color.white.opacity(0.02)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        }
     }
 }

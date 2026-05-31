@@ -5,8 +5,8 @@
 //  Consolidated Help & Support section within Settings
 //
 
-import SwiftUI
 import AppKit
+import SwiftUI
 
 struct HelpSettingsView: View {
     @EnvironmentObject var appState: AppState
@@ -102,13 +102,11 @@ struct HelpSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    ForEach(Array(deeplinkEntries.enumerated()), id: \.element.id) { index, entry in
-                        DeeplinkEntryRow(entry: entry) { value in
-                            copyDeeplink(value)
-                        }
-
-                        if index < deeplinkEntries.count - 1 {
-                            Divider()
+                    LazyVGrid(columns: deeplinkColumns, alignment: .leading, spacing: 10) {
+                        ForEach(deeplinkEntries) { entry in
+                            DeeplinkEntryRow(entry: entry) { value in
+                                copyDeeplink(value)
+                            }
                         }
                     }
 
@@ -130,6 +128,12 @@ struct HelpSettingsView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(value, forType: .string)
         HapticFeedbackManager.shared.selection()
+    }
+
+    private var deeplinkColumns: [GridItem] {
+        [
+            GridItem(.adaptive(minimum: 210, maximum: 280), spacing: 10, alignment: .top)
+        ]
     }
 }
 
@@ -200,26 +204,53 @@ private struct DeeplinkEntryRow: View {
     let entry: DeeplinkEntry
     let onCopy: (String) -> Void
 
+    @State private var isHovered = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 Text(entry.title)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
                 Spacer()
-                Button("Copy") {
+                Button {
                     onCopy(entry.url)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.caption.weight(.semibold))
                 }
-                .buttonStyle(.sortySecondary(size: .small))
+                .buttonStyle(.plain)
+                .foregroundStyle(isHovered ? Color.accentColor : .secondary)
+                .help("Copy \(entry.title) deeplink")
+                .accessibilityLabel("Copy \(entry.title) deeplink")
             }
 
             Text(entry.url)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(Color.accentColor)
+                .lineLimit(2)
                 .textSelection(.enabled)
 
             Text(entry.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(3)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.primary.opacity(isHovered ? 0.055 : 0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(isHovered ? 0.12 : 0.07), lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
         }
     }
 }

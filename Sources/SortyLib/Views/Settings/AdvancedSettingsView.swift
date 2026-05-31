@@ -13,6 +13,7 @@ struct AdvancedSettingsView: View {
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @AppStorage("privacyModeEnabled") private var privacyModeEnabled = true
     @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
+    @AppStorage("experimentalStreamingInsightsEnabled") private var experimentalStreamingInsightsEnabled = false
     
     var body: some View {
         VStack(spacing: 16) {
@@ -64,14 +65,16 @@ struct AdvancedSettingsView: View {
             }
             .animatedAppearance(delay: 0.04)
             
-            SettingsCard(title: "Streaming", icon: "waveform", color: .purple) {
-                SettingsToggle(
-                    isOn: $viewModel.config.enableStreaming,
-                    title: "Enable Streaming",
-                    description: "Stream AI responses for faster feedback"
-                )
+            if experimentalStreamingInsightsEnabled {
+                SettingsCard(title: "Streaming", icon: "waveform", color: .purple) {
+                    SettingsToggle(
+                        isOn: $viewModel.config.enableStreaming,
+                        title: "Enable Streaming",
+                        description: "Stream AI responses for faster feedback"
+                    )
+                }
+                .animatedAppearance(delay: 0.05)
             }
-            .animatedAppearance(delay: 0.05)
             
             SettingsCard(title: "Timeouts", icon: "clock", color: .orange) {
                 VStack(spacing: 16) {

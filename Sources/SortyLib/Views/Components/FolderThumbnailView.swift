@@ -6,6 +6,7 @@
 //  Shows Finder-style folder previews with content thumbnails.
 //
 
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -27,31 +28,15 @@ public struct FolderThumbnailView: View {
     }
     
     public var body: some View {
-        ZStack {
-            if let thumbnail = thumbnail {
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
-            } else if isLoading {
-                // Show Finder folder icon while loading
-                Image(nsImage: Self.systemFolderIcon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                // Fallback folder icon
-                Image(nsImage: Self.systemFolderIcon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            }
-        }
+        AppKitImageView(
+            image: thumbnail ?? Self.systemFolderIcon,
+            size: size
+        )
         .frame(width: size.width, height: size.height)
         .task(id: url) {
             isLoading = true
             thumbnail = await FolderThumbnailProvider.shared.thumbnail(for: url, size: size)
-            withAnimation(.easeOut(duration: 0.2)) {
-                isLoading = false
-            }
+            isLoading = false
         }
     }
 }
@@ -77,20 +62,11 @@ public struct CompactFolderThumbnail: View {
     }
     
     public var body: some View {
-        Group {
-            if let thumbnail = thumbnail {
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: size, height: size)
-            } else {
-                // Optimized: Avoid synchronous disk I/O in view body
-                Image(nsImage: Self.systemFolderIcon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: size, height: size)
-            }
-        }
+        AppKitImageView(
+            image: thumbnail ?? Self.systemFolderIcon,
+            size: CGSize(width: size, height: size)
+        )
+        .frame(width: size, height: size)
         .task(id: url) {
             guard let url = url else { return }
             thumbnail = await FolderThumbnailProvider.shared.thumbnail(

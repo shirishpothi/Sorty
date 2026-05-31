@@ -39,6 +39,14 @@ struct ExperimentalSettingsView: View {
                 enableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true",
                 disableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false"
             ),
+            ExperimentalFlag(
+                name: "Streaming AI Insights",
+                description: "Adds the streaming response controls and live insight panel back into the analysis flow.",
+                defaultsKey: "experimentalStreamingInsightsEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app experimentalStreamingInsightsEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app experimentalStreamingInsightsEnabled -bool false"
+            ),
         ]
     }
 }
@@ -111,17 +119,6 @@ struct ExperimentalFlagRow: View {
                     )
                 )
                 .toggleStyle(.switch)
-
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(isEnabled ? Color.green : Color.orange)
-                        .frame(width: 8, height: 8)
-                    Text(isEnabled ? "Enabled" : "Disabled")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(isEnabled ? .green : .orange)
-                }
-
                 let command = isEnabled ? flag.disableCommand : flag.enableCommand
                 HStack(spacing: 8) {
                     Text(command)

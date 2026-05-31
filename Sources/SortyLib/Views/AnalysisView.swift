@@ -170,7 +170,8 @@ struct AnalysisView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var learningsManager: LearningsManager
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = true
+    @AppStorage("analysis.liveInsightsEnabled") private var liveInsightsEnabled = false
+    @AppStorage("experimentalStreamingInsightsEnabled") private var experimentalStreamingInsightsEnabled = false
     @AppStorage("analysis.hideTakingLongerHUD") private var hideTakingLongerHUD = false
     @StateObject private var refreshManager = AnalysisRefreshManager()
     @State private var hasAppeared = false
@@ -262,7 +263,7 @@ struct AnalysisView: View {
                                     removal: .opacity
                                 )
                             )
-                    } else if organizer.isStreaming {
+                    } else if experimentalStreamingInsightsEnabled && organizer.isStreaming {
                         aiInsightsView
                             .transition(
                                 .asymmetric(
@@ -284,7 +285,11 @@ struct AnalysisView: View {
             withAnimation {
                 hasAppeared = true
             }
-            organizer.setLiveInsightsEnabled(liveInsightsEnabled)
+            if !experimentalStreamingInsightsEnabled {
+                settingsViewModel.config.enableStreaming = false
+                liveInsightsEnabled = false
+            }
+            organizer.setLiveInsightsEnabled(experimentalStreamingInsightsEnabled && liveInsightsEnabled)
             refreshManager.start(organizer: organizer)
             refreshStreamDerivedState()
         }
@@ -292,7 +297,14 @@ struct AnalysisView: View {
             refreshManager.stop()
         }
         .onChange(of: liveInsightsEnabled) { _, enabled in
-            organizer.setLiveInsightsEnabled(enabled)
+            organizer.setLiveInsightsEnabled(experimentalStreamingInsightsEnabled && enabled)
+        }
+        .onChange(of: experimentalStreamingInsightsEnabled) { _, enabled in
+            if !enabled {
+                settingsViewModel.config.enableStreaming = false
+                liveInsightsEnabled = false
+            }
+            organizer.setLiveInsightsEnabled(enabled && liveInsightsEnabled)
         }
         .onChange(of: organizer.insightHistory.count) { _, newCount in
             lastInsightCount = newCount
@@ -328,6 +340,7 @@ struct AnalysisView: View {
             currentModel: settingsViewModel.config.model,
             contextMessage: "Sorty will stop the current attempt and restart analysis from the beginning. The model you choose becomes your active model for future runs.",
             selectionActionTitle: "Restart Analysis",
+            isSelectionActionProminent: false,
             onSelect: { provider, model in
                 handleFasterModelSelection(provider: provider, model: model)
             }
@@ -1239,11 +1252,12 @@ private struct RenameFileIcon: View {
                     FileThumbnailView(url: url, size: CGSize(width: 22, height: 22))
                 }
             } else {
-                Image(nsImage: AnalysisIconProvider.icon(for: .data))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 22, height: 22)
-                    .opacity(0.72)
+                AppKitImageView(
+                    image: AnalysisIconProvider.icon(for: .data),
+                    size: CGSize(width: 22, height: 22),
+                    opacity: 0.72
+                )
+                .frame(width: 22, height: 22)
             }
 
             Image(systemName: isUnchanged ? "equal.circle.fill" : "checkmark.circle.fill")
@@ -1636,9 +1650,7 @@ private struct InsightHistorySection: View {
                 HStack(spacing: 8) {
                     if isStreaming {
                         if let nsImage = SortyResources.image(named: "SortyMascot") {
-                            Image(nsImage: nsImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
+                            AppKitImageView(image: nsImage, size: CGSize(width: 18, height: 18))
                                 .frame(width: 18, height: 18)
                         } else {
                             Image(systemName: "sparkles")
@@ -2079,35 +2091,40 @@ private struct InsightHistorySection: View {
             }
         } else if let category = insight?.category ?? fallbackCategory {
             if category == .folder {
-                Image(nsImage: AnalysisIconProvider.icon(for: .folder))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 20, height: 20)
+                AppKitImageView(
+                    image: AnalysisIconProvider.icon(for: .folder),
+                    size: CGSize(width: 20, height: 20)
+                )
+                .frame(width: 20, height: 20)
             } else if category == .file {
                 if let ext = mentionedFileExtension(in: fallbackText), !ext.isEmpty {
-                    Image(nsImage: AnalysisIconProvider.icon(forFileExtension: ext))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
+                    AppKitImageView(
+                        image: AnalysisIconProvider.icon(forFileExtension: ext),
+                        size: CGSize(width: 20, height: 20)
+                    )
+                    .frame(width: 20, height: 20)
                 } else {
-                    Image(nsImage: AnalysisIconProvider.icon(for: .data))
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 20, height: 20)
+                    AppKitImageView(
+                        image: AnalysisIconProvider.icon(for: .data),
+                        size: CGSize(width: 20, height: 20)
+                    )
+                    .frame(width: 20, height: 20)
                 }
             } else {
                 categoryIndicator(for: category)
             }
         } else if let ext = mentionedFileExtension(in: fallbackText), !ext.isEmpty {
-            Image(nsImage: AnalysisIconProvider.icon(forFileExtension: ext))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 20, height: 20)
+            AppKitImageView(
+                image: AnalysisIconProvider.icon(forFileExtension: ext),
+                size: CGSize(width: 20, height: 20)
+            )
+            .frame(width: 20, height: 20)
         } else if mentionsFolderContext(in: fallbackText) {
-            Image(nsImage: AnalysisIconProvider.icon(for: .folder))
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 20, height: 20)
+            AppKitImageView(
+                image: AnalysisIconProvider.icon(for: .folder),
+                size: CGSize(width: 20, height: 20)
+            )
+            .frame(width: 20, height: 20)
         } else {
             categoryIndicator(for: .general)
         }
@@ -2471,9 +2488,7 @@ struct InsightPill: View {
     var body: some View {
         HStack(spacing: 6) {
             if let finderIcon = resolvedFinderIcon {
-                Image(nsImage: finderIcon)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                AppKitImageView(image: finderIcon, size: CGSize(width: 14, height: 14))
                     .frame(width: 14, height: 14)
             } else {
                 Circle()

@@ -441,11 +441,10 @@ struct OrganizingMascotView: View {
                     .blur(radius: 1.5)
             }
             
-            Group {
-                Image(nsImage: orbitIconImage(for: url))
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            }
+            AppKitImageView(
+                image: orbitIconImage(for: url),
+                size: CGSize(width: iconSize, height: iconSize)
+            )
             .frame(width: iconSize, height: iconSize)
             .shadow(color: Color.cyan.opacity(isOrganizing ? 0.6 : 0.25), radius: isOrganizing ? 5 : 2)
             .opacity(opacity)

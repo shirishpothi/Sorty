@@ -1521,6 +1521,9 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         let personaPrompt = personaManager?.getEffectivePrompt(customStore: customPersonaStore ?? CustomPersonaStore())
 
         var instructions = customPrompt ?? customInstructions
+        if let referenceContext = fileReferenceContext(from: instructions, in: directory) {
+            instructions += "\n\n" + referenceContext
+        }
         if !duplicateContext.isEmpty {
             instructions += duplicateContext
         }
@@ -1706,6 +1709,67 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         Attached image order:
         \(fileList)
         """
+    }
+
+    private func fileReferenceContext(from instructions: String, in directory: URL) -> String? {
+        let referencedNames = referencedFileNames(in: instructions)
+        guard !referencedNames.isEmpty else { return nil }
+
+        let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: resourceKeys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return nil
+        }
+
+        var matches: [String] = []
+        for case let url as URL in enumerator {
+            guard let values = try? url.resourceValues(forKeys: Set(resourceKeys)),
+                  values.isRegularFile == true else { continue }
+
+            let relativePath = relativePath(for: url, baseDirectory: directory)
+            let name = url.lastPathComponent
+            guard referencedNames.contains(relativePath.localizedLowercase) || referencedNames.contains(name.localizedLowercase) else { continue }
+            let size = values.fileSize.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) } ?? "unknown size"
+            let modified = values.contentModificationDate.map { DateFormatter.localizedString(from: $0, dateStyle: .medium, timeStyle: .short) } ?? "unknown modified date"
+            matches.append("- @\(name): relative path \"\(relativePath)\", extension \"\(url.pathExtension)\", size \(size), modified \(modified)")
+        }
+
+        guard !matches.isEmpty else { return nil }
+
+        return """
+
+        REFERENCED SOURCE FILES
+        The user explicitly mentioned these files in their instructions. Treat these file references as important examples or constraints, and resolve @mentions to these exact source files:
+        \(matches.joined(separator: "\n"))
+        """
+    }
+
+    private func referencedFileNames(in instructions: String) -> Set<String> {
+        let pattern = #"@(?:"([^"]+)"|([^\s,;()\[\]{}]+))"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        let nsRange = NSRange(instructions.startIndex..<instructions.endIndex, in: instructions)
+        return Set(regex.matches(in: instructions, range: nsRange).compactMap { match in
+            let quotedRange = match.range(at: 1)
+            let bareRange = match.range(at: 2)
+            let selectedRange = quotedRange.location != NSNotFound ? quotedRange : bareRange
+            guard let range = Range(selectedRange, in: instructions) else { return nil }
+
+            let token = String(instructions[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return token.isEmpty ? nil : token.localizedLowercase
+        })
+    }
+
+    private func relativePath(for url: URL, baseDirectory: URL) -> String {
+        let basePath = baseDirectory.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        if path.hasPrefix(basePath + "/") {
+            return String(path.dropFirst(basePath.count + 1))
+        }
+        return url.lastPathComponent
     }
 
     private func validationPhase(

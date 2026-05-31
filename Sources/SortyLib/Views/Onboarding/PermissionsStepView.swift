@@ -67,7 +67,13 @@ public struct PermissionsStepView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 60)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .background(
+                LinearGradient(
+                    colors: [Color.black.opacity(0.10), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
 
             VStack(spacing: 20) {
                 Text("Required Permission")
@@ -317,9 +323,8 @@ struct PermissionRow: View {
     let state: PermissionState
     let onExplain: () -> Void
     let onRequest: (CGRect?) -> Void
-    @State private var approvalPulse = false
-    @State private var approvalSpin = false
-    @State private var approvalBurst = false
+    @State private var iconPop = false
+    @State private var successRingProgress: CGFloat = 0
 
     var body: some View {
         HStack(spacing: 16) {
@@ -374,86 +379,58 @@ struct PermissionRow: View {
             guard newState == .granted else { return }
             playApprovalAnimation()
         }
-        .onAppear {
-            if state == .granted {
-                approvalBurst = true
-            }
-        }
+    }
+
+    private var iconTint: Color {
+        state == .granted ? .green : type.color
     }
 
     private var permissionIcon: some View {
         ZStack {
+            // One-shot success ring that expands and fades when granted.
             Circle()
-                .fill(type.color.opacity(state == .granted ? 0.16 : 0.1))
+                .stroke(Color.green.opacity(0.6 * (1 - successRingProgress)), lineWidth: 2)
                 .frame(width: 44, height: 44)
-                .scaleEffect(approvalPulse ? 1.08 : 1)
+                .scaleEffect(0.85 + successRingProgress * 0.85)
+
+            Circle()
+                .fill(iconTint.opacity(0.14))
+                .frame(width: 44, height: 44)
 
             Image(systemName: type.icon)
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(type.color)
-                .scaleEffect(approvalPulse ? 1.08 : 1)
-                .rotationEffect(iconRotation)
-                .symbolEffect(.bounce, value: approvalPulse)
-
-            if state == .granted {
-                Circle()
-                    .stroke(type.color.opacity(0.28), lineWidth: 1)
-                    .frame(width: 52, height: 52)
-                    .scaleEffect(approvalPulse ? 1.12 : 0.86)
-                    .opacity(approvalPulse ? 0 : 1)
-
-                Image(systemName: "sparkle")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(type.color)
-                    .offset(x: 17, y: -18)
-                    .scaleEffect(approvalBurst ? 1 : 0.2)
-                    .opacity(approvalBurst ? 0.95 : 0)
-            }
+                .foregroundStyle(iconTint)
+                .symbolEffect(.bounce, value: iconPop)
         }
+        .scaleEffect(iconPop ? 1.12 : 1)
         .frame(width: 52, height: 52)
-        .animation(.spring(response: 0.28, dampingFraction: 0.62), value: approvalPulse)
-        .animation(.easeInOut(duration: 0.42), value: approvalSpin)
-        .animation(.spring(response: 0.24, dampingFraction: 0.72), value: approvalBurst)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: iconPop)
+        .animation(.easeInOut(duration: 0.25), value: state)
     }
 
     private var grantedCheckmark: some View {
         Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: 24, weight: .semibold))
+            .font(.system(size: 22, weight: .semibold))
             .foregroundStyle(.green)
-            .scaleEffect(approvalPulse ? 1.16 : 1)
-            .symbolEffect(.bounce, value: approvalPulse)
-            .transition(.scale(scale: 0.7).combined(with: .opacity))
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
             .accessibilityLabel("Granted")
     }
 
-    private var iconRotation: Angle {
-        switch type {
-        case .filesAndFolders:
-            return .degrees(approvalPulse ? 7 : 0)
-        case .notifications:
-            return .degrees(approvalPulse ? -12 : 0)
-        case .automation:
-            return .degrees(approvalSpin ? 32 : 0)
-        case .fullDiskAccess:
-            return .degrees(approvalPulse ? -5 : 0)
-        }
-    }
-
     private func playApprovalAnimation() {
-        approvalSpin.toggle()
-        approvalBurst = false
-        withAnimation(.spring(response: 0.22, dampingFraction: 0.48)) {
-            approvalPulse = true
-            approvalBurst = true
+        HapticFeedbackManager.shared.success()
+
+        successRingProgress = 0
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.55)) {
+            iconPop = true
         }
+        withAnimation(.easeOut(duration: 0.6)) {
+            successRingProgress = 1
+        }
+
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 180_000_000)
-            withAnimation(.spring(response: 0.26, dampingFraction: 0.66)) {
-                approvalPulse = false
-            }
-            try? await Task.sleep(nanoseconds: 260_000_000)
-            withAnimation(.easeOut(duration: 0.18)) {
-                approvalBurst = false
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) {
+                iconPop = false
             }
         }
     }

@@ -137,6 +137,7 @@ public struct WhatsNewTourView: View {
                 description: "The organize and rename flows now share cleaner controls, calmer spacing, and the new mid-generation surface."
             ),
             WhatsNewPage(
+                imageName: "whats-new-finder-integration.png",
                 title: "Finder Integration is core",
                 description: "Organize from Finder's right-click menu, add watched folders quickly, and repair the extension from Settings."
             ),

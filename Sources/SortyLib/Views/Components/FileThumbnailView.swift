@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -22,27 +23,13 @@ public struct FileThumbnailView: View {
     }
 
     public var body: some View {
-        ZStack {
-            if let thumbnail = thumbnail {
-                Image(nsImage: thumbnail)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-
-            } else if isLoading {
-                // Subtle loading state - use system icon as placeholder
-                Image(nsImage: placeholder)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .opacity(0.6)
-            } else {
-                // Fallback icon
-                Image(nsImage: placeholder)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            }
-        }
+        AppKitImageView(
+            image: thumbnail ?? placeholder,
+            size: size,
+            cornerRadius: 3,
+            opacity: thumbnail == nil && isLoading ? 0.6 : 1
+        )
         .frame(width: size.width, height: size.height)
-        .clipShape(RoundedRectangle(cornerRadius: 3))
         .task(id: "\(url.path)|\(Int(size.width.rounded()))x\(Int(size.height.rounded()))") {
             let currentURL = url
             isLoading = true

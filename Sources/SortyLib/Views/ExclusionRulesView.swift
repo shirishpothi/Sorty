@@ -504,9 +504,7 @@ struct RuleExamplePill: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 if useSystemFolderIcon {
-                    Image(nsImage: Self.folderIcon)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+                    AppKitImageView(image: Self.folderIcon, size: CGSize(width: 12, height: 12))
                         .frame(width: 12, height: 12)
                 } else {
                     Image(systemName: icon)
@@ -710,11 +708,12 @@ struct ExclusionRuleRow: View {
     @ViewBuilder
     private var ruleIcon: some View {
         if rule.type == .folderName {
-            Image(nsImage: Self.systemFolderIcon)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 16, height: 16)
-                .opacity(rule.isEnabled ? 1.0 : 0.5)
+            AppKitImageView(
+                image: Self.systemFolderIcon,
+                size: CGSize(width: 16, height: 16),
+                opacity: rule.isEnabled ? 1.0 : 0.5
+            )
+            .frame(width: 16, height: 16)
         } else {
             Image(systemName: iconForType(rule.type))
                 .font(.system(size: 14))

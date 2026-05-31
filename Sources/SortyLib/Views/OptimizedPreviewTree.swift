@@ -1134,11 +1134,12 @@ struct FlatFolderRowView: View {
     }
 
     private func finderIcon(for path: String) -> some View {
-        Image(nsImage: NSWorkspace.shared.icon(forFile: path))
-            .resizable()
-            .interpolation(.high)
-            .frame(width: 12, height: 12)
-            .clipShape(RoundedRectangle(cornerRadius: 2))
+        AppKitImageView(
+            image: NSWorkspace.shared.icon(forFile: path),
+            size: CGSize(width: 12, height: 12),
+            cornerRadius: 2
+        )
+        .frame(width: 12, height: 12)
     }
 
     private func revealStorageLocationInFinder() {

@@ -77,7 +77,13 @@ public struct ProviderSelectionStepView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 60)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .background(
+                LinearGradient(
+                    colors: [Color.black.opacity(0.10), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
             
             // Right side - provider selection and configuration
             ScrollView {
@@ -1093,60 +1099,83 @@ struct OnboardingProviderRow: View {
     let provider: AIProvider
     let isSelected: Bool
     let action: () -> Void
-    
+
+    @State private var isHovering = false
+
+    private var subtitle: String? {
+        switch provider {
+        case .ollama: return "Local • No API key needed"
+        case .appleFoundationModel: return "On-device • Apple Intelligence"
+        default: return nil
+        }
+    }
+
+    private var subtitleColor: Color {
+        provider == .ollama ? .green : .blue
+    }
+
     var body: some View {
         Button(action: {
             if provider.isAvailable { action() }
         }) {
             HStack(spacing: 12) {
-                ProviderLogoView(provider: provider, size: 24)
-                
-                VStack(alignment: .leading, spacing: 2) {
+                ProviderLogoView(provider: provider, size: 22)
+
+                VStack(alignment: .leading, spacing: 1) {
                     Text(provider.displayName)
+                        .font(.system(size: 14))
                         .foregroundColor(provider.isAvailable ? .primary : .secondary)
                         .fontWeight(isSelected ? .semibold : .regular)
-                    
-                    if provider == .ollama {
-                        Text("Local • No API key needed")
+
+                    if let subtitle {
+                        Text(subtitle)
                             .font(.caption2)
-                            .foregroundStyle(.green)
-                    } else if provider == .appleFoundationModel {
-                        Text("On-device • Apple Intelligence")
-                            .font(.caption2)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(subtitleColor)
                     }
                 }
-                
+
                 Spacer()
-                
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.accentColor)
-                        .font(.system(size: 18))
-                } else {
-                    Image(systemName: "circle")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 18))
-                }
-                
+
                 if !provider.isAvailable {
                     Text("Unavailable")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(4)
+                        .padding(.vertical, 3)
+                        .background(Color.secondary.opacity(0.1), in: Capsule())
+                } else if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(SortyDesignSystem.Colors.resolvedAccent)
+                        .font(.system(size: 17))
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.vertical, 10)
+            .padding(.vertical, 9)
             .padding(.horizontal, 12)
-            .background(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.12)
+                            : (isHovering ? Color.primary.opacity(0.05) : Color.clear)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(
+                        isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.45) : Color.clear,
+                        lineWidth: 1
+                    )
+            )
             .contentShape(Rectangle())
-            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .opacity(provider.isAvailable ? 1.0 : 0.6)
+        .onHover { hovering in
+            if provider.isAvailable { isHovering = hovering }
+        }
+        .animation(.easeOut(duration: 0.15), value: isSelected)
+        .animation(.easeOut(duration: 0.15), value: isHovering)
         .accessibilityIdentifier("OnboardingProvider_\(provider.rawValue)")
     }
 }

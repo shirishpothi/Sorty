@@ -122,7 +122,6 @@ struct HistoryView: View {
                     )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.windowBackgroundColor))
                 .opacity(contentOpacity)
             } else {
                 // Header - matches DuplicatesView style
@@ -152,6 +151,7 @@ struct HistoryView: View {
                 .opacity(contentOpacity)
             }
         }
+        .emptyStateWorkflowGradient(isVisible: organizer.history.entries.isEmpty)
         .animation(.pageTransition, value: organizer.history.entries.isEmpty)
         .navigationTitle("History")
         .disabled(isProcessing)
@@ -271,6 +271,7 @@ struct HistoryView: View {
                 HistorySessionCard(
                     entry: entry,
                     isSelected: selectedEntry == entry,
+                    isProcessing: isProcessing,
                     isModelPickerAnchorActive: showRedoModelPicker && redoModelEntry?.id == entry.id,
                     onSelect: {
                         HapticFeedbackManager.shared.selection()
@@ -552,21 +553,21 @@ struct HistoryHeader: View {
         HStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.title2)
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.blue.gradient)
-                Text("Organization History")
-                    .font(.title2.bold())
+                Text("History")
+                    .font(.title3.bold())
                     .lineLimit(1)
                     .minimumScaleFactor(0.9)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Organization History")
+            .accessibilityLabel("History")
 
-            Text("\(manager.history.totalSessions) sessions recorded")
-                .font(.subheadline)
+            Text("\(manager.history.totalSessions) runs")
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .accessibilityLabel("\(manager.history.totalSessions) sessions recorded")
+                .accessibilityLabel("\(manager.history.totalSessions) runs recorded")
 
             Spacer()
         }
@@ -575,10 +576,10 @@ struct HistoryHeader: View {
     private var emptyStateTitleRow: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Organization History")
+                Text("History")
                     .font(.largeTitle.bold())
 
-                Text("Review organization sessions, undo changes, and revisit past results")
+                Text("Review past runs, undo changes, and reapply plans when needed")
                     .foregroundStyle(.secondary)
             }
 
@@ -591,7 +592,7 @@ struct HistoryHeader: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
 
-            TextField("Search folders...", text: $searchText)
+            TextField("Search folders", text: $searchText)
                 .textFieldStyle(.plain)
                 .accessibilityIdentifier("HistorySearchField")
 
@@ -647,7 +648,7 @@ struct HistoryHeader: View {
         Button {
             onClearHistory()
         } label: {
-            Label("Clear History", systemImage: "trash")
+            Label("Clear", systemImage: "trash")
         }
         .buttonStyle(.tintedPill(.red, size: .small))
         .controlSize(.small)
@@ -710,17 +711,17 @@ struct HistorySummaryCard: View {
     }
 
     private var gridColumns: [GridItem] {
-        [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        [GridItem(.adaptive(minimum: 132, maximum: 180), spacing: 10)]
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Impact Dashboard", systemImage: "chart.bar.xaxis.ascending")
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Impact", systemImage: "chart.bar.xaxis.ascending")
                 .font(.headline)
                 .foregroundStyle(.primary)
                 .accessibilityAddTraits(.isHeader)
 
-            LazyVGrid(columns: gridColumns, spacing: 8) {
+            LazyVGrid(columns: gridColumns, spacing: 10) {
                 HistoryStatItem(
                     title: "Files Organized",
                     value: filesOrganizedValue,
@@ -776,12 +777,11 @@ struct HistorySummaryCard: View {
                 .accessibilityLabel("Total AI costs: \(totalCostValue)")
             }
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .systemLiquidGlassBackground(cornerRadius: 18)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.white.opacity(0.15), lineWidth: 1)
         )
     }
@@ -796,24 +796,27 @@ private struct HistoryStatItem: View {
     @State private var isHovered = false
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.title3)
                 .foregroundStyle(color.gradient)
                 .accessibilityHidden(true)
 
             Text(value)
-                .font(.headline)
+                .font(.title3.weight(.bold))
+                .monospacedDigit()
                 .contentTransition(.numericText())
 
             Text(title)
-                .font(.caption2)
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
         }
-        .padding(8)
-        .frame(maxWidth: .infinity, minHeight: 70)
-        .background(Color.secondary.opacity(0.05))
-        .cornerRadius(10)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 88)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .scaleEffect(isHovered ? 1.03 : 1.0)
         .animation(.subtleBounce, value: isHovered)
         .onHover { hovering in
@@ -827,6 +830,7 @@ private struct HistoryStatItem: View {
 struct HistorySessionCard: View {
     let entry: OrganizationHistoryEntry
     let isSelected: Bool
+    let isProcessing: Bool
     let isModelPickerAnchorActive: Bool
     let onSelect: () -> Void
     let onUndo: () -> Void
@@ -839,6 +843,17 @@ struct HistorySessionCard: View {
     @State private var isHovered = false
     @State private var feedbackGiven: LearningsManager.SessionOutcome?
     @State private var showFeedbackConfirmation = false
+    @State private var actionState: HistoryActionState = .idle
+
+    private enum HistoryActionState: Equatable {
+        case idle
+        case undoing
+        case redoing
+
+        var isUndoing: Bool { self == .undoing }
+        var isRedoing: Bool { self == .redoing }
+        var isBusy: Bool { self != .idle }
+    }
 
     // MARK: - Operations Breakdown
 
@@ -1049,24 +1064,38 @@ struct HistorySessionCard: View {
                         } else if entry.success && entry.status != .duplicatesCleanup {
                             if entry.isUndone {
                                 Button {
-                                    onRedo()
+                                    beginRedo()
                                 } label: {
-                                    Label("Redo", systemImage: "arrow.clockwise")
+                                    if actionState.isRedoing {
+                                        Label("Redoing…", systemImage: "arrow.triangle.2.circlepath")
+                                    } else {
+                                        Label("Redo", systemImage: "arrow.uturn.forward")
+                                    }
                                 }
                                 .buttonStyle(.onboardingPill)
                                 .controlSize(.small)
                                 .accessibilityLabel("Redo organization")
                                 .accessibilityIdentifier("RedoButton-\(entry.id.uuidString)")
+                                .contentTransition(.symbolEffect(.replace))
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                .disabled(isProcessing || actionState.isBusy)
                             } else {
                                 Button {
-                                    onUndo()
+                                    beginUndo()
                                 } label: {
-                                    Label("Undo", systemImage: "arrow.uturn.backward")
+                                    if actionState.isUndoing {
+                                        Label("Undoing…", systemImage: "arrow.triangle.2.circlepath")
+                                    } else {
+                                        Label("Undo", systemImage: "arrow.uturn.backward")
+                                    }
                                 }
                                 .buttonStyle(.sortyBordered)
                                 .controlSize(.small)
                                 .accessibilityLabel("Undo organization")
                                 .accessibilityIdentifier("UndoButton-\(entry.id.uuidString)")
+                                .contentTransition(.symbolEffect(.replace))
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                .disabled(isProcessing || actionState.isBusy)
                             }
 
                             // Try with different model button
@@ -1114,8 +1143,41 @@ struct HistorySessionCard: View {
         .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
         .scaleEffect(isHovered ? 1.01 : 1.0)
         .animation(.subtleBounce, value: isHovered)
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: actionState)
+        .onChange(of: isProcessing) { _, newValue in
+            guard !newValue else { return }
+            resetActionState()
+        }
+        .onChange(of: entry.isUndone) { _, _ in
+            resetActionState()
+        }
         .onHover { hovering in
             isHovered = hovering
+        }
+    }
+
+    private func beginUndo() {
+        guard !isProcessing, !actionState.isBusy else { return }
+        HapticFeedbackManager.shared.tap()
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+            actionState = .undoing
+        }
+        onUndo()
+    }
+
+    private func beginRedo() {
+        guard !isProcessing, !actionState.isBusy else { return }
+        HapticFeedbackManager.shared.tap()
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+            actionState = .redoing
+        }
+        onRedo()
+    }
+
+    private func resetActionState() {
+        guard actionState != .idle else { return }
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+            actionState = .idle
         }
     }
 }
@@ -1534,7 +1596,6 @@ struct HistoryEmptyStateView: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("No history yet. Organize a folder to start tracking your sessions.")
         .onAppear {

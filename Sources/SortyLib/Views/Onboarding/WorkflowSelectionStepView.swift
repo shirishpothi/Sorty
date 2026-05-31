@@ -63,7 +63,13 @@ public struct WorkflowSelectionStepView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 60)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .background(
+                LinearGradient(
+                    colors: [Color.black.opacity(0.10), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
             
             // Right side - persona selection
             ScrollView {
