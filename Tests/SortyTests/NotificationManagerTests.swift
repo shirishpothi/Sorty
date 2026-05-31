@@ -18,44 +18,18 @@ final class NotificationSettingsTests: XCTestCase {
         
         XCTAssertTrue(settings.inAppHUD, "In-app HUD should be enabled by default")
         XCTAssertTrue(settings.systemNotifications, "System notifications should be enabled by default")
-        XCTAssertEqual(settings.notificationBackend, .notifiCLI, "NotifiCLI should be default backend")
         XCTAssertTrue(settings.showActionButtons, "Action buttons should be enabled by default")
-        XCTAssertTrue(settings.persistentNotifications, "Persistent notifications should be enabled by default")
-        XCTAssertEqual(settings.notifiCLISound, "Glass", "Enhanced notifications should default to the Glass sound")
         XCTAssertTrue(settings.showPreviewReadyInForeground, "Preview-ready notifications should work in foreground by default")
         XCTAssertTrue(settings.batchSummary, "Batch summary notifications should be enabled by default")
         XCTAssertTrue(settings.alwaysShowCriticalErrors, "Critical errors should always notify by default")
         XCTAssertTrue(settings.systemNotificationSounds, "System notification sounds should be enabled by default")
     }
 
-    func testEnhancedNotificationDefaultsNormalizeHiddenSettings() {
-        var settings = NotificationSettings()
-        settings.notificationBackend = .native
-        settings.persistentNotifications = false
-        settings.showActionButtons = false
-        settings.notifiCLISound = ""
-        settings.showPreviewReadyInForeground = false
-        settings.batchSummary = false
-        settings.alwaysShowCriticalErrors = false
-        settings.systemNotificationSounds = false
-
-        settings.applyEnhancedNotificationDefaults()
-
-        XCTAssertEqual(settings.notificationBackend, .notifiCLI)
-        XCTAssertTrue(settings.persistentNotifications)
-        XCTAssertTrue(settings.showActionButtons)
-        XCTAssertEqual(settings.notifiCLISound, "Glass")
-        XCTAssertTrue(settings.showPreviewReadyInForeground)
-        XCTAssertTrue(settings.batchSummary)
-        XCTAssertTrue(settings.alwaysShowCriticalErrors)
-        XCTAssertTrue(settings.systemNotificationSounds)
-    }
     
     func testSettingsEncoding() throws {
         var settings = NotificationSettings()
         settings.inAppHUD = true
         settings.systemNotifications = false
-        settings.notificationBackend = .native
         settings.hudSounds = false
         settings.systemNotificationSounds = true
         
@@ -68,21 +42,13 @@ final class NotificationSettingsTests: XCTestCase {
         XCTAssertEqual(decoded, settings, "Decoded settings should match original")
     }
     
-    func testNotificationBackendCases() {
-        let backends = NotificationBackend.allCases
-        XCTAssertEqual(backends.count, 2, "Should have 2 notification backends")
-        XCTAssertTrue(backends.contains(.native))
-        XCTAssertTrue(backends.contains(.notifiCLI))
-    }
     
     func testNotificationBackendDisplayNames() {
         XCTAssertFalse(NotificationBackend.native.displayName.isEmpty)
-        XCTAssertFalse(NotificationBackend.notifiCLI.displayName.isEmpty)
     }
     
     func testNotificationBackendDescriptions() {
         XCTAssertFalse(NotificationBackend.native.description.isEmpty)
-        XCTAssertFalse(NotificationBackend.notifiCLI.description.isEmpty)
     }
 }
 
@@ -346,200 +312,10 @@ final class NotificationActionTests: XCTestCase {
     }
 }
 
-// MARK: - NotifiCLIResponse Tests
-
-final class NotifiCLIResponseTests: XCTestCase {
-    
-    func testResponseCases() {
-        // Test all response cases
-        let actionResponse = NotifiCLIResponse.action("Undo")
-        let replyResponse = NotifiCLIResponse.reply("Hello")
-        let defaultClickResponse = NotifiCLIResponse.defaultClick
-        let dismissedResponse = NotifiCLIResponse.dismissed
-        let timeoutResponse = NotifiCLIResponse.timeout
-        let errorResponse = NotifiCLIResponse.error("Test error")
-        
-        // Test isAction property
-        XCTAssertTrue(actionResponse.isAction)
-        XCTAssertFalse(replyResponse.isAction)
-        XCTAssertFalse(defaultClickResponse.isAction)
-        XCTAssertFalse(dismissedResponse.isAction)
-        XCTAssertFalse(timeoutResponse.isAction)
-        XCTAssertFalse(errorResponse.isAction)
-    }
-    
-    func testActionLabel() {
-        let actionResponse = NotifiCLIResponse.action("Undo")
-        let replyResponse = NotifiCLIResponse.reply("Hello")
-        
-        XCTAssertEqual(actionResponse.actionLabel, "Undo")
-        XCTAssertNil(replyResponse.actionLabel)
-    }
-    
-    func testEquatable() {
-        let action1 = NotifiCLIResponse.action("Undo")
-        let action2 = NotifiCLIResponse.action("Undo")
-        let action3 = NotifiCLIResponse.action("Retry")
-        
-        XCTAssertEqual(action1, action2)
-        XCTAssertNotEqual(action1, action3)
-        
-        XCTAssertEqual(NotifiCLIResponse.dismissed, NotifiCLIResponse.dismissed)
-        XCTAssertEqual(NotifiCLIResponse.timeout, NotifiCLIResponse.timeout)
-        XCTAssertEqual(NotifiCLIResponse.defaultClick, NotifiCLIResponse.defaultClick)
-    }
-}
-
-// MARK: - NotifiCLIService Process Parsing Tests
-
-final class NotifiCLIServiceProcessParsingTests: XCTestCase {
-
-    func testInterpretProcessResultTreatsInteractiveTimeoutAsTimeout() {
-        let config = NotifiCLIConfig(
-            title: "Test",
-            message: "Message",
-            actions: ["Undo", "Dismiss"],
-            persistent: true
-        )
-
-        let response = NotifiCLIService.interpretProcessResult(
-            terminationStatus: 1,
-            output: "",
-            errorOutput: "Timeout waiting for user interaction.",
-            config: config
-        )
-
-        XCTAssertEqual(response, .timeout)
-    }
-
-    func testInterpretProcessResultParsesExplicitTimeoutOutput() {
-        let config = NotifiCLIConfig(
-            title: "Test",
-            message: "Message",
-            actions: ["Undo", "Dismiss"]
-        )
-
-        let response = NotifiCLIService.interpretProcessResult(
-            terminationStatus: 0,
-            output: "timeout",
-            errorOutput: "",
-            config: config
-        )
-
-        XCTAssertEqual(response, .timeout)
-    }
-
-    func testInterpretProcessResultParsesActionOutputDespiteWarning() {
-        let config = NotifiCLIConfig(
-            title: "Test",
-            message: "Message",
-            actions: ["Undo", "Dismiss"]
-        )
-
-        let response = NotifiCLIService.interpretProcessResult(
-            terminationStatus: 1,
-            output: "Undo",
-            errorOutput: "Warning: temporary image cleanup failed",
-            config: config
-        )
-
-        XCTAssertEqual(response, .action("Undo"))
-    }
-
-    func testInterpretProcessResultReturnsErrorForHardFailures() {
-        let config = NotifiCLIConfig(title: "Test", message: "Message")
-
-        let response = NotifiCLIService.interpretProcessResult(
-            terminationStatus: 2,
-            output: "",
-            errorOutput: "Notification permission not granted.",
-            config: config
-        )
-
-        XCTAssertEqual(response, .error("Notification permission not granted."))
-    }
-}
-
-// MARK: - NotifiCLIConfig Tests
-
-final class NotifiCLIConfigTests: XCTestCase {
-    
-    func testBasicInit() {
-        let config = NotifiCLIConfig(title: "Test Title")
-        
-        XCTAssertEqual(config.title, "Test Title")
-        XCTAssertNil(config.subtitle)
-        XCTAssertNil(config.message)
-        XCTAssertNil(config.actions)
-        XCTAssertFalse(config.persistent)
-    }
-    
-    func testFullInit() {
-        let config = NotifiCLIConfig(
-            title: "Test",
-            subtitle: "Subtitle",
-            message: "Message",
-            actions: ["Action1", "Action2"],
-            image: "/path/to/image.png",
-            icon: "app.icon",
-            replyPlaceholder: "Type reply...",
-            url: "https://example.com",
-            sound: "Glass",
-            persistent: true
-        )
-        
-        XCTAssertEqual(config.title, "Test")
-        XCTAssertEqual(config.subtitle, "Subtitle")
-        XCTAssertEqual(config.message, "Message")
-        XCTAssertEqual(config.actions, ["Action1", "Action2"])
-        XCTAssertEqual(config.image, "/path/to/image.png")
-        XCTAssertEqual(config.icon, "app.icon")
-        XCTAssertEqual(config.replyPlaceholder, "Type reply...")
-        XCTAssertEqual(config.url, "https://example.com")
-        XCTAssertEqual(config.sound, "Glass")
-        XCTAssertTrue(config.persistent)
-    }
-}
-
-// MARK: - NotifiCLISound Tests
-
-final class NotifiCLISoundTests: XCTestCase {
-    
-    func testAllCases() {
-        let allSounds = NotifiCLISound.allCases
-        XCTAssertGreaterThan(allSounds.count, 0, "Should have at least one sound")
-        
-        // Verify some expected sounds exist
-        XCTAssertTrue(allSounds.contains(.glass))
-        XCTAssertTrue(allSounds.contains(.ping))
-        XCTAssertTrue(allSounds.contains(.pop))
-    }
-    
-    func testRawValues() {
-        XCTAssertEqual(NotifiCLISound.glass.rawValue, "Glass")
-        XCTAssertEqual(NotifiCLISound.ping.rawValue, "Ping")
-        XCTAssertEqual(NotifiCLISound.basso.rawValue, "Basso")
-    }
-}
-
 // MARK: - Additional NotificationSettings Tests
 
 final class ExtendedNotificationSettingsTests: XCTestCase {
     
-    func testNotifiCLISettings() {
-        var settings = NotificationSettings()
-        
-        // Test NotifiCLI-specific settings
-        settings.persistentNotifications = true
-        settings.showActionButtons = true
-        settings.notifiCLISound = "Ping"
-        settings.customNotificationIcon = "/path/to/icon"
-        
-        XCTAssertTrue(settings.persistentNotifications)
-        XCTAssertTrue(settings.showActionButtons)
-        XCTAssertEqual(settings.notifiCLISound, "Ping")
-        XCTAssertEqual(settings.customNotificationIcon, "/path/to/icon")
-    }
     
     func testNotificationTypesFlags() {
         var settings = NotificationSettings()
@@ -612,85 +388,6 @@ final class NotificationManagerNamesTests: XCTestCase {
     }
 }
 
-// MARK: - Extended NotifiCLIConfig Tests
-
-extension NotifiCLIConfigTests {
-    
-    func testConfigInitWithAllParameters() {
-        let config = NotifiCLIConfig(
-            title: "Title",
-            subtitle: "Subtitle",
-            message: "Message body",
-            actions: ["Undo", "Open Folder", "Dismiss"],
-            image: "/path/to/image.png",
-            icon: "com.app.icon",
-            replyPlaceholder: "Type here...",
-            url: "https://example.com",
-            sound: "Glass",
-            persistent: true
-        )
-        
-        XCTAssertEqual(config.title, "Title")
-        XCTAssertEqual(config.subtitle, "Subtitle")
-        XCTAssertEqual(config.message, "Message body")
-        XCTAssertEqual(config.actions, ["Undo", "Open Folder", "Dismiss"])
-        XCTAssertEqual(config.image, "/path/to/image.png")
-        XCTAssertEqual(config.icon, "com.app.icon")
-        XCTAssertEqual(config.replyPlaceholder, "Type here...")
-        XCTAssertEqual(config.url, "https://example.com")
-        XCTAssertEqual(config.sound, "Glass")
-        XCTAssertTrue(config.persistent)
-    }
-    
-    func testConfigActionsArray() {
-        let config = NotifiCLIConfig(
-            title: "Actions Test",
-            actions: ["Action1", "Action2", "Action3"]
-        )
-        
-        XCTAssertEqual(config.actions?.count, 3)
-        XCTAssertEqual(config.actions?[0], "Action1")
-        XCTAssertEqual(config.actions?[1], "Action2")
-        XCTAssertEqual(config.actions?[2], "Action3")
-    }
-}
-
-// MARK: - NotifiCLISetupStatus Tests
-
-final class NotifiCLISetupStatusTests: XCTestCase {
-    
-    func testSetupStatusCases() {
-        let notSetup = NotifiCLISetupStatus.notSetup
-        let building = NotifiCLISetupStatus.building
-        let ready = NotifiCLISetupStatus.ready
-        let failed = NotifiCLISetupStatus.failed("Build error")
-        
-        if case .notSetup = notSetup {
-            XCTAssertTrue(true)
-        } else {
-            XCTFail("Should be notSetup")
-        }
-        
-        if case .building = building {
-            XCTAssertTrue(true)
-        } else {
-            XCTFail("Should be building")
-        }
-        
-        if case .ready = ready {
-            XCTAssertTrue(true)
-        } else {
-            XCTFail("Should be ready")
-        }
-        
-        if case .failed(let message) = failed {
-            XCTAssertEqual(message, "Build error")
-        } else {
-            XCTFail("Should be failed with message")
-        }
-    }
-}
-
 // MARK: - Extended NotificationManager Tests
 
 @MainActor
@@ -710,10 +407,6 @@ final class NotificationManagerExtendedTests: XCTestCase {
         XCTAssertNotNil(manager.notificationPermissionStatus)
     }
     
-    func testNotifiCLISetupStatusProperty() {
-        let manager = NotificationManager.shared
-        XCTAssertNotNil(manager.notifiCLISetupStatus)
-    }
 }
 
 // MARK: - Extended BatchSummaryStats Tests
@@ -857,11 +550,7 @@ final class NotificationSettingsExtendedTests: XCTestCase {
         
         settings.inAppHUD = false
         settings.systemNotifications = false
-        settings.notificationBackend = .native
-        settings.persistentNotifications = false
         settings.showActionButtons = false
-        settings.notifiCLISound = "Ping"
-        settings.customNotificationIcon = "com.myapp.icon"
         settings.processingComplete = false
         settings.processingErrors = false
         settings.batchSummary = false
@@ -871,11 +560,7 @@ final class NotificationSettingsExtendedTests: XCTestCase {
         
         XCTAssertFalse(settings.inAppHUD)
         XCTAssertFalse(settings.systemNotifications)
-        XCTAssertEqual(settings.notificationBackend, .native)
-        XCTAssertFalse(settings.persistentNotifications)
         XCTAssertFalse(settings.showActionButtons)
-        XCTAssertEqual(settings.notifiCLISound, "Ping")
-        XCTAssertEqual(settings.customNotificationIcon, "com.myapp.icon")
         XCTAssertFalse(settings.processingComplete)
         XCTAssertFalse(settings.processingErrors)
         XCTAssertFalse(settings.batchSummary)
@@ -884,24 +569,6 @@ final class NotificationSettingsExtendedTests: XCTestCase {
         XCTAssertTrue(settings.hudSounds)
     }
     
-    func testSettingsEncodingDecoding() throws {
-        var settings = NotificationSettings()
-        settings.notificationBackend = .notifiCLI
-        settings.notifiCLISound = "Hero"
-        settings.customNotificationIcon = "test-icon"
-        settings.persistentNotifications = true
-        
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(settings)
-        
-        let decoder = JSONDecoder()
-        let decoded = try decoder.decode(NotificationSettings.self, from: data)
-        
-        XCTAssertEqual(decoded.notificationBackend, .notifiCLI)
-        XCTAssertEqual(decoded.notifiCLISound, "Hero")
-        XCTAssertEqual(decoded.customNotificationIcon, "test-icon")
-        XCTAssertTrue(decoded.persistentNotifications)
-    }
 }
 
 // MARK: - Notification Action Curation Tests

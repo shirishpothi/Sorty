@@ -8,23 +8,16 @@
 import Foundation
 import Combine
 
-/// Notification backend to use for system notifications
-public enum NotificationBackend: String, Codable, CaseIterable, Sendable {
-    case native = "native"       // UNUserNotificationCenter (macOS native)
-    case notifiCLI = "notificli" // NotifiCLI for actionable/persistent notifications
+/// Notification backend used for system notification analytics.
+public enum NotificationBackend: String, Codable, Sendable {
+    case native = "native"
     
     public var displayName: String {
-        switch self {
-        case .native: return "Native (macOS)"
-        case .notifiCLI: return "NotifiCLI (Enhanced)"
-        }
+        "Native (macOS)"
     }
     
     public var description: String {
-        switch self {
-        case .native: return "Standard macOS notifications via Notification Center"
-        case .notifiCLI: return "Actionable, persistent notifications with buttons"
-        }
+        "Standard macOS notifications via Notification Center"
     }
 }
 
@@ -38,22 +31,8 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
     /// Show in macOS Notification Center
     public var systemNotifications: Bool = true
     
-    /// Which backend to use for system notifications
-    public var notificationBackend: NotificationBackend = .notifiCLI
-    
-    // MARK: - NotifiCLI Settings
-    
-    /// Make notifications persistent (stay until dismissed)
-    public var persistentNotifications: Bool = true
-    
     /// Show action buttons on notifications (Undo, Open Folder, etc.)
     public var showActionButtons: Bool = true
-    
-    /// Sound to play with NotifiCLI notifications
-    public var notifiCLISound: String = "Glass"
-    
-    /// Custom app icon for notifications (app path or shorthand)
-    public var customNotificationIcon: String = ""
     
     // MARK: - Notification Types
     
@@ -91,17 +70,6 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
     
     public init() {}
 
-    public mutating func applyEnhancedNotificationDefaults() {
-        notificationBackend = .notifiCLI
-        persistentNotifications = true
-        showActionButtons = true
-        notifiCLISound = "Glass"
-        showPreviewReadyInForeground = true
-        batchSummary = true
-        alwaysShowCriticalErrors = true
-        systemNotificationSounds = true
-    }
-    
     @MainActor
     public static let `default` = NotificationSettings()
 }
@@ -133,8 +101,7 @@ public class NotificationSettingsManager: ObservableObject {
     
     private func load() {
         if let data = userDefaults.data(forKey: settingsKey),
-           var decoded = try? JSONDecoder().decode(NotificationSettings.self, from: data) {
-            decoded.applyEnhancedNotificationDefaults()
+           let decoded = try? JSONDecoder().decode(NotificationSettings.self, from: data) {
             settings = decoded
         }
     }

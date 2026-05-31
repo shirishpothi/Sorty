@@ -3,7 +3,7 @@
 //  Sorty
 //
 //  Unified notification manager for HUD and system notifications
-//  Supports both native macOS notifications and NotifiCLI for enhanced features
+//  Supports native macOS notifications and in-app HUD overlays.
 //
 
 import Foundation
@@ -407,13 +407,10 @@ public class NotificationManager: ObservableObject {
     @Published public var currentHUDNotification: HUDNotification?
     @Published public var hudNotificationQueue: [HUDNotification] = []
     @Published public var notificationPermissionStatus: UNAuthorizationStatus = .notDetermined
-    @Published public var isNotifiCLIAvailable: Bool = false
-    @Published public var notifiCLISetupStatus: String = "Initializing..."
     @Published public private(set) var analyticsEvents: [NotificationAnalyticsEvent] = []
     
     private var settings: NotificationSettingsManager { NotificationSettingsManager.shared }
     private var dismissTask: Task<Void, Never>?
-    private var notifiCLISetupTask: Task<Void, Never>?
     private var permissionCached: Bool = false
     private let nativeNotificationDelegate = NativeNotificationDelegate()
     private var pendingNativeActionHandlers: [String: NotificationActionHandler] = [:]
@@ -425,8 +422,7 @@ public class NotificationManager: ObservableObject {
         if isSafeToUseSystemNotifications {
             UNUserNotificationCenter.current().delegate = nativeNotificationDelegate
         }
-        // Start setup immediately
-        notifiCLISetupTask = Task {
+        Task {
             await setupNotificationSystem()
         }
     }
@@ -455,48 +451,12 @@ public class NotificationManager: ObservableObject {
             }
         }
         
-        // Avoid building NotifiCLI at launch. The build can be memory-heavy, so
-        // startup only checks whether an existing install is already available.
         if isSafeToUseSystemNotifications {
-            let installation = await NotifiCLIService.shared.getInstallationInfo()
-            await MainActor.run {
-                self.isNotifiCLIAvailable = installation.installed
-                self.notifiCLISetupStatus = installation.installed ? "Ready" : "Using native notifications"
-            }
-        } else {
-            await MainActor.run {
-                self.notifiCLISetupStatus = "Notifications disabled in this environment"
-                self.isNotifiCLIAvailable = false
-            }
-        }
-        
-        if isSafeToUseSystemNotifications && isNotifiCLIAvailable {
-            print("NotificationManager: NotifiCLI ready for enhanced notifications")
-        } else if isSafeToUseSystemNotifications {
             print("NotificationManager: Using native macOS notifications")
         }
     }
     
     // MARK: - Public API
-    
-    /// Check if NotifiCLI is installed and available
-    public func checkNotifiCLIAvailability() async {
-        let available = await NotifiCLIService.shared.checkAvailability()
-        await MainActor.run {
-            self.isNotifiCLIAvailable = available
-        }
-    }
-    
-    /// Ensure NotifiCLI is ready (waits for setup to complete)
-    public func ensureReady() async {
-        // Wait for initial setup to complete
-        await notifiCLISetupTask?.value
-    }
-    
-    /// Get NotifiCLI installation info
-    public func getNotifiCLIInfo() async -> (installed: Bool, path: String?) {
-        return await NotifiCLIService.shared.getInstallationInfo()
-    }
     
     /// Check current notification permission status
     public func checkNotificationPermission() async {
@@ -561,13 +521,13 @@ public class NotificationManager: ObservableObject {
              .batchSummary(_, let isAutomated):
             if isAutomated && !settingsValue.notifyOnAutoOrganize {
                 print("NotificationManager: Automated organization notification suppressed by settings")
-                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "automated notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: .native, detail: "automated notifications disabled")
                 return
             }
         case .processingError(_, _, _, _, let isAutomated):
             if isAutomated && !settingsValue.notifyOnAutoOrganize && !type.isCritical {
                 print("NotificationManager: Automated organization error suppressed by settings")
-                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "automated notifications disabled")
+                trackAnalytics(.suppressed, type: type, backend: .native, detail: "automated notifications disabled")
                 return
             }
         default:
@@ -579,13 +539,13 @@ public class NotificationManager: ObservableObject {
         case .processingComplete:
             guard settingsValue.processingComplete else {
                 print("NotificationManager: processingComplete notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "processing complete disabled")
+                trackAnalytics(.suppressed, type: type, backend: .native, detail: "processing complete disabled")
                 return
             }
         case .previewReady:
             guard settingsValue.previewReady else {
                 print("NotificationManager: previewReady notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "preview ready disabled")
+                trackAnalytics(.suppressed, type: type, backend: .native, detail: "preview ready disabled")
                 return
             }
         case .processingError(_, _, let isCritical, _, _):
@@ -593,13 +553,13 @@ public class NotificationManager: ObservableObject {
                 // Always show critical errors
             } else if !settingsValue.processingErrors {
                 print("NotificationManager: processingErrors notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "processing errors disabled")
+                trackAnalytics(.suppressed, type: type, backend: .native, detail: "processing errors disabled")
                 return
             }
         case .batchSummary:
             guard settingsValue.batchSummary else {
                 print("NotificationManager: batchSummary notifications disabled")
-                trackAnalytics(.suppressed, type: type, backend: settingsValue.notificationBackend, detail: "batch summary disabled")
+                trackAnalytics(.suppressed, type: type, backend: .native, detail: "batch summary disabled")
                 return
             }
         case .info:
@@ -645,7 +605,7 @@ public class NotificationManager: ObservableObject {
             }
         } else {
             print("NotificationManager: skipping system notification (enabled=\(settingsValue.systemNotifications), shouldShow=\(shouldShowSystem), critical=\(isCriticalError))")
-            trackAnalytics(.shown, type: type, backend: settingsValue.notificationBackend, detail: "hud only")
+            trackAnalytics(.shown, type: type, backend: .native, detail: "hud only")
         }
     }
     
@@ -802,7 +762,7 @@ public class NotificationManager: ObservableObject {
         trackAnalytics(
             failed ? .failed : .action,
             type: .info(title: "action", message: action),
-            backend: settings.settings.notificationBackend,
+            backend: .native,
             detail: stageDetail
         )
     }
@@ -823,7 +783,7 @@ public class NotificationManager: ObservableObject {
         trackAnalytics(
             .shown,
             type: .info(title: "deliveryPreview", message: "inAppHUD"),
-            backend: settings.settings.notificationBackend,
+            backend: .native,
             detail: "manual HUD delivery preview"
         )
     }
@@ -837,8 +797,7 @@ public class NotificationManager: ObservableObject {
                 title: "System Notification Test",
                 message: "This is a test notification from Sorty.",
                 playSound: settings.settings.systemNotificationSounds,
-                actionHandler: nil,
-                allowFallbackToNotifiCLI: false
+                actionHandler: nil
             )
         }
     }
@@ -1045,7 +1004,7 @@ public class NotificationManager: ObservableObject {
                 await self.handleDefaultNotificationActivation(
                     for: type,
                     actionHandler: actionHandler,
-                    backend: self.settings.settings.notificationBackend
+                    backend: .native
                 )
             }
         }
@@ -1080,143 +1039,15 @@ public class NotificationManager: ObservableObject {
         playSound: Bool,
         actionHandler: NotificationActionHandler? = nil
     ) async {
-        let settingsValue = settings.settings
-        
-        switch settingsValue.notificationBackend {
-        case .notifiCLI:
-            let available = isNotifiCLIAvailable ? true : await prepareNotifiCLIIfNeeded()
-            if available {
-                await showNotifiCLINotification(
-                    type: type,
-                    title: title,
-                    message: message,
-                    playSound: playSound,
-                    actionHandler: actionHandler
-                )
-            } else {
-                print("NotificationManager: NotifiCLI unavailable, falling back to native")
-                await showNativeNotification(
-                    type: type,
-                    title: title,
-                    message: message,
-                    playSound: playSound,
-                    actionHandler: actionHandler
-                )
-            }
-        case .native:
-            await showNativeNotification(
-                type: type,
-                title: title,
-                message: message,
-                playSound: playSound,
-                actionHandler: actionHandler
-            )
-        }
-    }
-
-    private func prepareNotifiCLIIfNeeded() async -> Bool {
-        await MainActor.run {
-            self.notifiCLISetupStatus = "Setting up enhanced notifications..."
-        }
-
-        let available = await NotifiCLIService.shared.ensureSetup()
-
-        await MainActor.run {
-            self.isNotifiCLIAvailable = available
-            self.notifiCLISetupStatus = available ? "Ready" : "Using native notifications"
-        }
-
-        return available
-    }
-    
-    /// Show notification using NotifiCLI with action buttons
-    private func showNotifiCLINotification(
-        type: NotificationType,
-        title: String,
-        message: String,
-        playSound: Bool,
-        actionHandler: NotificationActionHandler?
-    ) async {
-        let settingsValue = settings.settings
-        let actions = settingsValue.showActionButtons ? notificationActions(for: type) : []
-        
-        // Build NotifiCLI config
-        let config = NotifiCLIConfig(
+        await showNativeNotification(
+            type: type,
             title: title,
             message: message,
-            actions: actions.isEmpty ? nil : actions.map(\.label),
-            icon: settingsValue.customNotificationIcon.isEmpty ? nil : settingsValue.customNotificationIcon,
-            sound: playSound ? settingsValue.notifiCLISound : nil,
-            persistent: settingsValue.persistentNotifications && !actions.isEmpty
-        )
-        
-        // Send notification and handle response
-        let response = await NotifiCLIService.shared.send(config)
-
-        if case .error(let errorMessage) = response {
-            print("NotificationManager: NotifiCLI error: \(errorMessage)")
-            trackAnalytics(.failed, type: type, backend: .notifiCLI, detail: errorMessage)
-            await showNativeNotification(
-                type: type,
-                title: title,
-                message: message,
-                playSound: playSound,
-                actionHandler: actionHandler
-            )
-            return
-        }
-
-        print("NotificationManager: NotifiCLI response: \(response)")
-        let actionSummary = actions.isEmpty ? "no actions" : actions.map(\.label).joined(separator: ", ")
-        trackAnalytics(.shown, type: type, backend: .notifiCLI, detail: "sent via NotifiCLI [\(actionSummary)]")
-        
-        // Handle the response
-        await handleNotifiCLIResponse(
-            response,
-            type: type,
-            actions: actions,
+            playSound: playSound,
             actionHandler: actionHandler
         )
     }
-    
-    /// Handle response from NotifiCLI notification
-    private func handleNotifiCLIResponse(
-        _ response: NotifiCLIResponse,
-        type: NotificationType,
-        actions: [CuratedNotificationAction],
-        actionHandler: NotificationActionHandler?
-    ) async {
-        switch response {
-        case .action(let actionLabel):
-            if let action = actions.first(where: { $0.label == actionLabel }) {
-                await handleCuratedActionSelection(
-                    action,
-                    type: type,
-                    actionHandler: actionHandler,
-                    backend: .notifiCLI
-                )
-            } else {
-                print("NotificationManager: Unknown action: \(actionLabel)")
-            }
-            
-        case .defaultClick:
-            await handleDefaultNotificationActivation(for: type, actionHandler: actionHandler, backend: .notifiCLI)
-            
-        case .dismissed, .timeout:
-            // User dismissed or notification timed out
-            break
-            
-        case .reply(let text):
-            // Reply text received (not typically used for our notifications)
-            print("NotificationManager: Received reply: \(text)")
 
-        case .error:
-            // Errors are handled before this method is called so we can
-            // preserve original notification payload for fallback delivery.
-            break
-        }
-    }
-    
     /// Show notification using native macOS UNUserNotificationCenter (fallback)
     private func showNativeNotification(title: String, message: String, playSound: Bool) async {
         await showNativeNotification(
@@ -1234,8 +1065,7 @@ public class NotificationManager: ObservableObject {
         title: String,
         message: String,
         playSound: Bool,
-        actionHandler: NotificationActionHandler?,
-        allowFallbackToNotifiCLI: Bool = true
+        actionHandler: NotificationActionHandler?
     ) async {
         guard isSafeToUseSystemNotifications else {
             print("NotificationManager: Skipping native notification (CLI/Test environment)")
@@ -1252,12 +1082,8 @@ public class NotificationManager: ObservableObject {
         }
         
         guard status == .authorized else {
-            print("NotificationManager: System notifications not authorized (status: \(status.rawValue)), trying NotifiCLI fallback")
+            print("NotificationManager: System notifications not authorized (status: \(status.rawValue))")
             trackAnalytics(.failed, type: type, backend: .native, detail: "authorization denied")
-            if allowFallbackToNotifiCLI, await NotifiCLIService.shared.checkAvailability() {
-                let config = NotifiCLIConfig(title: title, message: message)
-                _ = await NotifiCLIService.shared.send(config)
-            }
             return
         }
         
@@ -1304,12 +1130,8 @@ public class NotificationManager: ObservableObject {
             print("NotificationManager: Native system notification sent successfully")
             trackAnalytics(.shown, type: type, backend: .native, detail: "native notification sent [\(actionSummary)]")
         } catch {
-            print("NotificationManager: Failed to send system notification: \(error), trying NotifiCLI fallback")
+            print("NotificationManager: Failed to send system notification: \(error)")
             trackAnalytics(.failed, type: type, backend: .native, detail: error.localizedDescription)
-            if allowFallbackToNotifiCLI, await NotifiCLIService.shared.checkAvailability() {
-                let config = NotifiCLIConfig(title: title, message: message)
-                _ = await NotifiCLIService.shared.send(config)
-            }
         }
     }
 

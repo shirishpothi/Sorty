@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Traffic Light UI components** — Added `TrafficLightUpdateButton` component and `TrafficLightStyling` utilities to support status/update indicators in the UI.
 - **Developer tooling** — Added `DevRebuilder` developer utility and a local CI helper script (`scripts/local_ci.sh`) to speed up iterative development and local CI checks.
-- **NotifiCLI license** — Added license file for the bundled NotifiCLI helper (`Resources/NotifiCLI/LICENSE`).
+- **Notification backend** — Standardized system notifications on native macOS Notification Center delivery.
 - **Docs & tests** — Minor updates to the architecture and Finder integration guides and improvements to Finder integration tests.
 - **CI & workflow updates** — Updated GitHub Actions workflow and Makefile targets to improve quick-build and CI behavior.
 
@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Session Stability** — Fixed a potential `NSGenericException` crash when changing AI configurations rapidly.
-- **Release Integrity** — Resolved issues with code signing entitlements and NotifiCLI architecture in production builds.
+- **Release Integrity** — Resolved issues with code signing entitlements in production builds.
 - **UI Polishing** — Fixed a visual artifact with the completion checkmark and resolved an issue where the menu bar mascot would fail to load in release builds.
 
 ## [1.1.0] - 2026-02-11

@@ -224,10 +224,6 @@ Sorty supports the `sorty://` URL scheme for automation and external control:
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
-Sorty bundles [NotifiCLI](https://github.com/saihgupr/NotifiCLI) for enhanced notifications.
-NotifiCLI is licensed under the MIT License (Copyright (c) 2026 saihgupr).
-See [Resources/NotifiCLI/LICENSE](Resources/NotifiCLI/LICENSE) for the full license text.
-
 ## Support
 
 - **Documentation**: See [HELP.md](https://github.com/sorty-organizer/Sorty/blob/main/HELP.md) for detailed usage guides
