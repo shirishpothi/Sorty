@@ -3,7 +3,7 @@
 //  Sorty
 //
 //  Interactive onboarding flow for first-time users
-//  Steps: Welcome → Provider Selection → Permissions → Workflow → Demo → Completion
+//  Steps: Provider Selection → Permissions → Workflow → Demo → Completion
 //
 
 import AppKit
@@ -22,7 +22,7 @@ public struct OnboardingView: View {
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
 
-    @State private var currentStep: OnboardingStep = .welcome
+    @State private var currentStep: OnboardingStep = .provider
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
     @State private var isAdvancing = false
@@ -85,6 +85,8 @@ public struct OnboardingView: View {
                         .padding(.bottom, 16)
                 }
                 .ignoresSafeArea(.container, edges: .top)
+                .allowsHitTesting(!isIntroVisible)
+                .accessibilityHidden(isIntroVisible)
                 .opacity(isIntroVisible ? 0 : 1)
                 .animation(.easeInOut(duration: 0.5), value: isIntroVisible)
 
@@ -126,9 +128,6 @@ public struct OnboardingView: View {
     @ViewBuilder
     private var stepContent: some View {
         switch currentStep {
-        case .welcome:
-            WelcomeStepView()
-                .transition(TransitionStyles.slideFromRight)
         case .provider:
             ProviderSelectionStepView()
                 .transition(TransitionStyles.slideFromRight)
@@ -189,7 +188,7 @@ public struct OnboardingView: View {
 
                     // Next/Skip button
                     Group {
-                        if currentStep != .completion && currentStep != .welcome {
+                        if currentStep != .completion {
                             if currentStep == .demo {
                                 Button {
                                     navigateForwardFromControls()
@@ -228,23 +227,6 @@ public struct OnboardingView: View {
                     .frame(width: sideControlWidth, alignment: .trailing)
                 }
                 .frame(maxWidth: .infinity)
-
-                if currentStep == .welcome {
-                    Button {
-                        navigateForwardFromControls()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("Get Started")
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 12, weight: .semibold))
-                        }
-                    }
-                    .buttonStyle(.onboardingPill(size: .large))
-                    .onboardingBeamBorder(variant: .featured)
-                    .keyboardShortcut(.defaultAction)
-                    .accessibilityIdentifier("OnboardingAdvanceButton")
-                    .transition(.scale.combined(with: .opacity))
-                }
             }
             .frame(maxWidth: .infinity)
             .frame(minHeight: 44)
@@ -319,11 +301,6 @@ public struct OnboardingView: View {
         guard currentStep != .completion else { return }
 
         switch currentStep {
-        case .welcome:
-            HapticFeedbackManager.shared.selection()
-            withAnimation(.pageTransition) {
-                currentStep = currentStep.next
-            }
         case .demo:
             HapticFeedbackManager.shared.selection()
             withAnimation(.pageTransition) {
@@ -440,12 +417,11 @@ public struct OnboardingView: View {
 // MARK: - Onboarding Step Enum
 
 enum OnboardingStep: Int, CaseIterable {
-    case welcome = 0
-    case provider = 1
-    case permissions = 2
-    case workflow = 3
-    case demo = 4
-    case completion = 5
+    case provider = 0
+    case permissions = 1
+    case workflow = 2
+    case demo = 3
+    case completion = 4
 
     @MainActor
     static var activeCases: [OnboardingStep] {
@@ -459,7 +435,6 @@ enum OnboardingStep: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .welcome: return "Welcome"
         case .provider: return "AI Provider"
         case .permissions: return "Permissions"
         case .workflow: return "Workflow"
@@ -500,7 +475,7 @@ extension OnboardingStep: OnboardingStepValidating {
                 return .valid
             }
             return .blocked("Grant Files & Folders access before continuing.")
-        case .welcome, .workflow, .demo, .completion:
+        case .workflow, .demo, .completion:
             return .valid
         }
     }
