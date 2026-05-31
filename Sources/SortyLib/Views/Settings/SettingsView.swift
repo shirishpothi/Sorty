@@ -69,9 +69,9 @@ struct SettingsView: View {
 
             if filteredCategories.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("No matching settings")
+                    Text("Nothing found")
                         .font(.subheadline.weight(.medium))
-                    Text("Try broader search terms.")
+                    Text("Sorty could not find that setting.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -242,14 +242,27 @@ struct SettingsView: View {
     @ViewBuilder
     private var searchResultsContent: some View {
         if searchResults.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("No matching settings")
-                    .font(.headline)
-                Text("Try a broader term like \"tags\", \"notifications\", or \"automation\".")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 14) {
+                Image("SadSortyMascot")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 132, height: 132)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .accessibilityHidden(true)
+
+                VStack(spacing: 5) {
+                    Text("Sorty came up empty")
+                        .font(.headline)
+                    Text("Nothing matches \"\(trimmedSearchText)\" yet.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
-            .padding(.top, 8)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 18)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Sorty came up empty. Nothing matches \(trimmedSearchText) yet.")
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(searchResults) { result in
