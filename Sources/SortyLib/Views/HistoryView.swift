@@ -702,14 +702,6 @@ struct HistorySummaryCard: View {
             : "not available"
     }
 
-    private var totalCostValue: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = 4
-        return formatter.string(from: history.totalEstimatedCost as NSDecimalNumber) ?? "$0.00"
-    }
-
     private var gridColumns: [GridItem] {
         [GridItem(.adaptive(minimum: 132, maximum: 180), spacing: 10)]
     }
@@ -767,14 +759,6 @@ struct HistorySummaryCard: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Success rate: \(successRateLabel)")
 
-                HistoryStatItem(
-                    title: "Total AI Cost",
-                    value: totalCostValue,
-                    icon: "dollarsign.circle.fill",
-                    color: .mint
-                )
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Total AI costs: \(totalCostValue)")
             }
         }
         .padding(16)
