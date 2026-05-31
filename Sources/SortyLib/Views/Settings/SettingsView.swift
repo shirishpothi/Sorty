@@ -242,12 +242,13 @@ struct SettingsView: View {
     @ViewBuilder
     private var searchResultsContent: some View {
         if searchResults.isEmpty {
-            VStack(spacing: 14) {
+            VStack(spacing: 16) {
                 Image("SadSortyMascot")
                     .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
                     .scaledToFit()
-                    .frame(width: 132, height: 132)
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .frame(width: 220, height: 220)
                     .accessibilityHidden(true)
 
                 VStack(spacing: 5) {
@@ -259,8 +260,8 @@ struct SettingsView: View {
                         .multilineTextAlignment(.center)
                 }
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 18)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, 28)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Sorty came up empty. Nothing matches \(trimmedSearchText) yet.")
         } else {
