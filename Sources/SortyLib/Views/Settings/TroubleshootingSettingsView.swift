@@ -129,7 +129,7 @@ struct TroubleshootingSettingsView: View {
                     )
                     TroubleshootingRow(
                         title: "Wrong categorization?",
-                        description: "Try enabling 'Deep Scan' in Organization Rules to let the AI read file content."
+                        description: "Try turning off Fast Mode in Organization Controls to let the AI read file content."
                     )
                 }
             }

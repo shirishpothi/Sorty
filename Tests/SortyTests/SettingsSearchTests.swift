@@ -52,9 +52,10 @@ final class SettingsSearchTests: XCTestCase {
 
     func testCategoriesForGroupPartitionsAllCasesWithoutDuplicates() {
         let grouped = SettingsCategoryGroup.allCases.flatMap(SettingsCategory.categories(for:))
+        let visibleCategories = SettingsCategory.allCases.filter { $0 != .tuning }
 
-        XCTAssertEqual(Set(grouped), Set(SettingsCategory.allCases))
-        XCTAssertEqual(grouped.count, SettingsCategory.allCases.count)
+        XCTAssertEqual(Set(grouped), Set(visibleCategories))
+        XCTAssertEqual(grouped.count, visibleCategories.count)
     }
 
     func testRulesFocusTargetMappingsForKnownSnippets() {

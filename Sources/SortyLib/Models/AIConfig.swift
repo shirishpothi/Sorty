@@ -622,7 +622,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         storeDuplicateMetadata: Bool = true,
         strictExclusions: Bool = true,
         maxTopLevelFolders: Int = 10,
-        enableVision: Bool = false,
+        enableVision: Bool = true,
         namingStyle: NamingStyle = .descriptive,
         renameNamingOptions: RenameNamingOptions = .default,
         customNamingInstructions: String? = nil,
@@ -747,7 +747,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         storeDuplicateMetadata = try container.decodeIfPresent(Bool.self, forKey: .storeDuplicateMetadata) ?? true
         strictExclusions = try container.decodeIfPresent(Bool.self, forKey: .strictExclusions) ?? true
         maxTopLevelFolders = try container.decodeIfPresent(Int.self, forKey: .maxTopLevelFolders) ?? 10
-        enableVision = try container.decodeIfPresent(Bool.self, forKey: .enableVision) ?? false
+        enableVision = try container.decodeIfPresent(Bool.self, forKey: .enableVision) ?? true
         namingStyle = try container.decodeIfPresent(NamingStyle.self, forKey: .namingStyle) ?? .descriptive
         renameNamingOptions = try container.decodeIfPresent(RenameNamingOptions.self, forKey: .renameNamingOptions) ?? .default
         customNamingInstructions = try container.decodeIfPresent(String.self, forKey: .customNamingInstructions)
@@ -829,7 +829,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         storeDuplicateMetadata: true,
         strictExclusions: true,
         maxTopLevelFolders: 10,
-        enableVision: false,
+        enableVision: true,
         namingStyle: .descriptive,
         renameNamingOptions: .default,
         customNamingInstructions: nil,

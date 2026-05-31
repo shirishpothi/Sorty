@@ -201,7 +201,7 @@ struct SettingsView: View {
     }
     
     private func isCategoryEnabled(_ category: SettingsCategory) -> Bool {
-        true
+        category != .tuning
     }
 
     private var categoryHeader: some View {

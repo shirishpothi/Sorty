@@ -44,8 +44,8 @@ public enum SettingsCategoryGroup: String, CaseIterable {
 
 public enum SettingsCategory: String, CaseIterable, Identifiable {
     case provider = "AI Provider"
-    case strategy = "Organization Strategy"
-    case rules = "Organization Rules"
+    case strategy = "Analysis & Naming"
+    case rules = "Organization Controls"
     case tuning = "Parameter Tuning"
     case automation = "Automation"
     case finder = "Finder Integration"
@@ -69,7 +69,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
     }
     
     public static func categories(for group: SettingsCategoryGroup) -> [SettingsCategory] {
-        allCases.filter { $0.group == group }
+        allCases.filter { $0.group == group && $0 != .tuning }
     }
     
     public var icon: String {
@@ -111,7 +111,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .strategy:
             return ["strategy", "fast mode", "deep scanning", "vision", "naming style", "folder structure", "organization style"]
         case .rules:
-            return ["rules", "instructions", "storage locations", "destinations", "tagging", "pattern"]
+            return ["rules", "controls", "instructions", "storage locations", "destinations", "tagging", "pattern", "temperature", "creativity", "strictness"]
         case .tuning:
             return ["temperature", "creativity", "strictness", "parameters", "timeouts", "token limits", "quality"]
         case .automation:
@@ -154,6 +154,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Organization Limits", summary: "Set max top-level folders to control output structure."),
                 SettingsFeatureSnippet(title: "Duplicate Handling", summary: "Use the duplicate detection dropdown in preview to control how duplicates are scanned.", keywords: ["duplicates", "duplicate detection"]),
                 SettingsFeatureSnippet(title: "Enable File Tagging", summary: "Allow AI to suggest and apply Finder tags to files.", keywords: ["tagging", "finder tags", "smart tags"]),
+                SettingsFeatureSnippet(title: "AI Temperature", summary: "Adjust creativity vs determinism in generation output."),
                 SettingsFeatureSnippet(title: "Organization Style", summary: "Pick personas and style preferences for folder structures.")
             ]
         case .tuning:

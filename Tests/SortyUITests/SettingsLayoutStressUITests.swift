@@ -24,7 +24,7 @@ final class SettingsLayoutStressUITests: XCTestCase {
         settingsSidebarItem.click()
 
         // The Settings view should show the category list.
-        XCTAssertTrue(waitForElement(app.buttons["Organization Rules"], timeout: 8.0), "Settings categories should render")
+        XCTAssertTrue(waitForElement(app.buttons["Organization Controls"], timeout: 8.0), "Settings categories should render")
     }
 
     private func resizeMainWindow(deltaWidth: CGFloat, deltaHeight: CGFloat) {
@@ -42,7 +42,7 @@ final class SettingsLayoutStressUITests: XCTestCase {
 
     func testOpeningSettingsDoesNotCrash() {
         navigateToSettings()
-        XCTAssertTrue(app.staticTexts["Settings"].exists || app.buttons["Organization Rules"].exists)
+        XCTAssertTrue(app.staticTexts["Settings"].exists || app.buttons["Organization Controls"].exists)
     }
 
     func testSettingsStressResizeAndSwitchCategories() {
@@ -53,10 +53,9 @@ final class SettingsLayoutStressUITests: XCTestCase {
         resizeMainWindow(deltaWidth: 700, deltaHeight: 500)
 
         let categories = [
-            "Organization Rules",
+            "Organization Controls",
             "AI Provider",
-            "Organization Strategy",
-            "Parameter Tuning",
+            "Analysis & Naming",
             "Finder Integration",
             "Advanced"
         ]

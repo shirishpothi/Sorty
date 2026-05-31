@@ -80,12 +80,43 @@ struct OrganizationRulesSettingsView: View {
             .settingsFocusable(.rulesContentRules)
             .animatedAppearance(delay: 0.15)
 
+            SettingsCard(title: "AI Temperature", icon: "thermometer.medium", color: .green) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Temperature")
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(viewModel.config.temperature, specifier: "%.2f")")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundColor(.secondary)
+                            .contentTransition(.numericText())
+                    }
+
+                    Slider(value: $viewModel.config.temperature, in: 0...1, step: 0.1)
+                        .onChange(of: viewModel.config.temperature) { _, _ in
+                            HapticFeedbackManager.shared.selection()
+                        }
+                        .accessibilityIdentifier("TemperatureSlider")
+
+                    HStack {
+                        Text("Focused")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("Creative")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.2)
+
             // Organization Style
             SettingsCard(title: "Organization Style", icon: "paintpalette", color: .purple) {
                 PersonaPickerView()
             }
             .settingsFocusable(.rulesOrganizationStyle)
-            .animatedAppearance(delay: 0.2)
+            .animatedAppearance(delay: 0.25)
         }
     }
 }
