@@ -24,13 +24,13 @@ public struct PermissionsStepView: View {
     }
 
     public var body: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 24) {
+        HStack(spacing: 36) {
+            VStack(alignment: .leading, spacing: 22) {
                 Spacer()
 
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
                     Image(systemName: "hand.raised.fill")
-                        .font(.system(size: 48))
+                        .font(.system(size: 44))
                         .foregroundStyle(.blue)
 
                     Text("Permissions")
@@ -44,18 +44,12 @@ public struct PermissionsStepView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("What is requested here?")
-                            .font(.subheadline.bold())
-
-                        Text(
-                            "• **Files & Folders**: Choose a folder before organizing\n• **Full Disk Access**: Organize protected folders without repeated prompts\n• **Automation**: Read Finder selections for Finder Integration\n• **Notifications**: Alert you when organization completes"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        PrivacyFeatureRow(icon: "folder.badge.gearshape", text: "Files & Folders is required")
+                        PrivacyFeatureRow(icon: "lock.open", text: "Full Disk Access is optional")
+                        PrivacyFeatureRow(icon: "gearshape.2", text: "Finder Automation is optional")
+                        PrivacyFeatureRow(icon: "bell", text: "Notifications are optional")
                     }
-                    .padding(16)
-                    .background(Color.blue.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.top, 6)
                 }
                 .frame(maxWidth: 350)
                 .opacity(hasAppeared ? 1 : 0)
@@ -66,14 +60,7 @@ public struct PermissionsStepView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 60)
-            .background(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.10), Color.clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .padding(.leading, 72)
 
             VStack(spacing: 20) {
                 Text("Required Permission")
@@ -123,7 +110,7 @@ public struct PermissionsStepView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
-            .padding(.horizontal, 40)
+            .padding(.trailing, 72)
             .opacity(hasAppeared ? 1 : 0)
             .scaleEffect(hasAppeared ? 1 : 0.985)
             .animation(.easeInOut(duration: 0.22).delay(0.12), value: hasAppeared)
@@ -389,22 +376,22 @@ struct PermissionRow: View {
         ZStack {
             // One-shot success ring that expands and fades when granted.
             Circle()
-                .stroke(Color.green.opacity(0.6 * (1 - successRingProgress)), lineWidth: 2)
+                .stroke(Color.green.opacity(0.5 * (1 - successRingProgress)), lineWidth: 2)
                 .frame(width: 44, height: 44)
-                .scaleEffect(0.85 + successRingProgress * 0.85)
+                .scaleEffect(0.92 + successRingProgress * 0.65)
 
             Circle()
-                .fill(iconTint.opacity(0.14))
+                .fill(iconTint.opacity(state == .granted ? 0.18 : 0.14))
                 .frame(width: 44, height: 44)
 
-            Image(systemName: type.icon)
-                .font(.system(size: 20, weight: .semibold))
+            Image(systemName: state == .granted ? "checkmark" : type.icon)
+                .font(.system(size: state == .granted ? 18 : 20, weight: .semibold))
                 .foregroundStyle(iconTint)
-                .symbolEffect(.bounce, value: iconPop)
+                .contentTransition(.symbolEffect(.replace))
         }
-        .scaleEffect(iconPop ? 1.12 : 1)
+        .scaleEffect(iconPop ? 1.05 : 1)
         .frame(width: 52, height: 52)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: iconPop)
+        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: iconPop)
         .animation(.easeInOut(duration: 0.25), value: state)
     }
 
@@ -420,16 +407,16 @@ struct PermissionRow: View {
         HapticFeedbackManager.shared.success()
 
         successRingProgress = 0
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.55)) {
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) {
             iconPop = true
         }
-        withAnimation(.easeOut(duration: 0.6)) {
+        withAnimation(.easeOut(duration: 0.5)) {
             successRingProgress = 1
         }
 
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 280_000_000)
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) {
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
                 iconPop = false
             }
         }

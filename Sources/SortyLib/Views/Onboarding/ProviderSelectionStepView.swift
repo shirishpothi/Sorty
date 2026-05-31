@@ -42,20 +42,19 @@ public struct ProviderSelectionStepView: View {
     public init() {}
     
     public var body: some View {
-        HStack(spacing: 0) {
-            // Left side - messaging
-            VStack(alignment: .leading, spacing: 24) {
+        HStack(spacing: 36) {
+            VStack(alignment: .leading, spacing: 22) {
                 Spacer()
                 
-                VStack(alignment: .leading, spacing: 16) {
-                    Image(systemName: "lock.shield")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.purple)
+                VStack(alignment: .leading, spacing: 14) {
+                    ProviderLogoView(provider: settingsViewModel.config.provider, size: 54)
+                        .padding(12)
+                        .systemLiquidGlassBackground(cornerRadius: 18)
                     
-                    Text("You choose where your data goes")
+                    Text("Choose your AI")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
                     
-                    Text("Sorty works with multiple AI providers. Your files are processed locally, and only file names and metadata are sent to the AI for organization suggestions.")
+                    Text("Sorty sends file names and metadata to the provider you pick. File contents stay on your Mac unless you enable Deep Scan.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -64,7 +63,7 @@ public struct ProviderSelectionStepView: View {
                         PrivacyFeatureRow(icon: "doc.text", text: "File names and metadata sent to AI")
                         PrivacyFeatureRow(icon: "folder", text: "File contents stay local (unless Deep Scan is enabled)")
                         PrivacyFeatureRow(icon: "arrow.uturn.backward", text: "All changes are reversible")
-                        PrivacyFeatureRow(icon: "server.rack", text: "Use local models for full privacy")
+                        PrivacyFeatureRow(icon: "server.rack", text: "Local and on-device options available")
                     }
                     .padding(.top, 8)
                 }
@@ -76,24 +75,24 @@ public struct ProviderSelectionStepView: View {
                 Spacer()
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 60)
-            .background(
-                LinearGradient(
-                    colors: [Color.black.opacity(0.10), Color.clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .padding(.leading, 72)
             
-            // Right side - provider selection and configuration
             ScrollView {
-                VStack(spacing: 20) {
-                    Text("Select AI Provider")
-                        .font(.title3)
-                        .fontWeight(.semibold)
+                VStack(spacing: 16) {
+                    HStack {
+                        Text("Provider")
+                            .font(.title3.weight(.semibold))
+                        Spacer()
+                        Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
+                    }
+                    .frame(maxWidth: 430)
                     
-                    // Provider list
-                    VStack(spacing: 4) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(providers, id: \.self) { provider in
                             OnboardingProviderRow(
                                 provider: provider,
@@ -103,13 +102,10 @@ public struct ProviderSelectionStepView: View {
                             }
                         }
                     }
-                    .frame(maxWidth: 380)
+                    .frame(maxWidth: 430)
                     
-                    // Configuration section for selected provider
                     if settingsViewModel.config.provider != .appleFoundationModel {
-                        // Info Card / Liquid Note style container
-                        VStack(spacing: 0) {
-                            // Header
+                        VStack(alignment: .leading, spacing: 14) {
                             HStack(spacing: 10) {
                                 Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
                                     .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
@@ -126,21 +122,8 @@ public struct ProviderSelectionStepView: View {
 
                                 Spacer()
 
-                                if !providerSetupStatus.isReady {
-                                    Text("Required")
-                                        .font(.caption2.weight(.bold))
-                                        .foregroundStyle(.orange)
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 4)
-                                        .background(Color.orange.opacity(0.14), in: Capsule())
-                                }
                             }
-                            .padding(12)
-                            .background(providerSetupStatus.isReady ? Color.green.opacity(0.06) : SortyDesignSystem.Colors.resolvedAccent.opacity(0.08))
-                            
-                            Divider()
-                            
-                            // Content
+
                             Group {
                                 if settingsViewModel.config.provider == .githubCopilot {
                                     onboardingCopilotConfig
@@ -148,29 +131,22 @@ public struct ProviderSelectionStepView: View {
                                     providerConfigSection
                                 }
                             }
-                            .padding(16)
                         }
-                        .background(Color(NSColor.controlBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.secondary.opacity(0.1), lineWidth: 1)
-                        )
-                        .shadow(color: .black.opacity(0.05), radius: 5, x: 0, y: 2)
-                        .frame(maxWidth: 380)
+                        .padding(16)
+                        .systemLiquidGlassBackground(cornerRadius: 14)
+                        .frame(maxWidth: 430)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
                     }
                     
                     providerReadinessView
-                        .frame(maxWidth: 380)
+                        .frame(maxWidth: 430)
 
-                    // Connection status
                     connectionStatusView
-                        .frame(maxWidth: 380)
+                        .frame(maxWidth: 430)
                 }
                 .padding(.vertical, 40)
-                .padding(.horizontal, 40)
+                .padding(.trailing, 72)
             }
             .frame(maxWidth: .infinity)
             .opacity(hasAppeared ? 1 : 0)
@@ -396,8 +372,6 @@ public struct ProviderSelectionStepView: View {
     @ViewBuilder
     private var providerConfigSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            
-            // API URL field for OpenAI-compatible and Ollama
             if settingsViewModel.config.provider == .openAICompatible || settingsViewModel.config.provider == .ollama {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("API URL")
@@ -420,8 +394,6 @@ public struct ProviderSelectionStepView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            
-            // API Key field
             if settingsViewModel.config.provider.typicallyRequiresAPIKey {
                 VStack(alignment: .leading, spacing: 8) {
                     if supportsSubscriptionAuthUI {
@@ -445,8 +417,6 @@ public struct ProviderSelectionStepView: View {
                     }
                 }
             }
-            
-            // Model selector
             if settingsViewModel.config.provider != .githubCopilot {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Model")
@@ -463,11 +433,6 @@ public struct ProviderSelectionStepView: View {
                 }
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor))
-        )
     }
 
     @ViewBuilder

@@ -183,7 +183,7 @@ public struct CompletionStepView: View {
             }
 
             // Layer 4: Main content
-            VStack(spacing: 28) {
+            VStack(spacing: 22) {
                 Spacer()
 
                 // Success icon with glow ring
@@ -208,10 +208,10 @@ public struct CompletionStepView: View {
 
                     Circle()
                         .fill(Color.green.opacity(0.1))
-                        .frame(width: 140, height: 140)
+                        .frame(width: 118, height: 118)
 
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 80))
+                        .font(.system(size: 70))
                         .foregroundStyle(.green)
                         .symbolEffect(.bounce, value: hasAppeared)
                 }
@@ -223,15 +223,15 @@ public struct CompletionStepView: View {
                 .opacity(contentDismissed ? 0 : 1)
 
                 // Title and message
-                VStack(spacing: 16) {
-                    Text("Sorty is Ready!")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                VStack(spacing: 10) {
+                    Text("Ready to Organize")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
                         .opacity(hasAppeared ? 1 : 0)
                         .offset(y: hasAppeared ? 0 : 20)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.2), value: hasAppeared)
 
-                    Text("You're all set to start organizing your files with AI.")
-                        .font(.title3)
+                    Text("Drop in a folder, preview the plan, and undo anything you change.")
+                        .font(.system(size: 17, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -243,38 +243,28 @@ public struct CompletionStepView: View {
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 30 : 0)
 
-                // Quick tips (staggered slide-in from left)
-                VStack(alignment: .leading, spacing: 16) {
-                    QuickTipRow(icon: "folder.badge.plus", text: "Drag any folder to organize it")
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
                         .opacity(tipsAppeared ? 1 : 0)
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.6), value: tipsAppeared)
 
-                    QuickTipRow(icon: "keyboard", text: "Press \u{2318}O to open a folder")
+                    QuickTipRow(icon: "keyboard", text: "Press \u{2318}O")
                         .opacity(tipsAppeared ? 1 : 0)
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.8), value: tipsAppeared)
 
-                    QuickTipRow(icon: "arrow.uturn.backward", text: "All changes can be undone")
+                    QuickTipRow(icon: "arrow.uturn.backward", text: "Undo changes")
                         .opacity(tipsAppeared ? 1 : 0)
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.0), value: tipsAppeared)
 
-                    QuickTipRow(icon: "gearshape", text: "Customize everything in Settings")
+                    QuickTipRow(icon: "gearshape", text: "Tune settings")
                         .opacity(tipsAppeared ? 1 : 0)
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
                 }
-                .padding(24)
-                .frame(maxWidth: 380)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
+                .frame(maxWidth: 430)
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 40 : 0)
 

@@ -22,7 +22,7 @@ public struct OnboardingView: View {
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
     @ObservedObject private var copilotAuth = GitHubCopilotAuthManager.shared
 
-    @State private var currentStep: OnboardingStep = .provider
+    @State private var currentStep: OnboardingStep = .welcome
     @State private var hasFilesAndFoldersPermission = false
     @State private var advanceValidationMessage: String?
     @State private var isAdvancing = false
@@ -450,9 +450,6 @@ enum OnboardingStep: Int, CaseIterable {
     @MainActor
     static var activeCases: [OnboardingStep] {
         allCases.filter { step in
-            if step == .welcome {
-                return false
-            }
             if step == .demo {
                 return FeatureFlags.featureDemoEnabled
             }
@@ -529,20 +526,20 @@ private struct OnboardingIntroView: View {
             OnboardingBottomGradient()
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+                .opacity(0.92)
 
-            // Messy pile of real files scattered around the app icon. When the
-            // user hovers "Get Started" they collapse into the icon — Sorty
-            // tidying the clutter.
+            // Real macOS file-type icons drift in a loose orbit, then tuck into
+            // the app icon when the user starts onboarding.
             SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
                 let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 ZStack {
                     ForEach(OnboardingOrbitFile.files) { file in
                         OnboardingOrbitFileChip(file: file)
-                            .rotationEffect(.degrees(isHoveringButton ? 0 : file.rotation))
-                            .scaleEffect(isHoveringButton ? 0.28 : file.scale)
+                            .rotationEffect(.degrees(isHoveringButton ? 0 : file.rotation + sin(phase * 0.7 + file.driftPhase) * 3))
+                            .scaleEffect(isHoveringButton ? 0.24 : file.scale)
                             .offset(orbitOffset(for: file, phase: phase))
                             .opacity(isHoveringButton ? 0 : (filesAppeared ? 1 : 0))
-                            .blur(radius: isHoveringButton ? 14 : 0)
+                            .blur(radius: isHoveringButton ? 16 : 0)
                             .animation(
                                 .spring(response: 0.7, dampingFraction: 0.86)
                                     .delay(file.appearDelay),
@@ -583,6 +580,7 @@ private struct OnboardingIntroView: View {
                 }
 
                 Button {
+                    HapticFeedbackManager.shared.success()
                     audio.stopAll()
                     onGetStarted()
                 } label: {
@@ -640,11 +638,12 @@ private struct OnboardingIntroView: View {
             return CGSize(width: file.collapseX, height: file.collapseY)
         }
 
-        // Gentle, lazy drift around each file's scattered resting position so
-        // the pile feels alive without looking like a tidy orbit.
-        let driftX = cos(phase * file.driftSpeed + file.driftPhase) * file.driftRadius
-        let driftY = sin(phase * file.driftSpeed * 0.82 + file.driftPhase) * file.driftRadius * 0.7
-        return CGSize(width: file.baseX + driftX, height: file.baseY + driftY)
+        let orbitalAngle = phase * file.driftSpeed + file.driftPhase
+        let orbitalX = cos(orbitalAngle) * file.orbitWidth
+        let orbitalY = sin(orbitalAngle) * file.orbitHeight
+        let driftX = cos(phase * 0.38 + file.driftPhase) * file.driftRadius
+        let driftY = sin(phase * 0.31 + file.driftPhase) * file.driftRadius
+        return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
     }
 }
 
@@ -659,6 +658,8 @@ private struct OnboardingOrbitFile: Identifiable {
     let driftPhase: Double
     let driftSpeed: Double
     let driftRadius: CGFloat
+    let orbitWidth: CGFloat
+    let orbitHeight: CGFloat
     // Messy presentation.
     let rotation: Double
     let scale: CGFloat
@@ -668,20 +669,16 @@ private struct OnboardingOrbitFile: Identifiable {
     let collapseY: CGFloat
 
     static let files: [OnboardingOrbitFile] = [
-        OnboardingOrbitFile(name: "Q3 Report", ext: "pdf", baseX: -332, baseY: -150, driftPhase: 0.0, driftSpeed: 0.42, driftRadius: 10, rotation: -13, scale: 1.04, appearDelay: 0.05, collapseX: -30, collapseY: -18),
-        OnboardingOrbitFile(name: "Budget 2024", ext: "xlsx", baseX: 318, baseY: -126, driftPhase: 1.3, driftSpeed: 0.5, driftRadius: 9, rotation: 11, scale: 0.96, appearDelay: 0.12, collapseX: 26, collapseY: -22),
-        OnboardingOrbitFile(name: "vacation", ext: "jpg", baseX: -250, baseY: 96, driftPhase: 2.1, driftSpeed: 0.46, driftRadius: 12, rotation: 8, scale: 1.1, appearDelay: 0.18, collapseX: -34, collapseY: 14),
-        OnboardingOrbitFile(name: "Resume", ext: "docx", baseX: 268, baseY: 120, driftPhase: 3.4, driftSpeed: 0.4, driftRadius: 10, rotation: -9, scale: 1.0, appearDelay: 0.24, collapseX: 30, collapseY: 20),
-        OnboardingOrbitFile(name: "demo", ext: "mp4", baseX: -382, baseY: 8, driftPhase: 0.7, driftSpeed: 0.54, driftRadius: 8, rotation: 6, scale: 0.92, appearDelay: 0.3, collapseX: -44, collapseY: 0),
-        OnboardingOrbitFile(name: "Keynote", ext: "key", baseX: 388, baseY: 18, driftPhase: 4.2, driftSpeed: 0.44, driftRadius: 11, rotation: -7, scale: 0.94, appearDelay: 0.36, collapseX: 44, collapseY: 4),
-        OnboardingOrbitFile(name: "logo", ext: "png", baseX: -150, baseY: -188, driftPhase: 5.0, driftSpeed: 0.48, driftRadius: 9, rotation: 14, scale: 0.88, appearDelay: 0.1, collapseX: -16, collapseY: -28),
-        OnboardingOrbitFile(name: "playlist", ext: "mp3", baseX: 168, baseY: -196, driftPhase: 2.7, driftSpeed: 0.52, driftRadius: 10, rotation: -12, scale: 0.9, appearDelay: 0.16, collapseX: 18, collapseY: -30),
-        OnboardingOrbitFile(name: "data", ext: "csv", baseX: -120, baseY: 178, driftPhase: 1.8, driftSpeed: 0.43, driftRadius: 8, rotation: -5, scale: 0.86, appearDelay: 0.22, collapseX: -14, collapseY: 26),
-        OnboardingOrbitFile(name: "archive", ext: "zip", baseX: 132, baseY: 188, driftPhase: 3.9, driftSpeed: 0.5, driftRadius: 11, rotation: 10, scale: 0.9, appearDelay: 0.28, collapseX: 16, collapseY: 28),
-        OnboardingOrbitFile(name: "contract", ext: "pages", baseX: -300, baseY: -34, driftPhase: 0.4, driftSpeed: 0.47, driftRadius: 9, rotation: 5, scale: 0.84, appearDelay: 0.34, collapseX: -38, collapseY: -8),
-        OnboardingOrbitFile(name: "notes", ext: "txt", baseX: 296, baseY: -42, driftPhase: 4.7, driftSpeed: 0.41, driftRadius: 10, rotation: -8, scale: 0.82, appearDelay: 0.4, collapseX: 38, collapseY: -6),
-        OnboardingOrbitFile(name: "Screenshot", ext: "png", baseX: 40, baseY: -206, driftPhase: 2.4, driftSpeed: 0.49, driftRadius: 8, rotation: 3, scale: 0.8, appearDelay: 0.2, collapseX: 6, collapseY: -32),
-        OnboardingOrbitFile(name: "invoice", ext: "pdf", baseX: -36, baseY: 200, driftPhase: 5.5, driftSpeed: 0.45, driftRadius: 9, rotation: -4, scale: 0.82, appearDelay: 0.26, collapseX: -4, collapseY: 30)
+        OnboardingOrbitFile(name: "Q3 Report", ext: "pdf", baseX: -292, baseY: -118, driftPhase: 0.0, driftSpeed: 0.42, driftRadius: 7, orbitWidth: 30, orbitHeight: 16, rotation: -13, scale: 1.04, appearDelay: 0.05, collapseX: -30, collapseY: -18),
+        OnboardingOrbitFile(name: "Budget 2024", ext: "xlsx", baseX: 286, baseY: -104, driftPhase: 1.3, driftSpeed: 0.5, driftRadius: 6, orbitWidth: 26, orbitHeight: 18, rotation: 11, scale: 0.96, appearDelay: 0.12, collapseX: 26, collapseY: -22),
+        OnboardingOrbitFile(name: "vacation", ext: "jpg", baseX: -244, baseY: 118, driftPhase: 2.1, driftSpeed: 0.46, driftRadius: 8, orbitWidth: 28, orbitHeight: 20, rotation: 8, scale: 1.1, appearDelay: 0.18, collapseX: -34, collapseY: 14),
+        OnboardingOrbitFile(name: "Resume", ext: "docx", baseX: 242, baseY: 132, driftPhase: 3.4, driftSpeed: 0.4, driftRadius: 7, orbitWidth: 32, orbitHeight: 16, rotation: -9, scale: 1.0, appearDelay: 0.24, collapseX: 30, collapseY: 20),
+        OnboardingOrbitFile(name: "demo", ext: "mp4", baseX: -344, baseY: 8, driftPhase: 0.7, driftSpeed: 0.54, driftRadius: 6, orbitWidth: 24, orbitHeight: 14, rotation: 6, scale: 0.92, appearDelay: 0.3, collapseX: -44, collapseY: 0),
+        OnboardingOrbitFile(name: "Keynote", ext: "key", baseX: 350, baseY: 24, driftPhase: 4.2, driftSpeed: 0.44, driftRadius: 8, orbitWidth: 28, orbitHeight: 18, rotation: -7, scale: 0.94, appearDelay: 0.36, collapseX: 44, collapseY: 4),
+        OnboardingOrbitFile(name: "logo", ext: "png", baseX: -142, baseY: -194, driftPhase: 5.0, driftSpeed: 0.48, driftRadius: 7, orbitWidth: 24, orbitHeight: 14, rotation: 14, scale: 0.88, appearDelay: 0.1, collapseX: -16, collapseY: -28),
+        OnboardingOrbitFile(name: "playlist", ext: "mp3", baseX: 152, baseY: -198, driftPhase: 2.7, driftSpeed: 0.52, driftRadius: 7, orbitWidth: 24, orbitHeight: 16, rotation: -12, scale: 0.9, appearDelay: 0.16, collapseX: 18, collapseY: -30),
+        OnboardingOrbitFile(name: "data", ext: "csv", baseX: -126, baseY: 194, driftPhase: 1.8, driftSpeed: 0.43, driftRadius: 6, orbitWidth: 22, orbitHeight: 14, rotation: -5, scale: 0.86, appearDelay: 0.22, collapseX: -14, collapseY: 26),
+        OnboardingOrbitFile(name: "archive", ext: "zip", baseX: 128, baseY: 204, driftPhase: 3.9, driftSpeed: 0.5, driftRadius: 8, orbitWidth: 24, orbitHeight: 16, rotation: 10, scale: 0.9, appearDelay: 0.28, collapseX: 16, collapseY: 28)
     ]
 }
 
