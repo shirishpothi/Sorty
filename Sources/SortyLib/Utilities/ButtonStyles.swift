@@ -551,6 +551,8 @@ private struct MetalFxPillSurface: View {
     let usesSubtleIdleBeam: Bool
     let colorScheme: ColorScheme
 
+    @Environment(\.scenePhase) private var scenePhase
+
     private var isIntensified: Bool {
         isHovering || isPressed
     }
@@ -560,7 +562,7 @@ private struct MetalFxPillSurface: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30, paused: isPaused || !isEnabled)) { timeline in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30, paused: isPaused || !isEnabled || scenePhase != .active)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
 
             ZStack {
@@ -768,6 +770,7 @@ private struct OnboardingBeamBorder: View {
     let size: BeamSize
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Capsule()
@@ -783,7 +786,7 @@ private struct OnboardingBeamBorder: View {
                 lensStrength: isIntensified ? variant.lensStrength * 1.25 : variant.lensStrength
             )
             .overlay {
-                SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+                SwiftUI.TimelineView(.animation(paused: reduceMotion || !active || scenePhase != .active)) { timeline in
                     let time = timeline.date.timeIntervalSinceReferenceDate
                     let phase = reduceMotion ? 0 : time / 1.96
                     ZStack {

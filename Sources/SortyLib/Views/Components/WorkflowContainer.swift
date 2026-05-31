@@ -102,6 +102,7 @@ struct WorkflowGradientBackground: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.workflowGradientHidden) private var gradientHidden
 
     /// Drives the one-shot rise-from-bottom reveal (0 -> 1).
@@ -151,7 +152,7 @@ struct WorkflowGradientBackground: View {
     /// transforms (`scaleEffect`, `opacity`) plus the bloom's `UnitPoint`.
     /// SwiftUI never has to rebuild or rasterize the gradient itself.
     private var backgroundLayer: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || scenePhase != .active)) { context in
             let t = context.date.timeIntervalSince(startTime)
 
             // Two detuned sine waves combined produce a slowly varying breath

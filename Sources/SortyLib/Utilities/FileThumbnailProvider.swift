@@ -3,6 +3,10 @@ import Combine
 @preconcurrency import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
+private struct SendableThumbnailImage: @unchecked Sendable {
+    let image: NSImage
+}
+
 /// Provides cached thumbnails for files using QuickLook and NSWorkspace
 @MainActor
 public class FileThumbnailProvider: ObservableObject {
@@ -10,6 +14,7 @@ public class FileThumbnailProvider: ObservableObject {
     
     private let cache = NSCache<NSString, NSImage>()
     private var processingKeys: Set<String> = []
+    private var continuations: [String: [CheckedContinuation<SendableThumbnailImage, Never>]] = [:]
     private let waveformCache = NSCache<NSString, NSImage>()
     
     private init() {
@@ -27,21 +32,24 @@ public class FileThumbnailProvider: ObservableObject {
         }
         
         if processingKeys.contains(key) {
-            while processingKeys.contains(key) {
-                if let cached = cache.object(forKey: key as NSString) {
-                    return cached
-                }
-                await Task.yield()
+            let sendableImage = await withCheckedContinuation { continuation in
+                continuations[key, default: []].append(continuation)
             }
-            if let cached = cache.object(forKey: key as NSString) {
-                return cached
-            }
+            return sendableImage.image
         }
         
         processingKeys.insert(key)
-        defer { processingKeys.remove(key) }
         let image = await generateThumbnail(for: url, size: size)
         cache.setObject(image, forKey: key as NSString, cost: imageCost(image))
+
+        if let waitingContinuations = continuations.removeValue(forKey: key) {
+            let sendableImage = SendableThumbnailImage(image: image)
+            for continuation in waitingContinuations {
+                continuation.resume(returning: sendableImage)
+            }
+        }
+
+        processingKeys.remove(key)
         return image
     }
     
@@ -114,6 +122,14 @@ public class FileThumbnailProvider: ObservableObject {
         cache.removeAllObjects()
         processingKeys.removeAll()
         waveformCache.removeAllObjects()
+
+        let emptyImage = SendableThumbnailImage(image: NSImage(size: NSSize(width: 1, height: 1)))
+        for waitingContinuations in continuations.values {
+            for continuation in waitingContinuations {
+                continuation.resume(returning: emptyImage)
+            }
+        }
+        continuations.removeAll()
     }
 
     private func imageCost(_ image: NSImage) -> Int {

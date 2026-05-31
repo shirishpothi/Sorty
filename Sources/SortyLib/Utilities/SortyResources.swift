@@ -12,6 +12,12 @@ import os.log
 
 public enum SortyResources {
     private static let logger = Logger(subsystem: "com.sorty.app", category: "Resources")
+    nonisolated(unsafe) private static let imageCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 80
+        cache.totalCostLimit = 48 * 1024 * 1024
+        return cache
+    }()
 
     /// The resource bundle for SortyLib resources.
     /// Uses multi-layer detection to find resources in various build scenarios:
@@ -157,11 +163,16 @@ public enum SortyResources {
     ///   - extension: The file extension (default: "png")
     /// - Returns: NSImage if found, nil otherwise
     public static func image(named name: String, withExtension ext: String = "png") -> NSImage? {
+        let cacheKey = imageCacheKey(name: name, ext: ext)
+        if let cached = imageCache.object(forKey: cacheKey) {
+            return cached
+        }
+
         // Try 1: Asset catalog (if compiled .car exists)
         if usesCompiledAssetCatalog {
             if let nsImage = bundle.image(forResource: name), isUsableImage(nsImage) {
                 logger.debug("Loaded image '\(name)' from asset catalog")
-                return nsImage
+                return cacheImage(nsImage, forKey: cacheKey)
             }
         }
 
@@ -170,13 +181,13 @@ public enum SortyResources {
         // Resources/Assets.xcassets win over legacy fallback PNGs in Images/.
         if let nsImage = loadImageFromRawAssetCatalog(named: name) {
             logger.debug("Loaded image '\(name)' from raw Assets.xcassets in bundle resources")
-            return nsImage
+            return cacheImage(nsImage, forKey: cacheKey)
         }
         
         // Try 3: Direct bundle resource lookup (works for Xcode builds with asset catalog)
         if let nsImage = bundle.image(forResource: name), isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from bundle resource")
-            return nsImage
+            return cacheImage(nsImage, forKey: cacheKey)
         }
 
         // Try 4: Main bundle fallback (covers app-level asset catalogs)
@@ -184,7 +195,7 @@ public enum SortyResources {
            let nsImage = Bundle.main.image(forResource: name),
            isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from main bundle")
-            return nsImage
+            return cacheImage(nsImage, forKey: cacheKey)
         }
 
         // Try 5: Images subdirectory (SPM .copy() resources)
@@ -192,7 +203,7 @@ public enum SortyResources {
               let nsImage = NSImage(contentsOf: imageURL),
               isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from Images subdirectory")
-            return nsImage
+            return cacheImage(nsImage, forKey: cacheKey)
         }
 
         // Try 6: Direct bundle resource with extension
@@ -200,7 +211,7 @@ public enum SortyResources {
               let nsImage = NSImage(contentsOf: imageURL),
               isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' from bundle root")
-            return nsImage
+            return cacheImage(nsImage, forKey: cacheKey)
         }
 
         // Try 7: Bundle image resource helper (covers non-asset bundled images)
@@ -208,7 +219,7 @@ public enum SortyResources {
            let nsImage = NSImage(contentsOf: imageURL),
            isUsableImage(nsImage) {
             logger.debug("Loaded image '\(name)' via urlForImageResource")
-            return nsImage
+            return cacheImage(nsImage, forKey: cacheKey)
         }
 
         // Try 8: Nested Sorty_SortyLib bundle fallback (covers builds where
@@ -216,7 +227,7 @@ public enum SortyResources {
         // in a sibling Sorty_SortyLib.bundle inside app resources).
         if let nsImage = loadImageFromEmbeddedSortyLibBundle(named: name, withExtension: ext) {
             logger.debug("Loaded image '\(name)' from embedded Sorty_SortyLib.bundle")
-            return nsImage
+            return cacheImage(nsImage, forKey: cacheKey)
         }
         
         // Try 9: Look in source tree Assets.xcassets imageset directories (development fallback)
@@ -234,13 +245,35 @@ public enum SortyResources {
                    let nsImage = NSImage(contentsOf: path),
                    isUsableImage(nsImage) {
                     logger.debug("Loaded image '\(name)' from Assets.xcassets imageset at \(path.path)")
-                    return nsImage
+                    return cacheImage(nsImage, forKey: cacheKey)
                 }
             }
         }
 
         logger.warning("Failed to load image '\(name)' from any source")
         return nil
+    }
+
+    public static func clearImageCache() {
+        imageCache.removeAllObjects()
+    }
+
+    private static func imageCacheKey(name: String, ext: String) -> NSString {
+        "\(bundle.bundlePath)|\(name)|\(ext.lowercased())" as NSString
+    }
+
+    private static func specialImageCacheKey(_ key: String) -> NSString {
+        "\(bundle.bundlePath)|\(key)" as NSString
+    }
+
+    private static func cacheImage(_ image: NSImage, forKey key: NSString) -> NSImage {
+        imageCache.setObject(image, forKey: key, cost: imageCost(image))
+        return image
+    }
+
+    private static func imageCost(_ image: NSImage) -> Int {
+        let pixels = max(1, Int(image.size.width * 2 * image.size.height * 2))
+        return pixels * 4
     }
 
     private static func isUsableImage(_ image: NSImage) -> Bool {
@@ -465,53 +498,67 @@ public enum SortyResources {
 
     /// Loads the full-color mascot head PNG used by Finder actions for menu bar labels.
     public static func menuBarLabelNSImage() -> NSImage {
+        let cacheKey = specialImageCacheKey("menuBarLabelNSImage")
+        if let cached = imageCache.object(forKey: cacheKey) {
+            return cached
+        }
+
         if let image = loadImage(from: menuBarPNGCandidateURLs(), isTemplate: false) {
-            return image
+            return cacheImage(image, forKey: cacheKey)
         }
 
         if let image = image(named: "SortyMascotHead", withExtension: "png") {
-            image.isTemplate = false
-            return image
+            let copy = (image.copy() as? NSImage) ?? image
+            copy.isTemplate = false
+            return cacheImage(copy, forKey: cacheKey)
         }
 
-        return menuBarNSImage()
+        let fallback = (menuBarNSImage().copy() as? NSImage) ?? menuBarNSImage()
+        fallback.isTemplate = false
+        return cacheImage(fallback, forKey: cacheKey)
     }
 
     /// Loads a robust NSImage for the menu bar item, bypassing asset catalog complexity
     /// and providing a guaranteed fallback to an SF Symbol.
     public static func menuBarNSImage() -> NSImage {
+        let cacheKey = specialImageCacheKey("menuBarNSImage")
+        if let cached = imageCache.object(forKey: cacheKey) {
+            return cached
+        }
+
         // Prefer the mascot head ICNS so menu bar, Finder integrations, and app branding match.
         if let image = loadImage(from: menuBarICNSCandidateURLs(), isTemplate: true) {
-            return image
+            return cacheImage(image, forKey: cacheKey)
         }
 
         if let img = bundle.image(forResource: "SortyMascotHead") ?? Bundle.main.image(forResource: "SortyMascotHead") {
             img.isTemplate = true
-            return img
+            return cacheImage(img, forKey: cacheKey)
         }
 
         // Try direct file-based loading from the bundle first (most reliable for SPM/macOS 15)
         if let url = bundle.url(forResource: "SortyMascotTemplate", withExtension: "svg"),
            let img = NSImage(contentsOf: url) {
             img.isTemplate = true
-            return img
+            return cacheImage(img, forKey: cacheKey)
         }
         
         // Fallback to name-based lookup
         if let img = image(named: "SortyMascotTemplate", withExtension: "svg") {
-            img.isTemplate = true
-            return img
+            let copy = (img.copy() as? NSImage) ?? img
+            copy.isTemplate = true
+            return cacheImage(copy, forKey: cacheKey)
         }
         
         // Final fallback: standard SF Symbol
         if let symbol = NSImage(systemSymbolName: "folder.fill.badge.gearshape", accessibilityDescription: "Sorty") {
             symbol.isTemplate = true
-            return symbol
+            return cacheImage(symbol, forKey: cacheKey)
         }
         
         // Absolute last resort: 1×1 empty template image (should never happen)
         let empty = NSImage(size: NSSize(width: 18, height: 18))
         empty.isTemplate = true
-        return empty
+        return cacheImage(empty, forKey: cacheKey)
     }
 }

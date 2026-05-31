@@ -2004,9 +2004,10 @@ private struct FocusedInstructionBeamBorder: View {
     let active: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
+        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active || scenePhase != .active)) { timeline in
             let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 1.96
 
             RoundedRectangle(cornerRadius: 10, style: .continuous)

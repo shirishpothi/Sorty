@@ -50,24 +50,49 @@ public struct FileThumbnailView: View {
         NSWorkspace.shared.icon(for: .data).copy() as! NSImage
     }()
 
+    nonisolated(unsafe) private static let iconCache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 160
+        cache.totalCostLimit = 4 * 1024 * 1024
+        return cache
+    }()
+
     /// Resolve the system icon for a URL once, returning a copied image to avoid
     /// shared reference invalidation during view recycling
     private static func resolveIcon(for url: URL, utTypeHint: UTType?) -> NSImage {
         // Optimized: Avoid synchronous disk I/O in view body
         let ext = url.pathExtension
-        if !ext.isEmpty, let utType = UTType(filenameExtension: ext) {
-            return NSWorkspace.shared.icon(for: utType).copy() as! NSImage
-        }
+
         if !ext.isEmpty {
-            // Using UTType is preferred over deprecated icon(forFileType:)
-            if let utType = UTType(tag: ext, tagClass: .filenameExtension, conformingTo: nil) {
-                return NSWorkspace.shared.icon(for: utType).copy() as! NSImage
+            let key = "ext:\(ext.lowercased())" as NSString
+            if let cached = iconCache.object(forKey: key) {
+                return cached
+            }
+
+            if let utType = UTType(filenameExtension: ext) ??
+                UTType(tag: ext, tagClass: .filenameExtension, conformingTo: nil) {
+                let icon = NSWorkspace.shared.icon(for: utType).copy() as! NSImage
+                iconCache.setObject(icon, forKey: key, cost: imageCost(icon))
+                return icon
             }
         }
+
         if let hint = utTypeHint {
-            return NSWorkspace.shared.icon(for: hint).copy() as! NSImage
+            let key = "hint:\(hint.identifier)" as NSString
+            if let cached = iconCache.object(forKey: key) {
+                return cached
+            }
+
+            let icon = NSWorkspace.shared.icon(for: hint).copy() as! NSImage
+            iconCache.setObject(icon, forKey: key, cost: imageCost(icon))
+            return icon
         }
         
         return fallbackIcon
+    }
+
+    private static func imageCost(_ image: NSImage) -> Int {
+        let pixels = max(1, Int(image.size.width * 2 * image.size.height * 2))
+        return pixels * 4
     }
 }

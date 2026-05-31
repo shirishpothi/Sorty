@@ -237,63 +237,56 @@ public enum DuplicateScanState: Equatable {
 @MainActor
 public class DuplicateDetectionManager: ObservableObject {
     @Published public var state: DuplicateScanState = .idle
-    @Published public var duplicateGroups: [DuplicateGroup] = []
+    @Published public var duplicateGroups: [DuplicateGroup] = [] {
+        didSet { refreshDerivedDuplicateSummary() }
+    }
     @Published public var isScanning = false
     @Published public var scanProgress: Double = 0
     @Published public var lastScanDate: Date?
-    @Published public var semanticGroups: [SemanticDuplicateGroup] = []
+    @Published public var semanticGroups: [SemanticDuplicateGroup] = [] {
+        didSet { refreshDerivedDuplicateSummary() }
+    }
     @Published public var scanStage: String = ""
+    @Published public private(set) var allGroups: [UnifiedDuplicateGroup] = []
+    @Published public private(set) var totalDuplicates: Int = 0
+    @Published public private(set) var potentialSavings: Int64 = 0
+    @Published public private(set) var formattedSavings: String = ByteCountFormatter.string(
+        fromByteCount: 0,
+        countStyle: .file
+    )
+    @Published public private(set) var totalDuplicatesIncludingSemantic: Int = 0
+    @Published public private(set) var potentialSavingsIncludingSemantic: Int64 = 0
+    @Published public private(set) var formattedSavingsIncludingSemantic: String = ByteCountFormatter.string(
+        fromByteCount: 0,
+        countStyle: .file
+    )
+    @Published public private(set) var exactGroupCount: Int = 0
+    @Published public private(set) var semanticGroupCount: Int = 0
     
     private let detector = DuplicateDetector()
     
     public init() {}
-    
-    public var totalDuplicates: Int {
-        duplicateGroups.reduce(0) { $0 + $1.duplicateCount }
-    }
-    
-    public var potentialSavings: Int64 {
-        duplicateGroups.reduce(0) { $0 + $1.potentialSavings }
-    }
-    
-    public var formattedSavings: String {
-        ByteCountFormatter.string(fromByteCount: potentialSavings, countStyle: .file)
-    }
-    
-    /// All duplicate groups (exact + semantic) unified
-    public var allGroups: [UnifiedDuplicateGroup] {
+
+    private func refreshDerivedDuplicateSummary() {
         let exactGroups = duplicateGroups.map { UnifiedDuplicateGroup.exact($0) }
         let semanticGroupsMapped = semanticGroups.map { UnifiedDuplicateGroup.semantic($0) }
-        return (exactGroups + semanticGroupsMapped).sorted { $0.potentialSavings > $1.potentialSavings }
-    }
-    
-    /// Total duplicates including semantic matches
-    public var totalDuplicatesIncludingSemantic: Int {
-        let exactCount = duplicateGroups.reduce(0) { $0 + $1.duplicateCount }
-        let semanticCount = semanticGroups.reduce(0) { $0 + max(0, $1.files.count - 1) }
-        return exactCount + semanticCount
-    }
-    
-    /// Potential savings including semantic matches
-    public var potentialSavingsIncludingSemantic: Int64 {
         let exactSavings = duplicateGroups.reduce(0) { $0 + $1.potentialSavings }
         let semanticSavings = semanticGroups.reduce(0) { $0 + $1.potentialSavings }
-        return exactSavings + semanticSavings
-    }
-    
-    /// Formatted savings including semantic matches
-    public var formattedSavingsIncludingSemantic: String {
-        ByteCountFormatter.string(fromByteCount: potentialSavingsIncludingSemantic, countStyle: .file)
-    }
-    
-    /// Count of exact match groups
-    public var exactGroupCount: Int {
-        duplicateGroups.count
-    }
-    
-    /// Count of semantic match groups
-    public var semanticGroupCount: Int {
-        semanticGroups.count
+        let exactDuplicateCount = duplicateGroups.reduce(0) { $0 + $1.duplicateCount }
+        let semanticDuplicateCount = semanticGroups.reduce(0) { $0 + max(0, $1.files.count - 1) }
+
+        allGroups = (exactGroups + semanticGroupsMapped).sorted { $0.potentialSavings > $1.potentialSavings }
+        totalDuplicates = exactDuplicateCount
+        potentialSavings = exactSavings
+        formattedSavings = ByteCountFormatter.string(fromByteCount: exactSavings, countStyle: .file)
+        totalDuplicatesIncludingSemantic = exactDuplicateCount + semanticDuplicateCount
+        potentialSavingsIncludingSemantic = exactSavings + semanticSavings
+        formattedSavingsIncludingSemantic = ByteCountFormatter.string(
+            fromByteCount: exactSavings + semanticSavings,
+            countStyle: .file
+        )
+        exactGroupCount = duplicateGroups.count
+        semanticGroupCount = semanticGroups.count
     }
     
     public func scanForDuplicates(files: [FileItem], settings: DuplicateSettings) async {

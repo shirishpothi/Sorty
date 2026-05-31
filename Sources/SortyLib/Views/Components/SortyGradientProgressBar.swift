@@ -175,6 +175,7 @@ struct SortyGradientCircularProgress: View {
     var lineWidth: CGFloat = 8
     var showsShimmer: Bool = false
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var animatedProgress: Double = 0
 
     private var clampedProgress: Double {
@@ -197,7 +198,7 @@ struct SortyGradientCircularProgress: View {
             }
 
             if showsShimmer {
-                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: scenePhase != .active)) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     let arcSpan = animatedProgress * 360
                     let phase = (elapsed * 120).truncatingRemainder(
@@ -271,6 +272,7 @@ struct SortyGradientCircularTrackProgress: View {
     var isIndeterminate: Bool = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var animatedProgress: Double = 0
 
     private var clampedProgress: Double {
@@ -278,7 +280,7 @@ struct SortyGradientCircularTrackProgress: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || scenePhase != .active)) { context in
             let elapsed = context.date.timeIntervalSinceReferenceDate
             let segmentSpan = 0.24
             let phase =
@@ -446,9 +448,10 @@ struct SortyGradientCircularLoader: View {
     var lineWidth: CGFloat = 3
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || scenePhase != .active)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             let rotation = reduceMotion ? 0 : (time * 280).truncatingRemainder(dividingBy: 360)
             let pulse = (sin(time * 2.2) + 1) * 0.5

@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 
 struct OrganizingMascotView: View {
     @EnvironmentObject var organizer: FolderOrganizer
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isAnimating = false
     @State private var orbitingURLs: [URL] = []
     @State private var cachedOrbitingURLs: [URL] = []
@@ -62,7 +63,7 @@ struct OrganizingMascotView: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.periodic(from: .now, by: frameInterval)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: frameInterval, paused: scenePhase != .active)) { context in
             let time = context.date.timeIntervalSinceReferenceDate
             
             ZStack {

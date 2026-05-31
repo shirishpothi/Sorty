@@ -495,6 +495,7 @@ private struct OnboardingIntroView: View {
     let onGetStarted: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var iconScale: CGFloat = 0.9
     @State private var iconOpacity: Double = 0
     @State private var textOpacity: Double = 0
@@ -513,7 +514,7 @@ private struct OnboardingIntroView: View {
 
             // Real macOS file-type icons drift in a loose orbit, then tuck into
             // the app icon when the user starts onboarding.
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion)) { context in
+            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || scenePhase != .active)) { context in
                 let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 ZStack {
                     ForEach(OnboardingOrbitFile.files) { file in
