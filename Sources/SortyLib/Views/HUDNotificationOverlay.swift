@@ -208,36 +208,34 @@ private struct HUDNotificationAmbientEffect: View {
                 ParticleField(time: 0, accent: accent)
             }
         }
-        .padding(.leading, -34)
-        .padding(.vertical, -26)
-        .padding(.trailing, -18)
+        .mask {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .padding(.leading, -18)
+                .padding(.trailing, 8)
+        }
+        .padding(.leading, -18)
     }
 
     private var sideGlow: some View {
         ZStack(alignment: .leading) {
-            Ellipse()
-                .fill(accent.opacity(0.34))
-                .frame(width: 116, height: 170)
-                .blur(radius: 34)
-                .offset(x: -56)
-
-            Ellipse()
-                .fill(accent.opacity(0.18))
-                .frame(width: 206, height: 126)
-                .blur(radius: 44)
-                .offset(x: -28)
-
             LinearGradient(
                 colors: [
-                    accent.opacity(0.34),
-                    accent.opacity(0.12),
+                    accent.opacity(0.46),
+                    accent.opacity(0.22),
+                    accent.opacity(0.08),
                     .clear
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: 160)
-            .blur(radius: 18)
+            .frame(width: 120)
+            .blur(radius: 16)
+
+            Capsule(style: .continuous)
+                .fill(accent.opacity(0.28))
+                .frame(width: 52)
+                .blur(radius: 28)
+                .offset(x: -22)
         }
     }
 }
@@ -247,12 +245,11 @@ private struct ParticleField: View {
     let accent: Color
 
     private let particles: [Particle] = [
-        .init(seed: 0.07, y: 0.18, size: 2.8, speed: 22, delay: 0.00),
-        .init(seed: 0.22, y: 0.31, size: 1.8, speed: 28, delay: 0.18),
-        .init(seed: 0.39, y: 0.46, size: 2.3, speed: 20, delay: 0.42),
-        .init(seed: 0.56, y: 0.62, size: 1.5, speed: 30, delay: 0.64),
-        .init(seed: 0.74, y: 0.76, size: 2.1, speed: 24, delay: 0.86),
-        .init(seed: 0.91, y: 0.38, size: 1.3, speed: 34, delay: 1.08)
+        .init(seed: 0.07, y: 0.28, size: 1.4, speed: 11, delay: 0.00),
+        .init(seed: 0.22, y: 0.40, size: 1.0, speed: 14, delay: 0.26),
+        .init(seed: 0.39, y: 0.54, size: 1.2, speed: 10, delay: 0.52),
+        .init(seed: 0.56, y: 0.66, size: 0.9, speed: 15, delay: 0.78),
+        .init(seed: 0.74, y: 0.46, size: 1.1, speed: 12, delay: 1.04)
     ]
 
     var body: some View {
@@ -261,8 +258,8 @@ private struct ParticleField: View {
                 let cycle = 2.6
                 let progress = ((time + particle.delay).truncatingRemainder(dividingBy: cycle)) / cycle
                 let easedProgress = 1 - pow(1 - progress, 2)
-                let x = -4 + CGFloat(easedProgress) * particle.speed * 3.4
-                let drift = CGFloat(sin((time * 2.0) + particle.seed * 8.0) * 7.0)
+                let x = 8 + CGFloat(easedProgress) * particle.speed * 2.2
+                let drift = CGFloat(sin((time * 1.6) + particle.seed * 8.0) * 2.5)
                 let y = size.height * particle.y + drift
                 let fade = sin(progress * .pi)
                 let rect = CGRect(
@@ -275,12 +272,12 @@ private struct ParticleField: View {
                 context.opacity = max(0, fade) * 0.85
                 context.fill(
                     Path(ellipseIn: rect),
-                    with: .color(accent.opacity(0.75))
+                    with: .color(accent.opacity(0.68))
                 )
 
-                context.opacity = max(0, fade) * 0.22
+                context.opacity = max(0, fade) * 0.10
                 context.fill(
-                    Path(ellipseIn: rect.insetBy(dx: -4, dy: -4)),
+                    Path(ellipseIn: rect.insetBy(dx: -2, dy: -2)),
                     with: .color(accent)
                 )
             }
