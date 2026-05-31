@@ -133,6 +133,23 @@ public enum FeatureFlags {
         return UserDefaults.standard.bool(forKey: "featureDemoEnabled")
     }
 
+    /// Controls whether Workspace Health is visible in navigation and deeplink entry points.
+    ///
+    /// Disabled by default. Enable via Terminal:
+    /// ```
+    /// defaults write com.sorty.app workspaceHealthEnabled -bool true
+    /// ```
+    /// Disable:
+    /// ```
+    /// defaults write com.sorty.app workspaceHealthEnabled -bool false
+    /// ```
+    public static var workspaceHealthEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "workspaceHealthEnabled") == nil {
+            return false
+        }
+        return UserDefaults.standard.bool(forKey: "workspaceHealthEnabled")
+    }
+
     /// Controls whether subscription-based auth methods are available for supported AI providers.
     ///
     /// Enabled by default. Disable via Terminal:

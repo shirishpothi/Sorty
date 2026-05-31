@@ -142,7 +142,7 @@ public final class WindowSession: ObservableObject {
             appState.currentView = .history
 
         case .health:
-            appState.currentView = .workspaceHealth
+            appState.currentView = FeatureFlags.workspaceHealthEnabled ? .workspaceHealth : .organize
 
         case .persona(let action, let prompt, let generate):
             appState.openSettingsWindow(section: .strategy)
@@ -211,7 +211,7 @@ public final class WindowSession: ObservableObject {
             if let path {
                 appState.selectedDirectory = URL(fileURLWithPath: path)
             }
-            appState.currentView = .workspaceHealth
+            appState.currentView = FeatureFlags.workspaceHealthEnabled ? .workspaceHealth : .organize
 
         case .storage(let action, let path):
             appState.currentView = .storageLocations

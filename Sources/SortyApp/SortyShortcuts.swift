@@ -47,6 +47,15 @@ enum SortyShortcutDestination: String, AppEnum {
     }
 }
 
+private enum SortyShortcutFeatureFlags {
+    static var workspaceHealthEnabled: Bool {
+        if UserDefaults.standard.object(forKey: "workspaceHealthEnabled") == nil {
+            return false
+        }
+        return UserDefaults.standard.bool(forKey: "workspaceHealthEnabled")
+    }
+}
+
 struct OpenSortyDestinationIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Sorty"
     static let description = IntentDescription("Open a specific Sorty workspace.")
@@ -69,6 +78,10 @@ struct OpenSortyDestinationIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        if destination == .workspaceHealth, !SortyShortcutFeatureFlags.workspaceHealthEnabled {
+            return .result(dialog: "Workspace Health is not enabled in Sorty.")
+        }
+
         guard let url = DeeplinkHandler.url(for: destination.deeplink) else {
             return .result(dialog: "Sorty couldn't build that shortcut.")
         }
@@ -135,44 +148,53 @@ struct SortyAppShortcutsProvider: AppShortcutsProvider {
     static let shortcutTileColor: ShortcutTileColor = .teal
 
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(
-            intent: OpenSortyDestinationIntent(destination: .organize),
-            phrases: [
-                "Open \(.applicationName)",
-                "Open organize in \(.applicationName)"
-            ],
-            shortTitle: "Open Sorty",
-            systemImageName: "sparkles"
-        )
+        var shortcuts = [
+            AppShortcut(
+                intent: OpenSortyDestinationIntent(destination: .organize),
+                phrases: [
+                    "Open \(.applicationName)",
+                    "Open organize in \(.applicationName)"
+                ],
+                shortTitle: "Open Sorty",
+                systemImageName: "sparkles"
+            ),
 
-        AppShortcut(
-            intent: OpenSortyDestinationIntent(destination: .history),
-            phrases: [
-                "Open \(.applicationName) history",
-                "Show history in \(.applicationName)"
-            ],
-            shortTitle: "History",
-            systemImageName: "clock.arrow.circlepath"
-        )
+            AppShortcut(
+                intent: OpenSortyDestinationIntent(destination: .history),
+                phrases: [
+                    "Open \(.applicationName) history",
+                    "Show history in \(.applicationName)"
+                ],
+                shortTitle: "History",
+                systemImageName: "clock.arrow.circlepath"
+            ),
 
-        AppShortcut(
-            intent: OpenSortyDestinationIntent(destination: .workspaceHealth),
-            phrases: [
-                "Open workspace health in \(.applicationName)",
-                "Show workspace health in \(.applicationName)"
-            ],
-            shortTitle: "Workspace Health",
-            systemImageName: "waveform.path.ecg"
-        )
+            AppShortcut(
+                intent: OrganizeFolderInSortyIntent(),
+                phrases: [
+                    "Organize a folder with \(.applicationName)",
+                    "Run \(.applicationName) on a folder"
+                ],
+                shortTitle: "Organize Folder",
+                systemImageName: "folder.badge.gearshape"
+            )
+        ]
 
-        AppShortcut(
-            intent: OrganizeFolderInSortyIntent(),
-            phrases: [
-                "Organize a folder with \(.applicationName)",
-                "Run \(.applicationName) on a folder"
-            ],
-            shortTitle: "Organize Folder",
-            systemImageName: "folder.badge.gearshape"
-        )
+        if SortyShortcutFeatureFlags.workspaceHealthEnabled {
+            shortcuts.insert(
+                AppShortcut(
+                    intent: OpenSortyDestinationIntent(destination: .workspaceHealth),
+                    phrases: [
+                        "Open workspace health in \(.applicationName)",
+                        "Show workspace health in \(.applicationName)"
+                    ],
+                    shortTitle: "Workspace Health",
+                    systemImageName: "waveform.path.ecg"
+                ),
+                at: 2
+            )
+        }
+
+        return shortcuts
     }
 }

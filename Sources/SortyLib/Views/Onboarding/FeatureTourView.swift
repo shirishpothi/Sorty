@@ -26,8 +26,8 @@ public struct FeatureTourView: View {
 
     @State private var currentIndex = 0
 
-    private var step: FeatureTourStep { FeatureTourStep.all[currentIndex] }
-    private var isLastStep: Bool { currentIndex == FeatureTourStep.all.count - 1 }
+    private var step: FeatureTourStep { FeatureTourStep.visible[currentIndex] }
+    private var isLastStep: Bool { currentIndex == FeatureTourStep.visible.count - 1 }
 
     public init() {}
 
@@ -167,7 +167,7 @@ public struct FeatureTourView: View {
 
     private var pageIndicator: some View {
         HStack(spacing: 7) {
-            ForEach(Array(FeatureTourStep.all.enumerated()), id: \.offset) { index, _ in
+            ForEach(Array(FeatureTourStep.visible.enumerated()), id: \.offset) { index, _ in
                 let isActive = index == currentIndex
                 Capsule(style: .continuous)
                     .fill(.white.opacity(isActive ? 0.95 : 0.32))
@@ -177,11 +177,11 @@ public struct FeatureTourView: View {
                         currentIndex = index
                         HapticFeedbackManager.shared.selection()
                     }
-                    .accessibilityLabel("Go to \(FeatureTourStep.all[index].title)")
+                    .accessibilityLabel("Go to \(FeatureTourStep.visible[index].title)")
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Page \(currentIndex + 1) of \(max(FeatureTourStep.all.count, 1))")
+        .accessibilityLabel("Page \(currentIndex + 1) of \(max(FeatureTourStep.visible.count, 1))")
     }
 
     // MARK: - Bottom panel (title + description + primary button)
@@ -256,7 +256,7 @@ public struct FeatureTourView: View {
     }
 
     private func goNext() {
-        if currentIndex < FeatureTourStep.all.count - 1 {
+        if currentIndex < FeatureTourStep.visible.count - 1 {
             currentIndex += 1
             HapticFeedbackManager.shared.tap()
         } else {
@@ -344,6 +344,13 @@ private struct FeatureTourStep: Identifiable {
             icon: "brain"
         ),
     ]
+
+    @MainActor
+    static var visible: [FeatureTourStep] {
+        all.filter { step in
+            step.id != .workspaceHealth || FeatureFlags.workspaceHealthEnabled
+        }
+    }
 }
 
 private struct WorkspaceHealthScreenMockup: View {

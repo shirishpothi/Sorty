@@ -46,14 +46,6 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 helpText: "Detect and manage duplicate files"
             ),
             SidebarNavigationItem(
-                view: .workspaceHealth,
-                title: "Workspace Health",
-                systemImage: "heart.text.square",
-                accessibilityIdentifier: "WorkspaceHealthSidebarItem",
-                accessibilityHint: "Inspect workspace quality and cleanup opportunities",
-                helpText: "Check workspace health insights"
-            ),
-            SidebarNavigationItem(
                 view: .history,
                 title: "History",
                 systemImage: "clock",
@@ -86,6 +78,20 @@ struct SidebarNavigationItem: Identifiable, Hashable {
                 helpText: "Adjust provider, strategy, automation, and system settings"
             )
         ])
+
+        if FeatureFlags.workspaceHealthEnabled {
+            items.insert(
+                SidebarNavigationItem(
+                    view: .workspaceHealth,
+                    title: "Workspace Health",
+                    systemImage: "heart.text.square",
+                    accessibilityIdentifier: "WorkspaceHealthSidebarItem",
+                    accessibilityHint: "Inspect workspace quality and cleanup opportunities",
+                    helpText: "Check workspace health insights"
+                ),
+                at: 3
+            )
+        }
 
         return items
     }

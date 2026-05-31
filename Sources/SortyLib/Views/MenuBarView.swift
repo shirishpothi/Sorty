@@ -154,8 +154,10 @@ public struct MenuBarView: View {
                 openDestination(.history)
             }
 
-            MenuBarButton(title: "Workspace Health", icon: "heart.text.square") {
-                openDestination(.health)
+            if FeatureFlags.workspaceHealthEnabled {
+                MenuBarButton(title: "Workspace Health", icon: "heart.text.square") {
+                    openDestination(.health)
+                }
             }
 
             MenuBarButton(title: "Learnings", icon: "brain") {

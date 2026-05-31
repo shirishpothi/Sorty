@@ -11,23 +11,30 @@ import SwiftUI
 struct HelpSettingsView: View {
     @EnvironmentObject var appState: AppState
 
-    private let deeplinkEntries: [DeeplinkEntry] = [
-        DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
-        DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files view with an optional path and autostart."),
-        DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear."),
-        DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
-        DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support destination with optional section."),
-        DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
-        DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history."),
-        DeeplinkEntry(title: "Workspace Health", url: "sorty://health", summary: "Open workspace health."),
-        DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Create/select persona flows with optional generation prompt."),
-        DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
-        DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions flow with optional add action and pattern."),
-        DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a new exclusion pattern."),
-        DeeplinkEntry(title: "Scan", url: "sorty://scan?path=/Users/me/Downloads", summary: "Open workspace-health scan target for a folder."),
-        DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path."),
-        DeeplinkEntry(title: "Legacy Path", url: "sorty:///Users/me/Downloads", summary: "Legacy path-only deeplink supported for compatibility.")
-    ]
+    private var deeplinkEntries: [DeeplinkEntry] {
+        var entries = [
+            DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
+            DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files view with an optional path and autostart."),
+            DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear."),
+            DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
+            DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support destination with optional section."),
+            DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
+            DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history."),
+            DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Create/select persona flows with optional generation prompt."),
+            DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
+            DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions flow with optional add action and pattern."),
+            DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a new exclusion pattern."),
+            DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path."),
+            DeeplinkEntry(title: "Legacy Path", url: "sorty:///Users/me/Downloads", summary: "Legacy path-only deeplink supported for compatibility.")
+        ]
+
+        if FeatureFlags.workspaceHealthEnabled {
+            entries.insert(DeeplinkEntry(title: "Workspace Health", url: "sorty://health", summary: "Open workspace health."), at: 7)
+            entries.insert(DeeplinkEntry(title: "Scan", url: "sorty://scan?path=/Users/me/Downloads", summary: "Open workspace-health scan target for a folder."), at: 13)
+        }
+
+        return entries
+    }
     
     var body: some View {
         VStack(spacing: 20) {
