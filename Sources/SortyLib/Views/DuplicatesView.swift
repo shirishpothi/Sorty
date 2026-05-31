@@ -1569,10 +1569,9 @@ private struct ScanProgressReferenceBeamFallback: View {
     let includesInteriorGlow: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active || scenePhase != .active)) { timeline in
+        SwiftUI.TimelineView(.animation(paused: reduceMotion || !active)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let phase = reduceMotion ? 0 : time / 1.96
             ZStack {

@@ -102,13 +102,12 @@ struct WorkflowGradientBackground: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.workflowGradientHidden) private var gradientHidden
 
-    /// Drives the one-shot rise-from-bottom reveal (0 -> 1).
-    /// We animate only `scaleEffect` (anchored to `.bottom`) and `opacity`:
-    /// no blur, no `drawingGroup`, because those were the main flicker sources.
-    @State private var gradientReveal: Double = 0
+    /// The background should be present immediately. It used to animate from 0 -> 1,
+    /// but that read as an unintended fill sweeping across the gradient whenever a
+    /// workflow screen mounted or refreshed.
+    @State private var gradientReveal: Double = 1
 
     @State private var motionActive = false
     @State private var breathScaleY: CGFloat = 1.0
@@ -121,9 +120,6 @@ struct WorkflowGradientBackground: View {
         if !gradientHidden {
             backgroundLayer
                 .task(id: animationPaused) {
-                    // Guarded against re-entry so it only plays once per mount even
-                    // if `task` is re-fired by an upstream identity change.
-                    revealIfNeeded()
                     updateContinuousMotion()
                 }
         }
@@ -148,14 +144,7 @@ struct WorkflowGradientBackground: View {
     }
 
     private var animationPaused: Bool {
-        reduceMotion || scenePhase != .active
-    }
-
-    private func revealIfNeeded() {
-        guard gradientReveal == 0 else { return }
-        withAnimation(.easeOut(duration: 0.7)) {
-            gradientReveal = 1
-        }
+        reduceMotion
     }
 
     private func updateContinuousMotion() {

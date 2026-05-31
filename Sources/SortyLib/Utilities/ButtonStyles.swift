@@ -551,8 +551,6 @@ private struct MetalFxPillSurface: View {
     let usesSubtleIdleBeam: Bool
     let colorScheme: ColorScheme
 
-    @Environment(\.scenePhase) private var scenePhase
-
     private var isIntensified: Bool {
         isHovering || isPressed
     }
@@ -562,7 +560,7 @@ private struct MetalFxPillSurface: View {
     }
 
     private var shouldAnimateSurface: Bool {
-        !isPaused && isEnabled && scenePhase == .active && (!usesSubtleIdleBeam || isIntensified)
+        !isPaused && isEnabled
     }
 
     var body: some View {
@@ -780,10 +778,9 @@ private struct OnboardingBeamBorder: View {
     let size: BeamSize
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
 
     private var shouldAnimateBeam: Bool {
-        active && !reduceMotion && scenePhase == .active && (isIntensified || includesInteriorGlow)
+        active && !reduceMotion
     }
 
     var body: some View {
@@ -800,10 +797,14 @@ private struct OnboardingBeamBorder: View {
                 lensStrength: isIntensified ? variant.lensStrength * 1.25 : 0
             )
             .overlay {
-                fallbackBorder(phase: 0.31)
-                    .opacity(active ? (isIntensified ? 1 : variant.fallbackOpacity) : 0)
-                    .animation(.easeOut(duration: 0.22), value: active)
-                    .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isIntensified)
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !shouldAnimateBeam)) { timeline in
+                    let phase = shouldAnimateBeam ? timeline.date.timeIntervalSinceReferenceDate / 1.96 : 0.31
+
+                    fallbackBorder(phase: phase)
+                        .opacity(active ? (isIntensified ? 1 : variant.fallbackOpacity) : 0)
+                        .animation(.easeOut(duration: 0.22), value: active)
+                        .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isIntensified)
+                }
             }
     }
 
