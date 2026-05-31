@@ -10,6 +10,7 @@ import SwiftUI
 /// HUD notification overlay that appears at the bottom-left of the window
 public struct HUDNotificationOverlay: View {
     @ObservedObject private var notificationManager: NotificationManager
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     public init() {
         self._notificationManager = ObservedObject(wrappedValue: NotificationManager.shared)
@@ -36,7 +37,10 @@ public struct HUDNotificationOverlay: View {
             .padding(.bottom, 20)
         }
         .allowsHitTesting(notificationManager.currentHUDNotification != nil)
-        .animation(.spring(response: 0.5, dampingFraction: 0.78), value: notificationManager.currentHUDNotification?.id)
+        .animation(
+            reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.78),
+            value: notificationManager.currentHUDNotification?.id
+        )
         .ignoresSafeArea()
         .zIndex(1000)
     }
@@ -47,6 +51,7 @@ struct HUDNotificationCard: View {
     let notification: HUDNotification
     let onDismiss: () -> Void
     
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
     @State private var progressRemaining: CGFloat = 1.0
     @State private var appeared = false
@@ -152,10 +157,15 @@ struct HUDNotificationCard: View {
             .padding(.horizontal, 6)
             .padding(.bottom, 3)
         }
+        .background {
+            HUDNotificationAmbientEffect(isAnimated: appeared && !reduceMotion)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .shadow(color: notification.iconColor.opacity(0.12), radius: 12, x: 0, y: 6)
         .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.15)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) {
                 isHovered = hovering
             }
         }
@@ -169,7 +179,9 @@ struct HUDNotificationCard: View {
             }
         }
         .onAppear {
-            withAnimation(.linear(duration: autoDismissSeconds)) {
+            appeared = true
+
+            withAnimation(reduceMotion ? nil : .linear(duration: autoDismissSeconds)) {
                 progressRemaining = 0
             }
         }
@@ -177,6 +189,111 @@ struct HUDNotificationCard: View {
         .accessibilityLabel("\(notification.title): \(notification.message)")
         .accessibilityHint(notification.defaultAction == nil ? "Tap to dismiss" : "Tap to open")
     }
+}
+
+private struct HUDNotificationAmbientEffect: View {
+    let isAnimated: Bool
+
+    private let accent = Color(red: 1.0, green: 0.22, blue: 0.62)
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            sideGlow
+
+            if isAnimated {
+                SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                    ParticleField(time: timeline.date.timeIntervalSinceReferenceDate, accent: accent)
+                }
+            } else {
+                ParticleField(time: 0, accent: accent)
+            }
+        }
+        .padding(.leading, -34)
+        .padding(.vertical, -26)
+        .padding(.trailing, -18)
+    }
+
+    private var sideGlow: some View {
+        ZStack(alignment: .leading) {
+            Ellipse()
+                .fill(accent.opacity(0.34))
+                .frame(width: 116, height: 170)
+                .blur(radius: 34)
+                .offset(x: -56)
+
+            Ellipse()
+                .fill(accent.opacity(0.18))
+                .frame(width: 206, height: 126)
+                .blur(radius: 44)
+                .offset(x: -28)
+
+            LinearGradient(
+                colors: [
+                    accent.opacity(0.34),
+                    accent.opacity(0.12),
+                    .clear
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: 160)
+            .blur(radius: 18)
+        }
+    }
+}
+
+private struct ParticleField: View {
+    let time: TimeInterval
+    let accent: Color
+
+    private let particles: [Particle] = [
+        .init(seed: 0.07, y: 0.18, size: 2.8, speed: 22, delay: 0.00),
+        .init(seed: 0.22, y: 0.31, size: 1.8, speed: 28, delay: 0.18),
+        .init(seed: 0.39, y: 0.46, size: 2.3, speed: 20, delay: 0.42),
+        .init(seed: 0.56, y: 0.62, size: 1.5, speed: 30, delay: 0.64),
+        .init(seed: 0.74, y: 0.76, size: 2.1, speed: 24, delay: 0.86),
+        .init(seed: 0.91, y: 0.38, size: 1.3, speed: 34, delay: 1.08)
+    ]
+
+    var body: some View {
+        Canvas { context, size in
+            for particle in particles {
+                let cycle = 2.6
+                let progress = ((time + particle.delay).truncatingRemainder(dividingBy: cycle)) / cycle
+                let easedProgress = 1 - pow(1 - progress, 2)
+                let x = -4 + CGFloat(easedProgress) * particle.speed * 3.4
+                let drift = CGFloat(sin((time * 2.0) + particle.seed * 8.0) * 7.0)
+                let y = size.height * particle.y + drift
+                let fade = sin(progress * .pi)
+                let rect = CGRect(
+                    x: x,
+                    y: y,
+                    width: particle.size,
+                    height: particle.size
+                )
+
+                context.opacity = max(0, fade) * 0.85
+                context.fill(
+                    Path(ellipseIn: rect),
+                    with: .color(accent.opacity(0.75))
+                )
+
+                context.opacity = max(0, fade) * 0.22
+                context.fill(
+                    Path(ellipseIn: rect.insetBy(dx: -4, dy: -4)),
+                    with: .color(accent)
+                )
+            }
+        }
+    }
+}
+
+private struct Particle {
+    let seed: Double
+    let y: CGFloat
+    let size: CGFloat
+    let speed: CGFloat
+    let delay: TimeInterval
 }
 
 private struct HUDNotificationActionLabel: View {
