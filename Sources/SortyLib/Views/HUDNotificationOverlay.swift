@@ -145,6 +145,12 @@ struct HUDNotificationCard: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
+        .overlay {
+            HUDNotificationGlassSheen()
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
@@ -155,7 +161,7 @@ struct HUDNotificationCard: View {
         .overlay(alignment: .bottom) {
             GeometryReader { geo in
                 Capsule()
-                    .fill(notification.iconColor.opacity(0.4))
+                    .fill(notification.iconColor.opacity(0.24))
                     .frame(width: geo.size.width * progressRemaining, height: 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -196,6 +202,7 @@ private struct HUDNotificationTorchEffect: View {
     let isAnimated: Bool
 
     private let accent = Color(red: 1.0, green: 0.22, blue: 0.62)
+    private let hotCore = Color(red: 1.0, green: 0.48, blue: 0.74)
 
     var body: some View {
         GeometryReader { geometry in
@@ -215,43 +222,79 @@ private struct HUDNotificationTorchEffect: View {
 
     private func torchGlow(in size: CGSize) -> some View {
         ZStack(alignment: .leading) {
-            LinearGradient(
-                colors: [
-                    accent.opacity(0.52),
-                    accent.opacity(0.24),
-                    accent.opacity(0.075),
-                    .clear
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: min(250, size.width * 0.60), height: size.height)
-            .blur(radius: 18)
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            hotCore.opacity(0.82),
+                            accent.opacity(0.42),
+                            accent.opacity(0.16),
+                            .clear
+                        ],
+                        center: .leading,
+                        startRadius: 0,
+                        endRadius: 118
+                    )
+                )
+                .frame(width: min(260, size.width * 0.62), height: size.height * 1.22)
+                .blur(radius: 16)
+                .offset(x: -62)
 
             Ellipse()
                 .fill(
                     RadialGradient(
                         colors: [
-                            accent.opacity(0.72),
-                            accent.opacity(0.28),
-                            accent.opacity(0.08),
+                            accent.opacity(0.34),
+                            accent.opacity(0.14),
                             .clear
                         ],
                         center: .leading,
-                        startRadius: 0,
-                        endRadius: 92
+                        startRadius: 12,
+                        endRadius: 96
                     )
                 )
-                .frame(width: min(210, size.width * 0.50), height: size.height * 1.28)
-                .blur(radius: 12)
-                .offset(x: -46)
+                .frame(width: min(190, size.width * 0.46), height: size.height * 0.76)
+                .blur(radius: 18)
+                .offset(x: 6)
 
             Rectangle()
-                .fill(accent.opacity(0.24))
-                .frame(width: 3, height: size.height * 0.72)
-                .blur(radius: 4)
-                .offset(x: 1)
+                .fill(hotCore.opacity(0.38))
+                .frame(width: 2, height: size.height * 0.66)
+                .blur(radius: 5)
+                .offset(x: 0)
         }
+        .blendMode(.screen)
+    }
+}
+
+private struct HUDNotificationGlassSheen: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(0.16),
+                    Color.white.opacity(0.045),
+                    .clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .center
+            )
+
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.30),
+                            Color.white.opacity(0.08),
+                            Color.white.opacity(0.16)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        }
+        .blendMode(.screen)
     }
 }
 
@@ -260,11 +303,11 @@ private struct ParticleField: View {
     let accent: Color
 
     private let particles: [Particle] = [
-        .init(seed: 0.07, y: 0.30, size: 1.1, speed: 14, delay: 0.00),
-        .init(seed: 0.22, y: 0.40, size: 0.8, speed: 18, delay: 0.32),
-        .init(seed: 0.39, y: 0.52, size: 1.0, speed: 12, delay: 0.64),
-        .init(seed: 0.56, y: 0.63, size: 0.7, speed: 16, delay: 0.96),
-        .init(seed: 0.74, y: 0.46, size: 0.9, speed: 20, delay: 1.28)
+        .init(seed: 0.07, y: 0.32, size: 0.8, speed: 12, delay: 0.00),
+        .init(seed: 0.22, y: 0.42, size: 0.6, speed: 16, delay: 0.32),
+        .init(seed: 0.39, y: 0.53, size: 0.75, speed: 11, delay: 0.64),
+        .init(seed: 0.56, y: 0.64, size: 0.55, speed: 15, delay: 0.96),
+        .init(seed: 0.74, y: 0.47, size: 0.7, speed: 18, delay: 1.28)
     ]
 
     var body: some View {
@@ -284,10 +327,10 @@ private struct ParticleField: View {
                     height: particle.size
                 )
 
-                context.opacity = max(0, fade) * 0.55
+                context.opacity = max(0, fade) * 0.42
                 context.fill(
                     Path(ellipseIn: rect),
-                    with: .color(accent.opacity(0.74))
+                    with: .color(accent.opacity(0.62))
                 )
             }
         }
