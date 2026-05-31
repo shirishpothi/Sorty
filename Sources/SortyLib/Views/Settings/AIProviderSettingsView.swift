@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AIProviderSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
     
     @State private var testConnectionStatus: String?
@@ -18,48 +19,28 @@ struct AIProviderSettingsView: View {
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
     @State private var isDetailsExpanded = false
+
+    private let providerColumns = [
+        GridItem(.adaptive(minimum: 220, maximum: 280), spacing: 10, alignment: .top)
+    ]
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Provider Selection
-            SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
-                VStack(spacing: 8) {
-                    ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
-                        AIProviderRow(
-                            provider: provider,
-                            isSelected: viewModel.config.provider == provider,
-                            action: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    viewModel.config.provider = provider
-                                    if let defaultURL = provider.defaultAPIURL {
-                                        viewModel.config.apiURL = defaultURL
-                                    }
-                                    viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
-                                    HapticFeedbackManager.shared.selection()
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-            .animatedAppearance(delay: 0.05)
-            
-            // Provider-specific configuration
-            if viewModel.config.provider == .githubCopilot {
-                copilotConfigSection
-                    .animatedAppearance(delay: 0.1)
-            } else if viewModel.config.provider == .appleFoundationModel {
-                appleConfigSection
-                    .animatedAppearance(delay: 0.1)
-            } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
-                apiConfigSection
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 16) {
+                providerSelectionSection
+                    .frame(minWidth: 420, maxWidth: .infinity, alignment: .top)
+                    .animatedAppearance(delay: 0.05)
+
+                configurationRail
+                    .frame(width: 360)
                     .animatedAppearance(delay: 0.1)
             }
-            
-            // Connection Test
-            if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini, .appleFoundationModel].contains(viewModel.config.provider) {
-                connectionSection
-                    .animatedAppearance(delay: 0.15)
+
+            VStack(spacing: 16) {
+                providerSelectionSection
+                    .animatedAppearance(delay: 0.05)
+                configurationRail
+                    .animatedAppearance(delay: 0.1)
             }
         }
         .onAppear {
@@ -82,49 +63,294 @@ struct AIProviderSettingsView: View {
             }
         )
     }
+
+    private var providerSelectionSection: some View {
+        SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
+            VStack(alignment: .leading, spacing: 16) {
+                selectedProviderHeadline
+
+                ForEach(providerGroups) { group in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(group.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+
+                        LazyVGrid(columns: providerColumns, alignment: .leading, spacing: 10) {
+                            ForEach(group.providers, id: \.self) { provider in
+                                AIProviderRow(
+                                    provider: provider,
+                                    isSelected: viewModel.config.provider == provider,
+                                    action: {
+                                        selectProvider(provider)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var selectedProviderHeadline: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ProviderLogoView(provider: viewModel.config.provider, size: 26)
+                .frame(width: 40, height: 40)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(viewModel.config.provider.brandColor.opacity(0.12))
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(viewModel.config.provider.displayName)
+                    .font(.headline)
+                Text(viewModel.config.provider.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 8)
+
+            ProviderSetupBadge(summary: setupSummary)
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(viewModel.config.provider.displayName), \(setupSummary.title)")
+    }
+
+    private var configurationRail: some View {
+        VStack(spacing: 16) {
+            currentSetupSection
+            providerConfigurationSection
+            connectionSection
+        }
+    }
+
+    @ViewBuilder
+    private var providerConfigurationSection: some View {
+        if viewModel.config.provider == .githubCopilot {
+            copilotConfigSection
+        } else if viewModel.config.provider == .appleFoundationModel {
+            appleConfigSection
+        } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
+            apiConfigSection
+        }
+    }
+
+    private var currentSetupSection: some View {
+        SettingsCard(title: "Current Setup", icon: setupSummary.icon, color: setupSummary.color) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: setupSummary.icon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(setupSummary.color)
+                        .frame(width: 24, height: 24)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(setupSummary.title)
+                            .font(.subheadline.weight(.semibold))
+                        Text(setupSummary.message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                Divider()
+
+                VStack(spacing: 9) {
+                    SetupSummaryRow(icon: "cube", title: "Model", value: selectedModelDisplayName)
+
+                    if let endpoint = selectedEndpointDisplayName {
+                        SetupSummaryRow(icon: "network", title: "Endpoint", value: endpoint)
+                    }
+
+                    SetupSummaryRow(icon: "key", title: "Credential", value: credentialDisplayName)
+                }
+            }
+        }
+    }
+
+    private var providerGroups: [AIProviderSettingsGroup] {
+        let available = Set(AIProvider.userSelectableProviders)
+        return [
+            AIProviderSettingsGroup(
+                title: "Best starting points",
+                providers: [.openAI, .githubCopilot, .anthropic, .gemini].filter { available.contains($0) }
+            ),
+            AIProviderSettingsGroup(
+                title: "Speed and breadth",
+                providers: [.groq, .openRouter, .openAICompatible].filter { available.contains($0) }
+            ),
+            AIProviderSettingsGroup(
+                title: "Local and on-device",
+                providers: [.ollama, .appleFoundationModel].filter { available.contains($0) }
+            )
+        ]
+        .filter { !$0.providers.isEmpty }
+    }
+
+    private var setupSummary: AIProviderSetupSummary {
+        let provider = viewModel.config.provider
+
+        if provider == .githubCopilot, !copilotAuth.isAuthenticated {
+            return AIProviderSetupSummary(
+                title: "Sign-in required",
+                message: "Connect GitHub before Sorty can use Copilot models.",
+                icon: "person.badge.key.fill",
+                color: .orange,
+                isReady: false
+            )
+        }
+
+        if provider == .appleFoundationModel, !viewModel.isAppleModelAvailable {
+            return AIProviderSetupSummary(
+                title: "Unavailable",
+                message: viewModel.appleModelStatus.isEmpty
+                    ? "Apple Foundation Model is not available on this Mac."
+                    : viewModel.appleModelStatus,
+                icon: "exclamationmark.triangle.fill",
+                color: .orange,
+                isReady: false
+            )
+        }
+
+        if requiresEditableEndpoint(provider),
+           (viewModel.config.apiURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return AIProviderSetupSummary(
+                title: "Endpoint required",
+                message: "Add the API URL before testing this provider.",
+                icon: "network.badge.shield.half.filled",
+                color: .orange,
+                isReady: false
+            )
+        }
+
+        if !ProviderAuthResolver.hasRequiredCredential(for: provider, config: viewModel.config) {
+            return AIProviderSetupSummary(
+                title: "Credential required",
+                message: "Add credentials before testing this provider.",
+                icon: "key.fill",
+                color: .orange,
+                isReady: false
+            )
+        }
+
+        return AIProviderSetupSummary(
+            title: "Ready to test",
+            message: "\(provider.displayName) has the required setup.",
+            icon: "checkmark.shield.fill",
+            color: .green,
+            isReady: true
+        )
+    }
+
+    private var selectedModelDisplayName: String {
+        viewModel.config.model.isEmpty ? viewModel.config.provider.defaultModel : viewModel.config.model
+    }
+
+    private var selectedEndpointDisplayName: String? {
+        guard requiresEditableEndpoint(viewModel.config.provider) else { return nil }
+        return viewModel.config.apiURL ?? viewModel.config.provider.defaultAPIURL
+    }
+
+    private var credentialDisplayName: String {
+        let provider = viewModel.config.provider
+        let hasCredential = ProviderAuthResolver.hasRequiredCredential(for: provider, config: viewModel.config)
+
+        if provider == .githubCopilot {
+            return copilotAuth.isAuthenticated ? "GitHub signed in" : "Sign-in required"
+        }
+
+        if provider == .appleFoundationModel {
+            return "Not required"
+        }
+
+        if provider == .ollama && !viewModel.config.requiresAPIKey {
+            return "Not required"
+        }
+
+        if ProviderAuthResolver.effectiveAuthMethod(for: provider, config: viewModel.config) == .accountSignIn {
+            return hasCredential ? "Codex CLI signed in" : "Codex CLI sign-in required"
+        }
+
+        if !viewModel.config.requiresAPIKey {
+            return hasCredential ? "Optional key saved" : "Optional"
+        }
+
+        return hasCredential ? "API key saved" : "API key required"
+    }
+
+    private func requiresEditableEndpoint(_ provider: AIProvider) -> Bool {
+        [.openAICompatible, .ollama].contains(provider)
+    }
+
+    private func selectProvider(_ provider: AIProvider) {
+        let animation = reduceMotion ? nil : Animation.spring(response: 0.3, dampingFraction: 0.7)
+
+        withAnimation(animation) {
+            viewModel.config.provider = provider
+            if let defaultURL = provider.defaultAPIURL {
+                viewModel.config.apiURL = defaultURL
+            }
+            viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
+            HapticFeedbackManager.shared.selection()
+        }
+    }
     
     private var copilotConfigSection: some View {
         SettingsCard(title: "GitHub Copilot", icon: "person.badge.key", color: .black) {
             if copilotAuth.isAuthenticated {
                 // Signed in state
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.green)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Signed in")
-                            .font(.headline)
-                        if let username = copilotAuth.username {
-                            Text(username)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                                .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
-                                .animation(.spring(), value: isHoveringUsername)
-                                .onHover { hovering in
-                                    isHoveringUsername = hovering
-                                }
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.green)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Signed in")
+                                .font(.headline)
+                            if let username = copilotAuth.username {
+                                Text(username)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
+                                    .animation(reduceMotion ? nil : .spring(), value: isHoveringUsername)
+                                    .onHover { hovering in
+                                        isHoveringUsername = hovering
+                                    }
+                            }
                         }
+
+                        Spacer()
+
+                        Button("Sign Out") {
+                            copilotAuth.signOut()
+                        }
+                        .buttonStyle(.sortyBordered)
                     }
-                    
-                    Spacer()
-                    
+
                     if !viewModel.availableModels.isEmpty {
                         ModelSelectorRow(
                             provider: .githubCopilot,
                             model: viewModel.config.model,
                             onTap: { showModelPicker = true }
                         )
-                        .frame(width: 220)
                         .modelSelectorTriggerBounds()
                     } else if viewModel.isLoadingModels {
-                        BouncingSpinner(size: 12, color: .secondary)
+                        HStack(spacing: 8) {
+                            BouncingSpinner(size: 12, color: .secondary)
+                            Text("Loading models...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    
-                    Button("Sign Out") {
-                        copilotAuth.signOut()
-                    }
-                    .buttonStyle(.sortyBordered)
                 }
                 .onAppear {
                     viewModel.updateAvailableModels()
@@ -468,8 +694,71 @@ struct AIProviderSettingsView: View {
     }
 }
 
+private struct AIProviderSettingsGroup: Identifiable {
+    let title: String
+    let providers: [AIProvider]
+
+    var id: String { title }
+}
+
+private struct AIProviderSetupSummary {
+    let title: String
+    let message: String
+    let icon: String
+    let color: Color
+    let isReady: Bool
+}
+
+private struct ProviderSetupBadge: View {
+    let summary: AIProviderSetupSummary
+
+    var body: some View {
+        Label(summary.isReady ? "Ready" : "Needs setup", systemImage: summary.icon)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(summary.color)
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(summary.color.opacity(0.12), in: Capsule())
+            .fixedSize()
+    }
+}
+
+private struct SetupSummaryRow: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 14)
+
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 8)
+
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .help(value)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 #Preview {
+    let codexAuthManager = CodexCLIAuthManager()
+
     AIProviderSettingsView()
         .environmentObject(SettingsViewModel())
+        .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
+        .environmentObject(codexAuthManager)
         .frame(width: 500, height: 600)
 }
