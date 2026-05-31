@@ -561,59 +561,69 @@ private struct MetalFxPillSurface: View {
         usesSubtleIdleBeam && !isIntensified ? 0.42 : 1.0
     }
 
+    private var shouldAnimateSurface: Bool {
+        !isPaused && isEnabled && scenePhase == .active && (!usesSubtleIdleBeam || isIntensified)
+    }
+
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30, paused: isPaused || !isEnabled || scenePhase != .active)) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-
-            ZStack {
-                Capsule()
-                    .fill(baseFill)
-
-                Capsule()
-                    .strokeBorder(
-                        AngularGradient(
-                            colors: ringColors,
-                            center: .center,
-                            angle: .degrees(time * 52)
-                        ),
-                        lineWidth: isIntensified ? 3.2 : 1.6
-                    )
-                    .blur(radius: 0.35)
-                    .opacity(idleBeamOpacity)
-
-                Capsule()
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(colorScheme == .dark ? 0.30 : 0.38),
-                                Color.white.opacity(0.08),
-                                Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 1
-                    )
-
-                movingCatchlight(time: time)
-                    .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
-
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(isPressed ? 0.08 : (isHovering ? 0.16 : (usesSubtleIdleBeam ? 0.08 : 0.11))),
-                                Color.clear,
-                                Color.black.opacity(isPressed ? 0.22 : 0.13)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .padding(3)
+        if shouldAnimateSurface {
+            SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+                surface(time: timeline.date.timeIntervalSinceReferenceDate)
             }
-            .compositingGroup()
+        } else {
+            surface(time: 0)
         }
+    }
+
+    private func surface(time: TimeInterval) -> some View {
+        ZStack {
+            Capsule()
+                .fill(baseFill)
+
+            Capsule()
+                .strokeBorder(
+                    AngularGradient(
+                        colors: ringColors,
+                        center: .center,
+                        angle: .degrees(time * 52)
+                    ),
+                    lineWidth: isIntensified ? 3.2 : 1.6
+                )
+                .blur(radius: 0.35)
+                .opacity(idleBeamOpacity)
+
+            Capsule()
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(colorScheme == .dark ? 0.30 : 0.38),
+                            Color.white.opacity(0.08),
+                            Color.black.opacity(colorScheme == .dark ? 0.28 : 0.10)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+
+            movingCatchlight(time: time)
+                .opacity(usesSubtleIdleBeam && !isIntensified ? 0.38 : 1.0)
+
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isPressed ? 0.08 : (isHovering ? 0.16 : (usesSubtleIdleBeam ? 0.08 : 0.11))),
+                            Color.clear,
+                            Color.black.opacity(isPressed ? 0.22 : 0.13)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .padding(3)
+        }
+        .compositingGroup()
     }
 
     private var baseFill: some ShapeStyle {
@@ -772,6 +782,10 @@ private struct OnboardingBeamBorder: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
+    private var shouldAnimateBeam: Bool {
+        active && !reduceMotion && scenePhase == .active && (isIntensified || includesInteriorGlow)
+    }
+
     var body: some View {
         Capsule()
             .strokeBorder(.clear, lineWidth: 1)
@@ -779,36 +793,36 @@ private struct OnboardingBeamBorder: View {
                 size,
                 palette: variant.palette,
                 theme: .dark,
-                active: active,
+                active: shouldAnimateBeam,
                 shape: .capsule,
                 duration: 1.96,
                 strength: isIntensified ? variant.strength * 1.2 : variant.strength,
-                lensStrength: isIntensified ? variant.lensStrength * 1.25 : variant.lensStrength
+                lensStrength: isIntensified ? variant.lensStrength * 1.25 : 0
             )
             .overlay {
-                SwiftUI.TimelineView(.animation(paused: reduceMotion || !active || scenePhase != .active)) { timeline in
-                    let time = timeline.date.timeIntervalSinceReferenceDate
-                    let phase = reduceMotion ? 0 : time / 1.96
-                    ZStack {
-                        if includesInteriorGlow {
-                            beamInteriorGlow(phase: phase)
-                        }
-
-                        Capsule()
-                            .strokeBorder(
-                                AngularGradient(
-                                    stops: fallbackStops,
-                                    center: .center,
-                                    angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
-                                ),
-                                lineWidth: isIntensified ? 1.35 : 1
-                            )
-                    }
+                fallbackBorder(phase: 0.31)
                     .opacity(active ? (isIntensified ? 1 : variant.fallbackOpacity) : 0)
                     .animation(.easeOut(duration: 0.22), value: active)
                     .animation(.spring(response: 0.22, dampingFraction: 0.82), value: isIntensified)
-                }
             }
+    }
+
+    private func fallbackBorder(phase: TimeInterval) -> some View {
+        ZStack {
+            if includesInteriorGlow {
+                beamInteriorGlow(phase: phase)
+            }
+
+            Capsule()
+                .strokeBorder(
+                    AngularGradient(
+                        stops: fallbackStops,
+                        center: .center,
+                        angle: .degrees((phase.truncatingRemainder(dividingBy: 1)) * 360)
+                    ),
+                    lineWidth: isIntensified ? 1.35 : 1
+                )
+        }
     }
 
     private func beamInteriorGlow(phase: TimeInterval) -> some View {

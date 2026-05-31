@@ -514,7 +514,10 @@ private struct OnboardingIntroView: View {
 
             // Real macOS file-type icons drift in a loose orbit, then tuck into
             // the app icon when the user starts onboarding.
-            SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: reduceMotion || scenePhase != .active)) { context in
+            SwiftUI.TimelineView(.animation(
+                minimumInterval: 1.0 / 30.0,
+                paused: reduceMotion || scenePhase != .active || !filesAppeared || isHoveringButton
+            )) { context in
                 let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 ZStack {
                     ForEach(OnboardingOrbitFile.files) { file in
