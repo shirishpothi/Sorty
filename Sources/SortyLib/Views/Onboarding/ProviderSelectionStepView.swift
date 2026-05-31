@@ -77,81 +77,87 @@ public struct ProviderSelectionStepView: View {
             .frame(maxWidth: .infinity)
             .padding(.leading, 72)
             
-            ScrollView {
-                VStack(spacing: 16) {
-                    HStack {
-                        Text("Provider")
-                            .font(.title3.weight(.semibold))
-                        Spacer()
-                        Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
-                    }
-                    .frame(maxWidth: 430)
-                    
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                        ForEach(providers, id: \.self) { provider in
-                            OnboardingProviderRow(
-                                provider: provider,
-                                isSelected: settingsViewModel.config.provider == provider
-                            ) {
-                                selectProvider(provider)
-                            }
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: 16) {
+                        HStack {
+                            Text("Provider")
+                                .font(.title3.weight(.semibold))
+                            Spacer()
+                            Text(providerSetupStatus.isReady ? "Ready" : "Setup required")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(providerSetupStatus.isReady ? .green : .orange)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background((providerSetupStatus.isReady ? Color.green : Color.orange).opacity(0.12), in: Capsule())
                         }
-                    }
-                    .frame(maxWidth: 430)
-                    
-                    if settingsViewModel.config.provider != .appleFoundationModel {
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack(spacing: 10) {
-                                Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
-                                    .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
-                                    .font(.system(size: 16, weight: .semibold))
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Configure \(settingsViewModel.config.provider.displayName)")
-                                        .font(.subheadline.weight(.semibold))
-
-                                    Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-
-                                Spacer()
-
-                            }
-
-                            Group {
-                                if settingsViewModel.config.provider == .githubCopilot {
-                                    onboardingCopilotConfig
-                                } else {
-                                    providerConfigSection
+                        .frame(maxWidth: 430)
+                        
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            ForEach(providers, id: \.self) { provider in
+                                OnboardingProviderRow(
+                                    provider: provider,
+                                    isSelected: settingsViewModel.config.provider == provider
+                                ) {
+                                    selectProvider(provider)
                                 }
                             }
                         }
-                        .padding(16)
-                        .systemLiquidGlassBackground(cornerRadius: 14)
                         .frame(maxWidth: 430)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                        .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
-                    }
-                    
-                    providerReadinessView
-                        .frame(maxWidth: 430)
+                        
+                        if settingsViewModel.config.provider != .appleFoundationModel {
+                            VStack(alignment: .leading, spacing: 14) {
+                                HStack(spacing: 10) {
+                                    Image(systemName: providerSetupStatus.isReady ? "checkmark.shield.fill" : "key.horizontal.fill")
+                                        .foregroundStyle(providerSetupStatus.isReady ? .green : SortyDesignSystem.Colors.resolvedAccent)
+                                        .font(.system(size: 16, weight: .semibold))
 
-                    connectionStatusView
-                        .frame(maxWidth: 430)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Configure \(settingsViewModel.config.provider.displayName)")
+                                            .font(.subheadline.weight(.semibold))
+
+                                        Text(providerSetupStatus.isReady ? "Ready to organize" : "Add credentials and choose a model")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    Spacer()
+
+                                }
+
+                                Group {
+                                    if settingsViewModel.config.provider == .githubCopilot {
+                                        onboardingCopilotConfig
+                                    } else {
+                                        providerConfigSection
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .systemLiquidGlassBackground(cornerRadius: 14)
+                            .frame(maxWidth: 430)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                            .accessibilityIdentifier("OnboardingProviderConfigurationPanel")
+                        }
+                        
+                        providerReadinessView
+                            .frame(maxWidth: 430)
+
+                        connectionStatusView
+                            .frame(maxWidth: 430)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: proxy.size.height, alignment: .center)
+                    .padding(.vertical, 40)
+                    .padding(.trailing, 72)
                 }
-                .padding(.vertical, 40)
-                .padding(.trailing, 72)
+                .scrollIndicators(.hidden)
+                .frame(maxWidth: .infinity)
+                .opacity(hasAppeared ? 1 : 0)
+                .offset(x: hasAppeared ? 0 : 20)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
             }
             .frame(maxWidth: .infinity)
-            .opacity(hasAppeared ? 1 : 0)
-            .offset(x: hasAppeared ? 0 : 20)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
         }
         .onAppear {
             withAnimation { hasAppeared = true }
