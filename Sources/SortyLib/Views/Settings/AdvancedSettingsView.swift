@@ -122,11 +122,11 @@ struct AdvancedSettingsView: View {
                         }
                     } label: {
                         HStack {
-                            Image(systemName: "square.and.arrow.up")
+                            Image(systemName: "hammer")
                             Text("Show Error Logs")
                         }
                     }
-                    .buttonStyle(.sortyBordered)
+                    .buttonStyle(.sortyProminent(intent: .destructive))
                 }
             }
             .animatedAppearance(delay: 0.2)
