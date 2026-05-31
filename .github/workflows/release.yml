@@ -194,10 +194,10 @@ jobs:
           path: |
             .build
             ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-spm-release-tests-${{ hashFiles('**/Package.resolved') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-v2-release-tests-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}
           restore-keys: |
-            ${{ runner.os }}-spm-release-tests-
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-${{ runner.arch }}-spm-v2-release-tests-
+            ${{ runner.os }}-${{ runner.arch }}-spm-v2-
 
       - name: Run Unit Tests
         run: |
@@ -236,12 +236,14 @@ jobs:
           path: |
             .build
             ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-spm-release-universal-${{ hashFiles('**/Package.resolved') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-v2-release-universal-${{ hashFiles('Package.swift', 'Package.resolved', 'Packages/**/Package.swift') }}
           restore-keys: |
-            ${{ runner.os }}-spm-release-universal-
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-${{ runner.arch }}-spm-v2-release-universal-
+            ${{ runner.os }}-${{ runner.arch }}-spm-v2-
 
       - name: Build universal app
+        env:
+          SORTY_BUILD_DIR: ${{ github.workspace }}/.build
         run: |
           chmod +x ./scripts/build.sh
           if [ "${{ needs.prepare-release.outputs.is_prerelease }}" = "true" ]; then

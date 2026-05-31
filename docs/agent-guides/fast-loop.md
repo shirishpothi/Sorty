@@ -11,6 +11,8 @@ Optimized workflows for rapid iteration on Sorty.
 | Local diagnostic build + tests | `make build` | ~30-60s |
 | Harness mode (targeted view) | `make harness` | ~7s incremental |
 | Profile slow files | `make build-profile` | ~30s |
+| Inspect build cache | `make cache-status` | <1s |
+| Force cache pruning | `make cache-prune` | varies |
 | Benchmark all builds | `make benchmark` | ~5-10min |
 
 ## Harness Mode
@@ -52,6 +54,32 @@ These are already configured — no action needed:
 - **Concurrency checking** set to `minimal` to reduce type-check overhead
 - **FinderSync extension cached** — only rebuilds when source files change (~33s saved on incremental builds)
 - **View bodies split** into smaller computed properties to reduce type-checker complexity (MainWindowRootView.body went from 9.9s → 0.2s)
+- **Cache fingerprints**: toolchain, package, project, and build-script inputs are checked before every scripted build so stale compiled outputs are cleared without a full dependency reset.
+- **Scheduled cache pruning**: oversized build caches are pruned at most once per day by default, including `make now`, instead of growing unchecked or doing expensive cleanup every run.
+
+## Cache Hygiene
+
+The scripted build path uses `scripts/build_cache.sh` before compiling:
+
+- Clears compiled outputs when the Swift/Xcode toolchain, package inputs, project settings, entitlements, or build scripts change.
+- Clears SwiftPM dependency caches only when package inputs change, or when the cache remains oversized after compiled outputs are removed.
+- Keeps pruning cheap for the fast loop by using `BUILD_CACHE_PRUNE_INTERVAL_SECONDS=86400` by default.
+- Uses `BUILD_CACHE_MAX_SIZE_MB=8192`, `BUILD_CACHE_TARGET_SIZE_MB=6144`, and `BUILD_CACHE_STALE_DAYS=7` unless overridden.
+
+Useful commands:
+
+```bash
+make cache-status
+make cache-prune
+```
+
+Useful overrides:
+
+```bash
+BUILD_CACHE_PRUNE_INTERVAL_SECONDS=0 make now
+BUILD_CACHE_MAX_SIZE_MB=4096 BUILD_CACHE_TARGET_SIZE_MB=3072 make cache-prune
+BUILD_CACHE_RESET_DEPENDENCIES_ON_PACKAGE_CHANGE=false make now
+```
 
 ### Type-Checker Performance
 
@@ -100,7 +128,7 @@ SortyLib is a monolithic target (199 files, ~85K lines). Clean builds take ~160s
 
 - **Use `make now` as your default** — it's the fastest path to a running app
 - **Touch only what you're editing** — incremental builds only recompile changed files
-- **Avoid `make clean`** unless you're debugging build cache issues
+- **Prefer `make cache-prune` before `make clean`** when the cache is too large or stale
 - **Use `make test-fast`** for a local unit-test diagnostic pass; Blacksmith remains the merge/release gate
 - **Close Xcode** when using SPM builds — Xcode's indexer competes for resources
 - **For liquid glass changes, do a visual check** — compile/test success is not enough. Compare against `AboutView` if the goal is “system liquid glass”, because native `.popover` or `.sheet` chrome can look wrong even when `glassEffect` compiles.

@@ -215,6 +215,7 @@ step_app_build() {
     SKIP_GIT_INJECT=true \
     BUILD_CONFIG=debug \
     APP_ICON_VARIANT=ci \
+    SORTY_BUILD_DIR="${PROJECT_DIR}/.build" \
     ./scripts/build.sh
 }
 

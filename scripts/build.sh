@@ -19,9 +19,16 @@ KEYCHAIN_UNLOCK_TIMEOUT_SECONDS="${KEYCHAIN_UNLOCK_TIMEOUT_SECONDS:-43200}"
 AUTO_UNLOCK_SIGNING_KEYCHAIN="${AUTO_UNLOCK_SIGNING_KEYCHAIN:-true}"
 BUILD_AUTO_CLOSE_REQUEST_KEY="buildAutoCloseRequest"
 AUTO_PRUNE_BUILD_CACHE="${AUTO_PRUNE_BUILD_CACHE:-true}"
-BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-12288}"
-BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-8192}"
-BUILD_CACHE_STALE_DAYS="${BUILD_CACHE_STALE_DAYS:-14}"
+BUILD_CACHE_VALIDATE_INPUTS="${BUILD_CACHE_VALIDATE_INPUTS:-true}"
+BUILD_CACHE_MAX_SIZE_MB="${BUILD_CACHE_MAX_SIZE_MB:-8192}"
+BUILD_CACHE_TARGET_SIZE_MB="${BUILD_CACHE_TARGET_SIZE_MB:-6144}"
+BUILD_CACHE_STALE_DAYS="${BUILD_CACHE_STALE_DAYS:-7}"
+BUILD_CACHE_PRUNE_INTERVAL_SECONDS="${BUILD_CACHE_PRUNE_INTERVAL_SECONDS:-86400}"
+BUILD_CACHE_RESET_DEPENDENCIES_ON_PACKAGE_CHANGE="${BUILD_CACHE_RESET_DEPENDENCIES_ON_PACKAGE_CHANGE:-true}"
+BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED="${BUILD_CACHE_PRUNE_DEPENDENCIES_WHEN_OVERSIZED:-true}"
+
+# shellcheck source=scripts/build_cache.sh
+source "${SCRIPT_DIR}/build_cache.sh"
 
 sorty_processes_are_running() {
     pgrep -x "Sorty" >/dev/null 2>&1
@@ -86,97 +93,6 @@ terminate_running_sorty_if_safe() {
 
     set_build_auto_close_request false
     log_warning "Sorty stayed open (likely active organization). Build continues without force-kill."
-}
-
-get_directory_size_mb() {
-    local dir_path="$1"
-    if [ ! -e "${dir_path}" ]; then
-        echo "0"
-        return
-    fi
-
-    du -sm "${dir_path}" 2>/dev/null | awk '{print $1+0}'
-}
-
-prune_path_if_exists() {
-    local path="$1"
-    [ -e "${path}" ] || return
-    rm -rf "${path}"
-}
-
-manage_build_cache() {
-    if ! is_truthy "${AUTO_PRUNE_BUILD_CACHE}"; then
-        log_detail "Skipping build cache pruning (AUTO_PRUNE_BUILD_CACHE=${AUTO_PRUNE_BUILD_CACHE})"
-        return
-    fi
-
-    local max_size_mb="${BUILD_CACHE_MAX_SIZE_MB}"
-    local target_size_mb="${BUILD_CACHE_TARGET_SIZE_MB}"
-    local stale_days="${BUILD_CACHE_STALE_DAYS}"
-
-    if ! [[ "${max_size_mb}" =~ ^[0-9]+$ ]]; then
-        max_size_mb=12288
-    fi
-    if ! [[ "${target_size_mb}" =~ ^[0-9]+$ ]]; then
-        target_size_mb=8192
-    fi
-    if ! [[ "${stale_days}" =~ ^[0-9]+$ ]]; then
-        stale_days=14
-    fi
-    if [ "${target_size_mb}" -gt "${max_size_mb}" ]; then
-        target_size_mb="${max_size_mb}"
-    fi
-
-    mkdir -p "${BUILD_DIR}"
-
-    if [ -d "${BUILD_LOG_DIR}" ]; then
-        find "${BUILD_LOG_DIR}" -type f -mtime +"${stale_days}" -exec rm -f {} + 2>/dev/null || true
-    fi
-
-    local initial_size_mb
-    initial_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
-    if [ "${initial_size_mb}" -le "${max_size_mb}" ]; then
-        return
-    fi
-
-    log_item "Pruning .build cache (${initial_size_mb}MB > ${max_size_mb}MB)"
-
-    find "${BUILD_DIR}" -mindepth 1 -maxdepth 1 -type d -mtime +"${stale_days}" \
-        ! -name "artifacts" ! -name "checkouts" ! -name "repositories" \
-        -exec rm -rf {} + 2>/dev/null || true
-
-    local current_size_mb
-    current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
-
-    if [ "${current_size_mb}" -gt "${target_size_mb}" ]; then
-        prune_path_if_exists "${BUILD_DIR}/DerivedData"
-        prune_path_if_exists "${BUILD_DIR}/FinderSyncDerivedData"
-        current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
-    fi
-
-    if [ "${current_size_mb}" -gt "${target_size_mb}" ]; then
-        run_with_log --optional "swift_package_clean" swift package --package-path "${PROJECT_DIR}" --scratch-path "${BUILD_DIR}" clean
-        current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
-    fi
-
-    if [ "${current_size_mb}" -gt "${target_size_mb}" ]; then
-        if [ -d "${BUILD_DIR}/artifacts" ]; then
-            find "${BUILD_DIR}/artifacts" -mindepth 1 -maxdepth 1 -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
-        fi
-        if [ -d "${BUILD_DIR}/repositories" ]; then
-            find "${BUILD_DIR}/repositories" -mindepth 1 -maxdepth 1 -mtime +"${stale_days}" -exec rm -rf {} + 2>/dev/null || true
-        fi
-        current_size_mb=$(get_directory_size_mb "${BUILD_DIR}")
-    fi
-
-    local reclaimed_mb=$((initial_size_mb - current_size_mb))
-    if [ "${reclaimed_mb}" -gt 0 ]; then
-        log_item "Reclaimed ${reclaimed_mb}MB from .build cache (now ${current_size_mb}MB)"
-    fi
-
-    if [ "${current_size_mb}" -gt "${max_size_mb}" ]; then
-        log_warning ".build remains large (${current_size_mb}MB). Lower BUILD_CACHE_STALE_DAYS or run make clean if needed."
-    fi
 }
 
 resolve_signing_identity() {
@@ -734,6 +650,7 @@ BUILD_NUM=$(get_build_number)
 
 # Build method: "spm" (default for local) or "xcodebuild" (for CI releases)
 BUILD_METHOD="${BUILD_METHOD:-spm}"
+BUILD_CONFIG="${BUILD_CONFIG:-release}"
 BUILD_ARCHS="${BUILD_ARCHS:-arm64 x86_64}"
 XCODE_EXTRA_FLAGS="${XCODE_EXTRA_FLAGS:-COMPILER_INDEX_STORE_ENABLE=NO DEBUG_INFORMATION_FORMAT=dwarf ENABLE_CODE_COVERAGE=NO}"
 XCODE_BUILD_JOBS="${XCODE_BUILD_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo 8)}"
@@ -799,7 +716,6 @@ APP_BUNDLE="Sorty.app"
 TOTAL_STEPS=4
 
 # Build configuration
-BUILD_CONFIG="${BUILD_CONFIG:-release}"
 log_detail "Configuration: ${BUILD_CONFIG}"
 
 if [ "$SKIP_TESTS" != "true" ]; then

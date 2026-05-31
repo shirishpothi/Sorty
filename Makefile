@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
+.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile cache-status cache-prune release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
 
 # Default target
 all: build
@@ -15,7 +15,7 @@ SWIFTPM_SCRATCH_FLAG := --scratch-path "$(SORTY_BUILD_DIR)"
 # Swift build flags for optimization
 SWIFT_DEBUG_FLAGS := -Xswiftc -Onone -Xswiftc -enable-batch-mode --disable-sandbox -Xlinker -no_deduplicate
 SWIFT_RELEASE_FLAGS := -Xswiftc -O -Xswiftc -whole-module-optimization --disable-sandbox
-FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true AUTO_PRUNE_BUILD_CACHE=false
+FAST_LOOP_FLAGS := FAST_DEV_MODE=true ENABLE_CLI_BUNDLE=false ENABLE_FINDER_EXTENSION=true ENABLE_SPARKLE_SIGNING=false PRESERVE_APP_BUNDLE=true SKIP_GIT_INJECT=true
 VERBOSE ?= false
 BUILD_SCRIPT_ENV := SORTY_VERBOSE=$(VERBOSE) SORTY_BUILD_DIR="$(SORTY_BUILD_DIR)"
 
@@ -81,6 +81,12 @@ build-profile:
 	@echo "Building with diagnostics to identify slow type-checking..."
 	@swift build $(SWIFTPM_SCRATCH_FLAG) $(PARALLEL_FLAGS) -Xswiftc -Xfrontend -Xswiftc -warn-long-function-bodies=100 -Xswiftc -Xfrontend -Xswiftc -warn-long-expression-type-checking=100 2>&1 | grep -E "(warning:|error:)" || true
 	@echo "✅ Profile complete. Look for 'warning: expression took too long to type-check' messages above."
+
+cache-status:
+	@$(BUILD_SCRIPT_ENV) ./scripts/build_cache.sh status
+
+cache-prune:
+	@$(BUILD_SCRIPT_ENV) BUILD_CACHE_FORCE_PRUNE=true ./scripts/build_cache.sh prune
 
 # runs basic syntax checks and builds (skips tests)
 quick:
@@ -223,6 +229,8 @@ help:
 	@echo ""
 	@echo "Build Profiling:"
 	@echo "  make build-profile - Identify slow-compiling files and functions"
+	@echo "  make cache-status  - Show build cache size and fingerprint state"
+	@echo "  make cache-prune   - Force scheduled cache validation and pruning"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test        - Run unit tests in parallel"
@@ -260,10 +268,12 @@ help:
 	@echo ""
 	@echo "Build runtime behavior:"
 	@echo "  AUTO_CLOSE_SORTY_ON_BUILD=true (default) closes idle Sorty instances after build"
-	@echo "  AUTO_PRUNE_BUILD_CACHE=true (default) prunes stale .build data when oversized"
-	@echo "  BUILD_CACHE_MAX_SIZE_MB=12288 triggers pruning above this size"
-	@echo "  BUILD_CACHE_TARGET_SIZE_MB=8192 aims to shrink .build near this size"
-	@echo "  BUILD_CACHE_STALE_DAYS=14 marks old cache data eligible for cleanup"
+	@echo "  BUILD_CACHE_VALIDATE_INPUTS=true clears stale compiled outputs after toolchain/build input changes"
+	@echo "  AUTO_PRUNE_BUILD_CACHE=true (default) prunes stale build data on a schedule"
+	@echo "  BUILD_CACHE_MAX_SIZE_MB=8192 triggers pruning above this size"
+	@echo "  BUILD_CACHE_TARGET_SIZE_MB=6144 aims to shrink build cache near this size"
+	@echo "  BUILD_CACHE_STALE_DAYS=7 marks old cache data eligible for cleanup"
+	@echo "  BUILD_CACHE_PRUNE_INTERVAL_SECONDS=86400 limits full prune checks to once per day"
 	@echo "  KEYCHAIN_UNLOCK_TIMEOUT_SECONDS=43200 keeps keychain unlocked for signing (~12h)"
 	@echo ""
 	@echo "Parallel Jobs: $(CORES) cores detected"
