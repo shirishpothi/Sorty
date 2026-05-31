@@ -173,9 +173,7 @@ struct AutomationSettingsView: View {
                             }
                             .padding(14)
                             .frame(width: 280, alignment: .leading)
-                            .systemLiquidGlassBackground(cornerRadius: 12)
-                            .presentationBackground(.clear)
-                            .presentationCornerRadius(12)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
                         }
                     }
 
@@ -191,8 +189,6 @@ struct AutomationSettingsView: View {
                     }
                     .toggleStyle(.switch)
                 }
-
-                Divider()
 
                 if launchAtLogin || keepInBackground {
                     Button {
