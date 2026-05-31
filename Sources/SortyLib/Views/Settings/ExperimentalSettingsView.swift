@@ -39,6 +39,14 @@ struct ExperimentalSettingsView: View {
                 enableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true",
                 disableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false"
             ),
+            ExperimentalFlag(
+                name: "Workspace Health",
+                description: "Shows Workspace Health navigation, menu actions, deeplinks, and shortcuts.",
+                defaultsKey: "workspaceHealthEnabled",
+                defaultValue: false,
+                enableCommand: "defaults write com.sorty.app workspaceHealthEnabled -bool true",
+                disableCommand: "defaults write com.sorty.app workspaceHealthEnabled -bool false"
+            ),
         ]
     }
 }
