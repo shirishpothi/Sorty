@@ -135,20 +135,21 @@ struct WorkflowGradientBackground: View {
                 Color(NSColor.windowBackgroundColor)
             }
 
-            LinearGradient(
-                stops: [
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(topOpacity), location: 0.00),
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity), location: 0.36),
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.42), location: 0.68),
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.10), location: 0.88),
-                    .init(color: Color.clear, location: 1.00)
-                ],
-                startPoint: .bottom,
-                endPoint: .top
-            )
-            .opacity(1.0)
-
             GeometryReader { proxy in
+                LinearGradient(
+                    stops: [
+                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(topOpacity), location: 0.00),
+                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity), location: 0.38),
+                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.36), location: 0.72),
+                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * 0.08), location: 0.92),
+                        .init(color: Color.clear, location: 1.00)
+                    ],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+                .frame(height: proxy.size.height * 0.66)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+
                 RadialGradient(
                     colors: [
                         SortyDesignSystem.Colors.resolvedAccent.opacity(bloomOpacity),
@@ -157,10 +158,10 @@ struct WorkflowGradientBackground: View {
                     ],
                     center: UnitPoint(x: 0.5, y: 1.05),
                     startRadius: 0,
-                    endRadius: max(proxy.size.width, proxy.size.height) * 0.82
+                    endRadius: max(proxy.size.width, proxy.size.height) * 0.70
                 )
                 .blendMode(.plusLighter)
-                .opacity(0.58)
+                .opacity(0.50)
             }
             .allowsHitTesting(false)
         }
