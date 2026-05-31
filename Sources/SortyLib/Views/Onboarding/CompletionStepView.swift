@@ -18,14 +18,13 @@ private struct CompletionRevealBlob: View {
 
     var body: some View {
         ZStack {
-            // Primary blob - green/teal
             Ellipse()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.green.opacity(0.7),
-                            Color.teal.opacity(0.5),
-                            Color.blue.opacity(0.3),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.42),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.22),
+                            Color.pink.opacity(0.14),
                             Color.clear
                         ],
                         center: .center,
@@ -36,13 +35,12 @@ private struct CompletionRevealBlob: View {
                 .frame(width: 600, height: 500)
                 .blur(radius: 60)
 
-            // Secondary blob - shifting hue
             Ellipse()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.teal.opacity(0.5),
-                            Color.green.opacity(0.3),
+                            Color.pink.opacity(0.24),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
                             Color.clear
                         ],
                         center: .center,
@@ -54,13 +52,12 @@ private struct CompletionRevealBlob: View {
                 .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
                 .blur(radius: 50)
 
-            // Bright core
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
                             Color.white.opacity(0.15),
-                            Color.green.opacity(0.2),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.16),
                             Color.clear
                         ],
                         center: .center,
@@ -92,7 +89,12 @@ private struct CompletionGlowRing: View {
         Circle()
             .stroke(
                 AngularGradient(
-                    colors: [.green, .teal, .blue, .green],
+                    colors: [
+                        SortyDesignSystem.Colors.resolvedAccent,
+                        Color.pink,
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.65),
+                        SortyDesignSystem.Colors.resolvedAccent
+                    ],
                     center: .center
                 ),
                 lineWidth: 3
@@ -149,25 +151,9 @@ public struct CompletionStepView: View {
 
     public var body: some View {
         ZStack {
-            // Layer 0: Base background
-            Color(NSColor.windowBackgroundColor)
-                .ignoresSafeArea()
-
-            // Layer 1: Reveal gradient blob (expands from center)
             CompletionRevealBlob(scale: revealScale, opacity: revealOpacity)
                 .allowsHitTesting(false)
 
-            // Layer 2: Ambient gradient background (fades in after reveal)
-            AnimatedGradientBackground(
-                revealed: backgroundRevealed,
-                color1: .green,
-                color2: .blue,
-                color3: .teal
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-
-            // Layer 3: Floating particles (appear after reveal)
             if showParticles {
                 ZStack {
                     ForEach(0..<7, id: \.self) { i in
@@ -182,19 +168,13 @@ public struct CompletionStepView: View {
                 .transition(.opacity)
             }
 
-            // Layer 4: Main content
             VStack(spacing: 22) {
-                Spacer()
-
-                // Success icon with glow ring
                 ZStack {
-                    // Glow ring behind checkmark
                     CompletionGlowRing(isActive: showGlowRing)
 
-                    // Animated expanding rings
                     ForEach(0..<3, id: \.self) { index in
                         Circle()
-                            .stroke(Color.green.opacity(0.2 - Double(index) * 0.05), lineWidth: 2)
+                            .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.20 - Double(index) * 0.05), lineWidth: 2)
                             .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
                             .scaleEffect(hasAppeared ? 1.2 : 0.8)
                             .opacity(hasAppeared ? 0 : 1)
@@ -207,12 +187,12 @@ public struct CompletionStepView: View {
                     }
 
                     Circle()
-                        .fill(Color.green.opacity(0.1))
+                        .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
                         .frame(width: 118, height: 118)
 
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 70))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
                         .symbolEffect(.bounce, value: hasAppeared)
                 }
                 .opacity(hasAppeared ? 1 : 0)
@@ -221,8 +201,6 @@ public struct CompletionStepView: View {
                 // Exit: scale down and fade
                 .scaleEffect(contentDismissed ? 0.8 : 1.0)
                 .opacity(contentDismissed ? 0 : 1)
-
-                // Title and message
                 VStack(spacing: 10) {
                     Text("Ready to Organize")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -268,7 +246,6 @@ public struct CompletionStepView: View {
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 40 : 0)
 
-                // Start button
                 Button {
                     verifyAndFinish()
                 } label: {
@@ -297,10 +274,10 @@ public struct CompletionStepView: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                         .accessibilityIdentifier("OnboardingCompletionHealthError")
                 }
-
-                Spacer()
             }
             .padding(.horizontal, 48)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .offset(y: -10)
         }
         .onAppear {
             startRevealSequence()

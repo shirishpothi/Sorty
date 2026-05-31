@@ -37,6 +37,7 @@ public struct ContentView: View {
                     // HUD notification overlay (bottom-left)
                     HUDNotificationOverlay()
                 }
+                .transition(.opacity.combined(with: .scale(scale: 1.01)))
             }
 
             WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
@@ -47,6 +48,7 @@ public struct ContentView: View {
         .onDisappear {
             windowLinkHoverState.clearAllHover()
         }
+        .animation(.easeInOut(duration: 0.36), value: appState.hasCompletedOnboarding)
     }
 
     private var mainContent: some View {

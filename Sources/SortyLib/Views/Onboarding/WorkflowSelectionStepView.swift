@@ -25,7 +25,7 @@ public struct WorkflowSelectionStepView: View {
     public init() {}
     
     public var body: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .center, spacing: 0) {
             // Left side - explanation
             VStack(alignment: .leading, spacing: 24) {
                 Spacer()
@@ -140,13 +140,14 @@ public struct WorkflowSelectionStepView: View {
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.top, 16)
-                .padding(.bottom, 28)
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity)
             }
             .scrollIndicators(.automatic)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 40)
             .clipped()
+            .defaultScrollAnchor(.center)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
@@ -503,7 +504,7 @@ struct OnboardingPersonaCard: View {
             return SortyDesignSystem.Colors.resolvedAccent.opacity(0.10)
         }
 
-        return Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.72 : 0.56)
+        return Color.white.opacity(isHovered ? 0.13 : 0.08)
     }
 
     private var cardStroke: Color {
@@ -551,7 +552,7 @@ struct OnboardingCustomPersonaCard: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.74 : 0.58),
+                                Color.white.opacity(isHovered ? 0.13 : 0.08),
                                 (isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.teal).opacity(isSelected ? 0.12 : 0.08)
                             ],
                             startPoint: .topLeading,
@@ -779,7 +780,7 @@ struct CreatePersonaButton: View {
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.72 : 0.56))
+                    .fill(Color.white.opacity(isHovered ? 0.13 : 0.08))
             )
             .systemLiquidGlassBackground(cornerRadius: 16)
             .overlay(

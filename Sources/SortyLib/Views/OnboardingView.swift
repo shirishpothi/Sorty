@@ -64,8 +64,8 @@ public struct OnboardingView: View {
                         .background(
                             LinearGradient(
                                 colors: [
-                                    Color(NSColor.windowBackgroundColor),
-                                    Color(NSColor.windowBackgroundColor),
+                                    Color(NSColor.windowBackgroundColor).opacity(0.74),
+                                    Color(NSColor.windowBackgroundColor).opacity(0.40),
                                     Color(NSColor.windowBackgroundColor).opacity(0)
                                 ],
                                 startPoint: .top,
@@ -78,17 +78,19 @@ public struct OnboardingView: View {
                     // Main content
                     stepContent
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .padding(.bottom, currentStep == .completion ? 0 : 76)
                 }
                 .overlay(alignment: .bottom) {
-                    navigationControls
-                        .padding(.horizontal, 40)
-                        .padding(.top, 24)
-                        .padding(.bottom, 16)
-                        .background(
-                            OnboardingNavigationBackdrop()
-                                .allowsHitTesting(false)
-                        )
+                    if currentStep != .completion {
+                        navigationControls
+                            .padding(.horizontal, 40)
+                            .padding(.top, 24)
+                            .padding(.bottom, 16)
+                            .background(
+                                OnboardingNavigationBackdrop()
+                                    .allowsHitTesting(false)
+                            )
+                            .transition(.opacity)
+                    }
                 }
                 .ignoresSafeArea(.container, edges: .top)
                 .allowsHitTesting(!isIntroVisible)
