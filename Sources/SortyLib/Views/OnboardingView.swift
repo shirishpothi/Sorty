@@ -42,61 +42,58 @@ public struct OnboardingView: View {
     public var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color(NSColor.windowBackgroundColor)
-                    .opacity(isIntroVisible ? 0 : 1)
-                    .ignoresSafeArea()
+                if !isIntroVisible {
+                    Color(NSColor.windowBackgroundColor)
+                        .ignoresSafeArea()
 
-                OnboardingBottomGradient(progress: gradientProgress)
-                    .opacity(isIntroVisible ? 0 : 1)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-                    .animation(.easeInOut(duration: 0.65), value: gradientProgress)
+                    OnboardingBottomGradient(progress: gradientProgress)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .animation(.easeInOut(duration: 0.65), value: gradientProgress)
 
-                VStack(spacing: 0) {
-                    // Pinned with a fixed top padding so it doesn't shift between steps.
-                    // A soft top scrim (instead of a hard opaque strip) prevents scrolled
-                    // step content from bleeding behind it while blending seamlessly into
-                    // the unified background gradient so there is no visible color seam.
-                    OnboardingProgressBar(currentStep: currentStep)
-                        .padding(.top, 54)
-                        .padding(.bottom, 12)
-                        .padding(.horizontal, 48)
-                        .background(
-                            LinearGradient(
-                                colors: [
-                                    Color(NSColor.windowBackgroundColor).opacity(0.74),
-                                    Color(NSColor.windowBackgroundColor).opacity(0.40),
-                                    Color(NSColor.windowBackgroundColor).opacity(0)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .opacity(hasConfiguredWindowChrome ? 1 : 0)
-                        .animation(nil, value: hasConfiguredWindowChrome)
-
-                    // Main content
-                    stepContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .overlay(alignment: .bottom) {
-                    if currentStep != .completion {
-                        navigationControls
-                            .padding(.horizontal, 40)
-                            .padding(.top, 24)
-                            .padding(.bottom, 16)
+                    VStack(spacing: 0) {
+                        // Pinned with a fixed top padding so it doesn't shift between steps.
+                        // A soft top scrim (instead of a hard opaque strip) prevents scrolled
+                        // step content from bleeding behind it while blending seamlessly into
+                        // the unified background gradient so there is no visible color seam.
+                        OnboardingProgressBar(currentStep: currentStep)
+                            .padding(.top, 54)
+                            .padding(.bottom, 12)
+                            .padding(.horizontal, 48)
                             .background(
-                                OnboardingNavigationBackdrop()
-                                    .allowsHitTesting(false)
+                                LinearGradient(
+                                    colors: [
+                                        Color(NSColor.windowBackgroundColor).opacity(0.74),
+                                        Color(NSColor.windowBackgroundColor).opacity(0.40),
+                                        Color(NSColor.windowBackgroundColor).opacity(0)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                            .transition(.opacity)
+                            .opacity(hasConfiguredWindowChrome ? 1 : 0)
+                            .animation(nil, value: hasConfiguredWindowChrome)
+
+                        // Main content
+                        stepContent
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
+                    .overlay(alignment: .bottom) {
+                        if currentStep != .completion {
+                            navigationControls
+                                .padding(.horizontal, 40)
+                                .padding(.top, 24)
+                                .padding(.bottom, 16)
+                                .background(
+                                    OnboardingNavigationBackdrop()
+                                        .allowsHitTesting(false)
+                                )
+                                .transition(.opacity)
+                        }
+                    }
+                    .ignoresSafeArea(.container, edges: .top)
+                    .transition(.opacity)
                 }
-                .ignoresSafeArea(.container, edges: .top)
-                .allowsHitTesting(!isIntroVisible)
-                .accessibilityHidden(isIntroVisible)
-                .opacity(isIntroVisible ? 0 : 1)
-                .animation(.easeInOut(duration: 0.5), value: isIntroVisible)
 
                 if isIntroVisible {
                     OnboardingIntroView {
