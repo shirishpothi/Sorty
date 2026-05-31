@@ -113,33 +113,35 @@ struct SettingsView: View {
     }
 
     private var contentView: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    if isSearching {
-                        searchResultsHeader
-                            .animatedAppearance(delay: 0.03)
-                        searchResultsContent
-                            .animatedAppearance(delay: 0.08)
-                    } else {
-                        categoryHeader
-                            .animatedAppearance(delay: 0.03)
-                        Group {
-                            categoryContent
-                                .settingsFocusTarget(appState.settingsFocusTarget)
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        if isSearching {
+                            searchResultsHeader
+                                .animatedAppearance(delay: 0.03)
+                            searchResultsContent(minHeight: max(geometry.size.height - 128, 320))
+                                .animatedAppearance(delay: 0.08)
+                        } else {
+                            categoryHeader
+                                .animatedAppearance(delay: 0.03)
+                            Group {
+                                categoryContent
+                                    .settingsFocusTarget(appState.settingsFocusTarget)
+                            }
                         }
                     }
+                    .padding(24)
                 }
-                .padding(24)
-            }
-            .onAppear {
-                scrollToFocusedSetting(using: proxy)
-            }
-            .onChange(of: appState.settingsFocusTarget) { _, _ in
-                scrollToFocusedSetting(using: proxy)
-            }
-            .onChange(of: selectedCategory) { _, _ in
-                scrollToFocusedSetting(using: proxy)
+                .onAppear {
+                    scrollToFocusedSetting(using: proxy)
+                }
+                .onChange(of: appState.settingsFocusTarget) { _, _ in
+                    scrollToFocusedSetting(using: proxy)
+                }
+                .onChange(of: selectedCategory) { _, _ in
+                    scrollToFocusedSetting(using: proxy)
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -240,7 +242,7 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private var searchResultsContent: some View {
+    private func searchResultsContent(minHeight: CGFloat) -> some View {
         if searchResults.isEmpty {
             VStack(spacing: 16) {
                 Image("SadSortyMascot")
@@ -260,8 +262,7 @@ struct SettingsView: View {
                         .multilineTextAlignment(.center)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 28)
+            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .center)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Sorty came up empty. Nothing matches \(trimmedSearchText) yet.")
         } else {
