@@ -128,8 +128,6 @@ struct SettingsView: View {
                             categoryContent
                                 .settingsFocusTarget(appState.settingsFocusTarget)
                         }
-                        .id(selectedCategory)
-                        .animatedAppearance(delay: 0.08)
                     }
                 }
                 .padding(24)

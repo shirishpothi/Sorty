@@ -65,9 +65,7 @@ public struct ContentView: View {
                         // Clear navigatedFromSettings when using sidebar
                         appState.navigatedFromSettings = false
 
-                        withAnimation(.easeInOut(duration: 0.28)) {
-                            appState.currentView = newValue
-                        }
+                        appState.currentView = newValue
                     }
                 }
             )) {
@@ -88,9 +86,8 @@ public struct ContentView: View {
                 // Keep the detail view lightweight during navigation: only render the active page.
                 contentView(for: displayedView)
                     .id(displayedView)
-                    .transition(TransitionStyles.scaleAndFade)
+                    .transition(.identity)
             }
-            .animation(.easeInOut(duration: 0.28), value: displayedView)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Color.clear
@@ -136,9 +133,7 @@ public struct ContentView: View {
         .onChange(of: appState.currentView) { oldValue, newValue in
             if oldValue != newValue {
                 previousView = oldValue
-                withAnimation(.easeInOut(duration: 0.28)) {
-                    displayedView = newValue
-                }
+                displayedView = newValue
             }
         }
         .onChange(of: appState.showDirectoryPicker) { _, showPicker in
