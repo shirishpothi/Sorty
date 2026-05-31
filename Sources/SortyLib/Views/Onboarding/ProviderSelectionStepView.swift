@@ -487,7 +487,7 @@ public struct ProviderSelectionStepView: View {
 
         if let url = settingsViewModel.config.provider.apiKeyURL {
             HStack(spacing: 4) {
-                Text("Get your API key at")
+                Text(settingsViewModel.config.provider == .ollama ? "Find Ollama models at" : "Get your API key at")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

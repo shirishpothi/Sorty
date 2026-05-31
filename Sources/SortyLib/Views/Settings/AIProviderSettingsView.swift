@@ -236,7 +236,7 @@ struct AIProviderSettingsView: View {
                 
                 if let url = viewModel.config.provider.apiKeyURL {
                     HStack(spacing: 4) {
-                        Text("Get your API key from")
+                        Text(viewModel.config.provider == .ollama ? "Find Ollama models at" : "Get your API key from")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Link(destination: url) {

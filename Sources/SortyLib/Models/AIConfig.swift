@@ -159,7 +159,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return "Get your API key from openrouter.ai/keys"
         case .ollama:
-            return "API key is optional for local Ollama instances"
+            return "Find local models in the Ollama library"
         case .anthropic:
             return "Get your API key from console.anthropic.com"
         case .gemini:
@@ -183,7 +183,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return URL(string: "https://openrouter.ai/keys")
         case .ollama:
-            return URL(string: "https://ollama.com/download")
+            return URL(string: "https://ollama.com/library")
         case .anthropic:
             return URL(string: "https://console.anthropic.com/settings/keys")
         case .gemini:
@@ -207,7 +207,7 @@ public enum AIProvider: String, Codable, CaseIterable, Sendable {
         case .openRouter:
             return "openrouter.ai/keys"
         case .ollama:
-            return "ollama.com"
+            return "ollama.com/library"
         case .anthropic:
             return "console.anthropic.com"
         case .gemini:

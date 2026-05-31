@@ -9,6 +9,7 @@ import SwiftUI
 
 struct InternetAccessPolicyView: View {
     @Environment(\.openURL) private var openURL
+    @AppStorage(NetworkPrivacyPolicy.internetPrivacyModeKey) private var internetPrivacyModeEnabled = false
 
     @State private var iconHovered = false
     @State private var websiteHovered = false
@@ -115,6 +116,8 @@ struct InternetAccessPolicyView: View {
                 }
             }
 
+            privacyModeToggle
+
             Divider()
 
             AutoScrollingConnectionList(connections: policy.connections)
@@ -140,6 +143,28 @@ struct InternetAccessPolicyView: View {
 
             Spacer(minLength: 0)
         }
+    }
+
+    private var privacyModeToggle: some View {
+        Toggle(isOn: $internetPrivacyModeEnabled) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Privacy Mode")
+                    .font(.caption.weight(.semibold))
+
+                Text("Block all internet connections in and out, including public Ollama hosts. Local models on localhost remain allowed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch)
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(internetPrivacyModeEnabled ? Color.green.opacity(0.35) : Color.secondary.opacity(0.18), lineWidth: 1)
+        }
+        .accessibilityIdentifier("InternetAccessPolicyPrivacyModeToggle")
     }
 }
 
