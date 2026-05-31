@@ -115,6 +115,7 @@ struct WorkflowGradientBackground: View {
     @State private var breathOpacity: Double = 1.0
     @State private var bloomOffsetFraction: CGFloat = 0
     @State private var bloomPulse: Double = 0.55
+    @State private var motionGeneration = 0
 
     var body: some View {
         if !gradientHidden {
@@ -160,6 +161,7 @@ struct WorkflowGradientBackground: View {
     private func updateContinuousMotion() {
         guard !animationPaused else {
             motionActive = false
+            motionGeneration += 1
             withAnimation(.easeOut(duration: 0.18)) {
                 breathScaleY = 1.0
                 breathOpacity = 1.0
@@ -171,6 +173,8 @@ struct WorkflowGradientBackground: View {
 
         guard !motionActive else { return }
         motionActive = true
+        motionGeneration += 1
+        let generation = motionGeneration
 
         var transaction = Transaction()
         transaction.disablesAnimations = true
@@ -181,15 +185,22 @@ struct WorkflowGradientBackground: View {
             bloomPulse = 0.45
         }
 
-        withAnimation(.easeInOut(duration: 4.8).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 3.8)) {
             breathScaleY = 1.04
             breathOpacity = 1.0
+            bloomOffsetFraction = 0.16
+            bloomPulse = 0.74
         }
-        withAnimation(.easeInOut(duration: 11.0).repeatForever(autoreverses: true)) {
-            bloomOffsetFraction = 0.18
-        }
-        withAnimation(.easeInOut(duration: 6.1).repeatForever(autoreverses: true)) {
-            bloomPulse = 0.75
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3.8))
+            guard generation == motionGeneration, !animationPaused else { return }
+            withAnimation(.easeInOut(duration: 1.4)) {
+                breathScaleY = 1.0
+                breathOpacity = 0.94
+                bloomOffsetFraction = 0
+                bloomPulse = 0.58
+            }
         }
     }
 
