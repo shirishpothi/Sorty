@@ -123,11 +123,6 @@ struct AutomationSettingsView: View {
     private var backgroundBehaviorSection: some View {
         SettingsCard(title: "Background Behavior", icon: "menubar.rectangle", color: .purple) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Spacer()
-                    backgroundStatusBadge
-                }
-
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle(isOn: $launchAtLogin) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -163,9 +158,14 @@ struct AutomationSettingsView: View {
                         .padding(.top, 2)
                         .accessibilityLabel("Keep in Background information")
                         .popover(isPresented: $showBackgroundInfo, arrowEdge: .trailing) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Background Activity")
-                                    .font(.headline)
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text("Background Activity")
+                                        .font(.headline)
+                                    Spacer()
+                                    backgroundStatusBadge
+                                }
+
                                 Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably. It is recommended to keep this on.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -173,7 +173,9 @@ struct AutomationSettingsView: View {
                             }
                             .padding(14)
                             .frame(width: 280, alignment: .leading)
-                            .systemLiquidGlassPopover(cornerRadius: 12)
+                            .systemLiquidGlassBackground(cornerRadius: 12)
+                            .presentationBackground(.clear)
+                            .presentationCornerRadius(12)
                         }
                     }
 
