@@ -167,10 +167,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .automation:
             return [
                 SettingsFeatureSnippet(title: "Global Automation Model", summary: "Use a dedicated model for background and watched-folder tasks."),
-                SettingsFeatureSnippet(title: "Watched Folders Summary", summary: "See total, active, and auto-organizing folder counts."),
-                SettingsFeatureSnippet(title: "Manage Watched Folders", summary: "Jump to watched-folder configuration."),
-                SettingsFeatureSnippet(title: "Background Behavior", summary: "Configure launch at login, keep in background, and Dock visibility."),
-                SettingsFeatureSnippet(title: "Automation Notifications", summary: "Control notifications for auto-organized files.")
+                SettingsFeatureSnippet(title: "Background Behavior", summary: "Configure launch at login, keep in background, and Dock visibility.")
             ]
         case .finder:
             return [

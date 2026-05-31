@@ -9,10 +9,7 @@ import SwiftUI
 
 struct AutomationSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
-    @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var appState: AppState
     @EnvironmentObject var loginItemManager: LoginItemManager
-    @EnvironmentObject var notificationSettings: NotificationSettingsManager
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
@@ -21,25 +18,15 @@ struct AutomationSettingsView: View {
     @State private var selectedProvider: AIProvider = .openAI
     @State private var selectedModel: String = ""
     @State private var showModelPicker = false
-    
-    private var activeFoldersCount: Int {
-        watchedFoldersManager.folders.filter { $0.isEnabled }.count
-    }
-    
-    private var autoOrganizingCount: Int {
-        watchedFoldersManager.folders.filter { $0.isEnabled && $0.autoOrganize }.count
-    }
+    @State private var showBackgroundInfo = false
     
     var body: some View {
         VStack(spacing: 16) {
             globalModelSection
                 .animatedAppearance(delay: 0.05)
-            
-            watchedFoldersSummarySection
-                .animatedAppearance(delay: 0.1)
-            
+
             backgroundBehaviorSection
-                .animatedAppearance(delay: 0.15)
+                .animatedAppearance(delay: 0.1)
         }
         .onAppear {
             loadAutomationSettings()
@@ -132,68 +119,15 @@ struct AutomationSettingsView: View {
             )
         }
     }
-    
-    private var watchedFoldersSummarySection: some View {
-        SettingsCard(title: "Watched Folders Summary", icon: "folder.badge.gearshape", color: .blue) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 20) {
-                    StatBadge(
-                        value: "\(watchedFoldersManager.folders.count)",
-                        label: "Total Folders",
-                        color: .secondary
-                    )
-                    
-                    StatBadge(
-                        value: "\(activeFoldersCount)",
-                        label: "Active",
-                        color: .green
-                    )
-                    
-                    StatBadge(
-                        value: "\(autoOrganizingCount)",
-                        label: "Auto-Organizing",
-                        color: .blue
-                    )
-                    
-                    Spacer()
-                }
-                
-                if watchedFoldersManager.folders.isEmpty {
-                    HStack(spacing: 8) {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.secondary)
-                        Text("No watched folders configured. Add folders to enable automatic organization.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(10)
-                    .background(Color.secondary.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-                
-                Divider()
-                
-                Button {
-                    appState.navigatedFromSettings = true
-                    appState.currentView = .watchedFolders
-                } label: {
-                    HStack {
-                        Image(systemName: "folder.badge.plus")
-                        Text("Manage Watched Folders")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.sortyBordered)
-            }
-        }
-    }
-    
+
     private var backgroundBehaviorSection: some View {
         SettingsCard(title: "Background Behavior", icon: "menubar.rectangle", color: .purple) {
             VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Spacer()
+                    backgroundStatusBadge
+                }
+
                 VStack(alignment: .leading, spacing: 12) {
                     Toggle(isOn: $launchAtLogin) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -206,16 +140,42 @@ struct AutomationSettingsView: View {
                     }
                     .toggleStyle(.switch)
 
-                    Toggle(isOn: $keepInBackground) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Keep in Background")
-                                .font(.subheadline)
-                            Text("Continue monitoring folders even when all windows are closed")
+                    HStack(alignment: .top, spacing: 8) {
+                        Toggle(isOn: $keepInBackground) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Keep in Background")
+                                    .font(.subheadline)
+                                Text("Continue monitoring folders even when all windows are closed")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .toggleStyle(.switch)
+
+                        Button {
+                            showBackgroundInfo.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                        .accessibilityLabel("Keep in Background information")
+                        .popover(isPresented: $showBackgroundInfo, arrowEdge: .trailing) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Background Activity")
+                                    .font(.headline)
+                                Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably. It is recommended to keep this on.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(14)
+                            .frame(width: 280, alignment: .leading)
+                            .systemLiquidGlassPopover(cornerRadius: 12)
                         }
                     }
-                    .toggleStyle(.switch)
 
                     @AppStorage("hideDockIcon") var hideDockIcon = false
                     Toggle(isOn: $hideDockIcon) {
@@ -228,33 +188,9 @@ struct AutomationSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
-
-                    Toggle(isOn: $notificationSettings.settings.notifyOnAutoOrganize) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Automation Notifications")
-                                .font(.subheadline)
-                            Text("Show a system notification when files are automatically organized")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .toggleStyle(.switch)
                 }
 
                 Divider()
-
-                HStack(spacing: 8) {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.purple)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("App Background Activity")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        Text("Enabling background features registers Sorty as a background activity app in System Settings, allowing it to perform tasks like folder watching reliably.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
 
                 if launchAtLogin || keepInBackground {
                     Button {
@@ -268,6 +204,29 @@ struct AutomationSettingsView: View {
             }
         }
     }
+
+    private var backgroundStatusBadge: some View {
+        Label(backgroundStatusTitle, systemImage: loginItemManager.isBackgroundAgentEnabled ? "checkmark.circle.fill" : "circle")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(loginItemManager.isBackgroundAgentEnabled ? .green : .secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background((loginItemManager.isBackgroundAgentEnabled ? Color.green : Color.secondary).opacity(0.08))
+            .clipShape(Capsule())
+            .accessibilityLabel("Background activity status is \(backgroundStatusTitle)")
+    }
+
+    private var backgroundStatusTitle: String {
+        if loginItemManager.isBackgroundAgentEnabled {
+            return "On"
+        }
+
+        if keepInBackground, !loginItemManager.agentStatus.isEmpty {
+            return loginItemManager.agentStatus
+        }
+
+        return "Off"
+    }
     
     private func loadAutomationSettings() {
         if let provider = viewModel.config.automationProvider {
@@ -278,23 +237,6 @@ struct AutomationSettingsView: View {
             useSeparateModel = false
             selectedProvider = viewModel.config.provider
             selectedModel = viewModel.config.model
-        }
-    }
-}
-
-private struct StatBadge: View {
-    let value: String
-    let label: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.title2.bold())
-                .foregroundStyle(color)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
     }
 }

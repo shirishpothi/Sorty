@@ -56,38 +56,6 @@ struct OrganizationStrategySettingsView: View {
                     )
                     .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
 
-                    if viewModel.config.enableVision {
-                        Divider()
-
-                        HStack {
-                            Text("Images per Batch")
-                                .font(.subheadline)
-                            Spacer()
-                            Text("\(viewModel.config.visionBatchSize)")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundColor(.secondary)
-                        }
-
-                        Slider(
-                            value: Binding(
-                                get: { Double(viewModel.config.visionBatchSize) },
-                                set: { viewModel.config.visionBatchSize = Int($0) }
-                            ),
-                            in: 1...10,
-                            step: 1
-                        )
-
-                        HStack(spacing: 4) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.caption2)
-                                .foregroundColor(.orange)
-                            Text("Vision uses more tokens and may incur higher API costs.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 4)
-                    }
-
                     if !ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider) {
                         HStack(spacing: 4) {
                             Image(systemName: "info.circle")
