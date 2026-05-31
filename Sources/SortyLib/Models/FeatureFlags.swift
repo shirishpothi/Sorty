@@ -98,24 +98,6 @@ public enum FeatureFlags {
         return UserDefaults.standard.bool(forKey: "fileTaggingEnabled")
     }
 
-    /// Controls whether advanced/technical notification controls are shown in Settings.
-    /// This keeps the default notifications UX focused on the most common user options.
-    ///
-    /// Disabled by default. Enable via Terminal:
-    /// ```
-    /// defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true
-    /// ```
-    /// Disable:
-    /// ```
-    /// defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false
-    /// ```
-    public static var advancedNotificationSettingsEnabled: Bool {
-        if UserDefaults.standard.object(forKey: "advancedNotificationSettingsEnabled") == nil {
-            return false
-        }
-        return UserDefaults.standard.bool(forKey: "advancedNotificationSettingsEnabled")
-    }
-
     /// Controls whether the interactive demo is shown during onboarding.
     ///
     /// Disabled by default. Enable via Terminal:

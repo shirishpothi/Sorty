@@ -20,6 +20,35 @@ final class NotificationSettingsTests: XCTestCase {
         XCTAssertTrue(settings.systemNotifications, "System notifications should be enabled by default")
         XCTAssertEqual(settings.notificationBackend, .notifiCLI, "NotifiCLI should be default backend")
         XCTAssertTrue(settings.showActionButtons, "Action buttons should be enabled by default")
+        XCTAssertTrue(settings.persistentNotifications, "Persistent notifications should be enabled by default")
+        XCTAssertEqual(settings.notifiCLISound, "Glass", "Enhanced notifications should default to the Glass sound")
+        XCTAssertTrue(settings.showPreviewReadyInForeground, "Preview-ready notifications should work in foreground by default")
+        XCTAssertTrue(settings.batchSummary, "Batch summary notifications should be enabled by default")
+        XCTAssertTrue(settings.alwaysShowCriticalErrors, "Critical errors should always notify by default")
+        XCTAssertTrue(settings.systemNotificationSounds, "System notification sounds should be enabled by default")
+    }
+
+    func testEnhancedNotificationDefaultsNormalizeHiddenSettings() {
+        var settings = NotificationSettings()
+        settings.notificationBackend = .native
+        settings.persistentNotifications = false
+        settings.showActionButtons = false
+        settings.notifiCLISound = ""
+        settings.showPreviewReadyInForeground = false
+        settings.batchSummary = false
+        settings.alwaysShowCriticalErrors = false
+        settings.systemNotificationSounds = false
+
+        settings.applyEnhancedNotificationDefaults()
+
+        XCTAssertEqual(settings.notificationBackend, .notifiCLI)
+        XCTAssertTrue(settings.persistentNotifications)
+        XCTAssertTrue(settings.showActionButtons)
+        XCTAssertEqual(settings.notifiCLISound, "Glass")
+        XCTAssertTrue(settings.showPreviewReadyInForeground)
+        XCTAssertTrue(settings.batchSummary)
+        XCTAssertTrue(settings.alwaysShowCriticalErrors)
+        XCTAssertTrue(settings.systemNotificationSounds)
     }
     
     func testSettingsEncoding() throws {

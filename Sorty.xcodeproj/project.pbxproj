@@ -161,7 +161,6 @@
 		AABBCC220002000000000078 /* NamingInstructionsGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000078 /* NamingInstructionsGenerator.swift */; };
 		AABBCC220002000000000079 /* NamingPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC110001000000000079 /* NamingPreset.swift */; };
 		AABBCC22000200000000007A /* NamingPresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007A /* NamingPresetManager.swift */; };
-		AABBCC22000200000000007B /* NotifiCLIStatusCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007B /* NotifiCLIStatusCard.swift */; };
 		AABBCC22000200000000007C /* NotificationPermissionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007C /* NotificationPermissionCard.swift */; };
 		AABBCC22000200000000007D /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007D /* NotificationsSettingsView.swift */; };
 		AABBCC22000200000000007E /* OnboardingAudioManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCC11000100000000007E /* OnboardingAudioManager.swift */; };
@@ -512,7 +511,6 @@
 		AABBCC110001000000000078 /* NamingInstructionsGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NamingInstructionsGenerator.swift; sourceTree = "<group>"; };
 		AABBCC110001000000000079 /* NamingPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NamingPreset.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007A /* NamingPresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NamingPresetManager.swift; sourceTree = "<group>"; };
-		AABBCC11000100000000007B /* NotifiCLIStatusCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifiCLIStatusCard.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007C /* NotificationPermissionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionCard.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007D /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
 		AABBCC11000100000000007E /* OnboardingAudioManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingAudioManager.swift; sourceTree = "<group>"; };
@@ -978,7 +976,6 @@
 				AABBCC110001000000000062 /* AutomationSettingsView.swift */,
 				AABBCC11000100000000006F /* FinderIntegrationSettingsView.swift */,
 				AABBCC110001000000000074 /* HelpSettingsView.swift */,
-				AABBCC11000100000000007B /* NotifiCLIStatusCard.swift */,
 				AABBCC11000100000000007C /* NotificationPermissionCard.swift */,
 				AABBCC11000100000000007D /* NotificationsSettingsView.swift */,
 				AABBCC110001000000000080 /* OrganizationRulesSettingsView.swift */,

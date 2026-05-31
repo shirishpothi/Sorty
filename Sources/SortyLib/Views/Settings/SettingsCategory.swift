@@ -180,11 +180,8 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             return [
                 SettingsFeatureSnippet(title: "System Notification Permission", summary: "Check macOS notification authorization status."),
                 SettingsFeatureSnippet(title: "Delivery Method", summary: "Choose In-App HUD and system notification delivery."),
-                SettingsFeatureSnippet(title: "NotifiCLI Settings", summary: "Configure backend, action buttons, persistent notifications, and sounds."),
                 SettingsFeatureSnippet(title: "Notification Types", summary: "Control which events trigger notifications."),
-                SettingsFeatureSnippet(title: "Show Preview Ready in foreground", summary: "Show preview-ready system alerts even while app is active."),
-                SettingsFeatureSnippet(title: "Sounds", summary: "Configure completion and notification sounds."),
-                SettingsFeatureSnippet(title: "Test Notifications", summary: "Send test alerts to validate current notification setup.")
+                SettingsFeatureSnippet(title: "Sounds", summary: "Configure completion sounds.")
             ]
         case .advanced:
             return [
@@ -210,9 +207,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
                 SettingsFeatureSnippet(title: "Automation Deeplinks", summary: "Browse and copy all supported sorty:// deeplinks for scripts, launchers, and Shortcuts.", keywords: ["deeplink", "url scheme", "sorty://", "automation"])
             ]
         case .experimental:
-            return [
-                SettingsFeatureSnippet(title: "Advanced Notification Controls Flag", summary: "Expose technical notification backend controls.")
-            ]
+            return []
         }
     }
 

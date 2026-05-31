@@ -90,6 +90,17 @@ public struct NotificationSettings: Codable, Equatable, Sendable {
     public var playCompletionSound: Bool = true
     
     public init() {}
+
+    public mutating func applyEnhancedNotificationDefaults() {
+        notificationBackend = .notifiCLI
+        persistentNotifications = true
+        showActionButtons = true
+        notifiCLISound = "Glass"
+        showPreviewReadyInForeground = true
+        batchSummary = true
+        alwaysShowCriticalErrors = true
+        systemNotificationSounds = true
+    }
     
     @MainActor
     public static let `default` = NotificationSettings()
@@ -122,7 +133,8 @@ public class NotificationSettingsManager: ObservableObject {
     
     private func load() {
         if let data = userDefaults.data(forKey: settingsKey),
-           let decoded = try? JSONDecoder().decode(NotificationSettings.self, from: data) {
+           var decoded = try? JSONDecoder().decode(NotificationSettings.self, from: data) {
+            decoded.applyEnhancedNotificationDefaults()
             settings = decoded
         }
     }

@@ -32,14 +32,6 @@ struct ExperimentalSettingsView: View {
                 restartMessage: "Use Check for Updates after switching channels."
             ),
             ExperimentalFlag(
-                name: "Advanced Notification Controls",
-                description: "Shows technical notification controls including backend selection and test actions.",
-                defaultsKey: "advancedNotificationSettingsEnabled",
-                defaultValue: false,
-                enableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool true",
-                disableCommand: "defaults write com.sorty.app advancedNotificationSettingsEnabled -bool false"
-            ),
-            ExperimentalFlag(
                 name: "Workspace Health",
                 description: "Shows Workspace Health navigation, menu actions, deeplinks, and shortcuts.",
                 defaultsKey: "workspaceHealthEnabled",
