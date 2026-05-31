@@ -80,7 +80,7 @@ struct SidebarNavigationItem: Identifiable, Hashable {
             SidebarNavigationItem(
                 view: .settings,
                 title: "Settings",
-                systemImage: "gearshape",
+                systemImage: "gear",
                 accessibilityIdentifier: "SettingsSidebarItem",
                 accessibilityHint: "Configure Sorty behavior and AI providers",
                 helpText: "Adjust provider, strategy, automation, and system settings"
