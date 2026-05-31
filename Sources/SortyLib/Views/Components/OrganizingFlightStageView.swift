@@ -18,6 +18,7 @@ import UniformTypeIdentifiers
 
 struct OrganizingFlightStageView: View {
     let suggestions: [FolderSuggestion]
+    var prioritizesFilenames = false
 
     var stageWidth: CGFloat = 430
     var stageHeight: CGFloat = 170
@@ -41,8 +42,11 @@ struct OrganizingFlightStageView: View {
 
     private let dropTravel: CGFloat = 76
     private let cardSize = CGSize(width: 28, height: 28)
-    private let fileCardSize = CGSize(width: 188, height: 42)
     private let bucketSize = CGSize(width: 56, height: 56)
+
+    private var fileCardSize: CGSize {
+        prioritizesFilenames ? CGSize(width: 342, height: 64) : CGSize(width: 188, height: 42)
+    }
 
     private var visibleSuggestions: [FolderSuggestion] {
         let source = displayedSuggestions.isEmpty ? suggestions : displayedSuggestions
@@ -103,7 +107,7 @@ struct OrganizingFlightStageView: View {
     // MARK: - Subviews
 
     private var fileCard: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             AppKitImageView(image: currentFileIcon, size: cardSize)
                 .frame(width: cardSize.width, height: cardSize.height)
                 .shadow(color: Color.black.opacity(0.16), radius: 4, x: 0, y: 2)
@@ -112,9 +116,12 @@ struct OrganizingFlightStageView: View {
                 fileNameLabel
             }
 
-            Image(systemName: "arrow.down.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary.opacity(0.75))
+            if !prioritizesFilenames {
+                Image(systemName: "arrow.down.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary.opacity(0.75))
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, 10)
         .frame(width: fileCardSize.width, height: fileCardSize.height)
@@ -130,27 +137,55 @@ struct OrganizingFlightStageView: View {
     }
 
     private var fileNameLabel: some View {
-        ZStack {
-            if let currentRenamedFileName, isShowingRenamedFileName {
-                Text(currentRenamedFileName)
-                    .foregroundStyle(.primary.opacity(0.92))
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
+        Group {
+            if prioritizesFilenames, let currentRenamedFileName {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(currentFileName)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .strikethrough(isShowingRenamedFileName, color: .secondary.opacity(0.7))
+
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.right")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.purple.opacity(0.78))
+                            .accessibilityHidden(true)
+
+                        Text(isShowingRenamedFileName ? currentRenamedFileName : "Preparing better name...")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isShowingRenamedFileName ? .primary : .secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .opacity(isShowingRenamedFileName ? 1 : 0.68)
+                }
+                .transition(.opacity.combined(with: .move(edge: .trailing)))
             } else {
-                Text(currentFileName)
-                    .foregroundStyle(.primary.opacity(0.72))
-                    .strikethrough(currentRenamedFileName != nil, color: .secondary.opacity(0.7))
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .leading).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
+                ZStack {
+                    if let currentRenamedFileName, isShowingRenamedFileName {
+                        Text(currentRenamedFileName)
+                            .foregroundStyle(.primary.opacity(0.92))
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+                    } else {
+                        Text(currentFileName)
+                            .foregroundStyle(.primary.opacity(0.72))
+                            .strikethrough(currentRenamedFileName != nil, color: .secondary.opacity(0.7))
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ))
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
             }
         }
-        .font(.caption.weight(.semibold))
-        .lineLimit(1)
-        .truncationMode(.middle)
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipped()
         .accessibilityHidden(true)

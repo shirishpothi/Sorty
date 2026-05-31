@@ -254,7 +254,10 @@ struct AnalysisView: View {
                                 ))
                         }
                     } else if hasOrganizeStreamEvents {
-                        OrganizingFlightStageView(suggestions: liveOrganizingSuggestions)
+                        OrganizingFlightStageView(
+                            suggestions: liveOrganizingSuggestions,
+                            prioritizesFilenames: settingsViewModel.config.mode == .organizeAndRename
+                        )
                             .frame(maxWidth: .infinity)
                             .transition(
                                 .asymmetric(
@@ -696,6 +699,10 @@ private enum OrganizingStreamSuggestions {
         pattern: #""filename"\s*:\s*"((?:\\"|[^"])*)""#,
         options: []
     )
+    private static let suggestedNameRegex = try? NSRegularExpression(
+        pattern: #""suggested_name"\s*:\s*"((?:\\"|[^"])*)""#,
+        options: []
+    )
 
     static func hasRenderableEvents(in streamText: String) -> Bool {
         guard let jsonStart = streamText.firstIndex(of: "{") else { return false }
@@ -740,8 +747,8 @@ private enum OrganizingStreamSuggestions {
             let segment = nsText.substring(with: segmentRange)
             guard segment.range(of: #""files""#, options: .caseInsensitive) != nil else { continue }
 
-            let parsedFiles = parseFiles(from: segment, filesByName: filesByName)
-            guard !parsedFiles.isEmpty else { continue }
+            let parsedEntries = parseFiles(from: segment, filesByName: filesByName)
+            guard !parsedEntries.isEmpty else { continue }
 
             if suggestionsByFolder[folderName] == nil {
                 orderedFolderNames.append(folderName)
@@ -750,8 +757,19 @@ private enum OrganizingStreamSuggestions {
 
             var suggestion = suggestionsByFolder[folderName] ?? FolderSuggestion(folderName: folderName)
             let existingIDs = Set(suggestion.files.map(\.id))
-            let newFiles = parsedFiles.filter { !existingIDs.contains($0.id) }
-            suggestion.files.append(contentsOf: newFiles.prefix(max(0, maxFilesPerFolder - suggestion.files.count)))
+            let newEntries = parsedEntries.filter { !existingIDs.contains($0.file.id) }
+            let remainingSlots = max(0, maxFilesPerFolder - suggestion.files.count)
+            for entry in newEntries.prefix(remainingSlots) {
+                suggestion.files.append(entry.file)
+                if let suggestedName = entry.suggestedName, suggestedName != entry.file.displayName {
+                    suggestion.fileRenameMappings.append(
+                        FileRenameMapping(
+                            originalFile: entry.file,
+                            suggestedName: suggestedName
+                        )
+                    )
+                }
+            }
             suggestionsByFolder[folderName] = suggestion
         }
 
@@ -761,27 +779,64 @@ private enum OrganizingStreamSuggestions {
             .suffix(maxVisibleFolders))
     }
 
-    private static func parseFiles(from segment: String, filesByName: [String: FileItem]) -> [FileItem] {
+    private static func parseFiles(
+        from segment: String,
+        filesByName: [String: FileItem]
+    ) -> [(file: FileItem, suggestedName: String?)] {
         let segmentText = segment as NSString
-        let matches = filenameRegex?.matches(
-            in: segment,
-            range: NSRange(location: 0, length: segmentText.length)
-        ) ?? []
+        let matches = fileObjectMatches(in: segment, segmentText: segmentText)
 
-        var parsedFiles: [FileItem] = []
+        var parsedFiles: [(file: FileItem, suggestedName: String?)] = []
         var seenIDs: Set<UUID> = []
-        for match in matches where match.numberOfRanges > 1 {
-            let filenameRange = match.range(at: 1)
-            guard filenameRange.location != NSNotFound else { continue }
-            let filename = decodeJSONString(segmentText.substring(with: filenameRange))
+        for object in matches {
+            let filename = firstCapture(regex: filenameRegex, text: object)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !filename.isEmpty else { continue }
 
             let key = normalizedFileName(filename)
             guard let file = filesByName[key], seenIDs.insert(file.id).inserted else { continue }
-            parsedFiles.append(file)
+            let suggestedName = firstCapture(regex: suggestedNameRegex, text: object)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            parsedFiles.append((file: file, suggestedName: suggestedName.isEmpty ? nil : suggestedName))
         }
         return parsedFiles
+    }
+
+    private static func fileObjectMatches(in segment: String, segmentText: NSString) -> [String] {
+        let objectPattern = #"\{[^{}]*"filename"\s*:\s*"((?:\\"|[^"])*)"[^{}]*\}"#
+        if let objectRegex = try? NSRegularExpression(pattern: objectPattern, options: []) {
+            let objectMatches = objectRegex.matches(
+                in: segment,
+                range: NSRange(location: 0, length: segmentText.length)
+            )
+            if !objectMatches.isEmpty {
+                return objectMatches.map { segmentText.substring(with: $0.range) }
+            }
+        }
+
+        let filenameMatches = filenameRegex?.matches(
+            in: segment,
+            range: NSRange(location: 0, length: segmentText.length)
+        ) ?? []
+        return filenameMatches.compactMap { match in
+            guard match.numberOfRanges > 1 else { return nil }
+            let filenameRange = match.range(at: 1)
+            guard filenameRange.location != NSNotFound else { return nil }
+            let filename = segmentText.substring(with: filenameRange)
+            return #""filename":"\#(filename)""#
+        }
+    }
+
+    private static func firstCapture(regex: NSRegularExpression?, text: String) -> String {
+        guard let regex else { return "" }
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        guard let match = regex.firstMatch(in: text, range: range), match.numberOfRanges > 1 else {
+            return ""
+        }
+        let captureRange = match.range(at: 1)
+        guard captureRange.location != NSNotFound else { return "" }
+        return decodeJSONString(nsText.substring(with: captureRange))
     }
 
     private static func boundedParseText(_ text: String) -> String {
