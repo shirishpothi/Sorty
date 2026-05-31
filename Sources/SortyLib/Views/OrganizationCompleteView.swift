@@ -313,12 +313,6 @@ struct OrganizationCompleteView: View {
                     .opacity(historyLinkAppeared ? 1 : 0)
                     .offset(y: historyLinkAppeared ? 0 : 10)
                     
-                    if undoState == .completed {
-                        UndoCompletionSummary(restoredCount: undoRestoredCount, skippedCount: undoSkippedCount)
-                            .frame(maxWidth: 420)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-
                     if let stats = stats, settingsViewModel.config.showStatsForNerds, undoState == .idle {
                         OrganizationResultView(stats: stats)
                             .padding(.horizontal, 12)
@@ -387,7 +381,7 @@ struct OrganizationCompleteView: View {
         case .undoing:
             return "arrow.uturn.backward"
         case .completed:
-            return "arrow.uturn.backward.circle.fill"
+            return "checkmark"
         case .redoing:
             return "arrow.uturn.forward"
         case .failed:
@@ -402,7 +396,7 @@ struct OrganizationCompleteView: View {
         case .undoing:
             return .blue
         case .completed:
-            return .mint
+            return .green
         case .redoing:
             return .blue
         case .failed:
@@ -412,12 +406,10 @@ struct OrganizationCompleteView: View {
 
     private var statusTitle: String {
         switch undoState {
-        case .idle:
+        case .idle, .completed:
             return mode.completionTitle
         case .undoing:
             return "Undoing Changes"
-        case .completed:
-            return "Undo Complete"
         case .redoing:
             return "Redoing Changes"
         case .failed:
@@ -427,15 +419,10 @@ struct OrganizationCompleteView: View {
 
     private var statusMessage: String {
         switch undoState {
-        case .idle:
+        case .idle, .completed:
             return mode.completionMessage
         case .undoing:
             return "Restoring files to their previous locations..."
-        case .completed:
-            if undoSkippedCount > 0 {
-                return "\(undoRestoredCount) restored, \(undoSkippedCount) skipped. Redo to reapply this organization."
-            }
-            return "\(undoRestoredCount) restored. Redo to reapply this organization."
         case .redoing:
             return "Reapplying the organization plan..."
         case .failed:
@@ -496,6 +483,7 @@ struct OrganizationCompleteView: View {
                         ringExpanded = false
                     }
                     HapticFeedbackManager.shared.success()
+                    showUndoCompleteHUD()
                 }
             } catch {
                 await MainActor.run {
@@ -516,6 +504,29 @@ struct OrganizationCompleteView: View {
                 }
             }
         }
+    }
+
+    private func showUndoCompleteHUD() {
+        let message = undoRestoredSummaryText
+        NotificationManager.shared.showHUDInfo(
+            title: "Files restored",
+            message: message,
+            icon: "checkmark.seal.fill",
+            iconColor: .mint,
+            actions: [
+                HUDNotificationAction(title: "Redo", systemImage: "arrow.uturn.forward") {
+                    NotificationManager.shared.dismissHUD()
+                    redoLastOrganization()
+                }
+            ]
+        )
+    }
+
+    private var undoRestoredSummaryText: String {
+        if undoSkippedCount > 0 {
+            return "\(undoRestoredCount) restored, \(undoSkippedCount) skipped"
+        }
+        return "\(undoRestoredCount) restored"
     }
 
     private func restoredDisplayCount(
@@ -673,52 +684,6 @@ private struct SummaryStatItem: View {
                     .foregroundStyle(.secondary)
             }
         }
-    }
-}
-
-private struct UndoCompletionSummary: View {
-    let restoredCount: Int
-    let skippedCount: Int
-
-    private var summaryText: String {
-        if skippedCount > 0 {
-            return "\(restoredCount) restored, \(skippedCount) skipped"
-        }
-        return "\(restoredCount) restored"
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.seal.fill")
-                .font(.title3)
-                .foregroundStyle(.mint)
-                .frame(width: 32, height: 32)
-                .systemLiquidGlassBackground(cornerRadius: 16)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Files restored")
-                    .font(.subheadline.weight(.semibold))
-
-                Text(summaryText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Image(systemName: "arrow.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .systemLiquidGlassBackground(cornerRadius: 14)
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.mint.opacity(0.22), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Undo complete. \(summaryText).")
     }
 }
 
