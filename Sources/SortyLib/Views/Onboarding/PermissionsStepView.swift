@@ -17,6 +17,7 @@ public struct PermissionsStepView: View {
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
     @State private var selectedEducationPermission: PermissionType?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var automationManager: AutomationManager
 
     public init(hasRequiredPermissions: Binding<Bool>) {
@@ -44,7 +45,7 @@ public struct PermissionsStepView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                     VStack(alignment: .leading, spacing: 12) {
-                        PrivacyFeatureRow(icon: "folder.badge.gearshape", text: "Files & Folders is required")
+                        PrivacyFeatureRow(icon: "folder.fill", text: "Files & Folders is required")
                         PrivacyFeatureRow(icon: "lock.open", text: "Full Disk Access is optional")
                         PrivacyFeatureRow(icon: "gearshape.2", text: "Finder Automation is optional")
                         PrivacyFeatureRow(icon: "bell", text: "Notifications are optional")
@@ -62,28 +63,47 @@ public struct PermissionsStepView: View {
             .frame(maxWidth: .infinity)
             .padding(.leading, 72)
 
-            VStack(spacing: 20) {
-                Text("Required Permission")
-                    .font(.title3.weight(.semibold))
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Grant Access")
+                            .font(.title3.weight(.semibold))
 
-                VStack(spacing: 16) {
-                    PermissionRow(
-                        type: .filesAndFolders,
-                        state: permissionStates[.filesAndFolders] ?? .unknown,
-                        onExplain: { selectedEducationPermission = .filesAndFolders },
-                        onRequest: { requestPermission(.filesAndFolders, sourceFrameInScreen: $0) }
-                    )
+                        Text("Choose a folder to continue. Optional permissions can wait.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Text("\(grantedPermissionCount) of \(PermissionType.allCases.count) granted")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(grantedPermissionCount == PermissionType.allCases.count ? .green : .secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.primary.opacity(0.07), in: Capsule(style: .continuous))
                 }
-                .frame(maxWidth: 400)
 
-                Text("Optional Permissions")
-                    .font(.title3.weight(.semibold))
+                PermissionRow(
+                    type: .filesAndFolders,
+                    state: permissionStates[.filesAndFolders] ?? .unknown,
+                    isRequired: true,
+                    appearDelay: 0.06,
+                    onExplain: { selectedEducationPermission = .filesAndFolders },
+                    onRequest: { requestPermission(.filesAndFolders, sourceFrameInScreen: $0) }
+                )
+
+                Text("Optional")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                     .padding(.top, 4)
 
-                VStack(spacing: 16) {
+                VStack(spacing: 10) {
                     PermissionRow(
                         type: .fullDiskAccess,
                         state: permissionStates[.fullDiskAccess] ?? .unknown,
+                        isRequired: false,
+                        appearDelay: 0.12,
                         onExplain: { selectedEducationPermission = .fullDiskAccess },
                         onRequest: { requestPermission(.fullDiskAccess, sourceFrameInScreen: $0) }
                     )
@@ -91,6 +111,8 @@ public struct PermissionsStepView: View {
                     PermissionRow(
                         type: .automation,
                         state: permissionStates[.automation] ?? .unknown,
+                        isRequired: false,
+                        appearDelay: 0.18,
                         onExplain: { selectedEducationPermission = .automation },
                         onRequest: { requestPermission(.automation, sourceFrameInScreen: $0) }
                     )
@@ -98,25 +120,30 @@ public struct PermissionsStepView: View {
                     PermissionRow(
                         type: .notifications,
                         state: permissionStates[.notifications] ?? .unknown,
+                        isRequired: false,
+                        appearDelay: 0.24,
                         onExplain: { selectedEducationPermission = .notifications },
                         onRequest: { requestPermission(.notifications, sourceFrameInScreen: $0) }
                     )
                 }
-                .frame(maxWidth: 400)
 
-                Text("Choose any folder once so macOS can grant Sorty file access.")
+                Text("Files & Folders unlocks Continue after macOS grants access.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
             }
+            .frame(maxWidth: 430)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)
             .padding(.trailing, 72)
             .opacity(hasAppeared ? 1 : 0)
-            .scaleEffect(hasAppeared ? 1 : 0.985)
-            .animation(.easeInOut(duration: 0.22).delay(0.12), value: hasAppeared)
+            .offset(x: hasAppeared ? 0 : 18)
+            .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.86).delay(0.12), value: hasAppeared)
         }
         .onAppear {
-            withAnimation { hasAppeared = true }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.86)) {
+                hasAppeared = true
+            }
             checkPermissions()
         }
         .sheet(item: $selectedEducationPermission) { permission in
@@ -160,6 +187,10 @@ public struct PermissionsStepView: View {
         case .unknown:
             permissionStates[.automation] = .unknown
         }
+    }
+
+    private var grantedPermissionCount: Int {
+        PermissionType.allCases.filter { permissionStates[$0] == .granted }.count
     }
 
     private func requestPermission(_ type: PermissionType, sourceFrameInScreen: CGRect?) {
@@ -225,7 +256,7 @@ public struct PermissionsStepView: View {
 
 // MARK: - Supporting Types
 
-enum PermissionType: String, Identifiable {
+enum PermissionType: String, CaseIterable, Identifiable {
     case filesAndFolders = "Files & Folders"
     case fullDiskAccess = "Full Disk Access"
     case automation = "Automation"
@@ -235,7 +266,7 @@ enum PermissionType: String, Identifiable {
 
     var icon: String {
         switch self {
-        case .filesAndFolders: return "folder.badge.gearshape.fill"
+        case .filesAndFolders: return "folder.fill"
         case .fullDiskAccess: return "lock.open.fill"
         case .automation: return "gearshape.2.fill"
         case .notifications: return "bell.fill"
@@ -296,6 +327,17 @@ enum PermissionType: String, Identifiable {
             return "Enable Notifications"
         }
     }
+
+    var compactActionTitle: String {
+        switch self {
+        case .filesAndFolders:
+            return "Choose Folder"
+        case .fullDiskAccess, .automation:
+            return "Open Settings"
+        case .notifications:
+            return "Enable"
+        }
+    }
 }
 
 enum PermissionState {
@@ -303,121 +345,217 @@ enum PermissionState {
     case pending
     case granted
     case denied
+
+    var title: String {
+        switch self {
+        case .unknown: return "Not granted"
+        case .pending: return "Check Settings"
+        case .granted: return "Granted"
+        case .denied: return "Needs Attention"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .unknown: return "circle"
+        case .pending: return "arrow.clockwise"
+        case .granted: return "checkmark"
+        case .denied: return "exclamationmark"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .unknown: return .secondary
+        case .pending: return .orange
+        case .granted: return .green
+        case .denied: return .red
+        }
+    }
 }
 
 struct PermissionRow: View {
     let type: PermissionType
     let state: PermissionState
+    let isRequired: Bool
+    let appearDelay: Double
     let onExplain: () -> Void
     let onRequest: (CGRect?) -> Void
-    @State private var iconPop = false
-    @State private var successRingProgress: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var hasAppeared = false
+    @State private var isHovering = false
+    @State private var grantFlash = false
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 14) {
             permissionIcon
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(type.rawValue)
-                    .font(.headline)
+                HStack(spacing: 7) {
+                    Text(type.rawValue)
+                        .font(.headline)
+
+                    if isRequired {
+                        Text("Required")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12), in: Capsule(style: .continuous))
+                    }
+                }
 
                 Text(type.description)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer()
 
-            switch state {
-            case .granted:
-                grantedCheckmark
-            case .denied:
-                PermissionActionButton(title: "Open Settings", style: .bordered, action: onRequest)
-                    .fixedSize()
-            case .pending:
-                Text("Check Settings")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            case .unknown:
-                HStack(spacing: 8) {
-                    Button {
-                        onExplain()
-                    } label: {
-                        Image(systemName: "info.circle")
-                    }
-                    .buttonStyle(.plain)
-                    .help("Show what Sorty asks for")
-
-                    PermissionActionButton(title: "Grant", style: .primary, action: onRequest)
-                        .fixedSize()
-                }
+            trailingControl
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 13)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(rowFill)
+        )
+        .systemLiquidGlassBackground(cornerRadius: 14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(rowStroke, lineWidth: state == .granted || grantFlash ? 1.2 : 1)
+        )
+        .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.05), radius: isHovering ? 12 : 7, x: 0, y: isHovering ? 6 : 3)
+        .scaleEffect(grantFlash ? 1.012 : (isHovering ? 1.006 : 1))
+        .opacity(hasAppeared ? 1 : 0)
+        .offset(y: hasAppeared ? 0 : 10)
+        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.88), value: state)
+        .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86), value: isHovering)
+        .animation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82), value: grantFlash)
+        .onAppear {
+            guard !hasAppeared else { return }
+            withAnimation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.9).delay(appearDelay)) {
+                hasAppeared = true
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(state == .granted ? Color.green.opacity(0.3) : Color.clear, lineWidth: 2)
-        )
+        .onHover { hovering in
+            isHovering = hovering
+        }
         .onChange(of: state) { _, newState in
             guard newState == .granted else { return }
             playApprovalAnimation()
         }
+        .accessibilityElement(children: .contain)
     }
 
     private var iconTint: Color {
         state == .granted ? .green : type.color
     }
 
+    private var rowFill: Color {
+        if state == .granted {
+            return Color.green.opacity(colorScheme == .dark ? 0.12 : 0.08)
+        }
+
+        return Color(nsColor: .controlBackgroundColor)
+            .opacity(colorScheme == .dark ? (isHovering ? 0.82 : 0.68) : (isHovering ? 0.94 : 0.82))
+    }
+
+    private var rowStroke: Color {
+        if grantFlash || state == .granted {
+            return Color.green.opacity(grantFlash ? 0.72 : 0.34)
+        }
+
+        if isHovering {
+            return type.color.opacity(0.30)
+        }
+
+        return Color.primary.opacity(colorScheme == .dark ? 0.12 : 0.08)
+    }
+
     private var permissionIcon: some View {
         ZStack {
-            // One-shot success ring that expands and fades when granted.
-            Circle()
-                .stroke(Color.green.opacity(0.5 * (1 - successRingProgress)), lineWidth: 2)
-                .frame(width: 44, height: 44)
-                .scaleEffect(0.92 + successRingProgress * 0.65)
-
-            Circle()
-                .fill(iconTint.opacity(state == .granted ? 0.18 : 0.14))
-                .frame(width: 44, height: 44)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(iconTint.opacity(state == .granted ? 0.18 : 0.13))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(iconTint.opacity(state == .granted ? 0.28 : 0.18), lineWidth: 1)
+                }
 
             Image(systemName: state == .granted ? "checkmark" : type.icon)
-                .font(.system(size: state == .granted ? 18 : 20, weight: .semibold))
+                .font(.system(size: state == .granted ? 18 : 19, weight: .semibold))
                 .foregroundStyle(iconTint)
                 .contentTransition(.symbolEffect(.replace))
         }
-        .scaleEffect(iconPop ? 1.05 : 1)
-        .frame(width: 52, height: 52)
-        .animation(.spring(response: 0.28, dampingFraction: 0.72), value: iconPop)
-        .animation(.easeInOut(duration: 0.25), value: state)
+        .frame(width: 46, height: 46)
+        .accessibilityHidden(true)
     }
 
-    private var grantedCheckmark: some View {
-        Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: 22, weight: .semibold))
-            .foregroundStyle(.green)
-            .transition(.scale(scale: 0.6).combined(with: .opacity))
-            .accessibilityLabel("Granted")
+    @ViewBuilder
+    private var trailingControl: some View {
+        switch state {
+        case .granted, .pending:
+            statusChip
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        case .denied:
+            PermissionActionButton(title: "Open Settings", style: .bordered, action: onRequest)
+                .fixedSize()
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        case .unknown:
+            HStack(spacing: 8) {
+                Button {
+                    onExplain()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("Show what Sorty asks for")
+                .accessibilityLabel("Learn about \(type.rawValue)")
+
+                PermissionActionButton(
+                    title: type.compactActionTitle,
+                    style: isRequired ? .primary : .bordered,
+                    action: onRequest
+                )
+                .fixedSize()
+            }
+            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        }
+    }
+
+    private var statusChip: some View {
+        HStack(spacing: 6) {
+            Image(systemName: state.symbol)
+                .font(.system(size: 11, weight: .bold))
+            Text(state.title)
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundStyle(state.tint)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(state.tint.opacity(0.12), in: Capsule(style: .continuous))
+        .accessibilityLabel(state.title)
     }
 
     private func playApprovalAnimation() {
         HapticFeedbackManager.shared.success()
+        guard !reduceMotion else { return }
 
-        successRingProgress = 0
-        withAnimation(.spring(response: 0.24, dampingFraction: 0.78)) {
-            iconPop = true
-        }
-        withAnimation(.easeOut(duration: 0.5)) {
-            successRingProgress = 1
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.82)) {
+            grantFlash = true
         }
 
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 220_000_000)
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                iconPop = false
+            try? await Task.sleep(nanoseconds: 260_000_000)
+            withAnimation(.easeOut(duration: 0.24)) {
+                grantFlash = false
             }
         }
     }
@@ -559,6 +697,7 @@ private struct PermissionActionButton: View {
     let style: Style
     let action: (CGRect?) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var frameInScreen: CGRect = .zero
     @State private var isHovering = false
 
@@ -580,8 +719,8 @@ private struct PermissionActionButton: View {
             ScreenFrameReader(frameInScreen: $frameInScreen)
                 .allowsHitTesting(false)
         )
-        .scaleEffect(isHovering ? 1.03 : 1)
-        .animation(.easeOut(duration: 0.15), value: isHovering)
+        .scaleEffect(isHovering && !reduceMotion ? 1.015 : 1)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: isHovering)
         .onHover { hovering in
             if hovering && !isHovering {
                 HapticFeedbackManager.shared.selection()
@@ -594,7 +733,7 @@ private struct PermissionActionButton: View {
     private var buttonStyle: OnboardingPillButtonStyle {
         switch style {
         case .primary:
-            return .init()
+            return .init(size: .small)
         case .bordered:
             return .init(isSecondary: true, size: .small)
         }
