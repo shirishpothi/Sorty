@@ -172,6 +172,8 @@ public class SettingsViewModel: ObservableObject {
             } else {
                 decoded.apiKey = nil
             }
+
+            decoded.enableSmartRename = true
             
             config = decoded
         }

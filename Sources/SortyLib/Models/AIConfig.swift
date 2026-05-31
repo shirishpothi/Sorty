@@ -615,7 +615,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableReasoning: Bool = false,
         mode: OrganizationMode = .organize,
         enableDeepScan: Bool = true,
-        enableSmartRename: Bool = false,
+        enableSmartRename: Bool = true,
         detectDuplicates: Bool = false,
         enableFileTagging: Bool = true,
         showStatsForNerds: Bool = false,
@@ -740,7 +740,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableReasoning = try container.decodeIfPresent(Bool.self, forKey: .enableReasoning) ?? false
         mode = try container.decodeIfPresent(OrganizationMode.self, forKey: .mode) ?? .organize
         enableDeepScan = try container.decodeIfPresent(Bool.self, forKey: .enableDeepScan) ?? true
-        enableSmartRename = try container.decodeIfPresent(Bool.self, forKey: .enableSmartRename) ?? false
+        enableSmartRename = try container.decodeIfPresent(Bool.self, forKey: .enableSmartRename) ?? true
         detectDuplicates = try container.decodeIfPresent(Bool.self, forKey: .detectDuplicates) ?? false
         enableFileTagging = try container.decodeIfPresent(Bool.self, forKey: .enableFileTagging) ?? true
         showStatsForNerds = try container.decodeIfPresent(Bool.self, forKey: .showStatsForNerds) ?? false
@@ -822,7 +822,7 @@ public struct AIConfig: Codable, Sendable, Equatable {
         enableReasoning: false,
         mode: .organize,
         enableDeepScan: true,
-        enableSmartRename: false,
+        enableSmartRename: true,
         detectDuplicates: false,
         enableFileTagging: true,
         showStatsForNerds: false,

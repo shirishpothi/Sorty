@@ -109,7 +109,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .provider:
             return ["api key", "provider", "model", "endpoint", "token", "connection", "copilot", "ollama", "openrouter", "anthropic", "gemini"]
         case .strategy:
-            return ["strategy", "deep scanning", "smart renaming", "vision", "naming style", "folder structure", "organization style"]
+            return ["strategy", "fast mode", "deep scanning", "vision", "naming style", "folder structure", "organization style"]
         case .rules:
             return ["rules", "instructions", "storage locations", "destinations", "tagging", "pattern"]
         case .tuning:
@@ -143,8 +143,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .strategy:
             return [
-                SettingsFeatureSnippet(title: "Deep Scanning", summary: "Analyze file content including PDF text and metadata for better categorization."),
-                SettingsFeatureSnippet(title: "Smart Renaming", summary: "Generate cleaner, consistent filenames while organizing."),
+                SettingsFeatureSnippet(title: "Fast Mode", summary: "Skip content analysis for faster organization when filenames and folder context are enough.", keywords: ["deep scanning"]),
                 SettingsFeatureSnippet(title: "AI Vision for Images", summary: "Use image understanding to classify screenshots and photos.", keywords: ["vision"]),
                 SettingsFeatureSnippet(title: "Naming Preset", summary: "Choose naming conventions for organized files."),
                 SettingsFeatureSnippet(title: "Custom Naming Instructions", summary: "Define your own naming rules and generate instructions.")

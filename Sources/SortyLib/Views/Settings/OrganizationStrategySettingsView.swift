@@ -25,9 +25,12 @@ struct OrganizationStrategySettingsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         SettingsToggle(
-                            isOn: $viewModel.config.enableDeepScan,
-                            title: "Deep Scanning",
-                            description: "Analyze file content (PDF text, EXIF data) for smarter organization"
+                            isOn: Binding(
+                                get: { !viewModel.config.enableDeepScan },
+                                set: { viewModel.config.enableDeepScan = !$0 }
+                            ),
+                            title: "Fast Mode",
+                            description: "Skip content analysis and use filenames, extensions, and folder context only"
                         )
                         .disabled(!viewModel.config.provider.supportsDeepScan)
 
@@ -38,14 +41,6 @@ struct OrganizationStrategySettingsView: View {
                                 .padding(.leading, 32)
                         }
                     }
-
-                    Divider()
-
-                    SettingsToggle(
-                        isOn: $viewModel.config.enableSmartRename,
-                        title: "Smart Renaming",
-                        description: "AI suggests more descriptive filenames based on content"
-                    )
 
                 }
             }
@@ -153,16 +148,6 @@ struct OrganizationStrategySettingsView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
 
-                        if !viewModel.config.enableSmartRename {
-                            HStack(spacing: 4) {
-                                Image(systemName: "info.circle")
-                                    .font(.caption2)
-                                    .foregroundColor(.blue)
-                                Text("Naming instructions will be applied when Smart Renaming is enabled during organization.")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
                     }
 
                     Divider()
