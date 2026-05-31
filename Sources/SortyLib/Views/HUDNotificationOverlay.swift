@@ -123,7 +123,7 @@ struct HUDNotificationCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 14)
                 .stroke(
-                    Color.primary.opacity(0.08),
+                    Color.white.opacity(0.18),
                     lineWidth: 1
                 )
         )
@@ -193,10 +193,6 @@ private struct HUDNotificationActionLabel: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, minHeight: 30, alignment: .center)
-        .background {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(accent.opacity(isDestructive ? 0.08 : 0.12))
-        }
         .systemLiquidGlassBackground(cornerRadius: 8)
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)

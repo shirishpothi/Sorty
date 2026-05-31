@@ -185,7 +185,7 @@ struct OrganizeView: View {
     }
 
     private var persistentWorkflowGradientOpacity: Double {
-        guard appState.selectedDirectory != nil, !showsCompletionContent else { return 0 }
+        guard appState.selectedDirectory != nil else { return 0 }
         return 1
     }
 
