@@ -76,7 +76,7 @@ public struct ContentView: View {
 
                 Spacer()
             }
-            .padding(.top, 44)
+            .padding(.top, sidebarTopPadding)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color(NSColor.controlBackgroundColor))
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
@@ -190,6 +190,20 @@ public struct ContentView: View {
 
     private var sidebarItems: [SidebarNavigationItem] {
         SidebarNavigationItem.mainItems
+    }
+
+    private var sidebarTopPadding: CGFloat {
+        isShowingAllUnorganizedPreview ? 64 : 44
+    }
+
+    private var isShowingAllUnorganizedPreview: Bool {
+        guard appState.currentView == .organize,
+              organizer.state == .ready,
+              let plan = organizer.currentPlan else {
+            return false
+        }
+
+        return plan.suggestions.isEmpty && !plan.unorganizedFiles.isEmpty
     }
 
     @ViewBuilder

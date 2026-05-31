@@ -5,6 +5,7 @@
 //  List container for the preview file/folder tree
 //
 
+import AppKit
 import SwiftUI
 
 struct PreviewListView: View {
@@ -165,25 +166,34 @@ struct EmptyPreviewState: View {
     @ViewBuilder
     private var emptyStateArtwork: some View {
         if let mascotImageName {
-            Image(mascotImageName)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-                .scaledToFit()
-                .frame(width: 180, height: 180)
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                .accessibilityHidden(true)
-        } else {
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.1))
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: icon)
-                    .font(.system(size: 44))
-                    .foregroundColor(iconColor)
+            if let mascotImage = SortyResources.image(named: mascotImageName) {
+                Image(nsImage: mascotImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .antialiased(true)
+                    .scaledToFit()
+                    .frame(width: 180, height: 180)
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .accessibilityHidden(true)
+            } else {
+                fallbackArtwork
             }
+        } else {
+            fallbackArtwork
         }
+    }
+
+    private var fallbackArtwork: some View {
+        ZStack {
+            Circle()
+                .fill(iconColor.opacity(0.1))
+                .frame(width: 100, height: 100)
+
+            Image(systemName: icon)
+                .font(.system(size: 44))
+                .foregroundColor(iconColor)
+        }
+        .accessibilityHidden(true)
     }
 }
 
