@@ -140,28 +140,18 @@ struct HUDNotificationCard: View {
         .systemLiquidGlassBackground(cornerRadius: 14)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay {
-            HUDNotificationTorchEffect(isAnimated: appeared && !reduceMotion)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
-        .overlay {
-            HUDNotificationGlassSheen()
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            HUDNotificationGlassOverlay()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(
-                    Color.white.opacity(0.18),
-                    lineWidth: 1
-                )
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
         )
         .overlay(alignment: .bottom) {
             GeometryReader { geo in
                 Capsule()
-                    .fill(notification.iconColor.opacity(0.24))
+                    .fill(notification.iconColor.opacity(0.4))
                     .frame(width: geo.size.width * progressRemaining, height: 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -198,82 +188,16 @@ struct HUDNotificationCard: View {
     }
 }
 
-private struct HUDNotificationTorchEffect: View {
-    let isAnimated: Bool
-
-    private let accent = Color(red: 1.0, green: 0.22, blue: 0.62)
-    private let hotCore = Color(red: 1.0, green: 0.48, blue: 0.74)
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                torchGlow(in: geometry.size)
-
-                if isAnimated {
-                    SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { timeline in
-                        ParticleField(time: timeline.date.timeIntervalSinceReferenceDate, accent: accent)
-                    }
-                } else {
-                    ParticleField(time: 0, accent: accent)
-                }
-            }
-        }
-    }
-
-    private func torchGlow(in size: CGSize) -> some View {
-        ZStack(alignment: .leading) {
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            hotCore.opacity(0.82),
-                            accent.opacity(0.42),
-                            accent.opacity(0.16),
-                            .clear
-                        ],
-                        center: .leading,
-                        startRadius: 0,
-                        endRadius: 118
-                    )
-                )
-                .frame(width: min(260, size.width * 0.62), height: size.height * 1.22)
-                .blur(radius: 16)
-                .offset(x: -62)
-
-            Ellipse()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            accent.opacity(0.34),
-                            accent.opacity(0.14),
-                            .clear
-                        ],
-                        center: .leading,
-                        startRadius: 12,
-                        endRadius: 96
-                    )
-                )
-                .frame(width: min(190, size.width * 0.46), height: size.height * 0.76)
-                .blur(radius: 18)
-                .offset(x: 6)
-
-            Rectangle()
-                .fill(hotCore.opacity(0.38))
-                .frame(width: 2, height: size.height * 0.66)
-                .blur(radius: 5)
-                .offset(x: 0)
-        }
-        .blendMode(.screen)
-    }
-}
-
-private struct HUDNotificationGlassSheen: View {
+private struct HUDNotificationGlassOverlay: View {
     var body: some View {
         ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.035))
+
             LinearGradient(
                 colors: [
-                    Color.white.opacity(0.16),
-                    Color.white.opacity(0.045),
+                    Color.white.opacity(0.18),
+                    Color.white.opacity(0.05),
                     .clear
                 ],
                 startPoint: .topLeading,
@@ -284,9 +208,9 @@ private struct HUDNotificationGlassSheen: View {
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.30),
+                            Color.white.opacity(0.32),
                             Color.white.opacity(0.08),
-                            Color.white.opacity(0.16)
+                            Color.white.opacity(0.18)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -294,55 +218,9 @@ private struct HUDNotificationGlassSheen: View {
                     lineWidth: 1
                 )
         }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .blendMode(.screen)
     }
-}
-
-private struct ParticleField: View {
-    let time: TimeInterval
-    let accent: Color
-
-    private let particles: [Particle] = [
-        .init(seed: 0.07, y: 0.32, size: 0.8, speed: 12, delay: 0.00),
-        .init(seed: 0.22, y: 0.42, size: 0.6, speed: 16, delay: 0.32),
-        .init(seed: 0.39, y: 0.53, size: 0.75, speed: 11, delay: 0.64),
-        .init(seed: 0.56, y: 0.64, size: 0.55, speed: 15, delay: 0.96),
-        .init(seed: 0.74, y: 0.47, size: 0.7, speed: 18, delay: 1.28)
-    ]
-
-    var body: some View {
-        Canvas { context, size in
-            for particle in particles {
-                let cycle = 3.0
-                let progress = ((time + particle.delay).truncatingRemainder(dividingBy: cycle)) / cycle
-                let easedProgress = 1 - pow(1 - progress, 3)
-                let x = 18 + CGFloat(easedProgress) * particle.speed * 3.2
-                let drift = CGFloat(sin((time * 1.2) + particle.seed * 8.0) * 2.0)
-                let y = size.height * particle.y + drift
-                let fade = sin(progress * .pi)
-                let rect = CGRect(
-                    x: x,
-                    y: y,
-                    width: particle.size,
-                    height: particle.size
-                )
-
-                context.opacity = max(0, fade) * 0.42
-                context.fill(
-                    Path(ellipseIn: rect),
-                    with: .color(accent.opacity(0.62))
-                )
-            }
-        }
-    }
-}
-
-private struct Particle {
-    let seed: Double
-    let y: CGFloat
-    let size: CGFloat
-    let speed: CGFloat
-    let delay: TimeInterval
 }
 
 private struct HUDNotificationActionLabel: View {
