@@ -101,27 +101,11 @@ struct WorkflowGradientBackground: View {
     var showsBaseColor = true
 
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.workflowGradientHidden) private var gradientHidden
-
-    /// The background should be present immediately. It used to animate from 0 -> 1,
-    /// but that read as an unintended fill sweeping across the gradient whenever a
-    /// workflow screen mounted or refreshed.
-    @State private var gradientReveal: Double = 1
-
-    @State private var motionActive = false
-    @State private var breathScaleY: CGFloat = 1.0
-    @State private var breathOpacity: Double = 1.0
-    @State private var bloomOffsetFraction: CGFloat = 0
-    @State private var bloomPulse: Double = 0.55
-    @State private var motionGeneration = 0
 
     var body: some View {
         if !gradientHidden {
             backgroundLayer
-                .task(id: animationPaused) {
-                    updateContinuousMotion()
-                }
         }
     }
 
@@ -143,58 +127,8 @@ struct WorkflowGradientBackground: View {
         colorScheme == .dark ? 0.22 : 0.30
     }
 
-    private var animationPaused: Bool {
-        reduceMotion
-    }
-
-    private func updateContinuousMotion() {
-        guard !animationPaused else {
-            motionActive = false
-            motionGeneration += 1
-            withAnimation(.easeOut(duration: 0.18)) {
-                breathScaleY = 1.0
-                breathOpacity = 1.0
-                bloomOffsetFraction = 0
-                bloomPulse = 0.55
-            }
-            return
-        }
-
-        guard !motionActive else { return }
-        motionActive = true
-        motionGeneration += 1
-        let generation = motionGeneration
-
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            breathScaleY = 0.88
-            breathOpacity = 0.78
-            bloomOffsetFraction = -0.18
-            bloomPulse = 0.45
-        }
-
-        withAnimation(.easeInOut(duration: 3.8)) {
-            breathScaleY = 1.04
-            breathOpacity = 1.0
-            bloomOffsetFraction = 0.16
-            bloomPulse = 0.74
-        }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3.8))
-            guard generation == motionGeneration, !animationPaused else { return }
-            withAnimation(.easeInOut(duration: 1.4)) {
-                breathScaleY = 1.0
-                breathOpacity = 0.94
-                bloomOffsetFraction = 0
-                bloomPulse = 0.58
-            }
-        }
-    }
-
-    /// The gradients themselves stay stable. Motion is applied through transforms
-    /// and opacity so SwiftUI does not resolve gradient stops on every frame.
+    /// Static workflow wash. Keep this free of timed transforms so the background
+    /// never reads as a loading sweep behind the content.
     private var backgroundLayer: some View {
         ZStack(alignment: .bottom) {
             if showsBaseColor {
@@ -210,8 +144,7 @@ struct WorkflowGradientBackground: View {
                 startPoint: .bottom,
                 endPoint: .center
             )
-            .scaleEffect(x: 1, y: gradientReveal * breathScaleY, anchor: .bottom)
-            .opacity(gradientReveal * breathOpacity)
+            .opacity(1.0)
 
             GeometryReader { proxy in
                 RadialGradient(
@@ -224,10 +157,8 @@ struct WorkflowGradientBackground: View {
                     startRadius: 0,
                     endRadius: max(proxy.size.width, proxy.size.height) * 0.62
                 )
-                .scaleEffect(0.94 + (bloomPulse * 0.12), anchor: .bottom)
-                .offset(x: proxy.size.width * bloomOffsetFraction)
                 .blendMode(.plusLighter)
-                .opacity(gradientReveal * bloomPulse)
+                .opacity(0.58)
             }
             .allowsHitTesting(false)
         }
