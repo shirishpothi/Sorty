@@ -502,6 +502,8 @@ private struct OnboardingIntroView: View {
     @State private var textOffset: CGFloat = 14
     @State private var glowRadius: CGFloat = 28
     @State private var filesAppeared = false
+    @State private var ambientMotionActive = false
+    @State private var ambientMotionGeneration = 0
     @State private var isHoveringButton = false
     @StateObject private var audio = OnboardingAudioManager()
 
@@ -516,7 +518,7 @@ private struct OnboardingIntroView: View {
             // the app icon when the user starts onboarding.
             SwiftUI.TimelineView(.animation(
                 minimumInterval: 1.0 / 30.0,
-                paused: reduceMotion || scenePhase != .active || !filesAppeared || isHoveringButton
+                paused: reduceMotion || scenePhase != .active || !filesAppeared || isHoveringButton || !ambientMotionActive
             )) { context in
                 let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 ZStack {
@@ -585,6 +587,12 @@ private struct OnboardingIntroView: View {
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
                         isHoveringButton = hovering
                     }
+
+                    if hovering {
+                        stopAmbientMotion()
+                    } else {
+                        beginAmbientMotionWindow(seconds: 4)
+                    }
                 }
                 .scaleEffect(isHoveringButton ? 1.035 : 1)
                 .opacity(textOpacity)
@@ -603,8 +611,15 @@ private struct OnboardingIntroView: View {
             }
 
             if !reduceMotion {
-                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                withAnimation(.easeInOut(duration: 1.1)) {
                     glowRadius = 46
+                }
+
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(1.1))
+                    withAnimation(.easeInOut(duration: 1.3)) {
+                        glowRadius = 38
+                    }
                 }
             }
 
@@ -614,10 +629,30 @@ private struct OnboardingIntroView: View {
             }
 
             filesAppeared = true
+            beginAmbientMotionWindow(seconds: 8)
         }
         .onDisappear {
+            stopAmbientMotion()
             audio.stopAll()
         }
+    }
+
+    private func beginAmbientMotionWindow(seconds: TimeInterval) {
+        guard !reduceMotion else { return }
+        ambientMotionGeneration += 1
+        let generation = ambientMotionGeneration
+        ambientMotionActive = true
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard generation == ambientMotionGeneration, !isHoveringButton else { return }
+            ambientMotionActive = false
+        }
+    }
+
+    private func stopAmbientMotion() {
+        ambientMotionGeneration += 1
+        ambientMotionActive = false
     }
 
     private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
