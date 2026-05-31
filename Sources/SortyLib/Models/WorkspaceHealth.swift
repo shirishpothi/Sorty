@@ -472,11 +472,22 @@ public enum WorkspaceHealthScanError: LocalizedError, Sendable {
 public class WorkspaceHealthManager: ObservableObject {
     @Published public var config: WorkspaceHealthConfig = WorkspaceHealthConfig()
     @Published public var snapshots: [String: [DirectorySnapshot]] = [:] // Path -> Snapshots
-    @Published public var opportunities: [CleanupOpportunity] = []
-    @Published public var insights: [HealthInsight] = []
+    @Published public var opportunities: [CleanupOpportunity] = [] {
+        didSet { refreshDerivedHealthSummary() }
+    }
+    @Published public var insights: [HealthInsight] = [] {
+        didSet { refreshDerivedHealthSummary() }
+    }
     @Published public var cleanupHistory: [CleanupHistoryItem] = []
     @Published public var isAnalyzing: Bool = false
     @Published public var lastAnalysisDate: Date?
+    @Published public private(set) var activeOpportunities: [CleanupOpportunity] = []
+    @Published public private(set) var unreadInsights: [HealthInsight] = []
+    @Published public private(set) var totalPotentialSavings: Int64 = 0
+    @Published public private(set) var formattedTotalSavings: String = ByteCountFormatter.string(
+        fromByteCount: 0,
+        countStyle: .file
+    )
 
     private let userDefaults = UserDefaults.standard
     private let configKey = "workspaceHealthConfig"
@@ -1315,10 +1326,16 @@ public class WorkspaceHealthManager: ObservableObject {
         dismissOpportunity(opportunity)
     }
 
-    // MARK: - Computed Properties
+    // MARK: - Derived Properties
 
-    public var activeOpportunities: [CleanupOpportunity] {
-        opportunities.filter { !$0.isDismissed }.sorted { $0.priority > $1.priority }
+    private func refreshDerivedHealthSummary() {
+        let active = opportunities.filter { !$0.isDismissed }.sorted { $0.priority > $1.priority }
+        let totalSavings = active.reduce(0) { $0 + $1.estimatedSavings }
+
+        activeOpportunities = active
+        unreadInsights = insights.filter { !$0.isRead }.sorted { $0.createdAt > $1.createdAt }
+        totalPotentialSavings = totalSavings
+        formattedTotalSavings = ByteCountFormatter.string(fromByteCount: totalSavings, countStyle: .file)
     }
 
     public func sortedActiveOpportunities(for path: String?) -> [CleanupOpportunity] {
@@ -1341,18 +1358,6 @@ public class WorkspaceHealthManager: ObservableObject {
             .filter { $0.action != nil }
             .prefix(limit)
             .map { $0 }
-    }
-
-    public var unreadInsights: [HealthInsight] {
-        insights.filter { !$0.isRead }.sorted { $0.createdAt > $1.createdAt }
-    }
-
-    public var totalPotentialSavings: Int64 {
-        activeOpportunities.reduce(0) { $0 + $1.estimatedSavings }
-    }
-
-    public var formattedTotalSavings: String {
-        ByteCountFormatter.string(fromByteCount: totalPotentialSavings, countStyle: .file)
     }
 
     /// Calculate overall health score (0-100)
