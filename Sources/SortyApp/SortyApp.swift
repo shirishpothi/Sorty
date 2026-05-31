@@ -51,7 +51,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
     #if canImport(SortyLib)
         private enum QuitWarningContext {
-            case runningOrganizations(Int)
+            case runningActivities(Int)
             case watchedFolders(Int)
         }
 
@@ -73,7 +73,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             }
 
             if FolderOrganizer.hasRunningOrganizations {
-                return .runningOrganizations(FolderOrganizer.runningOrganizationCount)
+                return .runningActivities(FolderOrganizer.runningOrganizationCount)
             }
 
             guard shouldContinueRunningWhenLastWindowCloses else {
@@ -116,12 +116,16 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
 
             alert.alertStyle = .warning
             switch context {
-            case .runningOrganizations(let runningCount):
+            case .runningActivities(let runningCount):
                 let areIs = runningCount == 1 ? "is" : "are"
-                let noun = runningCount == 1 ? "organization" : "organizations"
+                let noun = runningCount == 1 ? "activity" : "activities"
+                let activitySummary =
+                    runningCount == 1
+                    ? "An organize, rename, or watched-folder activity is"
+                    : "\(runningCount) organize, rename, or watched-folder activities are"
                 alert.messageText = "Quit Sorty while \(noun) \(areIs) running?"
                 alert.informativeText =
-                    "\(runningCount) \(noun) \(areIs) still in progress. Quitting now will interrupt active work and stop watched-folder automations until Sorty is reopened.\(backgroundHint)"
+                    "\(activitySummary) still in progress. Quitting now will interrupt active work and stop watched-folder automations until Sorty is reopened.\(backgroundHint)"
 
             case .watchedFolders(let watchedCount):
                 let areIs = watchedCount == 1 ? "is" : "are"
@@ -134,16 +138,8 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
             alert.addButton(withTitle: "Quit Sorty")
             alert.addButton(withTitle: "Cancel")
 
-            let checkboxTitle: String
-            switch context {
-            case .runningOrganizations:
-                checkboxTitle = "Don't ask again while organization is running"
-            case .watchedFolders:
-                checkboxTitle = "Don't ask again while watched-folder automation is active"
-            }
-
             let dontAskAgainCheckbox = NSButton(
-                checkboxWithTitle: checkboxTitle,
+                checkboxWithTitle: "Don't ask again before quitting during activity",
                 target: nil,
                 action: nil
             )
