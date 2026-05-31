@@ -73,6 +73,7 @@ struct PreviewListView: View {
             EmptyPreviewState(
                 icon: "questionmark.folder",
                 iconColor: .orange,
+                mascotImageName: "UnorganizedSortyMascot",
                 title: "All Files Unorganized",
                 message: "\(count) files couldn't be automatically organized. Try providing specific instructions to help the AI categorize them better.",
                 actions: [
@@ -102,6 +103,7 @@ struct PreviewListView: View {
 struct EmptyPreviewState: View {
     let icon: String
     let iconColor: Color
+    var mascotImageName: String? = nil
     let title: String
     let message: String
     var actions: [EmptyAction] = []
@@ -112,15 +114,7 @@ struct EmptyPreviewState: View {
         VStack(spacing: 20) {
             Spacer()
             
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.1))
-                    .frame(width: 100, height: 100)
-                
-                Image(systemName: icon)
-                    .font(.system(size: 44))
-                    .foregroundColor(iconColor)
-            }
+            emptyStateArtwork
             
             VStack(spacing: 8) {
                 Text(title)
@@ -166,6 +160,30 @@ struct EmptyPreviewState: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title): \(message)")
+    }
+
+    @ViewBuilder
+    private var emptyStateArtwork: some View {
+        if let mascotImageName {
+            Image(mascotImageName)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .scaledToFit()
+                .frame(width: 180, height: 180)
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .accessibilityHidden(true)
+        } else {
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.1))
+                    .frame(width: 100, height: 100)
+
+                Image(systemName: icon)
+                    .font(.system(size: 44))
+                    .foregroundColor(iconColor)
+            }
+        }
     }
 }
 

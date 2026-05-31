@@ -53,35 +53,32 @@ public struct ContentView: View {
 
     private var mainContent: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
-            // Sidebar
-            List(selection: Binding(
-                get: { appState.currentView },
-                set: { newValue in
-                    if let newValue = newValue {
-                        guard newValue != appState.currentView else { return }
-                        previousView = appState.currentView
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Sorty")
+                    .font(.title3.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.top, 16)
 
-                        // Haptic feedback on navigation
-                        HapticFeedbackManager.shared.selection()
-
-                        // Clear navigatedFromSettings when using sidebar
-                        appState.navigatedFromSettings = false
-
-                        appState.currentView = newValue
+                VStack(spacing: 4) {
+                    ForEach(Array(sidebarItems.enumerated()), id: \.element.id) { index, item in
+                        Button {
+                            navigateToSidebarItem(item)
+                        } label: {
+                            sidebarRow(item: item, commandNumber: index + 1)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(item.accessibilityIdentifier)
+                        .accessibilityHint(item.accessibilityHint)
+                        .help(item.helpText)
                     }
                 }
-            )) {
-                ForEach(Array(sidebarItems.enumerated()), id: \.element.id) { index, item in
-                    NavigationLink(value: item.view) {
-                        sidebarRow(item: item, commandNumber: index + 1)
-                    }
-                    .accessibilityIdentifier(item.accessibilityIdentifier)
-                    .accessibilityHint(item.accessibilityHint)
-                    .help(item.helpText)
-                }
+                .padding(.horizontal, 8)
+
+                Spacer()
             }
-            .navigationTitle("Sorty")
-            .listStyle(.sidebar)
+            .padding(.top, 44)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color(NSColor.controlBackgroundColor))
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 300)
         } detail: {
             ZStack {
@@ -197,29 +194,54 @@ public struct ContentView: View {
 
     @ViewBuilder
     private func sidebarRow(item: SidebarNavigationItem, commandNumber: Int) -> some View {
-        Label(item.title, systemImage: item.systemImage)
-            .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.trailing, showCommandNumbers ? 38 : 0)
-            .overlay(alignment: .trailing) {
-                Text("\(commandNumber)")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 18)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(.quaternary)
-                    }
-                    .opacity(showCommandNumbers ? 1 : 0)
-                    .offset(x: showCommandNumbers ? 0 : 14)
-                    .scaleEffect(showCommandNumbers ? 1 : 0.96)
+        HStack(spacing: 10) {
+            Image(systemName: item.systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 20)
+                .foregroundStyle(appState.currentView == item.view ? Color.accentColor : .secondary)
+
+            Text(item.title)
+                .font(.system(size: 13, weight: appState.currentView == item.view ? .semibold : .regular))
+                .lineLimit(1)
+                .foregroundStyle(.primary)
+
+            Spacer(minLength: 8)
+
+            Text("\(commandNumber)")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(minWidth: 18)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(.quaternary)
+                }
+                .opacity(showCommandNumbers ? 1 : 0)
+                .offset(x: showCommandNumbers ? 0 : 14)
+                .scaleEffect(showCommandNumbers ? 1 : 0.96)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background {
+            if appState.currentView == item.view {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.16))
             }
-            .animation(
-                .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08),
-                value: showCommandNumbers
-            )
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .animation(
+            .spring(response: 0.24, dampingFraction: 0.86, blendDuration: 0.08),
+            value: showCommandNumbers
+        )
+    }
+
+    private func navigateToSidebarItem(_ item: SidebarNavigationItem) {
+        guard item.view != appState.currentView else { return }
+        previousView = appState.currentView
+        HapticFeedbackManager.shared.selection()
+        appState.navigatedFromSettings = false
+        appState.currentView = item.view
     }
 
     private func installCommandKeyMonitorIfNeeded() {
