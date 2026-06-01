@@ -18,6 +18,7 @@ public struct PermissionsStepView: View {
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
     @State private var selectedEducationPermission: PermissionType?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject private var notificationManager = NotificationManager.shared
     @EnvironmentObject private var automationManager: AutomationManager
 
     public init(hasRequiredPermissions: Binding<Bool>) {
@@ -88,7 +89,6 @@ public struct PermissionsStepView: View {
                     type: .filesAndFolders,
                     state: permissionStates[.filesAndFolders] ?? .unknown,
                     isRequired: true,
-                    appearDelay: 0.06,
                     onExplain: { selectedEducationPermission = .filesAndFolders },
                     onRequest: { requestPermission(.filesAndFolders, sourceFrameInScreen: $0) }
                 )
@@ -103,7 +103,6 @@ public struct PermissionsStepView: View {
                         type: .fullDiskAccess,
                         state: permissionStates[.fullDiskAccess] ?? .unknown,
                         isRequired: false,
-                        appearDelay: 0.12,
                         onExplain: { selectedEducationPermission = .fullDiskAccess },
                         onRequest: { requestPermission(.fullDiskAccess, sourceFrameInScreen: $0) }
                     )
@@ -112,7 +111,6 @@ public struct PermissionsStepView: View {
                         type: .automation,
                         state: permissionStates[.automation] ?? .unknown,
                         isRequired: false,
-                        appearDelay: 0.18,
                         onExplain: { selectedEducationPermission = .automation },
                         onRequest: { requestPermission(.automation, sourceFrameInScreen: $0) }
                     )
@@ -121,7 +119,6 @@ public struct PermissionsStepView: View {
                         type: .notifications,
                         state: permissionStates[.notifications] ?? .unknown,
                         isRequired: false,
-                        appearDelay: 0.24,
                         onExplain: { selectedEducationPermission = .notifications },
                         onRequest: { requestPermission(.notifications, sourceFrameInScreen: $0) }
                     )
@@ -146,6 +143,9 @@ public struct PermissionsStepView: View {
             }
             checkPermissions()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            checkPermissions()
+        }
         .sheet(item: $selectedEducationPermission) { permission in
             PermissionEducationView(pages: [permission]) {
                 selectedEducationPermission = nil
@@ -161,19 +161,9 @@ public struct PermissionsStepView: View {
         }
         permissionStates[.filesAndFolders] = hasRequiredPermissions ? .granted : .unknown
 
-        // Check notification permission
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let status = settings.authorizationStatus
-            Task { @MainActor in
-                switch status {
-                case .authorized:
-                    permissionStates[.notifications] = .granted
-                case .denied:
-                    permissionStates[.notifications] = .denied
-                default:
-                    permissionStates[.notifications] = .unknown
-                }
-            }
+        Task { @MainActor in
+            await notificationManager.checkNotificationPermission()
+            permissionStates[.notifications] = notificationState(for: notificationManager.notificationPermissionStatus)
         }
 
         permissionStates[.fullDiskAccess] = .unknown
@@ -219,16 +209,47 @@ public struct PermissionsStepView: View {
             permissionStates[.automation] = .pending
 
         case .notifications:
-            UNUserNotificationCenter.current().requestAuthorization(options: [
-                .alert, .sound, .badge,
-            ]) { granted, error in
-                Task { @MainActor in
-                    permissionStates[.notifications] = granted ? .granted : .denied
-                    if granted {
-                        HapticFeedbackManager.shared.success()
-                    }
+            Task { @MainActor in
+                permissionStates[.notifications] = .pending
+
+                if notificationManager.notificationPermissionStatus == .denied {
+                    permissionStates[.notifications] = .denied
+                    openNotificationSettings()
+                    return
+                }
+
+                let granted = await notificationManager.requestPermission()
+                permissionStates[.notifications] = notificationState(
+                    for: notificationManager.notificationPermissionStatus
+                )
+                if granted {
+                    HapticFeedbackManager.shared.success()
                 }
             }
+        }
+    }
+
+    private func notificationState(for status: UNAuthorizationStatus) -> PermissionState {
+        switch status {
+        case .authorized, .provisional:
+            return .granted
+        case .denied:
+            return .denied
+        case .notDetermined:
+            return .unknown
+        @unknown default:
+            return .unknown
+        }
+    }
+
+    private func openNotificationSettings() {
+        let urls = [
+            URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
+            URL(string: "x-apple.systempreferences:com.apple.preference.notifications")
+        ].compactMap(\.self)
+
+        if let url = urls.first {
+            NSWorkspace.shared.open(url)
         }
     }
 
@@ -378,12 +399,10 @@ struct PermissionRow: View {
     let type: PermissionType
     let state: PermissionState
     let isRequired: Bool
-    let appearDelay: Double
     let onExplain: () -> Void
     let onRequest: (CGRect?) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
-    @State private var hasAppeared = false
     @State private var isHovering = false
     @State private var grantFlash = false
 
@@ -430,17 +449,9 @@ struct PermissionRow: View {
         )
         .shadow(color: .black.opacity(colorScheme == .dark ? 0.12 : 0.05), radius: isHovering ? 12 : 7, x: 0, y: isHovering ? 6 : 3)
         .scaleEffect(grantFlash ? 1.012 : (isHovering ? 1.006 : 1))
-        .opacity(hasAppeared ? 1 : 0)
-        .offset(y: hasAppeared ? 0 : 10)
-        .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.88), value: state)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: state)
         .animation(reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.86), value: isHovering)
         .animation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82), value: grantFlash)
-        .onAppear {
-            guard !hasAppeared else { return }
-            withAnimation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.9).delay(appearDelay)) {
-                hasAppeared = true
-            }
-        }
         .onHover { hovering in
             isHovering = hovering
         }
