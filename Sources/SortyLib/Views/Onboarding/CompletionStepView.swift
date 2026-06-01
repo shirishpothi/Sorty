@@ -541,7 +541,7 @@ public struct CompletionStepView: View {
 private struct CompletionContrastBackdrop: View {
     var body: some View {
         ZStack {
-            OnboardingBottomGradient(progress: 1)
+            OnboardingBottomGradient(progress: 1, showsBaseColor: false)
 
             // A faint warm glow centered roughly behind the hero glyph,
             // keyed to the brand accent so the page stays on-palette.

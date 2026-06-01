@@ -803,6 +803,7 @@ struct OnboardingBottomGradient: View {
 
     /// 0 = gradient hugs the bottom edge, 1 = gradient reaches near the top.
     var progress: Double = 0
+    var showsBaseColor = true
 
     var body: some View {
         let clamped = max(0, min(1, progress))
@@ -815,7 +816,9 @@ struct OnboardingBottomGradient: View {
         let intensity = 1.0 + clamped * 0.25
 
         return ZStack(alignment: .bottom) {
-            Color(NSColor.windowBackgroundColor)
+            if showsBaseColor {
+                Color(NSColor.windowBackgroundColor)
+            }
 
             LinearGradient(
                 colors: [
