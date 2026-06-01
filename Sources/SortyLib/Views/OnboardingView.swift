@@ -807,15 +807,16 @@ struct OnboardingBottomGradient: View {
 
     var body: some View {
         let clamped = max(0, min(1, progress))
-        // The wash opens upward through onboarding. Completion gets a broad,
-        // layered glow instead of a heavy bottom-only tint, keeping the top
-        // rail quiet while making the main canvas feel warmer and finished.
-        let linearEnd = UnitPoint(x: 0.5, y: 0.72 - clamped * 0.44)
-        let primaryCenterY = 1.04 - clamped * 0.42
-        let primaryEnd = 620 + clamped * 680
-        let accentEnd = 440 + clamped * 420
-        let intensity = 0.95 + clamped * 0.28
-        let baseOpacity = colorScheme == .dark ? 0.22 : 0.28
+        // Let the accent grow through the flow, then settle into a single,
+        // centered completion glow behind the final call to action.
+        let completion = clamped * clamped
+        let linearEnd = UnitPoint(x: 0.5, y: 0.66 - clamped * 0.44)
+        let radialCenter = UnitPoint(x: 0.5, y: 1.04 - clamped * 0.24)
+        let radialEnd = 620 + completion * 520
+        let intensity = 0.92 + completion * 0.2
+        let bottomOpacity = colorScheme == .dark ? 0.30 : 0.40
+        let midOpacity = colorScheme == .dark ? 0.13 : 0.17
+        let glowOpacity = colorScheme == .dark ? 0.22 : 0.28
 
         return ZStack(alignment: .bottom) {
             if showsBaseColor {
@@ -824,56 +825,23 @@ struct OnboardingBottomGradient: View {
 
             LinearGradient(
                 stops: [
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(baseOpacity * intensity), location: 0.00),
-                    .init(color: Color.pink.opacity((colorScheme == .dark ? 0.10 : 0.14) * intensity), location: 0.38),
-                    .init(color: Color.cyan.opacity((colorScheme == .dark ? 0.06 : 0.09) * intensity), location: 0.68),
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(bottomOpacity * intensity), location: 0.00),
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(midOpacity * intensity), location: 0.42),
                     .init(color: Color.clear, location: 1.00)
                 ],
                 startPoint: .bottom,
                 endPoint: linearEnd
             )
 
-            LinearGradient(
+            RadialGradient(
                 stops: [
-                    .init(color: Color.white.opacity(colorScheme == .dark ? 0.05 : 0.12), location: 0.00),
-                    .init(color: Color.clear, location: 0.44),
-                    .init(color: Color.black.opacity(colorScheme == .dark ? 0.08 : 0.03), location: 1.00)
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(glowOpacity * intensity), location: 0.00),
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.10 * intensity), location: 0.46),
+                    .init(color: Color.clear, location: 1.00)
                 ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
-            RadialGradient(
-                colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.22 : 0.28) * intensity),
-                    Color.pink.opacity((colorScheme == .dark ? 0.11 : 0.15) * intensity),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 0.5, y: primaryCenterY),
+                center: radialCenter,
                 startRadius: 0,
-                endRadius: primaryEnd
-            )
-            .blendMode(.plusLighter)
-
-            RadialGradient(
-                colors: [
-                    Color.cyan.opacity((colorScheme == .dark ? 0.10 : 0.14) * intensity),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 0.34, y: 0.58 + clamped * 0.08),
-                startRadius: 40,
-                endRadius: accentEnd
-            )
-            .blendMode(.plusLighter)
-
-            RadialGradient(
-                colors: [
-                    Color.pink.opacity((colorScheme == .dark ? 0.12 : 0.16) * intensity),
-                    Color.clear
-                ],
-                center: UnitPoint(x: 0.72, y: 0.82 - clamped * 0.12),
-                startRadius: 30,
-                endRadius: accentEnd
+                endRadius: radialEnd
             )
             .blendMode(.plusLighter)
         }
