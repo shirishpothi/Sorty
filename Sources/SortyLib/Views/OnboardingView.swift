@@ -885,7 +885,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         private var originalIsOpaque: Bool?
         private var originalHasShadow: Bool?
         private var originalAlphaValue: CGFloat?
-        private var originalTitlebarSeparatorStyle: NSWindow.TitlebarSeparatorStyle?
+        private var originalTitlebarSeparatorStyle: NSTitlebarSeparatorStyle?
 
         func configure(window: NSWindow) {
             guard configuredWindow !== window else { return }
