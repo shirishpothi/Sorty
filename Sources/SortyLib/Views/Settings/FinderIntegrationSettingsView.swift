@@ -9,6 +9,7 @@ import AppKit
 import SwiftUI
 
 struct FinderIntegrationSettingsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isWatchActionInstalled = false
     @State private var watchActionMessage: String?
     @State private var finderSyncActive = false
@@ -240,8 +241,10 @@ struct FinderIntegrationSettingsView: View {
                     }
                 }
                 .animatedAppearance(delay: 0.1)
+                .transition(.opacity)
             }
         }
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: shouldShowTroubleshooting)
         .task {
             await refreshIntegrationStatus()
             refreshFinderContext()
