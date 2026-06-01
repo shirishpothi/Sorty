@@ -200,13 +200,13 @@ public struct PermissionsStepView: View {
             permissionStates[.fullDiskAccess] = .pending
 
         case .automation:
-            // Open System Settings to Automation using Permiso
-            PermisoAssistant.shared.present(
-                panel: .automation,
-                sourceFrameInScreen: sourceFrameInScreen,
-                onCancel: { permissionStates[.automation] = .unknown }
-            )
             permissionStates[.automation] = .pending
+            automationManager.requestAutomationPermissionCheck()
+            permissionStates[.automation] = permissionState(for: automationManager.automationStatus)
+
+            if automationManager.automationStatus == .denied {
+                openAutomationSettings()
+            }
 
         case .notifications:
             Task { @MainActor in
@@ -230,6 +230,32 @@ public struct PermissionsStepView: View {
                 }
             }
         }
+    }
+
+    private func permissionState(for status: PermissionStatus) -> PermissionState {
+        switch status {
+        case .granted:
+            return .granted
+        case .denied:
+            return .denied
+        case .unknown:
+            return .unknown
+        }
+    }
+
+    private func openAutomationSettings() {
+        let candidateURLs = [
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+            "x-apple.systempreferences:com.apple.preference.security"
+        ]
+
+        for urlString in candidateURLs {
+            if let url = URL(string: urlString), NSWorkspace.shared.open(url) {
+                return
+            }
+        }
+
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
     }
 
     private func notificationState(for status: UNAuthorizationStatus) -> PermissionState {
@@ -349,8 +375,10 @@ enum PermissionType: String, CaseIterable, Identifiable {
         switch self {
         case .filesAndFolders:
             return "Choose Folder"
-        case .fullDiskAccess, .automation:
+        case .fullDiskAccess:
             return "Open System Settings"
+        case .automation:
+            return "Enable Finder Automation"
         case .notifications:
             return "Enable Notifications"
         }
@@ -360,8 +388,10 @@ enum PermissionType: String, CaseIterable, Identifiable {
         switch self {
         case .filesAndFolders:
             return "Choose Folder"
-        case .fullDiskAccess, .automation:
+        case .fullDiskAccess:
             return "Open Settings"
+        case .automation:
+            return "Enable"
         case .notifications:
             return "Enable"
         }
@@ -389,8 +419,10 @@ enum PermissionState {
         switch type {
         case .filesAndFolders:
             return "Choosing Folder"
-        case .fullDiskAccess, .automation:
+        case .fullDiskAccess:
             return "Opening Settings"
+        case .automation:
+            return "Requesting"
         case .notifications:
             return "Enabling"
         }
@@ -560,6 +592,8 @@ struct PermissionRow: View {
 
     private var deniedActionTitle: String {
         switch type {
+        case .automation:
+            return "Enable in Settings"
         case .notifications:
             return "Enable in Settings"
         default:
