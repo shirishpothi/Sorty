@@ -278,32 +278,25 @@ struct DeeplinkSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "link")
-                    .foregroundStyle(.cyan)
-                    .accessibilityHidden(true)
-                Text("Use these `sorty://` URLs from Shortcuts, Raycast, AppleScript, shell scripts, or other launchers.")
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Deeplink Library", systemImage: "link.badge.plus")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text("Copy `sorty://` URLs for Shortcuts, Raycast, AppleScript, shell scripts, and other launchers.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            SettingsCard(title: "Deeplink Library", icon: "link.badge.plus", color: .cyan) {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(groups) { group in
-                        DeeplinkGroupSection(group: group)
-                    }
-
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle")
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                        Text("URL-encode `path` and `prompt` values when generating links programmatically.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            VStack(alignment: .leading, spacing: 22) {
+                ForEach(groups) { group in
+                    DeeplinkGroupSection(group: group)
                 }
+
+                Label("URL-encode path and prompt values when generating links programmatically.", systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -399,7 +392,7 @@ private struct DeeplinkGroupSection: View {
     let group: DeeplinkGroup
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
             Label(group.title, systemImage: group.icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(group.color)
@@ -410,16 +403,10 @@ private struct DeeplinkGroupSection: View {
 
                     if entry.id != group.entries.last?.id {
                         Divider()
-                            .padding(.leading, 116)
+                            .padding(.leading, 12)
                     }
                 }
             }
-            .background(Color.secondary.opacity(0.045))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.08), lineWidth: 1)
-            )
         }
     }
 }
@@ -431,22 +418,23 @@ private struct DeeplinkEntryRow: View {
     @State private var copied = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title)
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                 Text(entry.summary)
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(width: 104, alignment: .leading)
+            .frame(minWidth: 150, maxWidth: 220, alignment: .leading)
 
             Text(entry.url)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(color)
-                .lineLimit(2)
+                .lineLimit(1)
+                .truncationMode(.middle)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -462,8 +450,9 @@ private struct DeeplinkEntryRow: View {
             .help("Copy \(entry.title) deeplink")
             .accessibilityLabel("Copy \(entry.title) deeplink")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 
     private func copy(_ value: String) {

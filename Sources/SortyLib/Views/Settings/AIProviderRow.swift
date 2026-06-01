@@ -14,6 +14,13 @@ struct AIProviderRow: View {
     
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
+
+    private var detailText: String {
+        if provider == .openAI {
+            return "API keys or Codex subscription"
+        }
+        return provider.description
+    }
     
     var body: some View {
         Button(action: action) {
@@ -30,7 +37,7 @@ struct AIProviderRow: View {
                         .font(.subheadline.weight(isSelected ? .semibold : .medium))
                         .foregroundStyle(.primary)
 
-                    Text(provider.description)
+                    Text(detailText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -48,12 +55,12 @@ struct AIProviderRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
+                    .fill(isSelected ? provider.brandColor.opacity(0.09) : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
             )
             .contentShape(Rectangle())
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
+                    .stroke(isSelected ? provider.brandColor.opacity(0.42) : Color.secondary.opacity(isHovered ? 0.12 : 0.06), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
