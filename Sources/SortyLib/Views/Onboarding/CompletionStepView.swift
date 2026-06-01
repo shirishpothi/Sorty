@@ -22,9 +22,9 @@ private struct CompletionRevealBlob: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.42),
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.22),
-                            Color.pink.opacity(0.14),
+                            Color.teal.opacity(0.24),
+                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
+                            Color.blue.opacity(0.08),
                             Color.clear
                         ],
                         center: .center,
@@ -39,8 +39,8 @@ private struct CompletionRevealBlob: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.pink.opacity(0.24),
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
+                            Color.orange.opacity(0.14),
+                            Color.teal.opacity(0.10),
                             Color.clear
                         ],
                         center: .center,
@@ -57,7 +57,7 @@ private struct CompletionRevealBlob: View {
                     RadialGradient(
                         colors: [
                             Color.white.opacity(0.15),
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.16),
+                            Color.teal.opacity(0.12),
                             Color.clear
                         ],
                         center: .center,
@@ -90,10 +90,10 @@ private struct CompletionGlowRing: View {
             .stroke(
                 AngularGradient(
                     colors: [
-                        SortyDesignSystem.Colors.resolvedAccent,
-                        Color.pink,
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.65),
-                        SortyDesignSystem.Colors.resolvedAccent
+                        Color.teal.opacity(0.90),
+                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.82),
+                        Color.orange.opacity(0.55),
+                        Color.teal.opacity(0.90)
                     ],
                     center: .center
                 ),
@@ -151,6 +151,9 @@ public struct CompletionStepView: View {
 
     public var body: some View {
         ZStack {
+            CompletionContrastBackdrop()
+                .allowsHitTesting(false)
+
             CompletionRevealBlob(scale: revealScale, opacity: revealOpacity)
                 .allowsHitTesting(false)
 
@@ -174,7 +177,7 @@ public struct CompletionStepView: View {
 
                     ForEach(0..<3, id: \.self) { index in
                         Circle()
-                            .stroke(SortyDesignSystem.Colors.resolvedAccent.opacity(0.20 - Double(index) * 0.05), lineWidth: 2)
+                            .stroke(Color.teal.opacity(0.18 - Double(index) * 0.04), lineWidth: 2)
                             .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
                             .scaleEffect(hasAppeared ? 1.2 : 0.8)
                             .opacity(hasAppeared ? 0 : 1)
@@ -187,12 +190,18 @@ public struct CompletionStepView: View {
                     }
 
                     Circle()
-                        .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.12))
+                        .fill(Color.teal.opacity(0.13))
                         .frame(width: 118, height: 118)
 
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 70))
-                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.teal, SortyDesignSystem.Colors.resolvedAccent],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .symbolEffect(.bounce, value: hasAppeared)
                 }
                 .opacity(hasAppeared ? 1 : 0)
@@ -272,7 +281,7 @@ public struct CompletionStepView: View {
             }
             .padding(.horizontal, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .offset(y: -10)
+            .offset(y: -6)
         }
         .onAppear {
             startRevealSequence()
@@ -514,6 +523,36 @@ public struct CompletionStepView: View {
     }
 }
 
+private struct CompletionContrastBackdrop: View {
+    var body: some View {
+        ZStack {
+            Color(NSColor.windowBackgroundColor).opacity(0.38)
+
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.22),
+                    Color.clear,
+                    Color.black.opacity(0.10)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            RadialGradient(
+                colors: [
+                    Color.teal.opacity(0.16),
+                    Color.blue.opacity(0.06),
+                    Color.clear
+                ],
+                center: UnitPoint(x: 0.50, y: 0.42),
+                startRadius: 20,
+                endRadius: 520
+            )
+        }
+        .ignoresSafeArea()
+    }
+}
+
 struct QuickTipRow: View {
     let icon: String
     let text: String
@@ -522,19 +561,19 @@ struct QuickTipRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.16))
+                    .fill(Color.teal.opacity(0.14))
                     .frame(width: 32, height: 32)
                     .overlay(
                         Circle()
                             .strokeBorder(
-                                SortyDesignSystem.Colors.resolvedAccent.opacity(0.28),
+                                Color.teal.opacity(0.28),
                                 lineWidth: 0.5
                             )
                     )
 
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                    .foregroundStyle(Color.teal)
             }
 
             Text(text)
