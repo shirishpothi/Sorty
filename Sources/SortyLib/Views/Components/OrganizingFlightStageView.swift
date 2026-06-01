@@ -186,8 +186,9 @@ struct OrganizingFlightStageView: View {
                 .truncationMode(.middle)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
         .accessibilityHidden(true)
     }
 
