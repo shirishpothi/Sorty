@@ -60,6 +60,23 @@ public struct OnboardingView: View {
                             .padding(.top, 54)
                             .padding(.bottom, 24)
                             .padding(.horizontal, 48)
+                            .background(
+                                // Keep the title/progress rail legible without
+                                // stamping a separate color band across the
+                                // window.
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: Color(NSColor.windowBackgroundColor).opacity(0.24), location: 0.00),
+                                        .init(color: Color(NSColor.windowBackgroundColor).opacity(0.14), location: 0.38),
+                                        .init(color: Color(NSColor.windowBackgroundColor).opacity(0.04), location: 0.74),
+                                        .init(color: Color.clear, location: 1.00)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                                .frame(height: 220)
+                                .offset(y: -34)
+                            )
                             .opacity(hasConfiguredWindowChrome ? 1 : 0)
                             .animation(nil, value: hasConfiguredWindowChrome)
 
@@ -803,9 +820,6 @@ struct OnboardingBottomGradient: View {
                 Color(NSColor.windowBackgroundColor)
             }
 
-            SortyDesignSystem.Colors.resolvedAccent
-                .opacity((colorScheme == .dark ? 0.055 : 0.075) * clamped)
-
             LinearGradient(
                 colors: [
                     SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.34 : 0.46) * intensity),
@@ -825,17 +839,6 @@ struct OnboardingBottomGradient: View {
                 center: UnitPoint(x: 0.5, y: radialCenterY),
                 startRadius: 0,
                 endRadius: radialEnd
-            )
-            .blendMode(.plusLighter)
-
-            LinearGradient(
-                colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.13 : 0.16) * clamped),
-                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.07 : 0.10) * clamped),
-                    Color.clear
-                ],
-                startPoint: .top,
-                endPoint: UnitPoint(x: 0.5, y: 0.56)
             )
             .blendMode(.plusLighter)
         }
