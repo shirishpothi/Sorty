@@ -182,7 +182,7 @@ struct PreviewActionsView: View {
                 onChooseModel()
             } label: {
                 HStack(spacing: 4) {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "cpu")
                         .font(.system(size: 10, weight: .semibold))
                     Text("Model")
                         .font(.caption.bold())
