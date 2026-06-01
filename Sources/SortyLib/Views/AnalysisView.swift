@@ -1433,11 +1433,13 @@ private struct StreamingProgressBeam: View {
                 Text(displayedStage)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 Text("\(percent)%")
                     .monospacedDigit()
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.3), value: percent)
+                    .frame(width: 48, alignment: .leading)
             }
             .font(.system(size: 18, weight: .semibold))
             .foregroundStyle(.secondary)
