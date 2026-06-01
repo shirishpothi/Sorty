@@ -210,6 +210,14 @@ public struct PermissionsStepView: View {
 
         case .notifications:
             Task { @MainActor in
+                await notificationManager.checkNotificationPermission()
+
+                if notificationManager.notificationPermissionStatus == .denied {
+                    permissionStates[.notifications] = .denied
+                    openNotificationSettings()
+                    return
+                }
+
                 permissionStates[.notifications] = .pending
 
                 let granted = await notificationManager.requestPermission()
@@ -235,6 +243,21 @@ public struct PermissionsStepView: View {
         @unknown default:
             return .unknown
         }
+    }
+
+    private func openNotificationSettings() {
+        let candidateURLs = [
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
+            "x-apple.systempreferences:com.apple.preference.notifications"
+        ]
+
+        for urlString in candidateURLs {
+            if let url = URL(string: urlString), NSWorkspace.shared.open(url) {
+                return
+            }
+        }
+
+        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
     }
 
     private func requestFilesAndFoldersPermission() {
@@ -357,6 +380,19 @@ enum PermissionState {
         case .pending: return "Check Settings"
         case .granted: return "Granted"
         case .denied: return "Needs Attention"
+        }
+    }
+
+    func title(for type: PermissionType) -> String {
+        guard self == .pending else { return title }
+
+        switch type {
+        case .filesAndFolders:
+            return "Choosing Folder"
+        case .fullDiskAccess, .automation:
+            return "Opening Settings"
+        case .notifications:
+            return "Enabling"
         }
     }
 
@@ -494,11 +530,9 @@ struct PermissionRow: View {
         switch state {
         case .granted, .pending:
             statusChip
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
         case .denied:
-            PermissionActionButton(title: type.compactActionTitle, style: .bordered, action: onRequest)
+            PermissionActionButton(title: deniedActionTitle, style: .bordered, action: onRequest)
                 .fixedSize()
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
         case .unknown:
             HStack(spacing: 8) {
                 Button {
@@ -521,7 +555,15 @@ struct PermissionRow: View {
                 )
                 .fixedSize()
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        }
+    }
+
+    private var deniedActionTitle: String {
+        switch type {
+        case .notifications:
+            return "Enable in Settings"
+        default:
+            return type.compactActionTitle
         }
     }
 
@@ -529,14 +571,14 @@ struct PermissionRow: View {
         HStack(spacing: 6) {
             Image(systemName: state.symbol)
                 .font(.system(size: 11, weight: .bold))
-            Text(state.title)
+            Text(state.title(for: type))
                 .font(.caption.weight(.semibold))
         }
         .foregroundStyle(state.tint)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(state.tint.opacity(0.12), in: Capsule(style: .continuous))
-        .accessibilityLabel(state.title)
+        .accessibilityLabel(state.title(for: type))
     }
 
     private func playApprovalAnimation() {
