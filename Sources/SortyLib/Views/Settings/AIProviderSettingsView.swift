@@ -19,10 +19,7 @@ struct AIProviderSettingsView: View {
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
     @State private var isDetailsExpanded = false
-
-    private let providerColumns = [
-        GridItem(.adaptive(minimum: 220, maximum: 280), spacing: 10, alignment: .top)
-    ]
+    @State private var showAdvancedProviderChoices = false
     
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -65,29 +62,56 @@ struct AIProviderSettingsView: View {
     }
 
     private var providerSelectionSection: some View {
-        SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
-            VStack(alignment: .leading, spacing: 16) {
+        SettingsCard(title: "AI Provider", icon: "cpu", color: .purple) {
+            VStack(alignment: .leading, spacing: 14) {
                 selectedProviderHeadline
 
-                ForEach(providerGroups) { group in
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(group.title)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Choose the path that fits how you want Sorty to connect.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                        LazyVGrid(columns: providerColumns, alignment: .leading, spacing: 10) {
-                            ForEach(group.providers, id: \.self) { provider in
-                                AIProviderRow(
-                                    provider: provider,
-                                    isSelected: viewModel.config.provider == provider,
-                                    action: {
-                                        selectProvider(provider)
+                    VStack(spacing: 8) {
+                        ForEach(recommendedProviderChoices) { choice in
+                            ProviderChoiceCard(
+                                choice: choice,
+                                selectedProvider: viewModel.config.provider,
+                                action: { selectProvider(choice.provider) }
+                            )
+                        }
+                    }
+                }
+
+                DisclosureGroup(isExpanded: $showAdvancedProviderChoices) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Use this when you already know the exact service or endpoint you want.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        ForEach(providerGroups) { group in
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text(group.title)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .textCase(.uppercase)
+
+                                VStack(spacing: 8) {
+                                    ForEach(group.providers, id: \.self) { provider in
+                                        AIProviderRow(
+                                            provider: provider,
+                                            isSelected: viewModel.config.provider == provider,
+                                            action: { selectProvider(provider) }
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
                     }
+                    .padding(.top, 8)
+                } label: {
+                    Text("Show all providers")
+                        .font(.subheadline.weight(.semibold))
                 }
             }
         }
@@ -193,6 +217,31 @@ struct AIProviderSettingsView: View {
             )
         ]
         .filter { !$0.providers.isEmpty }
+    }
+
+    private var recommendedProviderChoices: [AIProviderChoice] {
+        let available = Set(AIProvider.userSelectableProviders)
+        return [
+            AIProviderChoice(
+                title: "I have a ChatGPT or OpenAI key",
+                subtitle: "Best default for quality and low setup friction.",
+                provider: .openAI,
+                icon: "sparkles"
+            ),
+            AIProviderChoice(
+                title: "I want to use an existing subscription",
+                subtitle: "Connect GitHub Copilot instead of managing an API key here.",
+                provider: .githubCopilot,
+                icon: "person.badge.key.fill"
+            ),
+            AIProviderChoice(
+                title: "I want local or custom models",
+                subtitle: "Use Ollama for local models, or expand all providers for custom endpoints.",
+                provider: .ollama,
+                icon: "desktopcomputer"
+            )
+        ]
+        .filter { available.contains($0.provider) }
     }
 
     private var setupSummary: AIProviderSetupSummary {
@@ -699,6 +748,91 @@ private struct AIProviderSettingsGroup: Identifiable {
     let providers: [AIProvider]
 
     var id: String { title }
+}
+
+private struct AIProviderChoice: Identifiable {
+    let title: String
+    let subtitle: String
+    let provider: AIProvider
+    let icon: String
+
+    var id: AIProvider { provider }
+}
+
+private struct ProviderChoiceCard: View {
+    let choice: AIProviderChoice
+    let selectedProvider: AIProvider
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    private var isSelected: Bool {
+        selectedProvider == choice.provider
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(choice.provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
+
+                    Image(systemName: choice.icon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(choice.provider.brandColor)
+                        .accessibilityHidden(true)
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(choice.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    Text(choice.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(choice.provider.displayName)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(choice.provider.brandColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(choice.provider.brandColor.opacity(0.12), in: Capsule())
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? choice.provider.brandColor : Color.secondary.opacity(0.55))
+                    .accessibilityHidden(true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isSelected ? choice.provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(isSelected ? choice.provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .minimumHitTarget()
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
+        .accessibilityValue(isSelected ? "Selected, \(choice.provider.displayName)" : choice.provider.displayName)
+        .accessibilityHint("Selects \(choice.provider.displayName) as the AI provider")
+        .help("Use \(choice.provider.displayName)")
+    }
 }
 
 private struct AIProviderSetupSummary {
