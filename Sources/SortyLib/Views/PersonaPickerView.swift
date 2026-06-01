@@ -104,83 +104,19 @@ struct PersonaPickerView: View {
                 }
             }
 
-            // Description
-            Text(currentDescription)
-                .font(.caption2)
-                .foregroundColor(.secondary.opacity(0.6))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .animation(.easeInOut, value: personaManager.selectedPersona)
+            // Built-in persona description
+            if selectedCustomPersona == nil {
+                Text(currentDescription)
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.6))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .animation(.easeInOut, value: personaManager.selectedPersona)
+            }
 
             Divider()
                 .padding(.vertical, 8)
 
-            // Custom System Prompt Editor
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text(personaName).foregroundColor(.purple).bold()
-                        + Text(" System Prompt")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-
-                    Spacer()
-
-                    if personaManager.selectedCustomPersonaId == nil {
-                        // Standard Persona Reset
-                        if personaManager.customPrompts[personaManager.selectedPersona] != nil {
-                            Button("Reset to Default") {
-                                HapticFeedbackManager.shared.tap()
-                                personaManager.resetCustomPrompt(
-                                    for: personaManager.selectedPersona)
-                                updateLocalPrompt()  // Update local prompt after reset
-                            }
-                            .font(.caption)
-                            .buttonStyle(.borderless)
-                            .foregroundColor(.red)
-                        }
-                    }
-                }
-
-                if let customId = personaManager.selectedCustomPersonaId,
-                    let index = customStore.customPersonas.firstIndex(where: { $0.id == customId })
-                {
-                    // Editing Custom Persona
-                    TextEditor(text: $localPrompt)
-                        .focused($isEditorFocused)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(height: 120)
-                        .padding(4)
-                        .background(Color(nsColor: .textBackgroundColor))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6).stroke(
-                                Color.secondary.opacity(0.2), lineWidth: 1))
-
-Text(
-                        "Editing prompt for custom persona '\(customStore.customPersonas[index].name)'"
-                    )
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                } else {
-                    // Editing Standard Persona
-                    TextEditor(text: $localPrompt)
-                        .focused($isEditorFocused)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(height: 120)
-                        .padding(4)
-                        .background(Color(nsColor: .textBackgroundColor))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6).stroke(
-                                Color.secondary.opacity(0.2), lineWidth: 1))
-
-Text(
-                        "Customize AI instructions for '\(personaManager.selectedPersona.displayName)'"
-                    )
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                }
-            }
+            personaInstructionsEditor
         }
         .sheet(isPresented: $showingEditor, onDismiss: { editingPersona = nil }) {
             PersonaEditorView(store: customStore, editing: editingPersona)
@@ -196,36 +132,132 @@ Text(
             updateLocalPrompt()
         }
         .onChange(of: isEditorFocused) { oldValue, newValue in
-            if !newValue {  // Focus lost
+            if !newValue {
                 saveChangesIfNeeded()
+            }
+        }
+        .onChange(of: personaManager.selectedCustomPersonaId) { _, _ in
+            updateLocalPrompt()
+        }
+        .onChange(of: customStore.customPersonas) { _, _ in
+            updateLocalPrompt()
+        }
+    }
+
+    @ViewBuilder
+    private var personaInstructionsEditor: some View {
+        if let custom = selectedCustomPersona {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: custom.icon)
+                        .foregroundStyle(.purple)
+                        .frame(width: 22, height: 22)
+                        .accessibilityHidden(true)
+
+                    Text(custom.name)
+                        .foregroundStyle(.purple)
+                        .fontWeight(.semibold)
+                        + Text(" System Prompt")
+                        .font(.subheadline.weight(.medium))
+
+                    Spacer()
+
+                    Button {
+                        saveChangesIfNeeded()
+                        HapticFeedbackManager.shared.tap()
+                        editingPersona = custom
+                        showingEditor = true
+                    } label: {
+                        Label("Edit Persona", systemImage: "pencil")
+                    }
+                    .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                }
+
+                TextEditor(text: $localPrompt)
+                    .focused($isEditorFocused)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(height: 120)
+                    .padding(4)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+                    .accessibilityLabel("\(custom.name) system prompt")
+
+                Text("Edit the custom persona system prompt Sorty sends to the AI.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Additional Instructions")
+                        .font(.subheadline.weight(.medium))
+
+                    Spacer()
+
+                    if personaManager.customPrompts[personaManager.selectedPersona] != nil {
+                        Button {
+                            HapticFeedbackManager.shared.tap()
+                            personaManager.resetCustomPrompt(for: personaManager.selectedPersona)
+                            updateLocalPrompt()
+                        } label: {
+                            Label("Reset", systemImage: "arrow.counterclockwise")
+                        }
+                        .font(.caption)
+                        .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
+                    }
+                }
+
+                TextEditor(text: $localPrompt)
+                    .focused($isEditorFocused)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(height: 92)
+                    .padding(4)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                    )
+
+                Text("Optional. Leave empty to use \(personaManager.selectedPersona.displayName)'s built-in behavior.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
     }
 
     private func updateLocalPrompt() {
-        if let customId = personaManager.selectedCustomPersonaId,
-            let custom = customStore.customPersonas.first(where: { $0.id == customId })
-        {
+        if let custom = selectedCustomPersona {
             localPrompt = custom.promptModifier
         } else {
-            localPrompt = personaManager.getPrompt(for: personaManager.selectedPersona)
+            localPrompt = personaManager.customPrompts[personaManager.selectedPersona] ?? ""
         }
     }
 
     private func saveChangesIfNeeded() {
-        if let customId = personaManager.selectedCustomPersonaId,
-            let index = customStore.customPersonas.firstIndex(where: { $0.id == customId })
-        {
-            var updated = customStore.customPersonas[index]
-            if updated.promptModifier != localPrompt {
-                updated.promptModifier = localPrompt
-                customStore.updatePersona(updated)
-            }
-        } else {
-            if personaManager.getPrompt(for: personaManager.selectedPersona) != localPrompt {
-                personaManager.saveCustomPrompt(
-                    for: personaManager.selectedPersona, prompt: localPrompt)
-            }
+        if let custom = selectedCustomPersona {
+            guard custom.promptModifier != localPrompt else { return }
+
+            var updated = custom
+            updated.update(
+                name: custom.name,
+                icon: custom.icon,
+                description: custom.description,
+                prompt: localPrompt
+            )
+            customStore.updatePersona(updated)
+            return
+        }
+
+        if (personaManager.customPrompts[personaManager.selectedPersona] ?? "") != localPrompt {
+            personaManager.saveCustomPrompt(
+                for: personaManager.selectedPersona,
+                prompt: localPrompt
+            )
         }
     }
 
@@ -239,12 +271,15 @@ Text(
     }
 
     private var personaName: String {
-        if let customId = personaManager.selectedCustomPersonaId,
-            let custom = customStore.customPersonas.first(where: { $0.id == customId })
-        {
+        if let custom = selectedCustomPersona {
             return custom.name
         }
         return personaManager.selectedPersona.displayName
+    }
+
+    private var selectedCustomPersona: CustomPersona? {
+        guard let customId = personaManager.selectedCustomPersonaId else { return nil }
+        return customStore.customPersonas.first(where: { $0.id == customId })
     }
 
     private var personaGridColumns: [GridItem] {
