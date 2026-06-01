@@ -179,7 +179,7 @@ public struct CompletionStepView: View {
                 .transition(.opacity)
             }
 
-            VStack(spacing: 22) {
+            VStack(spacing: 24) {
                 ZStack {
                     CompletionGlowRing(isActive: showGlowRing)
 
@@ -239,7 +239,14 @@ public struct CompletionStepView: View {
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 30 : 0)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.fixed(240), spacing: 56, alignment: .leading),
+                        GridItem(.fixed(240), spacing: 0, alignment: .leading)
+                    ],
+                    alignment: .center,
+                    spacing: 24
+                ) {
                     QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
                         .opacity(tipsAppeared ? 1 : 0)
                         .offset(x: tipsAppeared ? 0 : -30)
@@ -260,7 +267,7 @@ public struct CompletionStepView: View {
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
                 }
-                .frame(maxWidth: 430)
+                .frame(width: 536)
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 40 : 0)
 
@@ -608,6 +615,7 @@ struct QuickTipRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
+        .frame(width: 240, alignment: .leading)
     }
 }
 
