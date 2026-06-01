@@ -212,18 +212,15 @@ public struct PermissionsStepView: View {
             Task { @MainActor in
                 permissionStates[.notifications] = .pending
 
-                if notificationManager.notificationPermissionStatus == .denied {
-                    permissionStates[.notifications] = .denied
-                    openNotificationSettings()
-                    return
-                }
-
                 let granted = await notificationManager.requestPermission()
                 permissionStates[.notifications] = notificationState(
                     for: notificationManager.notificationPermissionStatus
                 )
+
                 if granted {
                     HapticFeedbackManager.shared.success()
+                } else if notificationManager.notificationPermissionStatus == .denied {
+                    openNotificationSettings()
                 }
             }
         }
