@@ -25,11 +25,9 @@ public struct WorkflowSelectionStepView: View {
     public init() {}
     
     public var body: some View {
-        HStack(alignment: .center, spacing: 0) {
+        HStack(alignment: .center, spacing: 28) {
             // Left side - explanation
             VStack(alignment: .leading, spacing: 24) {
-                Spacer()
-                
                 VStack(alignment: .leading, spacing: 16) {
                     Image(systemName: "person.crop.circle.badge.checkmark")
                         .font(.system(size: 48))
@@ -58,96 +56,91 @@ public struct WorkflowSelectionStepView: View {
                 .opacity(hasAppeared ? 1 : 0)
                 .offset(x: hasAppeared ? 0 : -20)
                 .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: hasAppeared)
-                
-                Spacer()
             }
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 60)
+            .frame(maxHeight: .infinity, alignment: .center)
+            .padding(.leading, 72)
+            .padding(.trailing, 24)
+            .padding(.bottom, 34)
             
             // Right side - persona selection
-            ScrollView {
-                VStack(spacing: 20) {
-                    Text("Select Default Persona")
-                        .font(.title3)
-                        .fontWeight(.semibold)
+            VStack(spacing: 12) {
+                Text("Select Default Persona")
+                    .font(.title3)
+                    .fontWeight(.semibold)
                     
-                    // Built-in personas grid - 2x2 layout
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        ForEach(PersonaType.allCases, id: \.self) { persona in
-                            OnboardingPersonaCard(
+                // Built-in personas grid - 2x2 layout
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(PersonaType.allCases, id: \.self) { persona in
+                        OnboardingPersonaCard(
+                            persona: persona,
+                            isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil
+                        ) {
+                            HapticFeedbackManager.shared.selection()
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                personaManager.selectPersona(persona)
+                                personaManager.selectedCustomPersonaId = nil
+                                isCreatingCustom = false
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: 420)
+                    
+                // Divider with "or"
+                HStack {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 1)
+                    Text("or")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(height: 1)
+                }
+                .frame(maxWidth: 420)
+                    
+                if !customPersonaStore.customPersonas.isEmpty {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(customPersonaStore.customPersonas.prefix(2)) { persona in
+                            OnboardingCustomPersonaCard(
                                 persona: persona,
-                                isSelected: personaManager.selectedPersona == persona && personaManager.selectedCustomPersonaId == nil
+                                isSelected: personaManager.selectedCustomPersonaId == persona.id,
+                                compact: true,
+                                onDelete: {
+                                    customPersonaStore.deletePersona(id: persona.id)
+                                    if personaManager.selectedCustomPersonaId == persona.id {
+                                        personaManager.selectedCustomPersonaId = nil
+                                    }
+                                }
                             ) {
-                                HapticFeedbackManager.shared.selection()
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    personaManager.selectPersona(persona)
-                                    personaManager.selectedCustomPersonaId = nil
+                                    personaManager.selectCustomPersona(persona.id)
                                     isCreatingCustom = false
                                 }
                             }
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
                         }
                     }
                     .frame(maxWidth: 420)
-                    
-                    // Divider with "or"
-                    HStack {
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.2))
-                            .frame(height: 1)
-                        Text("or")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 12)
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.2))
-                            .frame(height: 1)
-                    }
-                    .frame(maxWidth: 420)
-                    
-                    if !customPersonaStore.customPersonas.isEmpty {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            ForEach(customPersonaStore.customPersonas) { persona in
-                                OnboardingCustomPersonaCard(
-                                    persona: persona,
-                                    isSelected: personaManager.selectedCustomPersonaId == persona.id,
-                                    compact: true,
-                                    onDelete: {
-                                        customPersonaStore.deletePersona(id: persona.id)
-                                        if personaManager.selectedCustomPersonaId == persona.id {
-                                            personaManager.selectedCustomPersonaId = nil
-                                        }
-                                    }
-                                ) {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        personaManager.selectCustomPersona(persona.id)
-                                        isCreatingCustom = false
-                                    }
-                                }
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                            }
-                        }
-                        .frame(maxWidth: 420)
 
-                        CreatePersonaButton(
-                            title: "Generate Another",
-                            subtitle: "Try a different custom workflow idea",
-                            isCreatingCustom: $isCreatingCustom
-                        )
+                    CreatePersonaButton(
+                        title: "Generate Another",
+                        subtitle: "Try a different custom workflow idea",
+                        isCreatingCustom: $isCreatingCustom
+                    )
+                    .frame(maxWidth: 420)
+                } else {
+                    CreatePersonaButton(isCreatingCustom: $isCreatingCustom)
                         .frame(maxWidth: 420)
-                    } else {
-                        CreatePersonaButton(isCreatingCustom: $isCreatingCustom)
-                            .frame(maxWidth: 420)
-                    }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 24)
-                .frame(maxWidth: .infinity)
             }
-            .scrollIndicators(.automatic)
             .frame(maxWidth: .infinity)
-            .padding(.horizontal, 40)
-            .clipped()
-            .defaultScrollAnchor(.center)
+            .frame(maxHeight: .infinity, alignment: .center)
+            .padding(.trailing, 72)
+            .padding(.bottom, 70)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
@@ -435,14 +428,14 @@ struct OnboardingPersonaCard: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 ZStack {
                     Circle()
                         .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.secondary.opacity(0.1))
-                        .frame(width: 60, height: 60)
+                        .frame(width: 50, height: 50)
                     
                     Image(systemName: persona.icon)
-                        .font(.system(size: 28))
+                        .font(.system(size: 24))
                         .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
                 }
                 
@@ -459,7 +452,7 @@ struct OnboardingPersonaCard: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .padding(.vertical, 14)
             .padding(.horizontal, 16)
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
@@ -690,10 +683,10 @@ struct OnboardingCustomPersonaCard: View {
             ZStack {
                 Circle()
                     .fill(compactIconFill)
-                    .frame(width: 60, height: 60)
+                    .frame(width: 50, height: 50)
 
                 Image(systemName: persona.icon)
-                    .font(.system(size: 28))
+                    .font(.system(size: 24))
                     .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
             }
 
@@ -711,7 +704,7 @@ struct OnboardingCustomPersonaCard: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
     }
 
     private var compactIconFill: AnyShapeStyle {
@@ -752,14 +745,14 @@ struct CreatePersonaButton: View {
             }
             HapticFeedbackManager.shared.selection()
         } label: {
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 ZStack {
                     Circle()
                         .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 60, height: 60)
+                        .frame(width: 50, height: 50)
                     
                     Image(systemName: "sparkles")
-                        .font(.system(size: 28))
+                        .font(.system(size: 24))
                         .foregroundStyle(.primary)
                 }
                 
@@ -775,7 +768,7 @@ struct CreatePersonaButton: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
+            .padding(.vertical, 14)
             .padding(.horizontal, 16)
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
