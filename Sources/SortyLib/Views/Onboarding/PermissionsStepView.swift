@@ -219,8 +219,6 @@ public struct PermissionsStepView: View {
 
                 if granted {
                     HapticFeedbackManager.shared.success()
-                } else if notificationManager.notificationPermissionStatus == .denied {
-                    openNotificationSettings()
                 }
             }
         }
@@ -236,17 +234,6 @@ public struct PermissionsStepView: View {
             return .unknown
         @unknown default:
             return .unknown
-        }
-    }
-
-    private func openNotificationSettings() {
-        let urls = [
-            URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
-            URL(string: "x-apple.systempreferences:com.apple.preference.notifications")
-        ].compactMap(\.self)
-
-        if let url = urls.first {
-            NSWorkspace.shared.open(url)
         }
     }
 
@@ -509,7 +496,7 @@ struct PermissionRow: View {
             statusChip
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
         case .denied:
-            PermissionActionButton(title: "Open Settings", style: .bordered, action: onRequest)
+            PermissionActionButton(title: type.compactActionTitle, style: .bordered, action: onRequest)
                 .fixedSize()
                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
         case .unknown:
