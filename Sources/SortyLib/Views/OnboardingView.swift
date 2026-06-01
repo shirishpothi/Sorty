@@ -53,6 +53,9 @@ public struct OnboardingView: View {
 
                     VStack(spacing: 0) {
                         // Pinned with a fixed top padding so it doesn't shift between steps.
+                        // A soft top scrim (instead of a hard opaque strip) prevents scrolled
+                        // step content from bleeding behind it while blending seamlessly into
+                        // the unified background gradient so there is no visible color seam.
                         OnboardingProgressBar(currentStep: currentStep)
                             .padding(.top, 54)
                             .padding(.bottom, 24)
@@ -783,38 +786,56 @@ struct OnboardingBottomGradient: View {
 
     /// 0 = gradient hugs the bottom edge, 1 = gradient reaches near the top.
     var progress: Double = 0
+    var showsBaseColor = true
 
     var body: some View {
         let clamped = max(0, min(1, progress))
-        let baseColor = colorScheme == .dark
-            ? Color(red: 0.24, green: 0.14, blue: 0.16)
-            : Color(red: 0.49, green: 0.25, blue: 0.30)
-        let accentIntensity = colorScheme == .dark ? 0.34 : 0.46
+        // The linear wash climbs from the lower third toward the top as the
+        // user progresses. We keep a small top margin (y never reaches 0) so
+        // the title/progress region stays calm and the fade is always smooth.
+        let linearEnd = UnitPoint(x: 0.5, y: 0.62 - clamped * 0.5)
+        let radialCenterY = 1.06 - clamped * 0.36
+        let radialEnd = 560 + clamped * 540
+        let intensity = 1.0 + clamped * 0.25
 
         return ZStack(alignment: .bottom) {
-            baseColor
+            if showsBaseColor {
+                Color(NSColor.windowBackgroundColor)
+            }
+
+            SortyDesignSystem.Colors.resolvedAccent
+                .opacity((colorScheme == .dark ? 0.055 : 0.075) * clamped)
+
+            LinearGradient(
+                colors: [
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.34 : 0.46) * intensity),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.16 : 0.20) * intensity),
+                    Color.clear
+                ],
+                startPoint: .bottom,
+                endPoint: linearEnd
+            )
 
             RadialGradient(
                 colors: [
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(accentIntensity * (0.55 + clamped * 0.45)),
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.18 + clamped * 0.12),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.24 : 0.30) * intensity),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.08 * intensity),
                     Color.clear
                 ],
-                center: UnitPoint(x: 0.5, y: 0.84 - clamped * 0.28),
-                startRadius: 40,
-                endRadius: 920 + clamped * 420
+                center: UnitPoint(x: 0.5, y: radialCenterY),
+                startRadius: 0,
+                endRadius: radialEnd
             )
             .blendMode(.plusLighter)
 
-            RadialGradient(
+            LinearGradient(
                 colors: [
-                    Color.white.opacity((colorScheme == .dark ? 0.055 : 0.08) * clamped),
-                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.10 : 0.14) * clamped),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.13 : 0.16) * clamped),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity((colorScheme == .dark ? 0.07 : 0.10) * clamped),
                     Color.clear
                 ],
-                center: UnitPoint(x: 0.5, y: 0.42),
-                startRadius: 0,
-                endRadius: 620
+                startPoint: .top,
+                endPoint: UnitPoint(x: 0.5, y: 0.56)
             )
             .blendMode(.plusLighter)
         }
@@ -885,7 +906,6 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         private var originalIsOpaque: Bool?
         private var originalHasShadow: Bool?
         private var originalAlphaValue: CGFloat?
-        private var originalTitlebarSeparatorStyle: NSWindow.TitlebarSeparatorStyle?
 
         func configure(window: NSWindow) {
             guard configuredWindow !== window else { return }
@@ -899,21 +919,14 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             originalIsOpaque = window.isOpaque
             originalHasShadow = window.hasShadow
             originalAlphaValue = window.alphaValue
-            originalTitlebarSeparatorStyle = window.titlebarSeparatorStyle
 
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.styleMask.insert(.fullSizeContentView)
-            window.backgroundColor = NSColor(
-                calibratedRed: 0.24,
-                green: 0.14,
-                blue: 0.16,
-                alpha: 1
-            )
+            window.backgroundColor = .clear
             window.isOpaque = false
             window.hasShadow = false
             window.isMovableByWindowBackground = true
-            window.titlebarSeparatorStyle = .none
 
             // Pin the window to the onboarding minimum content size before the
             // first paint so it never visibly resizes/reframes after appearing.
@@ -959,9 +972,6 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
                 window.alphaValue = originalAlphaValue
             } else {
                 window.alphaValue = 1
-            }
-            if let originalTitlebarSeparatorStyle {
-                window.titlebarSeparatorStyle = originalTitlebarSeparatorStyle
             }
         }
 
