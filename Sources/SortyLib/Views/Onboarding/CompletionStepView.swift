@@ -297,7 +297,7 @@ public struct CompletionStepView: View {
             }
             .padding(.horizontal, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .offset(y: -6)
+            .offset(x: 18, y: -6)
         }
         .onAppear {
             startRevealSequence()
