@@ -710,9 +710,7 @@ private struct PermissionActionButton: View {
         }
         .buttonStyle(buttonStyle)
         .overlay {
-            if style == .primary {
-                Color.clear.onboardingBeamBorder(variant: .standard)
-            }
+            Color.clear.onboardingBeamBorder(variant: style == .primary ? .standard : .info)
         }
         .contentShape(Capsule())
         .background(
