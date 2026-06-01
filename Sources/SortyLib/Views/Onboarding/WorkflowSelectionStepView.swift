@@ -64,13 +64,13 @@ public struct WorkflowSelectionStepView: View {
             .padding(.bottom, 34)
             
             // Right side - persona selection
-            VStack(spacing: 12) {
+            VStack(spacing: 8) {
                 Text("Select Default Persona")
-                    .font(.title3)
+                    .font(.headline)
                     .fontWeight(.semibold)
                     
                 // Built-in personas grid - 2x2 layout
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     ForEach(PersonaType.allCases, id: \.self) { persona in
                         OnboardingPersonaCard(
                             persona: persona,
@@ -103,7 +103,7 @@ public struct WorkflowSelectionStepView: View {
                 .frame(maxWidth: 420)
                     
                 if !customPersonaStore.customPersonas.isEmpty {
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(customPersonaStore.customPersonas.prefix(2)) { persona in
                             OnboardingCustomPersonaCard(
                                 persona: persona,
@@ -126,7 +126,7 @@ public struct WorkflowSelectionStepView: View {
                     }
                     .frame(maxWidth: 420)
 
-                    CreatePersonaButton(
+                    CompactCreatePersonaButton(
                         title: "Generate Another",
                         subtitle: "Try a different custom workflow idea",
                         isCreatingCustom: $isCreatingCustom
@@ -140,7 +140,7 @@ public struct WorkflowSelectionStepView: View {
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity, alignment: .center)
             .padding(.trailing, 72)
-            .padding(.bottom, 70)
+            .padding(.bottom, 54)
             .opacity(hasAppeared ? 1 : 0)
             .offset(x: hasAppeared ? 0 : 20)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
@@ -428,20 +428,20 @@ struct OnboardingPersonaCard: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 7) {
                 ZStack {
                     Circle()
                         .fill(isSelected ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.secondary.opacity(0.1))
-                        .frame(width: 50, height: 50)
+                        .frame(width: 44, height: 44)
                     
                     Image(systemName: persona.icon)
-                        .font(.system(size: 24))
+                        .font(.system(size: 21))
                         .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
                 }
                 
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     Text(persona.displayName)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                     
                     Text(persona.description)
@@ -452,8 +452,8 @@ struct OnboardingPersonaCard: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -539,7 +539,7 @@ struct OnboardingCustomPersonaCard: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: compact ? .center : .leading)
-            .padding(compact ? 14 : 18)
+            .padding(compact ? 10 : 18)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(
@@ -679,20 +679,20 @@ struct OnboardingCustomPersonaCard: View {
 
     // Matches the built-in OnboardingPersonaCard's compact 2-column layout.
     private var compactBody: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 7) {
             ZStack {
                 Circle()
                     .fill(compactIconFill)
-                    .frame(width: 50, height: 50)
+                    .frame(width: 44, height: 44)
 
                 Image(systemName: persona.icon)
-                    .font(.system(size: 24))
+                    .font(.system(size: 21))
                     .foregroundStyle(isSelected ? SortyDesignSystem.Colors.resolvedAccent : .primary)
             }
 
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 Text(persona.name)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
@@ -704,7 +704,7 @@ struct OnboardingCustomPersonaCard: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 
     private var compactIconFill: AnyShapeStyle {
@@ -787,6 +787,68 @@ struct CreatePersonaButton: View {
             radius: isHovered ? 14 : 7,
             x: 0,
             y: isHovered ? 7 : 3
+        )
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.15), value: isHovered)
+    }
+}
+
+struct CompactCreatePersonaButton: View {
+    let title: String
+    let subtitle: String
+    @Binding var isCreatingCustom: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                isCreatingCustom = true
+            }
+            HapticFeedbackManager.shared.selection()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.secondary.opacity(0.1))
+                        .frame(width: 38, height: 38)
+
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 14)
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(isHovered ? 0.13 : 0.08))
+            )
+            .systemLiquidGlassBackground(cornerRadius: 14)
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.primary.opacity(isHovered ? 0.18 : 0.09), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .shadow(
+            color: Color.black.opacity(isHovered ? 0.05 : 0.02),
+            radius: isHovered ? 10 : 5,
+            x: 0,
+            y: isHovered ? 5 : 2
         )
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.15), value: isHovered)
