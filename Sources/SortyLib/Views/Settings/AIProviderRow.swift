@@ -17,44 +17,35 @@ struct AIProviderRow: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 10) {
-                    ProviderLogoView(provider: provider, size: 20)
-                        .frame(width: 34, height: 34)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
-                        )
+            HStack(alignment: .center, spacing: 10) {
+                ProviderLogoView(provider: provider, size: 18)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
+                    )
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(provider.displayName)
-                            .font(.subheadline.weight(isSelected ? .semibold : .medium))
-                            .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(provider.displayName)
+                        .font(.subheadline.weight(isSelected ? .semibold : .medium))
+                        .foregroundStyle(.primary)
 
-                        Text(provider.description)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 6)
-
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(isSelected ? provider.brandColor : Color.secondary.opacity(0.45))
-                        .accessibilityHidden(true)
+                    Text(provider.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
 
-                HStack(spacing: 6) {
-                    ForEach(provider.settingsBadges) { badge in
-                        AIProviderTag(badge: badge)
-                    }
-                }
+                Spacer(minLength: 8)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isSelected ? provider.brandColor : Color.secondary.opacity(0.45))
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity, minHeight: 102, alignment: .topLeading)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
@@ -75,27 +66,6 @@ struct AIProviderRow: View {
         .accessibilityValue(isSelected ? "Selected" : "Not selected")
         .accessibilityHint("Selects \(provider.displayName) as the AI provider")
         .help("Use \(provider.displayName)")
-    }
-}
-
-private struct AIProviderSettingsBadge: Identifiable {
-    let title: String
-    let color: Color
-
-    var id: String { title }
-}
-
-private struct AIProviderTag: View {
-    let badge: AIProviderSettingsBadge
-
-    var body: some View {
-        Text(badge.title)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(badge.color)
-            .lineLimit(1)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(badge.color.opacity(0.12), in: Capsule())
     }
 }
 
@@ -124,59 +94,9 @@ extension AIProvider {
             return "diamond.fill"
         }
     }
-    
+
     // brandColor is now defined canonically in AIProvider (AIConfig.swift)
 
-    fileprivate var settingsBadges: [AIProviderSettingsBadge] {
-        switch self {
-        case .openAI:
-            return [
-                AIProviderSettingsBadge(title: "Recommended", color: .green),
-                AIProviderSettingsBadge(title: "Cloud", color: .blue)
-            ]
-        case .githubCopilot:
-            return [
-                AIProviderSettingsBadge(title: "Subscription", color: .indigo),
-                AIProviderSettingsBadge(title: "Cloud", color: .blue)
-            ]
-        case .groq:
-            return [
-                AIProviderSettingsBadge(title: "Fast", color: .orange),
-                AIProviderSettingsBadge(title: "Cloud", color: .blue)
-            ]
-        case .openAICompatible:
-            return [
-                AIProviderSettingsBadge(title: "Custom", color: .blue),
-                AIProviderSettingsBadge(title: "Endpoint", color: .teal)
-            ]
-        case .openRouter:
-            return [
-                AIProviderSettingsBadge(title: "Model choice", color: .purple),
-                AIProviderSettingsBadge(title: "Cloud", color: .blue)
-            ]
-        case .ollama:
-            return [
-                AIProviderSettingsBadge(title: "Local", color: .green),
-                AIProviderSettingsBadge(title: "No key", color: .secondary)
-            ]
-        case .anthropic:
-            return [
-                AIProviderSettingsBadge(title: "Claude", color: .orange),
-                AIProviderSettingsBadge(title: "Cloud", color: .blue)
-            ]
-        case .gemini:
-            return [
-                AIProviderSettingsBadge(title: "Gemini", color: .cyan),
-                AIProviderSettingsBadge(title: "Cloud", color: .blue)
-            ]
-        case .appleFoundationModel:
-            return [
-                AIProviderSettingsBadge(title: "On-device", color: .blue),
-                AIProviderSettingsBadge(title: "No key", color: .secondary)
-            ]
-        }
-    }
-    
     var description: String {
         switch self {
         case .openAI:
