@@ -17,6 +17,8 @@ public struct PermissionsStepView: View {
     @State private var hasAppeared = false
     @State private var permissionStates: [PermissionType: PermissionState] = [:]
     @State private var selectedEducationPermission: PermissionType?
+    @State private var isFullDiskAccessConfirmationPresented = false
+    @State private var fullDiskAccessSourceFrameInScreen: CGRect?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var notificationManager = NotificationManager.shared
     @EnvironmentObject private var automationManager: AutomationManager
@@ -151,6 +153,18 @@ public struct PermissionsStepView: View {
                 selectedEducationPermission = nil
             }
         }
+        .alert("Set up Full Disk Access?", isPresented: $isFullDiskAccessConfirmationPresented) {
+            Button("Skip for Now", role: .cancel) {
+                permissionStates[.fullDiskAccess] = .unknown
+                fullDiskAccessSourceFrameInScreen = nil
+            }
+
+            Button("Open System Settings") {
+                openFullDiskAccessSettings()
+            }
+        } message: {
+            Text("Full Disk Access is optional and only needed for protected folders. macOS may relaunch Sorty after you turn it on, so it is safe to finish onboarding first and enable this later in Settings.")
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Permissions Step")
     }
@@ -191,13 +205,8 @@ public struct PermissionsStepView: View {
             requestFilesAndFoldersPermission()
 
         case .fullDiskAccess:
-            // Open System Settings to Full Disk Access using Permiso
-            PermisoAssistant.shared.present(
-                panel: .fullDiskAccess,
-                sourceFrameInScreen: sourceFrameInScreen,
-                onCancel: { permissionStates[.fullDiskAccess] = .unknown }
-            )
-            permissionStates[.fullDiskAccess] = .pending
+            fullDiskAccessSourceFrameInScreen = sourceFrameInScreen
+            isFullDiskAccessConfirmationPresented = true
 
         case .automation:
             permissionStates[.automation] = .pending
@@ -230,6 +239,18 @@ public struct PermissionsStepView: View {
                 }
             }
         }
+    }
+
+    private func openFullDiskAccessSettings() {
+        permissionStates[.fullDiskAccess] = .pending
+        PermisoAssistant.shared.present(
+            panel: .fullDiskAccess,
+            sourceFrameInScreen: fullDiskAccessSourceFrameInScreen,
+            onCancel: {
+                permissionStates[.fullDiskAccess] = .unknown
+                fullDiskAccessSourceFrameInScreen = nil
+            }
+        )
     }
 
     private func permissionState(for status: PermissionStatus) -> PermissionState {
@@ -330,7 +351,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .filesAndFolders: return "Choose a folder so Sorty can organize files"
-        case .fullDiskAccess: return "Access protected folders when you choose them"
+        case .fullDiskAccess: return "Optional for protected folders; may relaunch Sorty"
         case .automation: return "Read Finder selections for Finder Integration"
         case .notifications: return "Get notified when organization completes"
         }
@@ -363,7 +384,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
         case .filesAndFolders:
             return "Lets Sorty access folders you explicitly choose with the macOS picker. This is required before Sorty can scan and organize files."
         case .fullDiskAccess:
-            return "Lets Sorty organize protected folders you explicitly choose, such as Desktop, Documents, Downloads, or external locations macOS protects."
+            return "Lets Sorty organize protected folders you explicitly choose, such as Desktop, Documents, Downloads, or external locations macOS protects. macOS may relaunch Sorty after this is enabled, so it is usually better to finish onboarding first."
         case .automation:
             return "Lets Sorty read the current Finder selection for Finder Integration actions. Sorty only asks when you use Finder-driven workflows."
         case .notifications:
@@ -376,7 +397,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
         case .filesAndFolders:
             return "Choose Folder"
         case .fullDiskAccess:
-            return "Open System Settings"
+            return "Review Restart Note"
         case .automation:
             return "Enable Finder Automation"
         case .notifications:
@@ -389,7 +410,7 @@ enum PermissionType: String, CaseIterable, Identifiable {
         case .filesAndFolders:
             return "Choose Folder"
         case .fullDiskAccess:
-            return "Open Settings"
+            return "Review"
         case .automation:
             return "Enable"
         case .notifications:
@@ -420,7 +441,7 @@ enum PermissionState {
         case .filesAndFolders:
             return "Choosing Folder"
         case .fullDiskAccess:
-            return "Opening Settings"
+            return "Finish in Settings"
         case .automation:
             return "Requesting"
         case .notifications:
