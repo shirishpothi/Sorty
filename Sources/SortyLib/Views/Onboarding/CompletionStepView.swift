@@ -558,6 +558,22 @@ private struct CompletionContrastBackdrop: View {
                 endRadius: 520
             )
         }
+        .mask(alignment: .top) {
+            VStack(spacing: 0) {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.clear, location: 0.00),
+                        .init(color: Color.black.opacity(0.48), location: 0.36),
+                        .init(color: Color.black, location: 1.00)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 192)
+
+                Color.black
+            }
+        }
         .ignoresSafeArea()
     }
 }
