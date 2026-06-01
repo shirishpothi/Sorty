@@ -10,11 +10,16 @@ import AVFoundation
 
 // MARK: - Completion Reveal Blob
 
-/// A vibrant gradient blob that expands from center for the completion celebration
+/// A soft brand-aligned gradient blob that expands from center for the
+/// completion celebration. Stays close to the brand rose-pink, with a warm
+/// peach companion, so it complements (rather than fights) the page's
+/// rose-accented background.
 private struct CompletionRevealBlob: View {
     let scale: CGFloat
     let opacity: Double
     @State private var colorPhase: Double = 0
+
+    private var accent: Color { SortyDesignSystem.Colors.resolvedAccent }
 
     var body: some View {
         ZStack {
@@ -22,50 +27,49 @@ private struct CompletionRevealBlob: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.teal.opacity(0.24),
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
-                            Color.blue.opacity(0.08),
+                            accent.opacity(0.28),
+                            accent.opacity(0.12),
                             Color.clear
                         ],
                         center: .center,
                         startRadius: 0,
-                        endRadius: 300
+                        endRadius: 280
                     )
                 )
-                .frame(width: 600, height: 500)
+                .frame(width: 540, height: 440)
                 .blur(radius: 60)
 
             Ellipse()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.orange.opacity(0.14),
-                            Color.teal.opacity(0.10),
+                            Color(red: 1.0, green: 0.62, blue: 0.45).opacity(0.18),
+                            accent.opacity(0.08),
                             Color.clear
                         ],
                         center: .center,
                         startRadius: 0,
-                        endRadius: 250
+                        endRadius: 220
                     )
                 )
-                .frame(width: 450, height: 400)
-                .offset(x: 30 * sin(colorPhase), y: -20 * cos(colorPhase))
+                .frame(width: 420, height: 360)
+                .offset(x: 26 * sin(colorPhase), y: -16 * cos(colorPhase))
                 .blur(radius: 50)
 
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.white.opacity(0.15),
-                            Color.teal.opacity(0.12),
+                            Color.white.opacity(0.16),
+                            accent.opacity(0.10),
                             Color.clear
                         ],
                         center: .center,
                         startRadius: 0,
-                        endRadius: 120
+                        endRadius: 110
                     )
                 )
-                .frame(width: 240, height: 240)
+                .frame(width: 220, height: 220)
                 .blur(radius: 30)
         }
         .scaleEffect(scale)
@@ -85,23 +89,26 @@ private struct CompletionGlowRing: View {
     let isActive: Bool
     @State private var pulseScale: CGFloat = 1.0
 
+    private var accent: Color { SortyDesignSystem.Colors.resolvedAccent }
+
     var body: some View {
         Circle()
             .stroke(
                 AngularGradient(
                     colors: [
-                        Color.teal.opacity(0.90),
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.82),
-                        Color.orange.opacity(0.55),
-                        Color.teal.opacity(0.90)
+                        accent.opacity(0.95),
+                        Color(red: 1.0, green: 0.62, blue: 0.45).opacity(0.75),
+                        accent.opacity(0.95),
+                        Color.white.opacity(0.45),
+                        accent.opacity(0.95)
                     ],
                     center: .center
                 ),
                 lineWidth: 3
             )
-            .frame(width: 140, height: 140)
+            .frame(width: 160, height: 160)
             .scaleEffect(isActive ? pulseScale : 0.5)
-            .opacity(isActive ? 0.6 : 0)
+            .opacity(isActive ? 0.7 : 0)
             .blur(radius: 8)
             .onAppear {
                 withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
@@ -171,14 +178,17 @@ public struct CompletionStepView: View {
                 .transition(.opacity)
             }
 
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 ZStack {
                     CompletionGlowRing(isActive: showGlowRing)
 
                     ForEach(0..<3, id: \.self) { index in
                         Circle()
-                            .stroke(Color.teal.opacity(0.18 - Double(index) * 0.04), lineWidth: 2)
-                            .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
+                            .stroke(
+                                SortyDesignSystem.Colors.resolvedAccent.opacity(0.22 - Double(index) * 0.05),
+                                lineWidth: 2
+                            )
+                            .frame(width: CGFloat(150 + index * 32), height: CGFloat(150 + index * 32))
                             .scaleEffect(hasAppeared ? 1.2 : 0.8)
                             .opacity(hasAppeared ? 0 : 1)
                             .animation(
@@ -189,19 +199,32 @@ public struct CompletionStepView: View {
                             )
                     }
 
+                    // Solid disc behind the glyph so the checkmark reads with
+                    // proper weight against the rose backdrop.
                     Circle()
-                        .fill(Color.teal.opacity(0.13))
-                        .frame(width: 118, height: 118)
-
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 70))
-                        .foregroundStyle(
+                        .fill(
                             LinearGradient(
-                                colors: [Color.teal, SortyDesignSystem.Colors.resolvedAccent],
+                                colors: [
+                                    SortyDesignSystem.Colors.resolvedAccent,
+                                    Color(red: 1.0, green: 0.45, blue: 0.40)
+                                ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
+                        .frame(width: 128, height: 128)
+                        .shadow(
+                            color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.45),
+                            radius: 28, x: 0, y: 8
+                        )
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+                        )
+
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 56, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
                         .symbolEffect(.bounce, value: hasAppeared)
                 }
                 .opacity(hasAppeared ? 1 : 0)
@@ -210,6 +233,7 @@ public struct CompletionStepView: View {
                 // Exit: scale down and fade
                 .scaleEffect(contentDismissed ? 0.8 : 1.0)
                 .opacity(contentDismissed ? 0 : 1)
+
                 VStack(spacing: 10) {
                     Text("Ready to Organize")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
@@ -218,11 +242,11 @@ public struct CompletionStepView: View {
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.2), value: hasAppeared)
 
                     Text("Drop in a folder, preview the plan, and undo anything you change.")
-                        .font(.system(size: 17, weight: .medium, design: .rounded))
+                        .font(.system(size: 16, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: 420)
+                        .frame(maxWidth: 440)
                         .opacity(hasAppeared ? 1 : 0)
                         .offset(y: hasAppeared ? 0 : 15)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.4), value: hasAppeared)
@@ -230,47 +254,31 @@ public struct CompletionStepView: View {
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 30 : 0)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.6), value: tipsAppeared)
-
-                    QuickTipRow(icon: "keyboard", text: "Press \u{2318}O")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.8), value: tipsAppeared)
-
-                    QuickTipRow(icon: "arrow.uturn.backward", text: "Undo changes")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.0), value: tipsAppeared)
-
-                    QuickTipRow(icon: "gearshape", text: "Tune settings")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
-                }
-                .frame(maxWidth: 430)
-                .opacity(contentDismissed ? 0 : 1)
-                .offset(y: contentDismissed ? 40 : 0)
+                QuickTipsCard(tipsAppeared: tipsAppeared)
+                    .frame(maxWidth: 460)
+                    .opacity(contentDismissed ? 0 : 1)
+                    .offset(y: contentDismissed ? 40 : 0)
 
                 Button {
                     verifyAndFinish()
                 } label: {
                     HStack(spacing: 8) {
-                        if readinessState == .checking {
-                            BouncingSpinner(size: 12, color: .white)
-                            Text("Checking Provider...")
-                        } else {
-                            Text("Start Using Sorty")
-                            Image(systemName: "arrow.right.circle.fill")
-                                .font(.system(size: 16))
-                        }
+                        Text("Start Using Sorty")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .semibold))
                     }
                 }
                 .buttonStyle(.onboardingPill(size: .large))
-                .onboardingBeamBorder(variant: .featured, active: readinessState != .checking)
+                // A soft single-tone rose glow keeps the brand without the
+                // jarring cyan/magenta beam stripe under the pill.
+                .shadow(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.55),
+                    radius: 22, x: 0, y: 0
+                )
+                .shadow(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.35),
+                    radius: 6, x: 0, y: 4
+                )
                 .keyboardShortcut(.defaultAction)
                 .disabled(readinessState == .checking)
                 .opacity(tipsAppeared && !contentDismissed ? 1 : 0)
@@ -286,7 +294,9 @@ public struct CompletionStepView: View {
             }
             .padding(.horizontal, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .offset(y: -6)
+            // Pull the stack slightly above optical center to fill the
+            // empty void left between the stepper and the hero glyph.
+            .offset(y: -28)
         }
         .onAppear {
             startRevealSequence()
@@ -472,17 +482,26 @@ public struct CompletionStepView: View {
             return
         }
 
-        readinessState = .checking
+        // Start the transition immediately — the previous flow blocked on a
+        // network round-trip (`testConnection()`) before fading out, which
+        // made "Start Using Sorty" feel sluggish/laggy. We now fire the
+        // verification in the background; if it fails, the main app surfaces
+        // the issue through the existing setup-repair channel.
+        readinessState = .idle
+        startTransition()
 
+        let viewModel = settingsViewModel
+        let state = appState
         Task { @MainActor in
             do {
-                try await settingsViewModel.testConnection()
-                appState.clearSetupRepairState()
-                readinessState = .idle
-                startTransition()
+                try await viewModel.testConnection()
+                state.clearSetupRepairState()
             } catch {
-                readinessState = .failed(error.localizedDescription)
-                HapticFeedbackManager.shared.error()
+                state.startSetupRepair(
+                    message: "Sorty could not verify \(viewModel.config.provider.displayName). "
+                        + error.localizedDescription,
+                    navigateToSettings: false
+                )
             }
         }
     }
@@ -502,8 +521,10 @@ public struct CompletionStepView: View {
         HapticFeedbackManager.shared.success()
         fadeOutAndStopAudio(duration: 0.45)
 
-        // Fade out all content smoothly
-        withAnimation(.easeIn(duration: 0.4)) {
+        // Fade out all content smoothly, but hand off quickly so the main
+        // organize page can start rendering while the old frame is still
+        // visually settling.
+        withAnimation(.easeInOut(duration: 0.24)) {
             contentDismissed = true
             backgroundRevealed = false
             showParticles = false
@@ -511,8 +532,7 @@ public struct CompletionStepView: View {
             revealOpacity = 0
         }
 
-        // Complete after fade
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             onFinish()
         }
     }
@@ -521,25 +541,17 @@ public struct CompletionStepView: View {
 private struct CompletionContrastBackdrop: View {
     var body: some View {
         ZStack {
-            Color(NSColor.windowBackgroundColor).opacity(0.38)
+            OnboardingBottomGradient(progress: 1)
 
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.22),
-                    Color.clear,
-                    Color.black.opacity(0.10)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-
+            // A faint warm glow centered roughly behind the hero glyph,
+            // keyed to the brand accent so the page stays on-palette.
             RadialGradient(
                 colors: [
-                    Color.teal.opacity(0.16),
-                    Color.blue.opacity(0.06),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(0.06),
                     Color.clear
                 ],
-                center: UnitPoint(x: 0.50, y: 0.42),
+                center: UnitPoint(x: 0.50, y: 0.40),
                 startRadius: 20,
                 endRadius: 520
             )
@@ -553,23 +565,93 @@ struct QuickTipRow: View {
     let text: String
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.teal.opacity(0.14))
-                    .frame(width: 34, height: 34)
+                    .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.16))
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(
+                                SortyDesignSystem.Colors.resolvedAccent.opacity(0.28),
+                                lineWidth: 0.5
+                            )
+                    )
 
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.teal)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
             }
 
             Text(text)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.primary.opacity(0.9))
+                .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
 
             Spacer(minLength: 0)
         }
+        .padding(.vertical, 4)
+    }
+}
+
+/// Groups the four "what to do next" tips inside a single subtle glass card
+/// so they read as one cohesive panel instead of four orphan rows floating
+/// over the gradient.
+struct QuickTipsCard: View {
+    let tipsAppeared: Bool
+
+    private struct Tip: Identifiable {
+        let id = UUID()
+        let icon: String
+        let text: String
+        let delay: Double
+    }
+
+    private let tips: [Tip] = [
+        Tip(icon: "folder.badge.plus", text: "Drag a folder", delay: 0.6),
+        Tip(icon: "keyboard", text: "Press \u{2318}O", delay: 0.7),
+        Tip(icon: "arrow.uturn.backward", text: "Undo changes", delay: 0.8),
+        Tip(icon: "gearshape", text: "Tune settings", delay: 0.9)
+    ]
+
+    var body: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 18),
+                GridItem(.flexible(), spacing: 18)
+            ],
+            spacing: 6
+        ) {
+            ForEach(Array(tips.enumerated()), id: \.element.id) { index, tip in
+                QuickTipRow(icon: tip.icon, text: tip.text)
+                    .opacity(tipsAppeared ? 1 : 0)
+                    .offset(
+                        x: tipsAppeared ? 0 : (index.isMultiple(of: 2) ? -24 : 24)
+                    )
+                    .animation(
+                        .spring(response: 0.7, dampingFraction: 0.85).delay(tip.delay),
+                        value: tipsAppeared
+                    )
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(
+            // Soft radial wash that fades into the surrounding rose
+            // gradient instead of a stamped rectangle with hard edges.
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color.white.opacity(0.06),
+                            Color.white.opacity(0.025),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 260
+                    )
+                )
+        )
     }
 }
 

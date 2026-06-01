@@ -58,18 +58,24 @@ public struct OnboardingView: View {
                         // the unified background gradient so there is no visible color seam.
                         OnboardingProgressBar(currentStep: currentStep)
                             .padding(.top, 54)
-                            .padding(.bottom, 12)
+                            .padding(.bottom, 24)
                             .padding(.horizontal, 48)
                             .background(
+                                // Keep the title/progress rail legible without
+                                // stamping a separate color band across the
+                                // window.
                                 LinearGradient(
-                                    colors: [
-                                        Color(NSColor.windowBackgroundColor).opacity(0.74),
-                                        Color(NSColor.windowBackgroundColor).opacity(0.40),
-                                        Color(NSColor.windowBackgroundColor).opacity(0)
+                                    stops: [
+                                        .init(color: Color(NSColor.windowBackgroundColor).opacity(0.24), location: 0.00),
+                                        .init(color: Color(NSColor.windowBackgroundColor).opacity(0.14), location: 0.38),
+                                        .init(color: Color(NSColor.windowBackgroundColor).opacity(0.04), location: 0.74),
+                                        .init(color: Color.clear, location: 1.00)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
+                                .frame(height: 220)
+                                .offset(y: -34)
                             )
                             .opacity(hasConfiguredWindowChrome ? 1 : 0)
                             .animation(nil, value: hasConfiguredWindowChrome)
@@ -492,8 +498,10 @@ private struct OnboardingIntroView: View {
     let onGetStarted: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var iconScale: CGFloat = 0.9
+    @State private var iconScale: CGFloat = 0.78
     @State private var iconOpacity: Double = 0
+    @State private var iconBlur: CGFloat = 12
+    @State private var glowOpacity: Double = 0
     @State private var textOpacity: Double = 0
     @State private var textOffset: CGFloat = 14
     @State private var glowRadius: CGFloat = 28
@@ -501,6 +509,7 @@ private struct OnboardingIntroView: View {
     @State private var ambientMotionActive = false
     @State private var ambientMotionGeneration = 0
     @State private var isHoveringButton = false
+    @State private var hoverExitDebounceGeneration = 0
     @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
@@ -543,7 +552,7 @@ private struct OnboardingIntroView: View {
                             .fill(SortyDesignSystem.Colors.resolvedAccent.opacity(0.30))
                             .frame(width: 220, height: 220)
                             .blur(radius: glowRadius)
-                            .opacity(iconOpacity)
+                            .opacity(glowOpacity)
 
                         Image(nsImage: NSApp.applicationIconImage)
                             .resizable()
@@ -552,6 +561,7 @@ private struct OnboardingIntroView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
                             .shadow(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), radius: 34, x: 0, y: 0)
                             .shadow(color: .black.opacity(0.28), radius: 26, x: 0, y: 16)
+                            .blur(radius: iconBlur)
                             .accessibilityHidden(true)
                     }
                     .scaleEffect(iconScale)
@@ -585,9 +595,10 @@ private struct OnboardingIntroView: View {
                     }
 
                     if hovering {
+                        hoverExitDebounceGeneration += 1
                         stopAmbientMotion()
                     } else {
-                        beginAmbientMotionWindow(seconds: 4)
+                        releaseFileCollapseAfterGracePeriod()
                     }
                 }
                 .scaleEffect(isHoveringButton ? 1.035 : 1)
@@ -601,27 +612,48 @@ private struct OnboardingIntroView: View {
         .onAppear {
             audio.startBackgroundMelody()
 
-            withAnimation(reduceMotion ? nil : .spring(response: 0.7, dampingFraction: 0.84)) {
+            // Smooth fade-in for the icon. Springs feel jittery on opacity,
+            // so we drive opacity + blur with eases and reserve the spring
+            // for scale only. The icon resolves out of a soft blur, which
+            // reads as a graceful materialization instead of a jerky pop.
+            if reduceMotion {
                 iconScale = 1
                 iconOpacity = 1
-            }
-
-            if !reduceMotion {
-                withAnimation(.easeInOut(duration: 1.1)) {
-                    glowRadius = 46
+                iconBlur = 0
+                glowOpacity = 1
+                textOpacity = 1
+                textOffset = 0
+            } else {
+                withAnimation(.easeOut(duration: 0.95)) {
+                    iconOpacity = 1
+                    iconBlur = 0
                 }
 
+                withAnimation(.spring(response: 0.95, dampingFraction: 0.86)) {
+                    iconScale = 1
+                }
+
+                withAnimation(.easeOut(duration: 1.2).delay(0.10)) {
+                    glowOpacity = 1
+                }
+
+                // Slow "breathing" glow that blooms once after the icon
+                // settles, then eases back — no harder than the eye can
+                // follow, no overshoot.
+                withAnimation(.easeInOut(duration: 1.4).delay(0.45)) {
+                    glowRadius = 46
+                }
                 Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(1.1))
-                    withAnimation(.easeInOut(duration: 1.3)) {
+                    try? await Task.sleep(for: .seconds(1.85))
+                    withAnimation(.easeInOut(duration: 1.6)) {
                         glowRadius = 38
                     }
                 }
-            }
 
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.7).delay(0.16)) {
-                textOpacity = 1
-                textOffset = 0
+                withAnimation(.easeOut(duration: 0.85).delay(0.32)) {
+                    textOpacity = 1
+                    textOffset = 0
+                }
             }
 
             filesAppeared = true
@@ -651,16 +683,27 @@ private struct OnboardingIntroView: View {
         ambientMotionActive = false
     }
 
+    private func releaseFileCollapseAfterGracePeriod() {
+        hoverExitDebounceGeneration += 1
+        let generation = hoverExitDebounceGeneration
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(420))
+            guard generation == hoverExitDebounceGeneration, !isHoveringButton else { return }
+            beginAmbientMotionWindow(seconds: 4)
+        }
+    }
+
     private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
         if isHoveringButton {
             return CGSize(width: file.collapseX, height: file.collapseY)
         }
 
         let orbitalAngle = phase * file.driftSpeed + file.driftPhase
-        let orbitalX = cos(orbitalAngle) * file.orbitWidth
-        let orbitalY = sin(orbitalAngle) * file.orbitHeight
-        let driftX = cos(phase * 0.38 + file.driftPhase) * file.driftRadius
-        let driftY = sin(phase * 0.31 + file.driftPhase) * file.driftRadius
+        let orbitalX = cos(orbitalAngle) * file.orbitWidth * 1.18
+        let orbitalY = sin(orbitalAngle) * file.orbitHeight * 1.22
+        let driftX = cos(phase * 0.42 + file.driftPhase) * file.driftRadius * 1.28
+        let driftY = sin(phase * 0.35 + file.driftPhase) * file.driftRadius * 1.32
         return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
     }
 }
@@ -686,17 +729,20 @@ private struct OnboardingOrbitFile: Identifiable {
     let collapseX: CGFloat
     let collapseY: CGFloat
 
+    // Roughly 2.5–3× larger orbits and drift radii than before, plus more
+    // varied phase/speed so the cloud feels alive instead of just twitching
+    // in place.
     static let files: [OnboardingOrbitFile] = [
-        OnboardingOrbitFile(name: "Q3 Report", ext: "pdf", baseX: -292, baseY: -118, driftPhase: 0.0, driftSpeed: 0.42, driftRadius: 7, orbitWidth: 30, orbitHeight: 16, rotation: -13, scale: 1.04, appearDelay: 0.05, collapseX: -30, collapseY: -18),
-        OnboardingOrbitFile(name: "Budget 2024", ext: "xlsx", baseX: 286, baseY: -104, driftPhase: 1.3, driftSpeed: 0.5, driftRadius: 6, orbitWidth: 26, orbitHeight: 18, rotation: 11, scale: 0.96, appearDelay: 0.12, collapseX: 26, collapseY: -22),
-        OnboardingOrbitFile(name: "vacation", ext: "jpg", baseX: -244, baseY: 118, driftPhase: 2.1, driftSpeed: 0.46, driftRadius: 8, orbitWidth: 28, orbitHeight: 20, rotation: 8, scale: 1.1, appearDelay: 0.18, collapseX: -34, collapseY: 14),
-        OnboardingOrbitFile(name: "Resume", ext: "docx", baseX: 242, baseY: 132, driftPhase: 3.4, driftSpeed: 0.4, driftRadius: 7, orbitWidth: 32, orbitHeight: 16, rotation: -9, scale: 1.0, appearDelay: 0.24, collapseX: 30, collapseY: 20),
-        OnboardingOrbitFile(name: "demo", ext: "mp4", baseX: -344, baseY: 8, driftPhase: 0.7, driftSpeed: 0.54, driftRadius: 6, orbitWidth: 24, orbitHeight: 14, rotation: 6, scale: 0.92, appearDelay: 0.3, collapseX: -44, collapseY: 0),
-        OnboardingOrbitFile(name: "Keynote", ext: "key", baseX: 350, baseY: 24, driftPhase: 4.2, driftSpeed: 0.44, driftRadius: 8, orbitWidth: 28, orbitHeight: 18, rotation: -7, scale: 0.94, appearDelay: 0.36, collapseX: 44, collapseY: 4),
-        OnboardingOrbitFile(name: "logo", ext: "png", baseX: -142, baseY: -194, driftPhase: 5.0, driftSpeed: 0.48, driftRadius: 7, orbitWidth: 24, orbitHeight: 14, rotation: 14, scale: 0.88, appearDelay: 0.1, collapseX: -16, collapseY: -28),
-        OnboardingOrbitFile(name: "playlist", ext: "mp3", baseX: 152, baseY: -198, driftPhase: 2.7, driftSpeed: 0.52, driftRadius: 7, orbitWidth: 24, orbitHeight: 16, rotation: -12, scale: 0.9, appearDelay: 0.16, collapseX: 18, collapseY: -30),
-        OnboardingOrbitFile(name: "data", ext: "csv", baseX: -126, baseY: 194, driftPhase: 1.8, driftSpeed: 0.43, driftRadius: 6, orbitWidth: 22, orbitHeight: 14, rotation: -5, scale: 0.86, appearDelay: 0.22, collapseX: -14, collapseY: 26),
-        OnboardingOrbitFile(name: "archive", ext: "zip", baseX: 128, baseY: 204, driftPhase: 3.9, driftSpeed: 0.5, driftRadius: 8, orbitWidth: 24, orbitHeight: 16, rotation: 10, scale: 0.9, appearDelay: 0.28, collapseX: 16, collapseY: 28)
+        OnboardingOrbitFile(name: "Q3 Report", ext: "pdf", baseX: -292, baseY: -118, driftPhase: 0.0, driftSpeed: 0.62, driftRadius: 22, orbitWidth: 84, orbitHeight: 46, rotation: -13, scale: 1.04, appearDelay: 0.05, collapseX: -30, collapseY: -18),
+        OnboardingOrbitFile(name: "Budget 2024", ext: "xlsx", baseX: 286, baseY: -104, driftPhase: 1.3, driftSpeed: 0.74, driftRadius: 20, orbitWidth: 72, orbitHeight: 52, rotation: 11, scale: 0.96, appearDelay: 0.12, collapseX: 26, collapseY: -22),
+        OnboardingOrbitFile(name: "vacation", ext: "jpg", baseX: -244, baseY: 118, driftPhase: 2.1, driftSpeed: 0.68, driftRadius: 24, orbitWidth: 78, orbitHeight: 56, rotation: 8, scale: 1.1, appearDelay: 0.18, collapseX: -34, collapseY: 14),
+        OnboardingOrbitFile(name: "Resume", ext: "docx", baseX: 242, baseY: 132, driftPhase: 3.4, driftSpeed: 0.58, driftRadius: 22, orbitWidth: 90, orbitHeight: 48, rotation: -9, scale: 1.0, appearDelay: 0.24, collapseX: 30, collapseY: 20),
+        OnboardingOrbitFile(name: "demo", ext: "mp4", baseX: -344, baseY: 8, driftPhase: 0.7, driftSpeed: 0.80, driftRadius: 20, orbitWidth: 68, orbitHeight: 42, rotation: 6, scale: 0.92, appearDelay: 0.3, collapseX: -44, collapseY: 0),
+        OnboardingOrbitFile(name: "Keynote", ext: "key", baseX: 350, baseY: 24, driftPhase: 4.2, driftSpeed: 0.66, driftRadius: 24, orbitWidth: 80, orbitHeight: 52, rotation: -7, scale: 0.94, appearDelay: 0.36, collapseX: 44, collapseY: 4),
+        OnboardingOrbitFile(name: "logo", ext: "png", baseX: -142, baseY: -194, driftPhase: 5.0, driftSpeed: 0.72, driftRadius: 22, orbitWidth: 68, orbitHeight: 42, rotation: 14, scale: 0.88, appearDelay: 0.1, collapseX: -16, collapseY: -28),
+        OnboardingOrbitFile(name: "playlist", ext: "mp3", baseX: 152, baseY: -198, driftPhase: 2.7, driftSpeed: 0.78, driftRadius: 22, orbitWidth: 70, orbitHeight: 48, rotation: -12, scale: 0.9, appearDelay: 0.16, collapseX: 18, collapseY: -30),
+        OnboardingOrbitFile(name: "data", ext: "csv", baseX: -126, baseY: 194, driftPhase: 1.8, driftSpeed: 0.64, driftRadius: 20, orbitWidth: 64, orbitHeight: 42, rotation: -5, scale: 0.86, appearDelay: 0.22, collapseX: -14, collapseY: 26),
+        OnboardingOrbitFile(name: "archive", ext: "zip", baseX: 128, baseY: 204, driftPhase: 3.9, driftSpeed: 0.76, driftRadius: 24, orbitWidth: 70, orbitHeight: 48, rotation: 10, scale: 0.9, appearDelay: 0.28, collapseX: 16, collapseY: 28)
     ]
 }
 
@@ -752,7 +798,7 @@ private struct OnboardingOrbitFileChip: View {
     }
 }
 
-private struct OnboardingBottomGradient: View {
+struct OnboardingBottomGradient: View {
     @Environment(\.colorScheme) private var colorScheme
 
     /// 0 = gradient hugs the bottom edge, 1 = gradient reaches near the top.
@@ -978,7 +1024,13 @@ struct OnboardingProgressBar: View {
                             )
                             .frame(width: 24, height: 24)
 
-                        if step.rawValue < currentStep.rawValue {
+                        // Treat the completion step as "done" the moment the user lands on it,
+                        // so the final step badge celebrates rather than looking like an
+                        // unfinished number sitting next to a row of checkmarks.
+                        let isComplete = step.rawValue < currentStep.rawValue
+                            || (currentStep == .completion && step == .completion)
+
+                        if isComplete {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(.white)
