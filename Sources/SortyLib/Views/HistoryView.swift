@@ -539,7 +539,8 @@ struct HistoryHeader: View {
             }
         }
         .padding(.horizontal, showsControls ? 28 : 32)
-        .padding(.vertical, showsControls ? 10 : 0)
+        .padding(.top, showsControls ? 10 : 24)
+        .padding(.bottom, showsControls ? 10 : 0)
         .background {
             if showsControls {
                 Rectangle().fill(.bar)
