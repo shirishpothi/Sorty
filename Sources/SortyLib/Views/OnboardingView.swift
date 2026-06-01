@@ -807,16 +807,17 @@ struct OnboardingBottomGradient: View {
 
     var body: some View {
         let clamped = max(0, min(1, progress))
-        // Let the accent grow through the flow, then settle into a single,
-        // centered completion glow behind the final call to action.
+        // Let the accent grow through the flow, then settle into a single
+        // rose field on completion with the strongest color around the final
+        // call to action.
         let completion = clamped * clamped
-        let linearEnd = UnitPoint(x: 0.5, y: 0.66 - clamped * 0.44)
-        let radialCenter = UnitPoint(x: 0.5, y: 1.04 - clamped * 0.24)
-        let radialEnd = 620 + completion * 520
-        let intensity = 0.92 + completion * 0.2
-        let bottomOpacity = colorScheme == .dark ? 0.30 : 0.40
-        let midOpacity = colorScheme == .dark ? 0.13 : 0.17
-        let glowOpacity = colorScheme == .dark ? 0.22 : 0.28
+        let linearEnd = UnitPoint(x: 0.5, y: 0.68 - clamped * 0.56)
+        let radialCenter = UnitPoint(x: 0.5, y: 1.02 - clamped * 0.18)
+        let radialEnd = 680 + completion * 560
+        let intensity = 0.98 + completion * 0.28
+        let bottomOpacity = colorScheme == .dark ? 0.42 : 0.52
+        let midOpacity = colorScheme == .dark ? 0.22 : 0.28
+        let glowOpacity = colorScheme == .dark ? 0.28 : 0.36
 
         return ZStack(alignment: .bottom) {
             if showsBaseColor {
@@ -833,10 +834,20 @@ struct OnboardingBottomGradient: View {
                 endPoint: linearEnd
             )
 
+            LinearGradient(
+                stops: [
+                    .init(color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.10), location: 0.00),
+                    .init(color: Color.black.opacity(colorScheme == .dark ? 0.04 : 0.02), location: 0.32),
+                    .init(color: Color.clear, location: 0.64)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
             RadialGradient(
                 stops: [
                     .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(glowOpacity * intensity), location: 0.00),
-                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.10 * intensity), location: 0.46),
+                    .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.16 * intensity), location: 0.42),
                     .init(color: Color.clear, location: 1.00)
                 ],
                 center: radialCenter,
