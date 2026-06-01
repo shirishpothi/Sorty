@@ -2,160 +2,309 @@
 //  HelpSettingsView.swift
 //  Sorty
 //
-//  Consolidated Help & Support section within Settings
+//  Help, support, and deeplink settings pages
 //
 
 import AppKit
 import SwiftUI
 
 struct HelpSettingsView: View {
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var viewModel: SettingsViewModel
 
-    private var deeplinkEntries: [DeeplinkEntry] {
-        var entries = [
-            DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
-            DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files view with an optional path and autostart."),
-            DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear."),
-            DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
-            DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support destination with optional section."),
-            DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
-            DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history."),
-            DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Create/select persona flows with optional generation prompt."),
-            DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
-            DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions flow with optional add action and pattern."),
-            DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a new exclusion pattern."),
-            DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path."),
-            DeeplinkEntry(title: "Legacy Path", url: "sorty:///Users/me/Downloads", summary: "Legacy path-only deeplink supported for compatibility.")
-        ]
+    private let docsURL = URL(string: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md")!
+    private let issuesURL = URL(string: "https://github.com/shirishpothi/Sorty/issues")!
+    private let changelogURL = URL(string: "https://github.com/shirishpothi/Sorty/blob/main/CHANGELOG.md")!
+    private let developerURL = URL(string: "https://github.com/shirishpothi")!
 
-        if FeatureFlags.workspaceHealthEnabled {
-            entries.insert(DeeplinkEntry(title: "Workspace Health", url: "sorty://health", summary: "Open workspace health."), at: 7)
-            entries.insert(DeeplinkEntry(title: "Scan", url: "sorty://scan?path=/Users/me/Downloads", summary: "Open workspace-health scan target for a folder."), at: 13)
-        }
+    @State private var copiedIssueDetails = false
 
-        return entries
-    }
-    
     var body: some View {
         VStack(spacing: 20) {
-            // Section 1: The Basics
-            SettingsCard(title: "The Basics", icon: "star.fill", color: .yellow) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("New to Sorty? Here's the essential workflow to get your files organized in seconds.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    HelpBulletPoint(icon: "1.circle.fill", text: "Select a folder using ⌘O or drag-and-drop.")
-                    HelpBulletPoint(icon: "2.circle.fill", text: "Choose a Persona that matches your file types.")
-                    HelpBulletPoint(icon: "3.circle.fill", text: "Preview the AI's plan and apply changes.")
-                    
-                    Button {
-                        appState.showOnboarding()
-                    } label: {
-                        Label("Re-run Welcome Guide", systemImage: "hand.wave")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.onboardingPill)
-                    .padding(.top, 4)
-                }
-            }
-            .animatedAppearance(delay: 0.1)
-            
-            // Section 2: Privacy & App Info
-            SettingsCard(title: "Privacy & Support", icon: "lock.shield.fill", color: .green) {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Links row
-                    HStack(spacing: 0) {
+            SettingsCard(title: "Support", icon: "questionmark.circle.fill", color: .teal) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
                         HelpIconLink(
                             title: "Documentation",
                             icon: "doc.text",
-                            url: "https://github.com/shirishpothi/Sorty/blob/main/HELP.md"
+                            color: .blue,
+                            url: docsURL
                         )
+
                         HelpIconLink(
                             title: "Report Issue",
                             icon: "exclamationmark.bubble",
-                            url: "https://github.com/shirishpothi/Sorty/issues"
+                            color: .red,
+                            url: issuesURL
                         )
+
                         HelpIconLink(
                             title: "View Changelog",
                             icon: "clock.arrow.circlepath",
-                            url: "https://github.com/shirishpothi/Sorty/blob/main/CHANGELOG.md"
+                            color: .purple,
+                            url: changelogURL
                         )
                     }
 
                     Divider()
 
-                    // Privacy blurb
-                    Text("Your privacy is our priority. Sorty never uploads your file contents to our servers—only metadata (names/types) is sent to your chosen AI provider.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    // Version & copyright
-                    HStack {
+                    HStack(alignment: .center, spacing: 12) {
                         Text("Sorty \(BuildInfo.version) (\(BuildInfo.build))")
                             .font(.subheadline.weight(.medium))
+
                         Spacer()
-                        Text("© 2024-2026 Shirish Pothi")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 8) {
+                            Text("Built by")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Button {
+                                open(developerURL)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    GitHubMarkIcon()
+                                    Text("Shirish Pothi")
+                                }
+                            }
+                            .buttonStyle(.sortyBordered(intent: .info, size: .small))
+                            .trackHoveredURL(developerURL)
+                        }
                     }
                 }
             }
-            .animatedAppearance(delay: 0.2)
+            .animatedAppearance(delay: 0.1)
 
-            SettingsCard(title: "Automation Deeplinks", icon: "link.badge.plus", color: .cyan) {
+            SettingsCard(title: "Issue Details", icon: "clipboard", color: .blue) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Use these `sorty://` URLs from Shortcuts, Raycast, AppleScript, or shell scripts to jump directly into specific Sorty workflows.")
+                    Text("Copy a ready-to-paste environment block for GitHub issues.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    LazyVGrid(columns: deeplinkColumns, alignment: .leading, spacing: 10) {
-                        ForEach(deeplinkEntries) { entry in
-                            DeeplinkEntryRow(entry: entry) { value in
-                                copyDeeplink(value)
-                            }
+                    HStack(spacing: 10) {
+                        SupportDetailChip(label: "App", value: BuildInfo.fullVersion)
+                        SupportDetailChip(label: "macOS", value: ProcessInfo.processInfo.operatingSystemVersionString)
+                        SupportDetailChip(label: "Arch", value: systemArchitecture)
+                    }
+
+                    Button {
+                        copyIssueDetails()
+                    } label: {
+                        Label(copiedIssueDetails ? "Copied Issue Details" : "Copy Issue Details", systemImage: copiedIssueDetails ? "checkmark" : "doc.on.doc")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.sortyProminent(intent: .info))
+                    .accessibilityIdentifier("CopyIssueDetailsButton")
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
                         }
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.16)
+        }
+    }
+
+    private func copyIssueDetails() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(issueDetailsText, forType: .string)
+        HapticFeedbackManager.shared.success()
+
+        withAnimation(.easeInOut(duration: 0.15)) {
+            copiedIssueDetails = true
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation(.easeInOut(duration: 0.15)) {
+                copiedIssueDetails = false
+            }
+        }
+    }
+
+    private func open(_ url: URL) {
+        HapticFeedbackManager.shared.tap()
+        NSWorkspace.shared.open(url)
+    }
+
+    private var issueDetailsText: String {
+        let processInfo = ProcessInfo.processInfo
+        let config = viewModel.config
+        let defaults = UserDefaults.standard
+        let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
+        let memory = ByteCountFormatter.string(fromByteCount: Int64(processInfo.physicalMemory), countStyle: .memory)
+        let appSupportPath = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Sorty")
+            .path ?? "unknown"
+        let cachesPath = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent(bundleID)
+            .path ?? "unknown"
+
+        return """
+        ### Environment
+        - Sorty: \(BuildInfo.fullVersion)
+        - Commit: \(BuildInfo.shortCommit)
+        - Bundle ID: \(bundleID)
+        - Bundle path: \(Bundle.main.bundlePath)
+
+        ### System
+        - macOS: \(processInfo.operatingSystemVersionString)
+        - Architecture: \(systemArchitecture)
+        - CPU cores: \(processInfo.activeProcessorCount)
+        - Memory: \(memory)
+        - Locale: \(Locale.current.identifier)
+
+        ### AI Configuration
+        - Provider: \(config.provider.displayName)
+        - Model: \(config.model.isEmpty ? config.provider.defaultModel : config.model)
+        - Auth method: \(config.authMethod(for: config.provider).displayName)
+        - API URL configured: \(yesNo(config.apiURL?.isEmpty == false))
+        - Requires API key: \(yesNo(config.requiresAPIKey))
+        - Mode: \(config.mode.displayName)
+        - Deep scan: \(yesNo(config.enableDeepScan))
+        - Vision: \(yesNo(config.enableVision))
+        - Vision detail: \(config.effectiveVisionDetailLevel.displayName)
+        - Vision batch: \(config.limitVisionImages ? "\(config.visionBatchStrategy.displayName), max \(config.visionBatchSize)" : "All images")
+        - Smart rename: \(yesNo(config.enableSmartRename))
+        - Duplicate detection: \(yesNo(config.detectDuplicates))
+        - File tagging: \(yesNo(config.enableFileTagging))
+        - Strict exclusions: \(yesNo(config.strictExclusions))
+        - Streaming: \(yesNo(config.enableStreaming))
+        - Reasoning: \(yesNo(config.enableReasoning))
+        - Request timeout: \(Int(config.requestTimeout))s
+        - Resource timeout: \(Int(config.resourceTimeout))s
+
+        ### App Settings
+        - Privacy mode: \(yesNo(defaults.bool(forKey: "privacyModeEnabled")))
+        - Internet privacy mode: \(yesNo(FeatureFlags.internetPrivacyModeEnabled))
+        - Workspace Health: \(yesNo(FeatureFlags.workspaceHealthEnabled))
+        - Menu bar extra: \(yesNo(defaults.object(forKey: "showMenuBarExtra") as? Bool ?? true))
+        - Completed onboarding: \(yesNo(defaults.bool(forKey: "hasCompletedOnboarding")))
+        - App support path: \(appSupportPath)
+        - Caches path: \(cachesPath)
+        """
+    }
+
+    private func yesNo(_ value: Bool) -> String {
+        value ? "Yes" : "No"
+    }
+
+    private var systemArchitecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
+    }
+}
+
+private struct GitHubMarkIcon: View {
+    var body: some View {
+        if let image = NSImage(named: NSImage.Name("GitHub")) {
+            Image(nsImage: image)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 18, height: 18)
+                .foregroundStyle(.primary)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 18, height: 18)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+struct DeeplinkSettingsView: View {
+    private var groups: [DeeplinkGroup] {
+        var organizationEntries = [
+            DeeplinkEntry(title: "Organize Folder", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Open Organize with an optional path, persona, mode, and autostart."),
+            DeeplinkEntry(title: "Duplicates", url: "sorty://duplicates?path=/Users/me/Downloads&autostart=true", summary: "Open Duplicate Files with an optional path and autostart."),
+            DeeplinkEntry(title: "Storage", url: "sorty://storage?action=add&path=/Volumes/Archive", summary: "Open storage locations and optionally add a path.")
+        ]
+
+        if FeatureFlags.workspaceHealthEnabled {
+            organizationEntries.append(
+                DeeplinkEntry(title: "Workspace Health", url: "sorty://health", summary: "Open Workspace Health.")
+            )
+            organizationEntries.append(
+                DeeplinkEntry(title: "Scan Folder", url: "sorty://scan?path=/Users/me/Downloads", summary: "Open Workspace Health scan for a folder.")
+            )
+        }
+
+        return [
+            DeeplinkGroup(
+                title: "Core",
+                icon: "app.badge",
+                color: .blue,
+                entries: [
+                    DeeplinkEntry(title: "Open App", url: "sorty://open?path=/Users/me/Downloads", summary: "Bring Sorty to front and optionally preload a directory."),
+                    DeeplinkEntry(title: "Settings", url: "sorty://settings?section=notifications", summary: "Open Settings and optionally jump to a section."),
+                    DeeplinkEntry(title: "Help", url: "sorty://help?section=personas", summary: "Open help/support with an optional section."),
+                    DeeplinkEntry(title: "History", url: "sorty://history", summary: "Open organization history.")
+                ]
+            ),
+            DeeplinkGroup(
+                title: "Organization",
+                icon: "folder.badge.gearshape",
+                color: .green,
+                entries: organizationEntries
+            ),
+            DeeplinkGroup(
+                title: "Automation",
+                icon: "bolt.circle",
+                color: .orange,
+                entries: [
+                    DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
+                    DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule."),
+                    DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a pattern."),
+                    DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Open persona create/select flows with optional generation."),
+                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear.")
+                ]
+            ),
+            DeeplinkGroup(
+                title: "Compatibility",
+                icon: "arrow.triangle.2.circlepath",
+                color: .secondary,
+                entries: [
+                    DeeplinkEntry(title: "Legacy Path", url: "sorty:///Users/me/Downloads", summary: "Legacy path-only deeplink for older launchers.")
+                ]
+            )
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "link")
+                    .foregroundStyle(.cyan)
+                    .accessibilityHidden(true)
+                Text("Use these `sorty://` URLs from Shortcuts, Raycast, AppleScript, shell scripts, or other launchers.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            SettingsCard(title: "Deeplink Library", icon: "link.badge.plus", color: .cyan) {
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(groups) { group in
+                        DeeplinkGroupSection(group: group)
                     }
 
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "info.circle")
                             .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
                         Text("URL-encode `path` and `prompt` values when generating links programmatically.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 2)
                 }
             }
-            .animatedAppearance(delay: 0.26)
-        }
-    }
-
-    private func copyDeeplink(_ value: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(value, forType: .string)
-        HapticFeedbackManager.shared.selection()
-    }
-
-    private var deeplinkColumns: [GridItem] {
-        [
-            GridItem(.adaptive(minimum: 210, maximum: 280), spacing: 10, alignment: .top)
-        ]
-    }
-}
-
-// MARK: - Components
-
-private struct HelpBulletPoint: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon)
-                .foregroundColor(.accentColor)
-            Text(text)
-                .font(.subheadline)
         }
     }
 }
@@ -163,28 +312,38 @@ private struct HelpBulletPoint: View {
 private struct HelpIconLink: View {
     let title: String
     let icon: String
-    let url: String
+    let color: Color
+    let url: URL
 
     @State private var isHovered = false
 
     var body: some View {
-        Link(destination: URL(string: url)!) {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            NSWorkspace.shared.open(url)
+        } label: {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.title3)
-                    .foregroundStyle(isHovered ? Color.accentColor : .secondary)
+                    .foregroundStyle(isHovered ? color : .secondary)
                 Text(title)
-                    .font(.caption2)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(isHovered ? .primary : .secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 58)
             .padding(.vertical, 8)
-            .background(isHovered ? Color.primary.opacity(0.04) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(isHovered ? color.opacity(0.14) : Color.secondary.opacity(0.045))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isHovered ? color.opacity(0.32) : Color.secondary.opacity(0.08), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .trackHoveredURL(url)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovered = hovering
@@ -193,10 +352,39 @@ private struct HelpIconLink: View {
                 HapticFeedbackManager.shared.selection()
             }
         }
-        .simultaneousGesture(TapGesture().onEnded {
-            HapticFeedbackManager.shared.tap()
-        })
     }
+}
+
+private struct SupportDetailChip: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct DeeplinkGroup: Identifiable {
+    let title: String
+    let icon: String
+    let color: Color
+    let entries: [DeeplinkEntry]
+
+    var id: String { title }
 }
 
 private struct DeeplinkEntry: Identifiable {
@@ -207,66 +395,108 @@ private struct DeeplinkEntry: Identifiable {
     var id: String { url }
 }
 
-private struct DeeplinkEntryRow: View {
-    let entry: DeeplinkEntry
-    let onCopy: (String) -> Void
-
-    @State private var isHovered = false
+private struct DeeplinkGroupSection: View {
+    let group: DeeplinkGroup
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
-                Text(entry.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Spacer()
-                Button {
-                    onCopy(entry.url)
-                } label: {
-                    Image(systemName: "doc.on.doc")
-                        .font(.caption.weight(.semibold))
+        VStack(alignment: .leading, spacing: 9) {
+            Label(group.title, systemImage: group.icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(group.color)
+
+            VStack(spacing: 0) {
+                ForEach(group.entries) { entry in
+                    DeeplinkEntryRow(entry: entry, color: group.color)
+
+                    if entry.id != group.entries.last?.id {
+                        Divider()
+                            .padding(.leading, 116)
+                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(isHovered ? Color.accentColor : .secondary)
-                .help("Copy \(entry.title) deeplink")
-                .accessibilityLabel("Copy \(entry.title) deeplink")
             }
+            .background(Color.secondary.opacity(0.045))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.08), lineWidth: 1)
+            )
+        }
+    }
+}
+
+private struct DeeplinkEntryRow: View {
+    let entry: DeeplinkEntry
+    let color: Color
+
+    @State private var copied = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Text(entry.summary)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(width: 104, alignment: .leading)
 
             Text(entry.url)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(color)
                 .lineLimit(2)
                 .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(entry.summary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(3)
+            Button {
+                copy(entry.url)
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(copied ? .green : color)
+                    .frame(width: 24, height: 24)
+            }
+            .buttonStyle(.plain)
+            .help("Copy \(entry.title) deeplink")
+            .accessibilityLabel("Copy \(entry.title) deeplink")
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(isHovered ? 0.055 : 0.035))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(isHovered ? 0.12 : 0.07), lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+    }
+
+    private func copy(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+        HapticFeedbackManager.shared.tap()
+
+        withAnimation(.easeInOut(duration: 0.12)) {
+            copied = true
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_250_000_000)
+            withAnimation(.easeInOut(duration: 0.12)) {
+                copied = false
             }
         }
     }
 }
 
-#Preview {
+#Preview("Help & Support") {
     ScrollView {
         HelpSettingsView()
             .padding()
-            .environmentObject(AppState())
+            .environmentObject(SettingsViewModel())
     }
-    .frame(width: 500)
+    .frame(width: 560)
+}
+
+#Preview("Deeplinks") {
+    ScrollView {
+        DeeplinkSettingsView()
+            .padding()
+    }
+    .frame(width: 620)
 }

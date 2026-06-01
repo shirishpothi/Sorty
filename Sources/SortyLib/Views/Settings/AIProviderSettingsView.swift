@@ -9,9 +9,8 @@ import SwiftUI
 
 struct AIProviderSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var copilotAuth = GitHubCopilotAuthManager.shared
-    
+
     @State private var testConnectionStatus: String?
     @State private var testConnectionDetails: String?
     @State private var isTestingConnection = false
@@ -19,25 +18,48 @@ struct AIProviderSettingsView: View {
     @State private var showModelPicker = false
     @State private var isHoveringUsername = false
     @State private var isDetailsExpanded = false
-    @State private var showAdvancedProviderChoices = false
-    
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 16) {
-                providerSelectionSection
-                    .frame(minWidth: 420, maxWidth: .infinity, alignment: .top)
-                    .animatedAppearance(delay: 0.05)
 
-                configurationRail
-                    .frame(width: 360)
+    var body: some View {
+        VStack(spacing: 16) {
+            // Provider Selection
+            SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
+                VStack(spacing: 8) {
+                    ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
+                        AIProviderRow(
+                            provider: provider,
+                            isSelected: viewModel.config.provider == provider,
+                            action: {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    viewModel.config.provider = provider
+                                    if let defaultURL = provider.defaultAPIURL {
+                                        viewModel.config.apiURL = defaultURL
+                                    }
+                                    viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
+                                    HapticFeedbackManager.shared.selection()
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.05)
+
+            // Provider-specific configuration
+            if viewModel.config.provider == .githubCopilot {
+                copilotConfigSection
+                    .animatedAppearance(delay: 0.1)
+            } else if viewModel.config.provider == .appleFoundationModel {
+                appleConfigSection
+                    .animatedAppearance(delay: 0.1)
+            } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
+                apiConfigSection
                     .animatedAppearance(delay: 0.1)
             }
 
-            VStack(spacing: 16) {
-                providerSelectionSection
-                    .animatedAppearance(delay: 0.05)
-                configurationRail
-                    .animatedAppearance(delay: 0.1)
+            // Connection Test
+            if [.openAI, .githubCopilot, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini, .appleFoundationModel].contains(viewModel.config.provider) {
+                connectionSection
+                    .animatedAppearance(delay: 0.15)
             }
         }
         .onAppear {
@@ -61,329 +83,31 @@ struct AIProviderSettingsView: View {
         )
     }
 
-    private var providerSelectionSection: some View {
-        SettingsCard(title: "AI Provider", icon: "cpu", color: .purple) {
-            VStack(alignment: .leading, spacing: 14) {
-                selectedProviderHeadline
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Choose the path that fits how you want Sorty to connect.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(spacing: 8) {
-                        ForEach(recommendedProviderChoices) { choice in
-                            ProviderChoiceCard(
-                                choice: choice,
-                                selectedProvider: viewModel.config.provider,
-                                action: { selectProvider(choice.provider) }
-                            )
-                        }
-                    }
-                }
-
-                DisclosureGroup(isExpanded: $showAdvancedProviderChoices) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Use this when you already know the exact service or endpoint you want.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        ForEach(providerGroups) { group in
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(group.title)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                    .textCase(.uppercase)
-
-                                VStack(spacing: 8) {
-                                    ForEach(group.providers, id: \.self) { provider in
-                                        AIProviderRow(
-                                            provider: provider,
-                                            isSelected: viewModel.config.provider == provider,
-                                            action: { selectProvider(provider) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
-                } label: {
-                    Text("Show all providers")
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-        }
-    }
-
-    private var selectedProviderHeadline: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ProviderLogoView(provider: viewModel.config.provider, size: 26)
-                .frame(width: 40, height: 40)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(viewModel.config.provider.brandColor.opacity(0.12))
-                )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(viewModel.config.provider.displayName)
-                    .font(.headline)
-                Text(viewModel.config.provider.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 8)
-
-            ProviderSetupBadge(summary: setupSummary)
-        }
-        .padding(12)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(viewModel.config.provider.displayName), \(setupSummary.title)")
-    }
-
-    private var configurationRail: some View {
-        VStack(spacing: 16) {
-            currentSetupSection
-            providerConfigurationSection
-            connectionSection
-        }
-    }
-
-    @ViewBuilder
-    private var providerConfigurationSection: some View {
-        if viewModel.config.provider == .githubCopilot {
-            copilotConfigSection
-        } else if viewModel.config.provider == .appleFoundationModel {
-            appleConfigSection
-        } else if [.openAI, .groq, .openAICompatible, .openRouter, .anthropic, .ollama, .gemini].contains(viewModel.config.provider) {
-            apiConfigSection
-        }
-    }
-
-    private var currentSetupSection: some View {
-        SettingsCard(title: "Current Setup", icon: setupSummary.icon, color: setupSummary.color) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: setupSummary.icon)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(setupSummary.color)
-                        .frame(width: 24, height: 24)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(setupSummary.title)
-                            .font(.subheadline.weight(.semibold))
-                        Text(setupSummary.message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 0)
-                }
-
-                Divider()
-
-                VStack(spacing: 9) {
-                    SetupSummaryRow(icon: "cube", title: "Model", value: selectedModelDisplayName)
-
-                    if let endpoint = selectedEndpointDisplayName {
-                        SetupSummaryRow(icon: "network", title: "Endpoint", value: endpoint)
-                    }
-
-                    SetupSummaryRow(icon: "key", title: "Credential", value: credentialDisplayName)
-                }
-            }
-        }
-    }
-
-    private var providerGroups: [AIProviderSettingsGroup] {
-        let available = Set(AIProvider.userSelectableProviders)
-        return [
-            AIProviderSettingsGroup(
-                title: "Best starting points",
-                providers: [.openAI, .githubCopilot, .anthropic, .gemini].filter { available.contains($0) }
-            ),
-            AIProviderSettingsGroup(
-                title: "Speed and breadth",
-                providers: [.groq, .openRouter, .openAICompatible].filter { available.contains($0) }
-            ),
-            AIProviderSettingsGroup(
-                title: "Local and on-device",
-                providers: [.ollama, .appleFoundationModel].filter { available.contains($0) }
-            )
-        ]
-        .filter { !$0.providers.isEmpty }
-    }
-
-    private var recommendedProviderChoices: [AIProviderChoice] {
-        let available = Set(AIProvider.userSelectableProviders)
-        return [
-            AIProviderChoice(
-                title: "I have a ChatGPT or OpenAI key",
-                subtitle: "Best default for quality and low setup friction.",
-                provider: .openAI,
-                icon: "sparkles"
-            ),
-            AIProviderChoice(
-                title: "I want to use an existing subscription",
-                subtitle: "Connect GitHub Copilot instead of managing an API key here.",
-                provider: .githubCopilot,
-                icon: "person.badge.key.fill"
-            ),
-            AIProviderChoice(
-                title: "I want local or custom models",
-                subtitle: "Use Ollama for local models, or expand all providers for custom endpoints.",
-                provider: .ollama,
-                icon: "desktopcomputer"
-            )
-        ]
-        .filter { available.contains($0.provider) }
-    }
-
-    private var setupSummary: AIProviderSetupSummary {
-        let provider = viewModel.config.provider
-
-        if provider == .githubCopilot, !copilotAuth.isAuthenticated {
-            return AIProviderSetupSummary(
-                title: "Sign-in required",
-                message: "Connect GitHub before Sorty can use Copilot models.",
-                icon: "person.badge.key.fill",
-                color: .orange,
-                isReady: false
-            )
-        }
-
-        if provider == .appleFoundationModel, !viewModel.isAppleModelAvailable {
-            return AIProviderSetupSummary(
-                title: "Unavailable",
-                message: viewModel.appleModelStatus.isEmpty
-                    ? "Apple Foundation Model is not available on this Mac."
-                    : viewModel.appleModelStatus,
-                icon: "exclamationmark.triangle.fill",
-                color: .orange,
-                isReady: false
-            )
-        }
-
-        if requiresEditableEndpoint(provider),
-           (viewModel.config.apiURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return AIProviderSetupSummary(
-                title: "Endpoint required",
-                message: "Add the API URL before testing this provider.",
-                icon: "network.badge.shield.half.filled",
-                color: .orange,
-                isReady: false
-            )
-        }
-
-        if !ProviderAuthResolver.hasRequiredCredential(for: provider, config: viewModel.config) {
-            return AIProviderSetupSummary(
-                title: "Credential required",
-                message: "Add credentials before testing this provider.",
-                icon: "key.fill",
-                color: .orange,
-                isReady: false
-            )
-        }
-
-        return AIProviderSetupSummary(
-            title: "Ready to test",
-            message: "\(provider.displayName) has the required setup.",
-            icon: "checkmark.shield.fill",
-            color: .green,
-            isReady: true
-        )
-    }
-
-    private var selectedModelDisplayName: String {
-        viewModel.config.model.isEmpty ? viewModel.config.provider.defaultModel : viewModel.config.model
-    }
-
-    private var selectedEndpointDisplayName: String? {
-        guard requiresEditableEndpoint(viewModel.config.provider) else { return nil }
-        return viewModel.config.apiURL ?? viewModel.config.provider.defaultAPIURL
-    }
-
-    private var credentialDisplayName: String {
-        let provider = viewModel.config.provider
-        let hasCredential = ProviderAuthResolver.hasRequiredCredential(for: provider, config: viewModel.config)
-
-        if provider == .githubCopilot {
-            return copilotAuth.isAuthenticated ? "GitHub signed in" : "Sign-in required"
-        }
-
-        if provider == .appleFoundationModel {
-            return "Not required"
-        }
-
-        if provider == .ollama && !viewModel.config.requiresAPIKey {
-            return "Not required"
-        }
-
-        if ProviderAuthResolver.effectiveAuthMethod(for: provider, config: viewModel.config) == .accountSignIn {
-            return hasCredential ? "Codex CLI signed in" : "Codex CLI sign-in required"
-        }
-
-        if !viewModel.config.requiresAPIKey {
-            return hasCredential ? "Optional key saved" : "Optional"
-        }
-
-        return hasCredential ? "API key saved" : "API key required"
-    }
-
-    private func requiresEditableEndpoint(_ provider: AIProvider) -> Bool {
-        [.openAICompatible, .ollama].contains(provider)
-    }
-
-    private func selectProvider(_ provider: AIProvider) {
-        let animation = reduceMotion ? nil : Animation.spring(response: 0.3, dampingFraction: 0.7)
-
-        withAnimation(animation) {
-            viewModel.config.provider = provider
-            if let defaultURL = provider.defaultAPIURL {
-                viewModel.config.apiURL = defaultURL
-            }
-            viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
-            HapticFeedbackManager.shared.selection()
-        }
-    }
-    
     private var copilotConfigSection: some View {
         SettingsCard(title: "GitHub Copilot", icon: "person.badge.key", color: .black) {
             if copilotAuth.isAuthenticated {
                 // Signed in state
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.green)
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.green)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Signed in")
-                                .font(.headline)
-                            if let username = copilotAuth.username {
-                                Text(username)
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                    .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
-                                    .animation(reduceMotion ? nil : .spring(), value: isHoveringUsername)
-                                    .onHover { hovering in
-                                        isHoveringUsername = hovering
-                                    }
-                            }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Signed in")
+                            .font(.headline)
+                        if let username = copilotAuth.username {
+                            Text(username)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .blur(radius: (FeatureFlags.privacyModeEnabled && !isHoveringUsername) ? 4 : 0)
+                                .animation(.spring(), value: isHoveringUsername)
+                                .onHover { hovering in
+                                    isHoveringUsername = hovering
+                                }
                         }
-
-                        Spacer()
-
-                        Button("Sign Out") {
-                            copilotAuth.signOut()
-                        }
-                        .buttonStyle(.sortyBordered)
                     }
+
+                    Spacer()
 
                     if !viewModel.availableModels.isEmpty {
                         ModelSelectorRow(
@@ -391,15 +115,16 @@ struct AIProviderSettingsView: View {
                             model: viewModel.config.model,
                             onTap: { showModelPicker = true }
                         )
+                        .frame(width: 220)
                         .modelSelectorTriggerBounds()
                     } else if viewModel.isLoadingModels {
-                        HStack(spacing: 8) {
-                            BouncingSpinner(size: 12, color: .secondary)
-                            Text("Loading models...")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        BouncingSpinner(size: 12, color: .secondary)
                     }
+
+                    Button("Sign Out") {
+                        copilotAuth.signOut()
+                    }
+                    .buttonStyle(.sortyBordered)
                 }
                 .onAppear {
                     viewModel.updateAvailableModels()
@@ -414,7 +139,7 @@ struct AIProviderSettingsView: View {
                                 .foregroundColor(.blue)
                         }
                     }
-                    
+
                     StepCard(number: 2, title: "Enter this code") {
                         HStack(spacing: 8) {
                             Text(code.userCode)
@@ -424,7 +149,7 @@ struct AIProviderSettingsView: View {
                                 .padding(.vertical, 8)
                                 .background(Color.secondary.opacity(0.1))
                                 .cornerRadius(8)
-                            
+
                             Button {
                                 let pasteboard = NSPasteboard.general
                                 pasteboard.clearContents()
@@ -442,7 +167,7 @@ struct AIProviderSettingsView: View {
                             .buttonStyle(.sortyBordered)
                         }
                     }
-                    
+
                     HStack(spacing: 8) {
                         BouncingSpinner(size: 10, color: .secondary)
                         Text("Waiting for authorization...")
@@ -456,7 +181,7 @@ struct AIProviderSettingsView: View {
                     Text("Sign in with GitHub to use Copilot models.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                    
+
                     Button {
                         Task { try? await copilotAuth.startDeviceFlow() }
                         HapticFeedbackManager.shared.tap()
@@ -469,15 +194,15 @@ struct AIProviderSettingsView: View {
                     }
                     .buttonStyle(.onboardingPill)
                     .tint(.black)
-                    
+
                     if let error = copilotAuth.authError {
                         Label(error, systemImage: "exclamationmark.triangle")
                             .foregroundColor(.red)
                             .font(.caption)
                     }
-                    
+
                     Divider()
-                    
+
                     Text("Requires an active GitHub Copilot subscription. This is an unofficial integration.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
@@ -485,7 +210,7 @@ struct AIProviderSettingsView: View {
             }
         }
     }
-    
+
     private var apiConfigSection: some View {
         SettingsCard(title: "API Configuration", icon: "key", color: .orange) {
             VStack(alignment: .leading, spacing: 12) {
@@ -499,7 +224,7 @@ struct AIProviderSettingsView: View {
                         placeholder: viewModel.config.provider == .ollama ? "http://localhost:11434/v1" : "https://api.openai.com"
                     )
                 }
-                
+
                 SettingsSecureField(
                     title: "API Key",
                     text: Binding(
@@ -508,7 +233,7 @@ struct AIProviderSettingsView: View {
                     ),
                     isOptional: !viewModel.config.requiresAPIKey
                 )
-                
+
                 if let url = viewModel.config.provider.apiKeyURL {
                     HStack(spacing: 4) {
                         Text(viewModel.config.provider == .ollama ? "Find Ollama models at" : "Get your API key from")
@@ -525,12 +250,12 @@ struct AIProviderSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Model")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+
                     ModelSelectorRow(
                         provider: viewModel.config.provider,
                         model: viewModel.config.model,
@@ -591,10 +316,10 @@ struct AIProviderSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
-                    
+
                     Divider()
                 }
-                
+
                 VStack(spacing: 12) {
                     Button(action: testConnection) {
                         HStack(spacing: 6) {
@@ -608,7 +333,7 @@ struct AIProviderSettingsView: View {
                     }
                     .buttonStyle(.sortyBordered)
                     .disabled(isTestingConnection || !viewModel.config.provider.isAvailable)
-                    
+
                     if let status = testConnectionStatus {
                         VStack(alignment: .center, spacing: 4) {
                             Label(
@@ -616,7 +341,7 @@ struct AIProviderSettingsView: View {
                                 systemImage: status.contains("Success") ? "checkmark.circle.fill" : "xmark.circle.fill"
                             )
                             .foregroundColor(status.contains("Success") ? .green : .red)
-                            
+
                             if !status.contains("Success") {
                                 HStack(alignment: .top, spacing: 6) {
                                     Text(status.replacingOccurrences(of: "Error: ", with: ""))
@@ -625,7 +350,7 @@ struct AIProviderSettingsView: View {
                                         .foregroundColor(.red)
                                         .fixedSize(horizontal: false, vertical: true)
                                         .textSelection(.enabled)
-                                    
+
                                     Button {
                                         let pb = NSPasteboard.general
                                         pb.clearContents()
@@ -640,7 +365,7 @@ struct AIProviderSettingsView: View {
                                     .help("Copy error message")
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)
-                                
+
                                 if let details = testConnectionDetails, !details.isEmpty {
                                     DisclosureGroup(isExpanded: $isDetailsExpanded) {
                                         Text(details)
@@ -676,7 +401,7 @@ struct AIProviderSettingsView: View {
             }
         }
     }
-    
+
     private func testConnection() {
         HapticFeedbackManager.shared.tap()
         isTestingConnection = true
@@ -724,7 +449,7 @@ struct AIProviderSettingsView: View {
                     } else {
                         details = (error as NSError).localizedFailureReason ?? (error as NSError).localizedRecoverySuggestion
                     }
-                    
+
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                         testConnectionStatus = "Error: \(error.localizedDescription)"
                         testConnectionDetails = details
@@ -743,156 +468,8 @@ struct AIProviderSettingsView: View {
     }
 }
 
-private struct AIProviderSettingsGroup: Identifiable {
-    let title: String
-    let providers: [AIProvider]
-
-    var id: String { title }
-}
-
-private struct AIProviderChoice: Identifiable {
-    let title: String
-    let subtitle: String
-    let provider: AIProvider
-    let icon: String
-
-    var id: AIProvider { provider }
-}
-
-private struct ProviderChoiceCard: View {
-    let choice: AIProviderChoice
-    let selectedProvider: AIProvider
-    let action: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
-
-    private var isSelected: Bool {
-        selectedProvider == choice.provider
-    }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(alignment: .top, spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(choice.provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
-
-                    Image(systemName: choice.icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(choice.provider.brandColor)
-                        .accessibilityHidden(true)
-                }
-                .frame(width: 36, height: 36)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(choice.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-
-                    Text(choice.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text(choice.provider.displayName)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(choice.provider.brandColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(choice.provider.brandColor.opacity(0.12), in: Capsule())
-                }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(isSelected ? choice.provider.brandColor : Color.secondary.opacity(0.55))
-                    .accessibilityHidden(true)
-            }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(isSelected ? choice.provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(isSelected ? choice.provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .minimumHitTarget()
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isSelected)
-        .accessibilityValue(isSelected ? "Selected, \(choice.provider.displayName)" : choice.provider.displayName)
-        .accessibilityHint("Selects \(choice.provider.displayName) as the AI provider")
-        .help("Use \(choice.provider.displayName)")
-    }
-}
-
-private struct AIProviderSetupSummary {
-    let title: String
-    let message: String
-    let icon: String
-    let color: Color
-    let isReady: Bool
-}
-
-private struct ProviderSetupBadge: View {
-    let summary: AIProviderSetupSummary
-
-    var body: some View {
-        Label(summary.isReady ? "Ready" : "Needs setup", systemImage: summary.icon)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(summary.color)
-            .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
-            .background(summary.color.opacity(0.12), in: Capsule())
-            .fixedSize()
-    }
-}
-
-private struct SetupSummaryRow: View {
-    let icon: String
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 14)
-
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 8)
-
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(value)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 #Preview {
-    let codexAuthManager = CodexCLIAuthManager()
-
     AIProviderSettingsView()
         .environmentObject(SettingsViewModel())
-        .environmentObject(SubscriptionAuthManager(provider: .openAI, codexAuthManager: codexAuthManager))
-        .environmentObject(codexAuthManager)
         .frame(width: 500, height: 600)
 }

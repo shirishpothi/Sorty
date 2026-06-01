@@ -10,6 +10,7 @@ import SwiftUI
 struct AutomationSettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var loginItemManager: LoginItemManager
+    @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
 
     @AppStorage("keepInBackground") private var keepInBackground = false
     @AppStorage("launchAtLogin") private var launchAtLogin = false
@@ -51,6 +52,9 @@ struct AutomationSettingsView: View {
                         viewModel.config.automationProvider = nil
                         viewModel.config.automationModel = nil
                     } else {
+                        if selectedModel.isEmpty {
+                            selectedModel = selectedProvider.defaultModel
+                        }
                         viewModel.config.automationProvider = selectedProvider
                         viewModel.config.automationModel = selectedModel
                     }
@@ -58,6 +62,8 @@ struct AutomationSettingsView: View {
                 
                 if useSeparateModel {
                     Divider()
+
+                    automationOverrideNotice
                     
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Provider")
@@ -95,7 +101,7 @@ struct AutomationSettingsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "lightbulb.fill")
                             .foregroundStyle(.yellow)
-                        Text("Use a faster, cheaper model for automation to reduce costs. Background tasks don't require the most advanced model.")
+                        Text("A lean automation model keeps watched folders responsive without changing the main Organize page.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -135,7 +141,7 @@ struct AutomationSettingsView: View {
                     }
                     .toggleStyle(.switch)
 
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .center, spacing: 8) {
                         Toggle(isOn: $keepInBackground) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Keep in Background")
@@ -155,7 +161,6 @@ struct AutomationSettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                        .padding(.top, 2)
                         .accessibilityLabel("Keep in Background information")
                         .popover(isPresented: $showBackgroundInfo, arrowEdge: .trailing) {
                             VStack(alignment: .leading, spacing: 12) {
@@ -190,17 +195,45 @@ struct AutomationSettingsView: View {
                     .toggleStyle(.switch)
                 }
 
-                if launchAtLogin || keepInBackground {
-                    Button {
-                        loginItemManager.openLoginItemsSettings()
-                    } label: {
-                        Label("System Settings > Background Items", systemImage: "arrow.up.forward.app")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.link)
-                }
             }
         }
+    }
+
+    private var automationOverrideNotice: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Automation override is active")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(automationOverrideMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .background(Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var automationOverrideMessage: String {
+        let overrideCount = watchedFoldersManager.folders.filter { $0.providerOverride != nil || $0.modelOverride != nil }.count
+        let folderText = overrideCount == 1 ? "1 folder-level model choice" : "\(overrideCount) folder-level model choices"
+
+        if overrideCount > 0 {
+            return "Watched folders and background runs use \(automationModelName); \(folderText) are ignored while this is on. The main Organize page still uses its AI Provider model."
+        }
+
+        return "Watched folders and background runs use \(automationModelName). The main Organize page still uses its AI Provider model."
+    }
+
+    private var automationModelName: String {
+        selectedModel.isEmpty ? selectedProvider.defaultModel : selectedModel
     }
 
     private var backgroundStatusBadge: some View {

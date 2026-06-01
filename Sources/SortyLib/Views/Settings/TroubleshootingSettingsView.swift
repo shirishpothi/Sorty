@@ -19,57 +19,49 @@ struct TroubleshootingSettingsView: View {
     
     var body: some View {
         VStack(spacing: 16) {
-            // Cache
-            SettingsCard(title: "Cache", icon: "internaldrive", color: .orange) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Cache Size")
-                            .font(.subheadline)
-                        Spacer()
-                        Text(cacheSize)
-                            .font(.subheadline.monospacedDigit())
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Button {
+            SettingsCard(title: "Maintenance", icon: "wrench.and.screwdriver", color: .orange) {
+                HStack(spacing: 10) {
+                    MaintenanceActionTile(
+                        title: "Cache",
+                        description: "Clear temporary files and cached app data.",
+                        detail: cacheSize,
+                        icon: "internaldrive",
+                        color: .orange,
+                        buttonTitle: "Clear",
+                        buttonIcon: "trash"
+                    ) {
                         clearCache()
-                    } label: {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text("Clear")
-                        }
-                        .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.onboardingPill)
-                    .tint(.orange)
+
+                    MaintenanceActionTile(
+                        title: "Learnings Data",
+                        description: "Delete recorded patterns and personalizations.",
+                        detail: nil,
+                        icon: "brain.head.profile",
+                        color: .purple,
+                        buttonTitle: "Delete All",
+                        buttonIcon: "trash"
+                    ) {
+                        showingDeleteDataConfirmation = true
+                    }
+
+                    MaintenanceActionTile(
+                        title: "Reset",
+                        description: "Reset all preferences to defaults.",
+                        detail: nil,
+                        icon: "arrow.counterclockwise",
+                        color: .red,
+                        buttonTitle: "Reset All",
+                        buttonIcon: "arrow.counterclockwise"
+                    ) {
+                        showingResetConfirmation = true
+                    }
                 }
             }
             .animatedAppearance(delay: 0.05)
             .onAppear {
                 calculateCacheSize()
             }
-
-            // Data Management
-            SettingsCard(title: "Learnings Data", icon: "brain.head.profile", color: .purple) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Delete all recorded organization patterns, preferences, and personalizations.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Button {
-                        showingDeleteDataConfirmation = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text("Delete All Learning Data")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.onboardingPill)
-                    .tint(.purple)
-                }
-            }
-            .animatedAppearance(delay: 0.08)
             .alert("Delete All Learning Data?", isPresented: $showingDeleteDataConfirmation) {
                 Button("Cancel", role: .cancel) {}
                 Button("Delete", role: .destructive) {
@@ -85,28 +77,6 @@ struct TroubleshootingSettingsView: View {
             } message: {
                 Text("This will permanently delete all your learning data. This cannot be undone.")
             }
-            
-            // Reset Settings
-            SettingsCard(title: "Reset", icon: "arrow.counterclockwise", color: .red) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Reset all preferences to default values. This cannot be undone.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    
-                    Button {
-                        showingResetConfirmation = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "arrow.counterclockwise")
-                            Text("Reset All Settings")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.onboardingPill)
-                    .tint(.red)
-                }
-            }
-            .animatedAppearance(delay: 0.1)
             .alert("Reset All Settings?", isPresented: $showingResetConfirmation) {
                 Button("Cancel", role: .cancel) {}
                 Button("Reset", role: .destructive) {
@@ -115,25 +85,6 @@ struct TroubleshootingSettingsView: View {
             } message: {
                 Text("This will completely reset Sorty to its initial state, clearing all settings, history, and learnings. You'll go through onboarding again. This cannot be undone.")
             }
-            
-            // Common Issues section added for better Help integration
-            SettingsCard(title: "Common Issues", icon: "lightbulb", color: .blue) {
-                VStack(alignment: .leading, spacing: 12) {
-                    TroubleshootingRow(
-                        title: "AI takes too long?",
-                        description: "Check your internet connection or try a faster model like GPT-5-mini in AI Provider settings."
-                    )
-                    TroubleshootingRow(
-                        title: "Files not moving?",
-                        description: "Ensure Sorty has Full Disk Access in System Settings -> Privacy & Security."
-                    )
-                    TroubleshootingRow(
-                        title: "Wrong categorization?",
-                        description: "Try turning off Fast Mode in Organization Controls to let the AI read file content."
-                    )
-                }
-            }
-            .animatedAppearance(delay: 0.15)
         }
     }
     
@@ -221,6 +172,7 @@ struct TroubleshootingSettingsView: View {
         
         // Recalculate size
         calculateCacheSize()
+        HapticFeedbackManager.shared.success()
     }
     
     private func resetAllSettings() {
@@ -266,24 +218,86 @@ struct TroubleshootingSettingsView: View {
 
 // MARK: - Components
 
-private struct TroubleshootingRow: View {
+private struct MaintenanceActionTile: View {
     let title: String
     let description: String
-    
+    let detail: String?
+    let icon: String
+    let color: Color
+    let buttonTitle: String
+    let buttonIcon: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.subheadline.weight(.medium))
-            Text(description)
-                .font(.caption)
-                .foregroundColor(.secondary)
+        Button {
+            action()
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(isHovered ? color : .secondary)
+                    .frame(height: 24)
+                    .accessibilityHidden(true)
+
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isHovered ? .primary : .secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    if let detail {
+                        Text(detail)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+
+                Text(description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(height: 32, alignment: .center)
+
+                Label(buttonTitle, systemImage: buttonIcon)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(isHovered ? color : .secondary)
+                    .padding(.top, 1)
+            }
+            .frame(maxWidth: .infinity, minHeight: 108)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 12)
+            .background(isHovered ? color.opacity(0.14) : Color.secondary.opacity(0.045))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isHovered ? color.opacity(0.32) : Color.secondary.opacity(0.08), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .padding(.vertical, 4)
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering
+            }
+            if hovering {
+                HapticFeedbackManager.shared.selection()
+            }
+        }
     }
 }
 
 #Preview {
     TroubleshootingSettingsView()
         .environmentObject(SettingsViewModel())
-        .frame(width: 500, height: 300)
+        .environmentObject(NotificationSettingsManager.shared)
+        .environmentObject(AppState())
+        .environmentObject(LearningsManager())
+        .frame(width: 560, height: 300)
 }

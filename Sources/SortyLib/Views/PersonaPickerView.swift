@@ -176,7 +176,7 @@ struct PersonaPickerView: View {
                 TextEditor(text: $localPrompt)
                     .focused($isEditorFocused)
                     .font(.system(.body, design: .monospaced))
-                    .frame(height: 120)
+                    .frame(height: promptEditorHeight)
                     .padding(4)
                     .background(Color(nsColor: .textBackgroundColor))
                     .cornerRadius(6)
@@ -214,7 +214,7 @@ struct PersonaPickerView: View {
                 TextEditor(text: $localPrompt)
                     .focused($isEditorFocused)
                     .font(.system(.body, design: .monospaced))
-                    .frame(height: 92)
+                    .frame(height: promptEditorHeight)
                     .padding(4)
                     .background(Color(nsColor: .textBackgroundColor))
                     .cornerRadius(6)
@@ -280,6 +280,14 @@ struct PersonaPickerView: View {
     private var selectedCustomPersona: CustomPersona? {
         guard let customId = personaManager.selectedCustomPersonaId else { return nil }
         return customStore.customPersonas.first(where: { $0.id == customId })
+    }
+
+    private var promptEditorHeight: CGFloat {
+        let explicitLines = localPrompt.components(separatedBy: .newlines).count
+        let wrappedLines = max(1, localPrompt.count / 80 + 1)
+        let estimatedLines = max(explicitLines, wrappedLines)
+        let height = CGFloat(estimatedLines * 22 + 28)
+        return min(max(height, 58), 220)
     }
 
     private var personaGridColumns: [GridItem] {
