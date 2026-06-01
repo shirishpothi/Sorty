@@ -1041,11 +1041,7 @@ struct OnboardingProgressBar: View {
                             )
                             .frame(width: 24, height: 24)
 
-                        // Treat the completion step as "done" the moment the user lands on it,
-                        // so the final step badge celebrates rather than looking like an
-                        // unfinished number sitting next to a row of checkmarks.
                         let isComplete = step.rawValue < currentStep.rawValue
-                            || (currentStep == .completion && step == .completion)
 
                         if isComplete {
                             Image(systemName: "checkmark")

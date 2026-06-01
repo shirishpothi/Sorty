@@ -5,8 +5,16 @@
 //  Completion step of the onboarding flow
 //
 
-import SwiftUI
 import AVFoundation
+import SwiftUI
+
+@MainActor
+private enum CompletionPalette {
+    static var accent: Color { SortyDesignSystem.Colors.resolvedAccent }
+    static let softRose = Color(red: 1.0, green: 0.48, blue: 0.58)
+    static let deepRose = Color(red: 0.42, green: 0.19, blue: 0.25)
+    static let shadowRose = Color(red: 0.22, green: 0.10, blue: 0.14)
+}
 
 // MARK: - Completion Reveal Blob
 
@@ -22,9 +30,9 @@ private struct CompletionRevealBlob: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.teal.opacity(0.24),
-                            SortyDesignSystem.Colors.resolvedAccent.opacity(0.14),
-                            Color.blue.opacity(0.08),
+                            CompletionPalette.accent.opacity(0.30),
+                            CompletionPalette.softRose.opacity(0.18),
+                            CompletionPalette.deepRose.opacity(0.08),
                             Color.clear
                         ],
                         center: .center,
@@ -39,8 +47,8 @@ private struct CompletionRevealBlob: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color.orange.opacity(0.14),
-                            Color.teal.opacity(0.10),
+                            CompletionPalette.softRose.opacity(0.18),
+                            CompletionPalette.accent.opacity(0.12),
                             Color.clear
                         ],
                         center: .center,
@@ -57,7 +65,7 @@ private struct CompletionRevealBlob: View {
                     RadialGradient(
                         colors: [
                             Color.white.opacity(0.15),
-                            Color.teal.opacity(0.12),
+                            CompletionPalette.accent.opacity(0.16),
                             Color.clear
                         ],
                         center: .center,
@@ -90,10 +98,10 @@ private struct CompletionGlowRing: View {
             .stroke(
                 AngularGradient(
                     colors: [
-                        Color.teal.opacity(0.90),
-                        SortyDesignSystem.Colors.resolvedAccent.opacity(0.82),
-                        Color.orange.opacity(0.55),
-                        Color.teal.opacity(0.90)
+                        CompletionPalette.softRose.opacity(0.86),
+                        CompletionPalette.accent.opacity(0.78),
+                        CompletionPalette.deepRose.opacity(0.46),
+                        CompletionPalette.softRose.opacity(0.86)
                     ],
                     center: .center
                 ),
@@ -177,7 +185,10 @@ public struct CompletionStepView: View {
 
                     ForEach(0..<3, id: \.self) { index in
                         Circle()
-                            .stroke(Color.teal.opacity(0.18 - Double(index) * 0.04), lineWidth: 2)
+                            .stroke(
+                                CompletionPalette.softRose.opacity(0.18 - Double(index) * 0.04),
+                                lineWidth: 2
+                            )
                             .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
                             .scaleEffect(hasAppeared ? 1.2 : 0.8)
                             .opacity(hasAppeared ? 0 : 1)
@@ -190,18 +201,16 @@ public struct CompletionStepView: View {
                     }
 
                     Circle()
-                        .fill(Color.teal.opacity(0.13))
+                        .fill(CompletionPalette.shadowRose.opacity(0.30))
                         .frame(width: 118, height: 118)
 
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 70))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color.teal, SortyDesignSystem.Colors.resolvedAccent],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                    Circle()
+                        .fill(CompletionPalette.softRose)
+                        .frame(width: 72, height: 72)
+
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
                         .symbolEffect(.bounce, value: hasAppeared)
                 }
                 .opacity(hasAppeared ? 1 : 0)
@@ -540,8 +549,8 @@ private struct CompletionContrastBackdrop: View {
 
             RadialGradient(
                 colors: [
-                    Color.teal.opacity(0.16),
-                    Color.blue.opacity(0.06),
+                    CompletionPalette.softRose.opacity(0.18),
+                    CompletionPalette.accent.opacity(0.08),
                     Color.clear
                 ],
                 center: UnitPoint(x: 0.50, y: 0.42),
@@ -561,19 +570,19 @@ struct QuickTipRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.teal.opacity(0.14))
+                    .fill(CompletionPalette.accent.opacity(0.14))
                     .frame(width: 32, height: 32)
                     .overlay(
                         Circle()
                             .strokeBorder(
-                                Color.teal.opacity(0.28),
+                                CompletionPalette.softRose.opacity(0.24),
                                 lineWidth: 0.5
                             )
                     )
 
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.teal)
+                    .foregroundStyle(CompletionPalette.softRose)
             }
 
             Text(text)
