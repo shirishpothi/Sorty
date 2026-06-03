@@ -6,7 +6,7 @@
 //
 
 import AppKit
-import AVKit
+import AVFoundation
 import SwiftUI
 import UserNotifications
 
@@ -790,21 +790,12 @@ struct PermissionEducationView: View {
 }
 
 private struct FilesAndFoldersPermissionDemoView: View {
-    @State private var player = AVQueuePlayer()
-    @State private var looper: AVPlayerLooper?
-
     var body: some View {
         ZStack {
             Color.black
 
             if let videoURL {
-                VideoPlayer(player: player)
-                    .onAppear {
-                        configurePlayer(with: videoURL)
-                    }
-                    .onDisappear {
-                        player.pause()
-                    }
+                LoopingPermissionVideoView(url: videoURL)
             } else {
                 permissionDemoFallback
             }
@@ -831,19 +822,79 @@ private struct FilesAndFoldersPermissionDemoView: View {
                 .clipShape(Capsule(style: .continuous))
         }
     }
+}
 
-    private func configurePlayer(with url: URL) {
-        guard looper == nil else {
-            player.play()
-            return
+private struct LoopingPermissionVideoView: NSViewRepresentable {
+    let url: URL
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> PlayerLayerView {
+        let view = PlayerLayerView()
+        view.playerLayer.videoGravity = .resizeAspectFill
+        context.coordinator.configure(url: url, playerLayer: view.playerLayer)
+        return view
+    }
+
+    func updateNSView(_ nsView: PlayerLayerView, context: Context) {
+        context.coordinator.configure(url: url, playerLayer: nsView.playerLayer)
+    }
+
+    static func dismantleNSView(_ nsView: PlayerLayerView, coordinator: Coordinator) {
+        coordinator.stop()
+        nsView.playerLayer.player = nil
+    }
+
+    final class Coordinator {
+        private var currentURL: URL?
+        private var player: AVQueuePlayer?
+        private var looper: AVPlayerLooper?
+
+        func configure(url: URL, playerLayer: AVPlayerLayer) {
+            if currentURL == url, let player {
+                playerLayer.player = player
+                player.play()
+                return
+            }
+
+            let queuePlayer = AVQueuePlayer()
+            queuePlayer.isMuted = true
+            queuePlayer.actionAtItemEnd = .none
+
+            let item = AVPlayerItem(url: url)
+            looper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+            player = queuePlayer
+            currentURL = url
+            playerLayer.player = queuePlayer
+            queuePlayer.play()
         }
 
-        let item = AVPlayerItem(url: url)
-        player.removeAllItems()
-        player.isMuted = true
-        player.actionAtItemEnd = .none
-        looper = AVPlayerLooper(player: player, templateItem: item)
-        player.play()
+        func stop() {
+            player?.pause()
+            player?.removeAllItems()
+            player = nil
+            looper = nil
+            currentURL = nil
+        }
+    }
+}
+
+private final class PlayerLayerView: NSView {
+    override var wantsUpdateLayer: Bool { true }
+
+    let playerLayer = AVPlayerLayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer = playerLayer
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
     }
 }
 
