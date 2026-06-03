@@ -36,7 +36,7 @@ struct OrganizeView: View {
                     message: setupRepairMessage,
                     onOpenSettings: {
                         HapticFeedbackManager.shared.selection()
-                        appState.startSetupRepair(message: setupRepairMessage)
+                        appState.startSetupRepair(message: setupRepairMessage, navigateToSettings: true)
                     }
                 )
                 .padding(.horizontal, 20)
@@ -314,7 +314,8 @@ struct OrganizeView: View {
                     onOpenSettings: {
                         HapticFeedbackManager.shared.selection()
                         appState.startSetupRepair(
-                            message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files."
+                            message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files.",
+                            navigateToSettings: true
                         )
                     }
                 )

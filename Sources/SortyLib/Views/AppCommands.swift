@@ -780,7 +780,7 @@ public class AppState: ObservableObject {
         }
     }
 
-    public func startSetupRepair(message: String, navigateToSettings: Bool = true) {
+    public func startSetupRepair(message: String, navigateToSettings: Bool = false) {
         requiresSetupRepair = true
         setupRepairMessage = message
         if navigateToSettings {

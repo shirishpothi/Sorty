@@ -398,7 +398,7 @@ struct MainWindowRootView: View {
 
         let providerStatus = OnboardingSetupValidator.providerStatus(context: providerSetupContext)
         if !providerStatus.isReady {
-            appState.startSetupRepair(message: providerStatus.message)
+            appState.startSetupRepair(message: providerStatus.message, navigateToSettings: false)
             return
         }
 
@@ -409,7 +409,8 @@ struct MainWindowRootView: View {
             appState.clearSetupRepairState()
         } catch {
             appState.startSetupRepair(
-                message: "Sorty could not verify \(settingsViewModel.config.provider.displayName): \(error.localizedDescription)"
+                message: "Sorty could not verify \(settingsViewModel.config.provider.displayName): \(error.localizedDescription)",
+                navigateToSettings: false
             )
         }
     }
