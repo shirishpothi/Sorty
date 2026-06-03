@@ -604,14 +604,7 @@ private struct SetupRepairBanner: View {
                 .controlSize(.small)
         }
         .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color.orange.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
-        )
+        .systemLiquidGlassBackground(cornerRadius: 14)
         .accessibilityIdentifier("SetupRepairBanner")
     }
 }
