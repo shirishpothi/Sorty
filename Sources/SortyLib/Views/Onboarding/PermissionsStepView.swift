@@ -259,7 +259,7 @@ public struct PermissionsStepView: View {
 
     private func fullDiskAccessState() -> PermissionState {
         if canReadProtectedFullDiskAccessLocation() {
-            return .restartRequired
+            return didOpenFullDiskAccessSettings ? .restartRequired : .granted
         }
 
         return didOpenFullDiskAccessSettings ? .pending : .unknown
