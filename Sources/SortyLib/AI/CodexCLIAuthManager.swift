@@ -145,6 +145,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         isAuthenticated = true
         accountEmail = extractEmail(from: auth.tokens?.id_token)
         authError = nil
+        markDeviceAuthAuthorizedIfNeeded()
     }
 
     func signOut() {
@@ -263,11 +264,7 @@ public final class CodexCLIAuthManager: ObservableObject {
         checkStatus()
 
         if isAuthenticated {
-            deviceAuthSession = CodexDeviceAuthSession(
-                verificationURL: deviceAuthSession?.verificationURL,
-                userCode: deviceAuthSession?.userCode,
-                status: .authorized
-            )
+            markDeviceAuthAuthorizedIfNeeded()
             return
         }
 
@@ -280,6 +277,16 @@ public final class CodexCLIAuthManager: ObservableObject {
             status: .failed(message)
         )
         authError = message
+    }
+
+    private func markDeviceAuthAuthorizedIfNeeded() {
+        guard let deviceAuthSession else { return }
+
+        self.deviceAuthSession = CodexDeviceAuthSession(
+            verificationURL: deviceAuthSession.verificationURL,
+            userCode: deviceAuthSession.userCode,
+            status: .authorized
+        )
     }
 
     private func prepareLoginScript() throws -> URL {

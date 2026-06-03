@@ -24,6 +24,7 @@ struct AIProviderSettingsView: View {
     @State private var isHoveringCodexTerminalButton = false
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
     @State private var codexTerminalResetTask: Task<Void, Never>?
+    @State private var codexDeviceAuthDismissTask: Task<Void, Never>?
     @State private var isShowingCodexDeviceAuth = false
 
     private let providerColumns = Array(
@@ -112,6 +113,7 @@ struct AIProviderSettingsView: View {
                 authError: codexAuth.authError,
                 onStart: startCodexDeviceAuth,
                 onCancel: {
+                    codexDeviceAuthDismissTask?.cancel()
                     codexAuth.cancelDeviceAuth()
                     isShowingCodexDeviceAuth = false
                 },
@@ -122,6 +124,14 @@ struct AIProviderSettingsView: View {
             .frame(width: 610)
             .systemLiquidGlassBackground(cornerRadius: 28)
             .systemLiquidGlassPopover(cornerRadius: 28)
+        }
+        .onChange(of: codexAuth.isAuthenticated) { _, isAuthenticated in
+            guard isAuthenticated, isShowingCodexDeviceAuth else { return }
+            handleCodexDeviceAuthSuccess()
+        }
+        .onChange(of: codexAuth.deviceAuthSession?.status) { _, status in
+            guard status == .authorized, isShowingCodexDeviceAuth else { return }
+            handleCodexDeviceAuthSuccess()
         }
     }
 
@@ -635,7 +645,7 @@ struct AIProviderSettingsView: View {
 
             if becameAuthenticated {
                 await MainActor.run {
-                    HapticFeedbackManager.shared.success()
+                    handleCodexDeviceAuthSuccess()
                 }
             }
 
@@ -684,6 +694,10 @@ struct AIProviderSettingsView: View {
     @MainActor
     private func openChatGPTSecuritySettings() {
         HapticFeedbackManager.shared.tap()
+        let targetToggle = "Enable device code authorization for Codex"
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(targetToggle, forType: .string)
+
         if let url = URL(string: "https://chatgpt.com/#settings/Security") {
             NSWorkspace.shared.open(url)
         }
@@ -713,8 +727,26 @@ struct AIProviderSettingsView: View {
         codexTerminalResetTask = Task {
             try? await Task.sleep(nanoseconds: 1_400_000_000)
             await MainActor.run {
+                guard codexAuth.deviceAuthSession?.status != .authorized else { return }
                 codexTerminalButtonState = .idle
             }
+        }
+    }
+
+    @MainActor
+    private func handleCodexDeviceAuthSuccess() {
+        guard isShowingCodexDeviceAuth else { return }
+
+        codexTerminalButtonState = .success
+        viewModel.updateAvailableModels(force: true)
+        openAIAuth.checkAuthenticationStatus()
+        HapticFeedbackManager.shared.success()
+
+        codexDeviceAuthDismissTask?.cancel()
+        codexDeviceAuthDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 650_000_000)
+            guard codexAuth.isAuthenticated || codexAuth.deviceAuthSession?.status == .authorized else { return }
+            isShowingCodexDeviceAuth = false
         }
     }
 
@@ -750,13 +782,7 @@ private struct CodexDeviceAuthSheet: View {
     }
 
     var body: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: 22) {
-                content
-            }
-        } else {
-            content
-        }
+        content
     }
 
     private var content: some View {
