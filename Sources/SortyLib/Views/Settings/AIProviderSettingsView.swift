@@ -411,17 +411,10 @@ struct AIProviderSettingsView: View {
                     startCodexDeviceAuth()
                     isShowingCodexDeviceAuth = true
                 } label: {
-                    CodexActionButtonLabel(
-                        idleTitle: "Authenticate ChatGPT Subscription",
-                        activatingTitle: "Starting Authorization...",
-                        successTitle: "Authorization Started",
-                        failureTitle: "Could Not Start Authorization",
-                        idleSymbol: "person.crop.circle.badge.checkmark",
-                        state: codexTerminalButtonState,
-                        isHovered: isHoveringCodexTerminalButton
-                    )
+                    Label(codexDeviceAuthButtonTitle, systemImage: codexDeviceAuthButtonSymbol)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.sortyBordered)
+                .controlSize(.small)
                 .accessibilityIdentifier("CodexDeviceAuthButton")
                 .onHover { hovering in isHoveringCodexTerminalButton = hovering }
 
@@ -441,6 +434,32 @@ struct AIProviderSettingsView: View {
         }
         .task {
             await autoVerifyCodexSignInLoop()
+        }
+    }
+
+    private var codexDeviceAuthButtonTitle: String {
+        switch codexTerminalButtonState {
+        case .idle:
+            return "Authenticate ChatGPT Subscription"
+        case .activating:
+            return "Starting Authorization..."
+        case .success:
+            return "Authorization Started"
+        case .failure:
+            return "Could Not Start Authorization"
+        }
+    }
+
+    private var codexDeviceAuthButtonSymbol: String {
+        switch codexTerminalButtonState {
+        case .idle:
+            return "person.crop.circle.badge.checkmark"
+        case .activating:
+            return "arrow.triangle.2.circlepath"
+        case .success:
+            return "checkmark.circle.fill"
+        case .failure:
+            return "xmark.circle.fill"
         }
     }
 
