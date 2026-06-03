@@ -179,6 +179,21 @@ reset_cached_dependency_products() {
     prune_path_if_exists "${BUILD_DIR}/artifacts"
 }
 
+validate_binary_artifact_cache() {
+    [ "${BUILD_METHOD:-spm}" = "spm" ] || return 0
+
+    local sparkle_checkout="${BUILD_DIR}/checkouts/Sparkle"
+    local sparkle_artifact="${BUILD_DIR}/artifacts/sparkle/Sparkle/Sparkle.xcframework"
+
+    if [ -d "${sparkle_checkout}" ] &&
+        [ -e "${BUILD_DIR}/artifacts" ] &&
+        [ ! -f "${sparkle_artifact}/Info.plist" ]; then
+        log_item "Sparkle binary artifact cache is incomplete; clearing SwiftPM dependency cache"
+        reset_cached_build_products
+        reset_cached_dependency_products
+    fi
+}
+
 validate_build_cache_fingerprint() {
     if ! is_truthy "${BUILD_CACHE_VALIDATE_INPUTS}"; then
         log_detail "Skipping build cache validation (BUILD_CACHE_VALIDATE_INPUTS=${BUILD_CACHE_VALIDATE_INPUTS})"
@@ -373,6 +388,7 @@ manage_build_cache() {
     fi
 
     validate_build_cache_fingerprint || true
+    validate_binary_artifact_cache || true
     prune_oversized_build_cache || true
     build_cache_release_lock
 }
