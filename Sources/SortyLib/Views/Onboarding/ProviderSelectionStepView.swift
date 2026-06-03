@@ -1093,7 +1093,7 @@ struct OnboardingProviderRow: View {
                     .frame(width: 28, height: 28)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(provider.selectorTitle)
+                    Text(provider.displayName)
                         .font(.system(size: 13, weight: isSelected ? .semibold : .regular, design: .rounded))
                         .foregroundColor(provider.isAvailable ? .primary : .secondary)
                         .lineLimit(1)

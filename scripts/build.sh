@@ -1037,8 +1037,9 @@ fi
 # Icon variant selection — swap AppIcon.icns in the bundle based on context.
 # APP_ICON_VARIANT accepts:
 # - release/prod/production -> AppIcon-Release.icns
-# - debug/dev/local        -> AppIcon-Debug.icns for local builds
-# - anything else          -> AppIcon-CI.icns for CI builds
+# - nightly/preview         -> AppIcon-Nightly.icns for nightly builds
+# - debug/dev/local         -> AppIcon-Debug.icns for local builds
+# - anything else           -> AppIcon-CI.icns for CI builds
 RAW_APP_ICON_VARIANT="${APP_ICON_VARIANT:-ci}"
 APP_ICON_VARIANT_NORMALIZED="$(echo "${RAW_APP_ICON_VARIANT}" | tr '[:upper:]' '[:lower:]')"
 
@@ -1046,6 +1047,10 @@ case "${APP_ICON_VARIANT_NORMALIZED}" in
     release|prod|production)
         APP_ICON_VARIANT_KEY="release"
         ICON_VARIANT_SUFFIX="Release"
+        ;;
+    nightly|preview)
+        APP_ICON_VARIANT_KEY="nightly"
+        ICON_VARIANT_SUFFIX="Nightly"
         ;;
     debug|dev|local)
         APP_ICON_VARIANT_KEY="debug"
