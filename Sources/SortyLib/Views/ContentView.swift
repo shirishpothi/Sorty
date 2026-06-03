@@ -29,7 +29,7 @@ public struct ContentView: View {
         ZStack {
             if !appState.hasCompletedOnboarding {
                 OnboardingView(hasCompletedOnboarding: $appState.hasCompletedOnboarding)
-                    .transition(TransitionStyles.scaleAndFade)
+                    .transition(.opacity)
             } else {
                 ZStack {
                     mainContent
@@ -37,7 +37,7 @@ public struct ContentView: View {
                     // HUD notification overlay (bottom-left)
                     HUDNotificationOverlay()
                 }
-                .transition(.opacity.combined(with: .scale(scale: 1.01)))
+                .transition(.opacity)
             }
 
             WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
@@ -48,7 +48,7 @@ public struct ContentView: View {
         .onDisappear {
             windowLinkHoverState.clearAllHover()
         }
-        .animation(.easeInOut(duration: 0.36), value: appState.hasCompletedOnboarding)
+        .animation(.easeInOut(duration: 0.22), value: appState.hasCompletedOnboarding)
     }
 
     private var mainContent: some View {

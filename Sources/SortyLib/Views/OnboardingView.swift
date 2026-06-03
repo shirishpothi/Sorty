@@ -158,6 +158,12 @@ public struct OnboardingView: View {
         case .completion:
             CompletionStepView(onFinish: {
                 HapticFeedbackManager.shared.success()
+                // Skip the staggered ReadyToOrganizeView cascade on first
+                // appearance — the user just saw a long reveal animation in
+                // the onboarding completion step, so an additional 0.4s of
+                // staggered fade-ins on the main screen reads as lag rather
+                // than polish.
+                appState.hasPresentedReadyToOrganize = true
                 hasCompletedOnboarding = true
                 guard !appState.hasCompletedFeatureTour else { return }
 

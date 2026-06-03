@@ -202,20 +202,17 @@ struct OrganizeView: View {
     }
 
     private var stateContentScale: CGFloat {
-        if isReturningToStart, !reduceMotion { return 0.985 }
-        return 1
+        1
     }
 
     private var stateContentBlur: CGFloat {
-        guard !reduceMotion else { return 0 }
-        if isReturningToStart { return 2 }
-        return 0
+        // Blur during transitions is expensive on macOS and was producing a
+        // visible "reload" wobble when returning from a cancelled run.
+        0
     }
 
     private var stateContentOffset: CGFloat {
-        guard !reduceMotion else { return 0 }
-        if isReturningToStart { return -14 }
-        return 0
+        0
     }
 
     private var returnToStartContentOpacity: Double {
@@ -223,13 +220,11 @@ struct OrganizeView: View {
     }
 
     private var returnToStartContentScale: CGFloat {
-        guard !reduceMotion else { return 1 }
-        return isReturningToStart ? 1 : 0.985
+        1
     }
 
     private var returnToStartContentOffset: CGFloat {
-        guard !reduceMotion else { return 0 }
-        return isReturningToStart ? 0 : 12
+        0
     }
 
     private var returnToStartContent: some View {
@@ -326,7 +321,9 @@ struct OrganizeView: View {
             } else {
                 ReadyToOrganizeView(
                     onStart: startOrganization,
-                    startsVisible: isShowingReturnToStartContent || keepsReadyContentVisibleAfterReturn
+                    startsVisible: isShowingReturnToStartContent
+                        || keepsReadyContentVisibleAfterReturn
+                        || appState.hasPresentedReadyToOrganize
                 )
             }
         case .scanning:
@@ -364,7 +361,7 @@ struct OrganizeView: View {
     }
 
     private var returnToStartExitAnimation: Animation {
-        reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)
+        reduceMotion ? .easeOut(duration: 0.10) : .easeInOut(duration: 0.22)
     }
 
     private func returnToStartAfterCancellation() {
@@ -387,7 +384,10 @@ struct OrganizeView: View {
         }
 
         Task { @MainActor in
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(90) : .milliseconds(360))
+            // Settle the underlying organizer state behind the overlay
+            // (which is fully opaque by now) so swapping in the fresh
+            // ReadyToOrganizeView underneath is invisible.
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(60) : .milliseconds(200))
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
@@ -402,14 +402,16 @@ struct OrganizeView: View {
                 keepsReadyContentVisibleAfterReturn = !isReturningFromCompletion
             }
 
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(80) : .milliseconds(260))
-            withAnimation(returnToStartExitAnimation) {
-                isReturningToStart = false
-            }
-
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(120) : .milliseconds(420))
+            // Drop the overlay instantly — the underlying ReadyToOrganizeView
+            // is already the same content, so any crossfade here just reads
+            // as a redundant "reload" wobble.
             isShowingReturnToStartContent = false
             returnsToDirectorySelection = false
+            var resetTransaction = Transaction()
+            resetTransaction.disablesAnimations = true
+            withTransaction(resetTransaction) {
+                isReturningToStart = false
+            }
         }
     }
 

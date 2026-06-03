@@ -241,11 +241,11 @@ public struct CompletionStepView: View {
 
                 LazyVGrid(
                     columns: [
-                        GridItem(.flexible(minimum: 210, maximum: 240), spacing: 28, alignment: .leading),
-                        GridItem(.flexible(minimum: 210, maximum: 240), spacing: 0, alignment: .leading)
+                        GridItem(.flexible(), spacing: 24, alignment: .leading),
+                        GridItem(.flexible(), spacing: 0, alignment: .leading)
                     ],
                     alignment: .center,
-                    spacing: 18
+                    spacing: 14
                 ) {
                     QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
                         .opacity(tipsAppeared ? 1 : 0)
@@ -267,7 +267,7 @@ public struct CompletionStepView: View {
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
                 }
-                .frame(maxWidth: 508)
+                .frame(maxWidth: 440)
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 40 : 0)
 
@@ -520,12 +520,13 @@ public struct CompletionStepView: View {
         guard !exitTriggered else { return }
         exitTriggered = true
         HapticFeedbackManager.shared.success()
-        fadeOutAndStopAudio(duration: 0.45)
+        fadeOutAndStopAudio(duration: 0.32)
 
-        // Fade out all content smoothly, but hand off quickly so the main
-        // organize page can start rendering while the old frame is still
-        // visually settling.
-        withAnimation(.easeInOut(duration: 0.24)) {
+        // Fade out all content smoothly and hand off immediately so the main
+        // organize page can start rendering on the same run loop turn. The
+        // previous 0.18s `asyncAfter` was perceived as a hang after pressing
+        // "Start Using Sorty".
+        withAnimation(.easeOut(duration: 0.18)) {
             contentDismissed = true
             backgroundRevealed = false
             showParticles = false
@@ -533,9 +534,7 @@ public struct CompletionStepView: View {
             revealOpacity = 0
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            onFinish()
-        }
+        onFinish()
     }
 }
 
@@ -611,11 +610,13 @@ struct QuickTipRow: View {
             Text(text)
                 .font(.system(size: 13.5, weight: .medium, design: .rounded))
                 .foregroundStyle(.primary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
 
             Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
-        .frame(width: 240, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
