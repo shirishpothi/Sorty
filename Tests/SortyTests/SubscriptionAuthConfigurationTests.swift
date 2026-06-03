@@ -83,6 +83,19 @@ final class SubscriptionAuthConfigurationTests: XCTestCase {
         XCTAssertTrue(ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config))
     }
 
+    func testProviderAuthResolverDoesNotExposeHeaderForOpenAIAccountSignIn() {
+        var config = AIConfig(
+            provider: .openAI,
+            apiURL: AIProvider.openAI.defaultAPIURL,
+            apiKey: "should-not-be-used",
+            model: AIProvider.openAI.defaultModel,
+            requiresAPIKey: true
+        )
+        config.setAuthMethod(.accountSignIn, for: .openAI)
+
+        XCTAssertNil(ProviderAuthResolver.authHeader(for: .openAI, config: config))
+    }
+
     func testProviderAuthResolverRequiresCredentialWhenConfigured() {
         let config = AIConfig(
             provider: .openAI,

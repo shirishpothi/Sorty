@@ -35,11 +35,21 @@ public final class CodexCLIAuthManager: ObservableObject {
     @Published public var isCodexInstalled = false
     @Published public var deviceAuthSession: CodexDeviceAuthSession?
 
-    enum CredentialStoreMode: String {
-        case file
-        case keyring
-        case auto
-        case unknown
+    enum LoginStatus: Sendable, Equatable {
+        case chatGPT
+        case accessToken
+        case apiKey
+        case notLoggedIn(String?)
+        case unavailable(String?)
+
+        var isSubscriptionUsable: Bool {
+            switch self {
+            case .chatGPT, .accessToken:
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     private var authFilePath: String {
@@ -83,17 +93,50 @@ public final class CodexCLIAuthManager: ObservableObject {
         checkStatus()
     }
 
-    nonisolated var accessToken: String? {
-        Self.readAccessToken()
+    nonisolated static func hasUsableSubscriptionLogin() -> Bool {
+        readLoginStatus().isSubscriptionUsable
     }
 
-    nonisolated static func readAccessToken() -> String? {
-        let path = authFileURL.path
-        guard let data = FileManager.default.contents(atPath: path),
-              let auth = try? JSONDecoder().decode(CodexAuth.self, from: data) else {
-            return nil
+    nonisolated static func readLoginStatus() -> LoginStatus {
+        if let codexExecutablePath = resolveCodexExecutablePath() {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: codexExecutablePath)
+            process.arguments = ["login", "status"]
+
+            let outputPipe = Pipe()
+            process.standardOutput = outputPipe
+            process.standardError = outputPipe
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+
+                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: outputData, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                if process.terminationStatus == 0 {
+                    return parseLoginStatusOutput(output)
+                }
+
+                if let fallback = readFileBackedSubscriptionStatus() {
+                    return fallback
+                }
+
+                return .notLoggedIn(output)
+            } catch {
+                if let fallback = readFileBackedSubscriptionStatus() {
+                    return fallback
+                }
+                return .unavailable(error.localizedDescription)
+            }
         }
-        return auth.tokens?.access_token
+
+        if let fallback = readFileBackedSubscriptionStatus() {
+            return fallback
+        }
+
+        return .unavailable("Codex CLI not found. Install with: npm i -g @openai/codex")
     }
 
     nonisolated static func readConfiguredModel() -> String? {
@@ -103,49 +146,31 @@ public final class CodexCLIAuthManager: ObservableObject {
         return readTomlStringValue(for: "model", in: configContents)
     }
 
-    nonisolated static func readCredentialStoreMode() -> CredentialStoreMode {
-        guard let configContents = readConfigFile(),
-              let value = readTomlStringValue(for: "cli_auth_credentials_store", in: configContents) else {
-            return .unknown
-        }
-
-        switch value.lowercased() {
-        case "file":
-            return .file
-        case "keyring":
-            return .keyring
-        case "auto":
-            return .auto
-        default:
-            return .unknown
-        }
-    }
-
     public func checkStatus() {
         isCodexInstalled = checkCodexInstalled()
-        let fileExists = FileManager.default.fileExists(atPath: authFilePath)
 
-        guard fileExists,
-              let data = FileManager.default.contents(atPath: authFilePath),
-              let auth = try? JSONDecoder().decode(CodexAuth.self, from: data),
-              let token = auth.tokens?.access_token, !token.isEmpty else {
+        switch Self.readLoginStatus() {
+        case .chatGPT, .accessToken:
+            isAuthenticated = true
+            accountEmail = extractEmail(from: Self.readIDToken())
+            authError = nil
+            markDeviceAuthAuthorizedIfNeeded()
+
+        case .apiKey:
             isAuthenticated = false
             accountEmail = nil
-            if isCodexInstalled {
-                switch Self.readCredentialStoreMode() {
-                case .keyring:
-                    authError = "Codex CLI is configured to store credentials in keychain. Set cli_auth_credentials_store = \"file\" in ~/.codex/config.toml and run codex login again."
-                default:
-                    authError = nil
-                }
-            }
-            return
-        }
+            authError = "Codex CLI is signed in with an API key. Use ChatGPT sign-in or a Codex access token for subscription-backed inference."
 
-        isAuthenticated = true
-        accountEmail = extractEmail(from: auth.tokens?.id_token)
-        authError = nil
-        markDeviceAuthAuthorizedIfNeeded()
+        case .notLoggedIn:
+            isAuthenticated = false
+            accountEmail = nil
+            authError = nil
+
+        case .unavailable(let message):
+            isAuthenticated = false
+            accountEmail = nil
+            authError = message
+        }
     }
 
     func signOut() {
@@ -315,10 +340,11 @@ public final class CodexCLIAuthManager: ObservableObject {
         resolveCodexExecutablePath() != nil
     }
 
-    private func resolveCodexExecutablePath() -> String? {
+    private nonisolated static func resolveCodexExecutablePath() -> String? {
         let paths = [
             "/usr/local/bin/codex",
             "/opt/homebrew/bin/codex",
+            "/Applications/Codex.app/Contents/Resources/codex",
             "\(FileManager.default.homeDirectoryForCurrentUser.path)/.npm-global/bin/codex",
         ]
 
@@ -352,6 +378,10 @@ public final class CodexCLIAuthManager: ObservableObject {
         } catch {
             return nil
         }
+    }
+
+    private func resolveCodexExecutablePath() -> String? {
+        Self.resolveCodexExecutablePath()
     }
 
     private nonisolated static func strippedANSIEscapeSequences(from string: String) -> String {
@@ -423,6 +453,57 @@ public final class CodexCLIAuthManager: ObservableObject {
         }
 
         return json["email"] as? String
+    }
+
+    private nonisolated static func parseLoginStatusOutput(_ output: String?) -> LoginStatus {
+        let normalizedOutput = (output ?? "").lowercased()
+        if normalizedOutput.contains("logged in using chatgpt") {
+            return .chatGPT
+        }
+        if normalizedOutput.contains("logged in using access token") {
+            return .accessToken
+        }
+        if normalizedOutput.contains("logged in using an api key")
+            || normalizedOutput.contains("logged in using api key") {
+            return .apiKey
+        }
+        if normalizedOutput.contains("not logged in") {
+            return .notLoggedIn(output)
+        }
+        return .unavailable(output)
+    }
+
+    private nonisolated static func readFileBackedSubscriptionStatus() -> LoginStatus? {
+        guard let auth = readFileBackedAuth() else {
+            return nil
+        }
+
+        if auth.auth_mode?.lowercased() == "apikey" {
+            return .apiKey
+        }
+
+        guard let token = auth.tokens?.access_token?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty else {
+            return nil
+        }
+
+        if auth.auth_mode?.lowercased() == "agentidentity" {
+            return .accessToken
+        }
+
+        return .chatGPT
+    }
+
+    private nonisolated static func readIDToken() -> String? {
+        readFileBackedAuth()?.tokens?.id_token
+    }
+
+    private nonisolated static func readFileBackedAuth() -> CodexAuth? {
+        guard let data = FileManager.default.contents(atPath: authFileURL.path),
+              let auth = try? JSONDecoder().decode(CodexAuth.self, from: data) else {
+            return nil
+        }
+        return auth
     }
 
     private nonisolated static func readConfigFile() -> String? {

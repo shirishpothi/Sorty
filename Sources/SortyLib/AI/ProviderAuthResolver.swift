@@ -50,7 +50,12 @@ enum ProviderAuthResolver {
         default:
             let method = effectiveAuthMethod(for: provider, config: config)
             switch method {
-            case .accountSignIn, .manualSessionToken:
+            case .accountSignIn:
+                if provider == .openAI {
+                    return CodexCLIAuthManager.hasUsableSubscriptionLogin()
+                }
+                return authHeader(for: provider, config: config) != nil
+            case .manualSessionToken:
                 return authHeader(for: provider, config: config) != nil
             case .apiKey:
                 guard config.requiresAPIKey else {
@@ -80,8 +85,10 @@ enum ProviderAuthResolver {
         case .apiKey:
             return configuredOrStoredAPIKey(for: provider, config: config)
         case .accountSignIn:
+            // Codex ChatGPT/account credentials are consumed by `codex exec`, not
+            // by Sorty's direct OpenAI API client.
             if provider == .openAI {
-                return CodexCLIAuthManager.readAccessToken()
+                return nil
             }
             return configuredOrStoredAPIKey(for: provider, config: config)
         case .manualSessionToken:

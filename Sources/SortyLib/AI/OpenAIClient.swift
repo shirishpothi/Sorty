@@ -177,12 +177,8 @@ public final class OpenAIClient: AIClientProtocol, Sendable {
 
         if config.provider == .openAI,
            ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn {
-            guard ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config) else {
-                throw AIClientError.apiError(
-                    statusCode: 401,
-                    message: "Codex CLI sign-in is required. Run 'codex login' and verify in Sorty settings."
-                )
-            }
+            try await CodexSubscriptionClient(config: config).checkHealth()
+            return
         } else {
             try AIRequestSupport.requireAPIKeyIfNeeded(from: config)
         }

@@ -129,16 +129,30 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     }
 
     public func checkHealth() async throws {
-        guard ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config) else {
-            throw AIClientError.apiError(
-                statusCode: 401,
-                message: "Codex CLI sign-in is required. Reauthenticate your ChatGPT subscription in Sorty settings."
-            )
-        }
         guard Self.resolveCodexExecutablePath() != nil else {
             throw AIClientError.apiError(
                 statusCode: 501,
                 message: "Codex CLI is required. Install with: npm i -g @openai/codex"
+            )
+        }
+
+        switch CodexCLIAuthManager.readLoginStatus() {
+        case .chatGPT, .accessToken:
+            return
+        case .apiKey:
+            throw AIClientError.apiError(
+                statusCode: 401,
+                message: "Codex CLI is signed in with an API key. Use ChatGPT sign-in or a Codex access token for subscription-backed inference."
+            )
+        case .notLoggedIn:
+            throw AIClientError.apiError(
+                statusCode: 401,
+                message: "Codex CLI sign-in is required. Reauthenticate your ChatGPT subscription in Sorty settings."
+            )
+        case .unavailable(let message):
+            throw AIClientError.apiError(
+                statusCode: 401,
+                message: message ?? "Codex CLI sign-in could not be verified. Run `codex login status` in Terminal."
             )
         }
     }
@@ -270,6 +284,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let paths = [
             "/usr/local/bin/codex",
             "/opt/homebrew/bin/codex",
+            "/Applications/Codex.app/Contents/Resources/codex",
             "\(FileManager.default.homeDirectoryForCurrentUser.path)/.npm-global/bin/codex"
         ]
 
