@@ -20,6 +20,7 @@ public struct PermissionsStepView: View {
     @State private var selectedEducationPermission: PermissionType?
     @State private var isFullDiskAccessConfirmationPresented = false
     @State private var fullDiskAccessSourceFrameInScreen: CGRect?
+    @State private var didOpenFullDiskAccessSettings = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var notificationManager = NotificationManager.shared
     @EnvironmentObject private var automationManager: AutomationManager
@@ -158,6 +159,7 @@ public struct PermissionsStepView: View {
             Button("Skip for Now", role: .cancel) {
                 permissionStates[.fullDiskAccess] = .unknown
                 fullDiskAccessSourceFrameInScreen = nil
+                didOpenFullDiskAccessSettings = false
             }
 
             Button("Open System Settings") {
@@ -181,7 +183,7 @@ public struct PermissionsStepView: View {
             permissionStates[.notifications] = notificationState(for: notificationManager.notificationPermissionStatus)
         }
 
-        permissionStates[.fullDiskAccess] = .unknown
+        permissionStates[.fullDiskAccess] = fullDiskAccessState()
 
         automationManager.checkPermissions(enableChecksIfNeeded: false)
         switch automationManager.automationStatus {
@@ -243,15 +245,40 @@ public struct PermissionsStepView: View {
     }
 
     private func openFullDiskAccessSettings() {
+        didOpenFullDiskAccessSettings = true
         permissionStates[.fullDiskAccess] = .pending
         PermisoAssistant.shared.present(
             panel: .fullDiskAccess,
             sourceFrameInScreen: fullDiskAccessSourceFrameInScreen,
             onCancel: {
-                permissionStates[.fullDiskAccess] = .unknown
+                permissionStates[.fullDiskAccess] = fullDiskAccessState()
                 fullDiskAccessSourceFrameInScreen = nil
             }
         )
+    }
+
+    private func fullDiskAccessState() -> PermissionState {
+        if canReadProtectedFullDiskAccessLocation() {
+            return .restartRequired
+        }
+
+        return didOpenFullDiskAccessSettings ? .pending : .unknown
+    }
+
+    private func canReadProtectedFullDiskAccessLocation() -> Bool {
+        let fileManager = FileManager.default
+        let protectedDirectories = [
+            "Library/Mail",
+            "Library/Messages",
+            "Library/Safari",
+            "Library/Calendars"
+        ]
+
+        return protectedDirectories.contains { relativePath in
+            let url = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(relativePath)
+            guard fileManager.fileExists(atPath: url.path) else { return false }
+            return (try? fileManager.contentsOfDirectory(atPath: url.path)) != nil
+        }
     }
 
     private func permissionState(for status: PermissionStatus) -> PermissionState {
@@ -358,6 +385,14 @@ enum PermissionType: String, CaseIterable, Identifiable {
         }
     }
 
+    func description(for state: PermissionState) -> String {
+        if self == .fullDiskAccess, state == .restartRequired {
+            return "Full Disk Access is on. Restart Sorty to use it."
+        }
+
+        return description
+    }
+
     var color: Color {
         switch self {
         case .filesAndFolders: return .blue
@@ -424,6 +459,7 @@ enum PermissionState {
     case unknown
     case pending
     case granted
+    case restartRequired
     case denied
 
     var title: String {
@@ -431,6 +467,7 @@ enum PermissionState {
         case .unknown: return "Not granted"
         case .pending: return "Check Settings"
         case .granted: return "Granted"
+        case .restartRequired: return "Restart Sorty"
         case .denied: return "Needs Attention"
         }
     }
@@ -455,6 +492,7 @@ enum PermissionState {
         case .unknown: return "circle"
         case .pending: return "arrow.clockwise"
         case .granted: return "checkmark"
+        case .restartRequired: return "arrow.clockwise"
         case .denied: return "exclamationmark"
         }
     }
@@ -464,6 +502,7 @@ enum PermissionState {
         case .unknown: return .secondary
         case .pending: return .orange
         case .granted: return .green
+        case .restartRequired: return .blue
         case .denied: return .red
         }
     }
@@ -499,7 +538,7 @@ struct PermissionRow: View {
                     }
                 }
 
-                Text(type.description)
+                Text(type.description(for: state))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -537,7 +576,7 @@ struct PermissionRow: View {
     }
 
     private var iconTint: Color {
-        state == .granted ? .green : type.color
+        state == .granted || state == .restartRequired ? state.tint : type.color
     }
 
     private var rowFill: Color {
@@ -582,7 +621,7 @@ struct PermissionRow: View {
     @ViewBuilder
     private var trailingControl: some View {
         switch state {
-        case .granted, .pending:
+        case .granted, .pending, .restartRequired:
             statusChip
         case .denied:
             PermissionActionButton(title: deniedActionTitle, style: .bordered, action: onRequest)
