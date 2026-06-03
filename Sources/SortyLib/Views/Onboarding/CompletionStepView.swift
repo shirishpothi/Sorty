@@ -241,11 +241,11 @@ public struct CompletionStepView: View {
 
                 LazyVGrid(
                     columns: [
-                        GridItem(.fixed(240), spacing: 56, alignment: .leading),
-                        GridItem(.fixed(240), spacing: 0, alignment: .leading)
+                        GridItem(.flexible(minimum: 210, maximum: 240), spacing: 28, alignment: .leading),
+                        GridItem(.flexible(minimum: 210, maximum: 240), spacing: 0, alignment: .leading)
                     ],
                     alignment: .center,
-                    spacing: 24
+                    spacing: 18
                 ) {
                     QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
                         .opacity(tipsAppeared ? 1 : 0)
@@ -267,7 +267,7 @@ public struct CompletionStepView: View {
                         .offset(x: tipsAppeared ? 0 : -30)
                         .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
                 }
-                .frame(width: 536)
+                .frame(maxWidth: 508)
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 40 : 0)
 
@@ -297,7 +297,7 @@ public struct CompletionStepView: View {
             }
             .padding(.horizontal, 48)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .offset(x: 18, y: -6)
+            .offset(y: -6)
         }
         .onAppear {
             startRevealSequence()

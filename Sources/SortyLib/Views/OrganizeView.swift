@@ -667,6 +667,7 @@ struct ReadyToOrganizeView: View {
     @State private var showSavedPromptsSheet = false
     @State private var referenceableFiles: [InstructionFileReference] = []
     @State private var instructionSelection: NSRange = NSRange(location: 0, length: 0)
+    @State private var referenceRefreshTask: Task<Void, Never>?
 
     init(onStart: @escaping () -> Void, startsVisible: Bool = false) {
         self.onStart = onStart
@@ -815,7 +816,7 @@ struct ReadyToOrganizeView: View {
             Text(addStorageLocationErrorMessage ?? "Please try selecting the folder again.")
         }
         .onAppear {
-            refreshReferenceableFiles()
+            scheduleReferenceableFilesRefresh()
 
             // Drive the staggered cascade only once. Each child element owns
             // its own `.animation(.smooth(...), value: hasAppeared)` modifier
@@ -837,7 +838,11 @@ struct ReadyToOrganizeView: View {
             hasAppeared = true
         }
         .onChange(of: appState.selectedDirectory) { _, _ in
-            refreshReferenceableFiles()
+            scheduleReferenceableFilesRefresh()
+        }
+        .onDisappear {
+            referenceRefreshTask?.cancel()
+            referenceRefreshTask = nil
         }
     }
 
@@ -1225,11 +1230,33 @@ struct ReadyToOrganizeView: View {
         HapticFeedbackManager.shared.selection()
     }
 
-    private func refreshReferenceableFiles() {
+    private func scheduleReferenceableFilesRefresh() {
+        referenceRefreshTask?.cancel()
+
         guard let directory = appState.selectedDirectory else {
             referenceableFiles = []
             return
         }
+
+        referenceRefreshTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+
+            let files = await Self.loadReferenceableFiles(in: directory)
+            guard !Task.isCancelled else { return }
+            referenceableFiles = files
+            referenceRefreshTask = nil
+        }
+    }
+
+    private nonisolated static func loadReferenceableFiles(in directory: URL) async -> [InstructionFileReference] {
+        await Task.detached(priority: .utility) {
+            referenceableFiles(in: directory)
+        }.value
+    }
+
+    private nonisolated static func referenceableFiles(in directory: URL) -> [InstructionFileReference] {
+        guard !Task.isCancelled else { return [] }
 
         let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .fileSizeKey]
         let options: FileManager.DirectoryEnumerationOptions = [.skipsHiddenFiles, .skipsPackageDescendants]
@@ -1238,12 +1265,12 @@ struct ReadyToOrganizeView: View {
             includingPropertiesForKeys: resourceKeys,
             options: options
         ) else {
-            referenceableFiles = []
-            return
+            return []
         }
 
         var files: [InstructionFileReference] = []
         for case let url as URL in enumerator {
+            guard !Task.isCancelled else { return [] }
             guard files.count < 400 else { break }
             guard let values = try? url.resourceValues(forKeys: Set(resourceKeys)),
                   values.isRegularFile == true else { continue }
@@ -1257,7 +1284,7 @@ struct ReadyToOrganizeView: View {
             )
         }
 
-        referenceableFiles = files.sorted {
+        return files.sorted {
             $0.name.localizedStandardCompare($1.name) == .orderedAscending
         }
     }
@@ -1295,7 +1322,7 @@ private struct InstructionMentionQuery: Equatable {
     }
 }
 
-private struct InstructionFileReference: Identifiable, Equatable {
+private struct InstructionFileReference: Identifiable, Equatable, Sendable {
     let id: String
     let url: URL
     let name: String

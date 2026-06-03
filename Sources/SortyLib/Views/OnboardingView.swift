@@ -158,10 +158,12 @@ public struct OnboardingView: View {
         case .completion:
             CompletionStepView(onFinish: {
                 HapticFeedbackManager.shared.success()
-                withAnimation(.easeOut(duration: 0.5)) {
-                    hasCompletedOnboarding = true
-                }
-                if !appState.hasCompletedFeatureTour {
+                hasCompletedOnboarding = true
+                guard !appState.hasCompletedFeatureTour else { return }
+
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(850))
+                    guard hasCompletedOnboarding, !appState.hasCompletedFeatureTour else { return }
                     appState.isFeatureTourPresented = true
                 }
             })
