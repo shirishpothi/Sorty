@@ -777,8 +777,8 @@ struct PermissionEducationView: View {
 
     @ViewBuilder
     private func permissionHero(_ permission: PermissionType) -> some View {
-        if permission == .filesAndFolders {
-            FilesAndFoldersPermissionDemoView()
+        if let resourceName = permission.demoVideoResourceName {
+            PermissionDemoVideoView(permission: permission, resourceName: resourceName)
         } else {
             permissionExplanationHero(permission)
         }
@@ -828,7 +828,10 @@ struct PermissionEducationView: View {
     }
 }
 
-private struct FilesAndFoldersPermissionDemoView: View {
+private struct PermissionDemoVideoView: View {
+    let permission: PermissionType
+    let resourceName: String
+
     var body: some View {
         ZStack {
             Color.black
@@ -839,26 +842,41 @@ private struct FilesAndFoldersPermissionDemoView: View {
                 permissionDemoFallback
             }
         }
-        .accessibilityLabel("Files and Folders permission demo video")
+        .accessibilityLabel("\(permission.educationTitle) permission demo video")
     }
 
     private var videoURL: URL? {
-        SortyResources.bundle.url(forResource: "files-and-folders-demo", withExtension: "mp4")
+        SortyResources.bundle.url(forResource: resourceName, withExtension: "mp4")
     }
 
     private var permissionDemoFallback: some View {
         VStack(spacing: 14) {
-            Image(systemName: "folder.fill")
+            Image(systemName: permission.icon)
                 .font(.system(size: 54, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.86))
 
-            Text("Files & Folders")
+            Text(permission.educationTitle)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.82))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(Color.white.opacity(0.10))
                 .clipShape(Capsule(style: .continuous))
+        }
+    }
+}
+
+private extension PermissionType {
+    var demoVideoResourceName: String? {
+        switch self {
+        case .filesAndFolders:
+            return "files-and-folders-demo"
+        case .fullDiskAccess:
+            return "full-disk-access-demo"
+        case .automation:
+            return "automation-demo"
+        case .notifications:
+            return nil
         }
     }
 }

@@ -260,6 +260,17 @@ swiftpm_build_db_error_detected() {
     grep -Eiq 'accessing build database .* (disk I/O error|database disk image is malformed|readonly database|unable to open database file)' "${log_file}"
 }
 
+swiftpm_binary_artifact_error_detected() {
+    local log_name="$1"
+    local log_file="${BUILD_LOG_DIR}/${log_name}.log"
+
+    if [ ! -f "${log_file}" ]; then
+        return 1
+    fi
+
+    grep -Eiq 'XCFramework Info\.plist not found .*Sparkle\.xcframework' "${log_file}"
+}
+
 reset_swiftpm_build_database() {
     log_item "Resetting SwiftPM build database"
     rm -f \
@@ -268,6 +279,14 @@ reset_swiftpm_build_database() {
         "${BUILD_DIR}/build.db-journal" \
         "${BUILD_DIR}/build.db-shm" \
         "${BUILD_DIR}/build.db-wal"
+}
+
+reset_swiftpm_package_cache() {
+    log_item "Resetting SwiftPM package cache"
+    swift package --package-path "${PROJECT_DIR}" --scratch-path "${BUILD_DIR}" reset >/dev/null 2>&1 || {
+        reset_cached_build_products
+        reset_cached_dependency_products
+    }
 }
 
 run_with_swiftpm_db_recovery() {
@@ -279,6 +298,13 @@ run_with_swiftpm_db_recovery() {
     fi
 
     if ! swiftpm_build_db_error_detected "${log_name}"; then
+        if swiftpm_binary_artifact_error_detected "${log_name}"; then
+            log_warning "SwiftPM binary artifact cache is incomplete; retrying once after package reset."
+            reset_swiftpm_package_cache
+            run_with_log "${log_name}_retry" "$@"
+            return
+        fi
+
         return 1
     fi
 
