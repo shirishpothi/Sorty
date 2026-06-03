@@ -6,6 +6,7 @@
 //
 
 import AppKit
+import AVKit
 import SwiftUI
 import UserNotifications
 
@@ -682,7 +683,7 @@ struct PermissionEducationView: View {
 
     private func educationPage(_ permission: PermissionType) -> some View {
         VStack(spacing: 0) {
-            permissionVideoPlaceholder(permission)
+            permissionHero(permission)
                 .frame(width: 640, height: 360)
 
             VStack(spacing: 8) {
@@ -735,7 +736,16 @@ struct PermissionEducationView: View {
         }
     }
 
-    private func permissionVideoPlaceholder(_ permission: PermissionType) -> some View {
+    @ViewBuilder
+    private func permissionHero(_ permission: PermissionType) -> some View {
+        if permission == .filesAndFolders {
+            FilesAndFoldersPermissionDemoView()
+        } else {
+            permissionExplanationHero(permission)
+        }
+    }
+
+    private func permissionExplanationHero(_ permission: PermissionType) -> some View {
         ZStack {
             LinearGradient(
                 colors: [
@@ -753,9 +763,9 @@ struct PermissionEducationView: View {
                     .foregroundStyle(.white.opacity(0.86))
 
                 HStack(spacing: 8) {
-                    Image(systemName: "play.rectangle.fill")
+                    Image(systemName: "info.circle.fill")
                         .foregroundStyle(permission.color)
-                    Text("Permission video")
+                    Text(permission.educationTitle)
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.82))
                 }
@@ -776,6 +786,64 @@ struct PermissionEducationView: View {
             }
         }
         .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
+    }
+}
+
+private struct FilesAndFoldersPermissionDemoView: View {
+    @State private var player = AVQueuePlayer()
+    @State private var looper: AVPlayerLooper?
+
+    var body: some View {
+        ZStack {
+            Color.black
+
+            if let videoURL {
+                VideoPlayer(player: player)
+                    .onAppear {
+                        configurePlayer(with: videoURL)
+                    }
+                    .onDisappear {
+                        player.pause()
+                    }
+            } else {
+                permissionDemoFallback
+            }
+        }
+        .accessibilityLabel("Files and Folders permission demo video")
+    }
+
+    private var videoURL: URL? {
+        SortyResources.bundle.url(forResource: "files-and-folders-demo", withExtension: "mp4")
+    }
+
+    private var permissionDemoFallback: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "folder.fill")
+                .font(.system(size: 54, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.86))
+
+            Text("Files & Folders")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.82))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.10))
+                .clipShape(Capsule(style: .continuous))
+        }
+    }
+
+    private func configurePlayer(with url: URL) {
+        guard looper == nil else {
+            player.play()
+            return
+        }
+
+        let item = AVPlayerItem(url: url)
+        player.removeAllItems()
+        player.isMuted = true
+        player.actionAtItemEnd = .none
+        looper = AVPlayerLooper(player: player, templateItem: item)
+        player.play()
     }
 }
 

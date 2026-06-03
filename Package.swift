@@ -46,6 +46,7 @@ let package = Package(
                 .copy("Resources/whats-new-finder-integration.png"),
                 .copy("Resources/whats-new-nightly.png"),
                 .copy("Resources/SortyAppRepair.entitlements"),
+                .process("Resources/files-and-folders-demo.mp4"),
                 .process("Resources/SortyMascotTemplate.svg"),
                 .process("Resources/OnboardingSound.wav"),
                 .process("Resources/Final Onboarding.wav")
