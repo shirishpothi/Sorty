@@ -816,7 +816,7 @@ struct OnboardingBottomGradient: View {
     var body: some View {
         let clamped = max(0, min(1, progress))
         // Let the accent grow through the flow, then settle into a single
-        // rose field on completion with the strongest color around the final
+        // brand field on completion with the strongest color around the final
         // call to action.
         let completion = clamped * clamped
         let linearEnd = UnitPoint(x: 0.5, y: 0.68 - clamped * 0.56)

@@ -117,7 +117,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .automation: return .green
         case .deeplinks: return .cyan
         case .finder: return .cyan
-        case .notifications: return .pink
+        case .notifications: return SortyDesignSystem.Colors.resolvedAccent
         case .advanced: return .gray
         case .troubleshooting: return .red
         case .help: return .teal

@@ -58,7 +58,7 @@ struct SimulatedDemoAnimationView: View {
         DemoFileNode(name: "screenshot_123.png", icon: "photo.fill", color: .purple, targetFolder: "Other"),
         DemoFileNode(name: "meeting_notes.md", icon: "doc.text.fill", color: .orange, targetFolder: "Documents"),
         DemoFileNode(name: "invoice_client.pdf", icon: "doc.fill", color: .red, targetFolder: "Finances"),
-        DemoFileNode(name: "family_photo.jpg", icon: "photo.fill", color: .pink, targetFolder: "Photos"),
+        DemoFileNode(name: "family_photo.jpg", icon: "photo.fill", color: SortyDesignSystem.Colors.resolvedAccent, targetFolder: "Photos"),
         DemoFileNode(name: "code_backup.zip", icon: "doc.zipper", color: .gray, targetFolder: "Other")
     ]
     
@@ -1071,7 +1071,7 @@ struct TransitionParticleView: View {
 struct ConfettiBurstView: View {
     let isActive: Bool
     
-    private let confettiColors: [Color] = [.green, .blue, .purple, .orange, .pink, .yellow, .red, .mint]
+    private let confettiColors: [Color] = [.green, .blue, .purple, .orange, SortyDesignSystem.Colors.resolvedAccent, .yellow, .red, .mint]
     private let particleCount = 24
     
     var body: some View {

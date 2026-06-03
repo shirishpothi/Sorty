@@ -777,7 +777,7 @@ public class NotificationManager: ObservableObject {
             title: "In-App HUD Demo",
             message: "This is how subtle in-app overlays appear in Sorty.",
             icon: "rectangle.bottomthird.inset.filled",
-            iconColor: .pink,
+            iconColor: SortyDesignSystem.Colors.resolvedAccent,
             playSound: settings.settings.hudSounds
         )
         trackAnalytics(

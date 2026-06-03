@@ -102,7 +102,7 @@ struct ThanksForUsingSortyView: View {
                     .scaledToFit()
                     .frame(width: 84, height: 84)
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(heartHovered ? Color.pink : Color.red)
+                    .foregroundStyle(heartHovered ? SortyDesignSystem.Colors.resolvedAccent : Color.red)
                     .scaleEffect(isHeartBeating ? (heartHovered ? 1.14 : 1.04) : 0.92)
                     .shadow(color: Color.red.opacity(0.22), radius: 18, y: 8)
                     .animation(.easeInOut(duration: 0.72).repeatForever(autoreverses: true), value: isHeartBeating)

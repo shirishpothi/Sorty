@@ -11,9 +11,9 @@ import SwiftUI
 @MainActor
 private enum CompletionPalette {
     static var accent: Color { SortyDesignSystem.Colors.resolvedAccent }
-    static let softRose = Color(red: 1.0, green: 0.48, blue: 0.58)
-    static let deepRose = Color(red: 0.42, green: 0.19, blue: 0.25)
-    static let shadowRose = Color(red: 0.22, green: 0.10, blue: 0.14)
+    static let softBlue = Color(red: 0.18, green: 0.34, blue: 0.72)
+    static let deepBlue = Color(red: 0.0, green: 0.03, blue: 0.22)
+    static let shadowBlue = Color(red: 0.0, green: 0.015, blue: 0.12)
 }
 
 // MARK: - Completion Reveal Blob
@@ -31,8 +31,8 @@ private struct CompletionRevealBlob: View {
                     RadialGradient(
                         colors: [
                             CompletionPalette.accent.opacity(0.30),
-                            CompletionPalette.softRose.opacity(0.18),
-                            CompletionPalette.deepRose.opacity(0.08),
+                            CompletionPalette.softBlue.opacity(0.18),
+                            CompletionPalette.deepBlue.opacity(0.08),
                             Color.clear
                         ],
                         center: .center,
@@ -47,7 +47,7 @@ private struct CompletionRevealBlob: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            CompletionPalette.softRose.opacity(0.18),
+                            CompletionPalette.softBlue.opacity(0.18),
                             CompletionPalette.accent.opacity(0.12),
                             Color.clear
                         ],
@@ -98,10 +98,10 @@ private struct CompletionGlowRing: View {
             .stroke(
                 AngularGradient(
                     colors: [
-                        CompletionPalette.softRose.opacity(0.86),
+                        CompletionPalette.softBlue.opacity(0.86),
                         CompletionPalette.accent.opacity(0.78),
-                        CompletionPalette.deepRose.opacity(0.46),
-                        CompletionPalette.softRose.opacity(0.86)
+                        CompletionPalette.deepBlue.opacity(0.46),
+                        CompletionPalette.softBlue.opacity(0.86)
                     ],
                     center: .center
                 ),
@@ -186,7 +186,7 @@ public struct CompletionStepView: View {
                     ForEach(0..<3, id: \.self) { index in
                         Circle()
                             .stroke(
-                                CompletionPalette.softRose.opacity(0.18 - Double(index) * 0.04),
+                                CompletionPalette.softBlue.opacity(0.18 - Double(index) * 0.04),
                                 lineWidth: 2
                             )
                             .frame(width: CGFloat(140 + index * 30), height: CGFloat(140 + index * 30))
@@ -201,16 +201,16 @@ public struct CompletionStepView: View {
                     }
 
                     Circle()
-                        .fill(CompletionPalette.shadowRose.opacity(0.30))
+                        .fill(CompletionPalette.shadowBlue.opacity(0.30))
                         .frame(width: 118, height: 118)
 
                     Circle()
-                        .fill(CompletionPalette.softRose)
+                        .fill(CompletionPalette.softBlue)
                         .frame(width: 72, height: 72)
 
                     Image(systemName: "checkmark")
                         .font(.system(size: 42, weight: .bold, design: .rounded))
-                        .foregroundStyle(CompletionPalette.deepRose.opacity(0.92))
+                        .foregroundStyle(CompletionPalette.deepBlue.opacity(0.92))
                         .symbolEffect(.bounce, value: hasAppeared)
                 }
                 .opacity(hasAppeared ? 1 : 0)
@@ -556,7 +556,7 @@ private struct CompletionContrastBackdrop: View {
 
             RadialGradient(
                 colors: [
-                    CompletionPalette.softRose.opacity(0.18),
+                    CompletionPalette.softBlue.opacity(0.18),
                     CompletionPalette.accent.opacity(0.08),
                     Color.clear
                 ],
@@ -598,14 +598,14 @@ struct QuickTipRow: View {
                     .overlay(
                         Circle()
                             .strokeBorder(
-                                CompletionPalette.softRose.opacity(0.24),
+                                CompletionPalette.softBlue.opacity(0.24),
                                 lineWidth: 0.5
                             )
                     )
 
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(CompletionPalette.softRose)
+                    .foregroundStyle(CompletionPalette.softBlue)
             }
 
             Text(text)

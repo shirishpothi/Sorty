@@ -303,7 +303,7 @@ private struct IconBurstParticles: View {
             angle: angle,
             distance: CGFloat(46 + (index % 4) * 14),
             size: CGFloat(5 + (index % 3) * 3),
-            color: [.teal, .blue, .purple, .pink, .orange][index % 5]
+            color: [.teal, .blue, .purple, SortyDesignSystem.Colors.resolvedAccent, .orange][index % 5]
         )
     }
 

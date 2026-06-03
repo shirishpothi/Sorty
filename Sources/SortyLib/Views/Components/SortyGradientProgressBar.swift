@@ -492,7 +492,7 @@ struct SortyGradientCircularLoader: View {
         Group {
             SortyGradientProgressBar(progress: 0.78, accent: .indigo)
             SortyGradientProgressBar(progress: 0.45, accent: .blue)
-            SortyGradientProgressBar(progress: 0.2, accent: .pink)
+            SortyGradientProgressBar(progress: 0.2, accent: SortyDesignSystem.Colors.resolvedAccent)
             SortyGradientLoadingBar()
         }
 

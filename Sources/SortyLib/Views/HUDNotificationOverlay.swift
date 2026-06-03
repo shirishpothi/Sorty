@@ -195,7 +195,7 @@ struct HUDNotificationCard: View {
 private struct HUDNotificationTorchEffect: View {
     let isAnimated: Bool
 
-    private let accent = Color(red: 1.0, green: 0.22, blue: 0.62)
+    private let accent = SortyDesignSystem.Colors.resolvedAccent
 
     var body: some View {
         GeometryReader { geometry in
