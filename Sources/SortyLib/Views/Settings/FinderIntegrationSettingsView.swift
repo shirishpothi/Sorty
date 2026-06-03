@@ -5,7 +5,6 @@
 //  Finder Integration settings section
 //
 
-import AppKit
 import SwiftUI
 
 struct FinderIntegrationSettingsView: View {
@@ -14,7 +13,6 @@ struct FinderIntegrationSettingsView: View {
     @State private var watchActionMessage: String?
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
-    @State private var frontmostFinderFolder: URL?
     @State private var isShowingAutomationPermissionInfo = false
     @EnvironmentObject var automationManager: AutomationManager
     
@@ -76,79 +74,6 @@ struct FinderIntegrationSettingsView: View {
             }
             .animatedAppearance(delay: 0.03)
 
-            SettingsCard(title: "Use Finder Now", icon: "sparkles.rectangle.stack", color: .mint) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        Image(systemName: automationManager.hasValidFinderSelection ? "checkmark.seal.fill" : "scope")
-                            .font(.title3)
-                            .foregroundStyle(automationManager.hasValidFinderSelection ? .green : .secondary)
-                            .frame(width: 24, height: 24)
-                            .accessibilityHidden(true)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(finderContextTitle)
-                                .font(.subheadline.weight(.medium))
-                            Text(finderContextSubtitle)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-
-                        Spacer()
-
-                        Button("Refresh") {
-                            refreshFinderContext()
-                        }
-                        .buttonStyle(.sortySecondary(size: .regular))
-                        .accessibilityIdentifier("FinderWorkflowRefreshButton")
-                    }
-
-                    if let folder = frontmostFinderFolder {
-                        HStack(spacing: 8) {
-                            Image(systemName: "folder")
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Front Finder Folder")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                Text(folder.path)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-                        .padding(8)
-                        .background(Color.secondary.opacity(0.06))
-                        .cornerRadius(8)
-                    }
-
-                    HStack(spacing: 8) {
-                        Button {
-                            openFinderSelectionInSorty()
-                        } label: {
-                            Label("Organize Finder Selection", systemImage: "play.fill")
-                        }
-                        .buttonStyle(.sortyPrimary(size: .regular))
-                        .disabled(!automationManager.hasValidFinderSelection && frontmostFinderFolder == nil)
-                        .accessibilityIdentifier("FinderWorkflowOrganizeButton")
-
-                        Button {
-                            if let folder = frontmostFinderFolder {
-                                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folder.path)
-                            }
-                        } label: {
-                            Label("Reveal Folder", systemImage: "folder")
-                        }
-                        .buttonStyle(.sortySecondary(size: .regular))
-                        .disabled(frontmostFinderFolder == nil)
-                        .accessibilityIdentifier("FinderWorkflowRevealButton")
-                    }
-                }
-            }
-            .animatedAppearance(delay: 0.06)
-
             if shouldShowTroubleshooting {
                 SettingsCard(title: "Troubleshooting", icon: "wrench.and.screwdriver", color: .purple) {
                     VStack(alignment: .leading, spacing: 12) {
@@ -159,6 +84,7 @@ struct FinderIntegrationSettingsView: View {
 
                         HStack(spacing: 8) {
                             Button(finderSyncActive ? "Repair Extension" : "Activate Extension") {
+                                HapticFeedbackManager.shared.tap()
                                 Task {
                                     let repair = await ExtensionCommunication.repairFinderSyncExtensionRegistrationAsync()
                                     finderSyncActive = await ExtensionCommunication.isFinderSyncExtensionActiveAsync()
@@ -173,12 +99,14 @@ struct FinderIntegrationSettingsView: View {
                             .buttonStyle(.sortyPrimary(size: .regular))
 
                             Button("Open macOS Extensions") {
+                                HapticFeedbackManager.shared.tap()
                                 ExtensionCommunication.openFinderExtensionSettings()
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
 
                             if !isWatchActionInstalled {
                                 Button("Repair Menu Action") {
+                                    HapticFeedbackManager.shared.tap()
                                     Task {
                                         let result = await ExtensionCommunication.installQuickWatchActionAsync()
                                         isWatchActionInstalled = result.success
@@ -192,16 +120,27 @@ struct FinderIntegrationSettingsView: View {
                                 }
                                 .buttonStyle(.sortySecondary(size: .regular))
                             }
+
+                            Button("Run Full Check") {
+                                HapticFeedbackManager.shared.tap()
+                                Task {
+                                    await refreshIntegrationStatus()
+                                    refreshFinderContext()
+                                }
+                            }
+                            .buttonStyle(.sortySecondary(size: .regular))
                         }
 
                         if automationManager.automationStatus != .granted {
                             HStack(spacing: 8) {
                                 Button("Open Automation Settings") {
+                                    HapticFeedbackManager.shared.tap()
                                     automationManager.openAutomationSettings()
                                 }
                                 .buttonStyle(.sortySecondary(size: .regular))
 
                                 Button("Recover Permission") {
+                                    HapticFeedbackManager.shared.tap()
                                     automationManager.recoverAutomationState()
                                     refreshFinderContext()
                                 }
@@ -209,6 +148,7 @@ struct FinderIntegrationSettingsView: View {
                                 .accessibilityIdentifier("FinderAutomationRecoverButton")
 
                                 Button {
+                                    HapticFeedbackManager.shared.tap()
                                     isShowingAutomationPermissionInfo = true
                                 } label: {
                                     Label("Why this is needed", systemImage: "info.circle")
@@ -230,14 +170,6 @@ struct FinderIntegrationSettingsView: View {
                             }
                             .transition(.scale.combined(with: .opacity))
                         }
-
-                        Button("Run Full Check") {
-                            Task {
-                                await refreshIntegrationStatus()
-                                refreshFinderContext()
-                            }
-                        }
-                        .buttonStyle(.sortySecondary(size: .regular))
                     }
                 }
                 .animatedAppearance(delay: 0.1)
@@ -275,12 +207,6 @@ struct FinderIntegrationSettingsView: View {
 
     private func refreshFinderContext() {
         automationManager.checkPermissions(enableChecksIfNeeded: true)
-        if automationManager.automationStatus.isGranted {
-            automationManager.updateFinderSelection()
-            frontmostFinderFolder = automationManager.getFrontmostFinderWindow()
-        } else {
-            frontmostFinderFolder = nil
-        }
     }
 
     private var shouldShowTroubleshooting: Bool {
@@ -329,48 +255,6 @@ struct FinderIntegrationSettingsView: View {
             return "Blocked"
         case .unknown:
             return "Checking"
-        }
-    }
-
-    private var finderContextTitle: String {
-        if automationManager.hasValidFinderSelection {
-            return automationManager.statusMessage
-        }
-
-        if frontmostFinderFolder != nil {
-            return "Ready to use the front Finder folder"
-        }
-
-        return "Open Finder or select items to organize"
-    }
-
-    private var finderContextSubtitle: String {
-        if automationManager.selectedFinderItems.isEmpty {
-            return "Sorty can organize the current Finder folder when macOS exposes it."
-        }
-
-        let itemCount = automationManager.selectedFinderItems.count
-        return "Selection: \(itemCount) item\(itemCount == 1 ? "" : "s")"
-    }
-
-    private func openFinderSelectionInSorty() {
-        let selectedTarget: URL? = automationManager.selectedFinderItems.first.map { item in
-            let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-            return isDirectory ? item : item.deletingLastPathComponent()
-        }
-        let target = selectedTarget ?? frontmostFinderFolder
-        guard let target else { return }
-
-        var components = URLComponents()
-        components.scheme = "sorty"
-        components.host = "organize"
-        components.queryItems = [
-            URLQueryItem(name: "path", value: target.path),
-            URLQueryItem(name: "source", value: "finder")
-        ]
-
-        if let url = components.url {
-            NSWorkspace.shared.open(url)
         }
     }
 

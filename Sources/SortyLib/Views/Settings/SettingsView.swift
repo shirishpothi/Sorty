@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var selectedCategory: SettingsCategory = .rules
     @State private var contentOpacity: Double = 0
     @State private var searchText = ""
+    @StateObject private var windowLinkHoverState = WindowLinkHoverState()
 
     private var trimmedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -23,16 +24,23 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            settingsSidebar
-                .frame(width: 200)
-                .animatedAppearance(delay: 0.03)
-            Divider()
-            contentView
-                .animatedAppearance(delay: 0.08)
+        ZStack {
+            HStack(spacing: 0) {
+                settingsSidebar
+                    .frame(width: 200)
+                    .animatedAppearance(delay: 0.03)
+                Divider()
+                contentView
+                    .animatedAppearance(delay: 0.08)
+            }
+
+            WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
         }
         .navigationTitle("Settings")
         .opacity(contentOpacity)
+        .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
+            windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
+        }
         .onAppear {
             if let section = appState.selectedSettingsSection {
                 selectedCategory = section
@@ -46,9 +54,6 @@ struct SettingsView: View {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     selectedCategory = section
                 }
-                if section != .rules {
-                    appState.settingsFocusTarget = nil
-                }
             }
         }
         .onChange(of: searchText) { _, _ in
@@ -56,6 +61,9 @@ struct SettingsView: View {
             if let firstCategory = filteredCategories.first {
                 selectedCategory = firstCategory
             }
+        }
+        .onDisappear {
+            windowLinkHoverState.clearAllHover()
         }
     }
 
@@ -328,6 +336,8 @@ struct SettingsView: View {
             AutomationSettingsView()
                 .environmentObject(viewModel)
                 .environmentObject(appState)
+        case .deeplinks:
+            DeeplinkSettingsView()
         case .finder:
             FinderIntegrationSettingsView()
         case .notifications:
@@ -344,7 +354,7 @@ struct SettingsView: View {
     }
 
     private func scrollToFocusedSetting(using proxy: ScrollViewProxy) {
-        guard !isSearching, selectedCategory == .rules else { return }
+        guard !isSearching else { return }
         guard let target = appState.settingsFocusTarget else { return }
 
         DispatchQueue.main.async {

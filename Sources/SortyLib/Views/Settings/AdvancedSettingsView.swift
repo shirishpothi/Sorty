@@ -20,7 +20,8 @@ struct AdvancedSettingsView: View {
                 SettingsToggle(
                     isOn: $showMenuBarExtra,
                     title: "Show Menu Bar Icon",
-                    description: "Display Sorty icon in the menu bar for quick access"
+                    description: "Display Sorty icon in the menu bar for quick access",
+                    focusTarget: .advancedMenuBar
                 )
             }
             .animatedAppearance(delay: 0.0)
@@ -30,7 +31,8 @@ struct AdvancedSettingsView: View {
                     SettingsToggle(
                         isOn: $automationManager.autoSelectOrganizedFolders,
                         title: "Automatically reveal organized folders",
-                        description: "Open Finder and highlight newly organized folders after each completed run"
+                        description: "Open Finder and highlight newly organized folders after each completed run",
+                        focusTarget: .advancedFinderWorkflow
                     )
                     .accessibilityIdentifier("FinderAutoRevealToggle")
 
@@ -48,7 +50,8 @@ struct AdvancedSettingsView: View {
                     SettingsToggle(
                         isOn: $privacyModeEnabled,
                         title: "Privacy Mode",
-                        description: "Mask usernames, paths, API keys, and raw AI details in the interface"
+                        description: "Mask usernames, paths, API keys, and raw AI details in the interface",
+                        focusTarget: .advancedPrivacyMode
                     )
                     .accessibilityIdentifier("PrivacyModeToggle")
 
@@ -57,7 +60,8 @@ struct AdvancedSettingsView: View {
                     SettingsToggle(
                         isOn: $internetPrivacyModeEnabled,
                         title: "Block Internet Connections",
-                        description: "Allow only localhost requests for local models and offline workflows"
+                        description: "Allow only localhost requests for local models and offline workflows",
+                        focusTarget: .advancedInternetPrivacy
                     )
                     .accessibilityIdentifier("InternetPrivacyModeToggle")
                 }
@@ -87,24 +91,8 @@ struct AdvancedSettingsView: View {
                     )
                 }
             }
+            .settingsFocusable(.advancedTimeouts)
             .animatedAppearance(delay: 0.1)
-            
-            SettingsCard(title: "Token Limits", icon: "number", color: .blue) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Max Tokens")
-                            .font(.subheadline)
-                        Spacer()
-                        TextField("Auto", value: $viewModel.config.maxTokens, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 100)
-                    }
-                    Text("Leave empty for model default")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .animatedAppearance(delay: 0.15)
             
             SettingsCard(title: "Developer", icon: "hammer", color: .gray) {
                 VStack(spacing: 12) {
@@ -117,8 +105,12 @@ struct AdvancedSettingsView: View {
                     Divider()
                     
                     Button {
+                        HapticFeedbackManager.shared.tap()
                         if let logURL = LogManager.shared.exportLogs() {
+                            HapticFeedbackManager.shared.success()
                             NSWorkspace.shared.activateFileViewerSelecting([logURL])
+                        } else {
+                            HapticFeedbackManager.shared.error()
                         }
                     } label: {
                         HStack {
@@ -127,9 +119,16 @@ struct AdvancedSettingsView: View {
                         }
                     }
                     .buttonStyle(.sortyProminent(intent: .destructive))
+                    .accessibilityIdentifier("ShowErrorLogsButton")
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
                 }
             }
-            .animatedAppearance(delay: 0.2)
+            .settingsFocusable(.advancedDeveloper)
+            .animatedAppearance(delay: 0.15)
         }
     }
 }

@@ -111,6 +111,7 @@ struct AutomationSettingsView: View {
                 }
             }
         }
+        .settingsFocusable(.automationGlobalModel)
         .sheet(isPresented: $showModelPicker) {
             ModelSelectionPopover(
                 isPresented: $showModelPicker,
@@ -140,6 +141,7 @@ struct AutomationSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
+                    .settingsFocusable(.automationLaunchAtLogin)
 
                     HStack(alignment: .center, spacing: 8) {
                         Toggle(isOn: $keepInBackground) {
@@ -152,6 +154,7 @@ struct AutomationSettingsView: View {
                             }
                         }
                         .toggleStyle(.switch)
+                        .settingsFocusable(.automationKeepInBackground)
 
                         Button {
                             showBackgroundInfo.toggle()
@@ -193,6 +196,7 @@ struct AutomationSettingsView: View {
                         }
                     }
                     .toggleStyle(.switch)
+                    .settingsFocusable(.automationHideDockIcon)
                 }
 
             }

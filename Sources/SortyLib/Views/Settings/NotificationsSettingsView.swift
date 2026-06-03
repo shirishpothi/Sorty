@@ -16,6 +16,7 @@ struct NotificationsSettingsView: View {
         VStack(spacing: 16) {
             // Permission Status
             NotificationPermissionCard()
+                .settingsFocusable(.notificationsPermission)
                 .animatedAppearance(delay: 0.0)
             
             // Delivery Method
@@ -26,7 +27,8 @@ struct NotificationsSettingsView: View {
                         title: "In-App HUD",
                         description: "Show notifications as subtle bottom-left overlays",
                         previewAction: { notificationManager.previewInAppHUDDelivery() },
-                        previewIcon: "play.fill"
+                        previewIcon: "play.fill",
+                        focusTarget: .notificationsInAppHUD
                     )
                     
                     Divider()
@@ -36,7 +38,8 @@ struct NotificationsSettingsView: View {
                         title: "System Notifications",
                         description: "Show in macOS Notification Center",
                         previewAction: { notificationManager.previewSystemNotificationDelivery() },
-                        previewIcon: "play.fill"
+                        previewIcon: "play.fill",
+                        focusTarget: .notificationsSystem
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,24 +73,21 @@ struct NotificationsSettingsView: View {
                         description: "When errors occur during processing",
                         previewAction: { playPreviewSound("Basso") }
                     )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .animatedAppearance(delay: 0.15)
-            
-            // Sounds
-            SettingsCard(title: "Sounds", icon: "speaker.wave.2", color: .purple) {
-                VStack(alignment: .leading, spacing: 12) {
+
+                    Divider()
+
                     SettingsToggle(
                         isOn: $notificationSettings.settings.playCompletionSound,
                         title: "Completion Sound",
                         description: "Play a satisfying sound when organization finishes",
-                        previewAction: { playPreviewSound("Glass") }
+                        previewAction: { playPreviewSound("Glass") },
+                        focusTarget: .notificationsCompletionSound
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .animatedAppearance(delay: 0.2)
+            .settingsFocusable(.notificationsTypes)
+            .animatedAppearance(delay: 0.15)
         }
     }
 

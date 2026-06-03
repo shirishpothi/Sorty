@@ -261,9 +261,12 @@ struct DeeplinkSettingsView: View {
                 entries: [
                     DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
                     DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule."),
+                    DeeplinkEntry(title: "Exclude Path", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Add a folder or file path to exclusions."),
                     DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a pattern."),
                     DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Open persona create/select flows with optional generation."),
-                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear.")
+                    DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear."),
+                    DeeplinkEntry(title: "Provider Settings", url: "sorty://settings?section=provider", summary: "Jump straight to provider setup."),
+                    DeeplinkEntry(title: "Finder Settings", url: "sorty://settings?section=finder", summary: "Jump straight to Finder and Services integration.")
                 ]
             ),
             DeeplinkGroup(
@@ -415,6 +418,7 @@ private struct DeeplinkEntryRow: View {
     let entry: DeeplinkEntry
     let color: Color
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var copied = false
 
     var body: some View {
@@ -438,21 +442,48 @@ private struct DeeplinkEntryRow: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button {
-                copy(entry.url)
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(copied ? .green : color)
-                    .frame(width: 24, height: 24)
-            }
-            .buttonStyle(.plain)
-            .help("Copy \(entry.title) deeplink")
-            .accessibilityLabel("Copy \(entry.title) deeplink")
+            copyButton
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(copied ? color.opacity(0.13) : Color.clear)
+                .blur(radius: copied && !reduceMotion ? 8 : 0)
+        )
+        .overlay(alignment: .trailing) {
+            if copied {
+                Label("Copied", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.regularMaterial, in: Capsule())
+                    .shadow(color: color.opacity(0.22), radius: 12, y: 4)
+                    .padding(.trailing, 44)
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.88).combined(with: .opacity))
+            }
+        }
         .contentShape(Rectangle())
+    }
+
+    private var copyButton: some View {
+        Button {
+            copy(entry.url)
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(copied ? .green : color)
+                .frame(width: 28, height: 28)
+                .background(
+                    Circle()
+                        .fill(copied ? .green.opacity(0.14) : color.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Copy \(entry.title) deeplink")
+        .accessibilityLabel("Copy \(entry.title) deeplink")
+        .accessibilityValue(copied ? "Copied" : "")
     }
 
     private func copy(_ value: String) {
@@ -460,13 +491,13 @@ private struct DeeplinkEntryRow: View {
         NSPasteboard.general.setString(value, forType: .string)
         HapticFeedbackManager.shared.tap()
 
-        withAnimation(.easeInOut(duration: 0.12)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.74)) {
             copied = true
         }
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_250_000_000)
-            withAnimation(.easeInOut(duration: 0.12)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
                 copied = false
             }
         }

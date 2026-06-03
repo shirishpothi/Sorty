@@ -24,14 +24,20 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertTrue(matches.contains { $0.snippet.title == "Enable File Tagging" })
     }
 
-    func testHelpFeatureMatchesDeeplinkQuery() {
-        let matches = SettingsCategory.help.featureMatches(query: "deeplink")
+    func testDeeplinkFeatureMatchesDeeplinkQuery() {
+        let matches = SettingsCategory.deeplinks.featureMatches(query: "deeplink")
 
         XCTAssertTrue(matches.contains { $0.snippet.title == "Automation Deeplinks" })
     }
 
-    func testHelpCategoryMatchesSortySchemeQuery() {
-        XCTAssertTrue(SettingsCategory.help.matchesSearch(query: "sorty://"))
+    func testDeeplinkCategoryMatchesSortySchemeQuery() {
+        XCTAssertTrue(SettingsCategory.deeplinks.matchesSearch(query: "sorty://"))
+    }
+
+    func testDeeplinkFeatureMatchesDownloadsWordQuery() {
+        let matches = SettingsCategory.deeplinks.featureMatches(query: "downloads")
+
+        XCTAssertTrue(matches.contains { $0.snippet.title == "Organization Deeplinks" })
     }
 
     func testAutomationCategoryMatchesHyphenSeparatedQuery() {
@@ -64,6 +70,8 @@ final class SettingsSearchTests: XCTestCase {
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Duplicate Handling")), .rulesContentRules)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Enable File Tagging")), .rulesContentRules)
         XCTAssertEqual(SettingsCategory.rules.focusTarget(for: snippet(in: .rules, titled: "Organization Style")), .rulesOrganizationStyle)
+        XCTAssertEqual(SettingsCategory.notifications.focusTarget(for: snippet(in: .notifications, titled: "System Notifications")), .notificationsSystem)
+        XCTAssertEqual(SettingsCategory.advanced.focusTarget(for: snippet(in: .advanced, titled: "Block Internet Connections")), .advancedInternetPrivacy)
     }
 
     func testFocusTargetIsNilForUnknownSnippet() {
@@ -73,7 +81,7 @@ final class SettingsSearchTests: XCTestCase {
     }
 
     func testFocusTargetIsNilOutsideRulesCategory() {
-        XCTAssertNil(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Automation Deeplinks")))
+        XCTAssertNil(SettingsCategory.help.focusTarget(for: snippet(in: .help, titled: "Support Links")))
     }
 
     private func snippet(

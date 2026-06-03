@@ -9,6 +9,7 @@ import SwiftUI
 
 struct OrganizationStrategySettingsView: View {
     @EnvironmentObject var viewModel: SettingsViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var namingGenerator = NamingInstructionsGenerator()
     @StateObject private var presetManager = NamingPresetManager.shared
     @State private var namingPreferenceInput: String = ""
@@ -26,16 +27,23 @@ struct OrganizationStrategySettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         SettingsToggle(
                             isOn: Binding(
-                                get: { !viewModel.config.enableDeepScan },
-                                set: { viewModel.config.enableDeepScan = !$0 }
+                                get: { isFastModeOn },
+                                set: { newValue in
+                                    guard viewModel.config.provider.supportsDeepScan else {
+                                        viewModel.config.enableDeepScan = false
+                                        return
+                                    }
+                                    viewModel.config.enableDeepScan = !newValue
+                                }
                             ),
                             title: "Fast Mode",
-                            description: "Skip content analysis and use filenames, extensions, and folder context only"
+                            description: "Skip content analysis and use filenames, extensions, and folder context only",
+                            focusTarget: .strategyFastMode
                         )
                         .disabled(!viewModel.config.provider.supportsDeepScan)
 
                         if !viewModel.config.provider.supportsDeepScan {
-                            Text("Not supported by \(viewModel.config.provider.displayName) due to context limits.")
+                            Text("Required for \(viewModel.config.provider.displayName) because Apple on-device models have tighter context limits.")
                                 .font(.caption2)
                                 .foregroundColor(.orange)
                                 .padding(.leading, 32)
@@ -45,6 +53,12 @@ struct OrganizationStrategySettingsView: View {
                 }
             }
             .animatedAppearance(delay: 0.05)
+            .onAppear(perform: enforceProviderScanMode)
+            .onChange(of: viewModel.config.provider) { _, _ in
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
+                    enforceProviderScanMode()
+                }
+            }
 
             // Vision AI Section
             SettingsCard(title: "AI Vision", icon: "eye", color: .teal) {
@@ -52,7 +66,8 @@ struct OrganizationStrategySettingsView: View {
                     SettingsToggle(
                         isOn: $viewModel.config.enableVision,
                         title: "Use AI Vision for Images",
-                        description: "Send images to the AI for content-aware organization"
+                        description: "Send images to the AI for content-aware organization",
+                        focusTarget: .strategyVision
                     )
                     .disabled(!ModelCatalog.shared.supportsVision(modelId: viewModel.config.model, provider: viewModel.config.provider))
 
@@ -327,6 +342,7 @@ struct OrganizationStrategySettingsView: View {
                     }
                 }
             }
+            .settingsFocusable(.strategyRenaming)
             .animatedAppearance(delay: 0.15)
             .alert("Save as Naming Preset", isPresented: $showingSavePresetAlert) {
                 TextField("Preset name", text: $presetNameInput)
@@ -361,6 +377,16 @@ struct OrganizationStrategySettingsView: View {
                     )
                 }
             }
+        }
+    }
+
+    private var isFastModeOn: Bool {
+        !viewModel.config.provider.supportsDeepScan || !viewModel.config.enableDeepScan
+    }
+
+    private func enforceProviderScanMode() {
+        if !viewModel.config.provider.supportsDeepScan {
+            viewModel.config.enableDeepScan = false
         }
     }
 }

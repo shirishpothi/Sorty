@@ -232,6 +232,7 @@ struct SettingsToggle: View {
     var description: String? = nil
     var previewAction: (() -> Void)? = nil
     var previewIcon: String = "speaker.wave.2.fill"
+    var focusTarget: SettingsFocusTarget? = nil
     
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
@@ -268,6 +269,7 @@ struct SettingsToggle: View {
                 .toggleStyle(.switch)
         }
         .padding(.vertical, 4)
+        .settingsFocusable(focusTarget)
         .onChange(of: isOn) { _, _ in
             HapticFeedbackManager.shared.selection()
         }
@@ -333,6 +335,15 @@ extension View {
 
     func settingsFocusable(_ target: SettingsFocusTarget) -> some View {
         modifier(SettingsFocusableModifier(target: target))
+    }
+
+    @ViewBuilder
+    func settingsFocusable(_ target: SettingsFocusTarget?) -> some View {
+        if let target {
+            settingsFocusable(target)
+        } else {
+            self
+        }
     }
 }
 

@@ -207,6 +207,14 @@ public final class WindowSession: ObservableObject {
                 exclusionRules.addRule(rule)
             }
 
+        case .exclude(let path):
+            appState.currentView = .exclusions
+            if let path {
+                let normalizedPath = URL(fileURLWithPath: path).standardizedFileURL.path
+                let rule = ExclusionRule(type: .pathContains, pattern: normalizedPath)
+                exclusionRules.addRule(rule)
+            }
+
         case .scan(let path):
             if let path {
                 appState.selectedDirectory = URL(fileURLWithPath: path)

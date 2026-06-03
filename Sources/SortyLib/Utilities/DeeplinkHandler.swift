@@ -24,6 +24,7 @@ public enum DeeplinkDestination: Equatable {
     case watched(action: String?, path: String?)
     case rules(action: String?, type: String?, pattern: String?)
     case exclusions(action: String?, pattern: String?)
+    case exclude(path: String?)
     case scan(path: String?)
     case storage(action: String?, path: String?)
     
@@ -134,6 +135,9 @@ public class DeeplinkHandler: ObservableObject {
             let action = queryValue(for: "action")
             let pattern = queryValue(for: "pattern")
             pendingDestination = .exclusions(action: action, pattern: pattern)
+
+        case "exclude":
+            pendingDestination = .exclude(path: queryValue(for: "path") ?? queryValue(for: "pattern"))
             
         case "scan":
             let path = queryValue(for: "path")
@@ -272,6 +276,12 @@ public class DeeplinkHandler: ObservableObject {
                 items.append(URLQueryItem(name: "pattern", value: pattern))
             }
             if !items.isEmpty { components.queryItems = items }
+
+        case .exclude(let path):
+            components.host = "exclude"
+            if let path {
+                components.queryItems = [URLQueryItem(name: "path", value: path)]
+            }
             
         case .scan(let path):
             components.host = "scan"

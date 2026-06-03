@@ -14,53 +14,47 @@ struct AIProviderRow: View {
     
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
-
-    private var detailText: String {
-        if provider == .openAI {
-            return "API keys or Codex subscription"
-        }
-        return provider.description
-    }
     
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .center, spacing: 10) {
-                ProviderLogoView(provider: provider, size: 18)
-                    .frame(width: 32, height: 32)
+            HStack(alignment: .center, spacing: 8) {
+                ProviderLogoView(provider: provider, size: 17)
+                    .frame(width: 28, height: 28)
                     .background(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .fill(provider.brandColor.opacity(isSelected ? 0.16 : 0.1))
                     )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(provider.displayName)
+                    Text(provider.selectorTitle)
                         .font(.subheadline.weight(isSelected ? .semibold : .medium))
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
 
-                    Text(detailText)
+                    Text(provider.selectorDescription)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: 4)
 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(isSelected ? provider.brandColor : Color.secondary.opacity(0.45))
                     .accessibilityHidden(true)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? provider.brandColor.opacity(0.09) : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
+                    .fill(isSelected ? provider.brandColor.opacity(0.08) : (isHovered ? Color.primary.opacity(0.045) : Color.primary.opacity(0.025)))
             )
             .contentShape(Rectangle())
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? provider.brandColor.opacity(0.42) : Color.secondary.opacity(isHovered ? 0.12 : 0.06), lineWidth: 1)
+                    .stroke(isSelected ? provider.brandColor.opacity(0.35) : Color.secondary.opacity(0.1), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -79,6 +73,46 @@ struct AIProviderRow: View {
 // MARK: - AI Provider Extensions
 
 extension AIProvider {
+    var selectorTitle: String {
+        switch self {
+        case .githubCopilot:
+            return "Copilot"
+        case .openAICompatible:
+            return "Compatible API"
+        case .openRouter:
+            return "OpenRouter"
+        case .anthropic:
+            return "Claude"
+        case .appleFoundationModel:
+            return "Apple"
+        default:
+            return displayName
+        }
+    }
+
+    var selectorDescription: String {
+        switch self {
+        case .openAI:
+            return "API key or ChatGPT"
+        case .anthropic:
+            return "Claude models"
+        case .groq:
+            return "Fast inference"
+        case .ollama:
+            return "Local models"
+        case .githubCopilot:
+            return "Subscription models"
+        case .appleFoundationModel:
+            return "On-device"
+        case .openAICompatible:
+            return "Custom endpoint"
+        case .openRouter:
+            return "Model router"
+        case .gemini:
+            return "Gemini models"
+        }
+    }
+
     var iconName: String {
         switch self {
         case .openAI:

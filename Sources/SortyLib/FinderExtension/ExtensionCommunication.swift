@@ -29,10 +29,12 @@ public struct ExtensionCommunication {
     private static let directoryKey = "selectedDirectory"
     private static let organizeQuickActionWorkflowName = "Organize with Sorty.workflow"
     private static let watchQuickActionWorkflowName = "Watch with Sorty.workflow"
+    private static let excludeQuickActionWorkflowName = "Exclude with Sorty.workflow"
     private static let scanQuickActionWorkflowName = "Scan with Sorty.workflow"
     private static let previewQuickActionWorkflowName = "Preview with Sorty.workflow"
     private static let organizeQuickActionBundleIdentifier = "com.sorty.workflow.organize"
     private static let watchQuickActionBundleIdentifier = "com.sorty.workflow.watch"
+    private static let excludeQuickActionBundleIdentifier = "com.sorty.workflow.exclude"
     private static let scanQuickActionBundleIdentifier = "com.sorty.workflow.scan"
     private static let previewQuickActionBundleIdentifier = "com.sorty.workflow.preview"
     private static let quickActionIconBaseName = "SortyQuickActionIcon"
@@ -50,7 +52,8 @@ public struct ExtensionCommunication {
     private static let pbsDomain = "pbs"
     private static let activeSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
         (organizeQuickActionBundleIdentifier, "Organize with Sorty"),
-        (watchQuickActionBundleIdentifier, "Watch with Sorty")
+        (watchQuickActionBundleIdentifier, "Watch with Sorty"),
+        (excludeQuickActionBundleIdentifier, "Exclude with Sorty")
     ]
     private static let deprecatedSortyServices: [(bundleIdentifier: String, menuTitle: String)] = [
         (scanQuickActionBundleIdentifier, "Scan with Sorty"),
@@ -61,13 +64,13 @@ public struct ExtensionCommunication {
     private static let finderSyncHeartbeatDefaultsKey = "finderSyncHeartbeatCache"
     private static let finderSyncHeartbeatMaxAge: TimeInterval = 180
     nonisolated(unsafe) private static var finderSyncHeartbeatObserver: NSObjectProtocol?
-    
+
     // MARK: - URL Scheme Handling
-    
+
     /// Handle incoming URL schemes: sorty://organize?path=/path/to/folder
     public static func handleURL(_ url: URL) -> URL? {
         guard url.scheme == "sorty" else { return nil }
-        
+
         switch url.host {
         case "organize":
             // sorty://organize?path=/path/to/folder
@@ -76,7 +79,7 @@ public struct ExtensionCommunication {
                let path = pathItem.value?.removingPercentEncoding {
                 return URL(fileURLWithPath: path)
             }
-            
+
         case "scan":
             // sorty://scan?path=/path/to/folder
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -84,7 +87,7 @@ public struct ExtensionCommunication {
                let path = pathItem.value?.removingPercentEncoding {
                 return URL(fileURLWithPath: path)
             }
-            
+
         case "open":
             // sorty://open?path=/path/to/folder
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
@@ -100,17 +103,17 @@ public struct ExtensionCommunication {
                let path = pathItem.value?.removingPercentEncoding {
                 return URL(fileURLWithPath: path)
             }
-            
+
         default:
             // Legacy: sorty:///path/to/folder (path in URL path component)
             if !url.path.isEmpty && url.path != "/" {
                 return URL(fileURLWithPath: url.path)
             }
         }
-        
+
         return nil
     }
-    
+
     /// Generate a URL scheme command for organizing a given path
     public static func urlForOrganizing(path: String) -> URL? {
         var components = URLComponents()
@@ -119,7 +122,7 @@ public struct ExtensionCommunication {
         components.queryItems = [URLQueryItem(name: "path", value: path)]
         return components.url
     }
-    
+
     /// Generate a URL scheme command for scanning a given path
     public static func urlForScanning(path: String) -> URL? {
         var components = URLComponents()
@@ -128,15 +131,15 @@ public struct ExtensionCommunication {
         components.queryItems = [URLQueryItem(name: "path", value: path)]
         return components.url
     }
-    
+
     // MARK: - App Group Communication (for sandboxed extensions)
-    
+
     public static func sendDirectoryToApp(_ directoryURL: URL) {
         if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier) {
             sharedDefaults.set(directoryURL.path, forKey: directoryKey)
             sharedDefaults.synchronize()
         }
-        
+
         let notificationCenter = DistributedNotificationCenter.default()
         notificationCenter.post(
             name: notificationName,
@@ -144,7 +147,7 @@ public struct ExtensionCommunication {
             userInfo: ["path": directoryURL.path]
         )
     }
-    
+
     public static func receiveFromExtension() -> URL? {
         if let sharedDefaults = UserDefaults(suiteName: appGroupIdentifier),
            let path = sharedDefaults.string(forKey: directoryKey) {
@@ -152,7 +155,7 @@ public struct ExtensionCommunication {
         }
         return nil
     }
-    
+
     @discardableResult
     public static func setupNotificationObserver(handler: @escaping @Sendable @MainActor (URL) -> Void) -> NSObjectProtocol {
         let notificationCenter = DistributedNotificationCenter.default()
@@ -424,7 +427,7 @@ public struct ExtensionCommunication {
            let id = bundle.bundleIdentifier {
             return id
         }
-        
+
         if let appBundleID = Bundle.main.bundleIdentifier, !appBundleID.isEmpty {
             return appBundleID + finderSyncBundleSuffix
         }
@@ -1327,7 +1330,7 @@ public struct ExtensionCommunication {
         messageParts.append(message)
         return (true, messageParts.filter { !$0.isEmpty }.joined(separator: " "))
     }
-    
+
     /// Silently re-registers the Finder Sync extension on launch when the
     /// currently registered path doesn't match this build.  This prevents
     /// the extension from going missing after a rebuild or after switching
@@ -1973,7 +1976,7 @@ public struct ExtensionCommunication {
         UserDefaults.standard.setPersistentDomain(pbsDomainValues, forName: pbsDomain)
         UserDefaults.standard.synchronize()
     }
-    
+
     /// Install an "Organize with Sorty" Quick Action workflow to ~/Library/Services.
     public static func installQuickAction() -> (success: Bool, message: String) {
         let workflowName = organizeQuickActionWorkflowName
@@ -2263,7 +2266,7 @@ public struct ExtensionCommunication {
         }
     }
 
-    /// Ensure Organize and Watch service entries are installed and refreshed.
+    /// Ensure Organize, Watch, and Exclude service entries are installed and refreshed.
     public static func ensureQuickActionInstalled() -> (installed: Bool, message: String) {
         var refreshedOrganizeWorkflow = false
         var organizeRefreshError: String?
@@ -2275,15 +2278,26 @@ public struct ExtensionCommunication {
             }
         }
 
-        let hasWatchWorkflow = hasInstalledWatchWorkflowPackage()
-
         var refreshedWatchWorkflow = false
         var watchRefreshError: String?
-        if hasWatchWorkflow && !isWatchWorkflowInstalledAndCompatible() {
+        if !isWatchWorkflowInstalledAndCompatible() {
             let refreshResult = installQuickWatchAction()
             refreshedWatchWorkflow = refreshResult.success
             if !refreshResult.success {
                 watchRefreshError = refreshResult.message
+            }
+        }
+
+        var refreshedExcludeWorkflow = false
+        var excludeRefreshError: String?
+        if !isWorkflowInstalledAndCompatible(
+            workflowName: excludeQuickActionWorkflowName,
+            bundleIdentifier: excludeQuickActionBundleIdentifier
+        ) {
+            let refreshResult = installQuickExcludeAction()
+            refreshedExcludeWorkflow = refreshResult.success
+            if !refreshResult.success {
+                excludeRefreshError = refreshResult.message
             }
         }
 
@@ -2299,19 +2313,15 @@ public struct ExtensionCommunication {
             return (false, "Finder services refreshed, but Watch workflow icon update failed: \(watchRefreshError)")
         }
 
-        if refreshedOrganizeWorkflow && refreshedWatchWorkflow {
-            return (true, "Installed Organize workflow, refreshed Finder services, and updated Watch workflow icon for current appearance.")
+        if let excludeRefreshError {
+            return (false, "Finder services refreshed, but Exclude workflow install failed: \(excludeRefreshError)")
         }
 
-        if refreshedOrganizeWorkflow {
-            return (true, "Installed Organize workflow and refreshed Finder services.")
+        if refreshedOrganizeWorkflow || refreshedWatchWorkflow || refreshedExcludeWorkflow {
+            return (true, "Installed Sorty Services menu actions and refreshed Finder services.")
         }
 
-        if refreshedWatchWorkflow {
-            return (true, "Refreshed Watch workflow icon for current appearance.")
-        }
-
-        return (true, "Finder services are up to date. 'Organize with Sorty' and 'Watch with Sorty' are available in Finder.")
+        return (true, "Finder services are up to date. Organize, Watch, and Exclude are available in Finder's Services menu.")
     }
 
     public static func ensureQuickActionInstalledAsync() async -> (installed: Bool, message: String) {
@@ -2322,7 +2332,7 @@ public struct ExtensionCommunication {
             }
         }
     }
-    
+
     /// Check if Quick Action is installed
     public static func isQuickActionInstalled() -> Bool {
         return isWorkflowInstalledAndCompatible(
@@ -2340,9 +2350,9 @@ public struct ExtensionCommunication {
             }
         }
     }
-    
+
     // MARK: - Quick Scan Action Installation
-    
+
     /// Install a "Scan with Sorty" Quick Action workflow to ~/Library/Services
     public static func installQuickScanAction() -> (success: Bool, message: String) {
         let workflowName = scanQuickActionWorkflowName
@@ -2354,11 +2364,11 @@ public struct ExtensionCommunication {
         }
         let workflowDir = servicesDir.appendingPathComponent(workflowName)
         let contentsDir = workflowDir.appendingPathComponent("Contents")
-        
+
         do {
             try replaceWorkflowDirectoryIfNeeded(workflowDir)
             try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
-            
+
             let infoPlist = """
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -2400,11 +2410,11 @@ public struct ExtensionCommunication {
             </plist>
             """
             try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
-            
+
             let shellCommand = """
             for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://scan?path=$encoded"; done
             """
-            
+
             let workflowPlist = """
             <?xml version="1.0" encoding="UTF-8"?>
             <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -2615,16 +2625,16 @@ public struct ExtensionCommunication {
             """
             try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
             applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir)
-            
+
             refreshDynamicServicesRegistry()
-            
+
             return (true, "Quick Scan Action installed! Right-click any folder in Finder to use 'Scan with Sorty'.")
-            
+
         } catch {
             return (false, "Installation failed: \(error.localizedDescription)")
         }
     }
-    
+
     /// Check if Quick Scan Action is installed
     public static func isQuickScanActionInstalled() -> Bool {
         return isWorkflowInstalledAndCompatible(
@@ -2632,7 +2642,7 @@ public struct ExtensionCommunication {
             bundleIdentifier: scanQuickActionBundleIdentifier
         )
     }
-    
+
     /// Uninstall the Quick Scan Action
     public static func uninstallQuickScanAction() -> Bool {
         var removed = false
@@ -2655,7 +2665,7 @@ public struct ExtensionCommunication {
 
         return removed
     }
-    
+
     /// Uninstall the Quick Action
     public static func uninstallQuickAction() -> Bool {
         var removed = false
@@ -2974,6 +2984,289 @@ public struct ExtensionCommunication {
         }
     }
 
+    /// Install a "Exclude with Sorty" Quick Action workflow to ~/Library/Services
+    public static func installQuickExcludeAction() -> (success: Bool, message: String) {
+        let workflowName = excludeQuickActionWorkflowName
+        guard let servicesDir = resolveServicesDirectoryForInstall() else {
+            return (
+                false,
+                "Could not access ~/Library/Services. Click Install again and allow folder access when prompted."
+            )
+        }
+        let workflowDir = servicesDir.appendingPathComponent(workflowName)
+        let contentsDir = workflowDir.appendingPathComponent("Contents")
+
+        do {
+            try replaceWorkflowDirectoryIfNeeded(workflowDir)
+            try FileManager.default.createDirectory(at: contentsDir, withIntermediateDirectories: true)
+
+            let infoPlist = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>CFBundleIdentifier</key>
+                <string>\(excludeQuickActionBundleIdentifier)</string>
+                <key>CFBundleName</key>
+                <string>Exclude with Sorty</string>
+                <key>CFBundlePackageType</key>
+                <string>BNDL</string>
+                <key>CFBundleIconFile</key>
+                <string>\(quickActionIconBaseName)</string>
+                <key>NSServices</key>
+                <array>
+                    <dict>
+                        <key>NSMenuItem</key>
+                        <dict>
+                            <key>default</key>
+                            <string>Exclude with Sorty</string>
+                        </dict>
+                        <key>NSIconName</key>
+                        <string>\(quickActionServiceIconName)</string>
+                        <key>NSMessage</key>
+                        <string>runWorkflowAsService</string>
+                        <key>NSRequiredContext</key>
+                        <dict>
+                            <key>NSApplicationIdentifier</key>
+                            <string>com.apple.finder</string>
+                        </dict>
+                        <key>NSSendFileTypes</key>
+                        <array>
+                            <string>public.folder</string>
+                            <string>public.item</string>
+                        </array>
+                    </dict>
+                </array>
+            </dict>
+            </plist>
+            """
+            try infoPlist.write(to: contentsDir.appendingPathComponent("Info.plist"), atomically: true, encoding: .utf8)
+
+            let shellCommand = """
+            for f in "$@"; do if [[ "$f" == file://* ]]; then f=$(/usr/bin/python3 -c "import sys,urllib.parse; print(urllib.parse.unquote(urllib.parse.urlparse(sys.argv[1]).path))" "$f" 2>/dev/null || echo "$f" | sed 's|^file://||'); fi; if [ -f "$f" ]; then f="$(dirname "$f")"; fi; encoded=$(/usr/bin/python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$f" 2>/dev/null || printf '%s' "$f" | sed 's/ /%20/g; s/!/%21/g; s/#/%23/g; s/\\$/%24/g; s/&amp;/%26/g; s/(/%28/g; s/)/%29/g'); open "sorty://exclude?path=$encoded"; done
+            """
+
+            let workflowPlist = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0">
+            <dict>
+                <key>AMApplicationBuild</key>
+                <string>523</string>
+                <key>AMApplicationVersion</key>
+                <string>2.10</string>
+                <key>AMDocumentVersion</key>
+                <string>2</string>
+                <key>actions</key>
+                <array>
+                    <dict>
+                        <key>action</key>
+                        <dict>
+                            <key>AMAccepts</key>
+                            <dict>
+                                <key>Container</key>
+                                <string>List</string>
+                                <key>Optional</key>
+                                <true/>
+                                <key>Types</key>
+                                <array>
+                                    <string>com.apple.cocoa.path</string>
+                                    <string>com.apple.cocoa.url</string>
+                                    <string>public.item</string>
+                                    <string>public.folder</string>
+                                </array>
+                            </dict>
+                            <key>AMActionVersion</key>
+                            <string>1.0.2</string>
+                            <key>AMApplication</key>
+                            <array>
+                                <string>Automator</string>
+                            </array>
+                            <key>AMCategory</key>
+                            <string>AMCategoryUtilities</string>
+                            <key>AMIconName</key>
+                            <string>\(quickActionServiceIconName)</string>
+                            <key>AMName</key>
+                            <string>Run Shell Script</string>
+                            <key>AMParameters</key>
+                            <dict>
+                                <key>COMMAND_STRING</key>
+                                <string>\(shellCommand)</string>
+                                <key>CheckedForUserDefaultShell</key>
+                                <true/>
+                                <key>inputMethod</key>
+                                <integer>1</integer>
+                                <key>shell</key>
+                                <string>/bin/zsh</string>
+                                <key>source</key>
+                                <string></string>
+                            </dict>
+                            <key>AMProvides</key>
+                            <dict>
+                                <key>Container</key>
+                                <string>List</string>
+                                <key>Types</key>
+                                <array>
+                                    <string>com.apple.cocoa.path</string>
+                                </array>
+                            </dict>
+                            <key>AMRequiredResources</key>
+                            <array/>
+                            <key>ActionBundlePath</key>
+                            <string>/System/Library/Automator/Run Shell Script.action</string>
+                            <key>ActionName</key>
+                            <string>Run Shell Script</string>
+                            <key>ActionParameters</key>
+                            <dict>
+                                <key>COMMAND_STRING</key>
+                                <string>\(shellCommand)</string>
+                                <key>CheckedForUserDefaultShell</key>
+                                <true/>
+                                <key>inputMethod</key>
+                                <integer>1</integer>
+                                <key>shell</key>
+                                <string>/bin/zsh</string>
+                                <key>source</key>
+                                <string></string>
+                            </dict>
+                            <key>BundleIdentifier</key>
+                            <string>com.apple.RunShellScript</string>
+                            <key>CFBundleVersion</key>
+                            <string>1.0.2</string>
+                            <key>CanShowSelectedItemsWhenRun</key>
+                            <false/>
+                            <key>CanShowWhenRun</key>
+                            <true/>
+                            <key>Category</key>
+                            <array>
+                                <string>AMCategoryUtilities</string>
+                            </array>
+                            <key>Class Name</key>
+                            <string>RunShellScriptAction</string>
+                            <key>InputUUID</key>
+                            <string>6A1B2C3D-4E5F-6A7B-8C9D-0E1F2A3B4C5D</string>
+                            <key>Keywords</key>
+                            <array>
+                                <string>Shell</string>
+                                <string>Script</string>
+                                <string>Command</string>
+                                <string>Run</string>
+                                <string>Unix</string>
+                            </array>
+                            <key>OutputUUID</key>
+                            <string>7B2C3D4E-5F6A-7B8C-9D0E-1F2A3B4C5D6E</string>
+                            <key>UUID</key>
+                            <string>8C3D4E5F-6A7B-8C9D-0E1F-2A3B4C5D6E7F</string>
+                            <key>UnlocalizedApplications</key>
+                            <array>
+                                <string>Automator</string>
+                            </array>
+                            <key>arguments</key>
+                            <dict>
+                                <key>0</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <integer>1</integer>
+                                    <key>name</key>
+                                    <string>inputMethod</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>0</string>
+                                </dict>
+                                <key>1</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <string></string>
+                                    <key>name</key>
+                                    <string>source</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>1</string>
+                                </dict>
+                                <key>2</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <false/>
+                                    <key>name</key>
+                                    <string>CheckedForUserDefaultShell</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>2</string>
+                                </dict>
+                                <key>3</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <string></string>
+                                    <key>name</key>
+                                    <string>COMMAND_STRING</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>3</string>
+                                </dict>
+                                <key>4</key>
+                                <dict>
+                                    <key>default value</key>
+                                    <string>/bin/sh</string>
+                                    <key>name</key>
+                                    <string>shell</string>
+                                    <key>required</key>
+                                    <string>0</string>
+                                    <key>type</key>
+                                    <string>0</string>
+                                    <key>uuid</key>
+                                    <string>4</string>
+                                </dict>
+                            </dict>
+                            <key>isViewVisible</key>
+                            <integer>1</integer>
+                            <key>location</key>
+                            <string>309.000000:253.000000</string>
+                            <key>nibPath</key>
+                            <string>/System/Library/Automator/Run Shell Script.action/Contents/Resources/Base.lproj/main.nib</string>
+                        </dict>
+                        <key>isViewVisible</key>
+                        <integer>1</integer>
+                    </dict>
+                </array>
+                <key>connectors</key>
+                <dict/>
+                <key>workflowMetaData</key>
+                <dict>
+                    <key>serviceInputTypeIdentifier</key>
+                    <string>com.apple.Automator.fileSystemObject</string>
+                    <key>serviceApplicationPath</key>
+                    <string>/System/Library/CoreServices/Finder.app</string>
+                    <key>workflowTypeIdentifier</key>
+                    <string>com.apple.Automator.servicesMenu</string>
+                </dict>
+            </dict>
+            </plist>
+            """
+            try workflowPlist.write(to: contentsDir.appendingPathComponent("document.wflow"), atomically: true, encoding: .utf8)
+            applyQuickActionIcon(workflowDir: workflowDir, contentsDir: contentsDir)
+
+            refreshDynamicServicesRegistry()
+
+            return (true, "Quick Exclude Action installed! Right-click any folder in Finder to use 'Exclude with Sorty'.")
+
+        } catch {
+            return (false, "Installation failed: \(error.localizedDescription)")
+        }
+    }
+
+
     public static func installQuickWatchActionAsync() async -> (success: Bool, message: String) {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -2983,9 +3276,25 @@ public struct ExtensionCommunication {
         }
     }
 
+    public static func installQuickExcludeActionAsync() async -> (success: Bool, message: String) {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = installQuickExcludeAction()
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
     /// Check if Quick Watch Action is installed
     public static func isQuickWatchActionInstalled() -> Bool {
         return isWatchWorkflowInstalledAndCompatible()
+    }
+
+    public static func isQuickExcludeActionInstalled() -> Bool {
+        return isWorkflowInstalledAndCompatible(
+            workflowName: excludeQuickActionWorkflowName,
+            bundleIdentifier: excludeQuickActionBundleIdentifier
+        )
     }
 
     public static func isQuickWatchActionInstalledAsync() async -> Bool {
@@ -3349,6 +3658,7 @@ public struct ExtensionCommunication {
         let workflows = [
             organizeQuickActionWorkflowName,
             watchQuickActionWorkflowName,
+            excludeQuickActionWorkflowName,
             scanQuickActionWorkflowName,
             previewQuickActionWorkflowName
         ]
@@ -3416,7 +3726,7 @@ public struct ExtensionCommunication {
     }
 
     // MARK: - AppleScript Integration
-    
+
     /// Generate AppleScript for organizing a folder
     public static func appleScriptForOrganizing() -> String {
         return """
@@ -3430,7 +3740,7 @@ public struct ExtensionCommunication {
         end run
         """
     }
-    
+
     /// Open Finder Extension preferences
     public static func openFinderExtensionSettings() {
         let candidateURLs = [
@@ -3447,9 +3757,9 @@ public struct ExtensionCommunication {
             }
         }
     }
-    
+
     // MARK: - Finder Integration Status
-    
+
     public struct FinderIntegrationStatus: Sendable {
         public let quickActionInstalled: Bool
         public let quickWatchActionInstalled: Bool
@@ -3560,9 +3870,9 @@ public struct ExtensionCommunication {
             menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")
         )
     }
-    
+
     // MARK: - Complete Setup
-    
+
     /// Install all recommended Finder integrations
     public static func installAllIntegrations() -> [(name: String, success: Bool, message: String)] {
         var results: [(name: String, success: Bool, message: String)] = []
@@ -3579,7 +3889,11 @@ public struct ExtensionCommunication {
         let quickWatchResult = installQuickWatchAction()
         results.append(("Quick Watch Action", quickWatchResult.success, quickWatchResult.message))
 
-        // 4. Cleanup legacy scan/preview workflows if present.
+        // 4. Quick Exclude Action
+        let quickExcludeResult = installQuickExcludeAction()
+        results.append(("Quick Exclude Action", quickExcludeResult.success, quickExcludeResult.message))
+
+        // 5. Cleanup legacy scan/preview workflows if present.
         let removedLegacy = cleanupLegacyQuickActions()
         if removedLegacy > 0 {
             results.append(("Legacy Quick Actions Cleanup", true, "Removed \(removedLegacy) legacy Scan/Preview workflow(s)."))
@@ -3600,17 +3914,17 @@ public struct ExtensionCommunication {
             }
         }
     }
-    
+
     /// Get instructions for manual Finder toolbar setup
     public static func getToolbarInstructions() -> String {
         return """
         To add Sorty to your Finder toolbar:
-        
+
         1. Click "Install Toolbar Button" below
         2. A Finder window will open showing the helper app
         3. Hold Command (⌘) and drag "Organize with Sorty" to your Finder toolbar
         4. Click the button anytime to organize the current folder!
-        
+
         Alternative: Right-click on any folder and select "Organize with Sorty" from the context menu.
         """
     }

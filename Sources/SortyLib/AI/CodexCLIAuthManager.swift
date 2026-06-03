@@ -8,12 +8,32 @@
 import Foundation
 import AppKit
 
+public struct CodexDeviceAuthSession: Sendable, Equatable {
+    public enum Status: Sendable, Equatable {
+        case starting
+        case waiting
+        case authorized
+        case failed(String)
+    }
+
+    public var verificationURL: URL?
+    public var userCode: String?
+    public var status: Status
+
+    public init(verificationURL: URL? = nil, userCode: String? = nil, status: Status = .starting) {
+        self.verificationURL = verificationURL
+        self.userCode = userCode
+        self.status = status
+    }
+}
+
 @MainActor
 public final class CodexCLIAuthManager: ObservableObject {
     @Published public var isAuthenticated = false
     @Published public var accountEmail: String?
     @Published public var authError: String?
     @Published public var isCodexInstalled = false
+    @Published public var deviceAuthSession: CodexDeviceAuthSession?
 
     enum CredentialStoreMode: String {
         case file
@@ -25,6 +45,9 @@ public final class CodexCLIAuthManager: ObservableObject {
     private var authFilePath: String {
         Self.authFileURL.path
     }
+
+    private var deviceAuthProcess: Process?
+    private var deviceAuthOutput = ""
 
     private nonisolated static var codexHomeURL: URL {
         let environment = ProcessInfo.processInfo.environment
@@ -162,6 +185,103 @@ public final class CodexCLIAuthManager: ObservableObject {
         }
     }
 
+    func startDeviceAuth() {
+        cancelDeviceAuth()
+
+        guard let codexExecutablePath = resolveCodexExecutablePath() else {
+            deviceAuthSession = CodexDeviceAuthSession(status: .failed("Codex CLI not found. Install with: npm i -g @openai/codex"))
+            authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: codexExecutablePath)
+        process.arguments = ["login", "--device-auth"]
+
+        let outputPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = outputPipe
+
+        deviceAuthOutput = ""
+        deviceAuthProcess = process
+        deviceAuthSession = CodexDeviceAuthSession(status: .starting)
+        authError = nil
+
+        outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
+            Task { @MainActor [weak self] in
+                self?.consumeDeviceAuthOutput(chunk)
+            }
+        }
+
+        process.terminationHandler = { [weak self, weak outputPipe] finishedProcess in
+            outputPipe?.fileHandleForReading.readabilityHandler = nil
+            Task { @MainActor [weak self] in
+                self?.completeDeviceAuthProcess(finishedProcess.terminationStatus)
+            }
+        }
+
+        do {
+            try process.run()
+        } catch {
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            deviceAuthProcess = nil
+            let message = "Could not start Codex device authorization. Please run 'codex login --device-auth' manually."
+            deviceAuthSession = CodexDeviceAuthSession(status: .failed(message))
+            authError = message
+        }
+    }
+
+    func cancelDeviceAuth() {
+        deviceAuthProcess?.terminate()
+        deviceAuthProcess = nil
+        deviceAuthOutput = ""
+        deviceAuthSession = nil
+    }
+
+    private func consumeDeviceAuthOutput(_ chunk: String) {
+        deviceAuthOutput += Self.strippedANSIEscapeSequences(from: chunk)
+
+        var session = deviceAuthSession ?? CodexDeviceAuthSession()
+        if session.verificationURL == nil,
+           let url = Self.firstURL(in: deviceAuthOutput) {
+            session.verificationURL = url
+        }
+        if session.userCode == nil,
+           let code = Self.firstDeviceCode(in: deviceAuthOutput) {
+            session.userCode = code
+        }
+        if session.verificationURL != nil || session.userCode != nil {
+            session.status = .waiting
+        }
+        deviceAuthSession = session
+    }
+
+    private func completeDeviceAuthProcess(_ terminationStatus: Int32) {
+        deviceAuthProcess = nil
+        checkStatus()
+
+        if isAuthenticated {
+            deviceAuthSession = CodexDeviceAuthSession(
+                verificationURL: deviceAuthSession?.verificationURL,
+                userCode: deviceAuthSession?.userCode,
+                status: .authorized
+            )
+            return
+        }
+
+        guard terminationStatus != 15 else { return }
+
+        let message = "Codex authorization did not complete. Try again or run 'codex login --device-auth' manually."
+        deviceAuthSession = CodexDeviceAuthSession(
+            verificationURL: deviceAuthSession?.verificationURL,
+            userCode: deviceAuthSession?.userCode,
+            status: .failed(message)
+        )
+        authError = message
+    }
+
     private func prepareLoginScript() throws -> URL {
         guard let codexExecutablePath = resolveCodexExecutablePath() else {
             throw NSError(
@@ -225,6 +345,54 @@ public final class CodexCLIAuthManager: ObservableObject {
         } catch {
             return nil
         }
+    }
+
+    private nonisolated static func strippedANSIEscapeSequences(from string: String) -> String {
+        string
+            .replacingOccurrences(
+                of: "\u{001B}\\[[0-9;?]*[ -/]*[@-~]",
+                with: "",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: "\u{001B}\\][^\u{0007}]*(\u{0007}|\u{001B}\\\\)",
+                with: "",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: "\r",
+                with: "\n"
+            )
+    }
+
+    private nonisolated static func normalizedDeviceAuthOutput(_ string: String) -> String {
+        string.replacingOccurrences(
+            of: #"[^\S\r\n]+"#,
+            with: "",
+            options: .regularExpression
+        )
+    }
+
+    private nonisolated static func firstURL(in string: String) -> URL? {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return nil
+        }
+        let range = NSRange(string.startIndex..<string.endIndex, in: string)
+        return detector.firstMatch(in: string, options: [], range: range)?.url
+    }
+
+    private nonisolated static func firstDeviceCode(in string: String) -> String? {
+        let normalizedOutput = normalizedDeviceAuthOutput(string)
+        let pattern = #"\b(?:[A-Z0-9]{4}(?:-[A-Z0-9]{4,6}){1,2}|[A-Z0-9]{8,12})\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+        let range = NSRange(normalizedOutput.startIndex..<normalizedOutput.endIndex, in: normalizedOutput)
+        guard let match = regex.firstMatch(in: normalizedOutput, range: range),
+              let codeRange = Range(match.range, in: normalizedOutput) else {
+            return nil
+        }
+        return String(normalizedOutput[codeRange])
     }
 
     private func extractEmail(from idToken: String?) -> String? {

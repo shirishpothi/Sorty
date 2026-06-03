@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct AIProviderSettingsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var viewModel: SettingsViewModel
     @EnvironmentObject var openAIAuth: SubscriptionAuthManager
     @EnvironmentObject var codexAuth: CodexCLIAuthManager
@@ -21,16 +22,43 @@ struct AIProviderSettingsView: View {
     @State private var isHoveringUsername = false
     @State private var isDetailsExpanded = false
     @State private var isHoveringCodexTerminalButton = false
-    @State private var isHoveringCodexVerifyButton = false
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
-    @State private var codexVerifyButtonState: CodexActionVisualState = .idle
     @State private var codexTerminalResetTask: Task<Void, Never>?
-    @State private var codexVerifyResetTask: Task<Void, Never>?
+    @State private var isShowingCodexDeviceAuth = false
+
+    private let providerColumns = Array(
+        repeating: GridItem(.flexible(minimum: 160), spacing: 10),
+        count: 3
+    )
 
     var body: some View {
         VStack(spacing: 16) {
-            providerSelectionSection
-                .animatedAppearance(delay: 0.05)
+            // Provider Selection
+            SettingsCard(title: "Select Provider", icon: "cpu", color: .purple) {
+                LazyVGrid(
+                    columns: providerColumns,
+                    alignment: .leading,
+                    spacing: 10
+                ) {
+                    ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
+                        AIProviderRow(
+                            provider: provider,
+                            isSelected: viewModel.config.provider == provider,
+                            action: {
+                                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                                    viewModel.config.provider = provider
+                                    if let defaultURL = provider.defaultAPIURL {
+                                        viewModel.config.apiURL = defaultURL
+                                    }
+                                    viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
+                                    HapticFeedbackManager.shared.selection()
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            .animatedAppearance(delay: 0.05)
 
             // Provider-specific configuration
             if viewModel.config.provider == .githubCopilot {
@@ -77,39 +105,24 @@ struct AIProviderSettingsView: View {
                 viewModel.config.model = model
             }
         )
-    }
-
-    private var providerSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Select Provider", systemImage: "cpu")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(.secondary)
-
-            VStack(spacing: 2) {
-                ForEach(Array(AIProvider.userSelectableProviders), id: \.self) { provider in
-                    AIProviderRow(
-                        provider: provider,
-                        isSelected: viewModel.config.provider == provider,
-                        action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                viewModel.config.provider = provider
-                                if let defaultURL = provider.defaultAPIURL {
-                                    viewModel.config.apiURL = defaultURL
-                                }
-                                viewModel.config.requiresAPIKey = provider.typicallyRequiresAPIKey
-                                HapticFeedbackManager.shared.selection()
-                            }
-                        }
-                    )
-
-                    if provider != AIProvider.userSelectableProviders.last {
-                        Divider()
-                            .padding(.leading, 54)
-                    }
-                }
-            }
+        .sheet(isPresented: $isShowingCodexDeviceAuth) {
+            CodexDeviceAuthSheet(
+                session: codexAuth.deviceAuthSession,
+                isCodexInstalled: codexAuth.isCodexInstalled,
+                authError: codexAuth.authError,
+                onStart: startCodexDeviceAuth,
+                onCancel: {
+                    codexAuth.cancelDeviceAuth()
+                    isShowingCodexDeviceAuth = false
+                },
+                onOpenSettings: openChatGPTSecuritySettings,
+                onOpenDeviceAuthorization: openCodexDeviceAuthorization,
+                onCopyCode: copyCodexDeviceCode
+            )
+            .frame(width: 610)
+            .systemLiquidGlassBackground(cornerRadius: 28)
+            .systemLiquidGlassPopover(cornerRadius: 28)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var copilotConfigSection: some View {
@@ -380,48 +393,27 @@ struct AIProviderSettingsView: View {
                 .background(Color.green.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             } else {
-                Text("Use your OpenAI account through Codex CLI. Sorty reads the local Codex session after you sign in.")
+                Text("Use your ChatGPT subscription for OpenAI inference through Codex CLI device authorization.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    codexCommandBlock("npm i -g @openai/codex")
-                    codexCommandBlock("codex login")
+                Button {
+                    startCodexDeviceAuth()
+                    isShowingCodexDeviceAuth = true
+                } label: {
+                    CodexActionButtonLabel(
+                        idleTitle: "Authenticate ChatGPT Subscription",
+                        activatingTitle: "Starting Authorization...",
+                        successTitle: "Authorization Started",
+                        failureTitle: "Could Not Start Authorization",
+                        idleSymbol: "person.crop.circle.badge.checkmark",
+                        state: codexTerminalButtonState,
+                        isHovered: isHoveringCodexTerminalButton
+                    )
                 }
-
-                HStack(spacing: 8) {
-                    Button {
-                        startCodexTerminalSignIn()
-                    } label: {
-                        CodexActionButtonLabel(
-                            idleTitle: "Open Terminal & Sign In",
-                            activatingTitle: "Opening Terminal...",
-                            successTitle: "Terminal Opened",
-                            failureTitle: "Could Not Open Terminal",
-                            idleSymbol: "terminal",
-                            state: codexTerminalButtonState,
-                            isHovered: isHoveringCodexTerminalButton
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in isHoveringCodexTerminalButton = hovering }
-
-                    Button {
-                        manuallyVerifyCodexCLI()
-                    } label: {
-                        CodexActionButtonLabel(
-                            idleTitle: "Verify Codex CLI",
-                            activatingTitle: "Verifying...",
-                            successTitle: "Verified",
-                            failureTitle: "Verification Failed",
-                            idleSymbol: "checkmark.shield",
-                            state: codexVerifyButtonState,
-                            isHovered: isHoveringCodexVerifyButton
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in isHoveringCodexVerifyButton = hovering }
-                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("CodexDeviceAuthButton")
+                .onHover { hovering in isHoveringCodexTerminalButton = hovering }
 
                 if !codexAuth.isCodexInstalled {
                     Label("Codex CLI not detected", systemImage: "xmark.circle")
@@ -440,29 +432,6 @@ struct AIProviderSettingsView: View {
         .task {
             await autoVerifyCodexSignInLoop()
         }
-    }
-
-    private func codexCommandBlock(_ command: String) -> some View {
-        HStack(spacing: 8) {
-            Text(command)
-                .font(.system(.caption2, design: .monospaced))
-                .textSelection(.enabled)
-            Spacer()
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(command, forType: .string)
-                HapticFeedbackManager.shared.tap()
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Copy command")
-        }
-        .padding(7)
-        .background(Color.secondary.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var appleConfigSection: some View {
@@ -666,9 +635,7 @@ struct AIProviderSettingsView: View {
 
             if becameAuthenticated {
                 await MainActor.run {
-                    codexVerifyButtonState = .success
                     HapticFeedbackManager.shared.success()
-                    scheduleCodexVerifyButtonReset()
                 }
             }
 
@@ -699,14 +666,13 @@ struct AIProviderSettingsView: View {
     }
 
     @MainActor
-    private func startCodexTerminalSignIn() {
+    private func startCodexDeviceAuth() {
         HapticFeedbackManager.shared.tap()
         codexTerminalButtonState = .activating
-        codexAuth.openTerminalWithLogin()
+        codexAuth.startDeviceAuth()
 
         if codexAuth.authError == nil {
             codexTerminalButtonState = .success
-            HapticFeedbackManager.shared.success()
         } else {
             codexTerminalButtonState = .failure
             HapticFeedbackManager.shared.error()
@@ -716,24 +682,29 @@ struct AIProviderSettingsView: View {
     }
 
     @MainActor
-    private func manuallyVerifyCodexCLI() {
+    private func openChatGPTSecuritySettings() {
         HapticFeedbackManager.shared.tap()
-        codexVerifyButtonState = .activating
-
-        if verifyCodexSignInStatus() || codexAuth.isAuthenticated {
-            codexVerifyButtonState = .success
-            HapticFeedbackManager.shared.success()
-        } else {
-            codexVerifyButtonState = .failure
-            HapticFeedbackManager.shared.error()
-            if !codexAuth.isCodexInstalled {
-                codexAuth.authError = "Codex CLI not found. Install with: npm i -g @openai/codex"
-            } else if codexAuth.authError == nil {
-                codexAuth.authError = "Auth tokens not found. Run 'codex login' first."
-            }
+        if let url = URL(string: "https://chatgpt.com/#settings/Security") {
+            NSWorkspace.shared.open(url)
         }
+    }
 
-        scheduleCodexVerifyButtonReset()
+    @MainActor
+    private func openCodexDeviceAuthorization() {
+        HapticFeedbackManager.shared.tap()
+        let url = codexAuth.deviceAuthSession?.verificationURL
+            ?? URL(string: "https://auth.openai.com/activate")
+        if let url {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @MainActor
+    private func copyCodexDeviceCode() {
+        guard let code = codexAuth.deviceAuthSession?.userCode else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(code, forType: .string)
+        HapticFeedbackManager.shared.tap()
     }
 
     @MainActor
@@ -747,22 +718,199 @@ struct AIProviderSettingsView: View {
         }
     }
 
-    @MainActor
-    private func scheduleCodexVerifyButtonReset() {
-        codexVerifyResetTask?.cancel()
-        codexVerifyResetTask = Task {
-            try? await Task.sleep(nanoseconds: 1_400_000_000)
-            await MainActor.run {
-                codexVerifyButtonState = .idle
-            }
-        }
-    }
-
     private func openShortcutsApp() {
         HapticFeedbackManager.shared.tap()
         if let shortcutsURL = URL(string: "shortcuts://") {
             NSWorkspace.shared.open(shortcutsURL)
         }
+    }
+}
+
+private struct CodexDeviceAuthSheet: View {
+    let session: CodexDeviceAuthSession?
+    let isCodexInstalled: Bool
+    let authError: String?
+    let onStart: () -> Void
+    let onCancel: () -> Void
+    let onOpenSettings: () -> Void
+    let onOpenDeviceAuthorization: () -> Void
+    let onCopyCode: () -> Void
+
+    private var userCode: String {
+        session?.userCode ?? "---- -----"
+    }
+
+    private var isWaiting: Bool {
+        switch session?.status {
+        case .starting, .waiting:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 22) {
+                content
+            }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Reauthenticate ChatGPT Subscription")
+                        .font(.title2.weight(.bold))
+                    Text("Reauthenticate to keep using your ChatGPT subscription for OpenAI inference.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button(action: onCancel) {
+                    Image(systemName: "xmark")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+            }
+
+            VStack(alignment: .leading, spacing: 28) {
+                CodexDeviceAuthStep(number: 1, title: "Enable device code authorization for Codex.") {
+                    Button(action: onOpenSettings) {
+                        Label("Open ChatGPT Settings", systemImage: "arrow.up.right.square")
+                    }
+                    .buttonStyle(.sortyBordered)
+                }
+
+                CodexDeviceAuthStep(number: 2, title: "Open the OpenAI device authorization page.") {
+                    Button(action: onOpenDeviceAuthorization) {
+                        Label("Open device authorization", systemImage: "arrow.up.right.square")
+                    }
+                    .buttonStyle(.sortyBordered)
+                }
+
+                CodexDeviceAuthStep(number: 3, title: "Paste this device code when OpenAI asks for it:") {
+                    Button(action: onCopyCode) {
+                        Text(userCode)
+                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .tracking(4)
+                            .frame(minWidth: 210, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .systemLiquidGlassBackground(cornerRadius: 10)
+                    .disabled(session?.userCode == nil)
+                    .help("Copy device code")
+                }
+
+                CodexDeviceAuthStep(number: 4, title: "Continue to finish approval.") {
+                    CodexDeviceAuthStatusView(
+                        session: session,
+                        isCodexInstalled: isCodexInstalled,
+                        authError: authError,
+                        isWaiting: isWaiting,
+                        onStart: onStart
+                    )
+                }
+            }
+
+            Text("Keep this dialog open while Sorty waits for approval.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(.sortyBordered)
+            }
+        }
+        .padding(28)
+        .onAppear {
+            if session == nil {
+                onStart()
+            }
+        }
+    }
+}
+
+private struct CodexDeviceAuthStep<Content: View>: View {
+    let number: Int
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Text("\(number)")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.black)
+                .frame(width: 34, height: 34)
+                .background(Color.green.opacity(0.12))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                content
+            }
+        }
+    }
+}
+
+private struct CodexDeviceAuthStatusView: View {
+    let session: CodexDeviceAuthSession?
+    let isCodexInstalled: Bool
+    let authError: String?
+    let isWaiting: Bool
+    let onStart: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            switch session?.status {
+            case .authorized:
+                Label("Authorization complete", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            case .failed(let message):
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+                Button("Try Again", action: onStart)
+                    .buttonStyle(.sortyBordered)
+                    .controlSize(.small)
+            default:
+                HStack(spacing: 8) {
+                    BouncingSpinner(size: 14, color: .primary)
+                    Text(isWaiting ? "Waiting for authorization" : "Starting authorization")
+                        .font(.subheadline.weight(.semibold))
+                }
+                Text("Refreshing automatically")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !isCodexInstalled {
+                Text("Codex CLI is required. Install with: npm i -g @openai/codex")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            } else if let authError {
+                Text(authError)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 14)
+        .systemLiquidGlassBackground(cornerRadius: 12)
     }
 }
 

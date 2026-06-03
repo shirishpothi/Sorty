@@ -16,6 +16,12 @@ extension View {
 
     @ViewBuilder
     func systemLiquidGlassPopover(cornerRadius: CGFloat) -> some View {
-        self.presentationCornerRadius(cornerRadius)
+        if #available(macOS 26.0, *) {
+            self
+                .presentationBackground(.clear)
+                .presentationCornerRadius(cornerRadius)
+        } else {
+            self.presentationCornerRadius(cornerRadius)
+        }
     }
 }

@@ -30,7 +30,7 @@ struct NotificationPermissionCard: View {
     }
     
     var body: some View {
-        SettingsCard(title: "System Notification Permission", icon: "bell.badge.circle", color: .cyan) {
+        SettingsCard(title: "macOS Notification Permission", icon: "bell.badge.circle", color: .cyan) {
             VStack(alignment: .leading, spacing: 12) {
                 // Status indicator
                 HStack(spacing: 12) {
@@ -91,11 +91,11 @@ struct NotificationPermissionCard: View {
                         Button {
                             openSystemSettings()
                         } label: {
-                            Image(systemName: "gearshape")
+                            Label("macOS Settings", systemImage: "gearshape")
                         }
                         .buttonStyle(.sortyBordered)
                         .controlSize(.small)
-                        .help("Open notification settings")
+                        .help("Open macOS notification settings")
                         
                     default:
                         EmptyView()
