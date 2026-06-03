@@ -388,6 +388,12 @@ struct OrganizeView: View {
             // (which is fully opaque by now) so swapping in the fresh
             // ReadyToOrganizeView underneath is invisible.
             try? await Task.sleep(for: reduceMotion ? .milliseconds(60) : .milliseconds(200))
+
+            // Apply every late state mutation in a single transaction with
+            // animations disabled. Splitting these across multiple updates
+            // produced an intermediate render where the overlay had been
+            // removed but the underlying stateContent was still at opacity
+            // 0 (or vice versa), which the user perceived as a flicker.
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
@@ -400,16 +406,8 @@ struct OrganizeView: View {
                 }
                 showsCompletionContent = false
                 keepsReadyContentVisibleAfterReturn = !isReturningFromCompletion
-            }
-
-            // Drop the overlay instantly — the underlying ReadyToOrganizeView
-            // is already the same content, so any crossfade here just reads
-            // as a redundant "reload" wobble.
-            isShowingReturnToStartContent = false
-            returnsToDirectorySelection = false
-            var resetTransaction = Transaction()
-            resetTransaction.disablesAnimations = true
-            withTransaction(resetTransaction) {
+                isShowingReturnToStartContent = false
+                returnsToDirectorySelection = false
                 isReturningToStart = false
             }
         }

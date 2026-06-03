@@ -239,35 +239,36 @@ public struct CompletionStepView: View {
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 30 : 0)
 
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 24, alignment: .leading),
-                        GridItem(.flexible(), spacing: 0, alignment: .leading)
-                    ],
-                    alignment: .center,
-                    spacing: 14
-                ) {
-                    QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.6), value: tipsAppeared)
+                // Use Grid (not LazyVGrid) so columns are sized to fit the
+                // widest cell. This guarantees the four tips render as a
+                // tidy 2×2 block with icons that align vertically across
+                // rows, and the whole block sits perfectly centered in the
+                // parent without depending on a fragile fixed width.
+                Grid(alignment: .leading, horizontalSpacing: 36, verticalSpacing: 14) {
+                    GridRow {
+                        QuickTipRow(icon: "folder.badge.plus", text: "Drag a folder")
+                            .opacity(tipsAppeared ? 1 : 0)
+                            .offset(x: tipsAppeared ? 0 : -30)
+                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.6), value: tipsAppeared)
 
-                    QuickTipRow(icon: "keyboard", text: "Press \u{2318}O")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.8), value: tipsAppeared)
+                        QuickTipRow(icon: "keyboard", text: "Press \u{2318}O")
+                            .opacity(tipsAppeared ? 1 : 0)
+                            .offset(x: tipsAppeared ? 0 : -30)
+                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(0.8), value: tipsAppeared)
+                    }
 
-                    QuickTipRow(icon: "arrow.uturn.backward", text: "Undo changes")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.0), value: tipsAppeared)
+                    GridRow {
+                        QuickTipRow(icon: "arrow.uturn.backward", text: "Undo changes")
+                            .opacity(tipsAppeared ? 1 : 0)
+                            .offset(x: tipsAppeared ? 0 : -30)
+                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.0), value: tipsAppeared)
 
-                    QuickTipRow(icon: "gearshape", text: "Tune settings")
-                        .opacity(tipsAppeared ? 1 : 0)
-                        .offset(x: tipsAppeared ? 0 : -30)
-                        .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
+                        QuickTipRow(icon: "gearshape", text: "Tune settings")
+                            .opacity(tipsAppeared ? 1 : 0)
+                            .offset(x: tipsAppeared ? 0 : -30)
+                            .animation(.spring(response: 0.7, dampingFraction: 0.85).delay(1.2), value: tipsAppeared)
+                    }
                 }
-                .frame(maxWidth: 440)
                 .opacity(contentDismissed ? 0 : 1)
                 .offset(y: contentDismissed ? 40 : 0)
 
@@ -612,11 +613,8 @@ struct QuickTipRow: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-
-            Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
