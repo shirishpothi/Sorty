@@ -38,9 +38,15 @@ public final class SubscriptionAuthManager: ObservableObject {
         }
 
         let codex = codexAuthManager
-        codex.checkStatus()
-        isAuthenticated = codex.isAuthenticated
-        accountLabel = codex.accountEmail
+        // `refreshStatus()` performs its blocking Codex CLI probes off the main
+        // thread; await it so we mirror the resolved state instead of reading
+        // stale values, while keeping the main thread free during launch.
+        Task { [weak self] in
+            await codex.refreshStatus()
+            guard let self else { return }
+            self.isAuthenticated = codex.isAuthenticated
+            self.accountLabel = codex.accountEmail
+        }
     }
 
     func signOut() {

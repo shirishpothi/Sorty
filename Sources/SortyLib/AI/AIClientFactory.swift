@@ -10,7 +10,13 @@ import Foundation
 public struct AIClientFactory {
     public static func createClient(config: AIConfig) throws -> AIClientProtocol {
         switch config.provider {
-        case .openAI, .groq, .openAICompatible, .openRouter, .ollama, .gemini:
+        case .openAI:
+            if ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn {
+                return CodexSubscriptionClient(config: config)
+            }
+            return OpenAIClient(config: config)
+
+        case .groq, .openAICompatible, .openRouter, .ollama, .gemini:
             return OpenAIClient(config: config)
             
         case .githubCopilot:
@@ -31,4 +37,3 @@ public struct AIClientFactory {
         }
     }
 }
-

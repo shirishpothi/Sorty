@@ -127,6 +127,27 @@ public class AISessionManager: ObservableObject {
             prewarmingProviders.remove(provider)
         }
 
+        if provider == .openAI,
+           ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config) == .accountSignIn {
+            let codexPrewarmError = await Task.detached(priority: .userInitiated) {
+                do {
+                    try await CodexSubscriptionClient(config: config).checkHealth()
+                    return nil as String?
+                } catch {
+                    return error.localizedDescription
+                }
+            }.value
+
+            if let codexPrewarmError {
+                isPrewarmed = false
+                prewarmError = codexPrewarmError
+            } else {
+                isPrewarmed = true
+                prewarmError = nil
+            }
+            return
+        }
+
         // Skip prewarming for local/on-device providers
         switch provider {
         case .ollama, .appleFoundationModel:

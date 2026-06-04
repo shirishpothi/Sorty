@@ -118,21 +118,22 @@ struct OrganizeView: View {
         }
         .navigationTitle(settingsViewModel.config.mode.workflowTitle)
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                if organizer.state == .ready {
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        Task {
-                            try? await organizer.regeneratePreview()
-                        }
-                    } label: {
-                        Label("Regenerate", systemImage: "arrow.clockwise")
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    HapticFeedbackManager.shared.tap()
+                    Task {
+                        try? await organizer.regeneratePreview()
                     }
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .help(settingsViewModel.config.mode == .renameOnly ? "Regenerate filename suggestions with current settings" : "Regenerate organization plan with current settings")
-                    .accessibilityLabel(settingsViewModel.config.mode == .renameOnly ? "Regenerate filename suggestions" : "Regenerate organization plan")
-                    .accessibilityHint("Use when you want different AI suggestions")
+                } label: {
+                    Label("Regenerate", systemImage: "arrow.clockwise")
                 }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .help(regenerateHelpText)
+                .accessibilityLabel(regenerateAccessibilityLabel)
+                .accessibilityHint("Use when you want different AI suggestions")
+                .disabled(organizer.state != .ready)
+                .opacity(organizer.state == .ready ? 1 : 0)
+                .accessibilityHidden(organizer.state != .ready)
             }
         }
         .accessibilityElement(children: .contain)
@@ -238,6 +239,18 @@ struct OrganizeView: View {
                 ReadyToOrganizeView(onStart: startOrganization, startsVisible: true)
             }
         }
+    }
+
+    private var regenerateHelpText: String {
+        settingsViewModel.config.mode == .renameOnly
+            ? "Regenerate filename suggestions with current settings"
+            : "Regenerate organization plan with current settings"
+    }
+
+    private var regenerateAccessibilityLabel: String {
+        settingsViewModel.config.mode == .renameOnly
+            ? "Regenerate filename suggestions"
+            : "Regenerate organization plan"
     }
     
     @ViewBuilder

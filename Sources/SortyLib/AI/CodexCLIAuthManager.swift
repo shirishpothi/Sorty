@@ -147,9 +147,28 @@ public final class CodexCLIAuthManager: ObservableObject {
     }
 
     public func checkStatus() {
-        isCodexInstalled = checkCodexInstalled()
+        Task { await refreshStatus() }
+    }
 
-        switch Self.readLoginStatus() {
+    /// Refreshes the published auth state. The underlying Codex CLI probes shell
+    /// out to a subprocess and block on `Process.waitUntilExit()`, which spins
+    /// the run loop. That must never happen on the main thread, because during
+    /// app launch / SwiftUI scene instantiation it re-enters the in-progress
+    /// AttributeGraph transaction and aborts the app. So the blocking work is
+    /// performed on a detached background task and only the resulting state is
+    /// applied back on the main actor.
+    public func refreshStatus() async {
+        let installed = await Task.detached(priority: .userInitiated) {
+            Self.resolveCodexExecutablePath() != nil
+        }.value
+
+        let status = await Task.detached(priority: .userInitiated) {
+            Self.readLoginStatus()
+        }.value
+
+        isCodexInstalled = installed
+
+        switch status {
         case .chatGPT, .accessToken:
             isAuthenticated = true
             accountEmail = extractEmail(from: Self.readIDToken())
@@ -334,10 +353,6 @@ public final class CodexCLIAuthManager: ObservableObject {
         try script.write(to: scriptURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptURL.path)
         return scriptURL
-    }
-
-    private func checkCodexInstalled() -> Bool {
-        resolveCodexExecutablePath() != nil
     }
 
     private nonisolated static func resolveCodexExecutablePath() -> String? {
