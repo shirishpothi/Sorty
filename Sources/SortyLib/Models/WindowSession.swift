@@ -268,6 +268,9 @@ public final class WindowSession: ObservableObject {
         }
 
         switch section {
+        case "finder", "finder-integration", "finder-services", "services", "quick-actions", "organize-with-sorty", "watch-with-sorty", "exclude-with-sorty":
+            appState.selectedSettingsSection = .finder
+            appState.settingsFocusTarget = nil
         case "watched", "watched-folders", "folders", "exclusions", "rules":
             appState.selectedSettingsSection = .rules
             appState.settingsFocusTarget = nil

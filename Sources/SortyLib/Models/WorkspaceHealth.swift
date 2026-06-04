@@ -295,7 +295,7 @@ public struct CleanupOpportunity: Codable, Identifiable, Sendable {
             case .screenshotClutter: return .blue
             case .downloadClutter: return .green
             case .cacheFiles: return .yellow
-            case .temporaryFiles: return SortyDesignSystem.Colors.resolvedAccent
+            case .temporaryFiles: return .pink
             case .emptyFolders: return .indigo
             case .brokenSymlinks: return .red
             }

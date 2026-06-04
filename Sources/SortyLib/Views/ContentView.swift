@@ -7,7 +7,6 @@
 //  Enhanced with micro-animations and haptic feedback
 //
 
-import AppKit
 import SwiftUI
 
 public struct ContentView: View {
@@ -166,7 +165,6 @@ public struct ContentView: View {
             FeatureTourView()
                 .environmentObject(appState)
         }
-        .background(MainAppWindowChromeRestorer().frame(width: 0, height: 0))
     }
 
     @ViewBuilder
@@ -263,51 +261,6 @@ public struct ContentView: View {
         }
 
         appState.showDirectoryPicker = false
-    }
-}
-
-private struct MainAppWindowChromeRestorer: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            Self.restoreMainWindowChrome(window)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
-            Self.restoreMainWindowChrome(window)
-        }
-    }
-
-    private static func restoreMainWindowChrome(_ window: NSWindow) {
-        if window.styleMask.contains(.fullSizeContentView) {
-            window.styleMask.remove(.fullSizeContentView)
-        }
-        if window.titlebarAppearsTransparent {
-            window.titlebarAppearsTransparent = false
-        }
-        if window.titleVisibility != .visible {
-            window.titleVisibility = .visible
-        }
-        if window.alphaValue != 1 {
-            window.alphaValue = 1
-        }
-        if !window.hasShadow {
-            window.hasShadow = true
-        }
-        if !window.isOpaque {
-            window.isOpaque = true
-        }
-        if window.backgroundColor == .clear {
-            window.backgroundColor = NSColor.windowBackgroundColor
-        }
-        if window.isMovableByWindowBackground {
-            window.isMovableByWindowBackground = false
-        }
     }
 }
 

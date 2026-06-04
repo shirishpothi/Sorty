@@ -9,13 +9,14 @@ final class FinderIntegrationStatusTests: XCTestCase {
         let status = ExtensionCommunication.FinderIntegrationStatus(
             quickActionInstalled: true,
             quickWatchActionInstalled: true,
+            quickExcludeActionInstalled: true,
             toolbarAppInstalled: false,
             finderSyncEnabled: true,
             menuBarEnabled: false
         )
 
-        XCTAssertEqual(status.integrationCount, 2)
-        XCTAssertEqual(ExtensionCommunication.FinderIntegrationStatus.totalIntegrations, 4)
+        XCTAssertEqual(status.integrationCount, 4)
+        XCTAssertEqual(ExtensionCommunication.FinderIntegrationStatus.totalIntegrations, 6)
         XCTAssertEqual(status.overallStatus, "Active")
     }
 

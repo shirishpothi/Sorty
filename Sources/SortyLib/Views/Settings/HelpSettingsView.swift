@@ -261,11 +261,20 @@ struct DeeplinkSettingsView: View {
                 entries: [
                     DeeplinkEntry(title: "Watched Folders", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Open watched folders and optionally add a path."),
                     DeeplinkEntry(title: "Rules", url: "sorty://rules?action=add&type=pathContains&pattern=.cache", summary: "Open rules/exclusions and optionally add a rule."),
-                    DeeplinkEntry(title: "Exclude Path", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Add a folder or file path to exclusions."),
                     DeeplinkEntry(title: "Exclusions", url: "sorty://exclusions?action=add&pattern=node_modules", summary: "Open exclusions and optionally add a pattern."),
                     DeeplinkEntry(title: "Persona", url: "sorty://persona?action=create&generate=true&prompt=Design%20files", summary: "Open persona create/select flows with optional generation."),
                     DeeplinkEntry(title: "Learnings", url: "sorty://learnings?action=honing", summary: "Open Learnings with action: honing, stats, withdraw, export, import, or clear."),
-                    DeeplinkEntry(title: "Provider Settings", url: "sorty://settings?section=provider", summary: "Jump straight to provider setup."),
+                    DeeplinkEntry(title: "Provider Settings", url: "sorty://settings?section=provider", summary: "Jump straight to provider setup.")
+                ]
+            ),
+            DeeplinkGroup(
+                title: "Finder",
+                icon: "folder.badge.plus",
+                color: .cyan,
+                entries: [
+                    DeeplinkEntry(title: "Organize with Sorty", url: "sorty://organize?path=/Users/me/Downloads&autostart=true", summary: "Finder service target for organizing a selected folder."),
+                    DeeplinkEntry(title: "Watch with Sorty", url: "sorty://watched?action=add&path=/Users/me/Projects", summary: "Finder service target for adding a selected folder to watched folders."),
+                    DeeplinkEntry(title: "Exclude with Sorty", url: "sorty://exclude?path=/Users/me/Downloads/Archive", summary: "Finder service target for adding a selected file or folder to exclusions."),
                     DeeplinkEntry(title: "Finder Settings", url: "sorty://settings?section=finder", summary: "Jump straight to Finder and Services integration.")
                 ]
             ),

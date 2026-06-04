@@ -535,7 +535,7 @@ struct FileIconView: View {
         case "xls", "xlsx", "numbers": return .green
         case "ppt", "pptx", "keynote": return .orange
         case "jpg", "jpeg", "png", "gif", "heic", "bmp", "tiff": return .purple
-        case "mp4", "mov", "avi", "mkv": return SortyDesignSystem.Colors.resolvedAccent
+        case "mp4", "mov", "avi", "mkv": return .pink
         case "mp3", "wav", "aac", "m4a": return .red
         case "zip", "rar", "7z", "tar", "gz": return .brown
         case "dmg", "iso": return .gray

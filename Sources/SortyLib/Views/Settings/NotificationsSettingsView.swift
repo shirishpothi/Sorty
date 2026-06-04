@@ -20,7 +20,7 @@ struct NotificationsSettingsView: View {
                 .animatedAppearance(delay: 0.0)
             
             // Delivery Method
-            SettingsCard(title: "Delivery Method", icon: "bell.badge", color: SortyDesignSystem.Colors.resolvedAccent) {
+            SettingsCard(title: "Delivery Method", icon: "bell.badge", color: .pink) {
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsToggle(
                         isOn: $notificationSettings.settings.inAppHUD,

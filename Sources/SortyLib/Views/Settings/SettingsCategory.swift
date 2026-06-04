@@ -117,7 +117,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .automation: return .green
         case .deeplinks: return .cyan
         case .finder: return .cyan
-        case .notifications: return SortyDesignSystem.Colors.resolvedAccent
+        case .notifications: return .pink
         case .advanced: return .gray
         case .troubleshooting: return .red
         case .help: return .teal
@@ -140,7 +140,7 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
         case .deeplinks:
             return ["deeplink", "deeplinks", "deep link", "url scheme", "sorty://", "shortcuts", "raycast", "automation links", "scripts", "downloads", "desktop", "documents", "open url"]
         case .finder:
-            return ["finder", "quick action", "watch action", "extension", "service", "automation permission", "repair"]
+            return ["finder", "quick action", "organize action", "watch action", "exclude action", "extension", "service", "automation permission", "repair"]
         case .notifications:
             return ["notification", "notifications", "alerts", "sound", "banner", "hud", "in app hud", "notificli", "completion", "foreground", "permissions", "notification center"]
         case .advanced:
@@ -201,7 +201,9 @@ public enum SettingsCategory: String, CaseIterable, Identifiable {
             ]
         case .finder:
             return [
-                SettingsFeatureSnippet(title: "Quick Action", summary: "Run Sorty directly from Finder context menus."),
+                SettingsFeatureSnippet(title: "Organize with Sorty", summary: "Run Sorty directly from Finder context menus.", keywords: ["quick action", "service"]),
+                SettingsFeatureSnippet(title: "Watch with Sorty", summary: "Add watched folders directly from Finder context menus.", keywords: ["quick action", "service", "watched folders"]),
+                SettingsFeatureSnippet(title: "Exclude with Sorty", summary: "Add files and folders to exclusions directly from Finder context menus.", keywords: ["quick action", "service", "exclude path", "exclusion rules"]),
                 SettingsFeatureSnippet(title: "Finder Extension", summary: "Activate or repair the Finder Sync extension and jump to macOS Extensions settings."),
                 SettingsFeatureSnippet(title: "Automation Permission", summary: "Grant and recover Finder automation permission required for workflow controls.")
             ]

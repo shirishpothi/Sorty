@@ -58,7 +58,7 @@ struct CodexActionButtonLabel: View {
         case .success:
             return [Color.green.opacity(0.95), Color.teal.opacity(0.86)]
         case .failure:
-            return [Color.red.opacity(0.92), SortyDesignSystem.Colors.resolvedAccent.opacity(0.84)]
+            return [Color.red.opacity(0.92), Color.pink.opacity(0.84)]
         }
     }
 

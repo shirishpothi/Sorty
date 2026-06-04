@@ -9,7 +9,9 @@ import SwiftUI
 
 struct FinderIntegrationSettingsView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isOrganizeActionInstalled = false
     @State private var isWatchActionInstalled = false
+    @State private var isExcludeActionInstalled = false
     @State private var watchActionMessage: String?
     @State private var finderSyncActive = false
     @State private var finderSyncMessage: String?
@@ -53,9 +55,21 @@ struct FinderIntegrationSettingsView: View {
 
                     VStack(spacing: 8) {
                         compactStatusRow(
-                            label: "Finder menu actions",
+                            label: "Organize with Sorty",
+                            value: isOrganizeActionInstalled ? "Ready" : "Repair available",
+                            isHealthy: isOrganizeActionInstalled
+                        )
+
+                        compactStatusRow(
+                            label: "Watch with Sorty",
                             value: isWatchActionInstalled ? "Ready" : "Repair available",
                             isHealthy: isWatchActionInstalled
+                        )
+
+                        compactStatusRow(
+                            label: "Exclude with Sorty",
+                            value: isExcludeActionInstalled ? "Ready" : "Repair available",
+                            isHealthy: isExcludeActionInstalled
                         )
 
                         compactStatusRow(
@@ -104,14 +118,14 @@ struct FinderIntegrationSettingsView: View {
                             }
                             .buttonStyle(.sortySecondary(size: .regular))
 
-                            if !isWatchActionInstalled {
-                                Button("Repair Menu Action") {
+                            if !areFinderMenuActionsInstalled {
+                                Button("Repair Menu Actions") {
                                     HapticFeedbackManager.shared.tap()
                                     Task {
-                                        let result = await ExtensionCommunication.installQuickWatchActionAsync()
-                                        isWatchActionInstalled = result.success
+                                        let result = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                                        await refreshIntegrationStatus()
                                         watchActionMessage = result.message
-                                        if result.success {
+                                        if result.installed {
                                             HapticFeedbackManager.shared.success()
                                         } else {
                                             HapticFeedbackManager.shared.error()
@@ -210,11 +224,15 @@ struct FinderIntegrationSettingsView: View {
     }
 
     private var shouldShowTroubleshooting: Bool {
-        !isWatchActionInstalled || !finderSyncActive || !automationManager.automationStatus.isGranted || finderSyncMessage != nil || watchActionMessage != nil
+        !areFinderMenuActionsInstalled || !finderSyncActive || !automationManager.automationStatus.isGranted || finderSyncMessage != nil || watchActionMessage != nil
     }
 
     private var isFullyReady: Bool {
-        isWatchActionInstalled && finderSyncActive && automationManager.automationStatus.isGranted
+        areFinderMenuActionsInstalled && finderSyncActive && automationManager.automationStatus.isGranted
+    }
+
+    private var areFinderMenuActionsInstalled: Bool {
+        isOrganizeActionInstalled && isWatchActionInstalled && isExcludeActionInstalled
     }
 
     private var overallStatusIcon: String {
@@ -237,14 +255,14 @@ struct FinderIntegrationSettingsView: View {
 
     private var overallStatusSubtitle: String {
         if isFullyReady {
-            return "Use Finder's right-click menu to organize folders or add watched folders. Sorty will keep checking this setup in the background."
+            return "Use Finder's right-click menu to organize folders, add watched folders, or exclude paths. Sorty will keep checking this setup in the background."
         }
 
         if automationManager.automationStatus == .denied {
             return "macOS Automation permission is blocking Finder selection. Sorty can repair the rest automatically, but this permission must be re-enabled in System Settings."
         }
 
-        return "Sorty installs and repairs the Finder menu action automatically. If macOS needs confirmation, the repair options below will take you to the right place."
+        return "Sorty installs and repairs the Finder menu actions automatically. If macOS needs confirmation, the repair options below will take you to the right place."
     }
 
     private var automationStatusSummary: String {
@@ -261,7 +279,9 @@ struct FinderIntegrationSettingsView: View {
     private func refreshIntegrationStatus() async {
         _ = await ExtensionCommunication.ensureQuickActionInstalledAsync()
         let status = await ExtensionCommunication.getIntegrationStatusAsync()
+        isOrganizeActionInstalled = status.quickActionInstalled
         isWatchActionInstalled = status.quickWatchActionInstalled
+        isExcludeActionInstalled = status.quickExcludeActionInstalled
         finderSyncActive = status.finderSyncEnabled
     }
 }

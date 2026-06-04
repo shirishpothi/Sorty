@@ -217,7 +217,14 @@ public final class ModelCatalog: ObservableObject {
         let authMethod = ProviderAuthResolver.effectiveAuthMethod(for: .openAI, config: config)
 
         if authMethod == .accountSignIn {
-            if ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config) {
+            // `hasRequiredCredential` may shell out to the Codex CLI (`codex login
+            // status`) and block on `Process.waitUntilExit()`. Running that on the
+            // main thread spins the run loop and re-enters SwiftUI's in-progress
+            // AttributeGraph transaction, which aborts the app. Offload it.
+            let hasCredential = await Task.detached(priority: .userInitiated) {
+                ProviderAuthResolver.hasRequiredCredential(for: .openAI, config: config)
+            }.value
+            if hasCredential {
                 return (codexSubscriptionModels(), false)
             }
             return ([], true)

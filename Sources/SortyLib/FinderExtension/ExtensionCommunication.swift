@@ -3306,6 +3306,15 @@ public struct ExtensionCommunication {
         }
     }
 
+    public static func isQuickExcludeActionInstalledAsync() async -> Bool {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = isQuickExcludeActionInstalled()
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
     /// Uninstall the Quick Watch Action
     public static func uninstallQuickWatchAction() -> Bool {
         var removed = false
@@ -3763,28 +3772,30 @@ public struct ExtensionCommunication {
     public struct FinderIntegrationStatus: Sendable {
         public let quickActionInstalled: Bool
         public let quickWatchActionInstalled: Bool
+        public let quickExcludeActionInstalled: Bool
         public let toolbarAppInstalled: Bool
         public let finderSyncEnabled: Bool
         public let menuBarEnabled: Bool
 
-        public static let totalIntegrations = 4
+        public static let totalIntegrations = 6
         public static let empty = FinderIntegrationStatus(
             quickActionInstalled: false,
             quickWatchActionInstalled: false,
+            quickExcludeActionInstalled: false,
             toolbarAppInstalled: false,
             finderSyncEnabled: false,
             menuBarEnabled: false
         )
 
         public var overallStatus: String {
-            if quickWatchActionInstalled || toolbarAppInstalled || finderSyncEnabled || menuBarEnabled {
+            if quickActionInstalled || quickWatchActionInstalled || quickExcludeActionInstalled || toolbarAppInstalled || finderSyncEnabled || menuBarEnabled {
                 return "Active"
             }
             return "Not Configured"
         }
 
         public var integrationCount: Int {
-            [quickWatchActionInstalled, toolbarAppInstalled, finderSyncEnabled, menuBarEnabled]
+            [quickActionInstalled, quickWatchActionInstalled, quickExcludeActionInstalled, toolbarAppInstalled, finderSyncEnabled, menuBarEnabled]
                 .filter { $0 }.count
         }
     }
@@ -3845,6 +3856,7 @@ public struct ExtensionCommunication {
         return FinderIntegrationStatus(
             quickActionInstalled: isQuickActionInstalled(),
             quickWatchActionInstalled: isQuickWatchActionInstalled(),
+            quickExcludeActionInstalled: isQuickExcludeActionInstalled(),
             toolbarAppInstalled: FinderToolbarHelper.isToolbarAppInstalled(),
             finderSyncEnabled: finderSyncEnabled,
             menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")
@@ -3856,6 +3868,7 @@ public struct ExtensionCommunication {
         UserDefaults.standard.set(finderSyncEnabled, forKey: "enableFinderSyncExtension")
 
         let quickWatchActionInstalled = await isQuickWatchActionInstalledAsync()
+        let quickExcludeActionInstalled = await isQuickExcludeActionInstalledAsync()
         let toolbarAppInstalled = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 continuation.resume(returning: FinderToolbarHelper.isToolbarAppInstalled())
@@ -3865,6 +3878,7 @@ public struct ExtensionCommunication {
         return FinderIntegrationStatus(
             quickActionInstalled: await isQuickActionInstalledAsync(),
             quickWatchActionInstalled: quickWatchActionInstalled,
+            quickExcludeActionInstalled: quickExcludeActionInstalled,
             toolbarAppInstalled: toolbarAppInstalled,
             finderSyncEnabled: finderSyncEnabled,
             menuBarEnabled: UserDefaults.standard.bool(forKey: "showMenuBarExtra")

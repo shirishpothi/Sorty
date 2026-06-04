@@ -373,6 +373,7 @@
 		3353FC1B2F0124320097CD23 /* AIClientFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIClientFactory.swift; sourceTree = "<group>"; };
 		3353FC1C2F0124320097CD23 /* AIClientProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIClientProtocol.swift; sourceTree = "<group>"; };
 		3353FC1D2F0124320097CD23 /* AppleFoundationModelClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleFoundationModelClient.swift; sourceTree = "<group>"; };
+		CC110001000000000000A016 /* CodexSubscriptionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexSubscriptionClient.swift; sourceTree = "<group>"; };
 		3353FC1E2F0124320097CD23 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIClient.swift; sourceTree = "<group>"; };
 		3353FC1F2F0124320097CD23 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromptBuilder.swift; sourceTree = "<group>"; };
 		3353FC202F0124320097CD23 /* ResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResponseParser.swift; sourceTree = "<group>"; };
@@ -681,6 +682,7 @@
 				3353FC1B2F0124320097CD23 /* AIClientFactory.swift */,
 				3353FC1C2F0124320097CD23 /* AIClientProtocol.swift */,
 				3353FC1D2F0124320097CD23 /* AppleFoundationModelClient.swift */,
+				CC110001000000000000A016 /* CodexSubscriptionClient.swift */,
 				3353FC1E2F0124320097CD23 /* OpenAIClient.swift */,
 				3353FC1F2F0124320097CD23 /* PromptBuilder.swift */,
 				3353FC202F0124320097CD23 /* ResponseParser.swift */,

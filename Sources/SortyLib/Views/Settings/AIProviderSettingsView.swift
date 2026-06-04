@@ -25,6 +25,7 @@ struct AIProviderSettingsView: View {
     @State private var codexTerminalButtonState: CodexActionVisualState = .idle
     @State private var codexTerminalResetTask: Task<Void, Never>?
     @State private var codexDeviceAuthDismissTask: Task<Void, Never>?
+    @State private var codexDeviceCodeCopiedID: UUID?
     @State private var isShowingCodexDeviceAuth = false
 
     private let providerColumns = Array(
@@ -119,7 +120,8 @@ struct AIProviderSettingsView: View {
                 },
                 onOpenSettings: openChatGPTSecuritySettings,
                 onOpenDeviceAuthorization: openCodexDeviceAuthorization,
-                onCopyCode: copyCodexDeviceCode
+                onCopyCode: copyCodexDeviceCode,
+                copiedID: codexDeviceCodeCopiedID
             )
             .frame(width: 610)
             .systemLiquidGlassBackground(cornerRadius: 28)
@@ -738,6 +740,18 @@ struct AIProviderSettingsView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(code, forType: .string)
         HapticFeedbackManager.shared.tap()
+
+        let copiedID = UUID()
+        withAnimation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.72)) {
+            codexDeviceCodeCopiedID = copiedID
+        }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_250_000_000)
+            guard codexDeviceCodeCopiedID == copiedID else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                codexDeviceCodeCopiedID = nil
+            }
+        }
     }
 
     @MainActor
@@ -778,6 +792,8 @@ struct AIProviderSettingsView: View {
 }
 
 private struct CodexDeviceAuthSheet: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let session: CodexDeviceAuthSession?
     let isCodexInstalled: Bool
     let authError: String?
@@ -786,6 +802,7 @@ private struct CodexDeviceAuthSheet: View {
     let onOpenSettings: () -> Void
     let onOpenDeviceAuthorization: () -> Void
     let onCopyCode: () -> Void
+    let copiedID: UUID?
 
     private var userCode: String {
         session?.userCode ?? "---- -----"
@@ -800,12 +817,22 @@ private struct CodexDeviceAuthSheet: View {
         }
     }
 
+    private var isCodeCopied: Bool {
+        copiedID != nil
+    }
+
     var body: some View {
-        content
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 14) {
+                content
+            }
+        } else {
+            content
+        }
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 22) {
+        VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Reauthenticate ChatGPT Subscription")
@@ -826,12 +853,13 @@ private struct CodexDeviceAuthSheet: View {
                 .accessibilityLabel("Close")
             }
 
-            VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 12) {
                 CodexDeviceAuthStep(number: 1, title: "Enable device code authorization for Codex.") {
                     Button(action: onOpenSettings) {
                         Label("Open ChatGPT Settings", systemImage: "arrow.up.right.square")
                     }
                     .buttonStyle(.sortyBordered)
+                    .controlSize(.small)
                 }
 
                 CodexDeviceAuthStep(number: 2, title: "Open the OpenAI device authorization page.") {
@@ -839,21 +867,42 @@ private struct CodexDeviceAuthSheet: View {
                         Label("Open device authorization", systemImage: "arrow.up.right.square")
                     }
                     .buttonStyle(.sortyBordered)
+                    .controlSize(.small)
                 }
 
                 CodexDeviceAuthStep(number: 3, title: "Paste this device code when OpenAI asks for it:") {
                     Button(action: onCopyCode) {
-                        Text(userCode)
-                            .font(.system(size: 24, weight: .bold, design: .monospaced))
-                            .tracking(4)
-                            .frame(minWidth: 210, alignment: .leading)
+                        HStack(spacing: 12) {
+                            Text(userCode)
+                                .font(.title2.monospaced().weight(.bold))
+                                .tracking(3)
+                                .frame(minWidth: 190, alignment: .leading)
+
+                            Spacer(minLength: 10)
+
+                            Label(isCodeCopied ? "Copied" : "Copy", systemImage: isCodeCopied ? "checkmark.circle.fill" : "doc.on.doc")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(isCodeCopied ? .green : .secondary)
+                                .contentTransition(.symbolEffect(.replace))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 14)
-                    .systemLiquidGlassBackground(cornerRadius: 10)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(isCodeCopied ? Color.green.opacity(0.10) : Color.clear)
+                    }
+                    .systemLiquidGlassBackground(cornerRadius: 12)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(isCodeCopied ? Color.green.opacity(0.42) : Color.primary.opacity(0.08), lineWidth: 1)
+                    }
+                    .scaleEffect(isCodeCopied && !reduceMotion ? 1.015 : 1)
                     .disabled(session?.userCode == nil)
                     .help("Copy device code")
+                    .accessibilityLabel(isCodeCopied ? "Device code copied" : "Copy device code")
                 }
 
                 CodexDeviceAuthStep(number: 4, title: "Continue to finish approval.") {
@@ -894,10 +943,10 @@ private struct CodexDeviceAuthStep<Content: View>: View {
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             Text("\(number)")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.black)
-                .frame(width: 34, height: 34)
-                .background(Color.green.opacity(0.12))
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.primary)
+                .frame(width: 32, height: 32)
+                .systemLiquidGlassBackground(cornerRadius: 16)
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 10) {
@@ -906,7 +955,10 @@ private struct CodexDeviceAuthStep<Content: View>: View {
                     .foregroundStyle(.primary)
                 content
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(14)
+        .systemLiquidGlassBackground(cornerRadius: 14)
     }
 }
 
