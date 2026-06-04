@@ -113,40 +113,18 @@ struct OrganizeView: View {
                             .transition(.identity)
                     }
                 }
+
+                if organizer.state == .ready {
+                    regenerateButton
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(.top, 16)
+                        .padding(.trailing, 20)
+                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+                }
             }
             .animation(returnToStartExitAnimation, value: isReturningToStart)
         }
         .navigationTitle(settingsViewModel.config.mode.workflowTitle)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                if organizer.state == .ready {
-                    Button {
-                        HapticFeedbackManager.shared.tap()
-                        Task {
-                            try? await organizer.regeneratePreview()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(width: 30, height: 30)
-                            .background(
-                                Circle()
-                                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Circle())
-                    .keyboardShortcut("r", modifiers: [.command, .shift])
-                    .help(regenerateHelpText)
-                    .accessibilityLabel(regenerateAccessibilityLabel)
-                    .accessibilityHint("Use when you want different AI suggestions")
-                }
-            }
-        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Organization workflow")
         .accessibilityHint("Select a folder and configure options")
@@ -262,6 +240,34 @@ struct OrganizeView: View {
         settingsViewModel.config.mode == .renameOnly
             ? "Regenerate filename suggestions"
             : "Regenerate organization plan"
+    }
+
+    private var regenerateButton: some View {
+        Button {
+            HapticFeedbackManager.shared.tap()
+            Task {
+                try? await organizer.regeneratePreview()
+            }
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 30, height: 30)
+                .background(
+                    Circle()
+                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .contentShape(Circle())
+        .keyboardShortcut("r", modifiers: [.command, .shift])
+        .help(regenerateHelpText)
+        .accessibilityLabel(regenerateAccessibilityLabel)
+        .accessibilityHint("Use when you want different AI suggestions")
     }
     
     @ViewBuilder
