@@ -26,5 +26,4 @@
 - UI polish is required: subtle hover feedback, compact spacing, short `.spring()`/`.easeInOut` transitions, and `HapticFeedbackManager.shared` (`selection`, `light`/`tap`, `success`, `error`).
 - Liquid-glass UI must use `systemLiquidGlassBackground(...)` and `.systemLiquidGlassPopover(cornerRadius: 12)` only; never fake it with materials, blur, gradients, or clear-popover hacks.
 - Feature flags: `defaults write com.sorty.app <key> -bool true`; detailed guides live in `docs/agent-guides/`.
-- Never commit secrets, credentials, private keys, `.env` files, or local-only config.
 - Other rule files checked: `.github/copilot-instructions.md` is folded into this file; no Cursor, Claude, Windsurf, Cline, or Goose rules were present.
