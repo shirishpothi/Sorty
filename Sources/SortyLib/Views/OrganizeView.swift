@@ -119,21 +119,32 @@ struct OrganizeView: View {
         .navigationTitle(settingsViewModel.config.mode.workflowTitle)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    Task {
-                        try? await organizer.regeneratePreview()
+                if organizer.state == .ready {
+                    Button {
+                        HapticFeedbackManager.shared.tap()
+                        Task {
+                            try? await organizer.regeneratePreview()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 30, height: 30)
+                            .background(
+                                Circle()
+                                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                            )
                     }
-                } label: {
-                    Label("Regenerate", systemImage: "arrow.clockwise")
+                    .buttonStyle(.plain)
+                    .contentShape(Circle())
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .help(regenerateHelpText)
+                    .accessibilityLabel(regenerateAccessibilityLabel)
+                    .accessibilityHint("Use when you want different AI suggestions")
                 }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
-                .help(regenerateHelpText)
-                .accessibilityLabel(regenerateAccessibilityLabel)
-                .accessibilityHint("Use when you want different AI suggestions")
-                .disabled(organizer.state != .ready)
-                .opacity(organizer.state == .ready ? 1 : 0)
-                .accessibilityHidden(organizer.state != .ready)
             }
         }
         .accessibilityElement(children: .contain)
