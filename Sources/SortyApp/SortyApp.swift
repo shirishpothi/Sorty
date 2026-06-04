@@ -249,6 +249,13 @@ struct SortyApp: App {
 
     @SceneBuilder
     var body: some Scene {
+        Window("Sorty", id: "main") {
+            mainWindowContent(launchRequest: .constant(nil))
+        }
+        .windowStyle(.automatic)
+        .defaultSize(width: 1100, height: 750)
+        .defaultLaunchBehavior(.presented)
+
         WindowGroup(for: WindowLaunchRequest.self) { launchRequest in
             mainWindowContent(launchRequest: launchRequest)
         }
