@@ -170,16 +170,21 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             .appendingPathComponent("sorty-codex-\(UUID().uuidString).txt")
         let diagnosticsURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("sorty-codex-diagnostics-\(UUID().uuidString).txt")
+        let schemaURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sorty-codex-schema-\(UUID().uuidString).json")
         defer {
             try? FileManager.default.removeItem(at: outputURL)
             try? FileManager.default.removeItem(at: diagnosticsURL)
+            try? FileManager.default.removeItem(at: schemaURL)
         }
+        try Self.writeOrganizationResponseSchema(to: schemaURL)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: codexPath)
         process.arguments = Self.codexArguments(
             model: config.model,
             outputURL: outputURL,
+            schemaURL: schemaURL,
             imageFiles: imageFiles
         )
 
@@ -279,11 +284,13 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
     private nonisolated static func codexArguments(
         model: String,
         outputURL: URL,
+        schemaURL: URL,
         imageFiles: [URL]
     ) -> [String] {
         var arguments = [
             "exec",
             "--ephemeral",
+            "--ignore-user-config",
             "--ignore-rules",
             "--skip-git-repo-check",
             "--sandbox",
@@ -291,6 +298,8 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             "--json",
             "--output-last-message",
             outputURL.path,
+            "--output-schema",
+            schemaURL.path,
             "--model",
             model
         ]
@@ -301,6 +310,117 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
 
         arguments.append("-")
         return arguments
+    }
+
+    private nonisolated static func writeOrganizationResponseSchema(to url: URL) throws {
+        let schema: [String: Any] = [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "folders": [
+                    "type": "array",
+                    "items": folderSchema()
+                ],
+                "folder_assignments": [
+                    "type": ["array", "null"],
+                    "items": folderSchema()
+                ],
+                "unorganized": [
+                    "type": "array",
+                    "items": [
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": [
+                            "filename": ["type": "string"],
+                            "reason": ["type": "string"]
+                        ],
+                        "required": ["filename", "reason"]
+                    ]
+                ],
+                "unorganized_ids": [
+                    "type": ["array", "null"],
+                    "items": ["type": "integer"]
+                ],
+                "notes": ["type": "string"]
+            ],
+            "required": ["folders", "folder_assignments", "unorganized", "unorganized_ids", "notes"],
+            "$defs": [
+                "folder": folderSchema()
+            ]
+        ]
+
+        let data = try JSONSerialization.data(withJSONObject: schema, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: url, options: .atomic)
+    }
+
+    private nonisolated static func folderSchema() -> [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "name": ["type": "string"],
+                "description": ["type": ["string", "null"]],
+                "reasoning": ["type": ["string", "null"]],
+                "subfolders": [
+                    "type": ["array", "null"],
+                    "items": ["$ref": "#/$defs/folder"]
+                ],
+                "files": [
+                    "type": "array",
+                    "items": [
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": [
+                            "filename": ["type": "string"],
+                            "suggested_name": ["type": ["string", "null"]],
+                            "rename_reason": ["type": ["string", "null"]],
+                            "rename_confidence": ["type": ["number", "null"]],
+                            "tags": [
+                                "type": ["array", "null"],
+                                "items": ["type": "string"]
+                            ],
+                            "comment": ["type": ["string", "null"]]
+                        ],
+                        "required": [
+                            "filename",
+                            "suggested_name",
+                            "rename_reason",
+                            "rename_confidence",
+                            "tags",
+                            "comment"
+                        ]
+                    ]
+                ],
+                "tags": [
+                    "type": ["array", "null"],
+                    "items": ["type": "string"]
+                ],
+                "comment": ["type": ["string", "null"]],
+                "semantic_tags": [
+                    "type": ["array", "null"],
+                    "items": ["type": "string"]
+                ],
+                "confidence": ["type": ["number", "null"]],
+                "rule_id": ["type": ["string", "null"]],
+                "file_ids": [
+                    "type": ["array", "null"],
+                    "items": ["type": "integer"]
+                ]
+            ],
+            "required": [
+                "name",
+                "description",
+                "reasoning",
+                "subfolders",
+                "files",
+                "tags",
+                "comment",
+                "semantic_tags",
+                "confidence",
+                "rule_id",
+                "file_ids"
+            ]
+        ]
     }
 
     private nonisolated static func writeTemporaryImages(_ imageData: [String: Data]) throws -> [URL] {
@@ -401,10 +521,15 @@ private final class CodexOutputStreamer: @unchecked Sendable {
     private static func extractVisibleChunk(from json: [String: Any]) -> String? {
         if let type = json["type"] as? String {
             switch type {
-            case "agent_message_delta", "response.output_text.delta", "message_delta":
-                return nonEmptyString(json["delta"] ?? json["content"] ?? json["text"])
+            case "agent_message_delta", "response.output_text.delta", "message_delta",
+                 "agent_reasoning_delta", "response.reasoning.delta", "reasoning_delta":
+                return nonEmptyString(json["delta"] ?? json["content"] ?? json["text"] ?? json["summary"])
             case "agent_message", "assistant_message", "message":
                 return nonEmptyString(json["message"] ?? json["content"] ?? json["text"])
+            case "item.completed", "item.updated":
+                if let item = json["item"] as? [String: Any] {
+                    return extractVisibleChunk(from: item)
+                }
             default:
                 break
             }
