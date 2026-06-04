@@ -48,6 +48,7 @@ struct OrganizeView: View {
             if let directory = appState.selectedDirectory {
                 DirectoryHeader(
                     url: directory,
+                    mode: settingsViewModel.config.mode,
                     onBack: {
                         HapticFeedbackManager.shared.tap()
                         switch organizer.state {
@@ -77,7 +78,9 @@ struct OrganizeView: View {
                         }
                     }
                 )
-                .transition(TransitionStyles.slideFromBottom)
+                .id(settingsViewModel.config.mode)
+                .transition(directoryHeaderTransition)
+                .animation(directoryHeaderModeAnimation, value: settingsViewModel.config.mode)
             }
 
             // Main content area with animated transitions. We use a critically
@@ -184,6 +187,14 @@ struct OrganizeView: View {
 
     private var persistentWorkflowGradientAnimation: Animation {
         reduceMotion ? .easeOut(duration: 0.12) : .easeInOut(duration: 0.52)
+    }
+
+    private var directoryHeaderTransition: AnyTransition {
+        reduceMotion ? .opacity : .blurReplace
+    }
+
+    private var directoryHeaderModeAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.12) : .spring(response: 0.4, dampingFraction: 0.85)
     }
 
     private var stateContentOpacity: Double {
@@ -575,6 +586,7 @@ struct OrganizeView: View {
 
 struct DirectoryHeader: View {
     let url: URL
+    let mode: OrganizationMode
     let onBack: () -> Void
     let onClear: () -> Void
 
@@ -586,8 +598,20 @@ struct DirectoryHeader: View {
             FolderThumbnailView(url: url, size: CGSize(width: 32, height: 32))
 
             VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 7) {
+                    Image(systemName: mode.iconName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                        .accessibilityHidden(true)
+
+                    Text(mode.workflowTitle)
+                        .font(.headline)
+                        .lineLimit(1)
+                }
                 Text(url.lastPathComponent)
-                    .font(.headline)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 PrivacySensitivePathText(path: url.deletingLastPathComponent().path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
