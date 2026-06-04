@@ -635,7 +635,10 @@ private struct SetupRepairBanner: View {
                 .controlSize(.small)
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.72))
+        )
         .accessibilityIdentifier("SetupRepairBanner")
     }
 }
