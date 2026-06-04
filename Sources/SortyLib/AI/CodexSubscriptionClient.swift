@@ -186,9 +186,34 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         let inputPipe = Pipe()
         FileManager.default.createFile(atPath: diagnosticsURL.path, contents: nil)
         let diagnosticsHandle = try FileHandle(forWritingTo: diagnosticsURL)
+        let diagnosticsLock = NSLock()
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        let stdoutStreamer = CodexOutputStreamer { [weak self] chunk in
+            guard let self else { return }
+            Task { @MainActor in
+                self.streamingDelegate?.didReceiveChunk(chunk)
+            }
+        }
         process.standardInput = inputPipe
-        process.standardOutput = diagnosticsHandle
-        process.standardError = diagnosticsHandle
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        outputPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            diagnosticsLock.lock()
+            try? diagnosticsHandle.write(contentsOf: data)
+            diagnosticsLock.unlock()
+            stdoutStreamer.process(data)
+        }
+        errorPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            diagnosticsLock.lock()
+            try? diagnosticsHandle.write(contentsOf: data)
+            diagnosticsLock.unlock()
+        }
 
         do {
             try process.run()
@@ -199,9 +224,14 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             process.waitUntilExit()
         } catch {
             process.terminate()
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            errorPipe.fileHandleForReading.readabilityHandler = nil
             try? diagnosticsHandle.close()
             throw AIClientError.networkError(error)
         }
+        outputPipe.fileHandleForReading.readabilityHandler = nil
+        errorPipe.fileHandleForReading.readabilityHandler = nil
+        stdoutStreamer.finish()
         try? diagnosticsHandle.close()
 
         let diagnosticData = (try? Data(contentsOf: diagnosticsURL)) ?? Data()
@@ -218,6 +248,9 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard let response, !response.isEmpty else {
             throw AIClientError.invalidResponseFormat
+        }
+        await MainActor.run {
+            streamingDelegate?.didComplete(content: response)
         }
         return response
     }
@@ -255,6 +288,7 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
             "--skip-git-repo-check",
             "--sandbox",
             "read-only",
+            "--json",
             "--output-last-message",
             outputURL.path,
             "--model",
@@ -315,5 +349,104 @@ public final class CodexSubscriptionClient: AIClientProtocol, Sendable {
         } catch {
             return nil
         }
+    }
+}
+
+private final class CodexOutputStreamer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lineBuffer = ""
+    private let onChunk: @Sendable (String) -> Void
+
+    init(onChunk: @escaping @Sendable (String) -> Void) {
+        self.onChunk = onChunk
+    }
+
+    func process(_ data: Data) {
+        guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { return }
+
+        lock.lock()
+        lineBuffer += text
+        let lines = lineBuffer.split(separator: "\n", omittingEmptySubsequences: false)
+        let completeLines = lineBuffer.hasSuffix("\n") ? lines : Array(lines.dropLast())
+        lineBuffer = lineBuffer.hasSuffix("\n") ? "" : String(lines.last ?? "")
+        lock.unlock()
+
+        for line in completeLines {
+            processLine(String(line))
+        }
+    }
+
+    func finish() {
+        lock.lock()
+        let pending = lineBuffer
+        lineBuffer = ""
+        lock.unlock()
+
+        if !pending.isEmpty {
+            processLine(pending)
+        }
+    }
+
+    private func processLine(_ line: String) {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        if let data = trimmed.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let chunk = Self.extractVisibleChunk(from: json) {
+            onChunk(chunk)
+        }
+    }
+
+    private static func extractVisibleChunk(from json: [String: Any]) -> String? {
+        if let type = json["type"] as? String {
+            switch type {
+            case "agent_message_delta", "response.output_text.delta", "message_delta":
+                return nonEmptyString(json["delta"] ?? json["content"] ?? json["text"])
+            case "agent_message", "assistant_message", "message":
+                return nonEmptyString(json["message"] ?? json["content"] ?? json["text"])
+            default:
+                break
+            }
+        }
+
+        if let item = json["item"] as? [String: Any],
+           let chunk = extractVisibleChunk(from: item) {
+            return chunk
+        }
+
+        if let message = json["message"] as? [String: Any] {
+            return extractMessageContent(from: message)
+        }
+
+        if let content = json["content"] as? [[String: Any]] {
+            return content.compactMap(extractMessageContent(from:)).joinedNonEmpty()
+        }
+
+        return nil
+    }
+
+    private static func extractMessageContent(from json: [String: Any]) -> String? {
+        if let text = nonEmptyString(json["text"] ?? json["content"] ?? json["delta"]) {
+            return text
+        }
+
+        if let content = json["content"] as? [[String: Any]] {
+            return content.compactMap(extractMessageContent(from:)).joinedNonEmpty()
+        }
+
+        return nil
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let text = value as? String, !text.isEmpty else { return nil }
+        return text
+    }
+}
+
+private extension Array where Element == String {
+    func joinedNonEmpty() -> String? {
+        let value = joined()
+        return value.isEmpty ? nil : value
     }
 }
