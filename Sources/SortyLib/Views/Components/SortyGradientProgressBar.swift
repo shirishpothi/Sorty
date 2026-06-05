@@ -29,7 +29,7 @@ private struct SortyGradientRingSegment: View {
 }
 
 private enum SortyBeamPalette {
-    static let primary = Color(red: 0.20, green: 0.78, blue: 0.38)
+    static let primary = Color(red: 0.055, green: 0.647, blue: 0.643)
     static let warm = primary
     static let cool = primary
 

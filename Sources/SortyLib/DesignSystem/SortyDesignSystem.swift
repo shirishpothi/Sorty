@@ -39,8 +39,8 @@ public enum SortyDesignSystem {
         /// Sorty brand accent.
         /// Adapts between light and dark appearances.
         public static let accent: Color = {
-            let light = Color(red: 0.247, green: 0.627, blue: 0.949)
-            let dark  = Color(red: 0.365, green: 0.702, blue: 1.000)
+            let light = Color(red: 0.055, green: 0.647, blue: 0.643)
+            let dark  = Color(red: 0.176, green: 0.831, blue: 0.749)
             return Color(nsColor: NSColor(name: nil) { appearance in
                 let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
                 return isDark ? NSColor(dark) : NSColor(light)
