@@ -309,7 +309,7 @@ struct OrganizationCompleteView: View {
                     }
                     .help("Review this run and previous organization sessions")
                     .accessibilityHint("Opens organization history")
-                    .padding(.top, 8)
+                    .padding(.top, -4)
                     .opacity(historyLinkAppeared ? 1 : 0)
                     .offset(y: historyLinkAppeared ? 0 : 10)
                     
