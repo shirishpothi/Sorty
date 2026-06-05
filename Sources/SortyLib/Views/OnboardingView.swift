@@ -518,6 +518,7 @@ private struct OnboardingIntroView: View {
     @State private var ambientMotionGeneration = 0
     @State private var isHoveringButton = false
     @State private var hoverExitDebounceGeneration = 0
+    @State private var revealGeneration = 0
     @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
@@ -529,8 +530,12 @@ private struct OnboardingIntroView: View {
 
             // Real macOS file-type icons drift in a loose orbit, then tuck into
             // the app icon when the user starts onboarding.
+            // 24 fps is plenty for a slow drift and noticeably cheaper than
+            // 30 fps on a TimelineView that's evaluating 10 chip offsets per
+            // tick. The collapse uses opacity + scale only — blurring 10
+            // stacked views on hover was a noticeable GPU hit.
             SwiftUI.TimelineView(.animation(
-                minimumInterval: 1.0 / 30.0,
+                minimumInterval: 1.0 / 24.0,
                 paused: reduceMotion || !filesAppeared || isHoveringButton || !ambientMotionActive
             )) { context in
                 let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
@@ -541,7 +546,6 @@ private struct OnboardingIntroView: View {
                             .scaleEffect(isHoveringButton ? 0.24 : file.scale)
                             .offset(orbitOffset(for: file, phase: phase))
                             .opacity(isHoveringButton ? 0 : (filesAppeared ? 1 : 0))
-                            .blur(radius: isHoveringButton ? 16 : 0)
                             .animation(
                                 .spring(response: 0.7, dampingFraction: 0.86)
                                     .delay(file.appearDelay),
@@ -618,58 +622,90 @@ private struct OnboardingIntroView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Welcome to Sorty")
         .onAppear {
-            audio.startBackgroundMelody()
-
-            // Smooth fade-in for the icon. Springs feel jittery on opacity,
-            // so we drive opacity + blur with eases and reserve the spring
-            // for scale only. The icon resolves out of a soft blur, which
-            // reads as a graceful materialization instead of a jerky pop.
-            if reduceMotion {
-                iconScale = 1
-                iconOpacity = 1
-                iconBlur = 0
-                glowOpacity = 1
-                textOpacity = 1
-                textOffset = 0
-            } else {
-                withAnimation(.easeOut(duration: 0.95)) {
-                    iconOpacity = 1
-                    iconBlur = 0
-                }
-
-                withAnimation(.spring(response: 0.95, dampingFraction: 0.86)) {
-                    iconScale = 1
-                }
-
-                withAnimation(.easeOut(duration: 1.2).delay(0.10)) {
-                    glowOpacity = 1
-                }
-
-                // Slow "breathing" glow that blooms once after the icon
-                // settles, then eases back — no harder than the eye can
-                // follow, no overshoot.
-                withAnimation(.easeInOut(duration: 1.4).delay(0.45)) {
-                    glowRadius = 46
-                }
-                Task { @MainActor in
-                    try? await Task.sleep(for: .seconds(1.85))
-                    withAnimation(.easeInOut(duration: 1.6)) {
-                        glowRadius = 38
-                    }
-                }
-
-                withAnimation(.easeOut(duration: 0.85).delay(0.32)) {
-                    textOpacity = 1
-                    textOffset = 0
-                }
-            }
-
-            filesAppeared = true
-            beginAmbientMotionWindow(seconds: 8)
+            runIntroReveal()
         }
         .onDisappear {
+            revealGeneration += 1
             stopAmbientMotion()
             audio.stopAll()
+        }
+    }
+
+    /// Orchestrates the first-screen reveal. The audio engine is
+    /// intentionally deferred so its AVAudioEngine + AVAudioSourceNode
+    /// setup does not block the first paint of the icon. Animations
+    /// keep their original overlapping timing so the screen feels
+    /// alive from the first frame; the `revealGeneration` counter
+    /// cancels any in-flight reveal if the view disappears and
+    /// re-appears before the previous sequence finishes.
+    private func runIntroReveal() {
+        revealGeneration += 1
+        let generation = revealGeneration
+
+        if reduceMotion {
+            iconScale = 1
+            iconOpacity = 1
+            iconBlur = 0
+            glowOpacity = 1
+            glowRadius = 38
+            textOpacity = 1
+            textOffset = 0
+            filesAppeared = true
+            audio.startBackgroundMelody()
+            beginAmbientMotionWindow(seconds: 8)
+            return
+        }
+
+        // Defer audio so the AVAudioEngine + AVAudioSourceNode setup runs
+        // after the first paint settles, not on the same runloop tick as
+        // the icon reveal. This was the main source of the perceived
+        // starting lag.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(420))
+            guard generation == revealGeneration else { return }
+            audio.startBackgroundMelody()
+        }
+
+        // Icon materializes out of a soft blur. Springs feel jittery on
+        // opacity, so opacity + blur use eases and the scale spring is
+        // queued for the next tick.
+        withAnimation(.easeOut(duration: 0.85)) {
+            iconOpacity = 1
+            iconBlur = 0
+        }
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard generation == revealGeneration else { return }
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.86)) {
+                iconScale = 1
+            }
+        }
+
+        withAnimation(.easeOut(duration: 1.0).delay(0.10)) {
+            glowOpacity = 1
+        }
+
+        // Single soft pulse to a slightly larger radius — the previous
+        // two-stage bloom → settle stacked a second animation on top of
+        // the first and compounded easing curves. One deliberate pulse
+        // reads as calmer and avoids the visible hand-off between curves.
+        withAnimation(.easeInOut(duration: 1.3).delay(0.30)) {
+            glowRadius = 38
+        }
+
+        withAnimation(.easeOut(duration: 0.7).delay(0.30)) {
+            textOpacity = 1
+            textOffset = 0
+        }
+
+        // File chips drift in once the hero elements have settled so they
+        // never compete with the icon during the most fragile frame.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(900))
+            guard generation == revealGeneration else { return }
+            filesAppeared = true
+            beginAmbientMotionWindow(seconds: 8)
         }
     }
 
