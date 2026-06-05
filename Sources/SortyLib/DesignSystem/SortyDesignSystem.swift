@@ -36,11 +36,11 @@ public enum SortyDesignSystem {
     
     // MARK: - Colors
     public enum Colors {
-        /// Sorty brand accent — rose-pink derived from the app icon.
+        /// Sorty brand accent.
         /// Adapts between light and dark appearances.
         public static let accent: Color = {
-            let light = Color(red: 0.85, green: 0.235, blue: 0.353)
-            let dark  = Color(red: 0.95, green: 0.38,  blue: 0.475)
+            let light = Color(red: 0.137, green: 0.216, blue: 0.169)
+            let dark  = Color(red: 0.137, green: 0.216, blue: 0.169)
             return Color(nsColor: NSColor(name: nil) { appearance in
                 let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
                 return isDark ? NSColor(dark) : NSColor(light)
@@ -95,7 +95,7 @@ public enum SortyDesignSystem {
         ///              Purple, Pink)
         ///
         /// We treat any of the "Multicolor" representations as the trigger to
-        /// fall back to Sorty's brand pink. Any explicit color chosen by the
+        /// fall back to Sorty's brand accent. Any explicit color chosen by the
         /// user is respected via the live system accent.
         public static var resolvedAccent: Color {
             let raw = UserDefaults.standard.object(forKey: "AppleAccentColor")
