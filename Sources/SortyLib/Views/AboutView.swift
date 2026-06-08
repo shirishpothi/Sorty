@@ -164,6 +164,8 @@ struct AboutView: View {
 }
 
 private struct AboutAppIconEasterEgg: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var iconHovered = false
     @State private var selectedIconIndex = 0
     @State private var clickCount = 0
@@ -193,10 +195,11 @@ private struct AboutAppIconEasterEgg: View {
                         .transition(.opacity)
                 }
 
-                Image(nsImage: currentImage)
-                    .resizable()
-                    .frame(width: iconSize, height: iconSize)
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
+                SortyEnergyScanIcon(
+                    image: currentImage,
+                    size: iconSize,
+                    cornerRadius: 22
+                )
                     .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
                     .scaleEffect(isBursting ? 0.18 : (iconHovered ? 1.05 : 1.0))
                     .rotationEffect(.degrees(isBursting ? 18 : 0))
@@ -209,15 +212,15 @@ private struct AboutAppIconEasterEgg: View {
         .accessibilityLabel("Sorty app icon")
         .accessibilityIdentifier("AboutAppIconButton")
         .onHover { hovering in
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                 iconHovered = hovering
             }
             if hovering {
                 HapticFeedbackManager.shared.selection()
             }
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.68), value: selectedIconIndex)
-        .animation(.spring(response: 0.36, dampingFraction: 0.62), value: isBursting)
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.68), value: selectedIconIndex)
+        .animation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.62), value: isBursting)
     }
 
     private func handleClick() {

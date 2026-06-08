@@ -566,11 +566,11 @@ private struct OnboardingIntroView: View {
                             .blur(radius: glowRadius)
                             .opacity(glowOpacity)
 
-                        Image(nsImage: NSApp.applicationIconImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 156, height: 156)
-                            .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
+                        SortyEnergyScanIcon(
+                            image: NSApp.applicationIconImage,
+                            size: 156,
+                            cornerRadius: 34
+                        )
                             .shadow(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), radius: 34, x: 0, y: 0)
                             .shadow(color: .black.opacity(0.28), radius: 26, x: 0, y: 16)
                             .blur(radius: iconBlur)
@@ -749,6 +749,153 @@ private struct OnboardingIntroView: View {
         let driftX = cos(phase * 0.42 + file.driftPhase) * file.driftRadius * 1.28
         let driftY = sin(phase * 0.35 + file.driftPhase) * file.driftRadius * 1.32
         return CGSize(width: file.baseX + orbitalX + driftX, height: file.baseY + orbitalY + driftY)
+    }
+}
+
+struct SortyEnergyScanIcon: View {
+    let image: NSImage
+    let size: CGFloat
+    let cornerRadius: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+            let phase = reduceMotion
+                ? 0.92
+                : context.date.timeIntervalSinceReferenceDate
+                    .truncatingRemainder(dividingBy: 4.8) / 4.8
+
+            EnergyScanIconFrame(
+                image: image,
+                size: size,
+                cornerRadius: cornerRadius,
+                phase: phase,
+                reduceMotion: reduceMotion
+            )
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct EnergyScanIconFrame: View {
+    let image: NSImage
+    let size: CGFloat
+    let cornerRadius: CGFloat
+    let phase: Double
+    let reduceMotion: Bool
+
+    private var scanProgress: CGFloat {
+        CGFloat(min(max((phase - 0.10) / 0.70, 0), 1))
+    }
+
+    private var scanCenter: CGFloat {
+        -0.18 + scanProgress * 1.36
+    }
+
+    private var scanStrength: CGFloat {
+        guard !reduceMotion, phase >= 0.10, phase <= 0.80 else {
+            return reduceMotion ? 0.18 : 0
+        }
+
+        let edgeFade = min(scanProgress / 0.12, (1 - scanProgress) / 0.14, 1)
+        return max(edgeFade, 0)
+    }
+
+    private var iconShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+
+    private var icon: some View {
+        Image(nsImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(iconShape)
+    }
+
+    var body: some View {
+        ZStack {
+            icon
+
+            icon
+                .colorMultiply(.white)
+                .overlay {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: max(scanCenter - 0.28, 0)),
+                            .init(color: Color(red: 0.94, green: 0.10, blue: 1.00).opacity(0.92), location: max(scanCenter - 0.12, 0)),
+                            .init(color: Color(red: 1.00, green: 0.12, blue: 0.36), location: min(max(scanCenter, 0), 1)),
+                            .init(color: Color(red: 1.00, green: 0.38, blue: 0.12).opacity(0.88), location: min(scanCenter + 0.16, 1)),
+                            .init(color: .clear, location: min(scanCenter + 0.34, 1))
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .blendMode(.plusLighter)
+                }
+                .mask(icon)
+                .opacity(scanStrength)
+                .blur(radius: 1.6)
+
+            icon
+                .scaleEffect(
+                    x: 1 + scanStrength * 0.11,
+                    y: 1 - scanStrength * 0.10,
+                    anchor: UnitPoint(x: 0.5, y: min(max(scanCenter, 0), 1))
+                )
+                .offset(y: scanStrength * (scanCenter - 0.5) * 14)
+                .blur(radius: 5 + scanStrength * 4)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: max(scanCenter - 0.22, 0)),
+                            .init(color: .white, location: max(scanCenter - 0.08, 0)),
+                            .init(color: .white, location: min(scanCenter + 0.16, 1)),
+                            .init(color: .clear, location: min(scanCenter + 0.34, 1))
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .opacity(scanStrength * 0.72)
+
+            LinearGradient(
+                colors: [
+                    .clear,
+                    Color(red: 0.98, green: 0.08, blue: 0.98),
+                    Color(red: 1.00, green: 0.10, blue: 0.30),
+                    Color(red: 1.00, green: 0.36, blue: 0.10),
+                    .clear
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(height: max(8, size * 0.055))
+            .blur(radius: size * 0.035)
+            .offset(y: (scanCenter - 0.5) * size)
+            .mask(iconShape)
+            .opacity(scanStrength)
+
+            iconShape
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.18),
+                            .clear,
+                            Color(red: 0.95, green: 0.08, blue: 0.98).opacity(0.52),
+                            Color(red: 1.00, green: 0.16, blue: 0.24).opacity(0.46)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: max(1, size * 0.012)
+                )
+                .opacity(max(scanStrength * 0.9, reduceMotion ? 0.28 : 0.08))
+        }
+        .frame(width: size, height: size)
+        .compositingGroup()
     }
 }
 
