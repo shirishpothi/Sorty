@@ -760,7 +760,7 @@ struct SortyEnergyScanIcon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
             let phase = reduceMotion
                 ? 0.92
                 : context.date.timeIntervalSinceReferenceDate
