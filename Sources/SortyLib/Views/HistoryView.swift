@@ -507,7 +507,6 @@ struct HistoryView: View {
 // MARK: - History Header
 
 struct HistoryHeader: View {
-    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var manager: FolderOrganizer
     @Binding var selectedFilter: HistoryView.HistoryFilter
     @Binding var searchText: String
@@ -617,31 +616,15 @@ struct HistoryHeader: View {
     }
 
     private var filterPicker: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-
-            LiquidGlassSegmentedControl(
-                selection: $selectedFilter,
-                options: HistoryView.HistoryFilter.allCases,
-                minSegmentHeight: controlsHeight - 8
-            ) { filter, _ in
+        Picker("Filter history sessions", selection: $selectedFilter) {
+            ForEach(HistoryFilter.allCases) { filter in
                 Text(filter.rawValue)
+                    .tag(filter)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.primary.opacity(colorScheme == .dark ? 0.1 : 0.05))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(Color.primary.opacity(colorScheme == .dark ? 0.16 : 0.08), lineWidth: 1)
-        )
-        .accessibilityLabel("Filter history sessions")
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .frame(height: controlsHeight)
         .accessibilityIdentifier("HistoryFilterPicker")
     }
 
