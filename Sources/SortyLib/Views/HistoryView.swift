@@ -617,7 +617,7 @@ struct HistoryHeader: View {
 
     private var filterPicker: some View {
         Picker("Filter history sessions", selection: $selectedFilter) {
-            ForEach(HistoryFilter.allCases) { filter in
+            ForEach(HistoryView.HistoryFilter.allCases) { filter in
                 Text(filter.rawValue)
                     .tag(filter)
             }
