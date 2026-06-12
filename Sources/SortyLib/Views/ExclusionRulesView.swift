@@ -44,6 +44,26 @@ struct ExclusionRulesView: View {
         }
     }
 
+    private var filteredLearningExclusionPatterns: [String] {
+        let patterns = learningsManager.currentProfile?.learningExclusionPatterns ?? []
+        guard !searchText.isEmpty else { return patterns }
+        return patterns.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private var filteredNaturalLanguageExceptions: [(index: Int, exception: String)] {
+        let exceptions = rulesManager.naturalLanguageExceptions.enumerated().map {
+            (index: $0.offset, exception: $0.element)
+        }
+        guard !searchText.isEmpty else { return exceptions }
+        return exceptions.filter { $0.exception.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private var hasSearchResults: Bool {
+        !groupedRules.isEmpty ||
+        !filteredLearningExclusionPatterns.isEmpty ||
+        !filteredNaturalLanguageExceptions.isEmpty
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if rulesManager.rules.isEmpty {
@@ -81,7 +101,7 @@ struct ExclusionRulesView: View {
                                 .animatedAppearance(delay: Double(index) * 0.05)
                             }
 
-                            if filteredRules.isEmpty && !searchText.isEmpty {
+                            if !hasSearchResults && !searchText.isEmpty {
                                 VStack(spacing: 12) {
                                     Image(systemName: "magnifyingglass")
                                         .font(.title)
@@ -93,11 +113,15 @@ struct ExclusionRulesView: View {
                                 .padding(.vertical, 40)
                             }
 
-                            learningExclusionsCard
-                                .animatedAppearance(delay: 0.12)
+                            if searchText.isEmpty || !filteredLearningExclusionPatterns.isEmpty {
+                                learningExclusionsCard
+                                    .animatedAppearance(delay: 0.12)
+                            }
 
                             // Natural language exceptions
-                            naturalLanguageExceptionsCard
+                            if searchText.isEmpty || !filteredNaturalLanguageExceptions.isEmpty {
+                                naturalLanguageExceptionsCard
+                            }
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 20)
@@ -232,9 +256,9 @@ struct ExclusionRulesView: View {
                     }
                 }
 
-                if let patterns = learningsManager.currentProfile?.learningExclusionPatterns, !patterns.isEmpty {
+                if !filteredLearningExclusionPatterns.isEmpty {
                     VStack(spacing: 6) {
-                        ForEach(patterns, id: \.self) { pattern in
+                        ForEach(filteredLearningExclusionPatterns, id: \.self) { pattern in
                             LearningExclusionRow(pattern: pattern, manager: learningsManager)
                         }
                     }
@@ -308,16 +332,16 @@ struct ExclusionRulesView: View {
                     .disabled(newNLException.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
 
-                if !rulesManager.naturalLanguageExceptions.isEmpty {
+                if !filteredNaturalLanguageExceptions.isEmpty {
                     Divider()
 
-                    ForEach(Array(rulesManager.naturalLanguageExceptions.enumerated()), id: \.offset) { index, exception in
+                    ForEach(filteredNaturalLanguageExceptions, id: \.index) { item in
                         HStack(spacing: 10) {
                             Image(systemName: "text.quote")
                                 .font(.caption)
                                 .foregroundColor(.purple)
 
-                            Text(exception)
+                            Text(item.exception)
                                 .font(.subheadline)
                                 .lineLimit(2)
 
@@ -325,7 +349,7 @@ struct ExclusionRulesView: View {
 
                             Button {
                                 withAnimation {
-                                    rulesManager.removeNaturalLanguageException(at: index)
+                                    rulesManager.removeNaturalLanguageException(at: item.index)
                                 }
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
@@ -336,7 +360,7 @@ struct ExclusionRulesView: View {
                         }
                         .padding(.vertical, 4)
 
-                        if index < rulesManager.naturalLanguageExceptions.count - 1 {
+                        if item.index != filteredNaturalLanguageExceptions.last?.index {
                             Divider()
                         }
                     }
