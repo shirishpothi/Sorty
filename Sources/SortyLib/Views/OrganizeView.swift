@@ -39,7 +39,9 @@ struct OrganizeView: View {
                         appState.startSetupRepair(message: setupRepairMessage, navigateToSettings: true)
                     }
                 )
-                .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 20)
+                .padding(.trailing, 20)
                 .padding(.top, 16)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -685,7 +687,8 @@ private struct SetupRepairBanner: View {
                 .controlSize(.small)
         }
         .padding(14)
-        .systemLiquidGlassBackground(cornerRadius: 14)
+        .frame(maxWidth: 620, alignment: .leading)
+        .systemLiquidGlassPopover(cornerRadius: 12)
         .accessibilityIdentifier("SetupRepairBanner")
     }
 }
