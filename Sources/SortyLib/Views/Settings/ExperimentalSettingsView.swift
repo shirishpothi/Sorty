@@ -100,21 +100,7 @@ struct ExperimentalFlagRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Toggle(
-                    "Enable in Sorty",
-                    isOn: Binding(
-                        get: { isEnabled },
-                        set: { newValue in
-                            UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
-
-                            withAnimation(.easeOut(duration: 0.2)) {
-                                isEnabled = newValue
-                            }
-                            HapticFeedbackManager.shared.selection()
-                        }
-                    )
-                )
-                .toggleStyle(.switch)
+                featureToggle
                 let command = isEnabled ? flag.disableCommand : flag.enableCommand
                 HStack(spacing: 8) {
                     Text(command)
@@ -163,6 +149,31 @@ struct ExperimentalFlagRow: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ExperimentalFlag-\(flag.name)")
+    }
+
+    @ViewBuilder
+    private var featureToggle: some View {
+        let toggle = Toggle("Enable in Sorty", isOn: featureEnabledBinding)
+
+        if flag.defaultsKey == "workspaceHealthEnabled" {
+            toggle.toggleStyle(DeprecatingFeatureToggleStyle())
+        } else {
+            toggle.toggleStyle(.switch)
+        }
+    }
+
+    private var featureEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { isEnabled },
+            set: { newValue in
+                UserDefaults.standard.set(newValue, forKey: flag.defaultsKey)
+
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isEnabled = newValue
+                }
+                HapticFeedbackManager.shared.selection()
+            }
+        )
     }
 
     private var deprecationNoticeButton: some View {
@@ -217,6 +228,30 @@ struct ExperimentalFlagRow: View {
         .padding(16)
         .frame(width: 340, alignment: .leading)
         .background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct DeprecatingFeatureToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 12) {
+                configuration.label
+
+                ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                    Capsule()
+                        .fill(configuration.isOn ? Color.accentColor : Color.red.opacity(0.7))
+
+                    Circle()
+                        .fill(.white)
+                        .padding(3)
+                        .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
+                }
+                .frame(width: 48, height: 26)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
