@@ -114,7 +114,6 @@ struct HistoryView: View {
                     HistoryHeader(
                         manager: organizer,
                         selectedFilter: $selectedFilter,
-                        searchText: $searchText,
                         showsControls: false,
                         onClearHistory: {
                             appState.clearHistoryWithConfirmation()
@@ -128,7 +127,6 @@ struct HistoryView: View {
                 HistoryHeader(
                     manager: organizer,
                     selectedFilter: $selectedFilter,
-                    searchText: $searchText,
                     showsControls: true,
                     onClearHistory: {
                         appState.clearHistoryWithConfirmation()
@@ -154,6 +152,7 @@ struct HistoryView: View {
         .emptyStateWorkflowGradient(isVisible: organizer.history.entries.isEmpty)
         .animation(.pageTransition, value: organizer.history.entries.isEmpty)
         .navigationTitle("History")
+        .searchable(text: $searchText, prompt: "Search folders")
         .disabled(isProcessing)
         .overlay {
             if isProcessing {
@@ -509,7 +508,6 @@ struct HistoryView: View {
 struct HistoryHeader: View {
     @ObservedObject var manager: FolderOrganizer
     @Binding var selectedFilter: HistoryView.HistoryFilter
-    @Binding var searchText: String
     var showsControls: Bool = true
     let onClearHistory: () -> Void
     private let controlsHeight: CGFloat = 31
@@ -524,10 +522,6 @@ struct HistoryHeader: View {
 
             if showsControls {
                 HStack(spacing: 12) {
-                    searchField
-                        .frame(maxWidth: 220)
-                        .frame(height: controlsHeight)
-
                     filterPicker
                         .frame(height: controlsHeight)
 
@@ -585,34 +579,6 @@ struct HistoryHeader: View {
 
             Spacer()
         }
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-
-            TextField("Search folders", text: $searchText)
-                .textFieldStyle(.plain)
-                .accessibilityIdentifier("HistorySearchField")
-
-            if !searchText.isEmpty {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        searchText = ""
-                    }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private var filterPicker: some View {

@@ -37,6 +37,7 @@ struct SettingsView: View {
             WindowLinkHoverPillOverlay(hoverState: windowLinkHoverState)
         }
         .navigationTitle("Settings")
+        .searchable(text: $searchText, prompt: "Search settings")
         .opacity(contentOpacity)
         .environment(\.windowLinkHoverUpdate) { hovering, url, sourceID in
             windowLinkHoverState.setHovering(hovering, url: url, sourceID: sourceID)
@@ -69,12 +70,6 @@ struct SettingsView: View {
 
     private var settingsSidebar: some View {
         VStack(alignment: .leading, spacing: 4) {
-            TextField("Search settings", text: $searchText)
-                .textFieldStyle(.roundedBorder)
-                .accessibilityLabel("Search settings")
-                .accessibilityHint("Finds matching setting features and sections")
-                .help("Search settings by section name, feature name, or keyword")
-
             if filteredCategories.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Nothing found")
