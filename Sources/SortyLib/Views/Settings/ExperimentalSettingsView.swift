@@ -83,6 +83,10 @@ struct ExperimentalFlagRow: View {
     let flag: ExperimentalFlag
     @State private var copied = false
     @State private var isEnabled: Bool
+    @State private var isDeprecationNoticePresented = false
+
+    private let forkURL = URL(string: "https://github.com/sorty-organizer/Sorty/fork")!
+    private let featureRequestURL = URL(string: "https://github.com/sorty-organizer/Sorty/issues/new")!
 
     init(flag: ExperimentalFlag) {
         self.flag = flag
@@ -148,11 +152,70 @@ struct ExperimentalFlagRow: View {
                     .foregroundStyle(.tertiary)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if flag.defaultsKey == "workspaceHealthEnabled" {
+                deprecationNoticeButton
+                    .padding(12)
+            }
+        }
         .onAppear {
             isEnabled = flag.currentValue()
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ExperimentalFlag-\(flag.name)")
+    }
+
+    private var deprecationNoticeButton: some View {
+        Button {
+            HapticFeedbackManager.shared.selection()
+            isDeprecationNoticePresented.toggle()
+        } label: {
+            Image(systemName: "leaf.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+                .frame(width: 28, height: 28)
+                .background(.orange.opacity(0.12), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help("About the future of Workspace Health")
+        .accessibilityLabel("About the future of Workspace Health") // [VERIFY] confirm label matches intent
+        .accessibilityHint("Shows options for supporting this feature")
+        .popover(isPresented: $isDeprecationNoticePresented, arrowEdge: .top) {
+            deprecationNotice
+                .systemLiquidGlassPopover(cornerRadius: 12)
+        }
+    }
+
+    private var deprecationNotice: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("On the chopping block", systemImage: "leaf.fill")
+                .font(.headline)
+                .foregroundStyle(.orange)
+
+            Text("Workspace Health may be removed from a future version of Sorty.")
+                .font(.subheadline)
+
+            Text("Want to keep it around? Fork the open-source code, or file a GitHub issue to make the case for it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Link(destination: forkURL) {
+                    Label("Fork Sorty", systemImage: "tuningfork")
+                }
+                .buttonStyle(.sortyBordered(intent: .info, size: .small))
+                .trackHoveredURL(forkURL)
+
+                Link(destination: featureRequestURL) {
+                    Label("Advocate on GitHub", systemImage: "bubble.left.and.bubble.right")
+                }
+                .buttonStyle(.sortyBordered(intent: .primary, size: .small))
+                .trackHoveredURL(featureRequestURL)
+            }
+        }
+        .padding(16)
+        .frame(width: 340, alignment: .leading)
     }
 }
 
