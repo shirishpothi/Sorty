@@ -639,9 +639,6 @@ struct DirectoryHeader: View {
 
             Spacer()
 
-            CompactPersonaPicker()
-                .padding(.trailing, 8)
-
             Button("Change Folder", action: onClear)
                 .controlSize(.regular)
                 .accessibilityIdentifier("ChangeFolderButton")
@@ -1072,6 +1069,15 @@ struct ReadyToOrganizeView: View {
     private var instructionsContent: some View {
         VStack(alignment: .leading, spacing: 8) {
             let mention = activeFileMention
+
+            HStack {
+                Text("Additional Instructions")
+                    .font(.subheadline.weight(.medium))
+
+                Spacer()
+
+                CompactPersonaPicker()
+            }
 
             ZStack(alignment: .topLeading) {
                 if isImprovingPrompt {
