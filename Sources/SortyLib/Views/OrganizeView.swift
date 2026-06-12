@@ -644,6 +644,7 @@ struct DirectoryHeader: View {
 
             Button("Change Folder", action: onClear)
                 .controlSize(.regular)
+                .accessibilityIdentifier("ChangeFolderButton")
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
