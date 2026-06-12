@@ -170,7 +170,7 @@ struct ExperimentalFlagRow: View {
             HapticFeedbackManager.shared.selection()
             isDeprecationNoticePresented.toggle()
         } label: {
-            Image(systemName: "knife")
+            Image(systemName: "scissors")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.red)
                 .frame(width: 28, height: 28)
@@ -188,7 +188,7 @@ struct ExperimentalFlagRow: View {
 
     private var deprecationNotice: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Scheduled for deprecation", systemImage: "knife")
+            Label("Scheduled for deprecation", systemImage: "scissors")
                 .font(.headline)
                 .foregroundStyle(.red)
 
