@@ -71,12 +71,6 @@ struct ExclusionRulesView: View {
                 ZStack {
                     ScrollView {
                         VStack(spacing: 20) {
-                            // Search bar
-                            searchBar
-                                .padding(.horizontal, 20)
-                                .padding(.top, 16)
-                                .animatedAppearance(delay: 0.06)
-
                             // Grouped rules
                             ForEach(Array(groupedRules.enumerated()), id: \.1.0) { index, group in
                                 RuleGroupCard(
@@ -106,6 +100,7 @@ struct ExclusionRulesView: View {
                             naturalLanguageExceptionsCard
                         }
                         .padding(.horizontal, 20)
+                        .padding(.top, 20)
                         .padding(.bottom, 20)
                     }
                     .transition(TransitionStyles.slideFromRight)
@@ -115,6 +110,7 @@ struct ExclusionRulesView: View {
         }
         .animation(.pageTransition, value: rulesManager.rules.isEmpty)
         .navigationTitle("Exclusion Rules")
+        .searchable(text: $searchText, prompt: "Search rules")
         .sheet(isPresented: $showingAddRule) {
             AddExclusionRuleView(rulesManager: rulesManager)
                 .modalBounce()
@@ -212,29 +208,6 @@ struct ExclusionRulesView: View {
         }
     }
     
-    private var searchBar: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            
-            TextField("Search rules...", text: $searchText)
-                .textFieldStyle(.plain)
-            
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(10)
-        .background(Color.secondary.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
     // MARK: - Natural Language Exceptions
 
     private var learningExclusionsCard: some View {
