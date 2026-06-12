@@ -313,31 +313,37 @@ private final class NativeNotificationDelegate: NSObject, UNUserNotificationCent
 /// HUD notification data for display
 public struct HUDNotification: Identifiable, Equatable {
     public let id = UUID()
+    public let identifier: String?
     public let title: String
     public let message: String
     public let icon: String
     public let iconColor: Color
     public let timestamp: Date
     public let playSound: Bool
+    public let isPersistent: Bool
     public let actions: [HUDNotificationAction]
     public let defaultAction: (@MainActor () -> Void)?
 
     public init(
+        identifier: String? = nil,
         title: String,
         message: String,
         icon: String,
         iconColor: Color,
         timestamp: Date,
         playSound: Bool,
+        isPersistent: Bool = false,
         actions: [HUDNotificationAction] = [],
         defaultAction: (@MainActor () -> Void)? = nil
     ) {
+        self.identifier = identifier
         self.title = title
         self.message = message
         self.icon = icon
         self.iconColor = iconColor
         self.timestamp = timestamp
         self.playSound = playSound
+        self.isPersistent = isPersistent
         self.actions = actions
         self.defaultAction = defaultAction
     }
@@ -659,14 +665,18 @@ public class NotificationManager: ObservableObject {
         message: String,
         icon: String = "info.circle.fill",
         iconColor: Color = .blue,
+        identifier: String? = nil,
+        isPersistent: Bool = false,
         actions: [HUDNotificationAction] = []
     ) {
         showHUD(
+            identifier: identifier,
             title: title,
             message: message,
             icon: icon,
             iconColor: iconColor,
             playSound: false,
+            isPersistent: isPersistent,
             actions: actions
         )
     }
@@ -751,6 +761,12 @@ public class NotificationManager: ObservableObject {
             currentHUDNotification = nil
         }
         processQueue()
+    }
+
+    public func dismissHUD(identifier: String) {
+        hudNotificationQueue.removeAll { $0.identifier == identifier }
+        guard currentHUDNotification?.identifier == identifier else { return }
+        dismissHUD()
     }
 
     public func clearAnalytics() {
@@ -933,26 +949,38 @@ public class NotificationManager: ObservableObject {
     }
     
     private func showHUD(
+        identifier: String? = nil,
         title: String,
         message: String,
         icon: String,
         iconColor: Color,
         playSound: Bool,
+        isPersistent: Bool = false,
         actions: [HUDNotificationAction] = [],
         defaultAction: (@MainActor () -> Void)? = nil
     ) {
         print("NotificationManager: showHUD called - title: \(title), message: \(message)")
         
         let notification = HUDNotification(
+            identifier: identifier,
             title: title,
             message: message,
             icon: icon,
             iconColor: iconColor,
             timestamp: Date(),
             playSound: playSound,
+            isPersistent: isPersistent,
             actions: actions,
             defaultAction: defaultAction
         )
+
+        if let identifier {
+            hudNotificationQueue.removeAll { $0.identifier == identifier }
+            if currentHUDNotification?.identifier == identifier {
+                presentHUD(notification)
+                return
+            }
+        }
         
         if currentHUDNotification == nil {
             print("NotificationManager: Presenting HUD immediately")
@@ -979,8 +1007,10 @@ public class NotificationManager: ObservableObject {
         
         print("NotificationManager: currentHUDNotification set, scheduling auto-dismiss")
         
-        // Auto-dismiss after 4 seconds
         dismissTask?.cancel()
+        guard !notification.isPersistent else { return }
+
+        // Auto-dismiss transient HUDs after 4 seconds.
         dismissTask = Task {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             if !Task.isCancelled {

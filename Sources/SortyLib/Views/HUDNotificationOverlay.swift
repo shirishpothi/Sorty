@@ -103,7 +103,7 @@ struct HUDNotificationCard: View {
                         .fixedSize(horizontal: true, vertical: false)
                     }
 
-                    if isHovered {
+                    if isHovered && !notification.isPersistent {
                         Button {
                             onDismiss()
                         } label: {
@@ -146,15 +146,17 @@ struct HUDNotificationCard: View {
                 )
         )
         .overlay(alignment: .bottom) {
-            GeometryReader { geo in
-                Capsule()
-                    .fill(notification.iconColor.opacity(0.4))
-                    .frame(width: geo.size.width * progressRemaining, height: 2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if !notification.isPersistent {
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(notification.iconColor.opacity(0.4))
+                        .frame(width: geo.size.width * progressRemaining, height: 2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 2)
+                .padding(.horizontal, 6)
+                .padding(.bottom, 3)
             }
-            .frame(height: 2)
-            .padding(.horizontal, 6)
-            .padding(.bottom, 3)
         }
         .shadow(color: notification.iconColor.opacity(0.12), radius: 12, x: 0, y: 6)
         .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
@@ -168,18 +170,27 @@ struct HUDNotificationCard: View {
             if let defaultAction = notification.defaultAction {
                 HapticFeedbackManager.shared.tap()
                 defaultAction()
-            } else {
+            } else if !notification.isPersistent {
                 onDismiss()
             }
         }
         .onAppear {
-            withAnimation(reduceMotion ? nil : .linear(duration: autoDismissSeconds)) {
-                progressRemaining = 0
+            if !notification.isPersistent {
+                withAnimation(reduceMotion ? nil : .linear(duration: autoDismissSeconds)) {
+                    progressRemaining = 0
+                }
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(notification.title): \(notification.message)")
-        .accessibilityHint(notification.defaultAction == nil ? "Tap to dismiss" : "Tap to open")
+        .accessibilityHint(accessibilityHint)
+    }
+
+    private var accessibilityHint: String {
+        if notification.defaultAction != nil {
+            return "Tap to open"
+        }
+        return notification.isPersistent ? "" : "Tap to dismiss"
     }
 }
 

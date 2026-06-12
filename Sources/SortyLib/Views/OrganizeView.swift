@@ -31,21 +31,6 @@ struct OrganizeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let setupRepairMessage = activeSetupRepairMessage {
-                SetupRepairBanner(
-                    message: setupRepairMessage,
-                    onOpenSettings: {
-                        HapticFeedbackManager.shared.selection()
-                        appState.startSetupRepair(message: setupRepairMessage, navigateToSettings: true)
-                    }
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 20)
-                .padding(.trailing, 20)
-                .padding(.top, 16)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             // Header with selected directory
             if let directory = appState.selectedDirectory {
                 DirectoryHeader(
@@ -172,6 +157,12 @@ struct OrganizeView: View {
                     HapticFeedbackManager.shared.tap()
                 }
             )
+        }
+        .onAppear {
+            updateSetupRepairHUD()
+        }
+        .onChange(of: activeSetupRepairMessage) {
+            updateSetupRepairHUD()
         }
     }
 
@@ -582,6 +573,32 @@ struct OrganizeView: View {
         return nil
     }
 
+    private func updateSetupRepairHUD() {
+        let notificationManager = NotificationManager.shared
+        guard let message = activeSetupRepairMessage else {
+            notificationManager.dismissHUD(identifier: "setup-repair")
+            return
+        }
+
+        notificationManager.showHUDInfo(
+            title: "Setup Repair Needed",
+            message: message,
+            icon: "wrench.and.screwdriver.fill",
+            iconColor: .orange,
+            identifier: "setup-repair",
+            isPersistent: true,
+            actions: [
+                HUDNotificationAction(
+                    title: "Open Provider Settings",
+                    systemImage: "gearshape"
+                ) {
+                    HapticFeedbackManager.shared.selection()
+                    appState.startSetupRepair(message: message, navigateToSettings: true)
+                }
+            ]
+        )
+    }
+
 }
 
 // MARK: - Directory Header
@@ -658,38 +675,6 @@ private extension AnyTransition {
                 identity: HeaderBlurReplaceModifier(radius: 0, opacity: 1)
             )
         )
-    }
-}
-
-private struct SetupRepairBanner: View {
-    let message: String
-    let onOpenSettings: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "wrench.and.screwdriver.fill")
-                .font(.system(size: 16))
-                .foregroundStyle(.orange)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Setup Repair Needed")
-                    .font(.subheadline.weight(.semibold))
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 12)
-
-            Button("Open Provider Settings", action: onOpenSettings)
-                .buttonStyle(.sortyProminent)
-                .controlSize(.small)
-        }
-        .padding(14)
-        .frame(maxWidth: 620, alignment: .leading)
-        .systemLiquidGlassPopover(cornerRadius: 12)
-        .accessibilityIdentifier("SetupRepairBanner")
     }
 }
 
