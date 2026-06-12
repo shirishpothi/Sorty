@@ -170,16 +170,16 @@ struct ExperimentalFlagRow: View {
             HapticFeedbackManager.shared.selection()
             isDeprecationNoticePresented.toggle()
         } label: {
-            Image(systemName: "leaf.fill")
+            Image(systemName: "knife")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(.red)
                 .frame(width: 28, height: 28)
-                .background(.orange.opacity(0.12), in: Circle())
+                .background(.red.opacity(0.14), in: Circle())
         }
         .buttonStyle(.plain)
-        .help("About the future of Workspace Health")
-        .accessibilityLabel("About the future of Workspace Health") // [VERIFY] confirm label matches intent
-        .accessibilityHint("Shows options for supporting this feature")
+        .help("Workspace Health deprecation warning")
+        .accessibilityLabel("Workspace Health deprecation warning") // [VERIFY] confirm label matches intent
+        .accessibilityHint("Shows details and options for supporting the feature")
         .popover(isPresented: $isDeprecationNoticePresented, arrowEdge: .top) {
             deprecationNotice
                 .systemLiquidGlassPopover(cornerRadius: 12)
@@ -188,14 +188,14 @@ struct ExperimentalFlagRow: View {
 
     private var deprecationNotice: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("On the chopping block", systemImage: "leaf.fill")
+            Label("Scheduled for deprecation", systemImage: "knife")
                 .font(.headline)
-                .foregroundStyle(.orange)
+                .foregroundStyle(.red)
 
-            Text("Workspace Health may be removed from a future version of Sorty.")
+            Text("Workspace Health is on the chopping block and may be removed from a future version of Sorty.")
                 .font(.subheadline)
 
-            Text("Want to keep it around? Fork the open-source code, or file a GitHub issue to make the case for it.")
+            Text("To keep it alive, fork the open-source code or file a GitHub issue explaining why the feature should remain.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -216,6 +216,7 @@ struct ExperimentalFlagRow: View {
         }
         .padding(16)
         .frame(width: 340, alignment: .leading)
+        .background(.red.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
