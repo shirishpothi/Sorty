@@ -309,7 +309,7 @@ public struct MenuBarView: View {
                 openSettings()
             }
 
-            MenuBarButton(title: "Support the Developer", icon: "heart.fill", hoverIconColor: .red) {
+            MenuBarButton(title: "Support the Developer", icon: "heart.fill", hoverIconColor: .red, showsExternalArrow: true) {
                 openSupportDeveloper()
             }
 
@@ -390,6 +390,7 @@ private struct MenuBarButton: View {
     var icon: String? = nil
     var customImage: Image? = nil
     var hoverIconColor: Color? = nil
+    var showsExternalArrow = false
     let action: () -> Void
 
     @State private var isHovered = false
@@ -413,6 +414,13 @@ private struct MenuBarButton: View {
                 }
                 Text(title)
                 Spacer()
+                if showsExternalArrow {
+                    Image(systemName: "arrow.up.forward")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                        .opacity(isHovered ? 1 : 0)
+                        .accessibilityHidden(true)
+                }
             }
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
