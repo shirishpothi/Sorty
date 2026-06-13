@@ -80,7 +80,6 @@ struct ExclusionRulesView: View {
                         .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(NSColor.windowBackgroundColor))
             } else {
                 // Header
                 headerView
@@ -132,6 +131,7 @@ struct ExclusionRulesView: View {
                 .animation(.pageTransition, value: rulesManager.rules.isEmpty)
             }
         }
+        .emptyStateWorkflowGradient(isVisible: rulesManager.rules.isEmpty)
         .animation(.pageTransition, value: rulesManager.rules.isEmpty)
         .navigationTitle("Exclusion Rules")
         .searchable(text: $searchText, prompt: "Search rules")
