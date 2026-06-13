@@ -44,11 +44,10 @@ struct OrganizingFlightStageView: View {
     private let cardSize = CGSize(width: 24, height: 24)
     private let bucketSize = CGSize(width: 56, height: 56)
 
-    private var fileCardSize: CGSize {
-        guard prioritizesFilenames else {
-            return CGSize(width: 188, height: 42)
-        }
-        return CGSize(width: 300, height: currentRenamedFileName == nil ? 44 : 56)
+    private var fileCardHeight: CGFloat {
+        prioritizesFilenames
+            ? (currentRenamedFileName == nil ? 44 : 56)
+            : 42
     }
 
     private var visibleSuggestions: [FolderSuggestion] {
@@ -129,7 +128,9 @@ struct OrganizingFlightStageView: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(width: fileCardSize.width, height: fileCardSize.height)
+        .frame(width: prioritizesFilenames ? nil : 188, height: fileCardHeight)
+        .fixedSize(horizontal: prioritizesFilenames, vertical: false)
+        .frame(maxWidth: prioritizesFilenames ? 300 : nil)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.primary.opacity(0.065))
@@ -146,20 +147,20 @@ struct OrganizingFlightStageView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(currentFileName)
                         .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isShowingRenamedFileName ? Color.red.opacity(0.82) : Color.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .strikethrough(isShowingRenamedFileName, color: .secondary.opacity(0.7))
+                        .strikethrough(isShowingRenamedFileName, color: .red.opacity(0.75))
 
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.right")
                             .font(.caption2.weight(.bold))
-                            .foregroundStyle(.purple.opacity(0.78))
+                            .foregroundStyle(.secondary.opacity(0.7))
                             .accessibilityHidden(true)
 
                         Text(isShowingRenamedFileName ? currentRenamedFileName : "Preparing better name...")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(isShowingRenamedFileName ? .primary : .secondary)
+                            .foregroundStyle(isShowingRenamedFileName ? Color.green : Color.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
@@ -170,15 +171,15 @@ struct OrganizingFlightStageView: View {
                 ZStack {
                     if let currentRenamedFileName, isShowingRenamedFileName {
                         Text(currentRenamedFileName)
-                            .foregroundStyle(.primary.opacity(0.92))
+                            .foregroundStyle(.green)
                             .transition(.asymmetric(
                                 insertion: .move(edge: .trailing).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
                             ))
                     } else {
                         Text(currentFileName)
-                            .foregroundStyle(.primary.opacity(0.72))
-                            .strikethrough(currentRenamedFileName != nil, color: .secondary.opacity(0.7))
+                            .foregroundStyle(currentRenamedFileName == nil ? Color.primary.opacity(0.72) : Color.red.opacity(0.82))
+                            .strikethrough(currentRenamedFileName != nil, color: .red.opacity(0.75))
                             .transition(.asymmetric(
                                 insertion: .move(edge: .leading).combined(with: .opacity),
                                 removal: .move(edge: .leading).combined(with: .opacity)
@@ -191,7 +192,6 @@ struct OrganizingFlightStageView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityHidden(true)
     }
 
