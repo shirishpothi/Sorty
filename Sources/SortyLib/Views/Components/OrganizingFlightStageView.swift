@@ -35,8 +35,9 @@ struct OrganizingFlightStageView: View {
     @State private var currentFileIcon: NSImage = AnalysisIconProvider.icon(for: .data)
     @State private var currentFileName = ""
     @State private var currentRenamedFileName: String?
-    @State private var isShowingRenamedFileName = false
     @State private var renameStrikeProgress: CGFloat = 0
+    @State private var originalNameOpacity: Double = 1
+    @State private var renamedNameOpacity: Double = 0
     @State private var currentCardWidth: CGFloat = 188
     @State private var displayedSuggestions: [FolderSuggestion] = []
     @State private var flightTask: Task<Void, Never>?
@@ -139,24 +140,31 @@ struct OrganizingFlightStageView: View {
         Group {
             if prioritizesFilenames, let currentRenamedFileName {
                 ZStack(alignment: .leading) {
-                    Text(currentFileName)
-                        .foregroundStyle(renameStrikeProgress > 0 ? Color.red.opacity(0.82) : Color.primary.opacity(0.72))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .overlay(alignment: .center) {
-                            Rectangle()
-                                .fill(Color.red.opacity(0.78))
-                                .frame(height: 1.5)
-                                .scaleEffect(x: renameStrikeProgress, anchor: .leading)
-                        }
-                        .opacity(isShowingRenamedFileName ? 0 : 1)
+                    ZStack(alignment: .leading) {
+                        Text(currentFileName)
+                            .foregroundStyle(Color.primary.opacity(0.72))
+                            .opacity(1 - renameStrikeProgress)
+
+                        Text(currentFileName)
+                            .foregroundStyle(Color.red.opacity(0.82))
+                            .opacity(renameStrikeProgress)
+                            .overlay(alignment: .center) {
+                                Rectangle()
+                                    .fill(Color.red.opacity(0.78))
+                                    .frame(height: 1.5)
+                                    .scaleEffect(x: renameStrikeProgress, anchor: .leading)
+                            }
+                    }
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                        .opacity(originalNameOpacity)
 
                     Text(currentRenamedFileName)
                         .fontWeight(.medium)
                         .foregroundStyle(.green)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .opacity(isShowingRenamedFileName ? 1 : 0)
+                        .opacity(renamedNameOpacity)
                 }
             } else {
                 Text(currentFileName)
@@ -247,8 +255,9 @@ struct OrganizingFlightStageView: View {
                     originalName: flight.file.displayName,
                     suggestedName: flight.renameMapping?.suggestedName
                 )
-                isShowingRenamedFileName = false
                 renameStrikeProgress = 0
+                originalNameOpacity = 1
+                renamedNameOpacity = 0
                 await runFlight(toIndex: flight.folderIndex)
                 try? await Task.sleep(nanoseconds: 140_000_000)
             }
@@ -261,8 +270,9 @@ struct OrganizingFlightStageView: View {
         cardOpacity = 0
         bumpedIndex = nil
         haloIndex = nil
-        isShowingRenamedFileName = false
         renameStrikeProgress = 0
+        originalNameOpacity = 1
+        renamedNameOpacity = 0
     }
 
     private func runFlight(toIndex index: Int) async {
@@ -291,13 +301,23 @@ struct OrganizingFlightStageView: View {
             try? await Task.sleep(nanoseconds: 170_000_000)
             if Task.isCancelled { return }
 
-            withAnimation(.easeInOut(duration: 0.18)) {
-                isShowingRenamedFileName = true
+            withAnimation(.easeIn(duration: 0.22)) {
+                originalNameOpacity = 0.18
             }
+            try? await Task.sleep(nanoseconds: 90_000_000)
+            if Task.isCancelled { return }
+
+            withAnimation(.easeOut(duration: 0.24)) {
+                renamedNameOpacity = 1
+            }
+            withAnimation(.easeOut(duration: 0.16)) {
+                originalNameOpacity = 0
+            }
+
             HapticFeedbackManager.shared.selection()
         }
 
-        try? await Task.sleep(nanoseconds: currentRenamedFileName == nil ? 40_000_000 : 190_000_000)
+        try? await Task.sleep(nanoseconds: currentRenamedFileName == nil ? 40_000_000 : 250_000_000)
         if Task.isCancelled { return }
 
         // Show the receive halo just before the file lands.
