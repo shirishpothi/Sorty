@@ -104,13 +104,6 @@ struct OrganizeView: View {
                     }
                 }
 
-                if organizer.state == .ready {
-                    regenerateButton
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .padding(.top, 16)
-                        .padding(.trailing, 20)
-                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
-                }
             }
             .animation(returnToStartExitAnimation, value: isReturningToStart)
         }
@@ -234,46 +227,6 @@ struct OrganizeView: View {
         }
     }
 
-    private var regenerateHelpText: String {
-        settingsViewModel.config.mode == .renameOnly
-            ? "Regenerate filename suggestions with current settings"
-            : "Regenerate organization plan with current settings"
-    }
-
-    private var regenerateAccessibilityLabel: String {
-        settingsViewModel.config.mode == .renameOnly
-            ? "Regenerate filename suggestions"
-            : "Regenerate organization plan"
-    }
-
-    private var regenerateButton: some View {
-        Button {
-            HapticFeedbackManager.shared.tap()
-            Task {
-                try? await organizer.regeneratePreview()
-            }
-        } label: {
-            Image(systemName: "arrow.clockwise")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 30, height: 30)
-                .background(
-                    Circle()
-                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.72))
-                )
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-        .contentShape(Circle())
-        .keyboardShortcut("r", modifiers: [.command, .shift])
-        .help(regenerateHelpText)
-        .accessibilityLabel(regenerateAccessibilityLabel)
-        .accessibilityHint("Use when you want different AI suggestions")
-    }
-    
     @ViewBuilder
     private var stateContentInner: some View {
         if shouldShowCompletionView {
@@ -639,14 +592,17 @@ struct DirectoryHeader: View {
 
             Spacer()
 
-            Button("Change Folder", action: onClear)
-                .controlSize(.regular)
-                .accessibilityIdentifier("ChangeFolderButton")
+            Button {
+                onClear()
+            } label: {
+                Label("Change Folder", systemImage: "folder.badge.gearshape")
+            }
+            .buttonStyle(.sortyBordered(size: .small))
+            .accessibilityIdentifier("ChangeFolderButton")
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
         .background(.bar)
-        .overlay(Divider(), alignment: .bottom)
     }
 }
 
@@ -1013,25 +969,24 @@ struct ReadyToOrganizeView: View {
     }
     
     private var iconSection: some View {
-        ZStack {
-            Circle()
-                .fill(Color.teal.opacity(0.12))
-                .frame(width: 80, height: 80)
-            
-            if let mascotHead = SortyResources.image(named: "SortyMascotHead") {
-                Image(nsImage: mascotHead)
+        Group {
+            if let readyIcon = SortyResources.image(named: "ReadyToOrganizeIcon") {
+                Image(nsImage: readyIcon)
                     .resizable()
                     .interpolation(.high)
                     .antialiased(true)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 48, height: 48)
-                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 104, height: 104)
+                    .clipShape(Circle())
             } else {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 36, weight: .light))
                     .foregroundStyle(.teal)
+                    .frame(width: 104, height: 104)
+                    .background(Color.teal.opacity(0.12), in: Circle())
             }
         }
+        .accessibilityHidden(true)
     }
     
     @ViewBuilder
