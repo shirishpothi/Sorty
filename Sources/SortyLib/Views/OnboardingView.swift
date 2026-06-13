@@ -109,6 +109,8 @@ public struct OnboardingView: View {
                         .transition(.opacity)
                 }
 
+                OnboardingScreenEdgeGlow(progress: gradientProgress)
+                    .ignoresSafeArea()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -132,7 +134,6 @@ public struct OnboardingView: View {
                 OnboardingWindowTitleConfigurator {
                     hasConfiguredWindowChrome = true
                 }
-                OnboardingScreenEdgeGlowPresenter(progress: gradientProgress)
             }
             .frame(width: 0, height: 0)
         )
@@ -1074,139 +1075,6 @@ private struct OnboardingScreenEdgeGlow: View {
                 ),
                 lineWidth: lineWidth
             )
-    }
-}
-
-private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
-    let progress: Double
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = ScreenTrackingView()
-        view.onWindowChanged = { window in
-            context.coordinator.attach(to: window, progress: progress)
-        }
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.attach(to: nsView.window, progress: progress)
-    }
-
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.dismiss()
-    }
-
-    @MainActor
-    final class Coordinator {
-        private weak var hostWindow: NSWindow?
-        private var glowPanel: NSPanel?
-        private var glowHost: NSHostingView<OnboardingScreenEdgeGlow>?
-        private var observers: [NSObjectProtocol] = []
-
-        func attach(to window: NSWindow?, progress: Double) {
-            glowHost?.rootView = OnboardingScreenEdgeGlow(progress: progress)
-
-            guard hostWindow !== window else {
-                updatePanelFrame()
-                return
-            }
-
-            removeObservers()
-            hostWindow = window
-
-            guard let window else {
-                dismissPanel()
-                return
-            }
-
-            if glowPanel == nil {
-                glowPanel = makeGlowPanel(progress: progress)
-            }
-
-            let center = NotificationCenter.default
-            observers = [
-                center.addObserver(
-                    forName: NSWindow.didMoveNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
-                },
-                center.addObserver(
-                    forName: NSWindow.didChangeScreenNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    Task { @MainActor in self?.updatePanelFrame() }
-                }
-            ]
-
-            updatePanelFrame()
-            glowPanel?.orderFrontRegardless()
-        }
-
-        func dismiss() {
-            removeObservers()
-            dismissPanel()
-            hostWindow = nil
-        }
-
-        private func makeGlowPanel(progress: Double) -> NSPanel {
-            let panel = NSPanel(
-                contentRect: .zero,
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            panel.backgroundColor = .clear
-            panel.isOpaque = false
-            panel.hasShadow = false
-            panel.ignoresMouseEvents = true
-            panel.hidesOnDeactivate = false
-            panel.isReleasedWhenClosed = false
-            panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
-            panel.collectionBehavior = [
-                .canJoinAllSpaces,
-                .fullScreenAuxiliary,
-                .ignoresCycle,
-                .stationary
-            ]
-            let host = NSHostingView(rootView: OnboardingScreenEdgeGlow(progress: progress))
-            glowHost = host
-            panel.contentView = host
-            return panel
-        }
-
-        private func updatePanelFrame() {
-            guard let screen = hostWindow?.screen ?? NSScreen.main else { return }
-            glowPanel?.setFrame(screen.frame, display: true)
-        }
-
-        private func dismissPanel() {
-            glowPanel?.orderOut(nil)
-            glowPanel?.close()
-            glowPanel = nil
-            glowHost = nil
-        }
-
-        private func removeObservers() {
-            let center = NotificationCenter.default
-            observers.forEach(center.removeObserver)
-            observers.removeAll()
-        }
-    }
-
-    private final class ScreenTrackingView: NSView {
-        var onWindowChanged: ((NSWindow?) -> Void)?
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            onWindowChanged?(window)
-        }
     }
 }
 
