@@ -197,12 +197,14 @@ public struct ContentView: View {
 
     @ViewBuilder
     private func sidebarRow(item: SidebarNavigationItem, commandNumber: Int) -> some View {
+        let shortcutLabel = item.view == .settings ? "," : "\(commandNumber)"
+
         Label(item.title, systemImage: item.systemImage)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, showCommandNumbers ? 38 : 0)
             .overlay(alignment: .trailing) {
-                Text("\(commandNumber)")
+                Text(shortcutLabel)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .frame(minWidth: 18)
