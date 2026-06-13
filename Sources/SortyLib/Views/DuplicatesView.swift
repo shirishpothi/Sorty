@@ -232,8 +232,8 @@ struct DuplicatesView: View {
             description: "All files in this folder are unique. Your workspace is healthy!",
             icon: "checkmark.circle.fill",
             iconColor: .green,
-            actionTitle: "Scan Again",
-            action: startScan
+            actionTitle: "Scan Another Folder",
+            action: selectDirectory
         )
     }
 
