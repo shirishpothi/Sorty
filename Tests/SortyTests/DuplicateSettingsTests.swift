@@ -20,7 +20,6 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertTrue(settings.includeExtensions.isEmpty)
         XCTAssertFalse(settings.excludeExtensions.isEmpty) // Has defaults
         XCTAssertEqual(settings.defaultKeepStrategy, .newest)
-        XCTAssertTrue(settings.enableSafeDeletion)
         XCTAssertTrue(settings.autoStartScan)
         XCTAssertTrue(settings.includeSemanticDuplicates)
         XCTAssertEqual(settings.semanticSimilarityThreshold, DuplicateSettings.defaultSemanticSimilarityThreshold)
@@ -43,7 +42,6 @@ final class DuplicateSettingsTests: XCTestCase {
             includeExtensions: ["jpg", "png"],
             excludeExtensions: [".DS_Store"],
             defaultKeepStrategy: .largest,
-            enableSafeDeletion: false,
             autoStartScan: true,
             includeSemanticDuplicates: true,
             semanticSimilarityThreshold: 0.8
@@ -54,7 +52,6 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertEqual(settings.includeExtensions, ["jpg", "png"])
         XCTAssertEqual(settings.excludeExtensions, [".DS_Store"])
         XCTAssertEqual(settings.defaultKeepStrategy, .largest)
-        XCTAssertFalse(settings.enableSafeDeletion)
         XCTAssertTrue(settings.autoStartScan)
         XCTAssertTrue(settings.includeSemanticDuplicates)
         XCTAssertEqual(settings.semanticSimilarityThreshold, 0.8)
@@ -67,7 +64,6 @@ final class DuplicateSettingsTests: XCTestCase {
             includeExtensions: ["pdf"],
             excludeExtensions: [],
             defaultKeepStrategy: .oldest,
-            enableSafeDeletion: true,
             autoStartScan: false,
             includeSemanticDuplicates: false,
             semanticSimilarityThreshold: 0.95

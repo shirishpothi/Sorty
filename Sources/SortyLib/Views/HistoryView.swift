@@ -1844,7 +1844,8 @@ struct HistoryDetailSheet: View {
 
                             VStack(alignment: .leading, spacing: 8) {
                                 if entry.status == .duplicatesCleanup {
-                                    if let restorables = entry.restorableItems, !restorables.isEmpty {
+                                    if let restorables = entry.restorableItems,
+                                       restorables.contains(where: DuplicateRestorationManager.shared.canRestore) {
                                         Button {
                                             handleRestoreDuplicates()
                                         } label: {
@@ -2417,16 +2418,26 @@ struct HistoryDetailSheet: View {
                 return
             }
             var restoredCount = 0
+            var failedCount = 0
             for item in restorables {
+                guard DuplicateRestorationManager.shared.canRestore(item: item) else {
+                    failedCount += 1
+                    continue
+                }
                 do {
                     try DuplicateRestorationManager.shared.restore(item: item)
                     restoredCount += 1
                 } catch {
-                    // Continue with other items
+                    failedCount += 1
                 }
             }
-            HapticFeedbackManager.shared.success()
-            onAction("Restored \(restoredCount) files.")
+            if restoredCount > 0 {
+                HapticFeedbackManager.shared.success()
+            } else {
+                HapticFeedbackManager.shared.error()
+            }
+            let failureSuffix = failedCount == 0 ? "" : " \(failedCount) could not be restored because they were removed from Trash or their destination is occupied."
+            onAction("Restored \(restoredCount) files.\(failureSuffix)")
             isProcessing = false
             onDismiss()
         }

@@ -26,6 +26,7 @@ public enum OrganizationEntrySource: String, Codable, Sendable {
 public enum DuplicateCleanupMode: String, Codable, Sendable {
     case safeDeletion
     case directDelete
+    case trash
 }
 
 public struct OrganizationHistoryEntry: Codable, Identifiable, Hashable, Sendable {
@@ -589,6 +590,7 @@ public struct RestorableDuplicate: Codable, Identifiable, Sendable, Hashable, Eq
     public let id: UUID
     public let originalPath: String
     public let deletedPath: String
+    public let trashPath: String?
     public let deletedDate: Date
     public let metadata: FileMetadata
     
@@ -600,10 +602,18 @@ public struct RestorableDuplicate: Codable, Identifiable, Sendable, Hashable, Eq
         public let groupOwnerAccountID: Int?
     }
     
-    public init(id: UUID = UUID(), originalPath: String, deletedPath: String, deletedDate: Date = Date(), metadata: FileMetadata) {
+    public init(
+        id: UUID = UUID(),
+        originalPath: String,
+        deletedPath: String,
+        trashPath: String? = nil,
+        deletedDate: Date = Date(),
+        metadata: FileMetadata
+    ) {
         self.id = id
         self.originalPath = originalPath
         self.deletedPath = deletedPath
+        self.trashPath = trashPath
         self.deletedDate = deletedDate
         self.metadata = metadata
     }

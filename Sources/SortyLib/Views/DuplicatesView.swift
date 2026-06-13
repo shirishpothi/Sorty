@@ -17,7 +17,6 @@ struct DuplicatesView: View {
     @State private var filesToDelete: [FileItem] = []
     @State private var contentOpacity: Double = 0
     @State private var showSettings = false
-    @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
     @State private var handoffFilePaths: [String] = []
     @State private var currentScanTask: Task<Void, Never>?
     @State private var capturedDirectory: URL?
@@ -112,7 +111,7 @@ struct DuplicatesView: View {
         }
         .emptyStateWorkflowGradient(isVisible: isShowingEmptyContent)
         .navigationTitle("Duplicate Files")
-        .alert("Delete Duplicate Files?", isPresented: $showDeleteConfirmation) {
+        .alert("Move Duplicate Files to Trash?", isPresented: $showDeleteConfirmation) {
             Button("Cancel", role: .cancel) {
                 HapticFeedbackManager.shared.tap()
             }
@@ -121,7 +120,7 @@ struct DuplicatesView: View {
                 deleteFiles(filesToDelete)
             }
         } message: {
-            Text("This will permanently delete \(filesToDelete.count) file(s). This cannot be undone.")
+            Text("\(filesToDelete.count) file(s) will be moved to Trash. History can restore them until Trash is emptied.")
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -380,47 +379,13 @@ struct DuplicatesView: View {
     }
 
     private func deleteFiles(_ files: [FileItem]) {
-        let fm = FileManager.default
         var totalDeleted = 0
         var totalSizeRecovered: Int64 = 0
-        var potentialRestorables: [RestorableDuplicate] = []
-        let cleanupMode: DuplicateCleanupMode = enableSafeDeletion ? .safeDeletion : .directDelete
 
         do {
-            if enableSafeDeletion {
-                for file in files {
-                    if let exactGroup = detectionManager.duplicateGroups.first(where: { $0.files.contains(file) }) {
-                        if let survivor = exactGroup.files.first(where: { !files.contains($0) }) {
-                            let restorables = try DuplicateRestorationManager.shared.deleteSafely(filesToDelete: [file], originalFile: survivor)
-                            potentialRestorables.append(contentsOf: restorables)
-                            totalDeleted += 1
-                            totalSizeRecovered += file.size
-                        } else {
-                            // No survivor found (all in group are being deleted) 
-                            // Fallback to Trash for safety instead of permanent delete
-                            try fm.trashItem(at: URL(fileURLWithPath: file.path), resultingItemURL: nil)
-                            totalDeleted += 1
-                            totalSizeRecovered += file.size
-                        }
-                    } else {
-                        // Group not found - fallback to Trash
-                        try fm.trashItem(at: URL(fileURLWithPath: file.path), resultingItemURL: nil)
-                        totalDeleted += 1
-                        totalSizeRecovered += file.size
-                    }
-                }
-            } else {
-                for file in files {
-                    do {
-                        try fm.removeItem(atPath: file.path)
-                        totalDeleted += 1
-                        totalSizeRecovered += file.size
-                    } catch {
-                         DebugLogger.log("Failed to remove file: \(file.path), error: \(error.localizedDescription)")
-                         // Continue deleting others
-                    }
-                }
-            }
+            let potentialRestorables = try DuplicateRestorationManager.shared.moveToTrash(files: files)
+            totalDeleted = potentialRestorables.count
+            totalSizeRecovered = files.reduce(0) { $0 + $1.size }
 
             Task { @MainActor in
                 let entry = OrganizationHistoryEntry(
@@ -432,7 +397,7 @@ struct DuplicatesView: View {
                     duplicatesDeleted: totalDeleted,
                     recoveredSpace: totalSizeRecovered,
                     restorableItems: potentialRestorables,
-                    duplicateCleanupMode: cleanupMode
+                    duplicateCleanupMode: .trash
                 )
                 appState.organizer?.history.addEntry(entry)
             }
@@ -497,10 +462,6 @@ struct DuplicatesHeaderNew: View {
     let onBulkDelete: (Bool) -> Void
     let onSettings: () -> Void
     
-    @AppStorage("enableSafeDeletion") private var enableSafeDeletion = true
-    @State private var showInfo = false
-    @State private var showSafeDeletionWarning = false
-
     var body: some View {
         ViewThatFits(in: .horizontal) {
             headerLayout(spacing: 20, showsFullControls: true)
@@ -511,12 +472,6 @@ struct DuplicatesHeaderNew: View {
         .background(.bar)
         .overlay(alignment: .bottom) {
             Divider()
-        }
-        .alert("Disable Safe Deletion?", isPresented: $showSafeDeletionWarning) {
-            Button("Disable", role: .destructive) { enableSafeDeletion = false }
-            Button("Cancel", role: .cancel) { enableSafeDeletion = true }
-        } message: {
-            Text("Permanently deleting files cannot be undone. Are you sure you want to disable the safety net?")
         }
     }
 
@@ -578,46 +533,6 @@ struct DuplicatesHeaderNew: View {
             
             // Right Side: Controls
             HStack(spacing: showsFullControls ? 12 : 8) {
-                // Safe Deletion Status
-                Button { showInfo.toggle() } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: enableSafeDeletion ? "shield.checkered" : "shield.slash")
-                        if showsFullControls {
-                            Text(enableSafeDeletion ? "Safe Mode" : "Direct Delete")
-                        }
-                    }
-                    .font(.caption.bold())
-                    .foregroundStyle(enableSafeDeletion ? .green : .orange)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .systemLiquidGlassBackground(cornerRadius: 999)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(showInfo ? 0.45 : 0.28),
-                                        Color.white.opacity(0.06)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 0.5
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
-                }
-                .contentShape(Capsule())
-                .buttonStyle(.plain)
-                .popover(isPresented: $showInfo) {
-                    SafeDeletionInfoPopover(isEnabled: enableSafeDeletion)
-                        .systemLiquidGlassPopover(cornerRadius: 12)
-                }
-                
-                Divider()
-                    .frame(height: 20)
-                
                 HStack(spacing: 8) {
                     Button(action: onSettings) {
                         Image(systemName: "slider.horizontal.3")
@@ -1626,38 +1541,5 @@ private struct ScanProgressReferenceBeamFallback: View {
                     .strokeBorder(lineWidth: 22)
                     .blur(radius: 7)
             }
-    }
-}
-
-struct SafeDeletionInfoPopover: View {
-    let isEnabled: Bool
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: isEnabled ? "checkmark.shield.fill" : "exclamationmark.shield.fill")
-                    .foregroundStyle(isEnabled ? .green : .orange)
-                    .font(.title3)
-                Text(isEnabled ? "Safe Deletion is ON" : "Safe Deletion is OFF")
-                    .font(.headline)
-            }
-            
-            if isEnabled {
-                Text("Files are moved to a hidden recovery zone, not deleted immediately. You can restore them from History.")
-                    .font(.caption)
-                Text("• Zero risk of accidental loss\n• Recoverable at any time\n• Disk space freed only after cleanup")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text("WARNING: Files will be permanently deleted! This action is irreversible.")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                Text("• Irreversible action\n• No recovery possible\n• Immediate disk space recovery")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(16)
-        .frame(width: 280)
     }
 }

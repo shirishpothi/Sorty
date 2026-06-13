@@ -1863,7 +1863,7 @@ public struct OperationFailure: Sendable {
 
 // MARK: - Duplicate Restoration Manager
 
-/// Manages the persistence and restoration of safely deleted duplicates
+/// Tracks duplicate files moved to Trash so History can restore them while they remain there.
 @MainActor
 public class DuplicateRestorationManager: ObservableObject {
     @Published public private(set) var restoredItems: [RestorableDuplicate] = []
@@ -1877,17 +1877,11 @@ public class DuplicateRestorationManager: ObservableObject {
         loadHistory()
     }
     
-    /// Safely delete a list of duplicate files, keeping one original.
-    /// Moves the deleted files to Trash and stores metadata so they can be restored by copying the original back.
-    /// - Parameters:
-    ///   - filesToDelete: The duplicates to remove
-    ///   - originalFile: The file that is being kept (source for restoration)
-    /// - Returns: A list of RestorableDuplicate objects representing the deleted files
-    public func deleteSafely(filesToDelete: [FileItem], originalFile: FileItem) throws -> [RestorableDuplicate] {
+    /// Moves duplicate files to macOS Trash and records their resulting locations for undo.
+    public func moveToTrash(files: [FileItem]) throws -> [RestorableDuplicate] {
         var deletedItems: [RestorableDuplicate] = []
         
-        for file in filesToDelete {
-            // Capture metadata before move
+        for file in files {
             let attributes = try? fileManager.attributesOfItem(atPath: file.path)
             let metadata = RestorableDuplicate.FileMetadata(
                 creationDate: attributes?[.creationDate] as? Date,
@@ -1896,15 +1890,19 @@ public class DuplicateRestorationManager: ObservableObject {
                 ownerAccountID: attributes?[.ownerAccountID] as? Int,
                 groupOwnerAccountID: attributes?[.groupOwnerAccountID] as? Int
             )
-            
+
+            var trashURL: NSURL?
+            try fileManager.trashItem(
+                at: URL(fileURLWithPath: file.path),
+                resultingItemURL: &trashURL
+            )
+
             let item = RestorableDuplicate(
-                originalPath: originalFile.path,
-                deletedPath: file.path, // Store the ORIGINAL path here
+                originalPath: file.path,
+                deletedPath: file.path,
+                trashPath: (trashURL as? URL)?.path,
                 metadata: metadata
             )
-            
-            try fileManager.trashItem(at: URL(fileURLWithPath: file.path), resultingItemURL: nil)
-            
             deletedItems.append(item)
         }
         
@@ -1913,23 +1911,36 @@ public class DuplicateRestorationManager: ObservableObject {
         
         return deletedItems
     }
+
+    public func canRestore(item: RestorableDuplicate) -> Bool {
+        if let trashPath = item.trashPath {
+            return fileManager.fileExists(atPath: trashPath)
+                && !fileManager.fileExists(atPath: item.deletedPath)
+        }
+
+        return fileManager.fileExists(atPath: item.originalPath)
+            && !fileManager.fileExists(atPath: item.deletedPath)
+    }
     
     /// Restore a previously deleted duplicate
     public func restore(item: RestorableDuplicate) throws {
-        // 1. Verify original still exists
-        guard fileManager.fileExists(atPath: item.originalPath) else {
-            throw RestorationError.originalFileNotFound
-        }
-        
-        // 2. Verify target location is free (or handle overwrite?)
         if fileManager.fileExists(atPath: item.deletedPath) {
             throw RestorationError.targetLocationOccupied
         }
-        
-        // 3. Copy original to deleted path
-        try fileManager.copyItem(atPath: item.originalPath, toPath: item.deletedPath)
-        
-        // 4. Apply metadata
+
+        if let trashPath = item.trashPath {
+            guard fileManager.fileExists(atPath: trashPath) else {
+                throw RestorationError.trashedFileNotFound
+            }
+            try fileManager.moveItem(atPath: trashPath, toPath: item.deletedPath)
+        } else {
+            // Legacy entries used the surviving duplicate as the restore source.
+            guard fileManager.fileExists(atPath: item.originalPath) else {
+                throw RestorationError.originalFileNotFound
+            }
+            try fileManager.copyItem(atPath: item.originalPath, toPath: item.deletedPath)
+        }
+
         var attributes: [FileAttributeKey: Any] = [:]
         if let creation = item.metadata.creationDate { attributes[.creationDate] = creation }
         if let modification = item.metadata.modificationDate { attributes[.modificationDate] = modification }
@@ -1939,7 +1950,6 @@ public class DuplicateRestorationManager: ObservableObject {
         
         try fileManager.setAttributes(attributes, ofItemAtPath: item.deletedPath)
         
-        // 5. Remove from our tracking list since it's restored
         if let index = restoredItems.firstIndex(where: { $0.id == item.id }) {
             restoredItems.remove(at: index)
             saveHistory()
@@ -1967,12 +1977,15 @@ public class DuplicateRestorationManager: ObservableObject {
     
     enum RestorationError: LocalizedError {
         case originalFileNotFound
+        case trashedFileNotFound
         case targetLocationOccupied
         
         var errorDescription: String? {
             switch self {
             case .originalFileNotFound:
                 return "The original file copy could not be found. It may have been moved or deleted."
+            case .trashedFileNotFound:
+                return "The file is no longer in Trash and cannot be restored."
             case .targetLocationOccupied:
                 return "A file already exists at the restoration location."
             }

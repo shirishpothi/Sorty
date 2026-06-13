@@ -32,9 +32,6 @@ public struct DuplicateSettings: Codable, Sendable {
     /// Default keep strategy when bulk deleting
     public var defaultKeepStrategy: KeepStrategy
     
-    /// Enable safe deletion (move to trash with restore option)
-    public var enableSafeDeletion: Bool
-    
     /// Auto-start scan when opening duplicates view
     public var autoStartScan: Bool
     
@@ -59,7 +56,6 @@ public struct DuplicateSettings: Codable, Sendable {
         includeExtensions: [String] = [],
         excludeExtensions: [String] = [".DS_Store", ".localized"],
         defaultKeepStrategy: KeepStrategy = .newest,
-        enableSafeDeletion: Bool = true,
         autoStartScan: Bool = true,
         includeSemanticDuplicates: Bool = true,
         semanticSimilarityThreshold: Double = DuplicateSettings.defaultSemanticSimilarityThreshold
@@ -70,7 +66,6 @@ public struct DuplicateSettings: Codable, Sendable {
         self.includeExtensions = includeExtensions
         self.excludeExtensions = excludeExtensions
         self.defaultKeepStrategy = defaultKeepStrategy
-        self.enableSafeDeletion = enableSafeDeletion
         self.autoStartScan = autoStartScan
         self.includeSemanticDuplicates = includeSemanticDuplicates
         self.semanticSimilarityThreshold = Self.clampedSemanticSimilarityThreshold(semanticSimilarityThreshold)
@@ -144,7 +139,6 @@ public class DuplicateSettingsManager: ObservableObject {
         static let autoStartScan = "duplicates.autoStartScan"
         static let semanticMatching = "duplicates.semanticMatching"
         static let semanticThreshold = "duplicates.semanticThreshold"
-        static let safeDeletion = "duplicates.safeDeletion"
     }
     
     public init() {
@@ -191,7 +185,6 @@ public class DuplicateSettingsManager: ObservableObject {
         overridden.maxScanDepth = recommended.maxScanDepth
         overridden.includeExtensions = recommended.includeExtensions
         overridden.excludeExtensions = recommended.excludeExtensions
-        overridden.enableSafeDeletion = recommended.enableSafeDeletion
         overridden.autoStartScan = recommended.autoStartScan
         overridden.includeSemanticDuplicates = recommended.includeSemanticDuplicates
         overridden.semanticSimilarityThreshold = recommended.semanticSimilarityThreshold
@@ -221,9 +214,6 @@ public class DuplicateSettingsManager: ObservableObject {
         if defaults.object(forKey: OverrideKey.semanticThreshold) != nil {
             overridden.semanticSimilarityThreshold = defaults.double(forKey: OverrideKey.semanticThreshold)
         }
-        if defaults.object(forKey: OverrideKey.safeDeletion) != nil {
-            overridden.enableSafeDeletion = defaults.bool(forKey: OverrideKey.safeDeletion)
-        }
 
         return overridden
     }
@@ -244,8 +234,7 @@ public class DuplicateSettingsManager: ObservableObject {
             OverrideKey.excludeExtensions,
             OverrideKey.autoStartScan,
             OverrideKey.semanticMatching,
-            OverrideKey.semanticThreshold,
-            OverrideKey.safeDeletion
+            OverrideKey.semanticThreshold
         ]
     }
 }

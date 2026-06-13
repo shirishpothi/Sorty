@@ -435,7 +435,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         tempDirectory = nil
     }
     
-    func testSafeDeleteSingleFile() throws {
+    func testMoveSingleFileToTrash() throws {
         // Create original and duplicate
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Original Content".write(to: originalFile, atomically: true, encoding: .utf8)
@@ -443,20 +443,20 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
         try "Original Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
-        let originalItem = FileItem(path: originalFile.path, name: "original", extension: "txt", size: 16, isDirectory: false)
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 16, isDirectory: false)
         
-        let deleted = try manager.deleteSafely(filesToDelete: [duplicateItem], originalFile: originalItem)
+        let deleted = try manager.moveToTrash(files: [duplicateItem])
         
         XCTAssertEqual(deleted.count, 1)
-        XCTAssertEqual(deleted.first?.originalPath, originalFile.path)
+        XCTAssertEqual(deleted.first?.originalPath, duplicateFile.path)
         XCTAssertEqual(deleted.first?.deletedPath, duplicateFile.path)
+        XCTAssertNotNil(deleted.first?.trashPath)
         XCTAssertFalse(FileManager.default.fileExists(atPath: duplicateFile.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: tempDirectory.appendingPathComponent(".duplicates").path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: originalFile.path))
     }
     
-    func testSafeDeleteMultipleFiles() throws {
+    func testMoveMultipleFilesToTrash() throws {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
@@ -467,9 +467,7 @@ final class DuplicateRestorationManagerTests: XCTestCase {
             duplicates.append(FileItem(path: dupFile.path, name: "duplicate\(i)", extension: "txt", size: 7, isDirectory: false))
         }
         
-        let originalItem = FileItem(path: originalFile.path, name: "original", extension: "txt", size: 7, isDirectory: false)
-        
-        let deleted = try manager.deleteSafely(filesToDelete: duplicates, originalFile: originalItem)
+        let deleted = try manager.moveToTrash(files: duplicates)
         
         XCTAssertEqual(deleted.count, 3)
         XCTAssertEqual(manager.restoredItems.count, 3)
@@ -487,10 +485,9 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
         try "Original Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
-        let originalItem = FileItem(path: originalFile.path, name: "original", extension: "txt", size: 16, isDirectory: false)
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 16, isDirectory: false)
         
-        let deleted = try manager.deleteSafely(filesToDelete: [duplicateItem], originalFile: originalItem)
+        let deleted = try manager.moveToTrash(files: [duplicateItem])
         XCTAssertFalse(FileManager.default.fileExists(atPath: duplicateFile.path))
         
         // Restore it
@@ -503,25 +500,22 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         XCTAssertTrue(manager.restoredItems.isEmpty)
     }
     
-    func testRestoreFailsWhenOriginalMissing() throws {
+    func testRestoreDoesNotDependOnSurvivingDuplicate() throws {
         let originalFile = tempDirectory.appendingPathComponent("original.txt")
         try "Content".write(to: originalFile, atomically: true, encoding: .utf8)
         
         let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
-        let originalItem = FileItem(path: originalFile.path, name: "original", extension: "txt", size: 7, isDirectory: false)
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
         
-        let deleted = try manager.deleteSafely(filesToDelete: [duplicateItem], originalFile: originalItem)
+        let deleted = try manager.moveToTrash(files: [duplicateItem])
         
         // Remove original
         try FileManager.default.removeItem(at: originalFile)
         
-        // Try to restore - should fail
-        XCTAssertThrowsError(try manager.restore(item: deleted.first!)) { error in
-            XCTAssertTrue(error is DuplicateRestorationManager.RestorationError)
-        }
+        try manager.restore(item: deleted.first!)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: duplicateFile.path))
     }
     
     func testRestoreFailsWhenTargetOccupied() throws {
@@ -531,10 +525,9 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
-        let originalItem = FileItem(path: originalFile.path, name: "original", extension: "txt", size: 7, isDirectory: false)
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
         
-        let deleted = try manager.deleteSafely(filesToDelete: [duplicateItem], originalFile: originalItem)
+        let deleted = try manager.moveToTrash(files: [duplicateItem])
         
         // Recreate file at deleted location
         try "New Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
@@ -552,10 +545,9 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
-        let originalItem = FileItem(path: originalFile.path, name: "original", extension: "txt", size: 7, isDirectory: false)
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
         
-        let deleted = try manager.deleteSafely(filesToDelete: [duplicateItem], originalFile: originalItem)
+        let deleted = try manager.moveToTrash(files: [duplicateItem])
         
         // Check metadata was captured
         let item = deleted.first!
@@ -570,10 +562,9 @@ final class DuplicateRestorationManagerTests: XCTestCase {
         let duplicateFile = tempDirectory.appendingPathComponent("duplicate.txt")
         try "Content".write(to: duplicateFile, atomically: true, encoding: .utf8)
         
-        let originalItem = FileItem(path: originalFile.path, name: "original", extension: "txt", size: 7, isDirectory: false)
         let duplicateItem = FileItem(path: duplicateFile.path, name: "duplicate", extension: "txt", size: 7, isDirectory: false)
         
-        _ = try manager.deleteSafely(filesToDelete: [duplicateItem], originalFile: originalItem)
+        _ = try manager.moveToTrash(files: [duplicateItem])
         
         XCTAssertFalse(manager.restoredItems.isEmpty)
         
