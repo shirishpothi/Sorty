@@ -429,13 +429,8 @@ struct DuplicatesView: View {
     private func prepareBulkDelete(keepNewest: Bool) {
         var filesToDelete: [FileItem] = []
         
-        // Only include exact matches and high-confidence semantic matches
-        for group in detectionManager.allGroups {
-            // Skip low-confidence semantic matches from bulk delete
-            if group.isSemantic && group.confidenceLevel == .low {
-                continue
-            }
-            
+        // Bulk cleanup is intentionally limited to byte-identical files.
+        for group in detectionManager.allGroups where group.isExact {
             let sortedFiles = group.files.sorted { f1, f2 in
                 let d1 = f1.creationDate ?? Date.distantPast
                 let d2 = f2.creationDate ?? Date.distantPast
@@ -552,7 +547,7 @@ struct DuplicatesHeaderNew: View {
                                 Label("Keep Oldest", systemImage: "clock.arrow.circlepath")
                             }
                             Divider()
-                            Text("Note: Low-confidence matches excluded")
+                            Text("Similar matches always require individual review")
                                 .font(.caption)
                         } label: {
                             Label(showsFullControls ? "Cleanup All" : "Cleanup", systemImage: "trash")
@@ -567,12 +562,9 @@ struct DuplicatesHeaderNew: View {
                         }
                         .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
                         .tint(.red)
-                    } else {
+                    } else if manager.lastScanDate == nil {
                         Button(action: onScan) {
-                            Label(
-                                manager.lastScanDate == nil ? (showsFullControls ? "Start Scan" : "Scan") : "Rescan",
-                                systemImage: manager.lastScanDate == nil ? "play.fill" : "arrow.clockwise"
-                            )
+                            Label(showsFullControls ? "Start Scan" : "Scan", systemImage: "play.fill")
                         }
                         .buttonStyle(.onboardingPill(size: .small))
                         .disabled(currentDirectory == nil)

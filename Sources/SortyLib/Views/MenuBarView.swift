@@ -62,7 +62,7 @@ public struct MenuBarView: View {
     public init() {}
 
     private var activeWatchedCount: Int {
-        watchedFoldersManager.folders.filter { $0.isEnabled && $0.autoOrganize }.count
+        watchedFoldersManager.folders.filter(\.isEnabled).count
     }
 
     private var foldersWithIssues: [WatchedFolder] {
@@ -446,7 +446,7 @@ private struct WatchedFolderMenuItem: View {
     private var statusIcon: String {
         switch folder.accessStatus {
         case .valid:
-            return folder.isEnabled && folder.autoOrganize ? "checkmark.circle.fill" : "pause.circle.fill"
+            return folder.isEnabled ? "checkmark.circle.fill" : "pause.circle.fill"
         case .stale:
             return "exclamationmark.circle.fill"
         case .lost:
@@ -459,7 +459,7 @@ private struct WatchedFolderMenuItem: View {
     private var statusColor: Color {
         switch folder.accessStatus {
         case .valid:
-            return folder.isEnabled && folder.autoOrganize ? .green : .orange
+            return folder.isEnabled ? .green : .orange
         case .stale:
             return .yellow
         case .lost:

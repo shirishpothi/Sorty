@@ -112,7 +112,7 @@ public enum SortyWidgetSnapshotStore {
             totalFilesOrganized: completedEntries.reduce(0) { $0 + $1.filesOrganized },
             successCount: completedEntries.count,
             failedCount: failedEntries.count,
-            activeWatchedFolderCount: watchedFolders.filter { $0.isEnabled && $0.autoOrganize }.count,
+            activeWatchedFolderCount: watchedFolders.filter(\.isEnabled).count,
             enabledStorageLocationCount: storageLocations.filter(\.isEnabled).count,
             lastRunDate: latestEntry?.timestamp,
             lastRunFolderName: latestEntry.flatMap(lastRunFolderName(for:)),

@@ -95,7 +95,7 @@ class SortyAppDelegate: NSObject, NSApplicationDelegate {
                 return 0
             }
 
-            return folders.filter { $0.isEnabled && $0.autoOrganize }.count
+            return folders.filter(\.isEnabled).count
         }
 
         private var shouldContinueRunningWhenLastWindowCloses: Bool {

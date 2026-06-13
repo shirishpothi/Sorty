@@ -93,7 +93,9 @@ public class WatchedFoldersManager: ObservableObject {
         // Avoid duplicates
         let normalizedPath = Self.normalizedPath(folder.path)
         guard !folders.contains(where: { Self.normalizedPath($0.path) == normalizedPath }) else { return }
-        folders.append(folder)
+        var normalizedFolder = folder
+        normalizedFolder.autoOrganize = normalizedFolder.isEnabled
+        folders.append(normalizedFolder)
         saveFolders()
     }
 
@@ -125,7 +127,9 @@ public class WatchedFoldersManager: ObservableObject {
     
     public func updateFolder(_ folder: WatchedFolder) {
         if let index = folders.firstIndex(where: { $0.id == folder.id }) {
-            folders[index] = folder
+            var normalizedFolder = folder
+            normalizedFolder.autoOrganize = normalizedFolder.isEnabled
+            folders[index] = normalizedFolder
             saveFolders()
         }
     }
@@ -133,13 +137,7 @@ public class WatchedFoldersManager: ObservableObject {
     public func toggleEnabled(for folder: WatchedFolder) {
         if var updated = folders.first(where: { $0.id == folder.id }) {
             updated.isEnabled.toggle()
-            updateFolder(updated)
-        }
-    }
-    
-    public func toggleAutoOrganize(for folder: WatchedFolder) {
-        if var updated = folders.first(where: { $0.id == folder.id }) {
-            updated.autoOrganize.toggle()
+            updated.autoOrganize = updated.isEnabled
             updateFolder(updated)
         }
     }
@@ -157,7 +155,8 @@ public class WatchedFoldersManager: ObservableObject {
         var updatedFolders = folders
         
         for (index, folder) in folders.enumerated() {
-            if folder.autoOrganize {
+            if folder.isEnabled {
+                updatedFolders[index].isEnabled = false
                 updatedFolders[index].autoOrganize = false
                 hasChanges = true
             }
@@ -277,7 +276,12 @@ public class WatchedFoldersManager: ObservableObject {
     private func loadFolders() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode([WatchedFolder].self, from: data) {
-            folders = decoded
+            folders = decoded.map { folder in
+                var migrated = folder
+                migrated.autoOrganize = migrated.isEnabled
+                return migrated
+            }
+            saveFolders()
         }
     }
     

@@ -412,7 +412,7 @@ public final class FolderWatcher: @unchecked Sendable {
     fileprivate func handleEvents(for folderId: UUID, changedPaths: Set<String>, requiresFullRescan: Bool) {
         lastEventTime[folderId] = Date()
         guard let folder = watchedFolders[folderId] else { return }
-        guard folder.autoOrganize else { return }
+        guard folder.isEnabled else { return }
         guard !pausedFolders.contains(folderId) else {
             DebugLogger.log("Watcher paused for \(folder.name), ignoring event")
             return

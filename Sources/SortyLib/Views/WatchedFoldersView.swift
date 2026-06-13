@@ -10,18 +10,12 @@ import UniformTypeIdentifiers
 
 struct WatchedFoldersView: View {
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
     @State private var showingFolderPicker = false
     @State private var selectedFolderForEdit: WatchedFolder?
     @State private var contentOpacity: Double = 0
     @State private var isDropTargeted = false
     
-    // Check if AI is available
-    private var isAIConfigured: Bool {
-        organizer.aiClient != nil
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             if watchedFoldersManager.folders.isEmpty {
@@ -174,17 +168,9 @@ struct WatchedFoldersView: View {
                 
                 HStack(spacing: 8) {
                     let activeCount = watchedFoldersManager.folders.filter { $0.isEnabled }.count
-                    let autoCount = watchedFoldersManager.folders.filter { $0.isEnabled && $0.autoOrganize }.count
                     
                     Text("\(activeCount) active")
                         .foregroundStyle(activeCount > 0 ? .green : .secondary)
-                    
-                    if autoCount > 0 {
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                        Text("\(autoCount) auto-organizing")
-                            .foregroundStyle(.blue)
-                    }
                 }
                 .font(.caption)
                 }
@@ -350,8 +336,7 @@ struct WatchedFolderCard: View {
         if folder.accessStatus == .lost { return .orange }
         if !folder.isEnabled { return .secondary }
         if isOrganizing { return .blue }
-        if folder.autoOrganize { return .green }
-        return .blue
+        return .green
     }
     
     private var statusIcon: String {
@@ -359,7 +344,6 @@ struct WatchedFolderCard: View {
         if folder.accessStatus == .lost { return "lock.slash.fill" }
         if !folder.isEnabled { return "pause.circle.fill" }
         if isOrganizing { return "arrow.triangle.2.circlepath" }
-        if folder.autoOrganize { return "bolt.circle.fill" }
         return "eye.circle.fill"
     }
 
@@ -431,7 +415,7 @@ struct WatchedFolderCard: View {
         .padding(.vertical, 2)
         .background(Color.orange.opacity(0.1))
         .clipShape(Capsule())
-        .help("Auto-organization requires an AI provider configured in Settings")
+        .help("Watching requires an AI provider configured in Settings")
     }
 
     private var titleRow: some View {
@@ -444,7 +428,7 @@ struct WatchedFolderCard: View {
                 organizingBadge
             }
 
-            if folder.isEnabled && folder.autoOrganize && !isAIConfigured {
+            if folder.isEnabled && !isAIConfigured {
                 aiMissingBadge
             }
         }
@@ -460,20 +444,6 @@ struct WatchedFolderCard: View {
                         .font(.caption2)
                 }
                 .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private var autoStat: some View {
-        Group {
-            if folder.autoOrganize {
-                HStack(spacing: 4) {
-                    Image(systemName: "bolt.fill")
-                        .font(.caption2)
-                    Text("Auto")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.green)
             }
         }
     }
@@ -549,7 +519,6 @@ struct WatchedFolderCard: View {
     private var statsRow: some View {
         HStack(spacing: 12) {
             lastTriggeredStat
-            autoStat
             modelOverrideStat
             healthStatusView
         }
@@ -609,46 +578,22 @@ struct WatchedFolderCard: View {
         }
     }
 
-    private var autoOrganizeControlView: some View {
-        VStack(alignment: .trailing, spacing: 4) {
-            Toggle("", isOn: Binding(
-                get: { folder.isEnabled },
-                set: { _ in
-                    HapticFeedbackManager.shared.selection()
-                    watchedFoldersManager.toggleEnabled(for: folder)
-                }
-            ))
+    private var isEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { folder.isEnabled },
+            set: { _ in
+                HapticFeedbackManager.shared.selection()
+                watchedFoldersManager.toggleEnabled(for: folder)
+            }
+        )
+    }
+
+    private var watchToggle: some View {
+        Toggle("Watch \(folder.name)", isOn: isEnabledBinding)
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
-
-            if folder.isEnabled {
-                Button {
-                    HapticFeedbackManager.shared.tap()
-                    if isAIConfigured {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            watchedFoldersManager.toggleAutoOrganize(for: folder)
-                        }
-                    } else {
-                        HapticFeedbackManager.shared.error()
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: folder.autoOrganize ? "bolt.fill" : "bolt")
-                            .font(.caption2)
-                        Text(folder.autoOrganize ? "Auto" : "Manual")
-                            .font(.caption2)
-                    }
-                    .contentShape(Rectangle())
-                    .foregroundColor(folder.autoOrganize ? .green : .secondary)
-                    .opacity(isAIConfigured ? 1.0 : 0.5)
-                }
-                .buttonStyle(.plain)
-                .disabled(!isAIConfigured)
-                .transition(.scale.combined(with: .opacity))
-                .help(!isAIConfigured ? "AI Provider required" : "")
-            }
-        }
+            .accessibilityHint("When enabled, Sorty organizes new files into this folder's preferred structure.")
     }
 
     private var controlsView: some View {
@@ -658,7 +603,7 @@ struct WatchedFolderCard: View {
                     .transition(.scale.combined(with: .opacity))
             }
 
-            autoOrganizeControlView
+            watchToggle
         }
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: folder.isEnabled)
     }
@@ -731,29 +676,19 @@ struct WatchedFolderCard: View {
 struct WatchedFolderConfigView: View {
     let folder: WatchedFolder
     @EnvironmentObject var watchedFoldersManager: WatchedFoldersManager
-    @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @Environment(\.dismiss) var dismiss
     
     @State private var customPrompt: String
-    @State private var temperature: Double
-    @State private var autoOrganize: Bool
     @State private var useCustomModel: Bool
     @State private var selectedProvider: AIProvider
     @State private var selectedModel: String
     @State private var showModelPicker = false
     
-    // Check if AI is available
-    private var isAIConfigured: Bool {
-        organizer.aiClient != nil
-    }
-
     init(folder: WatchedFolder) {
         self.folder = folder
         _customPrompt = State(initialValue: folder.customPrompt ?? "")
-        _temperature = State(initialValue: folder.temperature ?? 0.7)
-        _autoOrganize = State(initialValue: folder.autoOrganize)
         _useCustomModel = State(initialValue: folder.modelOverride != nil)
         _selectedProvider = State(initialValue: folder.providerOverride ?? .openAI)
         _selectedModel = State(initialValue: folder.modelOverride ?? AIProvider.openAI.defaultModel)
@@ -794,60 +729,6 @@ struct WatchedFolderConfigView: View {
             
             ScrollView {
                 VStack(spacing: 16) {
-                    // Automation Section
-                    ConfigSection(title: "Automation", icon: "bolt", color: .green) {
-                        VStack(spacing: 12) {
-                            if !isAIConfigured {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle.fill")
-                                        .foregroundStyle(.orange)
-                                    Text("AI Provider Not Configured")
-                                        .font(.subheadline.bold())
-                                        .foregroundStyle(.orange)
-                                    Spacer()
-                                }
-                                
-                                Text("To enable automatic organization, please configure an AI provider in Settings first.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    
-                                Button("Open Settings") {
-                                    appState.openSettingsWindow(section: .provider)
-                                    dismiss()
-                                }
-                                .controlSize(.small)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            
-                            Toggle(isOn: $autoOrganize) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Auto-Organize")
-                                        .font(.subheadline)
-                                    Text("Automatically organize new files as they appear")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .toggleStyle(.switch)
-                            .disabled(!isAIConfigured)
-                            
-                            if autoOrganize {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "info.circle")
-                                        .foregroundStyle(.blue)
-                                    Text("Files will be organized into existing folders based on content and type.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(10)
-                                .background(Color.blue.opacity(0.05))
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                    }
-                    
                     // Actions Section
                     ConfigSection(title: "Actions", icon: "play", color: .blue) {
                         Button {
@@ -860,9 +741,10 @@ struct WatchedFolderConfigView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Run Full Organization")
                                         .foregroundStyle(.primary)
-                                    Text("Analyze and organize all files now")
+                                    Text("Set up the folder structure you prefer. New files will then be placed into that structure without rearranging the whole folder.")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
@@ -891,41 +773,6 @@ struct WatchedFolderConfigView: View {
                             Text("e.g., \"Group by project name\" or \"Keep invoices separate\"")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                        }
-                    }
-                    
-                    // AI Creativity Section
-                    ConfigSection(title: "AI Creativity", icon: "sparkles", color: .orange) {
-                        VStack(spacing: 12) {
-                            HStack {
-                                Text("Temperature")
-                                    .font(.subheadline)
-                                Spacer()
-                                Text("\(temperature, specifier: "%.2f")")
-                                    .font(.subheadline.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                    .contentTransition(.numericText())
-                                Text(creativityLabel)
-                                    .font(.caption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(creativityColor.opacity(0.1))
-                                    .foregroundStyle(creativityColor)
-                                    .clipShape(Capsule())
-                            }
-                            
-                            Slider(value: $temperature, in: 0...1, step: 0.1)
-                                .tint(creativityColor)
-                            
-                            HStack {
-                                Text("Strict (0.0)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Text("Creative (1.0)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
                         }
                     }
                     
@@ -1033,23 +880,9 @@ struct WatchedFolderConfigView: View {
         selectedModel = defaults.model
     }
     
-    private var creativityLabel: String {
-        if temperature < 0.3 { return "Strict" }
-        if temperature < 0.6 { return "Balanced" }
-        return "Creative"
-    }
-    
-    private var creativityColor: Color {
-        if temperature < 0.3 { return .blue }
-        if temperature < 0.6 { return .green }
-        return .orange
-    }
-
     private func save() {
         var updated = folder
         updated.customPrompt = customPrompt.isEmpty ? nil : customPrompt
-        updated.temperature = temperature
-        updated.autoOrganize = autoOrganize
         
         if useCustomModel {
             updated.providerOverride = selectedProvider
