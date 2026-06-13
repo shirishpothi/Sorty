@@ -446,7 +446,7 @@ private struct WatchedFolderMenuItem: View {
 
     @State private var isHovered = false
 
-    private var statusIcon: String {
+    private var statusIcon: String? {
         switch folder.accessStatus {
         case .valid:
             return folder.isEnabled ? "checkmark.circle.fill" : "pause.circle.fill"
@@ -455,7 +455,7 @@ private struct WatchedFolderMenuItem: View {
         case .lost:
             return "xmark.circle.fill"
         case .unknown:
-            return "questionmark.circle"
+            return nil
         }
     }
 
@@ -489,15 +489,17 @@ private struct WatchedFolderMenuItem: View {
                     AppKitImageView(image: folderIcon, size: CGSize(width: 18, height: 18))
                         .frame(width: 18, height: 18)
 
-                    Image(systemName: statusIcon)
-                        .font(.system(size: 8))
-                        .foregroundStyle(statusColor)
-                        .background(
-                            Circle()
-                                .fill(.background)
-                                .frame(width: 10, height: 10)
-                        )
-                        .offset(x: 3, y: 3)
+                    if let statusIcon {
+                        Image(systemName: statusIcon)
+                            .font(.system(size: 8))
+                            .foregroundStyle(statusColor)
+                            .background(
+                                Circle()
+                                    .fill(.background)
+                                    .frame(width: 10, height: 10)
+                            )
+                            .offset(x: 3, y: 3)
+                    }
                 }
                 .frame(width: 22)
 
