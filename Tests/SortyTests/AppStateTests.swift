@@ -495,8 +495,55 @@ class AppStateTests: XCTestCase {
         NotificationCenter.default.removeObserver(observer)
     }
     
-    func testDeleteUsageData() {
-        appState.deleteUsageData()
+    func testUsageDataEraserRemovesOnlySortyOwnedData() throws {
+        let fileManager = FileManager.default
+        let sandbox = fileManager.temporaryDirectory
+            .appendingPathComponent("SortyUsageDataEraserTests-\(UUID().uuidString)", isDirectory: true)
+        let appSupport = sandbox.appendingPathComponent("Application Support", isDirectory: true)
+        let caches = sandbox.appendingPathComponent("Caches", isDirectory: true)
+        let temporary = sandbox.appendingPathComponent("Temporary", isDirectory: true)
+        let appGroup = sandbox.appendingPathComponent("App Group", isDirectory: true)
+        let unrelatedTemporaryFile = temporary.appendingPathComponent("unrelated.txt")
+
+        defer {
+            try? fileManager.removeItem(at: sandbox)
+        }
+
+        let ownedItems = [
+            appSupport.appendingPathComponent("Sorty/Learnings/profile.learning"),
+            appSupport.appendingPathComponent("com.sorty.app/Logs/sorty.log"),
+            caches.appendingPathComponent("Sorty/VisionCache/image.jpg"),
+            caches.appendingPathComponent("com.sorty.app/content-metadata-cache.json"),
+            temporary.appendingPathComponent("sorty-codex-request.txt"),
+            temporary.appendingPathComponent("SortyNotificationIcon-test.png"),
+            appGroup.appendingPathComponent("Widget/overview-snapshot.json")
+        ]
+
+        for item in ownedItems + [unrelatedTemporaryFile] {
+            try fileManager.createDirectory(
+                at: item.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data("test".utf8).write(to: item)
+        }
+
+        let failures = SortyUsageDataEraser.erase(
+            fileManager: fileManager,
+            bundleIdentifier: "com.sorty.app",
+            locations: .init(
+                applicationSupportDirectory: appSupport,
+                cachesDirectory: caches,
+                temporaryDirectory: temporary,
+                appGroupContainer: appGroup
+            )
+        )
+
+        XCTAssertTrue(failures.isEmpty)
+        for item in ownedItems {
+            XCTAssertFalse(fileManager.fileExists(atPath: item.path))
+        }
+        XCTAssertTrue(fileManager.fileExists(atPath: unrelatedTemporaryFile.path))
+        XCTAssertTrue(fileManager.fileExists(atPath: appGroup.path))
     }
     
     // MARK: - Edge Cases

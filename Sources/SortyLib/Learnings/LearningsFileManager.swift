@@ -78,28 +78,36 @@ public struct LearningsFileManager {
         return profile
     }
     
-    /// Securely delete the .learning file
+    /// Delete all persisted Learnings files and destroy the encryption key.
     public static func secureDelete() throws {
-        let fm = FileManager.default
-        
-        guard fm.fileExists(atPath: profileURL.path) else {
+        try deleteAllData()
+    }
+
+    public static func deleteAllData(
+        fileManager: FileManager = .default,
+        directory: URL? = nil
+    ) throws {
+        // Destroy the key first. On copy-on-write storage, overwriting a file is
+        // not a reliable secure erase, while deleting the key immediately makes
+        // the encrypted profile unreadable.
+        guard KeychainManager.delete(key: "learnings_encryption_key") else {
+            throw LearningsFileError.keychainDeleteFailed
+        }
+
+        let targetDirectory = directory ?? learningsDirectory
+        try deleteStoredFiles(fileManager: fileManager, directory: targetDirectory)
+
+        LogManager.shared.log("Deleted all Learnings data", category: "LearningsFile")
+    }
+
+    static func deleteStoredFiles(
+        fileManager: FileManager,
+        directory: URL
+    ) throws {
+        guard fileManager.fileExists(atPath: directory.path) else {
             return
         }
-        
-        // Overwrite with random data before deletion (secure wipe)
-        let fileSize = try fm.attributesOfItem(atPath: profileURL.path)[.size] as? Int ?? 0
-        if fileSize > 0 {
-            let randomData = Data((0..<fileSize).map { _ in UInt8.random(in: 0...255) })
-            try randomData.write(to: profileURL)
-        }
-        
-        // Delete file
-        try fm.removeItem(at: profileURL)
-        
-        // Delete encryption key
-        _ = KeychainManager.delete(key: "learnings_encryption_key")
-        
-        LogManager.shared.log("Securely deleted profile", category: "LearningsFile")
+        try fileManager.removeItem(at: directory)
     }
     
     /// Check if a profile exists
@@ -167,6 +175,7 @@ public struct LearningsFileManager {
 public enum LearningsFileError: LocalizedError {
     case noEncryptionKey
     case keychainSaveFailed
+    case keychainDeleteFailed
     case encryptionFailed
     case decryptionFailed
     
@@ -176,6 +185,8 @@ public enum LearningsFileError: LocalizedError {
             return "No encryption key found. Cannot decrypt learning data."
         case .keychainSaveFailed:
             return "Failed to save encryption key to Keychain."
+        case .keychainDeleteFailed:
+            return "Failed to delete the Learnings encryption key from Keychain."
         case .encryptionFailed:
             return "Failed to encrypt learning data."
         case .decryptionFailed:

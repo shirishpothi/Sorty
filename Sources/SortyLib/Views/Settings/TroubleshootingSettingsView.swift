@@ -8,8 +8,6 @@
 import SwiftUI
 
 struct TroubleshootingSettingsView: View {
-    @EnvironmentObject var viewModel: SettingsViewModel
-    @EnvironmentObject var notificationSettings: NotificationSettingsManager
     @EnvironmentObject var appState: AppState
     
     @State private var cacheSize: String = "Calculating..."
@@ -46,13 +44,13 @@ struct TroubleshootingSettingsView: View {
                     }
 
                     MaintenanceActionTile(
-                        title: "Reset",
-                        description: "Reset all preferences to defaults.",
+                        title: "All Sorty Data",
+                        description: "Erase settings, history, learnings, credentials, and caches.",
                         detail: nil,
                         icon: "arrow.counterclockwise",
                         color: .red,
-                        buttonTitle: "Reset All",
-                        buttonIcon: "arrow.counterclockwise"
+                        buttonTitle: "Erase All",
+                        buttonIcon: "trash"
                     ) {
                         showingResetConfirmation = true
                     }
@@ -77,13 +75,13 @@ struct TroubleshootingSettingsView: View {
             } message: {
                 Text("This will permanently delete all your learning data. This cannot be undone.")
             }
-            .alert("Reset All Settings?", isPresented: $showingResetConfirmation) {
-                Button("Cancel", role: .cancel) {}
-                Button("Reset", role: .destructive) {
-                    resetAllSettings()
+            .alert("Erase All Sorty Data?", isPresented: $showingResetConfirmation) {
+                Button("Keep Data", role: .cancel) {}
+                Button("Erase All Data", role: .destructive) {
+                    appState.deleteUsageData()
                 }
             } message: {
-                Text("This will completely reset Sorty to its initial state, clearing all settings, history, and learnings. You'll go through onboarding again. This cannot be undone.")
+                Text("This permanently removes Sorty settings, history, learnings, saved credentials, and caches from this Mac. You'll return to onboarding. This cannot be undone.")
             }
         }
     }
@@ -173,46 +171,6 @@ struct TroubleshootingSettingsView: View {
         // Recalculate size
         calculateCacheSize()
         HapticFeedbackManager.shared.success()
-    }
-    
-    private func resetAllSettings() {
-        // Reset AI config
-        viewModel.config = .default
-        
-        // Reset notification settings
-        notificationSettings.reset()
-        
-        // Clear ALL user defaults for this app
-        let defaults = UserDefaults.standard
-        let domain = Bundle.main.bundleIdentifier ?? ""
-        defaults.removePersistentDomain(forName: domain)
-        defaults.synchronize()
-        
-        // Clear app support data (learnings, history, etc.)
-        let fileManager = FileManager.default
-        if let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-            let sortySupport = appSupportURL.appendingPathComponent("Sorty")
-            try? fileManager.removeItem(at: sortySupport)
-        }
-        
-        // Clear Sorty caches
-        let bundleId = Bundle.main.bundleIdentifier ?? "com.sorty.app"
-        if let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let sortyCaches = cachesURL.appendingPathComponent(bundleId)
-            try? fileManager.removeItem(at: sortyCaches)
-        }
-        
-        // Reset onboarding state AND version tracking to trigger fresh start
-        defaults.set(false, forKey: "hasCompletedOnboarding")
-        defaults.removeObject(forKey: "lastLaunchedVersion")
-        defaults.synchronize()
-        
-        HapticFeedbackManager.shared.success()
-        
-        // Take user to onboarding screen immediately
-        withAnimation(.spring()) {
-            appState.hasCompletedOnboarding = false
-        }
     }
 }
 

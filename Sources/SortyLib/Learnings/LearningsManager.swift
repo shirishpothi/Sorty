@@ -26,7 +26,7 @@ public class LearningsManager: ObservableObject {
     @Published public var requiresInitialSetup: Bool = false
     @Published public var showingImportPicker: Bool = false
     public let securityManager = SecurityManager.shared
-    public let consentManager = LearningsConsentManager()
+    public let consentManager: LearningsConsentManager
     
     // Learning Controls
     @Published public var learningStrength: Double = 0.5 {
@@ -244,6 +244,7 @@ public class LearningsManager: ObservableObject {
     
     public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
+        self.consentManager = LearningsConsentManager(userDefaults: userDefaults)
         requiresInitialSetup = !consentManager.hasCompletedInitialSetup
         learningStrength = userDefaults.object(forKey: "learningStrength") as? Double ?? 0.5
         dataRetentionDays = userDefaults.integer(forKey: "learningDataRetentionDays")
@@ -314,10 +315,31 @@ public class LearningsManager: ObservableObject {
     public func clearAllData() async -> Bool {
         do {
             try await consentManager.deleteAllData()
-            try LearningsFileManager.secureDelete()
-            currentProfile = LearningsProfile() // Reset to empty
+
+            currentProfile = nil
             analysisResult = nil
+            behaviorPreferences = nil
+            pendingExceptionSuggestions = []
+            sessionLearningPaused = false
+            showingImportPicker = false
+            isLocked = false
             requiresInitialSetup = true
+            learningsModelSelection = nil
+            modelDirectories = []
+            learningStrength = 0.5
+            useAIForLearnings = true
+            dataRetentionDays = 0
+
+            [
+                "learningStrength",
+                "useAIForLearnings",
+                "learningDataRetentionDays",
+                Self.learningsModelSelectionKey,
+                Self.modelDirectoriesKey,
+                "lastLocalRuleInference",
+                "HoningRetryCount"
+            ].forEach(userDefaults.removeObject(forKey:))
+
             return true
         } catch {
             self.error = "Failed to clear data: \(error.localizedDescription)"

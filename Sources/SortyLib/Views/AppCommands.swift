@@ -1298,29 +1298,65 @@ public class AppState: ObservableObject {
     }
     
     public func deleteUsageData() {
-        // 1. Clear Security-sensitive data (Keychain)
-        _ = KeychainManager.deleteAll()
-        
-        // 2. Sign out of external services
+        var deletionFailures: [Error] = []
+
+        if !KeychainManager.deleteAll() {
+            deletionFailures.append(UsageDataDeletionError.keychain)
+        }
         GitHubCopilotAuthManager.shared.signOut()
-        
-        // 3. Clear core infrastructure data
+
+        deletionFailures.append(contentsOf: SortyUsageDataEraser.erase())
+
         DuplicateRestorationManager.shared.clearAllData()
-        userDefaults.removeObject(forKey: "organizationHistory")
-        
-        // 4. Notify all managers to reset their state and clear their storage
-        postWindowScopedNotification(.clearLearningsData)
-        NotificationCenter.default.post(name: .clearAllUsageData, object: nil)
-        
-        // 5. Reset primary engine
+        SortyWidgetSnapshotStore.clear()
+
         organizer?.reset()
-        
-        // 6. Reset onboarding state to trigger fresh start
+        duplicateManager.clearResults()
+        selectedDirectory = nil
+        duplicateSelectedDirectory = nil
+        duplicateSelectedGroup = nil
+        workspaceHealthSelectedDirectory = nil
+        workspaceHealthSelectedOpportunity = nil
+        workspaceHealthIsAnalyzing = false
+        workspaceHealthAnalysisStage = nil
+        workspaceHealthAnalysisError = nil
+        workspaceHealthAnalysisStartedAt = nil
+        pendingDuplicatesHandoff = nil
+        highlightedWatchedFolderID = nil
+        pendingNotificationActionRequest = nil
+        lastOrganizedDirectory = nil
+        settingsFocusTarget = nil
+        requiresSetupRepair = false
+        setupRepairMessage = nil
+
         withAnimation(.spring()) {
             hasCompletedOnboarding = false
         }
-        
-        HapticFeedbackManager.shared.success()
+
+        postWindowScopedNotification(.clearLearningsData)
+        NotificationCenter.default.post(name: .clearAllUsageData, object: nil)
+
+        userDefaults.dictionaryRepresentation().keys.forEach(userDefaults.removeObject(forKey:))
+        UserDefaults(suiteName: SortyWidgetSnapshotStore.appGroupIdentifier)?
+            .removePersistentDomain(forName: SortyWidgetSnapshotStore.appGroupIdentifier)
+
+        if let failure = deletionFailures.first {
+            HapticFeedbackManager.shared.error()
+            NotificationManager.shared.showError(
+                message: "Some Sorty data could not be deleted: \(failure.localizedDescription)",
+                isCritical: true
+            )
+        } else {
+            HapticFeedbackManager.shared.success()
+        }
+    }
+
+    private enum UsageDataDeletionError: LocalizedError {
+        case keychain
+
+        var errorDescription: String? {
+            "Sorty could not remove all Keychain data."
+        }
     }
 
     public func authenticateForSensitiveAction(
@@ -1522,5 +1558,140 @@ public class AppState: ObservableObject {
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "'", with: "&#39;")
+    }
+}
+
+struct SortyUsageDataEraser {
+    struct Locations {
+        let applicationSupportDirectory: URL?
+        let cachesDirectory: URL?
+        let temporaryDirectory: URL
+        let appGroupContainer: URL?
+    }
+
+    static func erase(
+        fileManager: FileManager = .default,
+        bundleIdentifier: String = Bundle.main.bundleIdentifier ?? "com.sorty.app",
+        locations: Locations? = nil
+    ) -> [Error] {
+        let locations = locations ?? defaultLocations(fileManager: fileManager)
+        var failures: [Error] = []
+
+        let removableRoots = ownedRoots(
+            bundleIdentifier: bundleIdentifier,
+            locations: locations
+        )
+        for root in removableRoots where fileManager.fileExists(atPath: root.path) {
+            do {
+                try fileManager.removeItem(at: root)
+            } catch {
+                failures.append(error)
+            }
+        }
+
+        if let appGroupContainer = locations.appGroupContainer {
+            failures.append(contentsOf: removeContents(
+                of: appGroupContainer,
+                fileManager: fileManager
+            ))
+        }
+
+        failures.append(contentsOf: removeOwnedTemporaryItems(
+            from: locations.temporaryDirectory,
+            fileManager: fileManager
+        ))
+        return failures
+    }
+
+    static func ownedRoots(
+        bundleIdentifier: String,
+        locations: Locations
+    ) -> [URL] {
+        var roots: [URL] = []
+
+        if let applicationSupportDirectory = locations.applicationSupportDirectory {
+            roots.append(applicationSupportDirectory.appendingPathComponent("Sorty", isDirectory: true))
+            roots.append(applicationSupportDirectory.appendingPathComponent(bundleIdentifier, isDirectory: true))
+        }
+
+        if let cachesDirectory = locations.cachesDirectory {
+            roots.append(cachesDirectory.appendingPathComponent(bundleIdentifier, isDirectory: true))
+            roots.append(cachesDirectory.appendingPathComponent("Sorty", isDirectory: true))
+        }
+
+        var seenPaths = Set<String>()
+        return roots.filter { seenPaths.insert($0.standardizedFileURL.path).inserted }
+    }
+
+    private static func defaultLocations(fileManager: FileManager) -> Locations {
+        Locations(
+            applicationSupportDirectory: fileManager.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            ).first,
+            cachesDirectory: fileManager.urls(
+                for: .cachesDirectory,
+                in: .userDomainMask
+            ).first,
+            temporaryDirectory: fileManager.temporaryDirectory,
+            appGroupContainer: fileManager.containerURL(
+                forSecurityApplicationGroupIdentifier: SortyWidgetSnapshotStore.appGroupIdentifier
+            )
+        )
+    }
+
+    private static func removeContents(
+        of directory: URL,
+        fileManager: FileManager
+    ) -> [Error] {
+        guard fileManager.fileExists(atPath: directory.path) else {
+            return []
+        }
+
+        do {
+            return try fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil
+            ).compactMap { item in
+                do {
+                    try fileManager.removeItem(at: item)
+                    return nil
+                } catch {
+                    return error
+                }
+            }
+        } catch {
+            return [error]
+        }
+    }
+
+    private static func removeOwnedTemporaryItems(
+        from directory: URL,
+        fileManager: FileManager
+    ) -> [Error] {
+        guard fileManager.fileExists(atPath: directory.path) else {
+            return []
+        }
+
+        let prefixes = ["sorty-", "Sorty_", "SortyNotificationIcon-"]
+        do {
+            let items = try fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil
+            ).filter { item in
+                prefixes.contains { item.lastPathComponent.hasPrefix($0) }
+            }
+
+            return items.compactMap { item in
+                do {
+                    try fileManager.removeItem(at: item)
+                    return nil
+                } catch {
+                    return error
+                }
+            }
+        } catch {
+            return [error]
+        }
     }
 }

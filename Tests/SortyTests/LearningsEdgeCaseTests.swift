@@ -546,4 +546,30 @@ final class LearningsEdgeCaseTests: XCTestCase {
         XCTAssertEqual(decoded.inferredRules.first?.pattern, ".*\\.pdf")
         XCTAssertEqual(decoded.additionalInstructionsHistory.count, 1)
     }
+
+    func testDeleteStoredFilesRemovesEntireLearningsDirectory() throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("LearningsDeletionTests-\(UUID().uuidString)", isDirectory: true)
+        let nestedArtifact = directory
+            .appendingPathComponent("Jobs", isDirectory: true)
+            .appendingPathComponent("pending-request.json")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(
+            at: nestedArtifact.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("sensitive".utf8).write(to: nestedArtifact)
+
+        try LearningsFileManager.deleteStoredFiles(
+            fileManager: fileManager,
+            directory: directory
+        )
+
+        XCTAssertFalse(fileManager.fileExists(atPath: directory.path))
+    }
 }

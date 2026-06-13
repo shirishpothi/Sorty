@@ -25,15 +25,12 @@ public class LearningsConsentManager: ObservableObject {
     private let consentKey = "learnings_consent_granted"
     private let consentDateKey = "learnings_consent_date"
     private let setupCompleteKey = "learnings_initial_setup_complete"
-    
-    private var learningsDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Sorty/Learnings")
-    }
+    private let userDefaults: UserDefaults
     
     // MARK: - Init
     
-    public init() {
+    public init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
         loadConsentState()
     }
     
@@ -45,8 +42,8 @@ public class LearningsConsentManager: ObservableObject {
         hasConsented = true
         consentDate = now
         
-        UserDefaults.standard.set(true, forKey: consentKey)
-        UserDefaults.standard.set(now.timeIntervalSince1970, forKey: consentDateKey)
+        userDefaults.set(true, forKey: consentKey)
+        userDefaults.set(now.timeIntervalSince1970, forKey: consentDateKey)
         
         LogManager.shared.log("Consent granted at \(now)", category: "ConsentManager")
     }
@@ -55,7 +52,7 @@ public class LearningsConsentManager: ObservableObject {
     public func withdrawConsent() {
         hasConsented = false
         
-        UserDefaults.standard.set(false, forKey: consentKey)
+        userDefaults.set(false, forKey: consentKey)
         
         LogManager.shared.log("Consent withdrawn", category: "ConsentManager")
     }
@@ -63,7 +60,7 @@ public class LearningsConsentManager: ObservableObject {
     /// Mark initial setup as complete (triggers Touch ID requirement)
     public func completeInitialSetup() {
         hasCompletedInitialSetup = true
-        UserDefaults.standard.set(true, forKey: setupCompleteKey)
+        userDefaults.set(true, forKey: setupCompleteKey)
         
         LogManager.shared.log("Initial setup complete, Touch ID will be required", category: "ConsentManager")
     }
@@ -71,31 +68,20 @@ public class LearningsConsentManager: ObservableObject {
     /// Reset initial setup (for testing or re-onboarding)
     public func resetInitialSetup() {
         hasCompletedInitialSetup = false
-        UserDefaults.standard.set(false, forKey: setupCompleteKey)
+        userDefaults.set(false, forKey: setupCompleteKey)
     }
     
     /// Delete ALL user learning data securely
     public func deleteAllData() async throws {
-        let fm = FileManager.default
-        
-        // Delete .learning files
-        if fm.fileExists(atPath: learningsDirectory.path) {
-            let files = try fm.contentsOfDirectory(at: learningsDirectory, includingPropertiesForKeys: nil)
-            for file in files where file.pathExtension == "learning" {
-                try fm.removeItem(at: file)
-                LogManager.shared.log("Deleted \(file.lastPathComponent)", category: "ConsentManager")
-            }
-        }
-        
-        // Delete encryption key from Keychain
-        _ = KeychainManager.delete(key: "learnings_encryption_key")
-        
-        // Reset consent state
-        withdrawConsent()
-        resetInitialSetup()
+        try LearningsFileManager.deleteAllData()
+
+        hasConsented = false
+        hasCompletedInitialSetup = false
         consentDate = nil
-        
-        UserDefaults.standard.removeObject(forKey: consentDateKey)
+
+        userDefaults.removeObject(forKey: consentKey)
+        userDefaults.removeObject(forKey: consentDateKey)
+        userDefaults.removeObject(forKey: setupCompleteKey)
         
         LogManager.shared.log("All data deleted successfully", category: "ConsentManager")
     }
@@ -108,10 +94,10 @@ public class LearningsConsentManager: ObservableObject {
     // MARK: - Private
     
     private func loadConsentState() {
-        hasConsented = UserDefaults.standard.bool(forKey: consentKey)
-        hasCompletedInitialSetup = UserDefaults.standard.bool(forKey: setupCompleteKey)
+        hasConsented = userDefaults.bool(forKey: consentKey)
+        hasCompletedInitialSetup = userDefaults.bool(forKey: setupCompleteKey)
         
-        if let timestamp = UserDefaults.standard.object(forKey: consentDateKey) as? TimeInterval {
+        if let timestamp = userDefaults.object(forKey: consentDateKey) as? TimeInterval {
             consentDate = Date(timeIntervalSince1970: timestamp)
         }
     }
