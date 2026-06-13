@@ -107,6 +107,9 @@ public struct OnboardingView: View {
                     }
                         .transition(.opacity)
                 }
+
+                OnboardingEdgeGlow()
+                    .ignoresSafeArea()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -978,6 +981,41 @@ private struct OnboardingOrbitFileChip: View {
                 .stroke(Color.white.opacity(0.10), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.30), radius: 16, x: 0, y: 12)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct OnboardingEdgeGlow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)
+        ) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate
+                .truncatingRemainder(dividingBy: 4.8) / 4.8
+            let pulse = reduceMotion
+                ? 0
+                : (1 - cos(phase * 2 * .pi)) / 2
+            let opacity = 0.34 + pulse * 0.30
+
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(
+                    SortyDesignSystem.Colors.resolvedAccent.opacity(opacity),
+                    lineWidth: 2
+                )
+                .shadow(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(opacity * 0.72),
+                    radius: 14 + pulse * 8
+                )
+                .shadow(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(opacity * 0.38),
+                    radius: 30 + pulse * 12
+                )
+                .padding(1)
+                .opacity(reduceMotion ? 0 : 1)
+        }
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }
