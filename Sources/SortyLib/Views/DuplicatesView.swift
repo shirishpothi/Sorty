@@ -1382,7 +1382,7 @@ private struct ScanningPulseIcon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
             let pulse = reduceMotion ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
             let beamPhase = reduceMotion ? 0.5 : elapsed.truncatingRemainder(dividingBy: 1.8) / 1.8
