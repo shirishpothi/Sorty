@@ -112,6 +112,7 @@ struct DuplicatesView: View {
                 .opacity(contentOpacity)
             }
         }
+        .frame(minWidth: 1040, minHeight: 700)
         .emptyStateWorkflowGradient(isVisible: isShowingEmptyContent)
         .navigationTitle("Duplicate Files")
         .alert("Move Duplicate Files to Trash?", isPresented: $showDeleteConfirmation) {
