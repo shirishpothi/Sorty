@@ -35,7 +35,6 @@ struct WatchedFoldersView: View {
 
                     emptyHeaderView
                         .padding(.horizontal, 32)
-                        .padding(.top, 24)
                         .animatedAppearance(delay: 0.03)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
