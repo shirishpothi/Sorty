@@ -627,13 +627,6 @@ struct DuplicatesHeaderNew: View {
                     .help("Detection Settings")
                     .disabled(manager.isScanning)
 
-                    Button(action: onSelectDirectory) {
-                        Label(showsFullControls ? "Change Folder" : "Folder", systemImage: "folder.badge.gearshape")
-                    }
-                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
-                    .help("Change folder")
-                    .disabled(manager.isScanning)
-
                     if !manager.allGroups.isEmpty && !manager.isScanning {
                         Menu {
                             Button { onBulkDelete(true) } label: {
