@@ -41,11 +41,14 @@ struct OrganizingFlightStageView: View {
     @State private var flightStep = 0
 
     private let dropTravel: CGFloat = 76
-    private let cardSize = CGSize(width: 28, height: 28)
+    private let cardSize = CGSize(width: 24, height: 24)
     private let bucketSize = CGSize(width: 56, height: 56)
 
     private var fileCardSize: CGSize {
-        prioritizesFilenames ? CGSize(width: 342, height: 64) : CGSize(width: 188, height: 42)
+        guard prioritizesFilenames else {
+            return CGSize(width: 188, height: 42)
+        }
+        return CGSize(width: 300, height: currentRenamedFileName == nil ? 44 : 56)
     }
 
     private var visibleSuggestions: [FolderSuggestion] {
@@ -107,10 +110,12 @@ struct OrganizingFlightStageView: View {
     // MARK: - Subviews
 
     private var fileCard: some View {
-        HStack(spacing: 10) {
-            AppKitImageView(image: currentFileIcon, size: cardSize)
+        HStack(spacing: 9) {
+            Image(nsImage: currentFileIcon)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
                 .frame(width: cardSize.width, height: cardSize.height)
-                .shadow(color: Color.black.opacity(0.16), radius: 4, x: 0, y: 2)
 
             if !currentFileName.isEmpty {
                 fileNameLabel
@@ -123,17 +128,16 @@ struct OrganizingFlightStageView: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 12)
         .frame(width: fileCardSize.width, height: fileCardSize.height)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(0.07))
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.065))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.09), lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.14), radius: 8, x: 0, y: 5)
     }
 
     private var fileNameLabel: some View {
@@ -187,7 +191,6 @@ struct OrganizingFlightStageView: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.vertical, 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityHidden(true)
     }
