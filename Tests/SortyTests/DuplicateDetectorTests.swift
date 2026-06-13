@@ -161,4 +161,45 @@ class DuplicateDetectorTests: XCTestCase {
         XCTAssertEqual(manager.hashedFileCount, 0)
         XCTAssertEqual(manager.hashCacheHitCount, 3)
     }
+
+    @MainActor
+    func testManagerPromotesSemanticCandidatesWithIdenticalContentToExactDuplicates() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicatePromotionTests-\(UUID().uuidString)", isDirectory: true)
+        let firstURL = directory.appendingPathComponent("proposal-v1.txt")
+        let secondURL = directory.appendingPathComponent("proposal-v2.txt")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("same proposal content".utf8).write(to: firstURL)
+        try Data("same proposal content".utf8).write(to: secondURL)
+
+        let files = [
+            FileItem(
+                path: firstURL.path,
+                name: "proposal-v1",
+                extension: "txt",
+                size: 21
+            ),
+            FileItem(
+                path: secondURL.path,
+                name: "proposal-v2",
+                extension: "txt",
+                size: 21
+            )
+        ]
+        var settings = DuplicateSettings()
+        settings.includeSemanticDuplicates = true
+        let manager = DuplicateDetectionManager()
+
+        await manager.scanForDuplicates(files: files, settings: settings)
+
+        XCTAssertEqual(manager.duplicateGroups.count, 1)
+        XCTAssertEqual(manager.duplicateGroups.first?.files.count, 2)
+        XCTAssertTrue(manager.semanticGroups.isEmpty)
+    }
 }

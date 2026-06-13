@@ -464,7 +464,7 @@ public class DuplicateDetectionManager: ObservableObject {
             return
         }
         
-        let groups = exactResult.groups
+        var groups = exactResult.groups
         duplicateGroups = groups
         
         // Step 3: Semantic duplicate detection (if enabled)
@@ -475,12 +475,28 @@ public class DuplicateDetectionManager: ObservableObject {
             let semanticDetector = SemanticDuplicateDetector(
                 similarityThreshold: settings.normalizedSemanticSimilarityThreshold
             )
-            semanticGroups = await semanticDetector.findSemanticDuplicates(in: semanticCandidates) { current, total, stage in
+            let detectedSemanticGroups = await semanticDetector.findSemanticDuplicates(in: semanticCandidates) { current, total, stage in
                 Task { @MainActor in
                     self.scanStage = stage
                     let semanticProgress = total > 0 ? Double(current) / Double(total) : 1
                     self.publishScanProgress(0.7 + semanticProgress * 0.3, force: current == total)
                 }
+            }
+            let promotedExactGroups = await promoteExactMatches(from: detectedSemanticGroups)
+            let promotedFileIDs = Set(promotedExactGroups.flatMap(\.files).map(\.id))
+            if !promotedExactGroups.isEmpty {
+                groups = mergeExactGroupsByHash(groups + promotedExactGroups)
+                duplicateGroups = groups
+            }
+            semanticGroups = detectedSemanticGroups.compactMap { group in
+                let remainingFiles = group.files.filter { !promotedFileIDs.contains($0.id) }
+                guard remainingFiles.count > 1 else { return nil }
+                return SemanticDuplicateGroup(
+                    groupType: group.groupType,
+                    files: remainingFiles,
+                    similarity: group.similarity,
+                    recommendation: group.recommendation
+                )
             }
         } else {
             semanticGroups = []
@@ -550,5 +566,44 @@ public class DuplicateDetectionManager: ObservableObject {
         lastProgressUpdate = now
         scanProgress = progress
         state = .scanning(progress: progress)
+    }
+
+    private func promoteExactMatches(from semanticGroups: [SemanticDuplicateGroup]) async -> [DuplicateGroup] {
+        var promotedGroups: [DuplicateGroup] = []
+
+        for group in semanticGroups {
+            let sameSizeBuckets = Dictionary(grouping: group.files.filter { !$0.isDirectory }, by: \.size)
+                .values
+                .filter { $0.count > 1 }
+
+            for files in sameSizeBuckets {
+                let exactResult = await detector.findExactDuplicates(in: Array(files))
+                promotedGroups.append(contentsOf: exactResult.groups)
+            }
+        }
+
+        return mergeExactGroupsByHash(promotedGroups)
+    }
+
+    private func mergeExactGroupsByHash(_ groups: [DuplicateGroup]) -> [DuplicateGroup] {
+        var filesByHash: [String: [UUID: FileItem]] = [:]
+        for group in groups {
+            for file in group.files {
+                filesByHash[group.hash, default: [:]][file.id] = file
+            }
+        }
+
+        return filesByHash
+            .compactMap { hash, filesById in
+                let files = filesById.values.sorted {
+                    if $0.displayName == $1.displayName {
+                        return $0.path < $1.path
+                    }
+                    return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+                }
+                guard files.count > 1 else { return nil }
+                return DuplicateGroup(hash: hash, files: files)
+            }
+            .sorted { $0.potentialSavings > $1.potentialSavings }
     }
 }

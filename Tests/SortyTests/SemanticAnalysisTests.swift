@@ -308,6 +308,38 @@ class SemanticDuplicateTests: XCTestCase {
         XCTAssertEqual(Set(groups[0].files.map(\.id)), Set(files.map(\.id)))
     }
 
+    func testSemanticDetectorBuildsTransitiveImageGroups() async {
+        let files = [
+            FileItem(
+                path: "/test/a.jpg",
+                name: "a",
+                extension: "jpg",
+                size: 100,
+                contentFingerprint: String(repeating: "0", count: 64)
+            ),
+            FileItem(
+                path: "/test/b.jpg",
+                name: "b",
+                extension: "jpg",
+                size: 100,
+                contentFingerprint: String(repeating: "0", count: 60) + String(repeating: "1", count: 4)
+            ),
+            FileItem(
+                path: "/test/c.jpg",
+                name: "c",
+                extension: "jpg",
+                size: 100,
+                contentFingerprint: String(repeating: "0", count: 56) + String(repeating: "1", count: 8)
+            )
+        ]
+
+        let detector = SemanticDuplicateDetector(similarityThreshold: 0.90)
+        let groups = await detector.findSemanticDuplicates(in: files)
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(Set(groups[0].files.map(\.id)), Set(files.map(\.id)))
+    }
+
     func testBurstDetectionDoesNotGroupUnrelatedSameSecondImages() async {
         let baseDate = Date()
         let files = [

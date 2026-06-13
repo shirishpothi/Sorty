@@ -251,9 +251,6 @@ public actor SemanticDuplicateDetector {
     // MARK: - Perceptual Hash Comparison
 
     private func findSimilarImages(in images: [FileItem]) async -> [SemanticDuplicateGroup] {
-        var groups: [SemanticDuplicateGroup] = []
-        var processedIds: Set<UUID> = []
-
         // Generate perceptual hashes for all images
         var imageHashes: [(file: FileItem, hash: String)] = []
 
@@ -267,40 +264,37 @@ public actor SemanticDuplicateDetector {
             }
         }
 
-        // Compare all pairs
+        var links: [(Int, Int, Int)] = []
         for i in 0..<imageHashes.count {
-            guard !processedIds.contains(imageHashes[i].file.id) else { continue }
-
-            var similarFiles: [FileItem] = [imageHashes[i].file]
-            var matchedDistances: [Int] = []
-
             for j in (i + 1)..<imageHashes.count {
-                guard !processedIds.contains(imageHashes[j].file.id) else { continue }
-
-                if let distance = imageHashes[i].hash.hammingDistance(to: imageHashes[j].hash),
-                   distance <= hammingThreshold {
-                    similarFiles.append(imageHashes[j].file)
-                    matchedDistances.append(distance)
-                    processedIds.insert(imageHashes[j].file.id)
+                guard let distance = imageHashes[i].hash.hammingDistance(to: imageHashes[j].hash),
+                      distance <= hammingThreshold else {
+                    continue
                 }
-            }
-
-            if similarFiles.count > 1 {
-                processedIds.insert(imageHashes[i].file.id)
-                let worstDistance = matchedDistances.max() ?? 0
-                let similarity = Self.similarityForHammingDistance(worstDistance, hashBits: Self.perceptualHashBitLength)
-                let recommendation = recommendForSimilarImages(similarFiles)
-
-                groups.append(SemanticDuplicateGroup(
-                    groupType: .nearIdenticalImages,
-                    files: similarFiles,
-                    similarity: similarity,
-                    recommendation: recommendation
-                ))
+                links.append((i, j, distance))
             }
         }
 
-        return groups
+        return connectedSemanticGroups(
+            itemCount: imageHashes.count,
+            links: links.map { ($0.0, $0.1) }
+        ) { indexes in
+            let files = indexes.map { imageHashes[$0].file }
+            let worstDistance = links
+                .filter { indexes.contains($0.0) && indexes.contains($0.1) }
+                .map(\.2)
+                .max() ?? 0
+            let similarity = Self.similarityForHammingDistance(
+                worstDistance,
+                hashBits: Self.perceptualHashBitLength
+            )
+            return SemanticDuplicateGroup(
+                groupType: .nearIdenticalImages,
+                files: files,
+                similarity: similarity,
+                recommendation: recommendForSimilarImages(files)
+            )
+        }
     }
 
     // MARK: - Resolution Variant Detection
@@ -421,15 +415,12 @@ public actor SemanticDuplicateDetector {
     }
 
     private func findSimilarByContent(_ documents: [FileItem], processedIds: Set<UUID>) async -> [SemanticDuplicateGroup] {
-        var groups: [SemanticDuplicateGroup] = []
         var localProcessed = processedIds
+        var links: [(Int, Int, Double)] = []
 
         for i in 0..<documents.count {
             guard !localProcessed.contains(documents[i].id),
                   let content1 = documents[i].semanticTextContent else { continue }
-
-            var similarFiles: [FileItem] = [documents[i]]
-            var lowestSimilarityInGroup = 1.0
 
             for j in (i + 1)..<documents.count {
                 guard !localProcessed.contains(documents[j].id),
@@ -437,23 +428,28 @@ public actor SemanticDuplicateDetector {
 
                 let similarity = calculateTextSimilarity(content1, content2)
                 if similarity >= similarityThreshold {
-                    similarFiles.append(documents[j])
-                    lowestSimilarityInGroup = min(lowestSimilarityInGroup, similarity)
-                    localProcessed.insert(documents[j].id)
+                    links.append((i, j, similarity))
                 }
             }
+        }
 
-            if similarFiles.count > 1 {
-                localProcessed.insert(documents[i].id)
-                let groupSimilarity = max(similarityThreshold, lowestSimilarityInGroup)
+        let groups = connectedSemanticGroups(
+            itemCount: documents.count,
+            links: links.map { ($0.0, $0.1) }
+        ) { indexes in
+            indexes.forEach { localProcessed.insert(documents[$0].id) }
+            let files = indexes.map { documents[$0] }
+            let groupSimilarity = links
+                .filter { indexes.contains($0.0) && indexes.contains($0.1) }
+                .map(\.2)
+                .min() ?? similarityThreshold
 
-                groups.append(SemanticDuplicateGroup(
-                    groupType: .similarDocuments,
-                    files: similarFiles,
-                    similarity: groupSimilarity,
-                    recommendation: .manualReview
-                ))
-            }
+            return SemanticDuplicateGroup(
+                groupType: .similarDocuments,
+                files: files,
+                similarity: max(similarityThreshold, groupSimilarity),
+                recommendation: .manualReview
+            )
         }
 
         return groups
@@ -814,6 +810,45 @@ public actor SemanticDuplicateDetector {
             similarity: min(first.similarity, second.similarity),
             recommendation: recommendation
         )
+    }
+
+    private func connectedSemanticGroups(
+        itemCount: Int,
+        links: [(Int, Int)],
+        makeGroup: (Set<Int>) -> SemanticDuplicateGroup
+    ) -> [SemanticDuplicateGroup] {
+        guard itemCount > 1, !links.isEmpty else { return [] }
+
+        var parent = Array(0..<itemCount)
+
+        func root(of index: Int) -> Int {
+            var current = index
+            while parent[current] != current {
+                current = parent[current]
+            }
+            return current
+        }
+
+        func union(_ first: Int, _ second: Int) {
+            let firstRoot = root(of: first)
+            let secondRoot = root(of: second)
+            guard firstRoot != secondRoot else { return }
+            parent[secondRoot] = firstRoot
+        }
+
+        for link in links {
+            union(link.0, link.1)
+        }
+
+        var indexesByRoot: [Int: Set<Int>] = [:]
+        for index in 0..<itemCount {
+            let itemRoot = root(of: index)
+            indexesByRoot[itemRoot, default: []].insert(index)
+        }
+
+        return indexesByRoot.values
+            .filter { $0.count > 1 }
+            .map(makeGroup)
     }
 }
 

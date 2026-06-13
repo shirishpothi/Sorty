@@ -277,7 +277,7 @@ struct DuplicatesView: View {
                 }
                 .listStyle(.sidebar)
             }
-            .frame(minWidth: 300, idealWidth: 360, maxWidth: 460)
+            .frame(minWidth: 320, idealWidth: 380, maxWidth: 500)
 
             if let group = appState.duplicateSelectedGroup {
                 UnifiedDuplicateGroupDetailView(
@@ -287,7 +287,7 @@ struct DuplicatesView: View {
                         showDeleteConfirmation = true
                     }
                 )
-                .frame(minWidth: 520, maxWidth: .infinity)
+                .frame(minWidth: 600, maxWidth: .infinity)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.left")
@@ -631,14 +631,21 @@ private struct DuplicatesResultsSidebarHeader: View {
             if showsStats {
                 DuplicatesNerdStatsStrip(manager: manager)
             }
+
+            if manager.semanticGroupCount > 0 {
+                Label("Cleanup All only removes exact duplicates.", systemImage: "checkmark.shield")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 
     private var summaryText: String {
-        let exact = "\(manager.exactGroupCount) exact"
-        let similar = "\(manager.semanticGroupCount) similar"
+        let exact = "\(manager.exactGroupCount) exact group\(manager.exactGroupCount == 1 ? "" : "s")"
+        let similar = "\(manager.semanticGroupCount) similarity match\(manager.semanticGroupCount == 1 ? "" : "es")"
         let recoverable = "\(manager.formattedSavings) safely recoverable"
         return [exact, similar, recoverable].joined(separator: " • ")
     }
@@ -779,7 +786,7 @@ struct UnifiedDuplicateGroupRow: View {
                         .truncationMode(.middle)
                         .help(group.displayName)
 
-                    Text(group.isExact ? "Exact" : "Similar")
+                    Text(group.isExact ? "Exact" : "Similarity")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(badgeColor)
                         .padding(.horizontal, 6)
@@ -807,10 +814,10 @@ struct UnifiedDuplicateGroupRow: View {
             }
             .layoutPriority(1)
 
-            Text(group.similarityPercentage ?? "100%")
+            Text(group.isExact ? "Exact" : (group.similarityPercentage ?? ""))
                 .font(.caption.monospacedDigit().weight(.semibold))
                 .foregroundStyle(badgeColor)
-                .frame(width: 42, alignment: .trailing)
+                .frame(width: 56, alignment: .trailing)
         }
         .padding(.vertical, 7)
         .frame(minHeight: 64)
@@ -1019,10 +1026,25 @@ struct UnifiedDuplicateGroupDetailView: View {
             }
 
             ViewThatFits(in: .horizontal) {
-                metricsRow
-                VStack(spacing: 8) {
-                    metricsRow
-                }
+                metricsGrid(columns: 3)
+                metricsGrid(columns: 1)
+            }
+
+            if !group.isExact {
+                Label(
+                    "Similarity matches are excluded from Cleanup All. Apply a recommendation only after review.",
+                    systemImage: "exclamationmark.triangle"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let recommendation = group.recommendation, recommendation == .manualReview {
+                Text("This group needs manual review before Sorty will choose files to remove.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Text(detailGuidance)
@@ -1039,8 +1061,10 @@ struct UnifiedDuplicateGroupDetailView: View {
         }
     }
 
-    private var metricsRow: some View {
-        HStack(spacing: 10) {
+    private func metricsGrid(columns: Int) -> some View {
+        let gridColumns = Array(repeating: GridItem(.flexible(minimum: 120), spacing: 10), count: columns)
+
+        return LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 10) {
             DuplicateMetricTile(
                 value: "\(group.files.count)", label: group.isExact ? "copies" : "versions",
                 color: .primary)
@@ -1049,7 +1073,7 @@ struct UnifiedDuplicateGroupDetailView: View {
                     fromByteCount: group.potentialSavings, countStyle: .file), label: "recoverable",
                 color: .green)
             DuplicateMetricTile(
-                value: group.similarityPercentage ?? "Exact",
+                value: group.isExact ? "100%" : (group.similarityPercentage ?? "Review"),
                 label: group.isExact ? "match" : "similarity",
                 color: group.isExact ? .orange : .blue)
         }
@@ -1244,6 +1268,25 @@ struct UnifiedFileDetailRow: View {
     }
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            horizontalLayout
+            verticalLayout
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    isRecommended ? Color.green.opacity(0.24) : Color.primary.opacity(0.07),
+                    lineWidth: 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var horizontalLayout: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
                 FileThumbnailView(url: fileURL, size: CGSize(width: 44, height: 44))
@@ -1260,99 +1303,133 @@ struct UnifiedFileDetailRow: View {
             }
             .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(file.displayName)
-                        .font(.headline)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    if let label = recommendation {
-                        Text(label)
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(.blue))
-                    }
-                }
-
-                Button {
-                    NSWorkspace.shared.selectFile(
-                        file.path,
-                        inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
-                } label: {
-                    HStack(spacing: 4) {
-                        AppKitImageView(
-                            image: NSWorkspace.shared.icon(
-                                forFile: fileURL.deletingLastPathComponent().path),
-                            size: CGSize(width: 12, height: 12)
-                        )
-                        .frame(width: 12, height: 12)
-                        Text(parentFolderName)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.secondary.opacity(0.1), in: Capsule())
-                    .foregroundStyle(.secondary)
-                }
-                .contentShape(Capsule())
-                .buttonStyle(.plain)
-                .help(
-                    "Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))"
-                )
-
-                HStack {
-                    Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
-                    if let date = file.creationDate {
-                        Text("•")
-                        Text(date.formatted(date: .abbreviated, time: .shortened))
-                    }
-                    if let pixels = file.totalPixels, pixels > 0 {
-                        Text("•")
-                        Text("\(formatPixels(pixels))")
-                            .foregroundStyle(.blue)
-                    }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
+            fileSummary
             .layoutPriority(1)
 
+            Spacer(minLength: 12)
             if !isRecommended {
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
-                        .frame(width: 18, height: 18)
-                }
-                .buttonStyle(.sortyBordered)
-                .controlSize(.small)
-                .help("Delete this duplicate")
-                .accessibilityLabel("Delete \(file.displayName)")
+                deleteButton
             } else {
-                Label("Keep", systemImage: "checkmark.circle.fill")
-                    .font(.caption.bold())
-                    .foregroundStyle(.green)
-                    .labelStyle(.titleAndIcon)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(.green.opacity(0.1), in: Capsule())
+                keepBadge
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .systemLiquidGlassBackground(cornerRadius: 12)
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    isRecommended ? Color.green.opacity(0.24) : Color.primary.opacity(0.07),
-                    lineWidth: 1)
+    }
+
+    private var verticalLayout: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                FileThumbnailView(url: fileURL, size: CGSize(width: 44, height: 44))
+                    .frame(width: 44, height: 44)
+                fileSummary
+            }
+
+            HStack {
+                if isRecommended {
+                    keepBadge
+                } else {
+                    deleteButton
+                }
+                Spacer()
+            }
         }
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var fileSummary: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(file.displayName)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let label = recommendation {
+                    Text(label)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.blue))
+                }
+            }
+
+            revealButton
+
+            ViewThatFits(in: .horizontal) {
+                fileMetadata
+                VStack(alignment: .leading, spacing: 2) {
+                    fileMetadata
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var revealButton: some View {
+        Button {
+            NSWorkspace.shared.selectFile(
+                file.path,
+                inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
+        } label: {
+            Label {
+                Text(parentFolderName)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } icon: {
+                AppKitImageView(
+                    image: NSWorkspace.shared.icon(
+                        forFile: fileURL.deletingLastPathComponent().path),
+                    size: CGSize(width: 12, height: 12)
+                )
+                .frame(width: 12, height: 12)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.secondary.opacity(0.1), in: Capsule())
+            .foregroundStyle(.secondary)
+        }
+        .contentShape(Capsule())
+        .buttonStyle(.plain)
+        .help("Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))")
+    }
+
+    private var fileMetadata: some View {
+        HStack(spacing: 5) {
+            Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
+            if let date = file.creationDate {
+                Text("•")
+                Text(date.formatted(date: .abbreviated, time: .shortened))
+            }
+            if let pixels = file.totalPixels, pixels > 0 {
+                Text("•")
+                Text("\(formatPixels(pixels))")
+                    .foregroundStyle(.blue)
+            }
+        }
+    }
+
+    private var deleteButton: some View {
+        Button(action: onDelete) {
+            Label("Remove", systemImage: "trash")
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.sortyBordered)
+        .controlSize(.small)
+        .foregroundStyle(.red)
+        .help("Delete this duplicate")
+        .accessibilityLabel("Delete \(file.displayName)")
+    }
+
+    private var keepBadge: some View {
+        Label("Keep", systemImage: "checkmark.circle.fill")
+            .font(.caption.bold())
+            .foregroundStyle(.green)
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(.green.opacity(0.1), in: Capsule())
     }
 
     private func formatPixels(_ pixels: Int) -> String {
