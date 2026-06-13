@@ -150,6 +150,10 @@ public struct MenuBarView: View {
                 openMainWindow()
             }
 
+            MenuBarButton(title: "Organise Folder", icon: "folder.badge.plus") {
+                openOrganizeFolderPicker()
+            }
+
             MenuBarButton(title: "View History", icon: "clock") {
                 openDestination(.history)
             }
@@ -160,28 +164,12 @@ public struct MenuBarView: View {
                 }
             }
 
-            MenuBarButton(title: "Learnings", icon: "brain") {
-                openDestination(.learnings(action: nil, project: nil))
-            }
-
             MenuBarButton(title: "Storage Locations", icon: "externaldrive.fill") {
                 openDestination(.storage(action: nil, path: nil))
             }
 
-            MenuBarButton(title: "Watched Folders", icon: "eye") {
+            MenuBarButton(title: "Watched Folders Settings", icon: "eye") {
                 openDestination(.watched(action: nil, path: nil))
-            }
-
-            if !watchedFoldersManager.folders.isEmpty {
-                Divider()
-                    .padding(.vertical, 2)
-
-                MenuBarButton(
-                    title: isAllPaused ? "Resume All" : "Pause All",
-                    icon: isAllPaused ? "play.fill" : "pause.fill"
-                ) {
-                    togglePauseAll()
-                }
             }
         }
     }
@@ -195,6 +183,13 @@ public struct MenuBarView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
                 .padding(.bottom, 4)
+
+            MenuBarButton(
+                title: isAllPaused ? "Resume All" : "Pause All",
+                icon: isAllPaused ? "play.fill" : "pause.fill"
+            ) {
+                togglePauseAll()
+            }
 
             ForEach(watchedFoldersManager.folders.prefix(5)) { folder in
                 WatchedFolderMenuItem(folder: folder)
@@ -225,15 +220,13 @@ public struct MenuBarView: View {
                     Image(systemName: "bell.badge.fill")
                         .frame(width: 16)
                     Text("Notifications")
+                    Spacer()
                 }
             }
             .toggleStyle(.switch)
             .controlSize(.small)
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
-
-            Divider()
-                .padding(.vertical, 4)
 
             Toggle(isOn: Binding(
                 get: { launchAtLogin },
@@ -316,19 +309,7 @@ public struct MenuBarView: View {
                 openSettings()
             }
 
-            MenuBarButton(title: "AI Provider Settings", icon: "cpu") {
-                openSettings(section: "provider")
-            }
-
-            MenuBarButton(title: "Automation Settings", icon: "bolt.circle") {
-                openSettings(section: "automation")
-            }
-
-            MenuBarButton(title: "Notification Settings", icon: "bell") {
-                openSettings(section: "notifications")
-            }
-
-            MenuBarButton(title: "Support the Developer", icon: "heart.fill") {
+            MenuBarButton(title: "Support the Developer", icon: "heart.fill", hoverIconColor: .red) {
                 openSupportDeveloper()
             }
 
@@ -357,6 +338,21 @@ public struct MenuBarView: View {
 
     private func openMainWindow() {
         openDestination(.open(path: nil))
+    }
+
+    private func openOrganizeFolderPicker() {
+        if MainWindowRouter.shared.post(name: .openOrganizeDirectoryPickerInMainWindow) {
+            MainWindowRouter.shared.activatePreferredWindow()
+            return
+        }
+
+        openDestination(.organize(path: nil, persona: nil, mode: .organize, autostart: false))
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            if MainWindowRouter.shared.post(name: .openOrganizeDirectoryPickerInMainWindow) {
+                MainWindowRouter.shared.activatePreferredWindow()
+            }
+        }
     }
 
     private func openSettings(section: String? = nil) {
@@ -393,6 +389,7 @@ private struct MenuBarButton: View {
     let title: String
     var icon: String? = nil
     var customImage: Image? = nil
+    var hoverIconColor: Color? = nil
     let action: () -> Void
 
     @State private var isHovered = false
@@ -412,12 +409,13 @@ private struct MenuBarButton: View {
                 } else if let icon = icon {
                     Image(systemName: icon)
                         .frame(width: 16)
+                        .foregroundStyle(isHovered ? (hoverIconColor ?? .primary) : .primary)
                 }
                 Text(title)
                 Spacer()
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)
@@ -517,7 +515,7 @@ private struct WatchedFolderMenuItem: View {
                     .opacity(isHovered ? 1 : 0)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.1) : Color.clear)

@@ -143,6 +143,11 @@ public struct ContentView: View {
                 openDirectoryPicker()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openOrganizeDirectoryPickerInMainWindow)) { notification in
+            guard notification.targetsWindowSession(appState.windowSessionID) else { return }
+            appState.currentView = .organize
+            appState.showDirectoryPicker = true
+        }
         .onAppear {
             installCommandKeyMonitorIfNeeded()
         }

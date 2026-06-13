@@ -9,6 +9,7 @@ public enum WindowRoutingUserInfoKey {
 public extension Notification.Name {
     static let routeDeeplinkInMainWindow = Notification.Name("SortyRouteDeeplinkInMainWindow")
     static let presentSteeringPromptsInMainWindow = Notification.Name("SortyPresentSteeringPromptsInMainWindow")
+    static let openOrganizeDirectoryPickerInMainWindow = Notification.Name("SortyOpenOrganizeDirectoryPickerInMainWindow")
 }
 
 public extension Notification {
