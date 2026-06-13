@@ -20,24 +20,32 @@ struct ExclusionRulesView: View {
     @State private var newNLException = ""
     @State private var isImprovingException = false
 
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isSearching: Bool {
+        !trimmedSearchText.isEmpty
+    }
+
     private var filteredRules: [ExclusionRule] {
-        if searchText.isEmpty {
+        if !isSearching {
             return rulesManager.rules
         }
         return rulesManager.rules.filter {
-            $0.displayDescription.localizedCaseInsensitiveContains(searchText) ||
-            $0.type.rawValue.localizedCaseInsensitiveContains(searchText)
+            $0.displayDescription.localizedCaseInsensitiveContains(trimmedSearchText)
+                || $0.type.rawValue.localizedCaseInsensitiveContains(trimmedSearchText)
         }
     }
-    
+
     private var groupedRules: [(String, [ExclusionRule])] {
         let groups: [(String, [ExclusionRuleType])] = [
             ("Pattern Rules", [.fileExtension, .fileName, .folderName, .pathContains, .regex]),
             ("Size & Date", [.fileSize, .creationDate, .modificationDate]),
             ("System Rules", [.hiddenFiles, .systemFiles, .fileType]),
-            ("Custom", [.customScript])
+            ("Custom", [.customScript]),
         ]
-        
+
         return groups.compactMap { (title, types) in
             let rules = filteredRules.filter { types.contains($0.type) }
             return rules.isEmpty ? nil : (title, rules)
@@ -46,22 +54,23 @@ struct ExclusionRulesView: View {
 
     private var filteredLearningExclusionPatterns: [String] {
         let patterns = learningsManager.currentProfile?.learningExclusionPatterns ?? []
-        guard !searchText.isEmpty else { return patterns }
-        return patterns.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        guard isSearching else { return patterns }
+        return patterns.filter { $0.localizedCaseInsensitiveContains(trimmedSearchText) }
     }
 
     private var filteredNaturalLanguageExceptions: [(index: Int, exception: String)] {
         let exceptions = rulesManager.naturalLanguageExceptions.enumerated().map {
             (index: $0.offset, exception: $0.element)
         }
-        guard !searchText.isEmpty else { return exceptions }
-        return exceptions.filter { $0.exception.localizedCaseInsensitiveContains(searchText) }
+        guard isSearching else { return exceptions }
+        return exceptions.filter {
+            $0.exception.localizedCaseInsensitiveContains(trimmedSearchText)
+        }
     }
 
     private var hasSearchResults: Bool {
-        !groupedRules.isEmpty ||
-        !filteredLearningExclusionPatterns.isEmpty ||
-        !filteredNaturalLanguageExceptions.isEmpty
+        !groupedRules.isEmpty || !filteredLearningExclusionPatterns.isEmpty
+            || !filteredNaturalLanguageExceptions.isEmpty
     }
 
     var body: some View {
@@ -100,25 +109,25 @@ struct ExclusionRulesView: View {
                                 .animatedAppearance(delay: Double(index) * 0.05)
                             }
 
-                            if !hasSearchResults && !searchText.isEmpty {
+                            if !hasSearchResults && isSearching {
                                 VStack(spacing: 12) {
                                     Image(systemName: "magnifyingglass")
                                         .font(.title)
                                         .foregroundStyle(.secondary)
-                                    Text("No rules match '\(searchText)'")
+                                    Text("No rules match '\(trimmedSearchText)'")
                                         .foregroundStyle(.secondary)
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 40)
                             }
 
-                            if searchText.isEmpty || !filteredLearningExclusionPatterns.isEmpty {
+                            if !isSearching || !filteredLearningExclusionPatterns.isEmpty {
                                 learningExclusionsCard
                                     .animatedAppearance(delay: 0.12)
                             }
 
                             // Natural language exceptions
-                            if searchText.isEmpty || !filteredNaturalLanguageExceptions.isEmpty {
+                            if !isSearching || !filteredNaturalLanguageExceptions.isEmpty {
                                 naturalLanguageExceptionsCard
                             }
                         }
@@ -153,7 +162,7 @@ struct ExclusionRulesView: View {
             }
         }
     }
-    
+
     private var headerView: some View {
         HStack {
             HStack(spacing: 12) {
@@ -164,32 +173,34 @@ struct ExclusionRulesView: View {
                         appState.openSettingsWindow(section: .rules)
                     }
                 }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                Text("Exclusion Rules")
-                    .font(.title2)
-                    .fontWeight(.semibold)
 
-                HStack(spacing: 8) {
-                    Text("\(rulesManager.enabledRulesCount) active")
-                        .foregroundStyle(.green)
-                    Text("•")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Exclusion Rules")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+
+                    HStack(spacing: 8) {
+                        Text("\(rulesManager.enabledRulesCount) active")
+                            .foregroundStyle(.green)
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Text(
+                            "\(rulesManager.rules.count - rulesManager.enabledRulesCount) disabled"
+                        )
                         .foregroundStyle(.secondary)
-                    Text("\(rulesManager.rules.count - rulesManager.enabledRulesCount) disabled")
-                        .foregroundStyle(.secondary)
-                    Text("•")
-                        .foregroundStyle(.secondary)
-                    Text("Also blocks learnings")
-                        .foregroundStyle(.orange)
-                }
-                .font(.caption)
-                .contentTransition(.numericText())
+                        Text("•")
+                            .foregroundStyle(.secondary)
+                        Text("Also blocks learnings")
+                            .foregroundStyle(.orange)
+                    }
+                    .font(.caption)
+                    .contentTransition(.numericText())
                 }
             }
             .animatedAppearance(delay: 0.05)
 
             Spacer()
-            
+
             if !rulesManager.rules.isEmpty {
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -224,14 +235,16 @@ struct ExclusionRulesView: View {
                 Text("Exclusion Rules")
                     .font(.largeTitle.bold())
 
-                Text("Keep protected files, folders, and patterns out of organization and learnings")
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Keep protected files, folders, and patterns out of organization and learnings"
+                )
+                .foregroundStyle(.secondary)
             }
 
             Spacer()
         }
     }
-    
+
     // MARK: - Natural Language Exceptions
 
     private var learningExclusionsCard: some View {
@@ -244,7 +257,9 @@ struct ExclusionRulesView: View {
 
                     Spacer()
 
-                    if let patterns = learningsManager.currentProfile?.learningExclusionPatterns, !patterns.isEmpty {
+                    if let patterns = learningsManager.currentProfile?.learningExclusionPatterns,
+                        !patterns.isEmpty
+                    {
                         Button {
                             presentLearningExclusionImporter()
                         } label: {
@@ -270,11 +285,13 @@ struct ExclusionRulesView: View {
                             .accessibilityHidden(true)
                         Text("No folders excluded")
                             .font(.subheadline.bold())
-                        Text("Exclude folders that should still be organized but shouldn't teach Sorty anything.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 340)
+                        Text(
+                            "Exclude folders that should still be organized but shouldn't teach Sorty anything."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 340)
                         Button {
                             presentLearningExclusionImporter()
                         } label: {
@@ -317,7 +334,10 @@ struct ExclusionRulesView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.purple)
-                    .disabled(newNLException.trimmingCharacters(in: .whitespaces).isEmpty || isImprovingException)
+                    .disabled(
+                        newNLException.trimmingCharacters(in: .whitespaces).isEmpty
+                            || isImprovingException
+                    )
                     .help("Refine with AI")
 
                     Button("Add") {
@@ -382,9 +402,12 @@ struct ExclusionRulesView: View {
                 for url in urls {
                     let hasScopedAccess = url.startAccessingSecurityScopedResource()
                     defer { if hasScopedAccess { url.stopAccessingSecurityScopedResource() } }
-                    let before = learningsManager.currentProfile?.learningExclusionPatterns.count ?? 0
+                    let before =
+                        learningsManager.currentProfile?.learningExclusionPatterns.count ?? 0
                     await learningsManager.addLearningExclusion(url.path)
-                    if (learningsManager.currentProfile?.learningExclusionPatterns.count ?? 0) > before {
+                    if (learningsManager.currentProfile?.learningExclusionPatterns.count ?? 0)
+                        > before
+                    {
                         addedCount += 1
                     }
                 }
@@ -418,8 +441,10 @@ struct ExclusionRulesView: View {
         do {
             let client = try AIClientFactory.createClient(config: settingsViewModel.config)
             let improved = try await client.generateText(
-                prompt: "Improve this file exclusion rule to be more precise and comprehensive: \"\(original)\"\n\nReturn only the improved rule text, nothing else. Keep it concise (under 200 characters).",
-                systemPrompt: "You are a file organization expert. Refine the natural language exclusion rule to be clearer and more specific about which files should be excluded from organization."
+                prompt:
+                    "Improve this file exclusion rule to be more precise and comprehensive: \"\(original)\"\n\nReturn only the improved rule text, nothing else. Keep it concise (under 200 characters).",
+                systemPrompt:
+                    "You are a file organization expert. Refine the natural language exclusion rule to be clearer and more specific about which files should be excluded from organization."
             )
             let trimmed = improved.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
@@ -446,18 +471,21 @@ struct EmptyExclusionRulesView: View {
                 .foregroundStyle(.secondary)
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
 
             VStack(spacing: 8) {
                 Text("No Exclusion Rules")
                     .font(.title3)
                     .fontWeight(.semibold)
 
-                Text("Add rules to exclude certain files or folders from organization. Excluded items also won't generate learnings.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 360)
+                Text(
+                    "Add rules to exclude certain files or folders from organization. Excluded items also won't generate learnings."
+                )
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
             }
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
@@ -492,11 +520,11 @@ struct RuleExamplePill: View {
     var useSystemFolderIcon: Bool = false
     let action: () -> Void
     @State private var isHovered = false
-    
+
     private static let folderIcon: NSImage = {
         NSWorkspace.shared.icon(forFile: "/tmp")
     }()
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
@@ -535,9 +563,9 @@ struct RuleGroupCard: View {
     let title: String
     let rules: [ExclusionRule]
     @ObservedObject var rulesManager: ExclusionRulesManager
-    
+
     @State private var isExpanded = true
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
@@ -551,7 +579,7 @@ struct RuleGroupCard: View {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    
+
                     Text("\(rules.count)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -559,9 +587,9 @@ struct RuleGroupCard: View {
                         .padding(.vertical, 2)
                         .background(Color.secondary.opacity(0.1))
                         .clipShape(Capsule())
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -572,15 +600,15 @@ struct RuleGroupCard: View {
                 .padding(.vertical, 12)
             }
             .buttonStyle(.plain)
-            
+
             if isExpanded {
                 Divider()
                     .padding(.horizontal, 16)
-                
+
                 VStack(spacing: 0) {
                     ForEach(rules) { rule in
                         ExclusionRuleRow(rule: rule, rulesManager: rulesManager)
-                        
+
                         if rule.id != rules.last?.id {
                             Divider()
                                 .padding(.leading, 52)
@@ -599,7 +627,7 @@ struct ExclusionRuleRow: View {
     let rule: ExclusionRule
     @ObservedObject var rulesManager: ExclusionRulesManager
     @State private var isHovered = false
-    
+
     private static let systemFolderIcon: NSImage = {
         NSWorkspace.shared.icon(forFile: "/tmp")
     }()
@@ -618,7 +646,7 @@ struct ExclusionRuleRow: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                         .foregroundStyle(rule.isEnabled ? .primary : .secondary)
-                    
+
                     if rule.isBuiltIn {
                         Text("Built-in")
                             .font(.caption2)
@@ -647,7 +675,7 @@ struct ExclusionRuleRow: View {
             }
 
             Spacer()
-            
+
             if isHovered {
                 Button {
                     HapticFeedbackManager.shared.tap()
@@ -663,19 +691,25 @@ struct ExclusionRuleRow: View {
                 .transition(.scale.combined(with: .opacity))
             }
 
-            Toggle("", isOn: Binding(
-                get: { rule.isEnabled },
-                set: { newValue in
-                    HapticFeedbackManager.shared.selection()
-                    var updatedRule = rule
-                    updatedRule.isEnabled = newValue
-                    rulesManager.updateRule(updatedRule)
-                }
-            ))
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { rule.isEnabled },
+                    set: { newValue in
+                        HapticFeedbackManager.shared.selection()
+                        var updatedRule = rule
+                        updatedRule.isEnabled = newValue
+                        rulesManager.updateRule(updatedRule)
+                    }
+                )
+            )
             .toggleStyle(.switch)
             .controlSize(.small)
             .labelsHidden()
-            .accessibilityLabel(rule.isEnabled ? "Disable rule: \(rule.displayDescription)" : "Enable rule: \(rule.displayDescription)")
+            .accessibilityLabel(
+                rule.isEnabled
+                    ? "Disable rule: \(rule.displayDescription)"
+                    : "Enable rule: \(rule.displayDescription)")
         }
         .contentShape(Rectangle())
         .padding(.horizontal, 16)
@@ -701,7 +735,7 @@ struct ExclusionRuleRow: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private var ruleIcon: some View {
         if rule.type == .folderName {
@@ -734,7 +768,7 @@ struct ExclusionRuleRow: View {
         case .customScript: return "applescript"
         }
     }
-    
+
     private func colorForType(_ type: ExclusionRuleType) -> Color {
         switch type {
         case .fileExtension, .fileName, .folderName, .pathContains, .regex:
@@ -764,11 +798,11 @@ struct AddExclusionRuleView: View {
     @State private var testInput: String = ""
     @State private var isMatch: Bool = false
     @State private var appeared = false
-    
+
     private let ruleCategories: [(String, [ExclusionRuleType])] = [
         ("Pattern", [.fileExtension, .fileName, .folderName, .pathContains, .regex]),
         ("Size & Date", [.fileSize, .creationDate, .modificationDate]),
-        ("System", [.hiddenFiles, .systemFiles, .fileType])
+        ("System", [.hiddenFiles, .systemFiles, .fileType]),
     ]
 
     var body: some View {
@@ -809,20 +843,22 @@ struct AddExclusionRuleView: View {
                         Text("Rule Type")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        
+
                         ForEach(ruleCategories, id: \.0) { category in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(category.0)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                
+
                                 FlowLayout(spacing: 8) {
                                     ForEach(category.1, id: \.self) { type in
                                         RuleTypeChip(
                                             type: type,
                                             isSelected: selectedType == type
                                         ) {
-                                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                            withAnimation(
+                                                .spring(response: 0.25, dampingFraction: 0.8)
+                                            ) {
                                                 selectedType = type
                                             }
                                             HapticFeedbackManager.shared.selection()
@@ -834,24 +870,24 @@ struct AddExclusionRuleView: View {
                     }
                     .padding(16)
                     .systemLiquidGlassBackground(cornerRadius: 12)
-                    
+
                     // Configuration
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Configuration")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        
+
                         ruleConfigurationView
                     }
                     .padding(16)
                     .systemLiquidGlassBackground(cornerRadius: 12)
-                    
+
                     // Description
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Description (optional)")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        
+
                         TextField("e.g., Skip large media files", text: $description)
                             .textFieldStyle(.roundedBorder)
                     }
@@ -865,12 +901,14 @@ struct AddExclusionRuleView: View {
                                 Text("Test Rule")
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                
+
                                 Spacer()
-                                
+
                                 if !testInput.isEmpty {
                                     HStack(spacing: 4) {
-                                        Image(systemName: isMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                        Image(
+                                            systemName: isMatch
+                                                ? "checkmark.circle.fill" : "xmark.circle.fill")
                                         Text(isMatch ? "Matches" : "No match")
                                     }
                                     .font(.caption)
@@ -878,7 +916,7 @@ struct AddExclusionRuleView: View {
                                     .transition(.scale.combined(with: .opacity))
                                 }
                             }
-                            
+
                             TextField(testPlaceholder, text: $testInput)
                                 .textFieldStyle(.roundedBorder)
                                 .onChange(of: testInput) { _, _ in checkMatch() }
@@ -889,7 +927,7 @@ struct AddExclusionRuleView: View {
                         .systemLiquidGlassBackground(cornerRadius: 12)
                         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isMatch)
                     }
-                    
+
                     // Help Text
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle")
@@ -913,7 +951,7 @@ struct AddExclusionRuleView: View {
             }
         }
     }
-    
+
     @ViewBuilder
     private var ruleConfigurationView: some View {
         switch selectedType {
@@ -922,10 +960,10 @@ struct AddExclusionRuleView: View {
                 TextField("Size", value: $numericValue, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 100)
-                
+
                 Text("MB")
                     .foregroundStyle(.secondary)
-                
+
                 Picker("", selection: $comparisonGreater) {
                     Text("Larger than").tag(true)
                     Text("Smaller than").tag(false)
@@ -933,13 +971,13 @@ struct AddExclusionRuleView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 200)
             }
-            
+
         case .creationDate, .modificationDate:
             HStack(spacing: 12) {
                 TextField("Days", value: $numericValue, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 80)
-                
+
                 Text("days ago")
                     .foregroundStyle(.secondary)
 
@@ -961,9 +999,11 @@ struct AddExclusionRuleView: View {
                 }
                 .pickerStyle(.menu)
 
-                Text("Includes: \(selectedFileTypeCategory.extensions.prefix(5).joined(separator: ", "))\(selectedFileTypeCategory.extensions.count > 5 ? "..." : "")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Text(
+                    "Includes: \(selectedFileTypeCategory.extensions.prefix(5).joined(separator: ", "))\(selectedFileTypeCategory.extensions.count > 5 ? "..." : "")"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
         case .hiddenFiles, .systemFiles:
@@ -983,14 +1023,14 @@ struct AddExclusionRuleView: View {
             VStack(alignment: .leading, spacing: 6) {
                 TextField("Pattern", text: $pattern)
                     .textFieldStyle(.roundedBorder)
-                
+
                 Text(patternHint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
     }
-    
+
     private var patternHint: String {
         switch selectedType {
         case .fileExtension: return "Enter extension without dot (e.g., 'txt', 'pdf')"
@@ -1021,8 +1061,11 @@ struct AddExclusionRuleView: View {
             return
         }
 
-        let fileName = testInput.contains(".") ? String(testInput.split(separator: ".").dropLast().joined(separator: ".")) : testInput
-        let fileExtension = testInput.contains(".") ? String(testInput.split(separator: ".").last ?? "") : ""
+        let fileName =
+            testInput.contains(".")
+            ? String(testInput.split(separator: ".").dropLast().joined(separator: ".")) : testInput
+        let fileExtension =
+            testInput.contains(".") ? String(testInput.split(separator: ".").last ?? "") : ""
 
         let file = FileItem(
             path: "/path/to/\(testInput)",
@@ -1060,7 +1103,7 @@ struct AddExclusionRuleView: View {
 
     private func addRule() {
         var rule: ExclusionRule
-        
+
         switch selectedType {
         case .fileSize, .creationDate, .modificationDate:
             rule = ExclusionRule(
@@ -1115,7 +1158,7 @@ struct RuleTypeChip: View {
     let type: ExclusionRuleType
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
@@ -1126,13 +1169,15 @@ struct RuleTypeChip: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.1))
+            .background(
+                isSelected ? SortyDesignSystem.Colors.resolvedAccent : Color.secondary.opacity(0.1)
+            )
             .foregroundColor(isSelected ? .white : .primary)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }
-    
+
     private func iconForType(_ type: ExclusionRuleType) -> String {
         switch type {
         case .fileExtension: return "doc.badge.gearshape"
