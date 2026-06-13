@@ -277,7 +277,7 @@ struct DuplicatesView: View {
                 }
                 .listStyle(.sidebar)
             }
-            .frame(minWidth: 320, idealWidth: 380, maxWidth: 500)
+            .frame(minWidth: 260, idealWidth: 340, maxWidth: 420)
 
             if let group = appState.duplicateSelectedGroup {
                 UnifiedDuplicateGroupDetailView(
@@ -287,7 +287,7 @@ struct DuplicatesView: View {
                         showDeleteConfirmation = true
                     }
                 )
-                .frame(minWidth: 600, maxWidth: .infinity)
+                .frame(minWidth: 360, maxWidth: .infinity)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.left")
@@ -1000,8 +1000,8 @@ struct UnifiedDuplicateGroupDetailView: View {
                         )
                     }
                 }
-                .padding(18)
-                .frame(maxWidth: 860, alignment: .leading)
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(NSColor.windowBackgroundColor).opacity(0.35))
@@ -1009,30 +1009,22 @@ struct UnifiedDuplicateGroupDetailView: View {
     }
 
     private var groupOverview: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 12) {
-                    overviewTitle
-
-                    Spacer(minLength: 12)
-
-                    primaryActionButton
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    overviewTitle
-                    primaryActionButton
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                overviewTitle
+                Spacer(minLength: 8)
             }
 
-            ViewThatFits(in: .horizontal) {
-                metricsGrid(columns: 3)
-                metricsGrid(columns: 1)
+            HStack {
+                primaryActionButton
+                Spacer(minLength: 0)
             }
+
+            metricsGrid
 
             if !group.isExact {
                 Label(
-                    "Similarity matches are excluded from Cleanup All. Apply a recommendation only after review.",
+                    "Excluded from Cleanup All. Review before applying a recommendation.",
                     systemImage: "exclamationmark.triangle"
                 )
                 .font(.caption)
@@ -1061,10 +1053,16 @@ struct UnifiedDuplicateGroupDetailView: View {
         }
     }
 
-    private func metricsGrid(columns: Int) -> some View {
-        let gridColumns = Array(repeating: GridItem(.flexible(minimum: 120), spacing: 10), count: columns)
-
-        return LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 10) {
+    private var metricsGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(minimum: 92), spacing: 8),
+                GridItem(.flexible(minimum: 92), spacing: 8),
+                GridItem(.flexible(minimum: 92), spacing: 8)
+            ],
+            alignment: .leading,
+            spacing: 8
+        ) {
             DuplicateMetricTile(
                 value: "\(group.files.count)", label: group.isExact ? "copies" : "versions",
                 color: .primary)
@@ -1127,7 +1125,6 @@ struct UnifiedDuplicateGroupDetailView: View {
             .buttonStyle(.onboardingPill)
             .tint(.blue)
             .controlSize(.regular)
-            .fixedSize(horizontal: true, vertical: false)
             .help(recommendation.description)
         } else {
             Button {
@@ -1143,7 +1140,6 @@ struct UnifiedDuplicateGroupDetailView: View {
             .buttonStyle(.onboardingPill)
             .tint(.red)
             .controlSize(.regular)
-            .fixedSize(horizontal: true, vertical: false)
             .help("Keep the first file and clean up the rest.")
         }
     }
@@ -1234,10 +1230,10 @@ private struct DuplicateMetricTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(value)
-                .font(.headline.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .minimumScaleFactor(0.65)
 
             Text(label)
                 .font(.caption2)
@@ -1248,7 +1244,7 @@ private struct DuplicateMetricTile: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .systemLiquidGlassBackground(cornerRadius: 10)
-        .frame(minHeight: 52)
+        .frame(minHeight: 50)
         .accessibilityElement(children: .combine)
     }
 }
@@ -1268,10 +1264,7 @@ struct UnifiedFileDetailRow: View {
     }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            horizontalLayout
-            verticalLayout
-        }
+        verticalLayout
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1286,40 +1279,10 @@ struct UnifiedFileDetailRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var horizontalLayout: some View {
-        HStack(alignment: .center, spacing: 12) {
-            ZStack(alignment: .bottomTrailing) {
-                FileThumbnailView(url: fileURL, size: CGSize(width: 44, height: 44))
-
-                if isRecommended {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
-                        .font(.system(size: 10))
-                        .padding(2)
-                        .background(Circle().fill(.white))
-                        .offset(x: 4, y: 4)
-                        .help("Recommended to Keep")
-                }
-            }
-            .frame(width: 44, height: 44)
-
-            fileSummary
-            .layoutPriority(1)
-
-            Spacer(minLength: 12)
-            if !isRecommended {
-                deleteButton
-            } else {
-                keepBadge
-            }
-        }
-    }
-
     private var verticalLayout: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
-                FileThumbnailView(url: fileURL, size: CGSize(width: 44, height: 44))
-                    .frame(width: 44, height: 44)
+                thumbnail
                 fileSummary
             }
 
@@ -1332,6 +1295,24 @@ struct UnifiedFileDetailRow: View {
                 Spacer()
             }
         }
+    }
+
+    private var thumbnail: some View {
+        ZStack(alignment: .bottomTrailing) {
+            FileThumbnailView(url: fileURL, size: CGSize(width: 44, height: 44))
+
+            if isRecommended {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(.yellow)
+                    .font(.caption2)
+                    .padding(2)
+                    .background(Circle().fill(.white))
+                    .offset(x: 4, y: 4)
+                    .help("Recommended to Keep")
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(width: 44, height: 44)
     }
 
     private var fileSummary: some View {
@@ -1355,12 +1336,7 @@ struct UnifiedFileDetailRow: View {
 
             revealButton
 
-            ViewThatFits(in: .horizontal) {
-                fileMetadata
-                VStack(alignment: .leading, spacing: 2) {
-                    fileMetadata
-                }
-            }
+            fileMetadata
             .font(.caption2)
             .foregroundStyle(.secondary)
         }
@@ -1396,7 +1372,18 @@ struct UnifiedFileDetailRow: View {
     }
 
     private var fileMetadata: some View {
-        HStack(spacing: 5) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 5) {
+                metadataContent
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                metadataContent
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var metadataContent: some View {
             Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
             if let date = file.creationDate {
                 Text("•")
@@ -1407,7 +1394,6 @@ struct UnifiedFileDetailRow: View {
                 Text("\(formatPixels(pixels))")
                     .foregroundStyle(.blue)
             }
-        }
     }
 
     private var deleteButton: some View {
