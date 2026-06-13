@@ -60,8 +60,8 @@ public struct DuplicateSettings: Codable, Sendable {
         excludeExtensions: [String] = [".DS_Store", ".localized"],
         defaultKeepStrategy: KeepStrategy = .newest,
         enableSafeDeletion: Bool = true,
-        autoStartScan: Bool = false,
-        includeSemanticDuplicates: Bool = false,
+        autoStartScan: Bool = true,
+        includeSemanticDuplicates: Bool = true,
         semanticSimilarityThreshold: Double = DuplicateSettings.defaultSemanticSimilarityThreshold
     ) {
         self.comparisonMethod = comparisonMethod
@@ -134,13 +134,25 @@ public class DuplicateSettingsManager: ObservableObject {
     
     private let userDefaults = UserDefaults.standard
     private let storageKey = "duplicateSettings"
+
+    private enum OverrideKey {
+        static let comparisonMethod = "duplicates.comparisonMethod"
+        static let minimumFileSizeMB = "duplicates.minimumFileSizeMB"
+        static let maximumScanDepth = "duplicates.maximumScanDepth"
+        static let includeExtensions = "duplicates.includeExtensions"
+        static let excludeExtensions = "duplicates.excludeExtensions"
+        static let autoStartScan = "duplicates.autoStartScan"
+        static let semanticMatching = "duplicates.semanticMatching"
+        static let semanticThreshold = "duplicates.semanticThreshold"
+        static let safeDeletion = "duplicates.safeDeletion"
+    }
     
     public init() {
         if let data = userDefaults.data(forKey: storageKey),
            let decoded = try? JSONDecoder().decode(DuplicateSettings.self, from: data) {
-            self.settings = Self.normalize(decoded)
+            self.settings = Self.normalize(Self.applyingOverrides(to: decoded, defaults: userDefaults))
         } else {
-            self.settings = DuplicateSettings()
+            self.settings = Self.normalize(Self.applyingOverrides(to: DuplicateSettings(), defaults: userDefaults))
         }
         setupNotificationObservers()
     }
@@ -159,6 +171,7 @@ public class DuplicateSettingsManager: ObservableObject {
     }
     
     public func reset() {
+        Self.allOverrideKeys.forEach(userDefaults.removeObject(forKey:))
         settings = DuplicateSettings()
         save()
     }
@@ -167,5 +180,72 @@ public class DuplicateSettingsManager: ObservableObject {
         var normalized = settings
         normalized.semanticSimilarityThreshold = settings.normalizedSemanticSimilarityThreshold
         return normalized
+    }
+
+    private static func applyingOverrides(to settings: DuplicateSettings, defaults: UserDefaults) -> DuplicateSettings {
+        var overridden = settings
+        let recommended = DuplicateSettings()
+
+        overridden.comparisonMethod = recommended.comparisonMethod
+        overridden.minFileSize = recommended.minFileSize
+        overridden.maxScanDepth = recommended.maxScanDepth
+        overridden.includeExtensions = recommended.includeExtensions
+        overridden.excludeExtensions = recommended.excludeExtensions
+        overridden.enableSafeDeletion = recommended.enableSafeDeletion
+        overridden.autoStartScan = recommended.autoStartScan
+        overridden.includeSemanticDuplicates = recommended.includeSemanticDuplicates
+        overridden.semanticSimilarityThreshold = recommended.semanticSimilarityThreshold
+
+        if let rawMethod = defaults.string(forKey: OverrideKey.comparisonMethod),
+           let method = ComparisonMethod(rawValue: rawMethod) {
+            overridden.comparisonMethod = method
+        }
+        if defaults.object(forKey: OverrideKey.minimumFileSizeMB) != nil {
+            overridden.minFileSize = Int64(max(0, defaults.double(forKey: OverrideKey.minimumFileSizeMB)) * 1_048_576)
+        }
+        if defaults.object(forKey: OverrideKey.maximumScanDepth) != nil {
+            overridden.maxScanDepth = defaults.integer(forKey: OverrideKey.maximumScanDepth)
+        }
+        if let extensions = defaults.string(forKey: OverrideKey.includeExtensions) {
+            overridden.includeExtensions = parsedExtensions(extensions)
+        }
+        if let extensions = defaults.string(forKey: OverrideKey.excludeExtensions) {
+            overridden.excludeExtensions = parsedExtensions(extensions)
+        }
+        if defaults.object(forKey: OverrideKey.autoStartScan) != nil {
+            overridden.autoStartScan = defaults.bool(forKey: OverrideKey.autoStartScan)
+        }
+        if defaults.object(forKey: OverrideKey.semanticMatching) != nil {
+            overridden.includeSemanticDuplicates = defaults.bool(forKey: OverrideKey.semanticMatching)
+        }
+        if defaults.object(forKey: OverrideKey.semanticThreshold) != nil {
+            overridden.semanticSimilarityThreshold = defaults.double(forKey: OverrideKey.semanticThreshold)
+        }
+        if defaults.object(forKey: OverrideKey.safeDeletion) != nil {
+            overridden.enableSafeDeletion = defaults.bool(forKey: OverrideKey.safeDeletion)
+        }
+
+        return overridden
+    }
+
+    private static func parsedExtensions(_ value: String) -> [String] {
+        value
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static var allOverrideKeys: [String] {
+        [
+            OverrideKey.comparisonMethod,
+            OverrideKey.minimumFileSizeMB,
+            OverrideKey.maximumScanDepth,
+            OverrideKey.includeExtensions,
+            OverrideKey.excludeExtensions,
+            OverrideKey.autoStartScan,
+            OverrideKey.semanticMatching,
+            OverrideKey.semanticThreshold,
+            OverrideKey.safeDeletion
+        ]
     }
 }

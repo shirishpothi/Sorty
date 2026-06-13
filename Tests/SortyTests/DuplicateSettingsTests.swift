@@ -21,8 +21,8 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertFalse(settings.excludeExtensions.isEmpty) // Has defaults
         XCTAssertEqual(settings.defaultKeepStrategy, .newest)
         XCTAssertTrue(settings.enableSafeDeletion)
-        XCTAssertFalse(settings.autoStartScan)
-        XCTAssertFalse(settings.includeSemanticDuplicates)
+        XCTAssertTrue(settings.autoStartScan)
+        XCTAssertTrue(settings.includeSemanticDuplicates)
         XCTAssertEqual(settings.semanticSimilarityThreshold, DuplicateSettings.defaultSemanticSimilarityThreshold)
     }
 
