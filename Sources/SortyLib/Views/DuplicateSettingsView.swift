@@ -10,8 +10,6 @@ import SwiftUI
 struct DuplicateSettingsView: View {
     @ObservedObject var settingsManager: DuplicateSettingsManager
     @Environment(\.dismiss) private var dismiss
-
-    private let defaultsDomain = "com.sorty.app"
     
     var body: some View {
         VStack(spacing: 0) {
@@ -100,62 +98,11 @@ struct DuplicateSettingsView: View {
                         }
                     }
 
-                    SettingsSection(title: "Defaults", icon: "sparkles") {
-                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.md) {
-                            Label("Exact and semantic matching", systemImage: "checkmark")
-                            Label("Automatic scans with unlimited depth", systemImage: "checkmark")
-                            Label("All file sizes, with common system files excluded", systemImage: "checkmark")
-                            Label("Recoverable safe deletion", systemImage: "checkmark")
-                        }
-                        .font(SortyDesignSystem.Typography.caption())
-                        .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
-                    }
-
-                    SettingsSection(title: "Terminal Overrides", icon: "terminal") {
-                        VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sm) {
-                            Text("Advanced options stay available through macOS defaults. Restart Sorty after changing them.")
-                                .font(SortyDesignSystem.Typography.caption())
-                                .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
-
-                            DefaultsCommandRow(
-                                title: "Minimum file size: 10 MB",
-                                command: "defaults write \(defaultsDomain) duplicates.minimumFileSizeMB -float 10"
-                            )
-                            DefaultsCommandRow(
-                                title: "Maximum scan depth: 3",
-                                command: "defaults write \(defaultsDomain) duplicates.maximumScanDepth -int 3"
-                            )
-                            DefaultsCommandRow(
-                                title: "Disable semantic matching",
-                                command: "defaults write \(defaultsDomain) duplicates.semanticMatching -bool false"
-                            )
-                            DefaultsCommandRow(
-                                title: "Semantic threshold: 95%",
-                                command: "defaults write \(defaultsDomain) duplicates.semanticThreshold -float 0.95"
-                            )
-                            DefaultsCommandRow(
-                                title: "Reset all advanced overrides",
-                                command: [
-                                    "comparisonMethod",
-                                    "minimumFileSizeMB",
-                                    "maximumScanDepth",
-                                    "includeExtensions",
-                                    "excludeExtensions",
-                                    "autoStartScan",
-                                    "semanticMatching",
-                                    "semanticThreshold",
-                                    "safeDeletion"
-                                ]
-                                .map { "defaults delete \(defaultsDomain) duplicates.\($0)" }
-                                .joined(separator: " ; ")
-                            )
-                        }
-                    }
                 }
                 .padding(SortyDesignSystem.Spacing.xl)
             }
         }
-        .frame(width: 620, height: 640)
+        .frame(width: 620, height: 520)
         .background(SortyDesignSystem.Colors.backgroundPrimary)
     }
     
@@ -195,42 +142,6 @@ struct SettingsSection<Content: View>: View {
                 .padding(SortyDesignSystem.Spacing.md)
                 .systemLiquidGlassBackground(cornerRadius: SortyDesignSystem.Radius.large)
         }
-    }
-}
-
-private struct DefaultsCommandRow: View {
-    let title: String
-    let command: String
-    @State private var copied = false
-    
-    var body: some View {
-        HStack(spacing: SortyDesignSystem.Spacing.sm) {
-            VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.xxxs) {
-                Text(title)
-                    .font(SortyDesignSystem.Typography.caption())
-                Text(command)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: SortyDesignSystem.Spacing.sm)
-
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(command, forType: .string)
-                copied = true
-                HapticFeedbackManager.shared.tap()
-            } label: {
-                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-            }
-            .buttonStyle(.plain)
-            .frame(width: 28, height: 28)
-            .contentShape(Rectangle())
-            .accessibilityLabel("Copy \(title) command")
-        }
-        .padding(.horizontal, SortyDesignSystem.Spacing.sm)
-        .padding(.vertical, SortyDesignSystem.Spacing.xs)
     }
 }
 
