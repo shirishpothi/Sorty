@@ -145,7 +145,7 @@ public struct MenuBarView: View {
     // MARK: - Quick Actions
 
     private var quickActions: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 0) {
             MenuBarButton(title: "Open Sorty", icon: "macwindow") {
                 openMainWindow()
             }
@@ -174,7 +174,7 @@ public struct MenuBarView: View {
     // MARK: - Watched Folders List
 
     private var watchedFoldersList: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("Watched Folders")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -301,7 +301,7 @@ public struct MenuBarView: View {
     // MARK: - Bottom Actions
 
     private var bottomActions: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 0) {
             MenuBarButton(title: "Settings...", icon: "gear") {
                 openSettings()
             }
