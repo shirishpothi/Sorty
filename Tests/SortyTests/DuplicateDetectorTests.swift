@@ -47,4 +47,118 @@ class DuplicateDetectorTests: XCTestCase {
         XCTAssertTrue(manager.duplicateGroups.isEmpty)
         XCTAssertTrue(manager.semanticGroups.isEmpty)
     }
+
+    @MainActor
+    func testManagerRequiresMatchingContentEvenWhenFastModeIsSelected() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateExactnessTests-\(UUID().uuidString)", isDirectory: true)
+        let firstURL = directory.appendingPathComponent("First/report.txt")
+        let secondURL = directory.appendingPathComponent("Second/report.txt")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        try fileManager.createDirectory(
+            at: firstURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try fileManager.createDirectory(
+            at: secondURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("ABCD".utf8).write(to: firstURL)
+        try Data("WXYZ".utf8).write(to: secondURL)
+
+        let timestamp = Date()
+        let files = [
+            FileItem(
+                path: firstURL.path,
+                name: "report",
+                extension: "txt",
+                size: 4,
+                modificationDate: timestamp
+            ),
+            FileItem(
+                path: secondURL.path,
+                name: "report",
+                extension: "txt",
+                size: 4,
+                modificationDate: timestamp
+            )
+        ]
+        var settings = DuplicateSettings()
+        settings.comparisonMethod = .fast
+        settings.includeSemanticDuplicates = false
+        let manager = DuplicateDetectionManager()
+
+        await manager.scanForDuplicates(files: files, settings: settings)
+
+        XCTAssertTrue(manager.duplicateGroups.isEmpty)
+        XCTAssertEqual(manager.hashCandidateCount, 2)
+        XCTAssertEqual(manager.hashedFileCount, 2)
+    }
+
+    @MainActor
+    func testManagerGroupsAllExactCopiesAndReusesCachedHashes() async throws {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("DuplicateGroupingTests-\(UUID().uuidString)", isDirectory: true)
+        let exactURLs = [
+            directory.appendingPathComponent("original.txt"),
+            directory.appendingPathComponent("renamed-copy.txt"),
+            directory.appendingPathComponent("Nested/another-name.txt")
+        ]
+        let uniqueURL = directory.appendingPathComponent("unique.txt")
+
+        defer {
+            try? fileManager.removeItem(at: directory)
+        }
+
+        for url in exactURLs {
+            try fileManager.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data("same-content".utf8).write(to: url)
+        }
+        try Data("unique".utf8).write(to: uniqueURL)
+
+        let timestamp = Date()
+        let files = exactURLs.enumerated().map { index, url in
+            FileItem(
+                path: url.path,
+                name: "file-\(index)",
+                extension: "txt",
+                size: 12,
+                modificationDate: timestamp
+            )
+        } + [
+            FileItem(
+                path: uniqueURL.path,
+                name: "unique",
+                extension: "txt",
+                size: 6,
+                modificationDate: timestamp
+            )
+        ]
+        var settings = DuplicateSettings()
+        settings.includeSemanticDuplicates = false
+        let manager = DuplicateDetectionManager()
+
+        await manager.scanForDuplicates(files: files, settings: settings)
+
+        XCTAssertEqual(manager.duplicateGroups.count, 1)
+        XCTAssertEqual(manager.duplicateGroups.first?.files.count, 3)
+        XCTAssertEqual(manager.hashCandidateCount, 3)
+        XCTAssertEqual(manager.hashedFileCount, 3)
+        XCTAssertEqual(manager.hashCacheHitCount, 0)
+
+        await manager.scanForDuplicates(files: files, settings: settings)
+
+        XCTAssertEqual(manager.duplicateGroups.first?.files.count, 3)
+        XCTAssertEqual(manager.hashedFileCount, 0)
+        XCTAssertEqual(manager.hashCacheHitCount, 3)
+    }
 }
