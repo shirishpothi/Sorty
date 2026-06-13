@@ -1240,9 +1240,6 @@ struct FlatFileRowView: View {
 
                     RenameActionGlassCluster(
                         isRegenerating: isRegeneratingName,
-                        onAccept: {
-                            HapticFeedbackManager.shared.selection()
-                        },
                         onEdit: {
                             startEditing(initialValue: mapping.suggestedName ?? "")
                         },
@@ -1506,14 +1503,12 @@ struct FlatFileRowView: View {
 
 private struct RenameActionGlassCluster: View {
     let isRegenerating: Bool
-    let onAccept: () -> Void
     let onEdit: () -> Void
     let onRegenerate: () -> Void
     let onReject: () -> Void
 
     var body: some View {
         HStack(spacing: 2) {
-            RenameGlassIconButton(systemImage: "checkmark.circle", help: "Accept suggested name", action: onAccept)
             RenameGlassIconButton(systemImage: "pencil", help: "Edit suggested name", action: onEdit)
             Button(action: onRegenerate) {
                 if isRegenerating {
