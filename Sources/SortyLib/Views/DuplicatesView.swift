@@ -85,6 +85,8 @@ struct DuplicatesView: View {
                                 description: "Identical files in \(effectiveDirectory?.lastPathComponent ?? "this folder") will be identified.",
                                 icon: "waveform.path.ecg",
                                 actionTitle: "Start Scan",
+                                animatesIcon: true,
+                                isDefaultAction: true,
                                 action: startScan
                             )
                             .transition(.sortyScaleAndFade)
@@ -1288,16 +1290,24 @@ struct DuplicatesEmptyStateView: View {
     var iconColor: Color = .secondary
     let actionTitle: String
     var actionAccessibilityIdentifier: String?
+    var animatesIcon = false
+    var isDefaultAction = false
     let action: () -> Void
     @State private var hasAppeared = false
     @State private var beamHasAppeared = false
     
     var body: some View {
         VStack(spacing: 20) {
-            Image(systemName: icon)
-                .font(.system(size: 48))
-                .foregroundStyle(iconColor)
-                .opacity(0.7)
+            Group {
+                if animatesIcon {
+                    ScanningPulseIcon(systemName: icon, color: iconColor)
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 48))
+                        .foregroundStyle(iconColor)
+                        .opacity(0.7)
+                }
+            }
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
                 .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
@@ -1325,10 +1335,14 @@ struct DuplicatesEmptyStateView: View {
             }
             .buttonStyle(.onboardingPill)
             .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
-
             .controlSize(.large)
+            .modifier(DefaultActionShortcut(isEnabled: isDefaultAction))
             .accessibilityLabel(actionTitle)
-            .accessibilityHint("Activate to \(actionTitle.lowercased())")
+            .accessibilityHint(
+                isDefaultAction
+                    ? "Press Enter to \(actionTitle.lowercased())"
+                    : "Activate to \(actionTitle.lowercased())"
+            )
             .accessibilityIdentifier(actionAccessibilityIdentifier ?? "\(title.replacingOccurrences(of: " ", with: ""))Action")
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
@@ -1345,6 +1359,61 @@ struct DuplicatesEmptyStateView: View {
                 beamHasAppeared = true
             }
         }
+    }
+}
+
+private struct DefaultActionShortcut: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.keyboardShortcut(.defaultAction)
+        } else {
+            content
+        }
+    }
+}
+
+private struct ScanningPulseIcon: View {
+    let systemName: String
+    let color: Color
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+            let elapsed = timeline.date.timeIntervalSinceReferenceDate
+            let pulse = reduceMotion ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
+            let beamPhase = reduceMotion ? 0.5 : elapsed.truncatingRemainder(dividingBy: 1.8) / 1.8
+
+            Image(systemName: systemName)
+                .font(.system(size: 48))
+                .foregroundStyle(color.opacity(0.55 + pulse * 0.2))
+                .overlay {
+                    GeometryReader { proxy in
+                        LinearGradient(
+                            colors: [.clear, .white, SortyDesignSystem.Colors.resolvedAccent, .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: proxy.size.width * 0.65)
+                        .offset(x: (proxy.size.width * 1.65 * beamPhase) - (proxy.size.width * 0.65))
+                    }
+                    .mask {
+                        Image(systemName: systemName)
+                            .font(.system(size: 48))
+                    }
+                    .opacity(reduceMotion ? 0.35 : 0.95)
+                }
+                .scaleEffect(reduceMotion ? 1 : 1 + pulse * 0.035)
+                .shadow(
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(reduceMotion ? 0.18 : 0.16 + pulse * 0.22),
+                    radius: reduceMotion ? 4 : 4 + pulse * 5
+                )
+        }
+        .frame(width: 72, height: 56)
+        .accessibilityHidden(true)
     }
 }
 
