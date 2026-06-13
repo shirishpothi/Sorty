@@ -140,7 +140,7 @@ struct OrganizingFlightStageView: View {
             if prioritizesFilenames, let currentRenamedFileName {
                 ZStack(alignment: .leading) {
                     Text(currentFileName)
-                        .foregroundStyle(isShowingRenamedFileName ? Color.red.opacity(0.82) : Color.primary.opacity(0.72))
+                        .foregroundStyle(renameStrikeProgress > 0 ? Color.red.opacity(0.82) : Color.primary.opacity(0.72))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .overlay(alignment: .center) {
@@ -157,9 +157,7 @@ struct OrganizingFlightStageView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .opacity(isShowingRenamedFileName ? 1 : 0)
-                        .offset(x: isShowingRenamedFileName ? 0 : 6)
                 }
-                .animation(.easeInOut(duration: 0.2), value: isShowingRenamedFileName)
             } else {
                 Text(currentFileName)
                     .foregroundStyle(.primary.opacity(0.72))

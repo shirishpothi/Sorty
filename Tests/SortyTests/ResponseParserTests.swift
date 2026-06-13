@@ -238,6 +238,44 @@ class ResponseParserTests: XCTestCase {
         XCTAssertEqual(plan.suggestions[0].renameCount, 0)
     }
 
+    func testOrganizeAndRenamePreservesRenameMetadataWhenFileIDsAlsoAssignFile() throws {
+        let json = """
+        {
+          "folders": [
+            {
+              "name": "Documents",
+              "file_ids": [0],
+              "files": [
+                {
+                  "filename": "old_name.pdf",
+                  "suggested_name": "Client Invoice.pdf",
+                  "rename_reason": "Uses the document subject",
+                  "rename_confidence": 0.9
+                }
+              ]
+            }
+          ]
+        }
+        """
+
+        let file = FileItem(
+            path: "/path/old_name.pdf",
+            name: "old_name",
+            extension: "pdf",
+            size: 1000,
+            isDirectory: false
+        )
+
+        let plan = try ResponseParser.parseResponse(
+            json,
+            originalFiles: [file],
+            mode: .organizeAndRename
+        )
+
+        XCTAssertEqual(plan.suggestions[0].files, [file])
+        XCTAssertEqual(plan.suggestions[0].renameMapping(for: file)?.suggestedName, "Client Invoice.pdf")
+    }
+
     func testRenameOnlyPreservesReasonForUnchangedFile() throws {
         let json = """
         {

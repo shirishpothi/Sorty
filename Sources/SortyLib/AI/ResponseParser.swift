@@ -416,11 +416,9 @@ struct ResponseParser {
 
         for fileEntry in folder.files {
             if let file = findFile(named: fileEntry.filename, in: originalFiles) {
-                // Deduplicate: Don't add the same physical file twice to the same folder
-                guard !seenFileIds.contains(file.id) else { continue }
-                seenFileIds.insert(file.id)
-
-                files.append(file)
+                if seenFileIds.insert(file.id).inserted {
+                    files.append(file)
+                }
 
                 // Parse-level safeguard: strip all rename fields in organize-only mode.
                 if mode != .organize {
