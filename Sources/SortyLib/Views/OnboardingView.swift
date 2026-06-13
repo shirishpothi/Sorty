@@ -83,13 +83,14 @@ public struct OnboardingView: View {
                         // Main content
                         stepContent
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .overlay(alignment: .bottom) {
+
                         if currentStep != .completion {
                             navigationControls
                                 .padding(.horizontal, 40)
-                                .padding(.top, 24)
-                                .padding(.bottom, 16)
+                                .padding(.top, 12)
+                                .padding(.bottom, 12)
+                                .frame(height: 92, alignment: .top)
+                                .frame(maxWidth: .infinity)
                                 .background(
                                     OnboardingNavigationBackdrop()
                                         .allowsHitTesting(false)
@@ -108,12 +109,13 @@ public struct OnboardingView: View {
                         .transition(.opacity)
                 }
 
-                OnboardingEdgeGlow()
-                    .ignoresSafeArea()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 900, minHeight: 640)
+        .frame(
+            minWidth: SortyDesignSystem.Sizing.windowOnboardingWidth,
+            minHeight: SortyDesignSystem.Sizing.windowOnboardingHeight
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Onboarding")
         .accessibilityIdentifier("OnboardingView")
@@ -126,8 +128,11 @@ public struct OnboardingView: View {
             }
         }
         .background(
-            OnboardingWindowTitleConfigurator {
-                hasConfiguredWindowChrome = true
+            ZStack {
+                OnboardingWindowTitleConfigurator {
+                    hasConfiguredWindowChrome = true
+                }
+                OnboardingScreenEdgeGlowPresenter(progress: gradientProgress)
             }
             .frame(width: 0, height: 0)
         )
@@ -502,46 +507,54 @@ private struct OnboardingIntroView: View {
     let onGetStarted: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var iconScale: CGFloat = 0.78
+    @State private var iconScale: CGFloat = 0.86
     @State private var iconOpacity: Double = 0
-    @State private var iconBlur: CGFloat = 12
     @State private var glowOpacity: Double = 0
+    @State private var glowRadius: CGFloat = 28
+    @State private var chromeRevealed = false
     @State private var textOpacity: Double = 0
     @State private var textOffset: CGFloat = 14
-    @State private var glowRadius: CGFloat = 28
     @State private var filesAppeared = false
-    @State private var ambientMotionActive = false
-    @State private var ambientMotionGeneration = 0
+    @State private var collapseProgress: CGFloat = 0
     @State private var isHoveringButton = false
-    @State private var hoverExitDebounceGeneration = 0
     @State private var revealGeneration = 0
     @StateObject private var audio = OnboardingAudioManager()
 
     var body: some View {
         ZStack {
+            // Phase 1 of the reveal shows only the icon and its rose glow on a
+            // fully transparent window — no backdrop, no "app window" feel.
+            // The gradient fades in later together with the title and button.
             OnboardingBottomGradient()
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
-                .opacity(0.92)
+                .opacity(chromeRevealed ? 0.92 : 0)
 
             // Real macOS file-type icons drift in a loose orbit, then tuck into
-            // the app icon when the user starts onboarding.
-            // 24 fps is plenty for a slow drift and noticeably cheaper than
-            // 30 fps on a TimelineView that's evaluating 10 chip offsets per
-            // tick. The collapse uses opacity + scale only — blurring 10
-            // stacked views on hover was a noticeable GPU hit.
+            // the app icon while the Get Started button is hovered.
+            // The timeline never pauses while the chips are visible: pausing it
+            // froze `context.date`, so resuming made every chip jump to a new
+            // orbital position (the hover "glitching"), and the old
+            // ambient-motion timeout stopped the drift entirely after a few
+            // seconds. 24 fps keeps the always-on drift cheap.
             SwiftUI.TimelineView(.animation(
                 minimumInterval: 1.0 / 24.0,
-                paused: reduceMotion || !filesAppeared || isHoveringButton || !ambientMotionActive
+                paused: reduceMotion || !filesAppeared
             )) { context in
                 let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 ZStack {
                     ForEach(OnboardingOrbitFile.files) { file in
                         OnboardingOrbitFileChip(file: file)
-                            .rotationEffect(.degrees(isHoveringButton ? 0 : file.rotation + sin(phase * 0.7 + file.driftPhase) * 3))
-                            .scaleEffect(isHoveringButton ? 0.24 : file.scale)
-                            .offset(orbitOffset(for: file, phase: phase))
-                            .opacity(isHoveringButton ? 0 : (filesAppeared ? 1 : 0))
+                            .modifier(
+                                OrbitChipPlacement(
+                                    collapseProgress: collapseProgress,
+                                    orbitOffset: orbitOffset(for: file, phase: phase),
+                                    collapseOffset: CGSize(width: file.collapseX, height: file.collapseY),
+                                    orbitRotation: file.rotation + sin(phase * 0.7 + file.driftPhase) * 3,
+                                    orbitScale: file.scale
+                                )
+                            )
+                            .opacity(filesAppeared ? 1 : 0)
                             .animation(
                                 .spring(response: 0.7, dampingFraction: 0.86)
                                     .delay(file.appearDelay),
@@ -549,7 +562,6 @@ private struct OnboardingIntroView: View {
                             )
                     }
                 }
-                .animation(.spring(response: 0.5, dampingFraction: 0.8), value: isHoveringButton)
                 .allowsHitTesting(false)
             }
 
@@ -569,7 +581,6 @@ private struct OnboardingIntroView: View {
                         )
                             .shadow(color: SortyDesignSystem.Colors.resolvedAccent.opacity(0.22), radius: 34, x: 0, y: 0)
                             .shadow(color: .black.opacity(0.28), radius: 26, x: 0, y: 16)
-                            .blur(radius: iconBlur)
                             .accessibilityHidden(true)
                     }
                     .scaleEffect(iconScale)
@@ -601,12 +612,11 @@ private struct OnboardingIntroView: View {
                     withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
                         isHoveringButton = hovering
                     }
-
-                    if hovering {
-                        hoverExitDebounceGeneration += 1
-                        stopAmbientMotion()
-                    } else {
-                        releaseFileCollapseAfterGracePeriod()
+                    // Only the collapse blend is animated; the orbit keeps
+                    // running underneath, so entering/leaving hover mid-flight
+                    // always springs to the chips' live positions.
+                    withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
+                        collapseProgress = hovering ? 1 : 0
                     }
                 }
                 .scaleEffect(isHoveringButton ? 1.035 : 1)
@@ -622,18 +632,19 @@ private struct OnboardingIntroView: View {
         }
         .onDisappear {
             revealGeneration += 1
-            stopAmbientMotion()
             audio.stopAll()
         }
     }
 
-    /// Orchestrates the first-screen reveal. The audio engine is
-    /// intentionally deferred so its AVAudioEngine + AVAudioSourceNode
-    /// setup does not block the first paint of the icon. Animations
-    /// keep their original overlapping timing so the screen feels
-    /// alive from the first frame; the `revealGeneration` counter
-    /// cancels any in-flight reveal if the view disappears and
-    /// re-appears before the previous sequence finishes.
+    /// Orchestrates the first-screen reveal in three deliberate phases:
+    /// 1. Only the icon and its rose glow, floating on a transparent window.
+    /// 2. After the icon has had the stage to itself, the gradient backdrop,
+    ///    title, and button fade in together.
+    /// 3. The orbiting file chips drift in last.
+    /// The audio engine is deferred so its AVAudioEngine + AVAudioSourceNode
+    /// setup does not block the first paint of the icon, and the
+    /// `revealGeneration` counter cancels any in-flight reveal if the view
+    /// disappears before the sequence finishes.
     private func runIntroReveal() {
         revealGeneration += 1
         let generation = revealGeneration
@@ -641,104 +652,60 @@ private struct OnboardingIntroView: View {
         if reduceMotion {
             iconScale = 1
             iconOpacity = 1
-            iconBlur = 0
             glowOpacity = 1
             glowRadius = 38
+            chromeRevealed = true
             textOpacity = 1
             textOffset = 0
             filesAppeared = true
             audio.startBackgroundMelody()
-            beginAmbientMotionWindow(seconds: 8)
             return
         }
 
         // Defer audio so the AVAudioEngine + AVAudioSourceNode setup runs
         // after the first paint settles, not on the same runloop tick as
-        // the icon reveal. This was the main source of the perceived
-        // starting lag.
+        // the icon reveal.
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(420))
+            try? await Task.sleep(for: .milliseconds(450))
             guard generation == revealGeneration else { return }
             audio.startBackgroundMelody()
         }
 
-        // Icon materializes out of a soft blur. Springs feel jittery on
-        // opacity, so opacity + blur use eases and the scale spring is
-        // queued for the next tick.
-        withAnimation(.easeOut(duration: 0.85)) {
+        // Phase 1 — the icon materializes with a clean fade + settle (no
+        // blur-in) while the glow blooms around it.
+        withAnimation(.easeOut(duration: 1.0)) {
             iconOpacity = 1
-            iconBlur = 0
         }
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(220))
-            guard generation == revealGeneration else { return }
-            withAnimation(.spring(response: 0.7, dampingFraction: 0.86)) {
-                iconScale = 1
-            }
+        withAnimation(.spring(response: 0.9, dampingFraction: 0.88)) {
+            iconScale = 1
         }
-
-        withAnimation(.easeOut(duration: 1.0).delay(0.10)) {
+        withAnimation(.easeOut(duration: 1.2).delay(0.2)) {
             glowOpacity = 1
         }
-
-        // Single soft pulse to a slightly larger radius — the previous
-        // two-stage bloom → settle stacked a second animation on top of
-        // the first and compounded easing curves. One deliberate pulse
-        // reads as calmer and avoids the visible hand-off between curves.
-        withAnimation(.easeInOut(duration: 1.3).delay(0.30)) {
+        withAnimation(.easeInOut(duration: 1.5).delay(0.4)) {
             glowRadius = 38
         }
 
-        withAnimation(.easeOut(duration: 0.7).delay(0.30)) {
-            textOpacity = 1
-            textOffset = 0
-        }
-
-        // File chips drift in once the hero elements have settled so they
-        // never compete with the icon during the most fragile frame.
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(900))
+            // Phase 2 — backdrop, title, and button.
+            try? await Task.sleep(for: .milliseconds(1700))
+            guard generation == revealGeneration else { return }
+            withAnimation(.easeInOut(duration: 0.9)) {
+                chromeRevealed = true
+            }
+            withAnimation(.easeOut(duration: 0.7).delay(0.15)) {
+                textOpacity = 1
+                textOffset = 0
+            }
+
+            // Phase 3 — file chips drift in once everything has settled.
+            try? await Task.sleep(for: .milliseconds(650))
             guard generation == revealGeneration else { return }
             filesAppeared = true
-            beginAmbientMotionWindow(seconds: 8)
-        }
-    }
-
-    private func beginAmbientMotionWindow(seconds: TimeInterval) {
-        guard !reduceMotion else { return }
-        ambientMotionGeneration += 1
-        let generation = ambientMotionGeneration
-        ambientMotionActive = true
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard generation == ambientMotionGeneration, !isHoveringButton else { return }
-            ambientMotionActive = false
-        }
-    }
-
-    private func stopAmbientMotion() {
-        ambientMotionGeneration += 1
-        ambientMotionActive = false
-    }
-
-    private func releaseFileCollapseAfterGracePeriod() {
-        hoverExitDebounceGeneration += 1
-        let generation = hoverExitDebounceGeneration
-
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(420))
-            guard generation == hoverExitDebounceGeneration, !isHoveringButton else { return }
-            beginAmbientMotionWindow(seconds: 4)
         }
     }
 
     private func orbitOffset(for file: OnboardingOrbitFile, phase: Double) -> CGSize {
-        if isHoveringButton {
-            return CGSize(width: file.collapseX, height: file.collapseY)
-        }
-
         let orbitalAngle = phase * file.driftSpeed + file.driftPhase
         let orbitalX = cos(orbitalAngle) * file.orbitWidth * 1.18
         let orbitalY = sin(orbitalAngle) * file.orbitHeight * 1.22
@@ -748,30 +715,85 @@ private struct OnboardingIntroView: View {
     }
 }
 
+/// Blends each orbit chip between its live orbital placement and its
+/// collapsed position near the app icon. `collapseProgress` is the only
+/// animated value — the orbit inputs update on every timeline tick — so the
+/// hover collapse can be entered and exited mid-flight without position
+/// jumps, and the orbit itself never freezes.
+private struct OrbitChipPlacement: ViewModifier, Animatable {
+    var collapseProgress: CGFloat
+    var orbitOffset: CGSize
+    var collapseOffset: CGSize
+    var orbitRotation: Double
+    var orbitScale: CGFloat
+
+    nonisolated var animatableData: CGFloat {
+        get { collapseProgress }
+        set { collapseProgress = newValue }
+    }
+
+    func body(content: Content) -> some View {
+        let t = min(max(collapseProgress, 0), 1)
+        content
+            .rotationEffect(.degrees(orbitRotation * Double(1 - t)))
+            .scaleEffect(orbitScale + (0.24 - orbitScale) * t)
+            .offset(
+                x: orbitOffset.width + (collapseOffset.width - orbitOffset.width) * t,
+                y: orbitOffset.height + (collapseOffset.height - orbitOffset.height) * t
+            )
+            .opacity(Double(1 - t))
+    }
+}
+
 struct SortyEnergyScanIcon: View {
     let image: NSImage
     let size: CGFloat
     let cornerRadius: CGFloat
+    var startDelay: TimeInterval = 0.8
+    var sweepDuration: TimeInterval = 2.6
+    var repeats = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appearedAt: Date?
+    @State private var sweepFinished = false
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { context in
-            let phase = reduceMotion
-                ? 0.92
-                : context.date.timeIntervalSinceReferenceDate
-                    .truncatingRemainder(dividingBy: 4.8) / 4.8
-
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion || sweepFinished)) { context in
             EnergyScanIconFrame(
                 image: image,
                 size: size,
                 cornerRadius: cornerRadius,
-                phase: phase,
+                phase: phase(at: context.date),
                 reduceMotion: reduceMotion
             )
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+        .onAppear {
+            guard appearedAt == nil else { return }
+            appearedAt = Date()
+
+            // A single deliberate sweep, then the timeline pauses for good.
+            // The looping version re-scanned the icon every few seconds,
+            // which read as restless rather than polished.
+            guard !repeats, !reduceMotion else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(startDelay + sweepDuration + 0.1))
+                sweepFinished = true
+            }
+        }
+    }
+
+    private func phase(at date: Date) -> Double {
+        if reduceMotion { return 0.92 }
+        guard let appearedAt else { return 0 }
+
+        let elapsed = date.timeIntervalSince(appearedAt) - startDelay
+        guard elapsed > 0 else { return 0 }
+        if repeats {
+            return elapsed.truncatingRemainder(dividingBy: sweepDuration) / sweepDuration
+        }
+        return min(elapsed / sweepDuration, 1)
     }
 }
 
@@ -985,38 +1007,206 @@ private struct OnboardingOrbitFileChip: View {
     }
 }
 
-private struct OnboardingEdgeGlow: View {
+private struct OnboardingScreenEdgeGlow: View {
+    let progress: Double
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         SwiftUI.TimelineView(
-            .animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)
+            .animation(minimumInterval: 1.0 / 24.0, paused: reduceMotion)
         ) { context in
-            let phase = context.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: 4.8) / 4.8
-            let pulse = reduceMotion
-                ? 0
-                : (1 - cos(phase * 2 * .pi)) / 2
-            let opacity = 0.34 + pulse * 0.30
+            let elapsed = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
+            let pulse = reduceMotion ? 0.35 : (1 - cos(elapsed * 1.15)) / 2
+            let progressStrength = 0.58 + min(max(progress, 0), 1) * 0.42
+            let strength = progressStrength * (0.56 + pulse * 0.22)
 
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(
-                    SortyDesignSystem.Colors.resolvedAccent.opacity(opacity),
-                    lineWidth: 2
+            ZStack {
+                perimeterBand(
+                    rotation: reduceMotion ? 18 : elapsed * 10.5 + sin(elapsed * 0.37) * 18,
+                    strength: strength,
+                    lineWidth: 3.0 + progress * 1.8
                 )
-                .shadow(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(opacity * 0.72),
-                    radius: 14 + pulse * 8
+                perimeterBand(
+                    rotation: reduceMotion ? 196 : -elapsed * 7.2 + cos(elapsed * 0.29) * 25,
+                    strength: strength * 0.72,
+                    lineWidth: 5.0 + progress * 2.4
                 )
-                .shadow(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(opacity * 0.38),
-                    radius: 30 + pulse * 12
-                )
-                .padding(1)
-                .opacity(reduceMotion ? 0 : 1)
+                .blur(radius: 7 + progress * 5)
+            }
+            .compositingGroup()
+            .shadow(
+                color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.72),
+                radius: 14 + progress * 10 + pulse * 4
+            )
+            .shadow(
+                color: Color.purple.opacity(strength * 0.34),
+                radius: 28 + progress * 12
+            )
+            .padding(2)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func perimeterBand(
+        rotation: Double,
+        strength: Double,
+        lineWidth: CGFloat
+    ) -> some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(
+                AngularGradient(
+                    stops: [
+                        .init(color: .clear, location: 0.00),
+                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.22), location: 0.08),
+                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength), location: 0.17),
+                        .init(color: Color.purple.opacity(strength * 0.78), location: 0.26),
+                        .init(color: .clear, location: 0.38),
+                        .init(color: .clear, location: 0.53),
+                        .init(color: Color.blue.opacity(strength * 0.58), location: 0.62),
+                        .init(color: SortyDesignSystem.Colors.resolvedAccent.opacity(strength * 0.88), location: 0.72),
+                        .init(color: .clear, location: 0.84),
+                        .init(color: .clear, location: 1.00)
+                    ],
+                    center: .center,
+                    angle: .degrees(rotation)
+                ),
+                lineWidth: lineWidth
+            )
+    }
+}
+
+private struct OnboardingScreenEdgeGlowPresenter: NSViewRepresentable {
+    let progress: Double
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ScreenTrackingView()
+        view.onWindowChanged = { window in
+            context.coordinator.attach(to: window, progress: progress)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.attach(to: nsView.window, progress: progress)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.dismiss()
+    }
+
+    @MainActor
+    final class Coordinator {
+        private weak var hostWindow: NSWindow?
+        private var glowPanel: NSPanel?
+        private var glowHost: NSHostingView<OnboardingScreenEdgeGlow>?
+        private var observers: [NSObjectProtocol] = []
+
+        func attach(to window: NSWindow?, progress: Double) {
+            glowHost?.rootView = OnboardingScreenEdgeGlow(progress: progress)
+
+            guard hostWindow !== window else {
+                updatePanelFrame()
+                return
+            }
+
+            removeObservers()
+            hostWindow = window
+
+            guard let window else {
+                dismissPanel()
+                return
+            }
+
+            if glowPanel == nil {
+                glowPanel = makeGlowPanel(progress: progress)
+            }
+
+            let center = NotificationCenter.default
+            observers = [
+                center.addObserver(
+                    forName: NSWindow.didMoveNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                },
+                center.addObserver(
+                    forName: NSWindow.didChangeScreenNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    Task { @MainActor in self?.updatePanelFrame() }
+                }
+            ]
+
+            updatePanelFrame()
+            glowPanel?.orderFrontRegardless()
+        }
+
+        func dismiss() {
+            removeObservers()
+            dismissPanel()
+            hostWindow = nil
+        }
+
+        private func makeGlowPanel(progress: Double) -> NSPanel {
+            let panel = NSPanel(
+                contentRect: .zero,
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.hasShadow = false
+            panel.ignoresMouseEvents = true
+            panel.hidesOnDeactivate = false
+            panel.isReleasedWhenClosed = false
+            panel.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
+            panel.collectionBehavior = [
+                .canJoinAllSpaces,
+                .fullScreenAuxiliary,
+                .ignoresCycle,
+                .stationary
+            ]
+            let host = NSHostingView(rootView: OnboardingScreenEdgeGlow(progress: progress))
+            glowHost = host
+            panel.contentView = host
+            return panel
+        }
+
+        private func updatePanelFrame() {
+            guard let screen = hostWindow?.screen ?? NSScreen.main else { return }
+            glowPanel?.setFrame(screen.frame, display: true)
+        }
+
+        private func dismissPanel() {
+            glowPanel?.orderOut(nil)
+            glowPanel?.close()
+            glowPanel = nil
+            glowHost = nil
+        }
+
+        private func removeObservers() {
+            let center = NotificationCenter.default
+            observers.forEach(center.removeObserver)
+            observers.removeAll()
+        }
+    }
+
+    private final class ScreenTrackingView: NSView {
+        var onWindowChanged: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChanged?(window)
+        }
     }
 }
 
@@ -1145,6 +1335,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
         private var originalIsOpaque: Bool?
         private var originalHasShadow: Bool?
         private var originalAlphaValue: CGFloat?
+        private var originalContentMinSize: NSSize?
 
         func configure(window: NSWindow) {
             guard configuredWindow !== window else { return }
@@ -1158,6 +1349,7 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
             originalIsOpaque = window.isOpaque
             originalHasShadow = window.hasShadow
             originalAlphaValue = window.alphaValue
+            originalContentMinSize = window.contentMinSize
 
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
@@ -1169,8 +1361,14 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
 
             // Pin the window to the onboarding minimum content size before the
             // first paint so it never visibly resizes/reframes after appearing.
-            let targetSize = NSSize(width: 1100, height: 720)
-            if window.frame.size.width < targetSize.width || window.frame.size.height < targetSize.height {
+            let targetSize = NSSize(
+                width: SortyDesignSystem.Sizing.windowOnboardingWidth,
+                height: SortyDesignSystem.Sizing.windowOnboardingHeight
+            )
+            window.contentMinSize = targetSize
+            if window.contentLayoutRect.width < targetSize.width
+                || window.contentLayoutRect.height < targetSize.height
+            {
                 window.setContentSize(targetSize)
                 window.center()
             }
@@ -1211,6 +1409,9 @@ private struct OnboardingWindowTitleConfigurator: NSViewRepresentable {
                 window.alphaValue = originalAlphaValue
             } else {
                 window.alphaValue = 1
+            }
+            if let originalContentMinSize {
+                window.contentMinSize = originalContentMinSize
             }
         }
 
