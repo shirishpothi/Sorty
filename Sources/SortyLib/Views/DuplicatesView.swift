@@ -13,6 +13,7 @@ struct DuplicatesView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var detectionManager: DuplicateDetectionManager
     @EnvironmentObject var settingsManager: DuplicateSettingsManager
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showDeleteConfirmation = false
     @State private var filesToDelete: [FileItem] = []
     @State private var contentOpacity: Double = 0
@@ -21,7 +22,7 @@ struct DuplicatesView: View {
     @State private var currentScanTask: Task<Void, Never>?
     @State private var capturedDirectory: URL?
     @State private var semanticScanProgress: String?
-    
+
     // Derived directory: Use local if set, otherwise fallback to global
     private var effectiveDirectory: URL? {
         appState.duplicateSelectedDirectory ?? appState.selectedDirectory
@@ -36,7 +37,7 @@ struct DuplicatesView: View {
         case .idle:
             return true
         case .completed, .failed:
-            return detectionManager.duplicateGroups.isEmpty
+            return detectionManager.allGroups.isEmpty
         }
     }
 
@@ -55,33 +56,34 @@ struct DuplicatesView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-            // Header
-            DuplicatesHeaderNew(
-                manager: detectionManager,
-                currentDirectory: effectiveDirectory,
-                onSelectDirectory: selectDirectory,
-                onScan: startScan,
-                onCancel: cancelScan,
-                onBulkDelete: prepareBulkDelete,
-                onSettings: { showSettings = true }
-            )
-            .animatedAppearance(delay: 0.03)
-            
-            ZStack {
+                // Header
+                DuplicatesHeaderNew(
+                    manager: detectionManager,
+                    currentDirectory: effectiveDirectory,
+                    onSelectDirectory: selectDirectory,
+                    onScan: startScan,
+                    onCancel: cancelScan,
+                    onBulkDelete: prepareBulkDelete,
+                    onSettings: { showSettings = true }
+                )
+                .animatedAppearance(delay: 0.03)
+
+                ZStack {
                     switch detectionManager.state {
                     case .preparing:
                         ScanProgressViewNew(progress: 0, isPreparing: true)
                             .transition(.sortyScaleAndFade)
-                        
+
                     case .scanning(let progress):
                         ScanProgressViewNew(progress: progress, isPreparing: false)
                             .transition(.sortyScaleAndFade)
-                        
+
                     case .idle:
                         if detectionManager.lastScanDate == nil {
                             DuplicatesEmptyStateView(
                                 title: "Ready to Scan",
-                                description: "Identical files in \(effectiveDirectory?.lastPathComponent ?? "this folder") will be identified.",
+                                description:
+                                    "Identical files in \(effectiveDirectory?.lastPathComponent ?? "this folder") will be identified.",
                                 icon: "waveform.path.ecg",
                                 actionTitle: "Start Scan",
                                 animatesIcon: true,
@@ -93,9 +95,9 @@ struct DuplicatesView: View {
                             noDuplicatesView
                                 .transition(.sortyScaleAndFade)
                         }
-                        
+
                     case .completed, .failed:
-                        if detectionManager.duplicateGroups.isEmpty {
+                        if detectionManager.allGroups.isEmpty {
                             noDuplicatesView
                                 .transition(.sortyScaleAndFade)
                         } else {
@@ -121,7 +123,9 @@ struct DuplicatesView: View {
                 deleteFiles(filesToDelete)
             }
         } message: {
-            Text("\(filesToDelete.count) file(s) will be moved to Trash. History can restore them until Trash is emptied.")
+            Text(
+                "\(filesToDelete.count) file(s) will be moved to Trash. History can restore them until Trash is emptied."
+            )
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
@@ -240,34 +244,41 @@ struct DuplicatesView: View {
 
     private var resultsView: some View {
         HSplitView {
-            // Left Pane: List of Groups
             VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Review groups")
-                        .font(.headline)
-
-                    Text("\(detectionManager.allGroups.count) groups • \(detectionManager.formattedSavingsIncludingSemantic) recoverable")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                DuplicatesResultsSidebarHeader(
+                    manager: detectionManager,
+                    showsStats: settingsViewModel.config.showStatsForNerds
+                )
 
                 Divider()
 
                 List(selection: $appState.duplicateSelectedGroup) {
-                    ForEach(detectionManager.allGroups) { group in
-                        UnifiedDuplicateGroupRow(group: group)
-                            .tag(group)
-                            .scaleEffect(appState.duplicateSelectedGroup == group ? 1.01 : 1.0)
-                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: appState.duplicateSelectedGroup)
+                    if !exactGroups.isEmpty {
+                        Section {
+                            ForEach(exactGroups) { group in
+                                UnifiedDuplicateGroupRow(group: group)
+                                    .tag(group)
+                            }
+                        } header: {
+                            Text("Exact duplicates")
+                        }
+                    }
+
+                    if !similarGroups.isEmpty {
+                        Section {
+                            ForEach(similarGroups) { group in
+                                UnifiedDuplicateGroupRow(group: group)
+                                    .tag(group)
+                            }
+                        } header: {
+                            Text("Similarity matches")
+                        }
                     }
                 }
-                .listStyle(.inset)
+                .listStyle(.sidebar)
             }
-            .frame(minWidth: 240, idealWidth: 320, maxWidth: 420)
+            .frame(minWidth: 300, idealWidth: 360, maxWidth: 460)
 
-            // Right Pane: Detail View
             if let group = appState.duplicateSelectedGroup {
                 UnifiedDuplicateGroupDetailView(
                     group: group,
@@ -276,23 +287,34 @@ struct DuplicatesView: View {
                         showDeleteConfirmation = true
                     }
                 )
-                .frame(minWidth: 420, maxWidth: .infinity)
+                .frame(minWidth: 520, maxWidth: .infinity)
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "sidebar.left")
                         .font(.system(size: 28, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                     Text("Choose a group")
                         .font(.headline)
-                    Text("The right panel shows the recommended file to keep, what you can recover, and the files in that group.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 320)
+                    Text(
+                        "Review exact duplicates first. Similarity matches stay separate and need individual confirmation."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 340)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+
+    private var exactGroups: [UnifiedDuplicateGroup] {
+        detectionManager.allGroups.filter { $0.isExact }
+    }
+
+    private var similarGroups: [UnifiedDuplicateGroup] {
+        detectionManager.allGroups.filter { $0.isSemantic }
     }
 
     private func startScan() {
@@ -320,7 +342,8 @@ struct DuplicatesView: View {
 
                 // Verify directory hasn't changed since scan started
                 if capturedDirectory == effectiveDirectory && !Task.isCancelled {
-                    await detectionManager.scanForDuplicates(files: files, settings: settingsManager.settings)
+                    await detectionManager.scanForDuplicates(
+                        files: files, settings: settingsManager.settings)
 
                     if !Task.isCancelled {
                         // Auto-select first group
@@ -348,7 +371,8 @@ struct DuplicatesView: View {
     ) async throws -> [FileItem] {
         guard !handoffPaths.isEmpty else {
             // Pass false for computeHashes because we compute them in detectionManager with progress.
-            return try await scanner.scanDirectory(at: directory, deepScan: deepScan, computeHashes: false)
+            return try await scanner.scanDirectory(
+                at: directory, deepScan: deepScan, computeHashes: false)
         }
 
         var targetedFiles: [FileItem] = []
@@ -358,7 +382,9 @@ struct DuplicatesView: View {
             let fileURL = URL(fileURLWithPath: path).standardizedFileURL
             guard FileManager.default.fileExists(atPath: fileURL.path) else { continue }
 
-            if let scannedFile = try? await scanner.scanFile(at: fileURL, deepScan: deepScan, computeHashes: false), !scannedFile.isDirectory {
+            if let scannedFile = try? await scanner.scanFile(
+                at: fileURL, deepScan: deepScan, computeHashes: false), !scannedFile.isDirectory
+            {
                 targetedFiles.append(scannedFile)
             }
         }
@@ -368,7 +394,8 @@ struct DuplicatesView: View {
         }
 
         // Fallback when history paths no longer exist or are insufficient.
-        return try await scanner.scanDirectory(at: directory, deepScan: deepScan, computeHashes: false)
+        return try await scanner.scanDirectory(
+            at: directory, deepScan: deepScan, computeHashes: false)
     }
 
     private func cancelScan() {
@@ -384,7 +411,8 @@ struct DuplicatesView: View {
         var totalSizeRecovered: Int64 = 0
 
         do {
-            let potentialRestorables = try DuplicateRestorationManager.shared.moveToTrash(files: files)
+            let potentialRestorables = try DuplicateRestorationManager.shared.moveToTrash(
+                files: files)
             totalDeleted = potentialRestorables.count
             totalSizeRecovered = files.reduce(0) { $0 + $1.size }
 
@@ -408,17 +436,17 @@ struct DuplicatesView: View {
             HapticFeedbackManager.shared.error()
             DebugLogger.log("Delete failed: \(error)")
         }
-        
+
         // Refresh the scan
         startScan()
     }
-    
+
     private func selectDirectory() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        
+
         if panel.runModal() == .OK, let url = panel.url {
             appState.duplicateSelectedDirectory = url
             detectionManager.clearResults()
@@ -428,7 +456,7 @@ struct DuplicatesView: View {
 
     private func prepareBulkDelete(keepNewest: Bool) {
         var filesToDelete: [FileItem] = []
-        
+
         // Bulk cleanup is intentionally limited to byte-identical files.
         for group in detectionManager.allGroups where group.isExact {
             let sortedFiles = group.files.sorted { f1, f2 in
@@ -457,7 +485,7 @@ struct DuplicatesHeaderNew: View {
     let onCancel: () -> Void
     let onBulkDelete: (Bool) -> Void
     let onSettings: () -> Void
-    
+
     var body: some View {
         ViewThatFits(in: .horizontal) {
             headerLayout(spacing: 20, showsFullControls: true)
@@ -479,17 +507,17 @@ struct DuplicatesHeaderNew: View {
                     Circle()
                         .fill(Color.blue.opacity(0.1))
                         .frame(width: 44, height: 44)
-                    
+
                     Image(systemName: "doc.on.doc.fill")
                         .foregroundStyle(.blue)
                         .font(.title3)
                 }
-                
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Duplicate Files")
                         .font(.headline)
                         .lineLimit(1)
-                    
+
                     if let dir = currentDirectory {
                         Button(action: onSelectDirectory) {
                             HStack(spacing: 4) {
@@ -509,7 +537,8 @@ struct DuplicatesHeaderNew: View {
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                            .background(
+                                Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
                         }
                         .contentShape(RoundedRectangle(cornerRadius: 6))
                         .buttonStyle(.plain)
@@ -524,9 +553,9 @@ struct DuplicatesHeaderNew: View {
                 .frame(maxWidth: 260, alignment: .leading)
             }
             .layoutPriority(1)
-            
+
             Spacer()
-            
+
             // Right Side: Controls
             HStack(spacing: showsFullControls ? 12 : 8) {
                 HStack(spacing: 8) {
@@ -538,19 +567,24 @@ struct DuplicatesHeaderNew: View {
                     .help("Detection Settings")
                     .disabled(manager.isScanning)
 
-                    if !manager.allGroups.isEmpty && !manager.isScanning {
+                    if manager.exactGroupCount > 0 && !manager.isScanning {
                         Menu {
-                            Button { onBulkDelete(true) } label: {
+                            Button {
+                                onBulkDelete(true)
+                            } label: {
                                 Label("Keep Newest", systemImage: "clock")
                             }
-                            Button { onBulkDelete(false) } label: {
+                            Button {
+                                onBulkDelete(false)
+                            } label: {
                                 Label("Keep Oldest", systemImage: "clock.arrow.circlepath")
                             }
                             Divider()
                             Text("Similar matches always require individual review")
                                 .font(.caption)
                         } label: {
-                            Label(showsFullControls ? "Cleanup All" : "Cleanup", systemImage: "trash")
+                            Label(
+                                showsFullControls ? "Cleanup All" : "Cleanup", systemImage: "trash")
                         }
                         .buttonStyle(.onboardingPill(size: .small))
                         .tint(.red)
@@ -564,7 +598,8 @@ struct DuplicatesHeaderNew: View {
                         .tint(.red)
                     } else if manager.lastScanDate == nil {
                         Button(action: onScan) {
-                            Label(showsFullControls ? "Start Scan" : "Scan", systemImage: "play.fill")
+                            Label(
+                                showsFullControls ? "Start Scan" : "Scan", systemImage: "play.fill")
                         }
                         .buttonStyle(.onboardingPill(size: .small))
                         .disabled(currentDirectory == nil)
@@ -577,14 +612,88 @@ struct DuplicatesHeaderNew: View {
 
 // MARK: - Components
 
+private struct DuplicatesResultsSidebarHeader: View {
+    @ObservedObject var manager: DuplicateDetectionManager
+    let showsStats: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Review groups")
+                    .font(.headline)
+
+                Text(summaryText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if showsStats {
+                DuplicatesNerdStatsStrip(manager: manager)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var summaryText: String {
+        let exact = "\(manager.exactGroupCount) exact"
+        let similar = "\(manager.semanticGroupCount) similar"
+        let recoverable = "\(manager.formattedSavings) safely recoverable"
+        return [exact, similar, recoverable].joined(separator: " • ")
+    }
+}
+
+private struct DuplicatesNerdStatsStrip: View {
+    @ObservedObject var manager: DuplicateDetectionManager
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                stat("Scanned", value: "\(manager.scannedFileCount)")
+                stat("Candidates", value: "\(manager.hashCandidateCount)")
+            }
+            HStack(spacing: 8) {
+                stat("Hashed", value: "\(manager.hashedFileCount)")
+                stat("Cache hits", value: "\(manager.hashCacheHitCount)")
+            }
+            stat("Duration", value: formattedDuration)
+        }
+        .padding(10)
+        .systemLiquidGlassBackground(cornerRadius: 12)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Duplicate scan stats. \(manager.scannedFileCount) files scanned. \(manager.hashCandidateCount) hash candidates. \(manager.hashedFileCount) files hashed. \(manager.hashCacheHitCount) cache hits. Duration \(formattedDuration)."
+        )
+    }
+
+    private func stat(_ label: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(value)
+                .fontWeight(.semibold)
+                .monospacedDigit()
+                .foregroundStyle(.primary)
+        }
+        .font(.caption2)
+    }
+
+    private var formattedDuration: String {
+        guard manager.scanDuration > 0 else { return "—" }
+        return String(format: "%.2fs", manager.scanDuration)
+    }
+}
+
 struct DuplicateGroupRow: View {
     let group: DuplicateGroup
-    
+
     private var firstFileURL: URL? {
         guard let path = group.files.first?.path else { return nil }
         return URL(fileURLWithPath: path)
     }
-    
+
     var body: some View {
         HStack(spacing: 12) {
             if let url = firstFileURL {
@@ -594,23 +703,25 @@ struct DuplicateGroupRow: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(.orange.opacity(0.1))
                         .frame(width: 36, height: 36)
-                    
+
                     Image(systemName: "doc.on.doc.fill")
                         .foregroundStyle(.orange)
                         .font(.body)
                 }
             }
-            
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(group.files.first?.displayName ?? "Unknown File")
                     .font(.headline)
                     .lineLimit(1)
-                
+
                 HStack(spacing: 4) {
                     Text("\(group.files.count) copies")
                     Text("•")
-                    Text("Save \(ByteCountFormatter.string(fromByteCount: group.potentialSavings, countStyle: .file))")
-                        .foregroundStyle(.green)
+                    Text(
+                        "Save \(ByteCountFormatter.string(fromByteCount: group.potentialSavings, countStyle: .file))"
+                    )
+                    .foregroundStyle(.green)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -623,85 +734,95 @@ struct DuplicateGroupRow: View {
 
 struct UnifiedDuplicateGroupRow: View {
     let group: UnifiedDuplicateGroup
-    
+
     private var firstFileURL: URL? {
         guard let path = group.files.first?.path else { return nil }
         return URL(fileURLWithPath: path)
     }
-    
+
+    private var folderSummary: String {
+        let folders = Set(
+            group.files.map {
+                URL(fileURLWithPath: $0.path).deletingLastPathComponent().lastPathComponent
+            })
+        if folders.count == 1, let folder = folders.first, !folder.isEmpty {
+            return folder
+        }
+        return "Across \(folders.count) folders"
+    }
+
+    private var badgeColor: Color {
+        group.isExact ? .orange : .blue
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // Thumbnail with badge
-            ZStack(alignment: .topTrailing) {
-                if let url = firstFileURL {
-                    FileThumbnailView(url: url, size: CGSize(width: 36, height: 36))
-                } else {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(group.isSemantic ? Color.blue.opacity(0.1) : Color.orange.opacity(0.1))
-                            .frame(width: 36, height: 36)
-                        
-                        Image(systemName: group.isSemantic ? "waveform.path" : "doc.on.doc.fill")
-                            .foregroundStyle(group.isSemantic ? .blue : .orange)
-                            .font(.body)
+            if let url = firstFileURL {
+                FileThumbnailView(url: url, size: CGSize(width: 40, height: 40))
+                    .frame(width: 40, height: 40)
+            } else {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(badgeColor.opacity(0.12))
+                    .frame(width: 40, height: 40)
+                    .overlay {
+                        Image(systemName: group.isExact ? "doc.on.doc.fill" : "waveform.path")
+                            .foregroundStyle(badgeColor)
                     }
-                }
-                
-                // Badge for semantic matches
-                if group.isSemantic {
-                    Text("Similar")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.blue))
-                        .offset(x: 8, y: -4)
-                }
+                    .accessibilityHidden(true)
             }
-            
-            VStack(alignment: .leading, spacing: 2) {
+
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 6) {
                     Text(group.displayName)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
-                    
-                    // Group type tag
-                    if group.isSemantic {
-                        Text(group.groupTypeLabel)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.blue)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(.blue.opacity(0.1)))
-                    }
+                        .truncationMode(.middle)
+                        .help(group.displayName)
+
+                    Text(group.isExact ? "Exact" : "Similar")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(badgeColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(badgeColor.opacity(0.12), in: Capsule())
                 }
-                
-                HStack(spacing: 4) {
-                    Text("\(group.files.count) \(group.isExact ? "copies" : "versions")")
-                    
-                    if let similarity = group.similarityPercentage {
-                        Text("•")
-                        Text(similarity)
-                            .foregroundStyle(group.isExact ? .green : .blue)
-                    }
-                    
+
+                HStack(spacing: 5) {
+                    Label(folderSummary, systemImage: "folder")
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+
                     Text("•")
-                    Text("Save \(ByteCountFormatter.string(fromByteCount: group.potentialSavings, countStyle: .file))")
-                        .foregroundStyle(.green)
+                    Text("\(group.files.count) \(group.isExact ? "copies" : "matches")")
+                    Text("•")
+                    Text(
+                        ByteCountFormatter.string(
+                            fromByteCount: group.potentialSavings, countStyle: .file)
+                    )
+                    .foregroundStyle(.green)
                 }
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(.secondary)
             }
+            .layoutPriority(1)
+
+            Text(group.similarityPercentage ?? "100%")
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundStyle(badgeColor)
+                .frame(width: 42, alignment: .trailing)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 7)
+        .frame(minHeight: 64)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 
 struct DuplicateGroupDetailView: View {
     let group: DuplicateGroup
     let onDelete: ([FileItem]) -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
@@ -709,7 +830,7 @@ struct DuplicateGroupDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.files.first?.displayName ?? "Unknown File")
                         .font(.title2.bold())
-                    
+
                     Text("\(group.files.count) identical files found")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -717,12 +838,12 @@ struct DuplicateGroupDetailView: View {
                 .layoutPriority(1)
 
                 Spacer()
-                
+
                 Button {
                     let sortedFiles = group.files.sorted { f1, f2 in
                         let d1 = f1.creationDate ?? Date.distantPast
                         let d2 = f2.creationDate ?? Date.distantPast
-                        return d1 < d2 // Keep oldest
+                        return d1 < d2  // Keep oldest
                     }
                     onDelete(Array(sortedFiles.dropFirst()))
                 } label: {
@@ -735,7 +856,7 @@ struct DuplicateGroupDetailView: View {
             }
             .padding()
             .background(.ultraThinMaterial)
-            
+
             // File List
             List {
                 let sortedFiles = group.files.sorted { f1, f2 in
@@ -743,11 +864,13 @@ struct DuplicateGroupDetailView: View {
                     let d2 = f2.creationDate ?? Date.distantPast
                     return d1 < d2
                 }
-                
+
                 ForEach(Array(sortedFiles.enumerated()), id: \.element.id) { index, file in
-                    DuplicateFileDetailRow(file: file, isOriginal: index == 0, onDelete: {
-                        onDelete([file])
-                    })
+                    DuplicateFileDetailRow(
+                        file: file, isOriginal: index == 0,
+                        onDelete: {
+                            onDelete([file])
+                        })
                 }
             }
             .listStyle(.inset)
@@ -759,20 +882,20 @@ struct DuplicateFileDetailRow: View {
     let file: FileItem
     let isOriginal: Bool
     let onDelete: () -> Void
-    
+
     private var fileURL: URL {
         URL(fileURLWithPath: file.path)
     }
-    
+
     private var parentFolderName: String {
         fileURL.deletingLastPathComponent().lastPathComponent
     }
-    
+
     var body: some View {
         HStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
                 FileThumbnailView(url: fileURL, size: CGSize(width: 36, height: 36))
-                
+
                 if isOriginal {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.yellow)
@@ -784,17 +907,20 @@ struct DuplicateFileDetailRow: View {
                 }
             }
             .frame(width: 36)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(file.displayName)
                     .font(.headline)
-                
+
                 Button {
-                    NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
+                    NSWorkspace.shared.selectFile(
+                        file.path,
+                        inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
                 } label: {
                     HStack(spacing: 4) {
                         AppKitImageView(
-                            image: NSWorkspace.shared.icon(forFile: fileURL.deletingLastPathComponent().path),
+                            image: NSWorkspace.shared.icon(
+                                forFile: fileURL.deletingLastPathComponent().path),
                             size: CGSize(width: 12, height: 12)
                         )
                         .frame(width: 12, height: 12)
@@ -808,8 +934,10 @@ struct DuplicateFileDetailRow: View {
                 }
                 .contentShape(Capsule())
                 .buttonStyle(.plain)
-                .help("Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))")
-                
+                .help(
+                    "Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))"
+                )
+
                 HStack {
                     Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
                     if let date = file.creationDate {
@@ -820,9 +948,9 @@ struct DuplicateFileDetailRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             }
-            
+
             Spacer()
-            
+
             if !isOriginal {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
@@ -847,13 +975,13 @@ struct DuplicateFileDetailRow: View {
 struct UnifiedDuplicateGroupDetailView: View {
     let group: UnifiedDuplicateGroup
     let onDelete: ([FileItem]) -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             groupOverview
 
             ScrollView {
-                LazyVStack(spacing: 10) {
+                LazyVStack(spacing: 8) {
                     ForEach(sortedFiles, id: \.id) { file in
                         UnifiedFileDetailRow(
                             file: file,
@@ -866,7 +994,7 @@ struct UnifiedDuplicateGroupDetailView: View {
                     }
                 }
                 .padding(18)
-                .frame(maxWidth: 760, alignment: .leading)
+                .frame(maxWidth: 860, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(NSColor.windowBackgroundColor).opacity(0.35))
@@ -905,7 +1033,7 @@ struct UnifiedDuplicateGroupDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
-        .background(.ultraThinMaterial)
+        .systemLiquidGlassBackground(cornerRadius: 0)
         .overlay(alignment: .bottom) {
             Divider()
         }
@@ -913,9 +1041,17 @@ struct UnifiedDuplicateGroupDetailView: View {
 
     private var metricsRow: some View {
         HStack(spacing: 10) {
-            DuplicateMetricTile(value: "\(group.files.count)", label: group.isExact ? "copies" : "versions", color: .primary)
-            DuplicateMetricTile(value: ByteCountFormatter.string(fromByteCount: group.potentialSavings, countStyle: .file), label: "recoverable", color: .green)
-            DuplicateMetricTile(value: group.similarityPercentage ?? "Exact", label: group.isExact ? "match" : "similarity", color: group.isExact ? .orange : .blue)
+            DuplicateMetricTile(
+                value: "\(group.files.count)", label: group.isExact ? "copies" : "versions",
+                color: .primary)
+            DuplicateMetricTile(
+                value: ByteCountFormatter.string(
+                    fromByteCount: group.potentialSavings, countStyle: .file), label: "recoverable",
+                color: .green)
+            DuplicateMetricTile(
+                value: group.similarityPercentage ?? "Exact",
+                label: group.isExact ? "match" : "similarity",
+                color: group.isExact ? .orange : .blue)
         }
     }
 
@@ -927,7 +1063,9 @@ struct UnifiedDuplicateGroupDetailView: View {
                     .foregroundStyle(group.isExact ? .orange : .blue)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(group.isExact ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1), in: Capsule())
+                    .background(
+                        group.isExact ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1),
+                        in: Capsule())
 
                 confidenceBadge
             }
@@ -985,7 +1123,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             .help("Keep the first file and clean up the rest.")
         }
     }
-    
+
     private var confidenceColor: Color {
         switch group.confidenceLevel {
         case .high: return .green
@@ -993,7 +1131,7 @@ struct UnifiedDuplicateGroupDetailView: View {
         case .low: return .orange
         }
     }
-    
+
     private var sortedFiles: [FileItem] {
         // Put recommended file first, then sort by date
         let recommendedId = group.recommendedFileId
@@ -1005,10 +1143,10 @@ struct UnifiedDuplicateGroupDetailView: View {
             return d1 < d2
         }
     }
-    
+
     private func recommendationLabel(for file: FileItem) -> String? {
         guard file.id == group.recommendedFileId else { return nil }
-        
+
         switch group.recommendation {
         case .keepHighestResolution:
             return "Highest Res"
@@ -1027,13 +1165,17 @@ struct UnifiedDuplicateGroupDetailView: View {
 
     private var detailGuidance: String {
         if group.isExact {
-            return "Exact matches have identical content. Keep one copy, then remove the rest when you are confident about the location you want to preserve."
+            return
+                "Exact matches have identical content. Keep one copy, then remove the rest when you are confident about the location you want to preserve."
         }
 
-        return "Similar files may be versions or variants. Review thumbnails, dates, and resolution before applying the recommendation."
+        return
+            "Similar files may be versions or variants. Review thumbnails, dates, and resolution before applying the recommendation."
     }
 
-    private func compactButtonTitle(for recommendation: SemanticDuplicateGroup.DuplicateRecommendation) -> String {
+    private func compactButtonTitle(
+        for recommendation: SemanticDuplicateGroup.DuplicateRecommendation
+    ) -> String {
         switch recommendation {
         case .keepHighestResolution:
             return "Keep Highest Res"
@@ -1049,7 +1191,7 @@ struct UnifiedDuplicateGroupDetailView: View {
             return "Review"
         }
     }
-    
+
     private func applyRecommendation() {
         guard let recommendedId = group.recommendedFileId else {
             // Manual review - delete none
@@ -1081,7 +1223,7 @@ private struct DuplicateMetricTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+        .systemLiquidGlassBackground(cornerRadius: 10)
         .frame(minHeight: 52)
         .accessibilityElement(children: .combine)
     }
@@ -1092,20 +1234,20 @@ struct UnifiedFileDetailRow: View {
     let isRecommended: Bool
     let recommendation: String?
     let onDelete: () -> Void
-    
+
     private var fileURL: URL {
         URL(fileURLWithPath: file.path)
     }
-    
+
     private var parentFolderName: String {
         fileURL.deletingLastPathComponent().lastPathComponent
     }
-    
+
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
                 FileThumbnailView(url: fileURL, size: CGSize(width: 44, height: 44))
-                
+
                 if isRecommended {
                     Image(systemName: "star.fill")
                         .foregroundStyle(.yellow)
@@ -1117,14 +1259,14 @@ struct UnifiedFileDetailRow: View {
                 }
             }
             .frame(width: 44, height: 44)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(file.displayName)
                         .font(.headline)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    
+
                     if let label = recommendation {
                         Text(label)
                             .font(.system(size: 9, weight: .bold))
@@ -1134,13 +1276,16 @@ struct UnifiedFileDetailRow: View {
                             .background(Capsule().fill(.blue))
                     }
                 }
-                
+
                 Button {
-                    NSWorkspace.shared.selectFile(file.path, inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
+                    NSWorkspace.shared.selectFile(
+                        file.path,
+                        inFileViewerRootedAtPath: fileURL.deletingLastPathComponent().path)
                 } label: {
                     HStack(spacing: 4) {
                         AppKitImageView(
-                            image: NSWorkspace.shared.icon(forFile: fileURL.deletingLastPathComponent().path),
+                            image: NSWorkspace.shared.icon(
+                                forFile: fileURL.deletingLastPathComponent().path),
                             size: CGSize(width: 12, height: 12)
                         )
                         .frame(width: 12, height: 12)
@@ -1156,8 +1301,10 @@ struct UnifiedFileDetailRow: View {
                 }
                 .contentShape(Capsule())
                 .buttonStyle(.plain)
-                .help("Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))")
-                
+                .help(
+                    "Reveal in Finder: \(PrivacyPathMasker.redactedPath(fileURL.deletingLastPathComponent().path))"
+                )
+
                 HStack {
                     Text(ByteCountFormatter.string(fromByteCount: file.size, countStyle: .file))
                     if let date = file.creationDate {
@@ -1174,7 +1321,7 @@ struct UnifiedFileDetailRow: View {
                 .foregroundStyle(.secondary)
             }
             .layoutPriority(1)
-            
+
             if !isRecommended {
                 Button(action: onDelete) {
                     Image(systemName: "trash")
@@ -1184,6 +1331,7 @@ struct UnifiedFileDetailRow: View {
                 .buttonStyle(.sortyBordered)
                 .controlSize(.small)
                 .help("Delete this duplicate")
+                .accessibilityLabel("Delete \(file.displayName)")
             } else {
                 Label("Keep", systemImage: "checkmark.circle.fill")
                     .font(.caption.bold())
@@ -1197,14 +1345,16 @@ struct UnifiedFileDetailRow: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(isRecommended ? 0.055 : 0.025), in: RoundedRectangle(cornerRadius: 10))
+        .systemLiquidGlassBackground(cornerRadius: 12)
         .overlay {
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(isRecommended ? Color.green.opacity(0.22) : Color.white.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(
+                    isRecommended ? Color.green.opacity(0.24) : Color.primary.opacity(0.07),
+                    lineWidth: 1)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 10))
+        .contentShape(RoundedRectangle(cornerRadius: 12))
     }
-    
+
     private func formatPixels(_ pixels: Int) -> String {
         let mp = Double(pixels) / 1_000_000.0
         return String(format: "%.1f MP", mp)
@@ -1213,16 +1363,16 @@ struct UnifiedFileDetailRow: View {
 
 struct DuplicatesSummaryCardMini: View {
     @ObservedObject var manager: DuplicateDetectionManager
-    
+
     var body: some View {
         HStack(spacing: 0) {
             Text("Scan Results")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
                 .fixedSize()
-            
+
             Spacer()
-            
+
             HStack(spacing: 8) {
                 if manager.exactGroupCount > 0 {
                     HStack(spacing: 4) {
@@ -1234,7 +1384,7 @@ struct DuplicatesSummaryCardMini: View {
                     }
                     .fixedSize()
                 }
-                
+
                 if manager.semanticGroupCount > 0 {
                     if manager.exactGroupCount > 0 {
                         Text("+")
@@ -1242,19 +1392,21 @@ struct DuplicatesSummaryCardMini: View {
                             .foregroundStyle(.secondary)
                     }
                     HStack(spacing: 4) {
-                        Text("\(manager.semanticGroups.reduce(0) { $0 + max(0, $1.files.count - 1) })")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.blue)
+                        Text(
+                            "\(manager.semanticGroups.reduce(0) { $0 + max(0, $1.files.count - 1) })"
+                        )
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.blue)
                         Text("similar")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     .fixedSize()
                 }
-                
+
                 Divider()
                     .frame(height: 12)
-                
+
                 HStack(spacing: 4) {
                     Text(manager.formattedSavingsIncludingSemantic)
                         .font(.subheadline.bold())
@@ -1286,7 +1438,7 @@ struct DuplicatesEmptyStateView: View {
     let action: () -> Void
     @State private var hasAppeared = false
     @State private var beamHasAppeared = false
-    
+
     var body: some View {
         VStack(spacing: 20) {
             Group {
@@ -1299,15 +1451,15 @@ struct DuplicatesEmptyStateView: View {
                         .opacity(0.7)
                 }
             }
-                .opacity(hasAppeared ? 1 : 0)
-                .scaleEffect(hasAppeared ? 1 : 0.8)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
-                .accessibilityHidden(true)
-            
+            .opacity(hasAppeared ? 1 : 0)
+            .scaleEffect(hasAppeared ? 1 : 0.8)
+            .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)
+            .accessibilityHidden(true)
+
             VStack(spacing: 8) {
                 Text(title)
                     .font(.title2.bold())
-                
+
                 Text(description)
                     .font(.body)
                     .foregroundStyle(.secondary)
@@ -1319,7 +1471,7 @@ struct DuplicatesEmptyStateView: View {
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 10)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
-            
+
             Button(action: action) {
                 Text(actionTitle)
                     .frame(minWidth: 120)
@@ -1334,7 +1486,10 @@ struct DuplicatesEmptyStateView: View {
                     ? "Press Enter to \(actionTitle.lowercased())"
                     : "Activate to \(actionTitle.lowercased())"
             )
-            .accessibilityIdentifier(actionAccessibilityIdentifier ?? "\(title.replacingOccurrences(of: " ", with: ""))Action")
+            .accessibilityIdentifier(
+                actionAccessibilityIdentifier
+                    ?? "\(title.replacingOccurrences(of: " ", with: ""))Action"
+            )
             .opacity(hasAppeared ? 1 : 0)
             .offset(y: hasAppeared ? 0 : 15)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
@@ -1373,7 +1528,8 @@ private struct ScanningPulseIcon: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)) {
+            timeline in
             let elapsed = timeline.date.timeIntervalSinceReferenceDate
             let pulse = reduceMotion ? 0.5 : (sin(elapsed * 3.2) + 1) / 2
             let beamPhase = reduceMotion ? 0.5 : elapsed.truncatingRemainder(dividingBy: 1.8) / 1.8
@@ -1384,12 +1540,15 @@ private struct ScanningPulseIcon: View {
                 .overlay {
                     GeometryReader { proxy in
                         LinearGradient(
-                            colors: [.clear, .white, SortyDesignSystem.Colors.resolvedAccent, .clear],
+                            colors: [
+                                .clear, .white, SortyDesignSystem.Colors.resolvedAccent, .clear,
+                            ],
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                         .frame(width: proxy.size.width * 0.65)
-                        .offset(x: (proxy.size.width * 1.65 * beamPhase) - (proxy.size.width * 0.65))
+                        .offset(
+                            x: (proxy.size.width * 1.65 * beamPhase) - (proxy.size.width * 0.65))
                     }
                     .mask {
                         Image(systemName: systemName)
@@ -1399,7 +1558,8 @@ private struct ScanningPulseIcon: View {
                 }
                 .scaleEffect(reduceMotion ? 1 : 1 + pulse * 0.035)
                 .shadow(
-                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(reduceMotion ? 0.18 : 0.16 + pulse * 0.22),
+                    color: SortyDesignSystem.Colors.resolvedAccent.opacity(
+                        reduceMotion ? 0.18 : 0.16 + pulse * 0.22),
                     radius: reduceMotion ? 4 : 4 + pulse * 5
                 )
         }
@@ -1425,7 +1585,8 @@ struct ScanProgressViewNew: View {
     }
 
     private var subtitle: String {
-        isPreparing ? "Reading directory structure..." : "Comparing file content to find exact matches..."
+        isPreparing
+            ? "Reading directory structure..." : "Comparing file content to find exact matches..."
     }
 
     var body: some View {
@@ -1438,7 +1599,9 @@ struct ScanProgressViewNew: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.windowBackgroundColor))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(isPreparing ? "Preparing scan" : "Scanning for duplicate files, \(percent) percent complete")
+        .accessibilityLabel(
+            isPreparing
+                ? "Preparing scan" : "Scanning for duplicate files, \(percent) percent complete")
     }
 
     private var progressCard: some View {
@@ -1487,7 +1650,11 @@ struct ScanProgressViewNew: View {
             beamSurface
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(isPreparing ? "Preparing to scan for duplicates" : "Computing file hashes to find exact duplicate matches")
+        .accessibilityLabel(
+            isPreparing
+                ? "Preparing to scan for duplicates"
+                : "Computing file hashes to find exact duplicate matches"
+        )
         .accessibilityValue(isPreparing ? subtitle : "\(percent) percent complete, \(subtitle)")
     }
 
@@ -1508,14 +1675,16 @@ struct ScanProgressViewNew: View {
             cornerRadius: 16,
             strength: 1.0
         )
-        .scanProgressReferenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
+        .scanProgressReferenceBeamFallback(
+            cornerRadius: 16, active: true, includesInteriorGlow: true
+        )
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }
 
-private extension View {
-    func scanProgressReferenceBeamFallback(
+extension View {
+    fileprivate func scanProgressReferenceBeamFallback(
         cornerRadius: CGFloat,
         active: Bool,
         includesInteriorGlow: Bool = false
@@ -1562,11 +1731,19 @@ private struct ScanProgressReferenceBeamFallback: View {
                     stops: [
                         .init(color: .clear, location: 0.00),
                         .init(color: .clear, location: 0.08),
-                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.36), location: 0.16),
-                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.62), location: 0.25),
+                        .init(
+                            color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.36),
+                            location: 0.16),
+                        .init(
+                            color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.62),
+                            location: 0.25),
                         .init(color: .white.opacity(0.88), location: 0.32),
-                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.54), location: 0.39),
-                        .init(color: Color(red: 0.40, green: 0.20, blue: 1.0).opacity(0.36), location: 0.48),
+                        .init(
+                            color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.54),
+                            location: 0.39),
+                        .init(
+                            color: Color(red: 0.40, green: 0.20, blue: 1.0).opacity(0.36),
+                            location: 0.48),
                         .init(color: .clear, location: 0.58),
                         .init(color: .clear, location: 1.00),
                     ],
@@ -1584,10 +1761,16 @@ private struct ScanProgressReferenceBeamFallback: View {
                 AngularGradient(
                     stops: [
                         .init(color: .clear, location: 0.00),
-                        .init(color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.10), location: 0.15),
-                        .init(color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.20), location: 0.25),
+                        .init(
+                            color: Color(red: 0.08, green: 0.80, blue: 1.0).opacity(0.10),
+                            location: 0.15),
+                        .init(
+                            color: Color(red: 0.92, green: 0.16, blue: 0.58).opacity(0.20),
+                            location: 0.25),
                         .init(color: .white.opacity(0.16), location: 0.32),
-                        .init(color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.14), location: 0.40),
+                        .init(
+                            color: Color(red: 1.0, green: 0.34, blue: 0.18).opacity(0.14),
+                            location: 0.40),
                         .init(color: .clear, location: 0.58),
                         .init(color: .clear, location: 1.00),
                     ],
