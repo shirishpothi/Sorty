@@ -31,6 +31,9 @@ public struct DuplicateSettings: Codable, Sendable {
     
     /// Default keep strategy when bulk deleting
     public var defaultKeepStrategy: KeepStrategy
+
+    /// Natural-language cleanup preference used to choose the default file to keep
+    public var cleanupPreferencePrompt: String
     
     /// Auto-start scan when opening duplicates view
     public var autoStartScan: Bool
@@ -56,6 +59,7 @@ public struct DuplicateSettings: Codable, Sendable {
         includeExtensions: [String] = [],
         excludeExtensions: [String] = [".DS_Store", ".localized"],
         defaultKeepStrategy: KeepStrategy = .newest,
+        cleanupPreferencePrompt: String = "",
         autoStartScan: Bool = true,
         includeSemanticDuplicates: Bool = true,
         semanticSimilarityThreshold: Double = DuplicateSettings.defaultSemanticSimilarityThreshold
@@ -66,6 +70,7 @@ public struct DuplicateSettings: Codable, Sendable {
         self.includeExtensions = includeExtensions
         self.excludeExtensions = excludeExtensions
         self.defaultKeepStrategy = defaultKeepStrategy
+        self.cleanupPreferencePrompt = cleanupPreferencePrompt
         self.autoStartScan = autoStartScan
         self.includeSemanticDuplicates = includeSemanticDuplicates
         self.semanticSimilarityThreshold = Self.clampedSemanticSimilarityThreshold(semanticSimilarityThreshold)

@@ -282,6 +282,7 @@ struct DuplicatesView: View {
             if let group = appState.duplicateSelectedGroup {
                 UnifiedDuplicateGroupDetailView(
                     group: group,
+                    settings: settingsManager.settings,
                     onDelete: { files in
                         filesToDelete = files
                         showDeleteConfirmation = true
@@ -779,20 +780,11 @@ struct UnifiedDuplicateGroupRow: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Text(group.displayName)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .help(group.displayName)
-
-                    Text(group.isExact ? "Exact" : "Similarity")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(badgeColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(badgeColor.opacity(0.12), in: Capsule())
-                }
+                Text(group.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(group.displayName)
 
                 HStack(spacing: 5) {
                     Label(folderSummary, systemImage: "folder")
@@ -814,10 +806,30 @@ struct UnifiedDuplicateGroupRow: View {
             }
             .layoutPriority(1)
 
-            Text(group.isExact ? "Exact" : (group.similarityPercentage ?? ""))
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundStyle(badgeColor)
-                .frame(width: 56, alignment: .trailing)
+            Group {
+                if group.isExact {
+                    EmptyView()
+                } else {
+                    Text(group.isExact ? "Exact" : "Similarity")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(badgeColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(badgeColor.opacity(0.12), in: Capsule())
+                }
+            }
+            .frame(width: 92, alignment: .leading)
+
+            Group {
+                if group.isExact {
+                    EmptyView()
+                } else {
+                    Text(group.similarityPercentage ?? "")
+                        .font(.caption.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(badgeColor)
+                }
+            }
+            .frame(width: 48, alignment: .trailing)
         }
         .padding(.vertical, 7)
         .frame(minHeight: 64)
@@ -981,7 +993,9 @@ struct DuplicateFileDetailRow: View {
 
 struct UnifiedDuplicateGroupDetailView: View {
     let group: UnifiedDuplicateGroup
+    let settings: DuplicateSettings
     let onDelete: ([FileItem]) -> Void
+    @State private var selectedKeepFileId: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -992,8 +1006,12 @@ struct UnifiedDuplicateGroupDetailView: View {
                     ForEach(sortedFiles, id: \.id) { file in
                         UnifiedFileDetailRow(
                             file: file,
-                            isRecommended: file.id == group.recommendedFileId,
+                            isRecommended: file.id == effectiveKeepFileId,
                             recommendation: recommendationLabel(for: file),
+                            onKeep: {
+                                HapticFeedbackManager.shared.selection()
+                                selectedKeepFileId = file.id
+                            },
                             onDelete: {
                                 onDelete([file])
                             }
@@ -1005,6 +1023,18 @@ struct UnifiedDuplicateGroupDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(NSColor.windowBackgroundColor).opacity(0.35))
+        }
+        .onAppear {
+            selectedKeepFileId = preferredKeepFileId()
+        }
+        .onChange(of: group.id) { _, _ in
+            selectedKeepFileId = preferredKeepFileId()
+        }
+        .onChange(of: settings.cleanupPreferencePrompt) { _, _ in
+            selectedKeepFileId = preferredKeepFileId()
+        }
+        .onChange(of: settings.defaultKeepStrategy) { _, _ in
+            selectedKeepFileId = preferredKeepFileId()
         }
     }
 
@@ -1080,15 +1110,14 @@ struct UnifiedDuplicateGroupDetailView: View {
     private var overviewTitle: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(group.groupTypeLabel)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(group.isExact ? .orange : .blue)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        group.isExact ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1),
-                        in: Capsule())
-
+                if !group.isExact {
+                    Text(group.groupTypeLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.blue.opacity(0.1), in: Capsule())
+                }
                 confidenceBadge
             }
 
@@ -1118,7 +1147,7 @@ struct UnifiedDuplicateGroupDetailView: View {
     private var primaryActionButton: some View {
         if let recommendation = group.recommendation {
             Button {
-                applyRecommendation()
+                removeFilesExceptSelectedKeepFile()
             } label: {
                 Text(compactButtonTitle(for: recommendation))
             }
@@ -1128,14 +1157,9 @@ struct UnifiedDuplicateGroupDetailView: View {
             .help(recommendation.description)
         } else {
             Button {
-                let sortedFiles = group.files.sorted { f1, f2 in
-                    let d1 = f1.creationDate ?? Date.distantPast
-                    let d2 = f2.creationDate ?? Date.distantPast
-                    return d1 < d2
-                }
-                onDelete(Array(sortedFiles.dropFirst()))
+                removeFilesExceptSelectedKeepFile()
             } label: {
-                Text("Keep First")
+                Text("Clean Up Selected")
             }
             .buttonStyle(.onboardingPill)
             .tint(.red)
@@ -1154,7 +1178,7 @@ struct UnifiedDuplicateGroupDetailView: View {
 
     private var sortedFiles: [FileItem] {
         // Put recommended file first, then sort by date
-        let recommendedId = group.recommendedFileId
+        let recommendedId = effectiveKeepFileId
         return group.files.sorted { f1, f2 in
             if f1.id == recommendedId { return true }
             if f2.id == recommendedId { return false }
@@ -1165,7 +1189,11 @@ struct UnifiedDuplicateGroupDetailView: View {
     }
 
     private func recommendationLabel(for file: FileItem) -> String? {
-        guard file.id == group.recommendedFileId else { return nil }
+        guard file.id == effectiveKeepFileId else { return nil }
+
+        if selectedKeepFileId == file.id {
+            return "Selected"
+        }
 
         switch group.recommendation {
         case .keepHighestResolution:
@@ -1198,27 +1226,93 @@ struct UnifiedDuplicateGroupDetailView: View {
     ) -> String {
         switch recommendation {
         case .keepHighestResolution:
-            return "Keep Highest Res"
+            return "Clean Up Selected"
         case .keepNewest:
-            return "Keep Newest"
+            return "Clean Up Selected"
         case .keepOldest:
-            return "Keep Original"
+            return "Clean Up Selected"
         case .keepLargest:
-            return "Keep Largest"
+            return "Clean Up Selected"
         case .archiveOlderVersions:
             return "Archive Older"
         case .manualReview:
-            return "Review"
+            return "Clean Up Selected"
         }
     }
 
-    private func applyRecommendation() {
-        guard let recommendedId = group.recommendedFileId else {
-            // Manual review - delete none
-            return
-        }
-        let filesToRemove = group.files.filter { $0.id != recommendedId }
+    private var effectiveKeepFileId: UUID? {
+        selectedKeepFileId ?? preferredKeepFileId()
+    }
+
+    private func removeFilesExceptSelectedKeepFile() {
+        guard let keepId = effectiveKeepFileId else { return }
+        let filesToRemove = group.files.filter { $0.id != keepId }
         onDelete(filesToRemove)
+    }
+
+    private func preferredKeepFileId() -> UUID? {
+        if let promptMatch = keepFileIdMatchingCleanupPreference() {
+            return promptMatch
+        }
+
+        if let recommended = group.recommendedFileId {
+            return recommended
+        }
+
+        return keepFile(using: settings.defaultKeepStrategy)?.id
+    }
+
+    private func keepFileIdMatchingCleanupPreference() -> UUID? {
+        let prompt = settings.cleanupPreferencePrompt
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !prompt.isEmpty else { return nil }
+
+        if prompt.contains("highest resolution") || prompt.contains("highest quality") || prompt.contains("best quality") {
+            return group.files.max {
+                (($0.totalPixels ?? 0), $0.size) < (($1.totalPixels ?? 0), $1.size)
+            }?.id
+        }
+        if prompt.contains("largest") || prompt.contains("biggest") {
+            return group.files.max { $0.size < $1.size }?.id
+        }
+        if prompt.contains("smallest") {
+            return group.files.min { $0.size < $1.size }?.id
+        }
+        if prompt.contains("newest") || prompt.contains("latest") || prompt.contains("most recent") {
+            return group.files.max { comparableDate(for: $0) < comparableDate(for: $1) }?.id
+        }
+        if prompt.contains("oldest") || prompt.contains("original") || prompt.contains("earliest") {
+            return group.files.min { comparableDate(for: $0) < comparableDate(for: $1) }?.id
+        }
+
+        let promptWords = Set(prompt.split { !$0.isLetter && !$0.isNumber }.map(String.init))
+            .filter { $0.count >= 3 }
+        guard !promptWords.isEmpty else { return nil }
+
+        return group.files.first { file in
+            let pathWords = Set(file.path.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
+            return !promptWords.isDisjoint(with: pathWords)
+        }?.id
+    }
+
+    private func keepFile(using strategy: KeepStrategy) -> FileItem? {
+        switch strategy {
+        case .newest:
+            return group.files.max { comparableDate(for: $0) < comparableDate(for: $1) }
+        case .oldest:
+            return group.files.min { comparableDate(for: $0) < comparableDate(for: $1) }
+        case .largest:
+            return group.files.max { $0.size < $1.size }
+        case .smallest:
+            return group.files.min { $0.size < $1.size }
+        case .shortestPath:
+            return group.files.min { $0.path.count < $1.path.count }
+        }
+    }
+
+    private func comparableDate(for file: FileItem) -> Date {
+        file.modificationDate ?? file.creationDate ?? .distantPast
     }
 }
 
@@ -1253,6 +1347,7 @@ struct UnifiedFileDetailRow: View {
     let file: FileItem
     let isRecommended: Bool
     let recommendation: String?
+    let onKeep: () -> Void
     let onDelete: () -> Void
 
     private var fileURL: URL {
@@ -1290,6 +1385,7 @@ struct UnifiedFileDetailRow: View {
                 if isRecommended {
                     keepBadge
                 } else {
+                    keepButton
                     deleteButton
                 }
                 Spacer()
@@ -1406,6 +1502,16 @@ struct UnifiedFileDetailRow: View {
         .foregroundStyle(.red)
         .help("Delete this duplicate")
         .accessibilityLabel("Delete \(file.displayName)")
+    }
+
+    private var keepButton: some View {
+        Button(action: onKeep) {
+            Label("Keep This", systemImage: "checkmark.circle")
+                .labelStyle(.titleAndIcon)
+        }
+        .buttonStyle(.sortyBordered)
+        .controlSize(.small)
+        .help("Keep this file and mark the others for cleanup")
     }
 
     private var keepBadge: some View {
