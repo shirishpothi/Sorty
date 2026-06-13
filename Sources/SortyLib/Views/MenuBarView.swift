@@ -168,9 +168,6 @@ public struct MenuBarView: View {
                 openDestination(.storage(action: nil, path: nil))
             }
 
-            MenuBarButton(title: "Watched Folders Settings", icon: "eye") {
-                openDestination(.watched(action: nil, path: nil))
-            }
         }
     }
 
