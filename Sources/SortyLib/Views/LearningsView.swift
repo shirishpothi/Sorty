@@ -5,8 +5,8 @@
 //  Passive Learning Dashboard — single scrollable page
 //
 
-import SwiftUI
 import AppKit
+import SwiftUI
 import UniformTypeIdentifiers
 
 // MARK: - Liquid Glass Styles (used by LearningsHoningView)
@@ -16,15 +16,7 @@ struct LiquidGlassModifier: ViewModifier {
     @Environment(\.colorScheme) var colorScheme
 
     func body(content: Content) -> some View {
-        let style = SortyDesignSystem.CardStyles.CardStyle(
-            backgroundColor: Color(NSColor.controlBackgroundColor),
-            cornerRadius: cornerRadius,
-            strokeColor: SortyDesignSystem.Colors.glassBorder,
-            strokeWidth: 1,
-            padding: 0,
-            useUltraThinMaterial: true
-        )
-        return content.sortyCardStyle(style)
+        content.systemLiquidGlassBackground(cornerRadius: cornerRadius)
     }
 }
 
@@ -61,7 +53,6 @@ struct LearningsView: View {
         case deleteData
     }
 
-
     private enum ActiveFileImporter: Int, Identifiable {
         case modelDirectories
         case learningsProfile
@@ -71,7 +62,8 @@ struct LearningsView: View {
         var allowedContentTypes: [UTType] {
             switch self {
             case .modelDirectories: return [.folder]
-            case .learningsProfile: return [UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json]
+            case .learningsProfile:
+                return [UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json]
             }
         }
 
@@ -128,18 +120,28 @@ struct LearningsView: View {
             VStack(spacing: 8) {
                 Text("The Learnings")
                     .font(.largeTitle.bold())
-                Text("A passive learning system that watches how you organize files and learns your preferences over time.")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 500)
+                Text(
+                    "A passive learning system that watches how you organize files and learns your preferences over time."
+                )
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 500)
             }
 
             VStack(alignment: .leading, spacing: 14) {
-                featureRow(icon: "eye.fill", title: "Watches", description: "Observes when you modify directories after AI organization")
-                featureRow(icon: "arrow.uturn.backward.circle.fill", title: "Learns from Reverts", description: "Understands when AI suggestions weren't right")
-                featureRow(icon: "text.bubble.fill", title: "Remembers Instructions", description: "Captures your additional guidance and preferences")
-                featureRow(icon: "sparkles", title: "Improves Over Time", description: "Uses learnings to make better future suggestions")
+                featureRow(
+                    icon: "eye.fill", title: "Watches",
+                    description: "Observes when you modify directories after AI organization")
+                featureRow(
+                    icon: "arrow.uturn.backward.circle.fill", title: "Learns from Reverts",
+                    description: "Understands when AI suggestions weren't right")
+                featureRow(
+                    icon: "text.bubble.fill", title: "Remembers Instructions",
+                    description: "Captures your additional guidance and preferences")
+                featureRow(
+                    icon: "sparkles", title: "Improves Over Time",
+                    description: "Uses learnings to make better future suggestions")
             }
             .padding(16)
             .systemLiquidGlassBackground(cornerRadius: 16)
@@ -163,15 +165,17 @@ struct LearningsView: View {
             .background(Color.green.opacity(0.1))
             .cornerRadius(20)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Privacy: Data is encrypted locally with biometric protection. You can delete anytime.")
+            .accessibilityLabel(
+                "Privacy: Data is encrypted locally with biometric protection. You can delete anytime."
+            )
 
             Button(action: {
-                  Task {
-                      HapticFeedbackManager.shared.light()
-                      await manager.grantConsent()
-                      manager.completeInitialSetup()
-                      HapticFeedbackManager.shared.success()
-                  }
+                Task {
+                    HapticFeedbackManager.shared.light()
+                    await manager.grantConsent()
+                    manager.completeInitialSetup()
+                    HapticFeedbackManager.shared.success()
+                }
             }) {
                 Label("Enable Learning", systemImage: "checkmark.circle.fill")
                     .font(.headline)
@@ -179,11 +183,11 @@ struct LearningsView: View {
             .buttonStyle(.onboardingPill)
             .onboardingBeamBorder(variant: .featured)
             .keyboardShortcut(.return)
-              .onHover { hovering in
-                  if hovering {
-                      HapticFeedbackManager.shared.selection()
-                  }
-              }
+            .onHover { hovering in
+                if hovering {
+                    HapticFeedbackManager.shared.selection()
+                }
+            }
             .accessibilityLabel("Enable Learning")
             .accessibilityHint("Start learning from your organization habits")
 
@@ -255,7 +259,9 @@ struct LearningsView: View {
                 : settingsViewModel.config.model,
             onSelect: { provider, model in
                 HapticFeedbackManager.shared.selection()
-                if provider == settingsViewModel.config.provider && model == settingsViewModel.config.model {
+                if provider == settingsViewModel.config.provider
+                    && model == settingsViewModel.config.model
+                {
                     manager.clearLearningsModelOverride()
                 } else {
                     manager.setLearningsModelOverride(provider: provider, model: model)
@@ -263,35 +269,39 @@ struct LearningsView: View {
             }
         )
         .alert("Delete All Learning Data?", isPresented: $showingDeleteConfirmation) {
-            Button("Cancel", role: .cancel) { }
-              Button("Delete", role: .destructive) {
-                  HapticFeedbackManager.shared.error()
-                  Task {
-                      let didClear = await manager.clearAllData()
-                      if didClear {
-                          HapticFeedbackManager.shared.success()
-                          withAnimation(.spring()) {
-                              appState.hasCompletedOnboarding = false
-                          }
-                      } else {
-                          HapticFeedbackManager.shared.error()
-                      }
-                  }
-              }
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                HapticFeedbackManager.shared.error()
+                Task {
+                    let didClear = await manager.clearAllData()
+                    if didClear {
+                        HapticFeedbackManager.shared.success()
+                        withAnimation(.spring()) {
+                            appState.hasCompletedOnboarding = false
+                        }
+                    } else {
+                        HapticFeedbackManager.shared.error()
+                    }
+                }
+            }
         } message: {
-            Text("This will permanently delete all your learning data and preferences. This cannot be undone.")
+            Text(
+                "This will permanently delete all your learning data and preferences. This cannot be undone."
+            )
         }
         .alert("Withdraw Consent?", isPresented: $showingWithdrawConfirmation) {
-            Button("Cancel", role: .cancel) { }
-              Button("Withdraw", role: .destructive) {
-                  HapticFeedbackManager.shared.light()
-                  Task {
-                      await manager.withdrawConsent()
-                      HapticFeedbackManager.shared.success()
-                  }
-              }
+            Button("Cancel", role: .cancel) {}
+            Button("Withdraw", role: .destructive) {
+                HapticFeedbackManager.shared.light()
+                Task {
+                    await manager.withdrawConsent()
+                    HapticFeedbackManager.shared.success()
+                }
+            }
         } message: {
-            Text("Learning will stop but your existing data will be preserved. You can re-enable learning later.")
+            Text(
+                "Learning will stop but your existing data will be preserved. You can re-enable learning later."
+            )
         }
         .onReceive(NotificationCenter.default.publisher(for: .startHoningSession)) { notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
@@ -303,7 +313,8 @@ struct LearningsView: View {
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
             showingWithdrawConfirmation = true
         }
-        .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .exportLearningsProfile)) {
+            notification in
             guard notification.targetsWindowSession(appState.windowSessionID) else { return }
             requestSensitiveAction(
                 reason: "Authenticate to export your learnings profile."
@@ -377,7 +388,7 @@ struct LearningsView: View {
                             HapticFeedbackManager.shared.selection()
                         }
                     }
-    
+
                     Button {
                         toggleSessionLearningPaused()
                     } label: {
@@ -387,19 +398,22 @@ struct LearningsView: View {
                         )
                         .font(.caption.bold())
                     }
-                    .buttonStyle(.tintedPill(manager.sessionLearningPaused ? .green : .red, size: .small))
-                      .onHover { hovering in
-                          if hovering {
-                              HapticFeedbackManager.shared.selection()
-                          }
-                      }
-    
+                    .buttonStyle(
+                        .tintedPill(manager.sessionLearningPaused ? .green : .red, size: .small)
+                    )
+                    .onHover { hovering in
+                        if hovering {
+                            HapticFeedbackManager.shared.selection()
+                        }
+                    }
+
                     Menu {
                         Section("Learnings Controls") {
                             Button {
                                 restoreLearningsDefaults()
                             } label: {
-                                Label("Reset Learnings Defaults", systemImage: "arrow.uturn.backward")
+                                Label(
+                                    "Reset Learnings Defaults", systemImage: "arrow.uturn.backward")
                             }
 
                             Button {
@@ -411,7 +425,10 @@ struct LearningsView: View {
                             Button {
                                 refreshLearningsInsights()
                             } label: {
-                                Label(isQuickRefreshingLearnings ? "Refreshing…" : "Refresh Learnings", systemImage: "arrow.clockwise")
+                                Label(
+                                    isQuickRefreshingLearnings
+                                        ? "Refreshing…" : "Refresh Learnings",
+                                    systemImage: "arrow.clockwise")
                             }
                             .disabled(isQuickRefreshingLearnings)
                         }
@@ -460,9 +477,11 @@ struct LearningsView: View {
                         .foregroundStyle(.secondary)
                     }
                     .menuStyle(.borderlessButton)
-                    .simultaneousGesture(TapGesture().onEnded {
-                        HapticFeedbackManager.shared.light()
-                    })
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            HapticFeedbackManager.shared.light()
+                        }
+                    )
                     .frame(width: 34)
                     .accessibilityLabel("Learnings settings")
                     .onHover { hovering in
@@ -470,12 +489,12 @@ struct LearningsView: View {
                             HapticFeedbackManager.shared.selection()
                         }
                     }
-    
+
                     statusBadge
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-                .background(Color.secondary.opacity(0.08))
+                .systemLiquidGlassBackground(cornerRadius: 999)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
@@ -488,7 +507,7 @@ struct LearningsView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 16)
-        .background(.ultraThinMaterial)
+        .systemLiquidGlassBackground(cornerRadius: 0)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Learnings header")
     }
@@ -569,7 +588,7 @@ struct LearningsView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(Color.secondary.opacity(0.08))
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -597,7 +616,9 @@ struct LearningsView: View {
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .pauseResume ? 0.12 : 0.0))
+                        .fill(
+                            Color.secondary.opacity(
+                                hoveredStatusPopoverAction == .pauseResume ? 0.12 : 0.0))
                 )
                 .offset(x: hoveredStatusPopoverAction == .pauseResume ? 1 : 0)
                 .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
@@ -627,7 +648,9 @@ struct LearningsView: View {
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .withdrawConsent ? 0.12 : 0.0))
+                        .fill(
+                            Color.secondary.opacity(
+                                hoveredStatusPopoverAction == .withdrawConsent ? 0.12 : 0.0))
                 )
                 .offset(x: hoveredStatusPopoverAction == .withdrawConsent ? 1 : 0)
                 .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
@@ -661,7 +684,9 @@ struct LearningsView: View {
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.secondary.opacity(hoveredStatusPopoverAction == .deleteData ? 0.12 : 0.0))
+                        .fill(
+                            Color.secondary.opacity(
+                                hoveredStatusPopoverAction == .deleteData ? 0.12 : 0.0))
                 )
                 .offset(x: hoveredStatusPopoverAction == .deleteData ? 1 : 0)
                 .animation(.easeInOut(duration: 0.14), value: hoveredStatusPopoverAction)
@@ -676,9 +701,9 @@ struct LearningsView: View {
             }
             .padding(8)
             .frame(width: 220)
-              .onDisappear {
-                  hoveredStatusPopoverAction = nil
-              }
+            .onDisappear {
+                hoveredStatusPopoverAction = nil
+            }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Learning status quick actions")
             .systemLiquidGlassPopover(cornerRadius: 12)
@@ -733,13 +758,13 @@ struct LearningsView: View {
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.orange.opacity(0.06))
+                .systemLiquidGlassBackground(cornerRadius: 8)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.04))
+        .systemLiquidGlassBackground(cornerRadius: 14)
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Learning status summary")
@@ -795,7 +820,8 @@ struct LearningsView: View {
         if recentClean == recentSessions.count && recentSessions.count >= 2 {
             return "Your last \(recentSessions.count) runs needed no corrections."
         } else if ruleCount > 0 {
-            return "\(ruleCount) learned pattern\(ruleCount == 1 ? " is" : "s are") actively applied."
+            return
+                "\(ruleCount) learned pattern\(ruleCount == 1 ? " is" : "s are") actively applied."
         }
         return nil
     }
@@ -809,17 +835,19 @@ struct LearningsView: View {
                     .font(.title2.bold())
                     .foregroundStyle(.teal)
                     .frame(width: 42, height: 42)
-                    .background(Color.teal.opacity(0.10))
+                    .systemLiquidGlassBackground(cornerRadius: 12)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Teach Sorty with example folders")
                         .font(.headline)
-                    Text("Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        "Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 16)
@@ -856,26 +884,32 @@ struct LearningsView: View {
                 VStack(spacing: 6) {
                     ForEach(manager.modelDirectories.prefix(3)) { directory in
                         HStack(spacing: 8) {
-                            Image(systemName: directory.isEnabled ? "checkmark.circle.fill" : "pause.circle")
-                                .foregroundStyle(directory.isEnabled ? .green : .secondary)
-                                .accessibilityHidden(true)
+                            Image(
+                                systemName: directory.isEnabled
+                                    ? "checkmark.circle.fill" : "pause.circle"
+                            )
+                            .foregroundStyle(directory.isEnabled ? .green : .secondary)
+                            .accessibilityHidden(true)
                             Text(directory.displayName)
                                 .font(.caption.bold())
                             Spacer()
-                            Text(directory.scanSnapshot?.namingConventions.joined(separator: ", ") ?? "Ready to scan")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                            Text(
+                                directory.scanSnapshot?.namingConventions.joined(separator: ", ")
+                                    ?? "Ready to scan"
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                         }
                     }
                 }
                 .padding(10)
-                .background(Color.secondary.opacity(0.04))
+                .systemLiquidGlassBackground(cornerRadius: 10)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
         }
         .padding(16)
-        .background(Color.teal.opacity(0.06))
+        .systemLiquidGlassBackground(cornerRadius: 16)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -897,7 +931,7 @@ struct LearningsView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(color.opacity(0.08))
+        .systemLiquidGlassBackground(cornerRadius: 10)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(value), \(label)")
@@ -963,25 +997,34 @@ struct LearningsView: View {
                 .accessibilityIgnoresInvertColors()
                 .opacity(emptyLearningsHasAppeared ? 1 : 0)
                 .scaleEffect(emptyLearningsHasAppeared ? 1 : 0.8)
-                .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: emptyLearningsHasAppeared)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1),
+                    value: emptyLearningsHasAppeared
+                )
                 .accessibilityHidden(true)
             Text("No patterns learned yet")
                 .font(.subheadline.bold())
                 .opacity(emptyLearningsHasAppeared ? 1 : 0)
                 .offset(y: emptyLearningsHasAppeared ? 0 : 8)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: emptyLearningsHasAppeared)
-            Text("Organize some folders, and Sorty will pick up your preferences from corrections and feedback.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 360)
-                .opacity(emptyLearningsHasAppeared ? 1 : 0)
-                .offset(y: emptyLearningsHasAppeared ? 0 : 10)
-                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: emptyLearningsHasAppeared)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.8).delay(0.2),
+                    value: emptyLearningsHasAppeared)
+            Text(
+                "Organize some folders, and Sorty will pick up your preferences from corrections and feedback."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 360)
+            .opacity(emptyLearningsHasAppeared ? 1 : 0)
+            .offset(y: emptyLearningsHasAppeared ? 0 : 10)
+            .animation(
+                .spring(response: 0.5, dampingFraction: 0.8).delay(0.3),
+                value: emptyLearningsHasAppeared)
         }
         .padding(20)
         .frame(maxWidth: .infinity)
-        .background(Color.secondary.opacity(0.04))
+        .systemLiquidGlassBackground(cornerRadius: 12)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No patterns learned yet. Organize folders to start learning.")
@@ -1003,7 +1046,8 @@ struct LearningsView: View {
             if let profile = manager.currentProfile, !profile.sessions.isEmpty {
                 let recentSessions = Array(profile.sessions.prefix(10))
                 VStack(spacing: 0) {
-                    ForEach(Array(recentSessions.enumerated()), id: \.element.id) { index, session in
+                    ForEach(Array(recentSessions.enumerated()), id: \.element.id) {
+                        index, session in
                         SessionTimelineRow(session: session)
                             .animatedAppearance(delay: Double(index) * 0.04)
                         if index < recentSessions.count - 1 {
@@ -1030,7 +1074,7 @@ struct LearningsView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity)
-                .background(Color.secondary.opacity(0.04))
+                .systemLiquidGlassBackground(cornerRadius: 12)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("No activity yet.")
@@ -1079,11 +1123,13 @@ struct LearningsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Learnings Model")
                                 .font(.subheadline)
-                            Text(usesDedicatedLearningsModel
-                                 ? "Dedicated to learnings analysis"
-                                 : "Using the same model as organization")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(
+                                usesDedicatedLearningsModel
+                                    ? "Dedicated to learnings analysis"
+                                    : "Using the same model as organization"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button {
@@ -1104,7 +1150,8 @@ struct LearningsView: View {
 
                     ModelSelectorRow(
                         provider: usesDedicatedLearningsModel
-                            ? (manager.learningsModelSelection?.provider ?? settingsViewModel.config.provider)
+                            ? (manager.learningsModelSelection?.provider
+                                ?? settingsViewModel.config.provider)
                             : settingsViewModel.config.provider,
                         model: usesDedicatedLearningsModel
                             ? effectiveLearningsModel
@@ -1150,7 +1197,7 @@ struct LearningsView: View {
                 .padding(.vertical, 10)
                 .padding(.horizontal, 12)
             }
-            .background(Color.secondary.opacity(0.04))
+            .systemLiquidGlassBackground(cornerRadius: 12)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             HStack(spacing: 12) {
@@ -1160,38 +1207,46 @@ struct LearningsView: View {
                 }) {
                     Label("Withdraw Consent", systemImage: "hand.raised")
                         .font(.caption.bold())
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .systemLiquidGlassBackground(cornerRadius: 999)
                 }
-                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
-                  .onHover { hovering in
-                      if hovering {
-                          HapticFeedbackManager.shared.selection()
-                      }
-                  }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                }
                 .accessibilityHint("Learning will stop but data is preserved")
 
-                Button(role: .destructive, action: {
-                    requestSensitiveAction(
-                        reason: "Authenticate to delete all learning data."
-                    ) {
-                        HapticFeedbackManager.shared.error()
-                        showingDeleteConfirmation = true
+                Button(
+                    role: .destructive,
+                    action: {
+                        requestSensitiveAction(
+                            reason: "Authenticate to delete all learning data."
+                        ) {
+                            HapticFeedbackManager.shared.error()
+                            showingDeleteConfirmation = true
+                        }
                     }
-                }) {
+                ) {
                     Label("Delete All Data", systemImage: "trash")
                         .font(.caption.bold())
                 }
                 .buttonStyle(.tintedPill(.red, size: .small))
-                  .onHover { hovering in
-                      if hovering {
-                          HapticFeedbackManager.shared.selection()
-                      }
-                  }
+                .onHover { hovering in
+                    if hovering {
+                        HapticFeedbackManager.shared.selection()
+                    }
+                }
                 .accessibilityHint("Permanently deletes all learning data")
             }
         }
     }
 
-    private func settingsToggleRow(icon: String, iconColor: Color, title: String, subtitle: String, isOn: Binding<Bool>) -> some View {
+    private func settingsToggleRow(
+        icon: String, iconColor: Color, title: String, subtitle: String, isOn: Binding<Bool>
+    ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .foregroundColor(iconColor)
@@ -1229,7 +1284,8 @@ struct LearningsView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.secondary)
                         .rotationEffect(.degrees(advancedExpanded ? 90 : 0))
-                        .animation(.spring(response: 0.3, dampingFraction: 0.82), value: advancedExpanded)
+                        .animation(
+                            .spring(response: 0.3, dampingFraction: 0.82), value: advancedExpanded)
                 }
                 .contentShape(Rectangle())
             }
@@ -1255,10 +1311,12 @@ struct LearningsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Teach Sorty with example folders")
                         .font(.subheadline.bold())
-                    Text("Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        "Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 if !manager.modelDirectories.isEmpty {
@@ -1267,7 +1325,7 @@ struct LearningsView: View {
                         .foregroundStyle(.teal)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color.teal.opacity(0.1))
+                        .systemLiquidGlassBackground(cornerRadius: 999)
                         .clipShape(Capsule())
                         .contentTransition(.numericText())
                     Button {
@@ -1289,11 +1347,13 @@ struct LearningsView: View {
                         .accessibilityHidden(true)
                     Text("No reference directories")
                         .font(.subheadline.bold())
-                    Text("Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 340)
+                    Text(
+                        "Point Sorty at folders that are already organized well. It will learn naming conventions, hierarchy depth, and media-style patterns, then apply similar rules during non-destructive previews."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 340)
                     Button {
                         presentFileImporter(.modelDirectories)
                     } label: {
@@ -1305,7 +1365,7 @@ struct LearningsView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity)
-                .background(Color.secondary.opacity(0.04))
+                .systemLiquidGlassBackground(cornerRadius: 12)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             } else {
                 VStack(spacing: 6) {
@@ -1350,7 +1410,8 @@ struct LearningsView: View {
         }
 
         Task { @MainActor in
-            let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(reason: reason)
+            let didAuthenticate = await SecurityManager.shared.authenticateForSensitiveAction(
+                reason: reason)
             guard didAuthenticate else {
                 HapticFeedbackManager.shared.error()
                 return
@@ -1390,7 +1451,8 @@ struct LearningsView: View {
         let panel = NSSavePanel()
         let learningsType = UTType(filenameExtension: "learnings", conformingTo: .json) ?? .json
         panel.allowedContentTypes = [learningsType]
-        panel.nameFieldStringValue = "learnings_profile_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "-")).learnings"
+        panel.nameFieldStringValue =
+            "learnings_profile_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "-")).learnings"
         panel.message = "Export Learning Profile"
 
         if panel.runModal() == .OK, let url = panel.url {
@@ -1418,7 +1480,11 @@ struct LearningsView: View {
                 defer { if hasScopedAccess { url.stopAccessingSecurityScopedResource() } }
                 if manager.addModelDirectory(url: url) { addedCount += 1 }
             }
-            if addedCount > 0 { HapticFeedbackManager.shared.success() } else { HapticFeedbackManager.shared.error() }
+            if addedCount > 0 {
+                HapticFeedbackManager.shared.success()
+            } else {
+                HapticFeedbackManager.shared.error()
+            }
         case .failure(let error):
             DebugLogger.log("Model directory import failed: \(error)")
             HapticFeedbackManager.shared.error()
@@ -1489,15 +1555,18 @@ private struct LearningInsightRow: View {
 
             Spacer()
 
-            Toggle("", isOn: Binding(
-                get: { rule.isEnabled },
-                set: { newValue in
-                    Task {
-                        HapticFeedbackManager.shared.selection()
-                        await manager.setRuleEnabled(ruleId: rule.id, enabled: newValue)
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { rule.isEnabled },
+                    set: { newValue in
+                        Task {
+                            HapticFeedbackManager.shared.selection()
+                            await manager.setRuleEnabled(ruleId: rule.id, enabled: newValue)
+                        }
                     }
-                }
-            ))
+                )
+            )
             .labelsHidden()
             .toggleStyle(.switch)
             .scaleEffect(0.7)
@@ -1607,9 +1676,11 @@ private struct SessionTimelineRow: View {
                                     .foregroundStyle(.secondary)
                             }
                             if !session.userCorrections.isEmpty {
-                                Text("\(session.userCorrections.count) correction\(session.userCorrections.count == 1 ? "" : "s")")
-                                    .font(.caption)
-                                    .foregroundStyle(.orange)
+                                Text(
+                                    "\(session.userCorrections.count) correction\(session.userCorrections.count == 1 ? "" : "s")"
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.orange)
                             }
                         }
                     }
@@ -1665,7 +1736,9 @@ private struct SessionTimelineRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(folderName), \(reactionLabel), \(sessionDate.formatted(date: .abbreviated, time: .shortened))")
+        .accessibilityLabel(
+            "\(folderName), \(reactionLabel), \(sessionDate.formatted(date: .abbreviated, time: .shortened))"
+        )
     }
 }
 
@@ -1686,14 +1759,17 @@ struct ModelDirectoryRow: View {
         guard let snapshot = directory.scanSnapshot else {
             return "Queued for scanning - used once Sorty reads the structure"
         }
-        return "Used in previews - scanned \(snapshot.totalFolderCount) folders and \(snapshot.totalFileCount) files"
+        return
+            "Used in previews - scanned \(snapshot.totalFolderCount) folders and \(snapshot.totalFileCount) files"
     }
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: directory.isAccessible ? "folder.fill" : "folder.badge.questionmark")
                 .font(.body.bold())
-                .foregroundColor(directory.isAccessible ? (directory.isEnabled ? .teal : .secondary) : .orange)
+                .foregroundColor(
+                    directory.isAccessible ? (directory.isEnabled ? .teal : .secondary) : .orange
+                )
                 .frame(width: 24)
                 .onTapGesture {
                     guard directory.isAccessible else { return }
@@ -1712,7 +1788,9 @@ struct ModelDirectoryRow: View {
                     .truncationMode(.middle)
                 Text(statusText)
                     .font(.caption2)
-                    .foregroundStyle(directory.isEnabled && directory.isAccessible ? .teal : .secondary)
+                    .foregroundStyle(
+                        directory.isEnabled && directory.isAccessible ? .teal : .secondary
+                    )
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -1741,13 +1819,16 @@ struct ModelDirectoryRow: View {
                 .accessibilityIdentifier("OpenModelDirectoryButton_\(directory.id)")
             }
 
-            Toggle("", isOn: Binding(
-                get: { directory.isEnabled },
-                set: { _ in
-                    HapticFeedbackManager.shared.selection()
-                    manager.toggleModelDirectory(id: directory.id)
-                }
-            ))
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { directory.isEnabled },
+                    set: { _ in
+                        HapticFeedbackManager.shared.selection()
+                        manager.toggleModelDirectory(id: directory.id)
+                    }
+                )
+            )
             .labelsHidden()
             .toggleStyle(.switch)
             .scaleEffect(0.8)
@@ -1824,7 +1905,8 @@ struct LearningExclusionRow: View {
                 HapticFeedbackManager.shared.tap()
                 Task {
                     await manager.removeLearningExclusion(pattern)
-                    exclusionRules.removeLegacyLearningsLinkedRules(matchingLearningPattern: pattern)
+                    exclusionRules.removeLegacyLearningsLinkedRules(
+                        matchingLearningPattern: pattern)
                 }
             } label: {
                 Label("Remove", systemImage: "xmark")
