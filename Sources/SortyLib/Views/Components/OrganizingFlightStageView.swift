@@ -35,6 +35,7 @@ struct OrganizingFlightStageView: View {
     @State private var currentFileIcon: NSImage = AnalysisIconProvider.icon(for: .data)
     @State private var currentFileName = ""
     @State private var currentRenamedFileName: String?
+    @State private var renameStrikeProgress: CGFloat = 0
     @State private var renameProgress: CGFloat = 0
     @State private var currentCardWidth: CGFloat = 188
     @State private var displayedSuggestions: [FolderSuggestion] = []
@@ -137,12 +138,25 @@ struct OrganizingFlightStageView: View {
         Group {
             if prioritizesFilenames, let currentRenamedFileName {
                 ZStack(alignment: .leading) {
-                    Text(currentFileName)
-                        .foregroundStyle(Color.primary.opacity(0.72))
+                    ZStack(alignment: .leading) {
+                        Text(currentFileName)
+                            .foregroundStyle(Color.primary.opacity(0.72))
+                            .opacity(1 - Double(renameStrikeProgress))
+
+                        Text(currentFileName)
+                            .foregroundStyle(Color.red.opacity(0.82))
+                            .opacity(Double(renameStrikeProgress))
+                            .overlay {
+                                Rectangle()
+                                    .fill(Color.red.opacity(0.78))
+                                    .frame(height: 1.5)
+                                    .scaleEffect(x: renameStrikeProgress, anchor: .leading)
+                            }
+                    }
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .opacity(1 - Double(renameProgress))
-                        .blur(radius: renameProgress * 3.5)
+                        .blur(radius: renameProgress * 2.5)
 
                     Text(currentRenamedFileName)
                         .fontWeight(.medium)
@@ -150,8 +164,7 @@ struct OrganizingFlightStageView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .opacity(Double(renameProgress))
-                        .blur(radius: (1 - renameProgress) * 3.5)
-                        .scaleEffect(0.97 + renameProgress * 0.03, anchor: .leading)
+                        .blur(radius: (1 - renameProgress) * 2.5)
                 }
             } else {
                 Text(currentFileName)
@@ -242,6 +255,7 @@ struct OrganizingFlightStageView: View {
                     originalName: flight.file.displayName,
                     suggestedName: flight.renameMapping?.suggestedName
                 )
+                renameStrikeProgress = 0
                 renameProgress = 0
                 await runFlight(toIndex: flight.folderIndex)
                 try? await Task.sleep(nanoseconds: 140_000_000)
@@ -255,6 +269,7 @@ struct OrganizingFlightStageView: View {
         cardOpacity = 0
         bumpedIndex = nil
         haloIndex = nil
+        renameStrikeProgress = 0
         renameProgress = 0
     }
 
@@ -277,11 +292,17 @@ struct OrganizingFlightStageView: View {
         let landingY = folderTopOffset() - 8
 
         if currentRenamedFileName != nil {
-            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.32)) {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                renameStrikeProgress = 1
+            }
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            if Task.isCancelled { return }
+
+            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.26)) {
                 renameProgress = 1
             }
             HapticFeedbackManager.shared.selection()
-            try? await Task.sleep(nanoseconds: 190_000_000)
+            try? await Task.sleep(nanoseconds: 160_000_000)
             if Task.isCancelled { return }
         }
 
