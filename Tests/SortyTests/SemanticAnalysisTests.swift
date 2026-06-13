@@ -265,6 +265,103 @@ class SemanticDuplicateTests: XCTestCase {
 
         XCTAssertEqual(group.similarityPercentage, "86%")
     }
+
+    func testSemanticDetectorMergesOverlappingEvidence() async {
+        let baseDate = Date()
+        let files = [
+            FileItem(
+                path: "/test/IMG_1001.jpg",
+                name: "IMG_1001",
+                extension: "jpg",
+                size: 1_000_000,
+                creationDate: baseDate,
+                contentFingerprint: String(repeating: "0", count: 64),
+                imageWidth: 4_000,
+                imageHeight: 3_000
+            ),
+            FileItem(
+                path: "/test/IMG_1002.jpg",
+                name: "IMG_1002",
+                extension: "jpg",
+                size: 1_100_000,
+                creationDate: baseDate.addingTimeInterval(1),
+                contentFingerprint: String(repeating: "0", count: 64),
+                imageWidth: 4_000,
+                imageHeight: 3_000
+            ),
+            FileItem(
+                path: "/test/IMG_1003.jpg",
+                name: "IMG_1003",
+                extension: "jpg",
+                size: 500_000,
+                creationDate: baseDate.addingTimeInterval(2),
+                contentFingerprint: String(repeating: "0", count: 64),
+                imageWidth: 2_000,
+                imageHeight: 1_500
+            )
+        ]
+
+        let detector = SemanticDuplicateDetector(similarityThreshold: 0.90)
+        let groups = await detector.findSemanticDuplicates(in: files)
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(Set(groups[0].files.map(\.id)), Set(files.map(\.id)))
+    }
+
+    func testBurstDetectionDoesNotGroupUnrelatedSameSecondImages() async {
+        let baseDate = Date()
+        let files = [
+            FileItem(
+                path: "/test/receipt.jpg",
+                name: "receipt",
+                extension: "jpg",
+                size: 1_000_000,
+                creationDate: baseDate,
+                imageWidth: 4_000,
+                imageHeight: 3_000
+            ),
+            FileItem(
+                path: "/test/screenshot.jpg",
+                name: "screenshot",
+                extension: "jpg",
+                size: 1_000_000,
+                creationDate: baseDate.addingTimeInterval(1),
+                imageWidth: 4_000,
+                imageHeight: 3_000
+            )
+        ]
+
+        let detector = SemanticDuplicateDetector(similarityThreshold: 0.90)
+        let groups = await detector.findSemanticDuplicates(in: files)
+
+        XCTAssertTrue(groups.isEmpty)
+    }
+
+    func testDocumentVersionDetectionIgnoresMeaningfulBareNumbers() async {
+        let files = [
+            FileItem(path: "/test/tax-return-2024.pdf", name: "tax-return-2024", extension: "pdf"),
+            FileItem(path: "/test/tax-return-2025.pdf", name: "tax-return-2025", extension: "pdf")
+        ]
+
+        let detector = SemanticDuplicateDetector(similarityThreshold: 0.90)
+        let groups = await detector.findSemanticDuplicates(in: files)
+
+        XCTAssertTrue(groups.isEmpty)
+    }
+
+    func testDocumentVersionDetectionGroupsExplicitVersions() async {
+        let files = [
+            FileItem(path: "/test/proposal-v1.pdf", name: "proposal-v1", extension: "pdf"),
+            FileItem(path: "/test/proposal-v2.pdf", name: "proposal-v2", extension: "pdf")
+        ]
+
+        let detector = SemanticDuplicateDetector(similarityThreshold: 0.90)
+        let groups = await detector.findSemanticDuplicates(in: files)
+
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups[0].groupType, .documentVersions)
+        XCTAssertEqual(Set(groups[0].files.map(\.id)), Set(files.map(\.id)))
+    }
 }
 
 // MARK: - FileItem Semantic Extensions Tests

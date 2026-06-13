@@ -204,38 +204,34 @@ public actor SemanticDuplicateDetector {
     private func findBurstPhotos(in images: [FileItem]) async -> [SemanticDuplicateGroup] {
         var groups: [SemanticDuplicateGroup] = []
 
-        // Group by creation date within 2-second window
+        // Group by creation date within a short burst window, but require
+        // either camera-style filename continuity or comparable dimensions/size
+        // from similarly named files. Timestamp-only grouping is too noisy for
+        // large mixed photo folders.
         let sortedByDate = images
             .filter { $0.creationDate != nil }
             .sorted { ($0.creationDate ?? .distantPast) < ($1.creationDate ?? .distantPast) }
 
         var currentGroup: [FileItem] = []
-        var lastDate: Date?
+        var previousFile: FileItem?
 
         for file in sortedByDate {
-            guard let fileDate = file.creationDate else { continue }
-
-            if let last = lastDate {
-                let interval = fileDate.timeIntervalSince(last)
-                if interval <= 2.0 { // Within 2 seconds
-                    currentGroup.append(file)
-                } else {
-                    if currentGroup.count > 1 {
-                        let recommendation = recommendForBurstPhotos(currentGroup)
-                        groups.append(SemanticDuplicateGroup(
-                            groupType: .burstPhotos,
-                            files: currentGroup,
-                            similarity: 0.95,
-                            recommendation: recommendation
-                        ))
-                    }
-                    currentGroup = [file]
-                }
+            if let previousFile, shouldTreatAsBurstContinuation(previousFile, file) {
+                currentGroup.append(file)
             } else {
+                if currentGroup.count > 1 {
+                    let recommendation = recommendForBurstPhotos(currentGroup)
+                    groups.append(SemanticDuplicateGroup(
+                        groupType: .burstPhotos,
+                        files: currentGroup,
+                        similarity: 0.95,
+                        recommendation: recommendation
+                    ))
+                }
                 currentGroup = [file]
             }
 
-            lastDate = fileDate
+            previousFile = file
         }
 
         // Don't forget the last group
@@ -378,21 +374,17 @@ public actor SemanticDuplicateDetector {
         var groups: [SemanticDuplicateGroup] = []
         var processedIds: Set<UUID> = []
 
-        // Group documents by filename similarity (version patterns)
-        let versionPattern = #"[\s_-]*(v?\d+\.?\d*|draft|final|rev\d*|copy|old|new|backup)[\s_-]*"#
-
-        let baseNameGroups = Dictionary(grouping: documents) { file -> String in
-            var baseName = file.name.lowercased()
-
-            if let regex = try? NSRegularExpression(pattern: versionPattern, options: .caseInsensitive) {
-                let range = NSRange(baseName.startIndex..., in: baseName)
-                baseName = regex.stringByReplacingMatches(in: baseName, range: range, withTemplate: "")
-            }
-
-            return baseName + "." + file.extension.lowercased()
+        // Group documents by explicit version/copy markers only. Bare numbers
+        // often carry meaning (tax year, invoice number, report quarter) and
+        // should not create false-positive version groups.
+        let versionRecords = documents.map { file in
+            let versionKey = documentVersionKey(for: file)
+            return (file: file, key: versionKey.key, hasVersionMarker: versionKey.hasVersionMarker)
         }
+        let baseNameGroups = Dictionary(grouping: versionRecords, by: \.key)
 
-        for (_, filesInGroup) in baseNameGroups where filesInGroup.count > 1 {
+        for (_, recordsInGroup) in baseNameGroups where recordsInGroup.count > 1 && recordsInGroup.contains(where: \.hasVersionMarker) {
+            let filesInGroup = recordsInGroup.map(\.file)
             for file in filesInGroup {
                 processedIds.insert(file.id)
             }
@@ -660,6 +652,108 @@ public actor SemanticDuplicateDetector {
         return .manualReview
     }
 
+    private func shouldTreatAsBurstContinuation(_ previous: FileItem, _ candidate: FileItem) -> Bool {
+        guard let previousDate = previous.creationDate,
+              let candidateDate = candidate.creationDate,
+              candidateDate.timeIntervalSince(previousDate) <= 2.0,
+              URL(fileURLWithPath: previous.path).deletingLastPathComponent().path == URL(fileURLWithPath: candidate.path).deletingLastPathComponent().path,
+              previous.extension.lowercased() == candidate.extension.lowercased() else {
+            return false
+        }
+
+        return hasSequentialCameraName(previous.name, candidate.name)
+            || (hasSharedNamePrefix(previous.name, candidate.name) && hasComparableImageShapeAndSize(previous, candidate))
+    }
+
+    private func hasSequentialCameraName(_ firstName: String, _ secondName: String) -> Bool {
+        guard let first = cameraNameParts(firstName),
+              let second = cameraNameParts(secondName),
+              first.prefix == second.prefix else {
+            return false
+        }
+
+        return abs(first.number - second.number) <= 10
+    }
+
+    private func cameraNameParts(_ name: String) -> (prefix: String, number: Int)? {
+        let lowercasedName = name.lowercased()
+        guard let match = lowercasedName.range(
+            of: #"^([a-z_\- ]{2,})(\d{2,})$"#,
+            options: .regularExpression
+        ) else {
+            return nil
+        }
+
+        let matched = String(lowercasedName[match])
+        guard let numberRange = matched.range(of: #"\d{2,}$"#, options: .regularExpression),
+              let number = Int(matched[numberRange]) else {
+            return nil
+        }
+
+        let prefix = String(matched[..<numberRange.lowerBound])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (prefix, number)
+    }
+
+    private func hasSharedNamePrefix(_ firstName: String, _ secondName: String) -> Bool {
+        let firstPrefix = alphabeticPrefix(for: firstName)
+        let secondPrefix = alphabeticPrefix(for: secondName)
+        guard firstPrefix.count >= 4, secondPrefix.count >= 4 else { return false }
+        return firstPrefix == secondPrefix
+    }
+
+    private func alphabeticPrefix(for name: String) -> String {
+        let lowercasedName = name.lowercased()
+        guard let range = lowercasedName.range(of: #"^[a-z][a-z_\- ]+"#, options: .regularExpression) else {
+            return ""
+        }
+        return lowercasedName[range]
+            .replacingOccurrences(of: #"[\s_\-]+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func hasComparableImageShapeAndSize(_ first: FileItem, _ second: FileItem) -> Bool {
+        if let firstPixels = first.totalPixels,
+           let secondPixels = second.totalPixels,
+           firstPixels > 0,
+           secondPixels > 0 {
+            let ratio = Double(min(firstPixels, secondPixels)) / Double(max(firstPixels, secondPixels))
+            return ratio >= 0.92
+        }
+
+        guard first.size > 0, second.size > 0 else { return false }
+        let ratio = Double(min(first.size, second.size)) / Double(max(first.size, second.size))
+        return ratio >= 0.75
+    }
+
+    private func documentVersionKey(for file: FileItem) -> (key: String, hasVersionMarker: Bool) {
+        let lowercasedName = file.name.lowercased()
+        let patterns = [
+            #"([\s_\-\.]|^)(v|version|rev)\s*\d+(\.\d+)?$"#,
+            #"[\s_\-\.]+(draft|final|copy|backup|old|new)(\s*\d+)?$"#,
+            #"\s+\(\d+\)$"#
+        ]
+
+        var normalizedName = lowercasedName
+        var hasVersionMarker = false
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(normalizedName.startIndex..., in: normalizedName)
+                let updated = regex.stringByReplacingMatches(in: normalizedName, range: range, withTemplate: "")
+                if updated != normalizedName {
+                    normalizedName = updated
+                    hasVersionMarker = true
+                }
+            }
+        }
+
+        normalizedName = normalizedName
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ._-"))
+            .replacingOccurrences(of: #"[\s_\-\.]+"#, with: " ", options: .regularExpression)
+
+        return (normalizedName + "." + file.extension.lowercased(), hasVersionMarker)
+    }
+
     private func mergeOverlappingGroups(_ groups: [SemanticDuplicateGroup]) -> [SemanticDuplicateGroup] {
         let sortedGroups = groups.sorted {
             if $0.similarity == $1.similarity {
@@ -668,19 +762,58 @@ public actor SemanticDuplicateDetector {
             return $0.similarity > $1.similarity
         }
 
-        var result: [SemanticDuplicateGroup] = []
-        var usedFileIds: Set<UUID> = []
+        var components: [SemanticDuplicateGroup] = []
 
         for group in sortedGroups {
-            // Check if any file in this group is already in another group
-            let fileIds = Set(group.files.map { $0.id })
-            if fileIds.isDisjoint(with: usedFileIds) {
-                result.append(group)
-                usedFileIds.formUnion(fileIds)
+            var mergedGroup = group
+            var mergedIndexes: [Int] = []
+            var mergedFileIds = Set(group.files.map(\.id))
+
+            for (index, existingGroup) in components.enumerated() {
+                let existingFileIds = Set(existingGroup.files.map(\.id))
+                guard !mergedFileIds.isDisjoint(with: existingFileIds) else { continue }
+
+                mergedGroup = merge(mergedGroup, with: existingGroup)
+                mergedFileIds.formUnion(existingFileIds)
+                mergedIndexes.append(index)
             }
+
+            for index in mergedIndexes.reversed() {
+                components.remove(at: index)
+            }
+            components.append(mergedGroup)
         }
 
-        return result
+        return components.sorted {
+            if $0.similarity == $1.similarity {
+                return $0.potentialSavings > $1.potentialSavings
+            }
+            return $0.similarity > $1.similarity
+        }
+    }
+
+    private func merge(_ first: SemanticDuplicateGroup, with second: SemanticDuplicateGroup) -> SemanticDuplicateGroup {
+        var filesById: [UUID: FileItem] = [:]
+        for file in first.files + second.files {
+            filesById[file.id] = file
+        }
+
+        let strongestEvidence = first.similarity >= second.similarity ? first : second
+        let mergedFiles = filesById.values.sorted {
+            if $0.displayName == $1.displayName {
+                return $0.path < $1.path
+            }
+            return $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending
+        }
+        let recommendation: SemanticDuplicateGroup.DuplicateRecommendation =
+            first.groupType == second.groupType ? strongestEvidence.recommendation : .manualReview
+
+        return SemanticDuplicateGroup(
+            groupType: strongestEvidence.groupType,
+            files: mergedFiles,
+            similarity: min(first.similarity, second.similarity),
+            recommendation: recommendation
+        )
     }
 }
 
