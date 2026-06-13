@@ -165,13 +165,6 @@ public struct OnboardingView: View {
                 // than polish.
                 appState.hasPresentedReadyToOrganize = true
                 hasCompletedOnboarding = true
-                guard !appState.hasCompletedFeatureTour else { return }
-
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(850))
-                    guard hasCompletedOnboarding, !appState.hasCompletedFeatureTour else { return }
-                    appState.isFeatureTourPresented = true
-                }
             })
             .transition(TransitionStyles.scaleAndFade)
         }

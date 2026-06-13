@@ -161,10 +161,6 @@ public struct ContentView: View {
                 extensionListener.incomingURL = nil
             }
         }
-        .sheet(isPresented: $appState.isFeatureTourPresented) {
-            FeatureTourView()
-                .environmentObject(appState)
-        }
     }
 
     @ViewBuilder

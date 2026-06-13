@@ -264,11 +264,6 @@ public struct SortyCommands: Commands {
             }
             .disabled(appState == nil)
             
-            Button("Feature Tour...", systemImage: "map") {
-                appState?.showFeatureTour()
-            }
-            .disabled(appState == nil)
-
             Button("Delete All Usage Data...", systemImage: "trash") {
                 appState?.requestDeleteUsageDataConfirmation()
             }
@@ -475,12 +470,6 @@ public class AppState: ObservableObject {
             userDefaults.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
         }
     }
-    @Published public var hasCompletedFeatureTour: Bool {
-        didSet {
-            userDefaults.set(hasCompletedFeatureTour, forKey: "hasCompletedFeatureTour")
-        }
-    }
-    @Published public var isFeatureTourPresented: Bool = false
     @Published public var shouldPresentSteeringPrompts = false
 
     // State derived from FolderOrganizer
@@ -574,7 +563,6 @@ public class AppState: ObservableObject {
         // In-app update: previous version exists, so skip onboarding even if flag was reset
         let previousVersion = userDefaults.string(forKey: "lastLaunchedVersion")
         let onboardingCompleted = userDefaults.bool(forKey: "hasCompletedOnboarding")
-        let featureTourCompleted = userDefaults.bool(forKey: "hasCompletedFeatureTour")
         let requiresSetupRepair = userDefaults.bool(forKey: Self.requiresSetupRepairKey)
         let setupRepairMessage = userDefaults.string(forKey: Self.setupRepairMessageKey)
         let currentVersion = BuildInfo.version
@@ -587,7 +575,6 @@ public class AppState: ObservableObject {
             // Even if hasCompletedOnboarding was somehow reset, don't show it
             self.hasCompletedOnboarding = true
         }
-        self.hasCompletedFeatureTour = featureTourCompleted
         self.requiresSetupRepair = requiresSetupRepair
         self.setupRepairMessage = setupRepairMessage
         
@@ -758,7 +745,6 @@ public class AppState: ObservableObject {
     /// Show the onboarding flow again (for revisiting setup)
     public func showOnboarding() {
         withAnimation(.spring()) {
-            isFeatureTourPresented = false
             clearSetupRepairState()
             hasCompletedOnboarding = false
         }
@@ -793,15 +779,6 @@ public class AppState: ObservableObject {
         setupRepairMessage = nil
     }
     
-    public func showFeatureTour() {
-        isFeatureTourPresented = true
-    }
-    
-    public func completeFeatureTour() {
-        hasCompletedFeatureTour = true
-        isFeatureTourPresented = false
-    }
-
     public func exportResults() {
         guard let plan = organizer?.currentPlan else { return }
 
@@ -1340,8 +1317,6 @@ public class AppState: ObservableObject {
         
         // 6. Reset onboarding state to trigger fresh start
         withAnimation(.spring()) {
-            hasCompletedFeatureTour = false
-            isFeatureTourPresented = false
             hasCompletedOnboarding = false
         }
         

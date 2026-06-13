@@ -222,7 +222,6 @@
 		CC220002000000000000A00E /* RenameRuleEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00E /* RenameRuleEngine.swift */; };
 		CC220002000000000000A00F /* StorageLocationPathResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A00F /* StorageLocationPathResolver.swift */; };
 		CC220002000000000000A010 /* SortyGradientProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A010 /* SortyGradientProgressBar.swift */; };
-		CC220002000000000000A011 /* FeatureTourView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A011 /* FeatureTourView.swift */; };
 		CC220002000000000000A012 /* DuplicateHandlingPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A012 /* DuplicateHandlingPicker.swift */; };
 		CC220002000000000000A013 /* LiquidGlassDuplicateButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */; };
 		CC220002000000000000A014 /* LiquidGlassLearningsButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC110001000000000000A014 /* LiquidGlassLearningsButton.swift */; };
@@ -556,7 +555,6 @@
 		CC110001000000000000A00E /* RenameRuleEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameRuleEngine.swift; sourceTree = "<group>"; };
 		CC110001000000000000A00F /* StorageLocationPathResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLocationPathResolver.swift; sourceTree = "<group>"; };
 		CC110001000000000000A010 /* SortyGradientProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SortyGradientProgressBar.swift; sourceTree = "<group>"; };
-		CC110001000000000000A011 /* FeatureTourView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureTourView.swift; sourceTree = "<group>"; };
 		CC110001000000000000A012 /* DuplicateHandlingPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateHandlingPicker.swift; sourceTree = "<group>"; };
 		CC110001000000000000A013 /* LiquidGlassDuplicateButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassDuplicateButton.swift; sourceTree = "<group>"; };
 		CC110001000000000000A014 /* LiquidGlassLearningsButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassLearningsButton.swift; sourceTree = "<group>"; };
@@ -1020,7 +1018,6 @@
 				AABBCC110001000000000092 /* SimulatedDemoAnimationView.swift */,
 				AABBCC110001000000000098 /* WelcomeStepView.swift */,
 				AABBCC110001000000000099 /* WorkflowSelectionStepView.swift */,
-				CC110001000000000000A011 /* FeatureTourView.swift */,
 			);
 			path = Onboarding;
 			sourceTree = "<group>";
