@@ -36,6 +36,8 @@ struct OrganizingFlightStageView: View {
     @State private var currentFileName = ""
     @State private var currentRenamedFileName: String?
     @State private var isShowingRenamedFileName = false
+    @State private var renameStrikeProgress: CGFloat = 0
+    @State private var currentCardWidth: CGFloat = 188
     @State private var displayedSuggestions: [FolderSuggestion] = []
     @State private var flightTask: Task<Void, Never>?
     @State private var flightStep = 0
@@ -43,12 +45,6 @@ struct OrganizingFlightStageView: View {
     private let dropTravel: CGFloat = 76
     private let cardSize = CGSize(width: 24, height: 24)
     private let bucketSize = CGSize(width: 56, height: 56)
-
-    private var fileCardHeight: CGFloat {
-        prioritizesFilenames
-            ? (currentRenamedFileName == nil ? 44 : 56)
-            : 42
-    }
 
     private var visibleSuggestions: [FolderSuggestion] {
         let source = displayedSuggestions.isEmpty ? suggestions : displayedSuggestions
@@ -128,9 +124,7 @@ struct OrganizingFlightStageView: View {
             }
         }
         .padding(.horizontal, 12)
-        .frame(width: prioritizesFilenames ? nil : 188, height: fileCardHeight)
-        .fixedSize(horizontal: prioritizesFilenames, vertical: false)
-        .frame(maxWidth: prioritizesFilenames ? 300 : nil)
+        .frame(width: currentCardWidth, height: 42)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.primary.opacity(0.065))
@@ -144,55 +138,46 @@ struct OrganizingFlightStageView: View {
     private var fileNameLabel: some View {
         Group {
             if prioritizesFilenames, let currentRenamedFileName {
-                VStack(alignment: .leading, spacing: 3) {
+                ZStack(alignment: .leading) {
                     Text(currentFileName)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(isShowingRenamedFileName ? Color.red.opacity(0.82) : Color.secondary)
+                        .foregroundStyle(isShowingRenamedFileName ? Color.red.opacity(0.82) : Color.primary.opacity(0.72))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .strikethrough(isShowingRenamedFileName, color: .red.opacity(0.75))
+                        .overlay(alignment: .center) {
+                            Rectangle()
+                                .fill(Color.red.opacity(0.78))
+                                .frame(height: 1.5)
+                                .scaleEffect(x: renameStrikeProgress, anchor: .leading)
+                        }
+                        .opacity(isShowingRenamedFileName ? 0 : 1)
 
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.right")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(.secondary.opacity(0.7))
-                            .accessibilityHidden(true)
-
-                        Text(isShowingRenamedFileName ? currentRenamedFileName : "Preparing better name...")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(isShowingRenamedFileName ? Color.green : Color.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .opacity(isShowingRenamedFileName ? 1 : 0.68)
+                    Text(currentRenamedFileName)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .opacity(isShowingRenamedFileName ? 1 : 0)
+                        .offset(x: isShowingRenamedFileName ? 0 : 6)
                 }
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
+                .animation(.easeInOut(duration: 0.2), value: isShowingRenamedFileName)
             } else {
-                ZStack {
-                    if let currentRenamedFileName, isShowingRenamedFileName {
-                        Text(currentRenamedFileName)
-                            .foregroundStyle(.green)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    } else {
-                        Text(currentFileName)
-                            .foregroundStyle(currentRenamedFileName == nil ? Color.primary.opacity(0.72) : Color.red.opacity(0.82))
-                            .strikethrough(currentRenamedFileName != nil, color: .red.opacity(0.75))
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .leading).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
-                    }
-                }
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .truncationMode(.middle)
+                Text(currentFileName)
+                    .foregroundStyle(.primary.opacity(0.72))
             }
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .font(.caption.weight(.semibold))
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .frame(maxWidth: currentCardWidth - cardSize.width - 33, alignment: .leading)
         .accessibilityHidden(true)
+    }
+
+    private func measuredWidth(of name: String) -> CGFloat {
+        let font = NSFont.systemFont(
+            ofSize: NSFont.smallSystemFontSize,
+            weight: .semibold
+        )
+        return ceil((name as NSString).size(withAttributes: [.font: font]).width)
     }
 
     @ViewBuilder
@@ -260,7 +245,12 @@ struct OrganizingFlightStageView: View {
                 currentFileIcon = iconForPath(flight.file.path)
                 currentFileName = flight.file.displayName
                 currentRenamedFileName = flight.renameMapping?.suggestedName
+                currentCardWidth = cardWidth(
+                    originalName: flight.file.displayName,
+                    suggestedName: flight.renameMapping?.suggestedName
+                )
                 isShowingRenamedFileName = false
+                renameStrikeProgress = 0
                 await runFlight(toIndex: flight.folderIndex)
                 try? await Task.sleep(nanoseconds: 140_000_000)
             }
@@ -274,6 +264,7 @@ struct OrganizingFlightStageView: View {
         bumpedIndex = nil
         haloIndex = nil
         isShowingRenamedFileName = false
+        renameStrikeProgress = 0
     }
 
     private func runFlight(toIndex index: Int) async {
@@ -296,13 +287,19 @@ struct OrganizingFlightStageView: View {
         let landingY = folderTopOffset() - 8
 
         if currentRenamedFileName != nil {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+            withAnimation(.easeInOut(duration: 0.16)) {
+                renameStrikeProgress = 1
+            }
+            try? await Task.sleep(nanoseconds: 170_000_000)
+            if Task.isCancelled { return }
+
+            withAnimation(.easeInOut(duration: 0.18)) {
                 isShowingRenamedFileName = true
             }
             HapticFeedbackManager.shared.selection()
         }
 
-        try? await Task.sleep(nanoseconds: currentRenamedFileName == nil ? 40_000_000 : 220_000_000)
+        try? await Task.sleep(nanoseconds: currentRenamedFileName == nil ? 40_000_000 : 190_000_000)
         if Task.isCancelled { return }
 
         // Show the receive halo just before the file lands.
@@ -400,6 +397,13 @@ struct OrganizingFlightStageView: View {
             return AnalysisIconProvider.icon(forFileExtension: ext)
         }
         return AnalysisIconProvider.icon(for: .data)
+    }
+
+    private func cardWidth(originalName: String, suggestedName: String?) -> CGFloat {
+        guard prioritizesFilenames else { return 188 }
+        let longestName = [originalName, suggestedName ?? ""]
+            .max(by: { measuredWidth(of: $0) < measuredWidth(of: $1) }) ?? originalName
+        return min(300, max(116, measuredWidth(of: longestName) + cardSize.width + 33))
     }
 }
 
