@@ -955,10 +955,12 @@ struct LearningsView: View {
 
     private var emptyLearningsPlaceholder: some View {
         VStack(spacing: 12) {
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 32))
-                .foregroundStyle(.secondary)
-                .opacity(0.5)
+            Image("LearningsEmptyState")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .accessibilityIgnoresInvertColors()
                 .opacity(emptyLearningsHasAppeared ? 1 : 0)
                 .scaleEffect(emptyLearningsHasAppeared ? 1 : 0.8)
                 .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: emptyLearningsHasAppeared)
@@ -1011,10 +1013,12 @@ struct LearningsView: View {
                 }
             } else {
                 VStack(spacing: 12) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 32))
-                        .foregroundStyle(.secondary)
-                        .opacity(0.5)
+                    Image("ActivityEmptyState")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .accessibilityIgnoresInvertColors()
                         .accessibilityHidden(true)
                     Text("No activity yet")
                         .font(.subheadline.bold())
