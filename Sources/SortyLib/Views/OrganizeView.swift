@@ -948,6 +948,8 @@ struct ReadyToOrganizeView: View {
                         .help("Add a folder that Sorty can use as a destination")
                         .accessibilityHint("Opens folder picker to add a destination location")
 
+                        Spacer()
+
                         Button {
                             HapticFeedbackManager.shared.selection()
                             appState.currentView = .storageLocations
