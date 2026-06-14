@@ -160,6 +160,21 @@ enum CleanupPreferenceResolver {
         return locationMatches.first?.id
     }
 
+    static func preferredFileID(in files: [FileItem], strategy: KeepStrategy) -> UUID? {
+        switch strategy {
+        case .newest:
+            return files.max { comparableDate(for: $0) < comparableDate(for: $1) }?.id
+        case .oldest:
+            return files.min { comparableDate(for: $0) < comparableDate(for: $1) }?.id
+        case .largest:
+            return files.max { $0.size < $1.size }?.id
+        case .smallest:
+            return files.min { $0.size < $1.size }?.id
+        case .shortestPath:
+            return files.min { $0.path.count < $1.path.count }?.id
+        }
+    }
+
     private static func filesMatchingPreferredLocation(in files: [FileItem], prompt: String) -> [FileItem] {
         let clauses = prompt.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)

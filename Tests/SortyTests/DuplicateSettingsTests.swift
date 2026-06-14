@@ -163,4 +163,24 @@ final class DuplicateSettingsTests: XCTestCase {
 
         XCTAssertEqual(preferredID, newerOriginal.id)
     }
+
+    func testCleanupPreferenceStrategyFallbackSelectsKeeper() {
+        let shorterPath = FileItem(
+            path: "/Photos/photo.jpg",
+            name: "photo",
+            extension: "jpg"
+        )
+        let longerPath = FileItem(
+            path: "/Photos/Exports/Edited/photo.jpg",
+            name: "photo",
+            extension: "jpg"
+        )
+
+        let preferredID = CleanupPreferenceResolver.preferredFileID(
+            in: [longerPath, shorterPath],
+            strategy: .shortestPath
+        )
+
+        XCTAssertEqual(preferredID, shorterPath.id)
+    }
 }

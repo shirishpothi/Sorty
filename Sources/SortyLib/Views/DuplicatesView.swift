@@ -456,19 +456,23 @@ struct DuplicatesView: View {
         }
     }
 
-    private func prepareBulkDelete(keepNewest: Bool) {
+    private func prepareBulkDelete(strategyOverride: KeepStrategy?) {
         var filesToDelete: [FileItem] = []
 
         // Bulk cleanup is intentionally limited to byte-identical files.
         for group in detectionManager.allGroups where group.isExact {
-            let sortedFiles = group.files.sorted { f1, f2 in
-                let d1 = f1.creationDate ?? Date.distantPast
-                let d2 = f2.creationDate ?? Date.distantPast
-                return keepNewest ? (d1 > d2) : (d1 < d2)
-            }
-            if sortedFiles.count > 1 {
-                filesToDelete.append(contentsOf: sortedFiles.dropFirst())
-            }
+            let keepFileID = strategyOverride
+                .flatMap { CleanupPreferenceResolver.preferredFileID(in: group.files, strategy: $0) }
+                ?? CleanupPreferenceResolver.preferredFileID(
+                    in: group.files,
+                    prompt: settingsManager.settings.cleanupPreferencePrompt
+                )
+                ?? CleanupPreferenceResolver.preferredFileID(
+                    in: group.files,
+                    strategy: settingsManager.settings.defaultKeepStrategy
+                )
+
+            filesToDelete.append(contentsOf: group.files.filter { $0.id != keepFileID })
         }
         if !filesToDelete.isEmpty {
             self.filesToDelete = filesToDelete
@@ -485,7 +489,7 @@ struct DuplicatesHeaderNew: View {
     let onSelectDirectory: () -> Void
     let onScan: () -> Void
     let onCancel: () -> Void
-    let onBulkDelete: (Bool) -> Void
+    let onBulkDelete: (KeepStrategy?) -> Void
     let onSettings: () -> Void
 
     var body: some View {
@@ -572,12 +576,18 @@ struct DuplicatesHeaderNew: View {
                     if manager.exactGroupCount > 0 && !manager.isScanning {
                         Menu {
                             Button {
-                                onBulkDelete(true)
+                                onBulkDelete(nil)
+                            } label: {
+                                Label("Use Cleanup Preference", systemImage: "text.badge.checkmark")
+                            }
+                            Divider()
+                            Button {
+                                onBulkDelete(.newest)
                             } label: {
                                 Label("Keep Newest", systemImage: "clock")
                             }
                             Button {
-                                onBulkDelete(false)
+                                onBulkDelete(.oldest)
                             } label: {
                                 Label("Keep Oldest", systemImage: "clock.arrow.circlepath")
                             }
