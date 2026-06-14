@@ -220,6 +220,7 @@ struct EmptyWatchedFoldersView: View {
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
+                .emptyStateIconHeartbeat()
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
                 .animation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared)

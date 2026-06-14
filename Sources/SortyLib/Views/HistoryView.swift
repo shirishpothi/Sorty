@@ -1472,6 +1472,7 @@ struct HistoryEmptyStateView: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 44))
                         .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent.gradient)
+                        .emptyStateIconHeartbeat()
                 }
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)

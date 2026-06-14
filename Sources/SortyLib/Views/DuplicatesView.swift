@@ -1592,6 +1592,7 @@ struct DuplicatesEmptyStateView: View {
                         .font(.system(size: 48))
                         .foregroundStyle(iconColor)
                         .opacity(0.7)
+                        .emptyStateIconHeartbeat()
                 }
             }
             .opacity(hasAppeared ? 1 : 0)

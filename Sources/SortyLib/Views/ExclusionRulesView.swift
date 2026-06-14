@@ -469,6 +469,7 @@ struct EmptyExclusionRulesView: View {
             Image(systemName: "eye.slash.circle")
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)
+                .emptyStateIconHeartbeat()
                 .opacity(hasAppeared ? 1 : 0)
                 .scaleEffect(hasAppeared ? 1 : 0.8)
                 .animation(

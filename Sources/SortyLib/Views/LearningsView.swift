@@ -995,6 +995,7 @@ struct LearningsView: View {
                 .frame(width: 72, height: 72)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .accessibilityIgnoresInvertColors()
+                .emptyStateIconHeartbeat()
                 .opacity(emptyLearningsHasAppeared ? 1 : 0)
                 .scaleEffect(emptyLearningsHasAppeared ? 1 : 0.8)
                 .animation(
@@ -1063,6 +1064,7 @@ struct LearningsView: View {
                         .frame(width: 72, height: 72)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .accessibilityIgnoresInvertColors()
+                        .emptyStateIconHeartbeat()
                         .accessibilityHidden(true)
                     Text("No activity yet")
                         .font(.subheadline.bold())

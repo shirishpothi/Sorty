@@ -198,6 +198,29 @@ extension View {
     func emptyStateWorkflowGradient(isVisible: Bool) -> some View {
         modifier(EmptyStateWorkflowGradientModifier(isVisible: isVisible))
     }
+
+    func emptyStateIconHeartbeat() -> some View {
+        modifier(EmptyStateIconHeartbeatModifier())
+    }
+}
+
+private struct EmptyStateIconHeartbeatModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        SwiftUI.TimelineView(
+            .animation(minimumInterval: 1.0 / 30.0, paused: reduceMotion)
+        ) { timeline in
+            let elapsed = timeline.date.timeIntervalSinceReferenceDate
+            let primaryBeat = max(0, sin(elapsed * 3.2))
+            let secondaryBeat = max(0, sin((elapsed * 3.2) - 0.72)) * 0.45
+            let heartbeat = reduceMotion ? 0 : min(1, primaryBeat + secondaryBeat)
+
+            content
+                .scaleEffect(1 + heartbeat * 0.035)
+                .opacity(reduceMotion ? 1 : 0.88 + heartbeat * 0.12)
+        }
+    }
 }
 
 /// Step indicator showing progress through workflow
