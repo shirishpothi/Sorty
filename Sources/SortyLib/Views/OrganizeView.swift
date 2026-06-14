@@ -1088,14 +1088,14 @@ struct ReadyToOrganizeView: View {
             }
             .animation(.easeInOut(duration: 0.16), value: mention?.query)
 
-            HStack(spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
                 // Improve with AI button
                 if !organizer.customInstructions.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button {
                         Task { await improvePromptWithAI() }
                     } label: {
                         Label("Improve", systemImage: "wand.and.stars")
-                            .font(.caption2)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.teal)
@@ -1111,7 +1111,7 @@ struct ReadyToOrganizeView: View {
                         showSavePromptDialog.toggle()
                     } label: {
                         Label("Save", systemImage: "bookmark")
-                            .font(.caption2)
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.accentColor)
@@ -1158,14 +1158,34 @@ struct ReadyToOrganizeView: View {
                 Button {
                     showSavedPromptsSheet.toggle()
                 } label: {
-                    Label(
-                        steeringManager.prompts.isEmpty ? "Saved Prompts" : "Saved Prompts (\(steeringManager.prompts.count))",
-                        systemImage: "text.alignleft"
-                    )
-                    .font(.caption2)
+                    HStack(spacing: 9) {
+                        Image(systemName: "text.alignleft")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(SortyDesignSystem.Colors.resolvedAccent)
+                            .frame(width: 18)
+                            .accessibilityHidden(true)
+
+                        Text(
+                            steeringManager.prompts.isEmpty
+                                ? "Saved Prompts"
+                                : "Saved Prompts (\(steeringManager.prompts.count))"
+                        )
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .systemLiquidGlassBackground(cornerRadius: 12)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(
+                                SortyDesignSystem.Colors.resolvedAccent.opacity(0.18),
+                                lineWidth: 1
+                            )
+                    }
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.accentColor)
                 .help("Open your saved instruction prompts")
                 .accessibilityHint("View, edit, and apply saved prompts")
 
