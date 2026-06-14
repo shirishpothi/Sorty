@@ -1152,8 +1152,6 @@ struct ReadyToOrganizeView: View {
                     }
                 }
 
-                Spacer()
-
                 // Manage saved prompts button
                 Button {
                     showSavedPromptsSheet.toggle()
@@ -1184,10 +1182,13 @@ struct ReadyToOrganizeView: View {
                                 lineWidth: 1
                             )
                     }
+                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
                 .help("Open your saved instruction prompts")
                 .accessibilityHint("View, edit, and apply saved prompts")
+
+                Spacer()
 
                 CompactPersonaPicker()
             }
