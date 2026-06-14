@@ -1403,6 +1403,8 @@ private struct StreamingProgressBeam: View {
     let isEstablishingConnection: Bool
     let state: OrganizationState
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var clampedProgress: Double { max(0, min(1, progress)) }
     private var percent: Int { Int((clampedProgress * 100).rounded()) }
 
@@ -1429,9 +1431,11 @@ private struct StreamingProgressBeam: View {
 
     private var progressCard: some View {
         ZStack {
+            progressStack
+
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(displayedStage)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1441,15 +1445,44 @@ private struct StreamingProgressBeam: View {
                     .animation(.easeInOut(duration: 0.3), value: percent)
                     .frame(width: 48, alignment: .leading)
             }
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 20)
+            .font(.system(size: 19, weight: .bold))
+            .foregroundStyle(.primary.opacity(0.88))
+            .padding(.horizontal, 26)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 370, height: 90)
-        .background {
-            beamSurface
+        .frame(width: 420, height: 150)
+    }
+
+    private var progressStack: some View {
+        TimelineView(.animation(paused: reduceMotion)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            let phase = reduceMotion ? 0.45 : (time.truncatingRemainder(dividingBy: 2.8) / 2.8)
+            let pulse = CGFloat(sin(phase * .pi))
+
+            ZStack {
+                ForEach(0..<6, id: \.self) { index in
+                    let depth = CGFloat(5 - index)
+                    let spread: CGFloat = reduceMotion ? 0.55 : pulse
+
+                    RoundedRectangle(cornerRadius: 25, style: .continuous)
+                        .fill(Color.primary.opacity(0.018 + Double(depth) * 0.008))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 25, style: .continuous)
+                                .strokeBorder(Color.primary.opacity(0.035), lineWidth: 0.75)
+                        }
+                        .frame(
+                            width: 326 + depth * 13 * spread,
+                            height: 104 + depth * 8 * spread
+                        )
+                        .offset(y: -depth * 4 * spread)
+                }
+
+                beamSurface
+                    .frame(width: 370, height: 116)
+            }
         }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var beamSurface: some View {
@@ -1470,8 +1503,6 @@ private struct StreamingProgressBeam: View {
             strength: 1.0
         )
         .referenceBeamFallback(cornerRadius: 16, active: true, includesInteriorGlow: true)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     private static func formatTime(_ elapsedSeconds: Int) -> String {
