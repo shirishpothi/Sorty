@@ -1025,15 +1025,6 @@ struct ReadyToOrganizeView: View {
         VStack(alignment: .leading, spacing: 8) {
             let mention = activeFileMention
 
-            HStack {
-                Text("Additional Instructions")
-                    .font(.subheadline.weight(.medium))
-
-                Spacer()
-
-                CompactPersonaPicker()
-            }
-
             ZStack(alignment: .topLeading) {
                 if isImprovingPrompt {
                     HStack {
@@ -1177,6 +1168,8 @@ struct ReadyToOrganizeView: View {
                 .foregroundColor(.accentColor)
                 .help("Open your saved instruction prompts")
                 .accessibilityHint("View, edit, and apply saved prompts")
+
+                CompactPersonaPicker()
             }
             .font(.caption2)
             .foregroundStyle(.quaternary)
