@@ -1454,7 +1454,7 @@ private struct StreamingProgressBeam: View {
     }
 
     private var progressStack: some View {
-        TimelineView(.animation(paused: reduceMotion)) { timeline in
+        SwiftUI.TimelineView(.animation(paused: reduceMotion)) { timeline in
             let time = timeline.date.timeIntervalSinceReferenceDate
             let phase = reduceMotion ? 0.45 : (time.truncatingRemainder(dividingBy: 2.8) / 2.8)
             let pulse = CGFloat(sin(phase * .pi))
