@@ -104,4 +104,63 @@ final class DuplicateSettingsTests: XCTestCase {
         XCTAssertTrue(allCases.contains(.newest))
         XCTAssertTrue(allCases.contains(.shortestPath))
     }
+
+    func testCleanupPreferencePrioritizesNamedFolderThenResolution() {
+        let lowerResolutionOriginal = FileItem(
+            path: "/Photos/Originals/photo.jpg",
+            name: "photo",
+            extension: "jpg",
+            size: 1_000,
+            modificationDate: Date(timeIntervalSince1970: 100),
+            imageWidth: 1_000,
+            imageHeight: 1_000
+        )
+        let higherResolutionOriginal = FileItem(
+            path: "/Photos/Originals/photo-copy.jpg",
+            name: "photo-copy",
+            extension: "jpg",
+            size: 2_000,
+            modificationDate: Date(timeIntervalSince1970: 200),
+            imageWidth: 2_000,
+            imageHeight: 2_000
+        )
+        let largerEditedCopy = FileItem(
+            path: "/Photos/Edits/photo.jpg",
+            name: "photo",
+            extension: "jpg",
+            size: 4_000,
+            modificationDate: Date(timeIntervalSince1970: 300),
+            imageWidth: 4_000,
+            imageHeight: 4_000
+        )
+
+        let preferredID = CleanupPreferenceResolver.preferredFileID(
+            in: [lowerResolutionOriginal, largerEditedCopy, higherResolutionOriginal],
+            prompt: "Keep files in Originals, prefer highest resolution, otherwise newest"
+        )
+
+        XCTAssertEqual(preferredID, higherResolutionOriginal.id)
+    }
+
+    func testCleanupPreferenceUsesNewestWhenResolutionIsUnavailable() {
+        let olderOriginal = FileItem(
+            path: "/Photos/Originals/photo.jpg",
+            name: "photo",
+            extension: "jpg",
+            modificationDate: Date(timeIntervalSince1970: 100)
+        )
+        let newerOriginal = FileItem(
+            path: "/Photos/Originals/photo-copy.jpg",
+            name: "photo-copy",
+            extension: "jpg",
+            modificationDate: Date(timeIntervalSince1970: 200)
+        )
+
+        let preferredID = CleanupPreferenceResolver.preferredFileID(
+            in: [olderOriginal, newerOriginal],
+            prompt: "Keep files in Originals, prefer highest resolution, otherwise newest"
+        )
+
+        XCTAssertEqual(preferredID, newerOriginal.id)
+    }
 }

@@ -127,6 +127,74 @@ public enum KeepStrategy: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum CleanupPreferenceResolver {
+    static func preferredFileID(in files: [FileItem], prompt: String) -> UUID? {
+        let normalizedPrompt = prompt
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalizedPrompt.isEmpty, !files.isEmpty else { return nil }
+
+        let locationMatches = filesMatchingPreferredLocation(in: files, prompt: normalizedPrompt)
+        let candidates = locationMatches.isEmpty ? files : locationMatches
+
+        if containsAny(["highest resolution", "highest quality", "best quality"], in: normalizedPrompt),
+           candidates.contains(where: { ($0.totalPixels ?? 0) > 0 }) {
+            return candidates.max {
+                (($0.totalPixels ?? 0), $0.size, comparableDate(for: $0))
+                    < (($1.totalPixels ?? 0), $1.size, comparableDate(for: $1))
+            }?.id
+        }
+        if containsAny(["largest", "biggest"], in: normalizedPrompt) {
+            return candidates.max { $0.size < $1.size }?.id
+        }
+        if normalizedPrompt.contains("smallest") {
+            return candidates.min { $0.size < $1.size }?.id
+        }
+        if containsAny(["newest", "latest", "most recent"], in: normalizedPrompt) {
+            return candidates.max { comparableDate(for: $0) < comparableDate(for: $1) }?.id
+        }
+        if containsAny(["oldest", "original", "earliest"], in: normalizedPrompt) {
+            return candidates.min { comparableDate(for: $0) < comparableDate(for: $1) }?.id
+        }
+
+        return locationMatches.first?.id
+    }
+
+    private static func filesMatchingPreferredLocation(in files: [FileItem], prompt: String) -> [FileItem] {
+        let clauses = prompt.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        for clause in clauses {
+            for marker in [" in ", " from "] {
+                guard let markerRange = clause.range(of: marker, options: .backwards) else { continue }
+                let location = clause[markerRange.upperBound...]
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !location.isEmpty else { continue }
+
+                let matches = files.filter { file in
+                    URL(fileURLWithPath: file.path).pathComponents.contains {
+                        $0.localizedCaseInsensitiveCompare(location) == .orderedSame
+                    }
+                }
+                if !matches.isEmpty {
+                    return matches
+                }
+            }
+        }
+
+        return []
+    }
+
+    private static func containsAny(_ terms: [String], in prompt: String) -> Bool {
+        terms.contains(where: prompt.contains)
+    }
+
+    private static func comparableDate(for file: FileItem) -> Date {
+        file.modificationDate ?? file.creationDate ?? .distantPast
+    }
+}
+
 /// Manager for duplicate settings persistence
 @MainActor
 public class DuplicateSettingsManager: ObservableObject {

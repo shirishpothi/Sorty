@@ -1264,37 +1264,10 @@ struct UnifiedDuplicateGroupDetailView: View {
     }
 
     private func keepFileIdMatchingCleanupPreference() -> UUID? {
-        let prompt = settings.cleanupPreferencePrompt
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        guard !prompt.isEmpty else { return nil }
-
-        if prompt.contains("highest resolution") || prompt.contains("highest quality") || prompt.contains("best quality") {
-            return group.files.max {
-                (($0.totalPixels ?? 0), $0.size) < (($1.totalPixels ?? 0), $1.size)
-            }?.id
-        }
-        if prompt.contains("largest") || prompt.contains("biggest") {
-            return group.files.max { $0.size < $1.size }?.id
-        }
-        if prompt.contains("smallest") {
-            return group.files.min { $0.size < $1.size }?.id
-        }
-        if prompt.contains("newest") || prompt.contains("latest") || prompt.contains("most recent") {
-            return group.files.max { comparableDate(for: $0) < comparableDate(for: $1) }?.id
-        }
-        if prompt.contains("oldest") || prompt.contains("original") || prompt.contains("earliest") {
-            return group.files.min { comparableDate(for: $0) < comparableDate(for: $1) }?.id
-        }
-
-        let promptWords = Set(prompt.split { !$0.isLetter && !$0.isNumber }.map(String.init))
-            .filter { $0.count >= 3 }
-        guard !promptWords.isEmpty else { return nil }
-
-        return group.files.first { file in
-            let pathWords = Set(file.path.lowercased().split { !$0.isLetter && !$0.isNumber }.map(String.init))
-            return !promptWords.isDisjoint(with: pathWords)
-        }?.id
+        CleanupPreferenceResolver.preferredFileID(
+            in: group.files,
+            prompt: settings.cleanupPreferencePrompt
+        )
     }
 
     private func keepFile(using strategy: KeepStrategy) -> FileItem? {
