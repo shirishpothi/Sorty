@@ -159,6 +159,7 @@ struct DirectorySelectionView: View {
                 Image(systemName: isTargeted ? "folder.fill.badge.plus" : "folder.badge.plus")
                     .font(.system(size: 34, weight: .light))
                     .foregroundStyle(isTargeted ? folderAccent : folderAccent.opacity(0.9))
+                    .animatedEmptyStateIcon()
                     .scaleEffect(iconBounce ? 1.1 : 1.0)
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isTargeted)
