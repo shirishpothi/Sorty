@@ -997,21 +997,16 @@ struct ReadyToOrganizeView: View {
     }
     
     private var iconSection: some View {
-        ZStack {
-            Circle()
-                .fill(Color.teal.opacity(0.12))
+        if let readyIcon = SortyResources.image(named: "ReadyToOrganizeIcon") {
+            Image(nsImage: readyIcon)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .aspectRatio(contentMode: .fill)
                 .frame(width: 104, height: 104)
-
-            if let mascotHead = SortyResources.image(named: "SortyMascotHead") {
-                Image(nsImage: mascotHead)
-                    .resizable()
-                    .interpolation(.high)
-                    .antialiased(true)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 64, height: 64)
-            }
+                .clipShape(Circle())
+                .accessibilityHidden(true)
         }
-        .accessibilityHidden(true)
     }
     
     @ViewBuilder
