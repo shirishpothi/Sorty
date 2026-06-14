@@ -105,6 +105,22 @@ struct HistoryView: View {
     }
 
     var body: some View {
+        Group {
+            if organizer.history.entries.count > 1 {
+                content
+                    .searchable(text: $searchText, prompt: "Search folders")
+            } else {
+                content
+            }
+        }
+        .onChange(of: organizer.history.entries.count) { _, count in
+            if count <= 1 {
+                searchText = ""
+            }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             if organizer.history.entries.isEmpty {
                 ZStack(alignment: .topLeading) {
@@ -152,7 +168,6 @@ struct HistoryView: View {
         .emptyStateWorkflowGradient(isVisible: organizer.history.entries.isEmpty)
         .animation(.pageTransition, value: organizer.history.entries.isEmpty)
         .navigationTitle("History")
-        .searchable(text: $searchText, prompt: "Search folders")
         .disabled(isProcessing)
         .overlay {
             if isProcessing {

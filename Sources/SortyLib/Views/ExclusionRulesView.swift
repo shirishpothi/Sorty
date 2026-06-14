@@ -74,6 +74,22 @@ struct ExclusionRulesView: View {
     }
 
     var body: some View {
+        Group {
+            if rulesManager.rules.count > 1 {
+                content
+                    .searchable(text: $searchText, prompt: "Search rules")
+            } else {
+                content
+            }
+        }
+        .onChange(of: rulesManager.rules.count) { _, count in
+            if count <= 1 {
+                searchText = ""
+            }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 0) {
             if rulesManager.rules.isEmpty {
                 ZStack(alignment: .topLeading) {
@@ -143,7 +159,6 @@ struct ExclusionRulesView: View {
         .emptyStateWorkflowGradient(isVisible: rulesManager.rules.isEmpty)
         .animation(.pageTransition, value: rulesManager.rules.isEmpty)
         .navigationTitle("Exclusion Rules")
-        .searchable(text: $searchText, prompt: "Search rules")
         .sheet(isPresented: $showingAddRule) {
             AddExclusionRuleView(rulesManager: rulesManager)
                 .modalBounce()
