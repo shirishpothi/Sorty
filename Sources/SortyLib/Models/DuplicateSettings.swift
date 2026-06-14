@@ -32,9 +32,6 @@ public struct DuplicateSettings: Codable, Sendable {
     /// Default keep strategy when bulk deleting
     public var defaultKeepStrategy: KeepStrategy
 
-    /// Natural-language cleanup preference used to choose the default file to keep
-    public var cleanupPreferencePrompt: String
-    
     /// Auto-start scan when opening duplicates view
     public var autoStartScan: Bool
     
@@ -59,7 +56,6 @@ public struct DuplicateSettings: Codable, Sendable {
         includeExtensions: [String] = [],
         excludeExtensions: [String] = [".DS_Store", ".localized"],
         defaultKeepStrategy: KeepStrategy = .newest,
-        cleanupPreferencePrompt: String = "",
         autoStartScan: Bool = true,
         includeSemanticDuplicates: Bool = true,
         semanticSimilarityThreshold: Double = DuplicateSettings.defaultSemanticSimilarityThreshold
@@ -70,7 +66,6 @@ public struct DuplicateSettings: Codable, Sendable {
         self.includeExtensions = includeExtensions
         self.excludeExtensions = excludeExtensions
         self.defaultKeepStrategy = defaultKeepStrategy
-        self.cleanupPreferencePrompt = cleanupPreferencePrompt
         self.autoStartScan = autoStartScan
         self.includeSemanticDuplicates = includeSemanticDuplicates
         self.semanticSimilarityThreshold = Self.clampedSemanticSimilarityThreshold(semanticSimilarityThreshold)
@@ -128,38 +123,6 @@ public enum KeepStrategy: String, Codable, CaseIterable, Sendable {
 }
 
 enum CleanupPreferenceResolver {
-    static func preferredFileID(in files: [FileItem], prompt: String) -> UUID? {
-        let normalizedPrompt = prompt
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-        guard !normalizedPrompt.isEmpty, !files.isEmpty else { return nil }
-
-        let locationMatches = filesMatchingPreferredLocation(in: files, prompt: normalizedPrompt)
-        let candidates = locationMatches.isEmpty ? files : locationMatches
-
-        if containsAny(["highest resolution", "highest quality", "best quality"], in: normalizedPrompt),
-           candidates.contains(where: { ($0.totalPixels ?? 0) > 0 }) {
-            return candidates.max {
-                (($0.totalPixels ?? 0), $0.size, comparableDate(for: $0))
-                    < (($1.totalPixels ?? 0), $1.size, comparableDate(for: $1))
-            }?.id
-        }
-        if containsAny(["largest", "biggest"], in: normalizedPrompt) {
-            return candidates.max { $0.size < $1.size }?.id
-        }
-        if normalizedPrompt.contains("smallest") {
-            return candidates.min { $0.size < $1.size }?.id
-        }
-        if containsAny(["newest", "latest", "most recent"], in: normalizedPrompt) {
-            return candidates.max { comparableDate(for: $0) < comparableDate(for: $1) }?.id
-        }
-        if containsAny(["oldest", "original", "earliest"], in: normalizedPrompt) {
-            return candidates.min { comparableDate(for: $0) < comparableDate(for: $1) }?.id
-        }
-
-        return locationMatches.first?.id
-    }
-
     static func preferredFileID(in files: [FileItem], strategy: KeepStrategy) -> UUID? {
         switch strategy {
         case .newest:
@@ -173,36 +136,6 @@ enum CleanupPreferenceResolver {
         case .shortestPath:
             return files.min { $0.path.count < $1.path.count }?.id
         }
-    }
-
-    private static func filesMatchingPreferredLocation(in files: [FileItem], prompt: String) -> [FileItem] {
-        let clauses = prompt.split(separator: ",").map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        for clause in clauses {
-            for marker in [" in ", " from "] {
-                guard let markerRange = clause.range(of: marker, options: .backwards) else { continue }
-                let location = clause[markerRange.upperBound...]
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !location.isEmpty else { continue }
-
-                let matches = files.filter { file in
-                    URL(fileURLWithPath: file.path).pathComponents.contains {
-                        $0.localizedCaseInsensitiveCompare(location) == .orderedSame
-                    }
-                }
-                if !matches.isEmpty {
-                    return matches
-                }
-            }
-        }
-
-        return []
-    }
-
-    private static func containsAny(_ terms: [String], in prompt: String) -> Bool {
-        terms.contains(where: prompt.contains)
     }
 
     private static func comparableDate(for file: FileItem) -> Date {

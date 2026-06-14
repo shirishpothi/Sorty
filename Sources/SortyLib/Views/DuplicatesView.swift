@@ -465,10 +465,6 @@ struct DuplicatesView: View {
                 .flatMap { CleanupPreferenceResolver.preferredFileID(in: group.files, strategy: $0) }
                 ?? CleanupPreferenceResolver.preferredFileID(
                     in: group.files,
-                    prompt: settingsManager.settings.cleanupPreferencePrompt
-                )
-                ?? CleanupPreferenceResolver.preferredFileID(
-                    in: group.files,
                     strategy: settingsManager.settings.defaultKeepStrategy
                 )
 
@@ -575,12 +571,6 @@ struct DuplicatesHeaderNew: View {
 
                     if manager.exactGroupCount > 0 && !manager.isScanning {
                         Menu {
-                            Button {
-                                onBulkDelete(nil)
-                            } label: {
-                                Label("Use Cleanup Preference", systemImage: "text.badge.checkmark")
-                            }
-                            Divider()
                             Button {
                                 onBulkDelete(.newest)
                             } label: {
@@ -1041,9 +1031,6 @@ struct UnifiedDuplicateGroupDetailView: View {
         .onChange(of: group.id) { _, _ in
             selectedKeepFileId = preferredKeepFileId()
         }
-        .onChange(of: settings.cleanupPreferencePrompt) { _, _ in
-            selectedKeepFileId = preferredKeepFileId()
-        }
         .onChange(of: settings.defaultKeepStrategy) { _, _ in
             selectedKeepFileId = preferredKeepFileId()
         }
@@ -1262,22 +1249,11 @@ struct UnifiedDuplicateGroupDetailView: View {
     }
 
     private func preferredKeepFileId() -> UUID? {
-        if let promptMatch = keepFileIdMatchingCleanupPreference() {
-            return promptMatch
-        }
-
         if let recommended = group.recommendedFileId {
             return recommended
         }
 
         return keepFile(using: settings.defaultKeepStrategy)?.id
-    }
-
-    private func keepFileIdMatchingCleanupPreference() -> UUID? {
-        CleanupPreferenceResolver.preferredFileID(
-            in: group.files,
-            prompt: settings.cleanupPreferencePrompt
-        )
     }
 
     private func keepFile(using strategy: KeepStrategy) -> FileItem? {

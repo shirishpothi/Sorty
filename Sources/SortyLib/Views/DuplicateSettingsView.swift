@@ -95,36 +95,6 @@ struct DuplicateSettingsView: View {
                                 .accessibilityValue(isSelected ? "Selected" : "Not selected")
                             }
 
-                            Divider()
-
-                            VStack(alignment: .leading, spacing: SortyDesignSystem.Spacing.sm) {
-                                Text("Describe cleanup preference")
-                                    .font(SortyDesignSystem.Typography.body(weight: .medium))
-                                    .foregroundStyle(SortyDesignSystem.Colors.textPrimary)
-
-                                Text("Sorty uses this as a rule hint when choosing the default file to keep. You can still change the kept file in each group.")
-                                    .font(SortyDesignSystem.Typography.caption2())
-                                    .foregroundStyle(SortyDesignSystem.Colors.textSecondary)
-
-                                TextField(
-                                    "Example: Keep files in Originals, prefer highest resolution, otherwise newest",
-                                    text: $settingsManager.settings.cleanupPreferencePrompt,
-                                    axis: .vertical
-                                )
-                                .textFieldStyle(.plain)
-                                .lineLimit(3...5)
-                                .padding(SortyDesignSystem.Spacing.md)
-                                .background(
-                                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
-                                        .fill(SortyDesignSystem.Colors.backgroundTertiary.opacity(0.28))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: SortyDesignSystem.Radius.medium)
-                                        .stroke(SortyDesignSystem.Colors.glassBorder, lineWidth: 1)
-                                )
-                                .accessibilityLabel("Cleanup preference")
-                            }
-                            
                         }
                     }
 
