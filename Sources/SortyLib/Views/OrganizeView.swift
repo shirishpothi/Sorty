@@ -997,21 +997,18 @@ struct ReadyToOrganizeView: View {
     }
     
     private var iconSection: some View {
-        Group {
-            if let readyIcon = SortyResources.image(named: "ReadyToOrganizeIcon") {
-                Image(nsImage: readyIcon)
+        ZStack {
+            Circle()
+                .fill(Color.teal.opacity(0.12))
+                .frame(width: 104, height: 104)
+
+            if let mascotHead = SortyResources.image(named: "SortyMascotHead") {
+                Image(nsImage: mascotHead)
                     .resizable()
                     .interpolation(.high)
                     .antialiased(true)
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 104, height: 104)
-                    .clipShape(Circle())
-            } else {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 36, weight: .light))
-                    .foregroundStyle(.teal)
-                    .frame(width: 104, height: 104)
-                    .background(Color.teal.opacity(0.12), in: Circle())
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 64, height: 64)
             }
         }
         .accessibilityHidden(true)
