@@ -934,7 +934,7 @@ struct ReadyToOrganizeView: View {
                         .frame(maxWidth: .infinity)
                     }
                     
-                    HStack {
+                    HStack(alignment: .center, spacing: 14) {
                         Button {
                             HapticFeedbackManager.shared.tap()
                             suggestedLocationName = nil
@@ -947,9 +947,7 @@ struct ReadyToOrganizeView: View {
                         .controlSize(.small)
                         .help("Add a folder that Sorty can use as a destination")
                         .accessibilityHint("Opens folder picker to add a destination location")
-                        
-                        Spacer()
-                        
+
                         Button {
                             HapticFeedbackManager.shared.selection()
                             appState.currentView = .storageLocations
@@ -968,6 +966,7 @@ struct ReadyToOrganizeView: View {
                                     .scaleEffect(reduceMotion || isMoreSettingsHovered ? 1 : 0.75)
                                     .accessibilityHidden(true)
                             }
+                            .frame(minHeight: 30)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -984,6 +983,8 @@ struct ReadyToOrganizeView: View {
                         .accessibilityIdentifier("OpenStorageLocationsInSettingsButton")
                         .accessibilityHint("Opens the Storage Locations page")
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 2)
                 }
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)),
