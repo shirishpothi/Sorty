@@ -203,10 +203,6 @@ struct ExclusionRulesView: View {
                             "\(rulesManager.rules.count - rulesManager.enabledRulesCount) disabled"
                         )
                         .foregroundStyle(.secondary)
-                        Text("•")
-                            .foregroundStyle(.secondary)
-                        Text("Also blocks learnings")
-                            .foregroundStyle(.orange)
                     }
                     .font(.caption)
                     .contentTransition(.numericText())
