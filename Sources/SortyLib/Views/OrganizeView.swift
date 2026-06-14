@@ -664,6 +664,7 @@ private struct SetupRepairGateView: View {
 
 struct ReadyToOrganizeView: View {
     let onStart: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var organizer: FolderOrganizer
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @EnvironmentObject var storageLocationsManager: StorageLocationsManager
@@ -681,6 +682,7 @@ struct ReadyToOrganizeView: View {
     @State private var savePromptName = ""
     @State private var isImprovingPrompt = false
     @State private var showSavedPromptsSheet = false
+    @State private var isMoreSettingsHovered = false
     @State private var referenceableFiles: [InstructionFileReference] = []
     @State private var instructionSelection: NSRange = NSRange(location: 0, length: 0)
     @State private var referenceRefreshTask: Task<Void, Never>?
@@ -948,13 +950,36 @@ struct ReadyToOrganizeView: View {
                         
                         Spacer()
                         
-                        Button("More in Settings") {
+                        Button {
                             HapticFeedbackManager.shared.selection()
                             appState.currentView = .storageLocations
+                        } label: {
+                            HStack(spacing: 5) {
+                                Text("More in Settings")
+
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .frame(width: 10)
+                                    .opacity(isMoreSettingsHovered ? 1 : 0)
+                                    .offset(
+                                        x: reduceMotion || isMoreSettingsHovered ? 0 : -3,
+                                        y: reduceMotion || isMoreSettingsHovered ? 0 : 3
+                                    )
+                                    .scaleEffect(reduceMotion || isMoreSettingsHovered ? 1 : 0.75)
+                                    .accessibilityHidden(true)
+                            }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
+                        .animation(
+                            reduceMotion ? nil : .spring(response: 0.24, dampingFraction: 0.82),
+                            value: isMoreSettingsHovered
+                        )
+                        .onHover { hovering in
+                            isMoreSettingsHovered = hovering
+                        }
                         .help("Open Storage Locations")
                         .accessibilityIdentifier("OpenStorageLocationsInSettingsButton")
                         .accessibilityHint("Opens the Storage Locations page")
