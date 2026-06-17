@@ -996,6 +996,7 @@ struct ReadyToOrganizeView: View {
         }
     }
     
+    @ViewBuilder
     private var iconSection: some View {
         if let readyIcon = SortyResources.image(named: "ReadyToOrganizeIcon") {
             Image(nsImage: readyIcon)
