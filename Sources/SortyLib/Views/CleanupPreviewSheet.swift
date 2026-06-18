@@ -112,6 +112,7 @@ public struct CleanupPreviewSheet: View {
                     onCancel()
                 }
                 .keyboardShortcut(.escape)
+                .buttonStyle(.sortyBordered(intent: .destructive))
                 
                 Spacer()
                 

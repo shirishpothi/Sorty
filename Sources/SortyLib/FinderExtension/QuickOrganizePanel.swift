@@ -367,7 +367,7 @@ struct QuickOrganizeView: View {
             Button("Cancel") {
                 controller.hidePanel()
             }
-            .buttonStyle(.sortyBordered)
+            .buttonStyle(.sortyBordered(intent: .destructive))
             .keyboardShortcut(.escape)
             
             Button(action: startOrganization) {

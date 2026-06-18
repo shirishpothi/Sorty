@@ -826,6 +826,7 @@ struct AddExclusionRuleView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.escape, modifiers: [])
+                .buttonStyle(.sortyBordered(intent: .destructive))
 
                 Spacer()
 

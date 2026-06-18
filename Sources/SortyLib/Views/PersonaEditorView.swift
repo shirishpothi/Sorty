@@ -52,6 +52,7 @@ struct PersonaEditorView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.escape)
+                .buttonStyle(.sortyBordered(intent: .destructive))
                 
                 Button(editingPersona == nil ? "Create" : "Save") {
                     savePersona()
@@ -186,6 +187,7 @@ struct PersonaEditorView: View {
                     Button("Cancel") {
                         showingGenerator = false
                     }
+                    .buttonStyle(.sortyBordered(intent: .destructive))
                     
                     if generator.isGenerating {
                         SortyGradientCircularLoader(size: 12, lineWidth: 2.2)

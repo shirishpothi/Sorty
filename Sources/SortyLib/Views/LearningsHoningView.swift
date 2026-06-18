@@ -100,7 +100,7 @@ struct LearningsHoningView: View {
             
             HStack(spacing: 16) {
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.onboardingPillSecondary)
+                    .buttonStyle(.sortyBordered(intent: .destructive))
                 
                 Button {
                     Task {

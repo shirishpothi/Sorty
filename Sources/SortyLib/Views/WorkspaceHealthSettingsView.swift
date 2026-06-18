@@ -76,7 +76,7 @@ struct WorkspaceHealthSettingsView: View {
                 HapticFeedbackManager.shared.tap()
                 dismiss()
             }
-            .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+            .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
 
             Spacer()
 

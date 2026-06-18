@@ -1689,6 +1689,7 @@ struct SavedPromptsSheet: View {
                         editingPromptId = nil
                     }
                     .controlSize(.small)
+                    .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
 
                     Button("Save") {
                         var updated = prompt

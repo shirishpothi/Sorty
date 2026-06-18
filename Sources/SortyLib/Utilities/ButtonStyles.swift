@@ -313,6 +313,7 @@ public struct OnboardingPillButtonStyle: ButtonStyle {
                     }
                 }
             )
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .shadow(
                 color: isSecondary
                     ? Color.black.opacity(colorScheme == .dark ? 0.14 : 0.05)
@@ -375,6 +376,7 @@ public struct TintedPillButtonStyle: ButtonStyle {
                         )
                 }
             )
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .shadow(color: fillColor.opacity(0.24), radius: 8, x: 0, y: 4)
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.92 : 1.0)
@@ -407,6 +409,7 @@ public struct SortySecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
             )
+            .systemLiquidGlassBackground(cornerRadius: 8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(color.opacity(0.3), lineWidth: 1)

@@ -314,7 +314,7 @@ struct OrganizationStrategySettingsView: View {
                                         showNamingInput = false
                                         namingPreferenceInput = ""
                                     }
-                                    .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                                    .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
                                 }
 
                                 if let error = namingGenerator.error {
@@ -444,7 +444,7 @@ private struct EditPresetSheet: View {
                 Button("Cancel") {
                     isPresented = false
                 }
-                .buttonStyle(.onboardingPill(isSecondary: true, size: .small))
+                .buttonStyle(.sortyBordered(intent: .destructive, size: .small))
 
                 Button("Save") {
                     var updated = preset
