@@ -210,6 +210,7 @@ public struct SortyPrimaryButtonStyle: ButtonStyle {
                     }
                 }
             )
+            .systemLiquidGlassBackground(cornerRadius: 999)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
             .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
@@ -444,6 +445,7 @@ public struct SortyDestructiveButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color.red.opacity(0.85))
             )
+            .systemLiquidGlassBackground(cornerRadius: 8)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.red, lineWidth: 1)
@@ -1276,6 +1278,7 @@ public struct GlossyCallToActionButtonStyle: ButtonStyle {
                 .animation(.easeOut(duration: 0.18), value: isHovering)
                 .animation(.easeOut(duration: 0.1), value: pressed)
             }
+            .systemLiquidGlassBackground(cornerRadius: 999)
             // Drop shadows — lift on hover, flatten on press
             .shadow(
                 color: baseColor.opacity(pressed ? 0.10 : (isHovering ? 0.28 : (size == .large ? 0.18 : 0.25))),
