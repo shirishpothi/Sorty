@@ -26,6 +26,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     private var pendingFiles: [UUID: (folder: WatchedFolder, files: Set<String>, resolvedURL: URL)] = [:]
     private var ignoredWatchEventsUntil: [UUID: Date] = [:]
     private var retryTask: Task<Void, Never>?
+    private let candidateStabilityDelay: TimeInterval = 1.5
     nonisolated(unsafe) private var notificationObservers: [NSObjectProtocol] = []
     
     init(organizer: FolderOrganizer, watchedFoldersManager: WatchedFoldersManager, learningsManager: LearningsManager) {
@@ -478,12 +479,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         
         if isOrganizerBusyForAutomation() {
             print("Coordinator: Organizer busy, queueing \(newFiles.count) files for \(folder.name)")
-            if var existing = pendingFiles[folder.id] {
-                existing.files.formUnion(newFiles)
-                pendingFiles[folder.id] = existing
-            } else {
-                pendingFiles[folder.id] = (folder: folder, files: newFiles, resolvedURL: resolvedURL)
-            }
+            mergePendingFiles(folder: folder, files: newFiles, resolvedURL: resolvedURL)
             scheduleRetry()
             return
         }
@@ -499,6 +495,25 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no AI provider configured", isCritical: false)
             return
         }
+
+        let candidateAudit = await Self.auditStableCandidates(
+            files: files,
+            rootURL: resolvedURL,
+            stabilityDelay: candidateStabilityDelay
+        )
+
+        if !candidateAudit.unsettled.isEmpty {
+            print("Coordinator: Deferring \(candidateAudit.unsettled.count) unsettled files for \(folder.name)")
+            mergePendingFiles(folder: folder, files: candidateAudit.unsettled, resolvedURL: resolvedURL)
+            scheduleRetry()
+        }
+
+        guard !candidateAudit.stable.isEmpty else {
+            if !candidateAudit.gone.isEmpty {
+                print("Coordinator: Dropping \(candidateAudit.gone.count) vanished files for \(folder.name)")
+            }
+            return
+        }
         
         let startTime = Date()
         defer {
@@ -508,11 +523,11 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
         do {
             watchedFoldersManager.markTriggered(folder)
             
-            print("Coordinator: Auto-organizing \(files.count) new files in \(folder.name): \(files)")
+            print("Coordinator: Auto-organizing \(candidateAudit.stable.count) stable new files in \(folder.name): \(candidateAudit.stable)")
             
             try await organizer.organizeIncremental(
                 directory: resolvedURL,
-                specificFiles: Array(files),
+                specificFiles: Array(candidateAudit.stable),
                 customPrompt: folder.customPrompt,
                 temperature: folder.temperature,
                 providerOverride: folder.providerOverride,
@@ -526,7 +541,7 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             print("Coordinator: Auto-organize completed for \(folder.name) in \(String(format: "%.1f", duration))s")
             
             let stats = BatchSummaryStats(
-                filesMoved: files.count,
+                filesMoved: candidateAudit.stable.count,
                 foldersCreated: 0,
                 duration: duration,
                 folderName: folder.name,
@@ -549,10 +564,164 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
             organizer.state = .idle
         }
     }
+
+    private func mergePendingFiles(folder: WatchedFolder, files: Set<String>, resolvedURL: URL) {
+        guard !files.isEmpty else { return }
+
+        if var existing = pendingFiles[folder.id] {
+            existing.files.formUnion(files)
+            pendingFiles[folder.id] = existing
+        } else {
+            pendingFiles[folder.id] = (folder: folder, files: files, resolvedURL: resolvedURL)
+        }
+    }
+
+    private struct CandidateAudit: Sendable {
+        var stable: Set<String>
+        var unsettled: Set<String>
+        var gone: Set<String>
+    }
+
+    private struct CandidateSnapshot: Equatable, Sendable {
+        var exists: Bool
+        var isDirectory: Bool
+        var fileCount: Int
+        var byteSize: Int64
+        var latestModification: Date?
+        var rootModification: Date?
+        var isTruncated: Bool
+
+        static let missing = CandidateSnapshot(
+            exists: false,
+            isDirectory: false,
+            fileCount: 0,
+            byteSize: 0,
+            latestModification: nil,
+            rootModification: nil,
+            isTruncated: false
+        )
+    }
+
+    private nonisolated static func auditStableCandidates(
+        files: Set<String>,
+        rootURL: URL,
+        stabilityDelay: TimeInterval
+    ) async -> CandidateAudit {
+        let firstSnapshot = await snapshotCandidates(files: files, rootURL: rootURL)
+        let delayNanoseconds = UInt64(stabilityDelay * 1_000_000_000)
+        try? await Task.sleep(nanoseconds: delayNanoseconds)
+        let secondSnapshot = await snapshotCandidates(files: files, rootURL: rootURL)
+
+        var stable = Set<String>()
+        var unsettled = Set<String>()
+        var gone = Set<String>()
+
+        for file in files {
+            let first = firstSnapshot[file] ?? CandidateSnapshot.missing
+            let second = secondSnapshot[file] ?? CandidateSnapshot.missing
+
+            if second.exists, first == second {
+                stable.insert(file)
+            } else if !first.exists && !second.exists {
+                gone.insert(file)
+            } else {
+                unsettled.insert(file)
+            }
+        }
+
+        return CandidateAudit(stable: stable, unsettled: unsettled, gone: gone)
+    }
+
+    private nonisolated static func snapshotCandidates(
+        files: Set<String>,
+        rootURL: URL
+    ) async -> [String: CandidateSnapshot] {
+        await Task.detached(priority: .utility) {
+            var snapshots: [String: CandidateSnapshot] = [:]
+            snapshots.reserveCapacity(files.count)
+
+            for file in files {
+                let url = rootURL.appendingPathComponent(file)
+                guard url.standardizedFileURL.path.hasPrefix(rootURL.standardizedFileURL.path + "/") else {
+                    snapshots[file] = .missing
+                    continue
+                }
+
+                snapshots[file] = snapshotCandidate(at: url)
+            }
+
+            return snapshots
+        }.value
+    }
+
+    private nonisolated static func snapshotCandidate(at url: URL) -> CandidateSnapshot {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            return .missing
+        }
+
+        let rootValues = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        guard isDirectory.boolValue else {
+            return CandidateSnapshot(
+                exists: true,
+                isDirectory: false,
+                fileCount: 1,
+                byteSize: Int64(rootValues?.fileSize ?? 0),
+                latestModification: rootValues?.contentModificationDate,
+                rootModification: rootValues?.contentModificationDate,
+                isTruncated: false
+            )
+        }
+
+        let maxEntriesToAudit = 5_000
+        var fileCount = 0
+        var byteSize: Int64 = 0
+        var latestModification = rootValues?.contentModificationDate
+        var isTruncated = false
+
+        if let enumerator = fileManager.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) {
+            for case let childURL as URL in enumerator {
+                guard fileCount < maxEntriesToAudit else {
+                    isTruncated = true
+                    break
+                }
+
+                guard let values = try? childURL.resourceValues(
+                    forKeys: [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+                ), values.isRegularFile == true else {
+                    continue
+                }
+
+                fileCount += 1
+                byteSize += Int64(values.fileSize ?? 0)
+                if let modificationDate = values.contentModificationDate,
+                   latestModification.map({ modificationDate > $0 }) ?? true {
+                    latestModification = modificationDate
+                }
+            }
+        }
+
+        return CandidateSnapshot(
+            exists: true,
+            isDirectory: true,
+            fileCount: fileCount,
+            byteSize: byteSize,
+            latestModification: latestModification,
+            rootModification: rootValues?.contentModificationDate,
+            isTruncated: isTruncated
+        )
+    }
     
     private func processPendingFiles() async {
-        while let (folderId, pending) = pendingFiles.first {
-            pendingFiles.removeValue(forKey: folderId)
+        let pendingBatch = pendingFiles
+        pendingFiles.removeAll()
+
+        for (_, pending) in pendingBatch {
             await autoOrganize(folder: pending.folder, files: pending.files, resolvedURL: pending.resolvedURL)
         }
     }

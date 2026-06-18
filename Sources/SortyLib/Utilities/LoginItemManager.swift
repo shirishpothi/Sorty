@@ -130,10 +130,12 @@ public class LoginItemManager: ObservableObject {
         // 1. Sync Login Item (mainApp)
         let mainAppStatus = SMAppService.mainApp.status
         
-        if launchAtLogin && mainAppStatus != .enabled {
+        if launchAtLogin && (mainAppStatus == .notRegistered || mainAppStatus == .notFound) {
             try? SMAppService.mainApp.register()
             DebugLogger.log("Registered main app service (Login Item)")
-        } else if !launchAtLogin && mainAppStatus == .enabled {
+        } else if launchAtLogin && mainAppStatus == .requiresApproval {
+            DebugLogger.log("Login item registration requires user approval in System Settings")
+        } else if !launchAtLogin && (mainAppStatus == .enabled || mainAppStatus == .requiresApproval) {
             try? SMAppService.mainApp.unregister()
             DebugLogger.log("Unregistered main app service (Login Item)")
         }
@@ -168,7 +170,7 @@ public class LoginItemManager: ObservableObject {
             } catch {
                 DebugLogger.log("Failed to refresh background agent registration: \(error.localizedDescription)")
             }
-        } else if shouldBeBackgroundAgent && agentCurrentStatus != .enabled {
+        } else if shouldBeBackgroundAgent && (agentCurrentStatus == .notRegistered || agentCurrentStatus == .notFound) {
             do {
                 try agent.register()
                 UserDefaults.standard.set(Self.backgroundAgentBundleProgram, forKey: Self.registeredBackgroundAgentBundleProgramKey)
@@ -176,7 +178,9 @@ public class LoginItemManager: ObservableObject {
             } catch {
                 DebugLogger.log("Failed to register background agent: \(error.localizedDescription)")
             }
-        } else if !shouldBeBackgroundAgent && agentCurrentStatus == .enabled {
+        } else if shouldBeBackgroundAgent && agentCurrentStatus == .requiresApproval {
+            DebugLogger.log("Background agent registration requires user approval in System Settings")
+        } else if !shouldBeBackgroundAgent && (agentCurrentStatus == .enabled || agentCurrentStatus == .requiresApproval) {
             do {
                 try agent.unregister()
                 UserDefaults.standard.removeObject(forKey: Self.registeredBackgroundAgentBundleProgramKey)
