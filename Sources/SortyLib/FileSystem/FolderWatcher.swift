@@ -57,6 +57,14 @@ public final class FolderWatcher: @unchecked Sendable {
     private var lastReconciliationTime: [UUID: Date] = [:]
     private let heartbeatInterval: TimeInterval = 300 // 5 minutes
     private let reconciliationInterval: TimeInterval = 900 // 15 minutes
+    private lazy var snapshotStoreDirectory: URL? = {
+        guard let supportDirectory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return supportDirectory
+            .appendingPathComponent("Sorty", isDirectory: true)
+            .appendingPathComponent("WatcherSnapshots", isDirectory: true)
+    }()
     
     public init() {
         queue.setSpecific(key: queueSpecificKey, value: ())
@@ -148,12 +156,19 @@ public final class FolderWatcher: @unchecked Sendable {
             }
         }
         
-        // Keep the previous baseline if a removable volume or cloud provider
-        // is temporarily unavailable during startup/restart.
-        updateSnapshot(for: folder, allowEmptyForUnavailableRoot: false)
-        
+        let restoredPersistedSnapshot = restorePersistedSnapshot(for: folder, currentRootPath: path)
+
         createStream(for: folder, at: path)
         startHeartbeatIfNeeded()
+
+        if restoredPersistedSnapshot {
+            forcedFullRescan.insert(folder.id)
+            processChanges(for: folder.id)
+        } else {
+            // Keep the previous baseline if a removable volume or cloud provider
+            // is temporarily unavailable during startup/restart.
+            updateSnapshot(for: folder, allowEmptyForUnavailableRoot: false)
+        }
     }
     
     /// Stop watching a specific folder
@@ -184,6 +199,7 @@ public final class FolderWatcher: @unchecked Sendable {
             // 1. Stop watching folders that were removed
             for id in currentIds.subtracting(folderIds) {
                 self.stopWatchingSync(id: id)
+                self.removePersistedSnapshot(for: id)
             }
             
             // 2. Process remaining and new folders
@@ -322,6 +338,7 @@ public final class FolderWatcher: @unchecked Sendable {
         folderSnapshots[folder.id] = Set(files)
         fileModDates[folder.id] = modDates
         lastReconciliationTime[folder.id] = Date()
+        persistSnapshot(folderId: folder.id, rootPath: path, modDates: modDates)
         return true
     }
     
@@ -591,6 +608,7 @@ public final class FolderWatcher: @unchecked Sendable {
         folderSnapshots[folderId] = currentSet
         fileModDates[folderId] = newModDates
         lastReconciliationTime[folderId] = Date()
+        persistSnapshot(folderId: folderId, rootPath: path, modDates: newModDates)
         
         guard !genuineNewFiles.isEmpty else { return }
         
@@ -655,6 +673,73 @@ public final class FolderWatcher: @unchecked Sendable {
             return queue.sync(execute: block)
         }
     }
+
+    private func restorePersistedSnapshot(for folder: WatchedFolder, currentRootPath: String) -> Bool {
+        guard let snapshot = readPersistedSnapshot(for: folder.id) else {
+            return false
+        }
+
+        if snapshot.rootPath != currentRootPath, folder.bookmarkData == nil {
+            removePersistedSnapshot(for: folder.id)
+            return false
+        }
+
+        folderSnapshots[folder.id] = Set(snapshot.fileModDates.keys)
+        fileModDates[folder.id] = snapshot.fileModDates
+        lastReconciliationTime[folder.id] = snapshot.updatedAt
+        DebugLogger.log("Restored watcher snapshot for \(folder.name) from previous session")
+        return true
+    }
+
+    private func readPersistedSnapshot(for folderId: UUID) -> PersistedWatcherSnapshot? {
+        guard let snapshotURL = persistedSnapshotURL(for: folderId),
+              let data = try? Data(contentsOf: snapshotURL) else {
+            return nil
+        }
+
+        do {
+            return try JSONDecoder().decode(PersistedWatcherSnapshot.self, from: data)
+        } catch {
+            DebugLogger.log("Discarding corrupt watcher snapshot for folder ID \(folderId): \(error)")
+            removePersistedSnapshot(for: folderId)
+            return nil
+        }
+    }
+
+    private func persistSnapshot(folderId: UUID, rootPath: String, modDates: [String: Date]) {
+        guard let snapshotURL = persistedSnapshotURL(for: folderId) else {
+            return
+        }
+
+        do {
+            let directory = snapshotURL.deletingLastPathComponent()
+            try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+
+            let snapshot = PersistedWatcherSnapshot(rootPath: rootPath, fileModDates: modDates, updatedAt: Date())
+            let data = try JSONEncoder().encode(snapshot)
+            try data.write(to: snapshotURL, options: .atomic)
+        } catch {
+            DebugLogger.log("Failed to persist watcher snapshot for folder ID \(folderId): \(error)")
+        }
+    }
+
+    private func removePersistedSnapshot(for folderId: UUID) {
+        guard let snapshotURL = persistedSnapshotURL(for: folderId) else {
+            return
+        }
+
+        do {
+            if fileManager.fileExists(atPath: snapshotURL.path) {
+                try fileManager.removeItem(at: snapshotURL)
+            }
+        } catch {
+            DebugLogger.log("Failed to remove watcher snapshot for folder ID \(folderId): \(error)")
+        }
+    }
+
+    private func persistedSnapshotURL(for folderId: UUID) -> URL? {
+        snapshotStoreDirectory?.appendingPathComponent("\(folderId.uuidString).json")
+    }
     
     // MARK: - Public Health & Recovery Methods
     
@@ -698,6 +783,12 @@ public final class FolderWatcher: @unchecked Sendable {
         let path = resolvedURL?.path ?? folder.path
         return isReadableDirectory(atPath: path)
     }
+}
+
+private struct PersistedWatcherSnapshot: Codable {
+    let rootPath: String
+    let fileModDates: [String: Date]
+    let updatedAt: Date
 }
 
 // Helper context class
