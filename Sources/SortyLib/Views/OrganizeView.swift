@@ -245,10 +245,10 @@ struct OrganizeView: View {
                     baseURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
                     onReturnToStart: returnToStartAfterCancellation
                 )
-                .opacity(showsCompletionContent ? 0 : 1)
+                .opacity(isCompletionContentVisible ? 0 : 1)
                 .blur(radius: completionPreviewBlur)
-                .scaleEffect(showsCompletionContent && !reduceMotion ? 0.992 : 1)
-                .allowsHitTesting(!showsCompletionContent)
+                .scaleEffect(isCompletionContentVisible && !reduceMotion ? 0.992 : 1)
+                .allowsHitTesting(!isCompletionContentVisible)
 
                 OrganizationCompleteView(
                     stats: plan.generationStats,
@@ -259,10 +259,10 @@ struct OrganizeView: View {
                     directoryURL: appState.selectedDirectory ?? URL(fileURLWithPath: "/"),
                     onReturnToStart: returnToStartAfterCancellation
                 )
-                .opacity(showsCompletionContent ? 1 : 0)
-                .scaleEffect(showsCompletionContent || reduceMotion ? 1 : 0.985)
-                .offset(y: showsCompletionContent || reduceMotion ? 0 : 10)
-                .allowsHitTesting(showsCompletionContent)
+                .opacity(isCompletionContentVisible ? 1 : 0)
+                .scaleEffect(isCompletionContentVisible || reduceMotion ? 1 : 0.985)
+                .offset(y: isCompletionContentVisible || reduceMotion ? 0 : 10)
+                .allowsHitTesting(isCompletionContentVisible)
             } else {
                 OrganizationCompleteView(
                     stats: nil,
@@ -279,7 +279,7 @@ struct OrganizeView: View {
     }
 
     private var completionPreviewBlur: CGFloat {
-        showsCompletionContent && !reduceMotion ? 2 : 0
+        isCompletionContentVisible && !reduceMotion ? 2 : 0
     }
 
     private var completionHandoffAnimation: Animation {
@@ -289,6 +289,11 @@ struct OrganizeView: View {
     private var shouldShowCompletionView: Bool {
         if case .completed = organizer.state { return true }
         return organizer.pinsCompletionView
+    }
+
+    private var isCompletionContentVisible: Bool {
+        if case .completed = organizer.state { return true }
+        return showsCompletionContent
     }
 
     @ViewBuilder
@@ -425,12 +430,8 @@ struct OrganizeView: View {
     private func beginCompletionHandoff() {
         guard !showsCompletionContent else { return }
 
-        Task { @MainActor in
-            try? await Task.sleep(for: reduceMotion ? .milliseconds(80) : .milliseconds(260))
-
-            withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)) {
-                showsCompletionContent = true
-            }
+        withAnimation(reduceMotion ? .easeOut(duration: 0.12) : .smooth(duration: 0.42)) {
+            showsCompletionContent = true
         }
     }
 
