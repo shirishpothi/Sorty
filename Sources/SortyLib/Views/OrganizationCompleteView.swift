@@ -69,13 +69,29 @@ struct OrganizationCompleteView: View {
     }
 
     private var primaryStatLabel: String {
+        if undoState == .completed {
+            return undoRestoredCount == 1 ? "File Restored" : "Files Restored"
+        }
+
         switch mode {
         case .renameOnly: return renameCount == 1 ? "Name Changed" : "Names Changed"
         case .organize, .organizeAndRename: return totalFiles == 1 ? "File Moved" : "Files Moved"
         }
     }
 
+    private var primaryStatValue: String {
+        if undoState == .completed {
+            return "\(undoRestoredCount)"
+        }
+
+        return "\(displayedFiles)"
+    }
+
     private var secondaryStatValue: String {
+        if undoState == .completed {
+            return "\(undoSkippedCount)"
+        }
+
         switch mode {
         case .renameOnly: return "\(max(totalFiles - renameCount, 0))"
         case .organize, .organizeAndRename: return "\(displayedFolders)"
@@ -83,6 +99,10 @@ struct OrganizationCompleteView: View {
     }
 
     private var secondaryStatLabel: String {
+        if undoState == .completed {
+            return undoSkippedCount == 1 ? "Item Skipped" : "Items Skipped"
+        }
+
         switch mode {
         case .renameOnly: return max(totalFiles - renameCount, 0) == 1 ? "File Unchanged" : "Files Unchanged"
         case .organize, .organizeAndRename: return totalFolders == 1 ? "Folder Created" : "Folders Created"
@@ -162,7 +182,7 @@ struct OrganizationCompleteView: View {
                     
                     HStack(spacing: 40) {
                         SummaryStatItem(
-                            value: "\(displayedFiles)",
+                            value: primaryStatValue,
                             label: primaryStatLabel,
                             icon: mode == .renameOnly ? "pencil.line" : "doc.on.doc.fill",
                             color: .blue
@@ -406,10 +426,12 @@ struct OrganizationCompleteView: View {
 
     private var statusTitle: String {
         switch undoState {
-        case .idle, .completed:
+        case .idle:
             return mode.completionTitle
         case .undoing:
             return "Undoing Changes"
+        case .completed:
+            return "Undo Complete"
         case .redoing:
             return "Redoing Changes"
         case .failed:
@@ -419,10 +441,14 @@ struct OrganizationCompleteView: View {
 
     private var statusMessage: String {
         switch undoState {
-        case .idle, .completed:
+        case .idle:
             return mode.completionMessage
         case .undoing:
             return "Restoring files to their previous locations..."
+        case .completed:
+            return undoSkippedCount > 0
+                ? "Restored what could be safely reverted. Review history for skipped items."
+                : "Restored your files to their previous locations."
         case .redoing:
             return "Reapplying the organization plan..."
         case .failed:
