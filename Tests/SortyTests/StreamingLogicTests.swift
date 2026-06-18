@@ -118,7 +118,7 @@ final class StreamingLogicTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(organizer.isStreaming)
-        XCTAssertEqual(organizer.organizationStage, "AI is analyzing your files...")
+        XCTAssertEqual(organizer.organizationStage, "Sorty is analyzing your files...")
         XCTAssertEqual(organizer.streamingContent, "retry stream")
         XCTAssertLessThan(organizer.progress, 0.5)
     }
@@ -247,7 +247,7 @@ final class StreamingLogicTests: XCTestCase {
         organizer.didReceiveChunk("first chunk of streaming data")
         try? await Task.sleep(nanoseconds: 100_000_000)
         
-        XCTAssertEqual(organizer.organizationStage, "AI is analyzing your files...")
+        XCTAssertEqual(organizer.organizationStage, "Sorty is analyzing your files...")
     }
 
     func testReadyCueCapturedAsGeneralInsight() async {

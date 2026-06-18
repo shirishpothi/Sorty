@@ -740,7 +740,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
         withBatchUpdates {
             isStreaming = false
             progress = 0.30
-            organizationStage = "AI is analyzing your files..."
+            organizationStage = "Sorty is analyzing your files..."
         }
         startTimeoutTimer()
     }
@@ -762,7 +762,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                 // Batch all initial state updates together
                 self.withBatchUpdates {
                     self.isStreaming = true
-                    self.organizationStage = "AI is analyzing your files..."
+                    self.organizationStage = "Sorty is analyzing your files..."
                     self.progress = 0.30
                     if self.liveInsightsEnabled {
                         self.syncDisplayContentImmediately()
