@@ -80,7 +80,7 @@ class AppStateTests: XCTestCase {
         XCTAssertNotNil(userDefaults.string(forKey: versionKey), "Version should be stored after first launch")
     }
     
-    func testOnboardingSkippedForUpdates() {
+    func testCompletedOnboardingPersistsAcrossUpdates() {
         let testSuiteName = "test.onboarding.updates.\(UUID().uuidString)"
         let userDefaults = UserDefaults(suiteName: testSuiteName)!
         let onboardingKey = "hasCompletedOnboarding"
@@ -90,13 +90,35 @@ class AppStateTests: XCTestCase {
             userDefaults.removePersistentDomain(forName: testSuiteName)
         }
         
-        // Simulate an in-app update scenario: previous version exists, even if onboarding flag was reset
+        // Simulate an in-app update scenario for a user who completed onboarding.
         userDefaults.set("0.9.0", forKey: versionKey)
-        userDefaults.set(false, forKey: onboardingKey)  // Somehow got reset
+        userDefaults.set(true, forKey: onboardingKey)
         
-        // Verify the state is set correctly
-        XCTAssertEqual(userDefaults.string(forKey: versionKey), "0.9.0")
-        XCTAssertFalse(userDefaults.bool(forKey: onboardingKey))
+        let state = AppState(userDefaults: userDefaults)
+
+        XCTAssertTrue(state.hasCompletedOnboarding)
+        XCTAssertEqual(userDefaults.string(forKey: versionKey), BuildInfo.version)
+    }
+
+    func testOnboardingShownWhenPreviousLaunchDidNotCompleteSetup() {
+        let testSuiteName = "test.onboarding.incomplete.\(UUID().uuidString)"
+        let userDefaults = UserDefaults(suiteName: testSuiteName)!
+        let onboardingKey = "hasCompletedOnboarding"
+        let versionKey = "lastLaunchedVersion"
+
+        defer {
+            userDefaults.removePersistentDomain(forName: testSuiteName)
+        }
+
+        // A failed first launch can still write lastLaunchedVersion. That must
+        // not make the next launch skip onboarding.
+        userDefaults.set("nightly", forKey: versionKey)
+        userDefaults.set(false, forKey: onboardingKey)
+
+        let state = AppState(userDefaults: userDefaults)
+
+        XCTAssertFalse(state.hasCompletedOnboarding)
+        XCTAssertEqual(userDefaults.string(forKey: versionKey), BuildInfo.version)
     }
     
     func testOnboardingShownForFreshInstall() {
@@ -113,9 +135,10 @@ class AppStateTests: XCTestCase {
         userDefaults.removeObject(forKey: versionKey)
         userDefaults.removeObject(forKey: onboardingKey)
         
-        // Verify state
-        XCTAssertFalse(userDefaults.bool(forKey: onboardingKey), "Fresh install should show onboarding")
-        XCTAssertNil(userDefaults.string(forKey: versionKey), "Fresh install should have no version")
+        let state = AppState(userDefaults: userDefaults)
+
+        XCTAssertFalse(state.hasCompletedOnboarding, "Fresh install should show onboarding")
+        XCTAssertEqual(userDefaults.string(forKey: versionKey), BuildInfo.version)
     }
 
     func testStartSetupRepairRoutesToProviderSettingsAndPersistsMessage() {

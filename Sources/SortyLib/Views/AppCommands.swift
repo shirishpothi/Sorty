@@ -558,23 +558,15 @@ public class AppState: ObservableObject {
         self.updateManager = updateManager
         self.userDefaults = userDefaults
 
-        // Detect fresh install vs in-app update
-        // Fresh install: no previous version stored AND onboarding not completed
-        // In-app update: previous version exists, so skip onboarding even if flag was reset
-        let previousVersion = userDefaults.string(forKey: "lastLaunchedVersion")
+        // Onboarding completion is the source of truth. `lastLaunchedVersion`
+        // can be written by a launch that never completed onboarding, so it
+        // must not force-skip setup on the next run.
         let onboardingCompleted = userDefaults.bool(forKey: "hasCompletedOnboarding")
         let requiresSetupRepair = userDefaults.bool(forKey: Self.requiresSetupRepairKey)
         let setupRepairMessage = userDefaults.string(forKey: Self.setupRepairMessageKey)
         let currentVersion = BuildInfo.version
         
-        if previousVersion == nil {
-            // First ever launch - show onboarding if not completed
-            self.hasCompletedOnboarding = onboardingCompleted
-        } else {
-            // Returning user (update or re-launch) - skip onboarding
-            // Even if hasCompletedOnboarding was somehow reset, don't show it
-            self.hasCompletedOnboarding = true
-        }
+        self.hasCompletedOnboarding = onboardingCompleted
         self.requiresSetupRepair = requiresSetupRepair
         self.setupRepairMessage = setupRepairMessage
         
