@@ -81,8 +81,21 @@ public struct OnboardingView: View {
                             .animation(nil, value: hasConfiguredWindowChrome)
 
                         // Main content
-                        stepContent
+                        if currentStep == .completion {
+                            stepContent
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            ScrollView(.vertical) {
+                                stepContent
+                                    .frame(
+                                        minHeight: max(480, geometry.size.height - 238),
+                                        maxWidth: .infinity
+                                    )
+                            }
+                            .scrollIndicators(.hidden)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipped()
+                        }
 
                         if currentStep != .completion {
                             navigationControls
