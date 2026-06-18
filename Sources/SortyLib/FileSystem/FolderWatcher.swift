@@ -41,6 +41,7 @@ public final class FolderWatcher: @unchecked Sendable {
     // Incremental scanning support
     private var pendingEventPaths: [UUID: Set<String>] = [:]
     private var forcedFullRescan: Set<UUID> = []
+    private var rootChangedFolders: Set<UUID> = []
     
     // Temp file extensions to ignore
     private static let ignoredExtensions: Set<String> = ["tmp", "download", "partial", "crdownload", "part"]
@@ -53,7 +54,9 @@ public final class FolderWatcher: @unchecked Sendable {
     // Stream health monitoring
     private var lastEventTime: [UUID: Date] = [:]
     private var streamStartTime: [UUID: Date] = [:]
-    private let stuckStreamThreshold: TimeInterval = 300 // 5 minutes
+    private var lastReconciliationTime: [UUID: Date] = [:]
+    private let heartbeatInterval: TimeInterval = 300 // 5 minutes
+    private let reconciliationInterval: TimeInterval = 900 // 15 minutes
     
     public init() {
         queue.setSpecific(key: queueSpecificKey, value: ())
@@ -145,10 +148,12 @@ public final class FolderWatcher: @unchecked Sendable {
             }
         }
         
-        // Take initial snapshot
-        updateSnapshot(for: folder)
+        // Keep the previous baseline if a removable volume or cloud provider
+        // is temporarily unavailable during startup/restart.
+        updateSnapshot(for: folder, allowEmptyForUnavailableRoot: false)
         
         createStream(for: folder, at: path)
+        startHeartbeatIfNeeded()
     }
     
     /// Stop watching a specific folder
@@ -285,6 +290,7 @@ public final class FolderWatcher: @unchecked Sendable {
         watchedFolders.removeValue(forKey: id)
         pendingEventPaths.removeValue(forKey: id)
         forcedFullRescan.remove(id)
+        rootChangedFolders.remove(id)
         
         // Release security scoped resource
         if let url = resolvedURLs[id] {
@@ -295,15 +301,28 @@ public final class FolderWatcher: @unchecked Sendable {
         
         lastEventTime.removeValue(forKey: id)
         streamStartTime.removeValue(forKey: id)
+        lastReconciliationTime.removeValue(forKey: id)
         stopHeartbeatIfIdle()
     }
     
-    private func updateSnapshot(for folder: WatchedFolder) {
+    @discardableResult
+    private func updateSnapshot(for folder: WatchedFolder, allowEmptyForUnavailableRoot: Bool = true) -> Bool {
         let path = resolvedURLs[folder.id]?.path ?? folder.path
+        guard isReadableDirectory(atPath: path) else {
+            if allowEmptyForUnavailableRoot || folderSnapshots[folder.id] == nil {
+                folderSnapshots[folder.id] = []
+                fileModDates[folder.id] = [:]
+            }
+            DebugLogger.log("Skipped watcher snapshot for unavailable folder: \(folder.name)")
+            return false
+        }
+
         let modDates = recursiveFileState(atRootPath: path)
         let files = Set(modDates.keys)
         folderSnapshots[folder.id] = Set(files)
         fileModDates[folder.id] = modDates
+        lastReconciliationTime[folder.id] = Date()
+        return true
     }
     
     private static func isIgnoredFile(_ name: String) -> Bool {
@@ -315,7 +334,20 @@ public final class FolderWatcher: @unchecked Sendable {
         return false
     }
 
+    private func isReadableDirectory(atPath path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return false
+        }
+        return fileManager.isReadableFile(atPath: path)
+    }
+
     private func recursiveFileState(atRootPath rootPath: String) -> [String: Date] {
+        guard isReadableDirectory(atPath: rootPath) else {
+            return [:]
+        }
+
         guard let enumerator = fileManager.enumerator(
             at: URL(fileURLWithPath: rootPath),
             includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey, .contentModificationDateKey],
@@ -353,22 +385,60 @@ public final class FolderWatcher: @unchecked Sendable {
     private func incrementalFileState(changedPaths: Set<String>, rootPath: String, existingModDates: [String: Date]) -> [String: Date] {
         var modDates = existingModDates
         
-        // Get unique parent directories of changed paths
+        // Get unique directories affected by the events. Directory paths are
+        // scanned recursively so dropped folders are captured without a
+        // full-root pass.
+        var recursiveDirsToScan = Set<String>()
         let changedDirs = Set(changedPaths.compactMap { path -> String? in
             let url = URL(fileURLWithPath: path)
-            let parent = url.deletingLastPathComponent().path
-            guard parent.hasPrefix(rootPath) else { return nil }
-            return parent
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue {
+                guard path.hasPrefix(rootPath) else { return nil }
+                recursiveDirsToScan.insert(path)
+                return path
+            } else {
+                let parent = url.deletingLastPathComponent().path
+                guard parent.hasPrefix(rootPath) else { return nil }
+                return parent
+            }
         })
+
+        for path in changedPaths where path.hasPrefix(rootPath) && !fileManager.fileExists(atPath: path) {
+            let relativePath = path.replacingOccurrences(of: rootPath + "/", with: "")
+            guard !relativePath.isEmpty, relativePath != rootPath else { continue }
+            modDates.removeValue(forKey: relativePath)
+            let deletedDirectoryPrefix = relativePath + "/"
+            for key in modDates.keys where key.hasPrefix(deletedDirectoryPrefix) {
+                modDates.removeValue(forKey: key)
+            }
+        }
         
         // Also include the root if any direct children changed
         var dirsToScan = changedDirs
         if changedPaths.contains(where: { URL(fileURLWithPath: $0).deletingLastPathComponent().path == rootPath }) {
             dirsToScan.insert(rootPath)
         }
+
+        let recursivePrefixes = recursiveDirsToScan.map { dir -> String in
+            dir == rootPath ? "" : dir.replacingOccurrences(of: rootPath + "/", with: "") + "/"
+        }
+        for key in modDates.keys where recursivePrefixes.contains(where: { prefix in
+            prefix.isEmpty || key.hasPrefix(prefix)
+        }) {
+            modDates.removeValue(forKey: key)
+        }
+
+        for dir in recursiveDirsToScan {
+            let recursiveState = recursiveFileState(atRootPath: dir)
+            let dirRelativePrefix = dir == rootPath ? "" : dir.replacingOccurrences(of: rootPath + "/", with: "") + "/"
+            for (relativePath, modDate) in recursiveState {
+                modDates[dirRelativePrefix + relativePath] = modDate
+            }
+        }
         
-        // For each changed directory, do a shallow enumeration
+        // For each remaining changed directory, do a shallow enumeration.
         for dir in dirsToScan {
+            guard !recursiveDirsToScan.contains(dir) else { continue }
             let dirURL = URL(fileURLWithPath: dir)
             guard let contents = try? fileManager.contentsOfDirectory(
                 at: dirURL,
@@ -409,7 +479,7 @@ public final class FolderWatcher: @unchecked Sendable {
         return modDates
     }
     
-    fileprivate func handleEvents(for folderId: UUID, changedPaths: Set<String>, requiresFullRescan: Bool) {
+    fileprivate func handleEvents(for folderId: UUID, changedPaths: Set<String>, requiresFullRescan: Bool, rootChanged: Bool) {
         lastEventTime[folderId] = Date()
         guard let folder = watchedFolders[folderId] else { return }
         guard folder.isEnabled else { return }
@@ -428,6 +498,10 @@ public final class FolderWatcher: @unchecked Sendable {
         if requiresFullRescan {
             forcedFullRescan.insert(folderId)
         }
+
+        if rootChanged {
+            rootChangedFolders.insert(folderId)
+        }
         
         debounceWorkItems[folderId]?.cancel()
         
@@ -443,15 +517,26 @@ public final class FolderWatcher: @unchecked Sendable {
         guard let folder = watchedFolders[folderId] else { return }
         guard !pausedFolders.contains(folderId) else { return }
         
-        let path = resolvedURLs[folderId]?.path ?? folder.path
         let previousModDates = fileModDates[folderId] ?? [:]
         
         let useFullRescan = forcedFullRescan.contains(folderId)
+        let rootChanged = rootChangedFolders.contains(folderId)
         let changedPaths = pendingEventPaths[folderId] ?? []
         
         // Clear pending state
         pendingEventPaths.removeValue(forKey: folderId)
         forcedFullRescan.remove(folderId)
+        rootChangedFolders.remove(folderId)
+
+        if rootChanged {
+            _ = reacquireAccessIfNeededSync(for: folder)
+        }
+
+        let path = resolvedURLs[folderId]?.path ?? folder.path
+        guard isReadableDirectory(atPath: path) else {
+            DebugLogger.log("Watcher root unavailable, preserving snapshot for: \(folder.name)")
+            return
+        }
 
         let modDates: [String: Date]
         if useFullRescan || changedPaths.isEmpty || previousModDates.isEmpty {
@@ -505,6 +590,7 @@ public final class FolderWatcher: @unchecked Sendable {
         let newModDates = modDates
         folderSnapshots[folderId] = currentSet
         fileModDates[folderId] = newModDates
+        lastReconciliationTime[folderId] = Date()
         
         guard !genuineNewFiles.isEmpty else { return }
         
@@ -519,26 +605,37 @@ public final class FolderWatcher: @unchecked Sendable {
     
     // Heartbeat to ensure streams stay alive (sometimes they can get stuck)
     private func startHeartbeatIfNeeded() {
-        guard heartbeatTimer == nil, !streams.isEmpty else { return }
+        guard heartbeatTimer == nil, !watchedFolders.isEmpty else { return }
 
         heartbeatTimer = DispatchSource.makeTimerSource(queue: queue)
-        heartbeatTimer?.schedule(deadline: .now() + 60, repeating: 60)
+        heartbeatTimer?.schedule(deadline: .now() + heartbeatInterval, repeating: heartbeatInterval)
         heartbeatTimer?.setEventHandler { [weak self] in
             guard let self = self else { return }
             
-            // Poll for missed changes and refresh quiet streams periodically.
+            // Do a cheap health check regularly, and a full reconciliation only
+            // occasionally to catch providers or volumes that drop FSEvents.
             for (id, folder) in Array(self.watchedFolders) {
                 guard !self.pausedFolders.contains(id) else { continue }
 
-                let lastSeen = self.lastEventTime[id] ?? self.streamStartTime[id] ?? Date.distantPast
-                if Date().timeIntervalSince(lastSeen) > self.stuckStreamThreshold {
-                    DebugLogger.log("Heartbeat poll for quiet watcher: \(folder.name)")
-                    self.processChanges(for: id)
-                    self.lastEventTime[id] = Date()
+                let path = self.resolvedURLs[id]?.path ?? folder.path
+                guard self.isReadableDirectory(atPath: path) else {
+                    DebugLogger.log("Heartbeat found unavailable watcher root: \(folder.name)")
+                    _ = self.reacquireAccessIfNeededSync(for: folder)
+                    continue
+                }
 
-                    DebugLogger.log("Refreshing quiet stream for: \(folder.name)")
+                if self.streams[id] == nil {
+                    DebugLogger.log("Heartbeat restarting missing stream for: \(folder.name)")
                     self.stopWatchingSync(id: id)
                     self.startWatchingSync(folder)
+                    continue
+                }
+
+                let lastReconciliation = self.lastReconciliationTime[id] ?? self.streamStartTime[id] ?? Date.distantPast
+                if Date().timeIntervalSince(lastReconciliation) >= self.reconciliationInterval {
+                    DebugLogger.log("Heartbeat reconciliation for quiet watcher: \(folder.name)")
+                    self.forcedFullRescan.insert(id)
+                    self.processChanges(for: id)
                 }
             }
         }
@@ -546,16 +643,16 @@ public final class FolderWatcher: @unchecked Sendable {
     }
 
     private func stopHeartbeatIfIdle() {
-        guard streams.isEmpty else { return }
+        guard watchedFolders.isEmpty else { return }
         heartbeatTimer?.cancel()
         heartbeatTimer = nil
     }
 
-    private func performOnQueueSyncIfNeeded(_ block: @escaping () -> Void) {
+    private func performOnQueueSyncIfNeeded<T>(_ block: () -> T) -> T {
         if DispatchQueue.getSpecific(key: queueSpecificKey) != nil {
-            block()
+            return block()
         } else {
-            queue.sync(execute: block)
+            return queue.sync(execute: block)
         }
     }
     
@@ -563,6 +660,12 @@ public final class FolderWatcher: @unchecked Sendable {
     
     /// Re-acquire security-scoped access if lost (e.g., volume disconnect)
     public func reacquireAccessIfNeeded(for folder: WatchedFolder) -> Bool {
+        performOnQueueSyncIfNeeded {
+            reacquireAccessIfNeededSync(for: folder)
+        }
+    }
+
+    private func reacquireAccessIfNeededSync(for folder: WatchedFolder) -> Bool {
         guard let bookmarkData = folder.bookmarkData else { return false }
         
         var isStale = false
@@ -575,9 +678,10 @@ public final class FolderWatcher: @unchecked Sendable {
         }
         
         if url.startAccessingSecurityScopedResource() {
-            queue.async { [weak self] in
-                self?.resolvedURLs[folder.id] = url
+            if let oldURL = resolvedURLs[folder.id], oldURL != url {
+                oldURL.stopAccessingSecurityScopedResource()
             }
+            resolvedURLs[folder.id] = url
             DebugLogger.log("Reacquired access for: \(folder.name)")
             return true
         }
@@ -592,7 +696,7 @@ public final class FolderWatcher: @unchecked Sendable {
             resolvedURL = resolvedURLs[folder.id]
         }
         let path = resolvedURL?.path ?? folder.path
-        return fileManager.isReadableFile(atPath: path)
+        return isReadableDirectory(atPath: path)
     }
 }
 
@@ -625,6 +729,7 @@ private func callback(
     // Extract event paths from the CFArray (kFSEventStreamCreateFlagUseCFTypes)
     var changedPaths = Set<String>()
     var requiresFullRescan = false
+    var rootChanged = false
     
     let cfPaths = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue()
     for i in 0..<numEvents {
@@ -636,8 +741,12 @@ private func callback(
         }
         
         if flags & UInt32(kFSEventStreamEventFlagMustScanSubDirs) != 0 ||
-           flags & UInt32(kFSEventStreamEventFlagRootChanged) != 0 {
+            flags & UInt32(kFSEventStreamEventFlagRootChanged) != 0 {
             requiresFullRescan = true
+        }
+
+        if flags & UInt32(kFSEventStreamEventFlagRootChanged) != 0 {
+            rootChanged = true
         }
         
         if let cfPath = CFArrayGetValueAtIndex(cfPaths, i) {
@@ -647,7 +756,7 @@ private func callback(
     }
     
     guard !changedPaths.isEmpty || requiresFullRescan else { return }
-    watcher.handleEvents(for: folderId, changedPaths: changedPaths, requiresFullRescan: requiresFullRescan)
+    watcher.handleEvents(for: folderId, changedPaths: changedPaths, requiresFullRescan: requiresFullRescan, rootChanged: rootChanged)
 }
 
 // Add extension to handle private method access in callback workaround if needed,
@@ -657,6 +766,6 @@ private func callback(
 
 extension FolderWatcher {
     fileprivate func handleEventsPublicWrapper(for folderId: UUID, changedPaths: Set<String>, requiresFullRescan: Bool) {
-        handleEvents(for: folderId, changedPaths: changedPaths, requiresFullRescan: requiresFullRescan)
+        handleEvents(for: folderId, changedPaths: changedPaths, requiresFullRescan: requiresFullRescan, rootChanged: false)
     }
 }
