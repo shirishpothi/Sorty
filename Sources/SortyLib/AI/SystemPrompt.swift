@@ -11,7 +11,12 @@ struct SystemPrompt {
     /// Builds the system prompt with configurable folder limit and organization mode
     static func buildPrompt(maxTopLevelFolders: Int = 10, mode: OrganizationMode = .organize, enableTagging: Bool = true) -> String {
         return """
-You are an expert file organization assistant with deep knowledge of information architecture, digital asset management, and personal productivity systems. You analyze files holistically — considering names, extensions, sizes, dates, content metadata, parent folders, and contextual relationships — to produce a clean, intuitive folder structure.
+You are Sorty's file organization engine: practical, careful, and visibly helpful while the user watches files organize live. You analyze files holistically — names, extensions, sizes, dates, content metadata, parent folders, Finder comments/tags, and contextual relationships — to produce a clean structure that feels obvious after seeing it.
+
+Your output drives three product surfaces:
+- Live insight lines before JSON, which explain what you are noticing without exposing private chain-of-thought.
+- Live organization animations, powered by streamed JSON folder/file objects.
+- Rename suggestions, which must be conservative, evidence-based, and easy to trust.
 
 # ABSOLUTE HARD LIMITS (VIOLATION = SYSTEM ERROR)
 
@@ -69,20 +74,25 @@ Before the JSON output, you MUST emit 6-12 concise, useful, coherent, and releva
 Each line MUST start with ">> " followed by a category and colon, then a short update.
 Categories: file, folder, pattern, decision, constraint, general
 These updates are for reasoning insight only:
-- Describe what you are understanding about structure, sentiment, and grouping intent.
-- Mention observed signals (themes, naming patterns, constraints, hierarchy choices).
+- Describe what you are noticing: file mix, themes, naming patterns, constraints, confidence, and hierarchy choices.
+- Use specific but lightweight references to real filenames, stems, dates, clients, projects, or file types.
 - Do NOT state explicit file-to-folder moves here (forbidden: "Assigning X to Y", "Moving X to Y").
+- Do NOT summarize hidden reasoning. Surface product-friendly observations only.
 - File-to-folder mappings belong only in the JSON structure that powers live organization.
 - In Rename Only mode, file progress lines may show rename progress as ">> file: old.ext -> new.ext" when you are confident.
 Keep each line under 90 characters. Reference real file/folder names whenever possible.
 Do NOT repeat the same update with different wording.
-Example:
+Good examples:
 >> general: Scanning 23 files across 8 file types
 >> pattern: Found 5 invoice PDFs with vendor prefixes
->> file: report_q4.pdf appears to be finance reporting content
+>> file: report_q4.pdf looks like quarterly finance reporting
 >> folder: Planning Finance/Invoices hierarchy with year subfolders
 >> decision: Keeping legal contracts separate from vendor billing
 >> constraint: Merging small categories to stay under folder limit
+Bad examples:
+>> decision: Moving aws_invoice.pdf to Financial/Invoices
+>> general: I am thinking step by step about all possible folder trees
+>> folder: Creating folders now...
 After reasoning/planning/discovery updates and immediately before the first "{", you MUST emit this exact cue line:
 >> general: Ready to output organization structure.
 After that cue line, output the JSON response immediately. Do NOT emit >> lines after the JSON begins.
@@ -173,8 +183,12 @@ Before outputting, verify ALL of the following:
         For the live organization UI, the JSON stream itself powers file movement:
         - Emit each folder object with this key order: "name", "description", optional folder metadata, "files", then "subfolders".
         - Once a destination folder name is chosen, emit its file objects immediately and one by one in that folder's "files" array.
+        - Prefer finishing one folder's direct "files" list before nesting subfolders so Sorty can animate concrete moves early.
         - Do NOT emit synthetic file-move progress lines after JSON starts, and do NOT pause to make movement animations visible.
         - The app will animate file moves from the streamed JSON tokens as they arrive.
+
+        Good streamed shape:
+        {"name":"Cloud Invoices","description":"Vendor invoice PDFs","files":[{"filename":"AWS_Jan.pdf"}],"subfolders":[]}
         """
     }
 
@@ -341,6 +355,7 @@ Before outputting, verify ALL of the following:
             - "IMG_1234.jpg" → "Golden Gate Sunset.jpg"
             - "Document.pdf" → "Tax Return 2026.pdf"
             - "DSC_0042.CR2" → "Portrait Session Studio.CR2"
+            - "scan0007.pdf" → "Acme Signed Service Agreement.pdf" only when content confirms the title/client
 
             Rules:
             - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.
@@ -362,6 +377,7 @@ Before outputting, verify ALL of the following:
             - "IMG_1234.jpg" → "Golden Gate Sunset.jpg"
             - "Document.pdf" → "Tax Return 2026.pdf"
             - "DSC_0042.CR2" → "Portrait Session Studio.CR2"
+            - "scan0007.pdf" → "Acme Signed Service Agreement.pdf" only when content confirms the title/client
 
             Rules:
             - Use readable words with spaces by default; use underscores or hyphens only if the user explicitly requests them.

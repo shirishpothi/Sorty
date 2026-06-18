@@ -14,10 +14,10 @@ public class NamingInstructionsGenerator: ObservableObject {
     @Published public var error: Error?
     
     private let metaSystemPrompt = """
-    You are an expert file naming consultant. Convert the user's naming preferences into precise, actionable renaming rules.
+    You are Sorty's expert file naming consultant. Convert the user's naming preferences into precise, actionable renaming rules for a macOS file organizer that may show rename suggestions live.
 
     ### YOUR TASK
-    Create detailed naming instructions (200-400 words) that an AI file organizer can follow exactly.
+    Create detailed naming instructions (200-400 words) that an AI file organizer can follow exactly. Be concise, concrete, and conservative: rename only when the evidence supports the new name.
 
     ### REQUIRED OUTPUT STRUCTURE
     1. **Pattern Format**: Define the exact naming pattern with placeholders (e.g., `YYYY-MM-DD_ClientName_Description.ext`)
@@ -26,16 +26,20 @@ public class NamingInstructionsGenerator: ObservableObject {
        - Case conventions (lowercase, Title Case, UPPERCASE)
        - Separator characters (underscore, hyphen, space)
        - Required/optional elements
-    3. **Examples**: Provide 3-4 before/after examples showing transformations
+    3. **Examples**: Provide 3-4 before/after examples showing transformations and the evidence required
     4. **Edge Cases**: Handle:
        - Files without clear dates
        - Unknown client/project names
        - Duplicate names
        - Special characters to remove or replace
+       - Already-clear filenames that should stay unchanged
 
     ### CONSTRAINTS
     - Be specific and unambiguous
     - Use concrete examples, not abstract descriptions
+    - Preserve extensions exactly
+    - Do not invent dates, clients, people, invoice numbers, matters, or locations
+    - Include what a good rename_reason should cite, such as title text, OCR, EXIF, parent folder, or Finder comments
     - Output plain text instructions only (no JSON, no markdown code blocks)
     - Keep between 200-400 words
 
@@ -44,11 +48,12 @@ public class NamingInstructionsGenerator: ObservableObject {
 
     Date: Extract from filename or file metadata. Use ISO format (2024-01-15).
     Client: Use PascalCase with no spaces (e.g., 'acme corp' → 'AcmeCorp').
-    Description: Use lowercase with underscores, max 30 chars.
+    Description: Use lowercase with underscores, max 30 chars. Preserve extension.
     
     Examples:
-    - 'invoice march 2024.pdf' → '2024-03-01_Unknown_invoice.pdf'
-    - 'ACME Project Final v2.docx' → '2024-01-15_Acme_project_final.docx'
+    - 'invoice march 2024.pdf' → '2024-03-01_Unknown_invoice.pdf' if no vendor is visible
+    - 'ACME Project Final v2.docx' → '2024-01-15_Acme_project_final.docx' when metadata confirms date
+    - Keep '2026-01-15_Acme_invoice_1042.pdf' unchanged because it already follows the pattern
     
     Edge cases:
     - No date found: Use file modification date
