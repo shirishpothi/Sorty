@@ -1,7 +1,7 @@
 # Sorty Makefile
 # Optimized for build speed and performance
 
-.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile cache-status cache-prune release release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
+.PHONY: build run debug test test-full test-ui clean help install quick now dev build-profile cache-status cache-prune release friend-zip release-patch release-minor release-major prerelease prerelease-full rebuild build-ci-arm64 build-ci-x86_64 build-ci-universal benchmark harness harness-settings harness-organize ci ci-report
 
 # Default target
 all: build
@@ -144,6 +144,16 @@ release:
 	@echo "   2. Upload releases/Sorty-macOS.zip"
 	@echo "   3. Remind users to run: xattr -cr /Applications/Sorty.app"
 
+friend-zip:
+	@echo "📦 Creating friend-test ZIP in Downloads..."
+	@chmod +x scripts/build.sh scripts/package.sh
+	@$(BUILD_SCRIPT_ENV) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
+	@ZIP_NAME_OVERRIDE="Sorty-friend-test.zip" ./scripts/package.sh
+	@mkdir -p "$(HOME)/Downloads"
+	@cp -f "releases/Sorty-friend-test.zip" "$(HOME)/Downloads/Sorty-friend-test.zip"
+	@echo "✅ Ready to share: $(HOME)/Downloads/Sorty-friend-test.zip"
+	@echo "   If macOS blocks it after download, unzip it and run: xattr -cr /Applications/Sorty.app"
+
 # Automated releases with version bumping
 release-patch:
 	@echo "🚀 Creating patch release..."
@@ -243,6 +253,7 @@ help:
 	@echo "  make release-minor   - Auto-release with minor version bump (1.0.0 -> 1.1.0)"
 	@echo "  make release-major   - Auto-release with major version bump (1.0.0 -> 2.0.0)"
 	@echo "  make release         - Create local release zip for diagnostics"
+	@echo "  make friend-zip      - Build a friend-test ZIP in ~/Downloads"
 	@echo "  make prerelease      - Run local pre-release diagnostics"
 	@echo "  make prerelease-full - Full local pre-release diagnostics"
 	@echo ""
