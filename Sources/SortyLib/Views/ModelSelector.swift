@@ -595,6 +595,7 @@ struct ModelSelectionPopover: View {
                 isPresented = false
             }
             .keyboardShortcut(.escape, modifiers: [])
+            .buttonStyle(.sortyBordered(intent: .destructive))
             
             Button(selectionActionTitle) {
                 onSelect(selectedProvider, selectedModel)
