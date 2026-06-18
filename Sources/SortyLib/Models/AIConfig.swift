@@ -418,7 +418,7 @@ public enum OrganizationMode: String, Codable, CaseIterable, Sendable {
     public var iconName: String {
         switch self {
         case .organize: return "folder.badge.plus"
-        case .organizeAndRename: return "folder.badge.gearshape"
+        case .organizeAndRename: return "arrow.left.arrow.right"
         case .renameOnly: return "pencil.line"
         }
     }
