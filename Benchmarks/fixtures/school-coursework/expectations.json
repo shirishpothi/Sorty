@@ -1,0 +1,20 @@
+{
+  "notes": "Good output groups by course and assignment while honoring organize-only mode with no rename fields.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 5,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents"],
+  "shouldGroupTogether": [
+    ["CS245_hw3.pdf", "hw3_solution.py", "CS245_notes_week5.md"],
+    ["HIST120 Essay Draft.docx", "HIST120 sources.pdf"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["CS245_hw3.pdf", "hw3_solution.py", "CS245_notes_week5.md", "HIST120 Essay Draft.docx", "HIST120 sources.pdf"],
+    "mayRenameWithEvidence": [],
+    "neverRename": ["hw3_solution.py"],
+    "renameOnlyWhenEvidence": true,
+    "disallowRenameFields": true
+  },
+  "preferredSignals": ["courseCode", "assignment", "contentMetadata"],
+  "liveInsightMustMentionAny": ["CS245", "HIST120", "course", "homework", "essay"]
+}

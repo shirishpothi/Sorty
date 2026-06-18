@@ -1,0 +1,19 @@
+{
+  "notes": "Good output detects Acme and Globex from mixed names, tags, comments, and content, while treating cross-client scratch notes carefully.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 6,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents"],
+  "shouldGroupTogether": [
+    ["Acme kickoff notes.md", "wireframes-v2.fig", "final_export.zip"],
+    ["globex_research.csv", "pricing-page-copy.docx"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["Acme kickoff notes.md", "pricing-page-copy.docx"],
+    "mayRenameWithEvidence": ["wireframes-v2.fig", "final_export.zip", "globex_research.csv", "notes.txt"],
+    "neverRename": [],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["client", "finderTags", "finderComments", "contentMetadata"],
+  "liveInsightMustMentionAny": ["Acme", "Globex", "client", "project"]
+}

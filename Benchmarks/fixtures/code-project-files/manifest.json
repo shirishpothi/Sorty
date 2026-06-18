@@ -1,0 +1,16 @@
+{
+  "id": "code-project-files",
+  "title": "Code and project files",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 4, "maxDepth": 3 },
+  "customInstructions": "Protect source-linked files and package/config files. Organize by project area, not file extension.",
+  "files": [
+    { "filename": "Package.swift", "path": "/Users/test/Downloads/SortyExport/Package.swift", "size": 4120, "modified": "2026-06-01T10:00:00Z", "contentSummary": "Swift package manifest for Sorty." },
+    { "filename": "Makefile", "path": "/Users/test/Downloads/SortyExport/Makefile", "size": 2380, "modified": "2026-06-01T10:01:00Z", "contentSummary": "Build commands for Sorty." },
+    { "filename": ".gitignore", "path": "/Users/test/Downloads/SortyExport/.gitignore", "size": 640, "modified": "2026-06-01T10:02:00Z", "contentSummary": "Git ignore rules." },
+    { "filename": "environment.local.example", "path": "/Users/test/Downloads/SortyExport/environment.local.example", "size": 230, "modified": "2026-06-01T10:03:00Z", "contentSummary": "Local development environment defaults." },
+    { "filename": "PromptBuilder.swift", "path": "/Users/test/Downloads/SortyExport/Sources/PromptBuilder.swift", "size": 18820, "modified": "2026-06-01T10:04:00Z", "contentSummary": "Builds AI organization prompts." },
+    { "filename": "PromptBuilderTests.swift", "path": "/Users/test/Downloads/SortyExport/Tests/PromptBuilderTests.swift", "size": 7110, "modified": "2026-06-01T10:05:00Z", "contentSummary": "XCTest coverage for prompt builder." },
+    { "filename": "README.md", "path": "/Users/test/Downloads/SortyExport/README.md", "size": 9420, "modified": "2026-06-01T10:06:00Z", "contentSummary": "Project documentation." }
+  ]
+}

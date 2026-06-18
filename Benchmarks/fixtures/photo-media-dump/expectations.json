@@ -1,0 +1,22 @@
+{
+  "notes": "A good result keeps related photo/video captures together by event and does not over-rename camera originals.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 5,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Media", "Documents"],
+  "shouldGroupTogether": [
+    ["IMG_0012.HEIC", "IMG_0013.HEIC", "VID_0014.MOV"],
+    ["DSC_0440.CR3", "DSC_0441.CR3"]
+  ],
+  "shouldNotGroupTogether": [
+    ["screen-recording-2026-05-20.mov", "IMG_0012.HEIC"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["IMG_0012.HEIC", "IMG_0013.HEIC", "VID_0014.MOV", "DSC_0440.CR3", "DSC_0441.CR3"],
+    "mayRenameWithEvidence": ["screen-recording-2026-05-20.mov"],
+    "neverRename": ["DSC_0440.CR3", "DSC_0441.CR3"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["dates", "contentMetadata", "mediaType"],
+  "liveInsightMustMentionAny": ["picnic", "studio", "screen recording", "event"]
+}

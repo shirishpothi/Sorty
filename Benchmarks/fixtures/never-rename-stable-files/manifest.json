@@ -1,0 +1,15 @@
+{
+  "id": "never-rename-stable-files",
+  "title": "Renaming is harmful",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 4, "maxDepth": 3 },
+  "customInstructions": "Do not rename files that are referenced by tools, imports, docs, or package managers.",
+  "files": [
+    { "filename": "package.json", "path": "/Users/test/WebApp/package.json", "size": 1812, "modified": "2026-06-10T11:00:00Z", "contentSummary": "Node package manifest with scripts and dependencies." },
+    { "filename": "package-lock.json", "path": "/Users/test/WebApp/package-lock.json", "size": 121200, "modified": "2026-06-10T11:01:00Z", "contentSummary": "NPM lockfile." },
+    { "filename": "vite.config.ts", "path": "/Users/test/WebApp/vite.config.ts", "size": 990, "modified": "2026-06-10T11:02:00Z", "contentSummary": "Vite build configuration imported by toolchain." },
+    { "filename": "index.html", "path": "/Users/test/WebApp/index.html", "size": 2210, "modified": "2026-06-10T11:03:00Z", "contentSummary": "App entry HTML." },
+    { "filename": "hero-final.png", "path": "/Users/test/WebApp/assets/hero-final.png", "size": 892120, "modified": "2026-06-10T11:04:00Z", "contentSummary": "Homepage hero asset referenced by CSS." },
+    { "filename": "brand-notes.md", "path": "/Users/test/WebApp/docs/brand-notes.md", "size": 8420, "modified": "2026-06-10T11:05:00Z", "contentSummary": "Internal brand notes." }
+  ]
+}

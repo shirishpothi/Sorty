@@ -1,0 +1,14 @@
+{
+  "id": "screenshots-research",
+  "title": "Screenshots used for product research",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 5, "maxDepth": 3 },
+  "customInstructions": "Group screenshots by research topic. Use OCR text when available.",
+  "files": [
+    { "filename": "Screenshot 2026-06-08 at 10.11.04 AM.png", "path": "/Users/test/Desktop/Research/Screenshot 2026-06-08 at 10.11.04 AM.png", "size": 1234000, "modified": "2026-06-08T10:11:04Z", "contentSummary": "Screenshot of Linear issue triage workflow." },
+    { "filename": "Screenshot 2026-06-08 at 10.12.16 AM.png", "path": "/Users/test/Desktop/Research/Screenshot 2026-06-08 at 10.12.16 AM.png", "size": 1321000, "modified": "2026-06-08T10:12:16Z", "contentSummary": "Screenshot of Linear keyboard shortcuts modal." },
+    { "filename": "Screenshot 2026-06-09 at 3.05.44 PM.png", "path": "/Users/test/Desktop/Research/Screenshot 2026-06-09 at 15.05.44 PM.png", "size": 1442000, "modified": "2026-06-09T15:05:44Z", "contentSummary": "Screenshot of Stripe checkout settings." },
+    { "filename": "checkout-flow-notes.md", "path": "/Users/test/Desktop/Research/checkout-flow-notes.md", "size": 11800, "modified": "2026-06-09T15:30:00Z", "contentSummary": "Notes about checkout verification and account persistence." },
+    { "filename": "linear-triage-notes.md", "path": "/Users/test/Desktop/Research/linear-triage-notes.md", "size": 9300, "modified": "2026-06-08T10:30:00Z", "contentSummary": "Notes about Linear triage and inbox patterns." }
+  ]
+}

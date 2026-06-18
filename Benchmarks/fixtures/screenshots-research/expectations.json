@@ -1,0 +1,19 @@
+{
+  "notes": "Good output pairs screenshots with matching research notes and avoids a single generic Screenshots folder.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 5,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents", "Screenshots"],
+  "shouldGroupTogether": [
+    ["Screenshot 2026-06-08 at 10.11.04 AM.png", "Screenshot 2026-06-08 at 10.12.16 AM.png", "linear-triage-notes.md"],
+    ["Screenshot 2026-06-09 at 3.05.44 PM.png", "checkout-flow-notes.md"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["checkout-flow-notes.md", "linear-triage-notes.md"],
+    "mayRenameWithEvidence": ["Screenshot 2026-06-08 at 10.11.04 AM.png", "Screenshot 2026-06-08 at 10.12.16 AM.png", "Screenshot 2026-06-09 at 3.05.44 PM.png"],
+    "neverRename": [],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["ocr", "contentMetadata", "dates"],
+  "liveInsightMustMentionAny": ["Linear", "Stripe", "research", "checkout"]
+}

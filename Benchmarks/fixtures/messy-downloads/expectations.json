@@ -1,0 +1,22 @@
+{
+  "notes": "A good result separates travel confirmations, software installers, receipts/statements, and personal career documents without dumping everything into generic Documents.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 6,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents", "Files"],
+  "shouldGroupTogether": [
+    ["Screenshot 2026-05-31 at 9.41.12 PM.png", "IMG_1842.PNG"],
+    ["Arc-1.47.2.dmg", "VSCode-darwin-universal.zip"]
+  ],
+  "shouldNotGroupTogether": [
+    ["Arc-1.47.2.dmg", "bank_statement_may_2026.pdf"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["Arc-1.47.2.dmg", "VSCode-darwin-universal.zip", "bank_statement_may_2026.pdf"],
+    "mayRenameWithEvidence": ["Screenshot 2026-05-31 at 9.41.12 PM.png", "IMG_1842.PNG", "receipt-88310.pdf"],
+    "neverRename": [],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["contentMetadata", "dates", "finderTags"],
+  "liveInsightMustMentionAny": ["travel", "installer", "receipt", "bank", "resume"]
+}

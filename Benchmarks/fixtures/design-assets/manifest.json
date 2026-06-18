@@ -1,0 +1,14 @@
+{
+  "id": "design-assets",
+  "title": "Design assets",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 6, "maxDepth": 3 },
+  "customInstructions": "Group assets by brand/project and artifact type. Do not rename exported assets that likely have references.",
+  "files": [
+    { "filename": "Sorty Logo.svg", "path": "/Users/test/Design/Sorty Logo.svg", "size": 22300, "modified": "2026-05-20T12:00:00Z", "tags": ["Sorty"], "contentSummary": "Sorty primary logo vector." },
+    { "filename": "sorty-icon-1024.png", "path": "/Users/test/Design/sorty-icon-1024.png", "size": 1002000, "modified": "2026-05-20T12:01:00Z", "tags": ["Sorty"], "contentSummary": "Sorty 1024 app icon export." },
+    { "filename": "waterlemon-cardboard-icon.png", "path": "/Users/test/Design/waterlemon-cardboard-icon.png", "size": 842000, "modified": "2026-05-21T13:00:00Z", "tags": ["Waterlemon"], "contentSummary": "Waterlemon cardboard style icon export." },
+    { "filename": "Brand Colors.sketchpalette", "path": "/Users/test/Design/Brand Colors.sketchpalette", "size": 11200, "modified": "2026-05-20T12:02:00Z", "contentSummary": "Sketch palette with Sorty and Waterlemon brand colors." },
+    { "filename": "draft-card-layout.fig", "path": "/Users/test/Design/draft-card-layout.fig", "size": 9120000, "modified": "2026-05-22T15:00:00Z", "finderComment": "Sorty onboarding card", "contentSummary": "Figma draft for Sorty onboarding card layout." }
+  ]
+}

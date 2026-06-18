@@ -1,0 +1,15 @@
+{
+  "id": "photo-media-dump",
+  "title": "Photo and media dump",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 5, "maxDepth": 3 },
+  "customInstructions": "Group media by event and capture date. Do not rename camera originals unless the event is clear from metadata.",
+  "files": [
+    { "filename": "IMG_0012.HEIC", "path": "/Users/test/Pictures/Import/IMG_0012.HEIC", "size": 4821100, "modified": "2026-06-05T20:12:00Z", "contentSummary": "Golden Gate Park picnic, EXIF date June 5 2026." },
+    { "filename": "IMG_0013.HEIC", "path": "/Users/test/Pictures/Import/IMG_0013.HEIC", "size": 4912000, "modified": "2026-06-05T20:14:00Z", "contentSummary": "Golden Gate Park picnic group photo, EXIF date June 5 2026." },
+    { "filename": "VID_0014.MOV", "path": "/Users/test/Pictures/Import/VID_0014.MOV", "size": 88120100, "modified": "2026-06-05T20:20:00Z", "contentSummary": "Short video from same Golden Gate Park picnic." },
+    { "filename": "DSC_0440.CR3", "path": "/Users/test/Pictures/Import/DSC_0440.CR3", "size": 24110200, "modified": "2026-05-22T17:18:00Z", "contentSummary": "Studio product photo of Waterlemon clay icon." },
+    { "filename": "DSC_0441.CR3", "path": "/Users/test/Pictures/Import/DSC_0441.CR3", "size": 24098000, "modified": "2026-05-22T17:19:00Z", "contentSummary": "Studio product photo of Waterlemon clay icon alternate angle." },
+    { "filename": "screen-recording-2026-05-20.mov", "path": "/Users/test/Pictures/Import/screen-recording-2026-05-20.mov", "size": 61220100, "modified": "2026-05-20T10:00:00Z", "contentSummary": "Screen recording of app onboarding bug reproduction." }
+  ]
+}

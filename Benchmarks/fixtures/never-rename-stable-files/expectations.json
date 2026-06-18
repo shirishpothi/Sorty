@@ -1,0 +1,18 @@
+{
+  "notes": "Good output may group app config, assets, and docs, but all names should remain stable because toolchains and links may depend on them.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 4,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents"],
+  "shouldGroupTogether": [
+    ["package.json", "package-lock.json", "vite.config.ts", "index.html"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["package.json", "package-lock.json", "vite.config.ts", "index.html", "hero-final.png", "brand-notes.md"],
+    "mayRenameWithEvidence": [],
+    "neverRename": ["package.json", "package-lock.json", "vite.config.ts", "index.html", "hero-final.png"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["sourceLinkage", "packageFiles", "parentFolder"],
+  "liveInsightMustMentionAny": ["config", "toolchain", "asset", "docs"]
+}

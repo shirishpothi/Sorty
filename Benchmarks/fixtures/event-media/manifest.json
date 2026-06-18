@@ -1,0 +1,14 @@
+{
+  "id": "event-media",
+  "title": "Event media and deliverables",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 6, "maxDepth": 3 },
+  "customInstructions": "Group by event phase. Preserve final exports and camera originals unless renaming has strong evidence.",
+  "files": [
+    { "filename": "keynote_final.mp4", "path": "/Users/test/Events/Launch/keynote_final.mp4", "size": 881000000, "modified": "2026-05-17T21:00:00Z", "contentSummary": "Final edited keynote video for product launch." },
+    { "filename": "DSC_1001.NEF", "path": "/Users/test/Events/Launch/DSC_1001.NEF", "size": 31000000, "modified": "2026-05-17T18:00:00Z", "contentSummary": "RAW photo of keynote stage." },
+    { "filename": "DSC_1002.NEF", "path": "/Users/test/Events/Launch/DSC_1002.NEF", "size": 31200000, "modified": "2026-05-17T18:01:00Z", "contentSummary": "RAW photo of keynote speaker." },
+    { "filename": "sponsor_logos.zip", "path": "/Users/test/Events/Launch/sponsor_logos.zip", "size": 4210000, "modified": "2026-05-16T10:00:00Z", "contentSummary": "Sponsor logo package used for event lower thirds." },
+    { "filename": "run-of-show.pdf", "path": "/Users/test/Events/Launch/run-of-show.pdf", "size": 482000, "modified": "2026-05-15T09:00:00Z", "contentSummary": "Run of show schedule for launch event." }
+  ]
+}

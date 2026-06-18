@@ -1,0 +1,19 @@
+{
+  "notes": "Good output keeps stable code/config names unchanged and groups source with tests/docs around the project, not as generic Swift and Markdown buckets.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 4,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents", "Swift Files"],
+  "shouldGroupTogether": [
+    ["PromptBuilder.swift", "PromptBuilderTests.swift"],
+    ["Package.swift", "Makefile", ".gitignore", "environment.local.example"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["Package.swift", "Makefile", ".gitignore", "environment.local.example", "PromptBuilder.swift", "PromptBuilderTests.swift", "README.md"],
+    "mayRenameWithEvidence": [],
+    "neverRename": ["Package.swift", "Makefile", ".gitignore", "environment.local.example", "PromptBuilder.swift", "PromptBuilderTests.swift"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["parentFolder", "sourceLinkage", "packageFiles"],
+  "liveInsightMustMentionAny": ["source", "tests", "config", "package", "project"]
+}

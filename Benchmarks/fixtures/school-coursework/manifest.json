@@ -1,0 +1,14 @@
+{
+  "id": "school-coursework",
+  "title": "School coursework",
+  "organizationMode": "organize",
+  "settings": { "maxTopLevelFolders": 5, "maxDepth": 3 },
+  "customInstructions": "Organize by course and assignment. Do not rename in organize-only mode.",
+  "files": [
+    { "filename": "CS245_hw3.pdf", "path": "/Users/test/Downloads/CS245_hw3.pdf", "size": 192000, "modified": "2026-02-11T12:00:00Z", "contentSummary": "CS245 homework 3 prompt." },
+    { "filename": "hw3_solution.py", "path": "/Users/test/Downloads/hw3_solution.py", "size": 8210, "modified": "2026-02-15T20:30:00Z", "contentSummary": "Python solution for CS245 homework 3." },
+    { "filename": "CS245_notes_week5.md", "path": "/Users/test/Downloads/CS245_notes_week5.md", "size": 15200, "modified": "2026-02-13T15:00:00Z", "contentSummary": "CS245 graph algorithms notes." },
+    { "filename": "HIST120 Essay Draft.docx", "path": "/Users/test/Downloads/HIST120 Essay Draft.docx", "size": 38200, "modified": "2026-02-14T18:00:00Z", "contentSummary": "History 120 essay draft." },
+    { "filename": "HIST120 sources.pdf", "path": "/Users/test/Downloads/HIST120 sources.pdf", "size": 812000, "modified": "2026-02-14T18:05:00Z", "contentSummary": "Source packet for History 120 essay." }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "medical-records",
+  "title": "Medical records",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 5, "maxDepth": 3 },
+  "customInstructions": "Use provider/date/document type. Be conservative and do not invent diagnoses.",
+  "files": [
+    { "filename": "lab-results-2026-01-12.pdf", "path": "/Users/test/Documents/Health/lab-results-2026-01-12.pdf", "size": 392000, "modified": "2026-01-13T08:00:00Z", "contentSummary": "Quest Diagnostics lab results from January 12 2026." },
+    { "filename": "visit_summary.pdf", "path": "/Users/test/Documents/Health/visit_summary.pdf", "size": 512000, "modified": "2026-01-15T17:00:00Z", "contentSummary": "Primary care visit summary from Pine Clinic, January 15 2026." },
+    { "filename": "rx_receipt.jpeg", "path": "/Users/test/Documents/Health/rx_receipt.jpeg", "size": 910000, "modified": "2026-01-16T10:00:00Z", "contentSummary": "Pharmacy receipt for prescription pickup, no medication details visible." },
+    { "filename": "dental-cleaning-2026.pdf", "path": "/Users/test/Documents/Health/dental-cleaning-2026.pdf", "size": 284000, "modified": "2026-02-01T14:00:00Z", "contentSummary": "Dental cleaning invoice and care summary." }
+  ]
+}

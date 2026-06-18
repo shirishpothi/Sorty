@@ -1,0 +1,19 @@
+{
+  "notes": "Good output groups health records by provider/type and keeps sensitive filenames conservative, never inventing medical facts.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 5,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents"],
+  "shouldGroupTogether": [
+    ["lab-results-2026-01-12.pdf", "visit_summary.pdf", "rx_receipt.jpeg"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["lab-results-2026-01-12.pdf", "dental-cleaning-2026.pdf"],
+    "mayRenameWithEvidence": ["visit_summary.pdf", "rx_receipt.jpeg"],
+    "neverRename": [],
+    "renameOnlyWhenEvidence": true,
+    "forbiddenSuggestedNameSubstrings": ["diagnosis", "diabetes", "hypertension", "medication"]
+  },
+  "preferredSignals": ["provider", "dates", "documentType"],
+  "liveInsightMustMentionAny": ["provider", "lab", "visit", "pharmacy", "dental"]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "messy-downloads",
+  "title": "Messy downloads and screenshots",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 6, "maxDepth": 3 },
+  "customInstructions": "Keep installer downloads separate from personal travel and receipts. Rename only cryptic screenshots with clear OCR evidence.",
+  "files": [
+    { "filename": "Screenshot 2026-05-31 at 9.41.12 PM.png", "path": "/Users/test/Downloads/Screenshot 2026-05-31 at 9.41.12 PM.png", "size": 1842200, "modified": "2026-05-31T21:41:12Z", "tags": ["Travel"], "contentSummary": "Screenshot of Delta flight confirmation SEA to SFO, confirmation GX2K9Q, June 14 2026." },
+    { "filename": "IMG_1842.PNG", "path": "/Users/test/Downloads/IMG_1842.PNG", "size": 2154000, "modified": "2026-06-01T08:14:00Z", "contentSummary": "Phone screenshot of hotel booking at Hotel Kabuki for June 14-16." },
+    { "filename": "receipt-88310.pdf", "path": "/Users/test/Downloads/receipt-88310.pdf", "size": 348120, "modified": "2026-06-01T09:04:00Z", "contentSummary": "Receipt from B&H Photo for USB-C hub, order 88310, total $79.90." },
+    { "filename": "Arc-1.47.2.dmg", "path": "/Users/test/Downloads/Arc-1.47.2.dmg", "size": 154002120, "modified": "2026-05-30T19:20:00Z", "contentSummary": "Arc browser installer disk image." },
+    { "filename": "VSCode-darwin-universal.zip", "path": "/Users/test/Downloads/VSCode-darwin-universal.zip", "size": 238801220, "modified": "2026-05-29T11:12:00Z", "contentSummary": "Visual Studio Code macOS app archive." },
+    { "filename": "resume-final-final.pdf", "path": "/Users/test/Downloads/resume-final-final.pdf", "size": 184000, "modified": "2026-05-28T13:32:00Z", "contentSummary": "Resume for Shirish Pothi, product engineering roles." },
+    { "filename": "bank_statement_may_2026.pdf", "path": "/Users/test/Downloads/bank_statement_may_2026.pdf", "size": 692000, "modified": "2026-06-02T10:02:00Z", "contentSummary": "May 2026 bank statement." }
+  ]
+}

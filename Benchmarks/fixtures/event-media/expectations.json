@@ -1,0 +1,18 @@
+{
+  "notes": "Good output separates raw captures, final edits, event ops docs, and sponsor assets without needless renames.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 6,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Media"],
+  "shouldGroupTogether": [
+    ["DSC_1001.NEF", "DSC_1002.NEF"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["keynote_final.mp4", "DSC_1001.NEF", "DSC_1002.NEF", "sponsor_logos.zip", "run-of-show.pdf"],
+    "mayRenameWithEvidence": [],
+    "neverRename": ["DSC_1001.NEF", "DSC_1002.NEF", "keynote_final.mp4"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["eventPhase", "mediaType", "dates"],
+  "liveInsightMustMentionAny": ["keynote", "raw", "sponsor", "run of show"]
+}

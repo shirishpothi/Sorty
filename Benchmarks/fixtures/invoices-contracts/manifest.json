@@ -1,0 +1,15 @@
+{
+  "id": "invoices-contracts",
+  "title": "Invoices and contracts",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 5, "maxDepth": 3 },
+  "customInstructions": "Prioritize client and document type. Do not invent signed status unless content says signed.",
+  "files": [
+    { "filename": "acme_contract.pdf", "path": "/Users/test/Desktop/acme_contract.pdf", "size": 1220100, "modified": "2026-04-12T15:20:00Z", "contentSummary": "Acme Corp master services agreement, unsigned draft, effective May 2026." },
+    { "filename": "acme_invoice.xlsx", "path": "/Users/test/Desktop/acme_invoice.xlsx", "size": 98000, "modified": "2026-05-02T11:05:00Z", "contentSummary": "Acme Corp invoice INV-2026-044 for April implementation work." },
+    { "filename": "acme_logo.svg", "path": "/Users/test/Desktop/acme_logo.svg", "size": 14120, "modified": "2026-03-20T10:10:00Z", "tags": ["Acme"], "contentSummary": "Acme Corp vector logo." },
+    { "filename": "globex_sow_signed.pdf", "path": "/Users/test/Desktop/globex_sow_signed.pdf", "size": 812000, "modified": "2026-04-18T16:45:00Z", "contentSummary": "Globex statement of work, signed by both parties on April 18 2026." },
+    { "filename": "Globex Invoice 1007.pdf", "path": "/Users/test/Desktop/Globex Invoice 1007.pdf", "size": 215000, "modified": "2026-05-01T13:30:00Z", "contentSummary": "Invoice 1007 for Globex design sprint." },
+    { "filename": "nda-template.pdf", "path": "/Users/test/Desktop/nda-template.pdf", "size": 177000, "modified": "2026-02-02T09:00:00Z", "contentSummary": "Blank mutual NDA template, no client." }
+  ]
+}

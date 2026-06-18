@@ -1,0 +1,18 @@
+{
+  "notes": "Good output uses tags/comments to group Sorty assets and Waterlemon assets, while shared brand palette can remain shared or be placed with brand resources.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 6,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Images", "Documents"],
+  "shouldGroupTogether": [
+    ["Sorty Logo.svg", "sorty-icon-1024.png", "draft-card-layout.fig"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["Sorty Logo.svg", "sorty-icon-1024.png", "waterlemon-cardboard-icon.png", "Brand Colors.sketchpalette"],
+    "mayRenameWithEvidence": ["draft-card-layout.fig"],
+    "neverRename": ["sorty-icon-1024.png", "waterlemon-cardboard-icon.png"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["finderTags", "finderComments", "brand", "contentMetadata"],
+  "liveInsightMustMentionAny": ["Sorty", "Waterlemon", "brand", "icon", "layout"]
+}

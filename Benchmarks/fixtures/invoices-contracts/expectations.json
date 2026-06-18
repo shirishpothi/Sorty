@@ -1,0 +1,23 @@
+{
+  "notes": "A strong answer groups by client where there is enough evidence, leaves generic templates separate, and does not rename the Acme draft as signed.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 5,
+  "maxDepth": 3,
+  "badFolderNames": ["Misc", "Other", "Documents"],
+  "shouldGroupTogether": [
+    ["acme_contract.pdf", "acme_invoice.xlsx", "acme_logo.svg"],
+    ["globex_sow_signed.pdf", "Globex Invoice 1007.pdf"]
+  ],
+  "shouldNotGroupTogether": [
+    ["nda-template.pdf", "acme_contract.pdf"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["acme_logo.svg", "nda-template.pdf"],
+    "mayRenameWithEvidence": ["acme_contract.pdf", "acme_invoice.xlsx", "globex_sow_signed.pdf"],
+    "neverRename": [],
+    "renameOnlyWhenEvidence": true,
+    "forbiddenSuggestedNameSubstrings": ["signed acme", "executed acme"]
+  },
+  "preferredSignals": ["client", "documentType", "contentMetadata"],
+  "liveInsightMustMentionAny": ["Acme", "Globex", "contract", "invoice", "template"]
+}

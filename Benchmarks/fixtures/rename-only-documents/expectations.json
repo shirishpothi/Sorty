@@ -1,0 +1,18 @@
+{
+  "notes": "Good output uses one root folder named '.' or equivalent, proposes evidence-backed names for scans, and keeps Passport.pdf.",
+  "mustRepresentAllFilesExactlyOnce": true,
+  "maxTopLevelFolders": 1,
+  "maxDepth": 1,
+  "badFolderNames": ["Misc", "Other", "Documents"],
+  "shouldGroupTogether": [
+    ["scan0001.pdf", "scan0002.pdf", "Document.pdf", "Passport.pdf"]
+  ],
+  "rename": {
+    "mustKeepUnrenamed": ["Passport.pdf"],
+    "mayRenameWithEvidence": ["scan0001.pdf", "scan0002.pdf", "Document.pdf"],
+    "neverRename": ["Passport.pdf"],
+    "renameOnlyWhenEvidence": true
+  },
+  "preferredSignals": ["contentMetadata", "documentType", "dates"],
+  "liveInsightMustMentionAny": ["rename", "scan", "lease", "insurance", "W-2"]
+}

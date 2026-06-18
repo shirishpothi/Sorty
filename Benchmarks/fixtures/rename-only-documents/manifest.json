@@ -1,0 +1,13 @@
+{
+  "id": "rename-only-documents",
+  "title": "Rename-only document cleanup",
+  "organizationMode": "renameOnly",
+  "settings": { "maxTopLevelFolders": 1, "maxDepth": 1 },
+  "customInstructions": "Rename cryptic scans in place. Do not create topical folders.",
+  "files": [
+    { "filename": "scan0001.pdf", "path": "/Users/test/Scans/scan0001.pdf", "size": 443200, "modified": "2026-03-04T08:00:00Z", "contentSummary": "IRS Form W-2 for 2025 from Northstar Labs." },
+    { "filename": "scan0002.pdf", "path": "/Users/test/Scans/scan0002.pdf", "size": 501200, "modified": "2026-03-04T08:02:00Z", "contentSummary": "Signed apartment lease renewal for 2026, Pine Street." },
+    { "filename": "Document.pdf", "path": "/Users/test/Scans/Document.pdf", "size": 387000, "modified": "2026-03-05T09:20:00Z", "contentSummary": "Auto insurance declaration page, policy starts April 2026." },
+    { "filename": "Passport.pdf", "path": "/Users/test/Scans/Passport.pdf", "size": 912000, "modified": "2026-02-01T10:00:00Z", "contentSummary": "Passport scan already clearly named." }
+  ]
+}

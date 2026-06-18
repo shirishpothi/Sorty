@@ -1,0 +1,15 @@
+{
+  "id": "mixed-client-projects",
+  "title": "Mixed client project work",
+  "organizationMode": "organizeAndRename",
+  "settings": { "maxTopLevelFolders": 6, "maxDepth": 3 },
+  "customInstructions": "Group client work by client first, then project when helpful. Keep final deliverable names stable.",
+  "files": [
+    { "filename": "Acme kickoff notes.md", "path": "/Users/test/Desktop/Client Dump/Acme kickoff notes.md", "size": 18200, "modified": "2026-05-01T09:00:00Z", "tags": ["Acme"], "contentSummary": "Kickoff notes for Acme onboarding redesign." },
+    { "filename": "wireframes-v2.fig", "path": "/Users/test/Desktop/Client Dump/wireframes-v2.fig", "size": 18400200, "modified": "2026-05-04T15:00:00Z", "finderComment": "Acme onboarding", "contentSummary": "Figma wireframes for Acme onboarding redesign." },
+    { "filename": "final_export.zip", "path": "/Users/test/Desktop/Client Dump/final_export.zip", "size": 50110200, "modified": "2026-05-12T17:30:00Z", "finderComment": "Acme final", "contentSummary": "Final export bundle for Acme onboarding redesign." },
+    { "filename": "globex_research.csv", "path": "/Users/test/Desktop/Client Dump/globex_research.csv", "size": 232100, "modified": "2026-05-03T13:00:00Z", "tags": ["Globex"], "contentSummary": "User research survey export for Globex pricing page." },
+    { "filename": "pricing-page-copy.docx", "path": "/Users/test/Desktop/Client Dump/pricing-page-copy.docx", "size": 124100, "modified": "2026-05-06T14:20:00Z", "finderComment": "Globex", "contentSummary": "Draft copy for Globex pricing page." },
+    { "filename": "notes.txt", "path": "/Users/test/Desktop/Client Dump/notes.txt", "size": 2100, "modified": "2026-05-02T12:10:00Z", "contentSummary": "Scratch notes: ask Acme and Globex for logo approvals." }
+  ]
+}
