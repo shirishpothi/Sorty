@@ -212,7 +212,7 @@ public struct OnboardingView: View {
                         }
                         .frame(minWidth: 80)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.sortyBordered(intent: .primary))
                     .keyboardShortcut(.leftArrow, modifiers: [])
                     .accessibilityIdentifier("OnboardingBackButton")
                     .opacity(backHidden ? 0 : 1)
