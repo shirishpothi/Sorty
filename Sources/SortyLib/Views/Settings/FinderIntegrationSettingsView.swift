@@ -122,7 +122,7 @@ struct FinderIntegrationSettingsView: View {
                                 Button("Repair Menu Actions") {
                                     HapticFeedbackManager.shared.tap()
                                     Task {
-                                        let result = await ExtensionCommunication.ensureQuickActionInstalledAsync()
+                                        let result = await ExtensionCommunication.ensureQuickActionInstalledAsync(forceRefreshServices: true)
                                         await refreshIntegrationStatus()
                                         watchActionMessage = result.message
                                         if result.installed {

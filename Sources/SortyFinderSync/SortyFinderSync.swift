@@ -3,6 +3,10 @@ import FinderSync
 
 final class SortyFinderSync: FIFinderSync {
     private static let heartbeatNotificationName = Notification.Name("SortyFinderSyncHeartbeat")
+    private static let heartbeatMinimumInterval: TimeInterval = 30
+    nonisolated(unsafe) private static var lastHeartbeatDate: Date?
+    nonisolated(unsafe) private static let cachedOrganizeImage = normalizedMenuIcon(finderOrganizeImage(), isTemplate: false)
+    nonisolated(unsafe) private static let cachedWatchImage = finderWatchImage()
 
     override init() {
         super.init()
@@ -23,8 +27,8 @@ final class SortyFinderSync: FIFinderSync {
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
         Self.reportHeartbeat(event: Self.menuEventName(for: menuKind))
         let menu = NSMenu()
-        let organizeImage = Self.normalizedMenuIcon(Self.finderOrganizeImage(), isTemplate: false)
-        let watchImage = Self.finderWatchImage()
+        let organizeImage = Self.cachedOrganizeImage
+        let watchImage = Self.cachedWatchImage
 
         switch menuKind {
         case .contextualMenuForItems, .contextualMenuForContainer, .contextualMenuForSidebar:
@@ -239,11 +243,19 @@ final class SortyFinderSync: FIFinderSync {
     }
 
     private static func reportHeartbeat(event: String) {
+        let now = Date()
+        if event != "launch",
+           let lastHeartbeatDate,
+           now.timeIntervalSince(lastHeartbeatDate) < heartbeatMinimumInterval {
+            return
+        }
+        lastHeartbeatDate = now
+
         let userInfo: [String: Any] = [
             "event": event,
             "bundleIdentifier": Bundle.main.bundleIdentifier ?? "",
             "path": Bundle.main.bundleURL.path,
-            "timestamp": Date().timeIntervalSince1970
+            "timestamp": now.timeIntervalSince1970
         ]
 
         DistributedNotificationCenter.default().post(

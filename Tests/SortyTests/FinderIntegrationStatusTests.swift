@@ -214,14 +214,14 @@ final class FinderIntegrationStatusTests: XCTestCase {
         XCTAssertFalse(diagnostics.needsRepair)
     }
 
-    func testAutoRepairTriggersWhenCurrentBuildIsOnlyRegistered() {
+    func testAutoRepairSkipsWhenCurrentBuildIsOnlyRegistered() {
         let diagnostics = ExtensionCommunication.finderSyncDiagnostics(
             entries: [.init(path: preferredExtensionPath, isEnabled: true)],
             preferredPath: preferredExtensionPath,
             heartbeat: nil
         )
 
-        XCTAssertTrue(
+        XCTAssertFalse(
             ExtensionCommunication.shouldAutoRepairFinderSync(
                 diagnostics: diagnostics,
                 currentPath: preferredExtensionPath

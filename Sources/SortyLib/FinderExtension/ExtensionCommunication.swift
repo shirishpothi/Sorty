@@ -63,6 +63,8 @@ public struct ExtensionCommunication {
     public static let finderSyncHeartbeatNotification = Notification.Name("SortyFinderSyncHeartbeat")
     private static let finderSyncHeartbeatDefaultsKey = "finderSyncHeartbeatCache"
     private static let finderSyncHeartbeatMaxAge: TimeInterval = 180
+    private static let servicesRegistryRefreshDefaultsKey = "finderServicesRegistryLastRefresh"
+    private static let servicesRegistryRefreshMinimumInterval: TimeInterval = 6 * 60 * 60
     nonisolated(unsafe) private static var finderSyncHeartbeatObserver: NSObjectProtocol?
 
     // MARK: - URL Scheme Handling
@@ -271,7 +273,12 @@ public struct ExtensionCommunication {
             return true
         }
 
-        return !diagnostics.isVerifiedWorking
+        switch diagnostics.kind {
+        case .missing, .signatureInvalid, .notRegistered, .disabled, .indeterminate, .activeElsewhere, .needsCleanup:
+            return true
+        case .registered, .verified:
+            return false
+        }
     }
 
     public static func beginMonitoringFinderSyncRuntime() {
@@ -1938,7 +1945,24 @@ public struct ExtensionCommunication {
         return true
     }
 
-    private static func refreshDynamicServicesRegistry() {
+    private static func shouldRefreshDynamicServicesRegistry(force: Bool) -> Bool {
+        if force {
+            return true
+        }
+
+        let lastRefresh = UserDefaults.standard.object(forKey: servicesRegistryRefreshDefaultsKey) as? Date
+        guard let lastRefresh else {
+            return true
+        }
+        return Date().timeIntervalSince(lastRefresh) >= servicesRegistryRefreshMinimumInterval
+    }
+
+    private static func refreshDynamicServicesRegistry(force: Bool = true) {
+        guard shouldRefreshDynamicServicesRegistry(force: force) else {
+            forceEnableSortyServiceEntries()
+            return
+        }
+
         removeLegacyServiceStatusEntries()
         forceEnableSortyServiceEntries()
         NSUpdateDynamicServices()
@@ -1956,6 +1980,7 @@ public struct ExtensionCommunication {
         }
 
         forceEnableSortyServiceEntries()
+        UserDefaults.standard.set(Date(), forKey: servicesRegistryRefreshDefaultsKey)
     }
 
     private static func removeLegacyServiceStatusEntries() {
@@ -2267,7 +2292,7 @@ public struct ExtensionCommunication {
     }
 
     /// Ensure Organize, Watch, and Exclude service entries are installed and refreshed.
-    public static func ensureQuickActionInstalled() -> (installed: Bool, message: String) {
+    public static func ensureQuickActionInstalled(forceRefreshServices: Bool = false) -> (installed: Bool, message: String) {
         var refreshedOrganizeWorkflow = false
         var organizeRefreshError: String?
         if !isQuickActionInstalled() {
@@ -2301,8 +2326,8 @@ public struct ExtensionCommunication {
             }
         }
 
-        if !areSortyServiceEntriesEnabled() {
-            refreshDynamicServicesRegistry()
+        if forceRefreshServices || !areSortyServiceEntriesEnabled() {
+            refreshDynamicServicesRegistry(force: forceRefreshServices)
         }
 
         if let organizeRefreshError {
@@ -2324,10 +2349,10 @@ public struct ExtensionCommunication {
         return (true, "Finder services are up to date. Organize, Watch, and Exclude are available in Finder's Services menu.")
     }
 
-    public static func ensureQuickActionInstalledAsync() async -> (installed: Bool, message: String) {
+    public static func ensureQuickActionInstalledAsync(forceRefreshServices: Bool = false) async -> (installed: Bool, message: String) {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                let result = ensureQuickActionInstalled()
+                let result = ensureQuickActionInstalled(forceRefreshServices: forceRefreshServices)
                 continuation.resume(returning: result)
             }
         }
