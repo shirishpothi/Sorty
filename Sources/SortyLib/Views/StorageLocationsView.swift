@@ -32,11 +32,6 @@ struct StorageLocationsView: View {
                             HapticFeedbackManager.shared.tap()
                             suggestedLocationName = nil
                             showingFolderPicker = true
-                        },
-                        onAddSuggestedLocation: { name, _ in
-                            HapticFeedbackManager.shared.tap()
-                            suggestedLocationName = name
-                            showingFolderPicker = true
                         }
                     )
                     .transition(TransitionStyles.scaleAndFade)
@@ -55,6 +50,7 @@ struct StorageLocationsView: View {
             }
             .animation(.pageTransition, value: storageLocationsManager.locations.isEmpty)
         }
+        .emptyStateWorkflowGradient(isVisible: storageLocationsManager.locations.isEmpty)
         .fileImporter(
             isPresented: $showingFolderPicker,
             allowedContentTypes: [.folder],
@@ -153,13 +149,18 @@ struct StorageLocationsView: View {
 
 struct EmptyStorageLocationsView: View {
     let onAddLocation: () -> Void
-    let onAddSuggestedLocation: (String, String) -> Void  // (suggestedName, icon)
+    @State private var hasAppeared = false
+    @State private var beamHasAppeared = false
     
     var body: some View {
         VStack(spacing: 24) {
-            Image(systemName: "externaldrive.badge.plus")
-                .font(.system(size: 52))
-                .foregroundStyle(.secondary)
+            EmptyStateHeroIcon(systemName: "externaldrive.badge.plus")
+                .opacity(hasAppeared ? 1 : 0)
+                .scaleEffect(hasAppeared ? 1 : 0.8)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.7).delay(0.1), value: hasAppeared
+                )
+                .accessibilityHidden(true)
 
             VStack(spacing: 8) {
                 Text("No Storage Locations")
@@ -170,45 +171,13 @@ struct EmptyStorageLocationsView: View {
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 400)
+                    .frame(maxWidth: 360)
             }
-            
-            // Info box
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "info.circle.fill")
-                        .foregroundStyle(.blue)
-                    Text("How it works")
-                        .font(.subheadline.bold())
-                }
-                
-                Text("Storage locations are destination-only folders. Files can be moved TO them during organization, but files already inside won't be reorganized.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(16)
-            .frame(maxWidth: 400)
-            .background(Color.blue.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            
-            // Suggestion cards
-            VStack(spacing: 8) {
-                Text("Common storage locations:")
-                    .font(.caption.bold())
-                    .foregroundStyle(.secondary)
-                
-                HStack(spacing: 12) {
-                    StorageSuggestionPill(name: "Archives", icon: "archivebox") {
-                        onAddSuggestedLocation("Archives", "archivebox")
-                    }
-                    StorageSuggestionPill(name: "Projects", icon: "folder.badge.gearshape") {
-                        onAddSuggestedLocation("Projects", "folder.badge.gearshape")
-                    }
-                    StorageSuggestionPill(name: "Backups", icon: "externaldrive") {
-                        onAddSuggestedLocation("Backups", "externaldrive")
-                    }
-                }
-            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("No Storage Locations. Add directories like Archives, Projects, or external drives as destinations for files during organization.")
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 10)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.2), value: hasAppeared)
 
             Button {
                 onAddLocation()
@@ -216,48 +185,21 @@ struct EmptyStorageLocationsView: View {
                 Label("Add Storage Location", systemImage: "plus")
             }
             .buttonStyle(.onboardingPill)
+            .onboardingBeamBorder(variant: .featured, active: beamHasAppeared)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared ? 0 : 15)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.3), value: hasAppeared)
+            .accessibilityIdentifier("EmptyStateAddStorageLocationButton")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
-struct StorageSuggestionPill: View {
-    let name: String
-    let icon: String
-    let onTap: () -> Void
-    @State private var isHovered = false
-    
-    var body: some View {
-        Button(action: {
-            HapticFeedbackManager.shared.tap()
-            onTap()
-        }) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption)
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.green)
-                Text(name)
-                    .font(.caption)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                hasAppeared = true
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.15) : Color.secondary.opacity(0.1))
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(isHovered ? SortyDesignSystem.Colors.resolvedAccent.opacity(0.5) : Color.clear, lineWidth: 1)
-            )
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+                beamHasAppeared = true
             }
         }
-        .help("Click to add '\(name)' as a storage location")
     }
 }
 
