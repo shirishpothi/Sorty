@@ -847,92 +847,110 @@ public actor FileSystemManager {
 
         var allOperations: [FileOperation] = []
         var allFailures: [OperationFailure] = []
-        
-        let totalFiles = plan.suggestions.reduce(0) { $0 + countFiles(in: $1) }
-        let totalFolders = plan.suggestions.reduce(0) { $0 + countFolders(in: $1) }
-        let totalOps = totalFiles + totalFolders + (enableTagging ? totalFiles + totalFolders : 0)
-        var completedOps = 0
-        
-        func updateProgress(_ message: String) {
-            completedOps += 1
-            let raw = totalOps > 0 ? Double(completedOps) / Double(totalOps) : 1.0
-            progress?(min(raw, 1.0), message)
-        }
 
-        if !dryRun {
-            progress?(0.02, "Validating files...")
-            let validationIssues = await preValidatePlan(plan, at: baseURL)
-            if !validationIssues.isEmpty {
-                DebugLogger.log("Pre-validation found \(validationIssues.count) issue(s): \(validationIssues.joined(separator: ", "))")
+        do {
+            let totalFiles = plan.suggestions.reduce(0) { $0 + countFiles(in: $1) }
+            let totalFolders = plan.suggestions.reduce(0) { $0 + countFolders(in: $1) }
+            let totalOps = totalFiles + totalFolders + (enableTagging ? totalFiles + totalFolders : 0)
+            var completedOps = 0
+
+            func updateProgress(_ message: String) {
+                completedOps += 1
+                let raw = totalOps > 0 ? Double(completedOps) / Double(totalOps) : 1.0
+                progress?(min(raw, 1.0), message)
             }
-        }
 
-        progress?(0.05, "Creating folder structure...")
-        
-        for suggestion in plan.suggestions {
-            let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
-                updateProgress(message)
-            }, failures: &allFailures)
-            allOperations.append(contentsOf: result.operations)
-        }
-
-        progress?(0.1, "Moving files...")
-        
-        for suggestion in plan.suggestions {
-            let result = try await moveFilesInSuggestionWithProgress(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
-                updateProgress(message)
-            }, failures: &allFailures)
-            allOperations.append(contentsOf: result.operations)
-        }
-
-        if enableTagging {
-            progress?(0.8, "Applying tags...")
-            
-            for suggestion in plan.suggestions {
-                let result = try await tagFilesWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager) { message in
-                    updateProgress(message)
+            if !dryRun {
+                progress?(0.02, "Validating files...")
+                let validationIssues = await preValidatePlan(plan, at: baseURL)
+                if !validationIssues.isEmpty {
+                    DebugLogger.log("Pre-validation found \(validationIssues.count) issue(s): \(validationIssues.joined(separator: ", "))")
                 }
+            }
+
+            progress?(0.05, "Creating folder structure...")
+
+            for suggestion in plan.suggestions {
+                let result = try await createFoldersWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
+                    updateProgress(message)
+                }, failures: &allFailures)
                 allOperations.append(contentsOf: result.operations)
             }
-        }
 
-        if !dryRun {
-            progress?(0.9, "Cleaning up empty folders...")
-            undoStack.append(contentsOf: allOperations)
-            
-            let fileOps = allOperations.filter { $0.type == .moveFile || $0.type == .renameFile }
-            let sourceFolders = Set(fileOps.compactMap { URL(fileURLWithPath: $0.sourcePath).deletingLastPathComponent().path })
-            let sortedFolders = sourceFolders.sorted { $0.components(separatedBy: "/").count > $1.components(separatedBy: "/").count }
+            progress?(0.1, "Moving files...")
 
-            for folderPath in sortedFolders {
-                if folderPath != baseURL.path && folderPath.hasPrefix(baseURL.path) {
-                    try? removeEmptyFolder(at: folderPath)
+            for suggestion in plan.suggestions {
+                let result = try await moveFilesInSuggestionWithProgress(suggestion, parentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager, onProgress: { message in
+                    updateProgress(message)
+                }, failures: &allFailures)
+                allOperations.append(contentsOf: result.operations)
+            }
+
+            if enableTagging {
+                progress?(0.8, "Applying tags...")
+
+                for suggestion in plan.suggestions {
+                    let result = try await tagFilesWithProgress(suggestion, currentURL: baseURL, dryRun: dryRun, exclusionManager: exclusionManager) { message in
+                        updateProgress(message)
+                    }
+                    allOperations.append(contentsOf: result.operations)
                 }
             }
-            
-            var newlyCreatedFolders = Set<String>()
-            for suggestion in plan.suggestions {
-                let paths = collectFolderPaths(suggestion, parentURL: baseURL)
-                newlyCreatedFolders.formUnion(paths)
+
+            if !dryRun {
+                progress?(0.9, "Cleaning up empty folders...")
+                undoStack.append(contentsOf: allOperations)
+
+                let fileOps = allOperations.filter { $0.type == .moveFile || $0.type == .renameFile }
+                let sourceFolders = Set(fileOps.compactMap { URL(fileURLWithPath: $0.sourcePath).deletingLastPathComponent().path })
+                let sortedFolders = sourceFolders.sorted { $0.components(separatedBy: "/").count > $1.components(separatedBy: "/").count }
+
+                for folderPath in sortedFolders {
+                    if folderPath != baseURL.path && folderPath.hasPrefix(baseURL.path) {
+                        try? removeEmptyFolder(at: folderPath)
+                    }
+                }
+
+                var newlyCreatedFolders = Set<String>()
+                for suggestion in plan.suggestions {
+                    let paths = collectFolderPaths(suggestion, parentURL: baseURL)
+                    newlyCreatedFolders.formUnion(paths)
+                }
+                try? cleanupEmptySubdirectories(at: baseURL, excluding: newlyCreatedFolders)
+
+                if !allFailures.isEmpty {
+                    DebugLogger.log("Organization completed with \(allFailures.count) failure(s)")
+                    for failure in allFailures {
+                        DebugLogger.log("  - \(failure.sourcePath): \(failure.error)")
+                    }
+                }
             }
-            try? cleanupEmptySubdirectories(at: baseURL, excluding: newlyCreatedFolders)
-            
+
+            if allFailures.isEmpty {
+                progress?(1.0, "Organization complete!")
+            } else {
+                progress?(1.0, "Complete with \(allFailures.count) skipped file(s)")
+            }
+
+            return allOperations
+        } catch {
+            guard !dryRun, !allOperations.isEmpty else {
+                throw error
+            }
+
+            undoStack.append(contentsOf: allOperations)
             if !allFailures.isEmpty {
-                DebugLogger.log("Organization completed with \(allFailures.count) failure(s)")
+                DebugLogger.log("Organization failed after \(allOperations.count) recorded operation(s) and \(allFailures.count) skipped file(s)")
                 for failure in allFailures {
                     DebugLogger.log("  - \(failure.sourcePath): \(failure.error)")
                 }
             }
+
+            throw FileSystemError.partialApplyFailure(
+                operations: allOperations,
+                underlyingDescription: error.localizedDescription
+            )
         }
-        
-        let successCount = allOperations.filter { $0.type == .moveFile || $0.type == .renameFile }.count
-        if allFailures.isEmpty {
-            progress?(1.0, "Organization complete!")
-        } else {
-            progress?(1.0, "Complete with \(allFailures.count) skipped file(s)")
-        }
-        
-        return allOperations
     }
     
     private func createFoldersWithProgress(_ suggestion: FolderSuggestion, currentURL: URL, dryRun: Bool, exclusionManager: ExclusionRulesManager? = nil, onProgress: (String) -> Void, failures: inout [OperationFailure]) async throws -> OperationResult {
@@ -1328,7 +1346,6 @@ public actor FileSystemManager {
             case .createFolder:
                 // Mark for cleanup (will be handled in second pass)
                 foldersToCleanup.insert(operation.sourcePath)
-                successCount += 1
 
             case .deleteFile:
                 // Cannot undo deletion without backup - log warning
@@ -1381,7 +1398,17 @@ public actor FileSystemManager {
             if protectedFolders.contains(normalizedPath(folderPath)) {
                 continue
             }
-            try? removeEmptyFolder(at: folderPath)
+            guard removeEmptyFolderIfEmpty(at: folderPath) else {
+                if let operation = operations.first(where: { $0.type == .createFolder && normalizedPath($0.sourcePath) == normalizedPath(folderPath) }) {
+                    missingFiles.append(URL(fileURLWithPath: folderPath).lastPathComponent)
+                    retryableFailedOperationIDs.append(operation.id)
+                }
+                continue
+            }
+
+            if operations.contains(where: { $0.type == .createFolder && normalizedPath($0.sourcePath) == normalizedPath(folderPath) }) {
+                successCount += 1
+            }
         }
         
         return RestoreResult(
@@ -1446,8 +1473,12 @@ public actor FileSystemManager {
             }
 
         case .createFolder:
-            try? removeEmptyFolder(at: operation.sourcePath)
-            successCount += 1
+            if removeEmptyFolderIfEmpty(at: operation.sourcePath) {
+                successCount += 1
+            } else {
+                missingFiles.append(URL(fileURLWithPath: operation.sourcePath).lastPathComponent)
+                retryableFailedOperationIDs.append(operation.id)
+            }
 
         case .deleteFile:
             missingFiles.append(URL(fileURLWithPath: operation.sourcePath).lastPathComponent)
@@ -1484,8 +1515,13 @@ public actor FileSystemManager {
     }
 
     /// Remove a folder only if it's empty (including cleaning up parent folders)
-    private func removeEmptyFolder(at path: String) throws {
-        guard fileManager.fileExists(atPath: path) else { return }
+    @discardableResult
+    private func removeEmptyFolder(at path: String) throws -> Bool {
+        removeEmptyFolderIfEmpty(at: path)
+    }
+
+    private func removeEmptyFolderIfEmpty(at path: String) -> Bool {
+        guard fileManager.fileExists(atPath: path) else { return true }
 
         do {
             let contents = try fileManager.contentsOfDirectory(atPath: path)
@@ -1514,15 +1550,17 @@ public actor FileSystemManager {
                 
                 // Try to clean up parent folder too
                 let parentPath = (path as NSString).deletingLastPathComponent
-                try? removeEmptyFolder(at: parentPath)
+                _ = removeEmptyFolderIfEmpty(at: parentPath)
                 
-                return // Exit function
+                return !fileManager.fileExists(atPath: path)
             }
 
         } catch {
             // Folder might not be empty or we don't have permission
             DebugLogger.log("Could not remove folder: \(path) - \(error.localizedDescription)")
         }
+
+        return false
     }
 
     // MARK: - Retry and Validation Helpers
@@ -1825,6 +1863,7 @@ enum FileSystemError: LocalizedError {
     case revertInProgress
     case fileLocked(String)
     case partialFailure(successCount: Int, failures: [OperationFailure])
+    case partialApplyFailure(operations: [FileSystemManager.FileOperation], underlyingDescription: String)
     case preValidationFailed([String])
     case crossVolumeCopyVerificationFailed(String)
 
@@ -1846,6 +1885,8 @@ enum FileSystemError: LocalizedError {
             return "File is locked or in use: \(path)"
         case .partialFailure(let successCount, let failures):
             return "Partial failure: \(successCount) succeeded, \(failures.count) failed"
+        case .partialApplyFailure(let operations, let underlyingDescription):
+            return "Organization stopped after \(operations.count) completed operation(s): \(underlyingDescription)"
         case .preValidationFailed(let issues):
             return "Pre-validation failed: \(issues.joined(separator: ", "))"
         case .crossVolumeCopyVerificationFailed(let path):

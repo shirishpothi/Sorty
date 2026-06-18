@@ -2847,6 +2847,8 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             learningsObserver.startSession(folderPath: baseURL.path, historyEntryId: nil)
         }
 
+        var completedOperationsBeforeHistory: [FileSystemManager.FileOperation] = []
+
         do {
             let operations = try await fileSystemManager.applyOrganization(
                 planToApply,
@@ -2862,6 +2864,7 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
                     }
                 }
             )
+            completedOperationsBeforeHistory = operations
 
             try checkCancellation()
             
@@ -2927,15 +2930,25 @@ public class FolderOrganizer: ObservableObject, StreamingDelegate {
             }
 
         } catch {
+            let partialOperations: [FileSystemManager.FileOperation]?
+            if case FileSystemError.partialApplyFailure(let operations, _) = error {
+                partialOperations = operations.isEmpty ? nil : operations
+            } else if !completedOperationsBeforeHistory.isEmpty {
+                partialOperations = completedOperationsBeforeHistory
+            } else {
+                partialOperations = nil
+            }
+
             let failedEntry = OrganizationHistoryEntry(
                 directoryPath: baseURL.path,
-                filesOrganized: 0,
-                foldersCreated: 0,
+                filesOrganized: partialOperations?.filter { $0.type == .moveFile || $0.type == .renameFile }.count ?? 0,
+                foldersCreated: partialOperations?.filter { $0.type == .createFolder }.count ?? 0,
                 plan: planToApply,
                 success: false,
-                status: .failed,
+                status: partialOperations == nil ? .failed : .partiallyUndone,
                 errorMessage: error.localizedDescription,
                 rawAIResponse: streamingContent.isEmpty ? nil : streamingContent,
+                operations: partialOperations,
                 source: source
             )
 

@@ -163,6 +163,51 @@ final class UndoReliabilityTests: XCTestCase {
         XCTAssertTrue(updatedEntry.isUndone)
     }
 
+    func testUndoCreatedFolderWithUserContentRemainsRetryable() async throws {
+        let createdFolder = workspaceDirectory.appendingPathComponent("Created", isDirectory: true)
+        try FileManager.default.createDirectory(at: createdFolder, withIntermediateDirectories: true)
+        try "user content".write(
+            to: createdFolder.appendingPathComponent("manual-note.txt"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let operation = FileSystemManager.FileOperation(
+            type: .createFolder,
+            sourcePath: createdFolder.path,
+            destinationPath: nil,
+            metadata: .init(wasCreatedDuringOrganization: true)
+        )
+        let entry = OrganizationHistoryEntry(
+            directoryPath: workspaceDirectory.path,
+            filesOrganized: 0,
+            foldersCreated: 1,
+            status: .completed,
+            operations: [operation]
+        )
+        history.addEntry(entry)
+
+        let firstResult = try await organizer.undoHistoryEntry(entry)
+        XCTAssertEqual(firstResult.successfulOperations, 0)
+        XCTAssertEqual(firstResult.retryableFailedOperationIDs, [operation.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: createdFolder.path))
+
+        let partiallyUndone = try XCTUnwrap(history.entries.first)
+        XCTAssertEqual(partiallyUndone.status, .partiallyUndone)
+        XCTAssertEqual(partiallyUndone.operations?.map(\.id), [operation.id])
+
+        try FileManager.default.removeItem(at: createdFolder.appendingPathComponent("manual-note.txt"))
+
+        let secondResult = try await organizer.undoHistoryEntry(partiallyUndone)
+        XCTAssertEqual(secondResult.successfulOperations, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: createdFolder.path))
+
+        let fullyUndone = try XCTUnwrap(history.entries.first)
+        XCTAssertEqual(fullyUndone.status, .undo)
+        XCTAssertTrue(fullyUndone.isUndone)
+        XCTAssertNil(fullyUndone.operations)
+    }
+
     private func makeMovedEntry(fileNames: [String]) throws -> (
         entry: OrganizationHistoryEntry,
         sources: [URL],
