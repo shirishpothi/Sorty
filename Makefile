@@ -95,7 +95,6 @@ quick:
 
 # skips all checks and builds/runs immediately
 now:
-	@echo "🏎️  Immediate build and run (DEBUG mode, $(CORES) parallel jobs)..."
 	@$(BUILD_SCRIPT_ENV) $(FAST_LOOP_FLAGS) APP_ICON_VARIANT=debug SKIP_TESTS=true BUILD_CONFIG=debug BUILD_FLAGS="$(PARALLEL_FLAGS) $(SWIFT_DEBUG_FLAGS) --skip-update" ./scripts/build.sh
 	@open releases/Sorty.app
 
