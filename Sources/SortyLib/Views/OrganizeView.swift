@@ -302,11 +302,11 @@ struct OrganizeView: View {
         case .idle:
             if needsSetupRepair {
                 SetupRepairGateView(
-                    message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files.",
+                    message: activeSetupRepairMessage ?? "Finish setting up your provider before organizing files.",
                     onOpenSettings: {
                         HapticFeedbackManager.shared.selection()
                         appState.startSetupRepair(
-                            message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files.",
+                            message: activeSetupRepairMessage ?? "Finish setting up your provider before organizing files.",
                             navigateToSettings: true
                         )
                     }
@@ -450,7 +450,7 @@ struct OrganizeView: View {
         guard !needsSetupRepair else {
             HapticFeedbackManager.shared.error()
             appState.startSetupRepair(
-                message: activeSetupRepairMessage ?? "Finish setting up your AI provider before organizing files."
+                message: activeSetupRepairMessage ?? "Finish setting up your provider before organizing files."
             )
             return
         }
@@ -1122,7 +1122,7 @@ struct ReadyToOrganizeView: View {
                     .buttonStyle(.plain)
                     .foregroundColor(.teal)
                     .disabled(isImprovingPrompt)
-                    .help("Improve instructions with AI")
+                    .help("Improve instructions with Sorty")
                     .accessibilityHint("Rewrites your prompt to be clearer and more specific")
                 }
 
@@ -1676,7 +1676,7 @@ struct SavedPromptsSheet: View {
                         if improvingPromptId == prompt.id {
                             SortyGradientCircularLoader(size: 12, lineWidth: 2.2)
                         } else {
-                            Label("Improve with AI", systemImage: "wand.and.stars")
+                            Label("Improve with Sorty", systemImage: "wand.and.stars")
                         }
                     }
                     .buttonStyle(.sortyBordered)

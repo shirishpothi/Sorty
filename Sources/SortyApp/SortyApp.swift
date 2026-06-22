@@ -502,7 +502,7 @@ struct SortyApp: App {
             defaults.set(true, forKey: "hasCompletedOnboarding")
             defaults.set(true, forKey: "requiresSetupRepair")
             defaults.set(
-                "Finish setting up your AI provider before organizing files.",
+                "Finish setting up your provider before organizing files.",
                 forKey: "setupRepairMessage"
             )
 

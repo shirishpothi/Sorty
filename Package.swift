@@ -34,6 +34,7 @@ let package = Package(
                 // NOTE: Assets.xcassets is managed by Xcode project for proper .car compilation
                 // SPM only handles the Images directory as PNG fallbacks
                 .copy("Resources/Images"),
+                .copy("Resources/AppIcons"),
                 .copy("Resources/whats-new-design-system.png"),
                 .copy("Resources/whats-new-design-system-1.png"),
                 .copy("Resources/whats-new-design-system-2.png"),

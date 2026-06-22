@@ -408,7 +408,7 @@ struct WatchedFolderCard: View {
         HStack(spacing: 4) {
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.caption2)
-            Text("AI Missing")
+            Text("Provider Missing")
                 .font(.caption2)
         }
         .foregroundColor(.orange)
@@ -416,7 +416,7 @@ struct WatchedFolderCard: View {
         .padding(.vertical, 2)
         .background(Color.orange.opacity(0.1))
         .clipShape(Capsule())
-        .help("Watching requires an AI provider configured in Settings")
+        .help("Watching requires a provider configured in Settings")
     }
 
     private var titleRow: some View {

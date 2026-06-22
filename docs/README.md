@@ -1,6 +1,6 @@
 # Sorty Documentation
 
-Welcome to the official Sorty documentation. Sorty is an AI-powered file organization app for macOS that intelligently sorts your files into logical folders.
+Welcome to the official Sorty documentation. Sorty is a smart file organization app for macOS that sorts your files into logical folders.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ Welcome to the official Sorty documentation. Sorty is an AI-powered file organiz
 
 1. **Select a Folder**: Click "Open Directory" (⌘O) or drag a folder onto the app
 2. **Choose a Persona**: Select a persona (e.g., "Developer", "Photographer") to tailor organization
-3. **Preview**: Click "Organize" to see the AI's proposed folder structure
+3. **Preview**: Click "Organize" to see Sorty's proposed folder structure
 4. **Apply**: Review the preview and click "Apply Changes" — undo anytime with ⌘Z
 
 ### System Requirements
@@ -42,7 +42,7 @@ Welcome to the official Sorty documentation. Sorty is an AI-powered file organiz
 ## Features
 
 ### Smart Organization
-AI-powered sorting based on filenames, file types, and optionally content metadata. The AI recognizes patterns like project structures, date sequences, and semantic groupings.
+Sorty sorts based on filenames, file types, and optionally content metadata. It recognizes patterns like project structures, date sequences, and semantic groupings.
 
 ### Deep Scan
 When enabled, Sorty reads file content for better accuracy:
@@ -64,8 +64,8 @@ Monitor your directories for clutter growth, identify cleanup opportunities, and
 ### How It Works
 
 1. **Scanning**: Sorty scans your selected directory and collects information about each file
-2. **AI Analysis**: The AI analyzes patterns (naming conventions, file types, dates, project structures)
-3. **Structure Proposal**: Based on analysis, the AI proposes a folder structure
+2. **Sorty Analysis**: Sorty analyzes patterns (naming conventions, file types, dates, project structures)
+3. **Structure Proposal**: Based on analysis, the app proposes a folder structure
 4. **Tagging**: Files receive relevant Finder tags for easy searching
 
 ### Custom Instructions
@@ -77,7 +77,7 @@ Before organizing, you can provide specific guidance:
 
 ### Temperature Control
 
-Adjust the AI's creativity in Settings:
+Adjust Sorty's creativity in Settings:
 - **Low (0.0-0.3)**: More predictable, strict categorization
 - **Medium (0.4-0.6)**: Balanced approach
 - **High (0.7-1.0)**: More creative groupings
@@ -95,7 +95,7 @@ The Learnings is a passive learning system that builds a personalized understand
 | Steering Prompts | Post-organization feedback | Highest |
 | Honing Answers | Explicit preferences from Q&A | High |
 | Guiding Instructions | Pre-organization instructions | High |
-| Manual Corrections | Files you move after AI organization | Medium |
+| Manual Corrections | Files you move after Sorty organization | Medium |
 | Reverts | Sessions you undo | Medium |
 
 ### Security
@@ -108,7 +108,7 @@ The Learnings is a passive learning system that builds a personalized understand
 
 ## Personas
 
-Personas customize how the AI organizes your files based on your profession or use case.
+Personas customize how Sorty organizes your files based on your profession or use case.
 
 | Persona | Best For | Key Features |
 |---------|----------|--------------|

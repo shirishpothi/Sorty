@@ -443,7 +443,6 @@ copy_resources_safely() {
             rsync -a \
                 --exclude ".DS_Store" \
                 --exclude "CLI/" \
-                --exclude "AppIcons/" \
                 "${spm_bundle}/" "${dest_dir}/"
         else
             log_warning "SPM bundle is empty"
@@ -555,14 +554,13 @@ bundle_cli_tools() {
     fi
 
     rm -rf "${resources_dir}/CLI"
-    rm -rf "${resources_dir}/AppIcons"
     log_detail "Sorty CLI tools are deprecated and are no longer bundled"
 }
 
 prune_nonshipping_resources() {
     local resources_dir="$1"
 
-    rm -rf "${resources_dir}/CLI" "${resources_dir}/AppIcons"
+    rm -rf "${resources_dir}/CLI"
     rm -f \
         "${resources_dir}/.DS_Store" \
         "${resources_dir}/.png" \
@@ -1215,11 +1213,19 @@ if [ ! -f "${ICON_SRC}" ]; then
 fi
 if [ -f "${ICON_SRC}" ]; then
     cp "${ICON_SRC}" "${APP_PATH}/Contents/Resources/AppIcon.icns"
-    rm -rf "${APP_PATH}/Contents/Resources/AppIcons"
+    # NOTE: Do NOT remove Contents/Resources/AppIcons here. That directory ships the
+    # About-window easter-egg icon variants (AppIcon-Debug/Release/CI/Nightly.png).
     touch "${APP_PATH}" "${APP_PATH}/Contents/Info.plist" "${APP_PATH}/Contents/Resources/AppIcon.icns"
     log_detail "App icon set to ${APP_ICON_VARIANT_KEY} variant"
 else
     log_warning "Icon variant '${RAW_APP_ICON_VARIANT}' not found, using default"
+fi
+
+# Record the build variant so packaged app code can detect its icon channel at runtime.
+if [ -f "${APP_PATH}/Contents/Info.plist" ]; then
+    /usr/libexec/PlistBuddy -c "Delete :SortyBuildVariant" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :SortyBuildVariant string ${APP_ICON_VARIANT_KEY}" "${APP_PATH}/Contents/Info.plist" 2>/dev/null || true
+    log_detail "Recorded build variant '${APP_ICON_VARIANT_KEY}' in Info.plist"
 fi
 
 # Step 4: Signing (common for both build methods)

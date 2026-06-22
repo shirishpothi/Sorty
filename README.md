@@ -1,4 +1,4 @@
-<h1 align="center">Sorty <img src="Sources/SortyLib/Resources/Images/SortyMascotHead.png" alt="Sorty logo" width="32" style="vertical-align:middle; height:32px; display:inline-block; margin:0 8px;" /> - AI-Powered Folder Organizer for macOS</h1>
+<h1 align="center">Sorty <img src="Sources/SortyLib/Resources/Images/SortyMascotHead.png" alt="Sorty logo" width="32" style="vertical-align:middle; height:32px; display:inline-block; margin:0 8px;" /> - Smart Folder Organizer for macOS</h1>
 
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -6,26 +6,26 @@
 [![macOS](https://img.shields.io/badge/macOS-15.1+-blue.svg)](https://www.apple.com/macos)
 [![Security Checks](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml/badge.svg)](https://github.com/sorty-organizer/Sorty/actions/workflows/swift.yml)
 
-A native macOS SwiftUI application that uses AI to intelligently organize directory contents into relevant, semantically-named folders.
+A native macOS SwiftUI application that helps organize directory contents into relevant, semantically-named folders.
 
 <div align="center">
 
 | <img src="Assets/Screenshots/New UI/Live Insights View.png" width="300" /> | <img src="Assets/Screenshots/New UI/Watched Folder View.png" width="300" /> | <img src="Assets/Screenshots/New UI/Post Generation View.png" width="300" /> |
 | :---: | :---: | :---: |
-| *Streaming AI Organisation, with Live Insights* | *Watched Folders* | *Interactive preview* |
+| *Streaming Sorty Organisation, with Live Insights* | *Watched Folders* | *Interactive preview* |
 
 </div>
 
 
 ## Features
 
-- **Intelligent Organization**: Uses AI to understand file content and context for accurate categorization.
+- **Intelligent Organization**: Sorty understands file content and context for accurate categorization.
 - **The Learnings Profile**: A passive learning system that trains from your existing folder structures, manual corrections, and even cancelled organizations to continuously improve future suggestions.
-- **Custom Personas**: Create and edit specialized AI profiles for different workflows (e.g., Developer, Photographer, Student).
+- **Custom Personas**: Create and edit specialized profiles for different workflows (e.g., Developer, Photographer, Student).
 - **Multiple AI Providers**: 
   - OpenAI-compatible APIs (OpenAI, Anthropic, GitHub Copilot, Groq, Ollama, etc.)
   - Apple Foundation Models (on-device, privacy-focused, requires macOS 15+).
-- **AI Vision Support**: Multimodal analysis for providers that support it to understand image content when organizing.
+- **Vision Support**: Multimodal analysis for providers that support it to understand image content when organizing.
 - **Finder Extension**: Right-click any folder in Finder to instantly start the organization process.
 - **Workspace Health Monitoring**: Monitor and analyze the health of your directories with actionable insights and quick actions.
 - **App-Wide Deeplinks**: Control the app externally via `sorty://` URL schemes for automation and shortcuts.
@@ -95,7 +95,7 @@ Sorty includes Finder Integration as a core app feature:
 
 ### 3. Watched Folders
 - Add folders to the "Watched" list in the sidebar to enable automatic background monitoring.
-- **Note**: The "Auto-Organize" feature will remain disabled until a valid AI provider is configured in Settings.
+- **Note**: The "Auto-Organize" feature will remain disabled until a valid provider is configured in Settings.
 
 
 ## Security Considerations
@@ -128,8 +128,8 @@ If you see an error indicating that access to a watched folder has been lost (e.
 2. Ensure the app is running from the `/Applications` folder.
 3. Remove the folder from the Watched list and add it again to refresh the security bookmark.
 
-### AI Not Configured / Auto-Organize Disabled
-- If "Auto-Organize" is grayed out or not functioning, check **Settings → AI Provider**.
+### Provider Not Configured / Auto-Organize Disabled
+- If "Auto-Organize" is grayed out or not functioning, check **Settings -> AI Provider**.
 - A valid API configuration (or Apple Intelligence setup) is required for the app to analyze and sort files.
 
 ### Update Check Issues
@@ -237,5 +237,5 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 <div align="center">
   <img src="Assets/AppIcon/AppIcon-Release.png" alt="Sorty logo" width="150" />
   <br>
-  <strong>Sorty: The FOSS AI File Organiser</strong>
+  <strong>Sorty: The FOSS File Organiser</strong>
 </div>

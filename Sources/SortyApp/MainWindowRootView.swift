@@ -189,7 +189,7 @@ struct MainWindowRootView: View {
             .onChange(of: windowSession.organizer.isAIConfigured) { oldValue, newValue in
                 if oldValue == true && newValue == false {
                     watchedFoldersManager.disableAutoOrganizeForAll(
-                        reason: "AI provider is no longer configured"
+                        reason: "Provider is no longer configured"
                     )
                 }
             }

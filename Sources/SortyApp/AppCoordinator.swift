@@ -491,8 +491,8 @@ class AppCoordinator: ObservableObject, FolderWatcherDelegate {
     
     private func autoOrganize(folder: WatchedFolder, files: Set<String>, resolvedURL: URL) async {
         guard organizer.aiClient != nil else {
-            print("Coordinator: Cannot auto-organize \(folder.name) - AI provider not configured")
-            notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no AI provider configured", isCritical: false)
+            print("Coordinator: Cannot auto-organize \(folder.name) - provider not configured")
+            notificationManager.showError(message: "Could not auto-organize \"\(folder.name)\" - no provider configured", isCritical: false)
             return
         }
 
