@@ -80,8 +80,14 @@ terminate_running_sorty_if_safe() {
     fi
 
     local instance_count
+    local instance_label
     instance_count=$(count_running_sorty_instances)
-    log_item "Closing ${instance_count} running Sorty instance(s) after build"
+    if [ "${instance_count}" = "1" ]; then
+        instance_label="instance"
+    else
+        instance_label="instances"
+    fi
+    log_item "Closing ${instance_count} running Sorty ${instance_label}"
 
     set_build_auto_close_request true
     request_sorty_quit
@@ -275,7 +281,7 @@ run_build_with_compact_status() {
     set -e
 
     if [ -f "${status_marker}" ]; then
-        printf '\r\033[K\n'
+        printf '\r\033[K'
         rm -f "${status_marker}"
     fi
 
@@ -283,6 +289,7 @@ run_build_with_compact_status() {
         return 0
     fi
 
+    printf '\n'
     log_failure "${log_name} failed"
     log_item "Last ${BUILD_TAIL_LINES} log lines (${log_file}):"
     tail -n "${BUILD_TAIL_LINES}" "${log_file}" || true
@@ -737,8 +744,6 @@ bundle_finder_extension() {
     fi
 }
 
-print_header "${PROJECT_NAME} Build" 50
-
 VERSION=$(get_version)
 BUILD_NUM=$(get_build_number)
 
@@ -771,6 +776,7 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ] || [ "${ENABLE_SPARKLE_SIGNING}" = "tr
 fi
 
 if is_truthy "${SORTY_VERBOSE}"; then
+    print_header "${PROJECT_NAME} Build" 50
     print_summary "Build Configuration" \
         "Version" "${VERSION}" \
         "Build" "${BUILD_NUM}" \
@@ -785,12 +791,6 @@ if is_truthy "${SORTY_VERBOSE}"; then
         "Sparkle Signing" "${ENABLE_SPARKLE_SIGNING}" \
         "Preserve Bundle" "${PRESERVE_APP_BUNDLE}" \
         "Output" "${BUILD_DIR}"
-else
-    print_summary "Build" \
-        "Version" "${VERSION} (${BUILD_NUM})" \
-        "Config" "${BUILD_CONFIG:-release}/${BUILD_METHOD}" \
-        "Signing" "${SIGNING_IDENTITY}" \
-        "Output" "${APP_PATH}"
 fi
 
 if [ "${BUILD_METHOD}" = "xcodebuild" ]; then
@@ -808,6 +808,10 @@ SPM_BINARY_NAME="SortyApp"
 APP_BUNDLE="Sorty.app"
 
 TOTAL_STEPS=4
+TEST_DURATION="0s"
+BUILD_DURATION="0s"
+ASSEMBLE_DURATION="0s"
+SIGN_DURATION="0s"
 
 # Build configuration
 log_detail "Configuration: ${BUILD_CONFIG}"
@@ -825,7 +829,8 @@ if [ "$SKIP_TESTS" != "true" ]; then
         log_failure "Tests failed ($(get_step_duration "test")). Set SKIP_TESTS=true to bypass."
         exit 1
     fi
-    log_success "Tests passed ($(get_step_duration "test"))"
+    TEST_DURATION=$(get_step_duration "test")
+    log_success "Tests passed (${TEST_DURATION})"
 else
     print_step 1 $TOTAL_STEPS "Skipping Unit Tests"
     log_detail "SKIP_TESTS is set."
@@ -953,7 +958,8 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
         log_detail "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
     fi
 
-    log_success "xcodebuild succeeded ($(get_step_duration "build"))"
+    BUILD_DURATION=$(get_step_duration "build")
+    log_success "xcodebuild succeeded (${BUILD_DURATION})"
 
     # Embed Sparkle framework for xcodebuild (if not already embedded)
     FRAMEWORKS_DIR="${APP_PATH}/Contents/Frameworks"
@@ -1001,7 +1007,8 @@ if [ "$BUILD_METHOD" = "xcodebuild" ]; then
     fi
     validate_sorty_app_linkage "${APP_PATH}"
     
-    log_success "App bundle verified ($(get_step_duration "assemble"))"
+    ASSEMBLE_DURATION=$(get_step_duration "assemble")
+    log_success "App bundle verified (${ASSEMBLE_DURATION})"
 else
     # Use swift build (SPM) for local development
     # BUILD_FLAGS can be set from Makefile for parallel compilation
@@ -1017,7 +1024,8 @@ else
         exit 1
     fi
     BIN_PATH="${BUILD_DIR}/${BUILD_CONFIG}"
-    log_success "Compilation succeeded ($(get_step_duration "build"))"
+    BUILD_DURATION=$(get_step_duration "build")
+    log_success "Compilation succeeded (${BUILD_DURATION})"
 
     print_step 3 $TOTAL_STEPS "Assembling App Bundle"
     start_step_timer "assemble"
@@ -1125,7 +1133,8 @@ else
         log_detail "Skipping Finder extension bundle (ENABLE_FINDER_EXTENSION=${ENABLE_FINDER_EXTENSION})"
     fi
 
-    log_success "App bundle assembled ($(get_step_duration "assemble"))"
+    ASSEMBLE_DURATION=$(get_step_duration "assemble")
+    log_success "App bundle assembled (${ASSEMBLE_DURATION})"
 fi
 
 # Icon variant selection — swap AppIcon.icns in the bundle based on context.
@@ -1222,7 +1231,8 @@ if [ "${ENABLE_ADHOC_SIGNING}" = "true" ]; then
     else
         run_quiet codesign_cmd "${APP_PATH}"
     fi
-    log_success "App signed ($(get_step_duration "sign"))"
+    SIGN_DURATION=$(get_step_duration "sign")
+    log_success "App signed (${SIGN_DURATION})"
 else
     print_step 4 $TOTAL_STEPS "Skipping Code Signing"
     log_detail "ENABLE_ADHOC_SIGNING is set to false."
@@ -1233,13 +1243,29 @@ fi
 terminate_running_sorty_if_safe
 
 APP_SIZE=$(get_file_size "${APP_PATH}")
+MACOS_SIZE=$(get_path_size "${APP_PATH}/Contents/MacOS")
+FRAMEWORKS_SIZE=$(get_path_size "${APP_PATH}/Contents/Frameworks")
+RESOURCES_SIZE=$(get_path_size "${APP_PATH}/Contents/Resources")
+PLUGINS_SIZE=$(get_path_size "${APP_PATH}/Contents/PlugIns")
+TOTAL_DURATION=$(get_total_duration)
 
 echo ""
 print_divider "═" 50
 echo ""
 
-print_summary "Build Complete ${SYM_SPARKLE}" \
-    "App" "${APP_PATH}" \
-    "Size" "${APP_SIZE}" \
-    "Version" "${VERSION} (build ${BUILD_NUM})" \
-    "Duration" "$(get_total_duration)"
+echo -e "${BLUE}--- Build Complete ---${NC}"
+printf "  %-15s : %s\n" "App" "${APP_PATH}"
+printf "  %-15s : %s\n" "Version" "${VERSION} (build ${BUILD_NUM})"
+printf "  %-15s : %s\n" "Size" "${APP_SIZE}"
+printf "    %-13s : %s\n" "MacOS" "${MACOS_SIZE}"
+printf "    %-13s : %s\n" "Frameworks" "${FRAMEWORKS_SIZE}"
+printf "    %-13s : %s\n" "Resources" "${RESOURCES_SIZE}"
+printf "    %-13s : %s\n" "PlugIns" "${PLUGINS_SIZE}"
+printf "  %-15s : %s\n" "Duration" "${TOTAL_DURATION}"
+printf "    %-13s : %s\n" "Compile" "${BUILD_DURATION}"
+printf "    %-13s : %s\n" "Assemble" "${ASSEMBLE_DURATION}"
+printf "    %-13s : %s\n" "Sign" "${SIGN_DURATION}"
+if [ "$SKIP_TESTS" != "true" ]; then
+    printf "    %-13s : %s\n" "Tests" "${TEST_DURATION}"
+fi
+echo ""

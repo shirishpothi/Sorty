@@ -119,6 +119,16 @@ get_file_size() {
     echo "${size_mb}MB"
 }
 
+get_path_size() {
+    local file_path=$1
+    if [ ! -e "${file_path}" ]; then
+        echo "0MB"
+        return
+    fi
+
+    get_file_size "${file_path}"
+}
+
 # Logging functions
 print_header() {
     local text=$1
@@ -241,5 +251,5 @@ validate_sorty_app_linkage() {
         return 1
     fi
 
-    log_success "App linkage verified"
+    log_detail "App linkage verified"
 }
